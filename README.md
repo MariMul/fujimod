@@ -82,6 +82,18 @@ ignored `.env.local`. The preview binds only `127.0.0.1` and permits the
 `cozycat.tail2b5ca.ts.net` Host header for `tailscale serve`. The ordinary public
 `npm run build` excludes the local automatic-boot setting.
 
+With a runtime that implements capture and Playback, verify the built preview:
+
+```sh
+PLAYWRIGHT_BROWSERS_PATH=/path/to/browsers python tests/capture.py \
+  --url http://127.0.0.1:5190/ --output /fresh/ignored/capture-proof
+```
+
+This WebKit iPhone gate checks exact English MENU pixels, touch dial input,
+source/LCD frame cadence, a Full shutter tap, a JPEG download through the card
+UI, and the same saved file decoded by stock Playback. It saves viewport and
+LCD screenshots without modifying served source or installing firmware patches.
+
 ### Release artifacts and deployment
 
 `npm run prepare:release` fetches a release index and verifies patches. Optional

@@ -43,6 +43,30 @@ test('fault normalization distinguishes guest faults, unsupported models and Was
   assert.equal(faultFrom({ error_type: 'UnsupportedDevice', error: 'write failed' }).kind, 'unsupported-device');
   assert.equal(faultFrom(new TypeError('broken callback')).kind, 'exception');
 });
+test('new guest images are presented immediately while unchanged status polls omit pixels', async () => {
+  const { engine, worker, sent, frames } = setup();
+  await engine.boot(new ArrayBuffer(1), { inputs: 'inputs.json', bundle: 'runtime/' }, () => {});
+  worker.reply({ type: 'metrics', runtime: { preview: { frames_per_second: 10 } } });
+  let image = 1, tick = 120001000;
+  worker.postMessage = data => {
+    sent.push(data);
+    queueMicrotask(() => worker.reply({ type: 'result', id: data.id,
+      state: { virtual_ticks: tick, image_frames: image, display: { width: 1, height: 1 } },
+      frame: data.action === 'state' && data.options.pixels ? new Uint8Array([4,5,6]).buffer : new ArrayBuffer(0) }));
+  };
+  engine.wall -= 1000;
+  await engine.pump();
+  assert.equal(sent.at(-1).action, 'state'); assert.equal(sent.at(-1).options.pixels, true);
+  assert.ok(sent.at(-2).options.pause_at_tick <= 120600000, 'A slice must yield within half a guest image interval');
+  assert.equal(frames.length, 2);
+  engine.nextFrame = 0;
+  await engine.pump();
+  assert.equal(sent.at(-1).options.pixels, false); assert.equal(frames.length, 2);
+  image++; tick++;
+  await engine.pump();
+  assert.equal(sent.at(-1).options.pixels, true); assert.equal(frames.length, 3);
+  engine.dispose();
+});
 test('cache identity changes independently with DAT, runtime and storage profile', async () => {
   const keys = await Promise.all([['a','b','c'],['A','b','c'],['a','B','c'],['a','b','C']].map(args => cacheKey(...args)));
   assert.equal(new Set(keys).size, 4);

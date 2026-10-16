@@ -21,13 +21,15 @@ export interface ModelHit { id: string; point?: { x: number; y: number } }
 
 /** Rendering, picking and LCD texture placement; no firmware knowledge. */
 export class ModelViewer {
-  readonly renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  private phoneViewport = matchMedia('(max-width: 760px)').matches;
+  readonly renderer = new THREE.WebGLRenderer({ antialias: !this.phoneViewport, alpha: true });
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(35, 1, 0.05, 100);
   private orbit: OrbitControls;
   private root = new THREE.Group();
   private targets = new Map<string, THREE.Object3D>();
   private lcd = document.createElement('canvas');
+  private lcdImage?: ImageData;
   private texture = new THREE.CanvasTexture(this.lcd);
   private ray = new THREE.Raycaster();
   private pointer = new THREE.Vector2();
@@ -47,7 +49,7 @@ export class ModelViewer {
   onPointerDown?: (hit: ModelHit, event: PointerEvent) => void;
   onHover?: (id: string | null) => void;
   constructor(private host: HTMLElement, private lines: SVGSVGElement, private workspace: HTMLElement) {
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, this.phoneViewport ? 1.5 : 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     host.prepend(this.renderer.domElement);
     this.camera.position.set(0, 0.6, 6);
@@ -221,9 +223,11 @@ export class ModelViewer {
   }
   frame(frame: Frame) {
     if (frame.rgb.length !== frame.width * frame.height * 3) throw Error('Invalid LCD frame size.');
-    this.lcd.width = frame.width; this.lcd.height = frame.height;
+    if (this.lcd.width !== frame.width || this.lcd.height !== frame.height) {
+      this.lcd.width = frame.width; this.lcd.height = frame.height; this.lcdImage = undefined;
+    }
     const context = this.lcd.getContext('2d')!;
-    const image = context.createImageData(frame.width, frame.height);
+    const image = this.lcdImage ??= context.createImageData(frame.width, frame.height);
     for (let s = 0, t = 0; s < frame.rgb.length; s += 3, t += 4) {
       image.data[t] = frame.rgb[s]; image.data[t + 1] = frame.rgb[s + 1]; image.data[t + 2] = frame.rgb[s + 2]; image.data[t + 3] = 255;
     }

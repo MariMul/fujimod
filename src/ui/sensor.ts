@@ -21,7 +21,7 @@ export class SensorInput {
     this.stopWebcam();
     if (!enabled) { if (this.image) this.send(); else await this.engine?.setScene(null); this.status(this.image ? 'Image' : 'Built-in scene'); return; }
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 720 }, height: { ideal: 480 }, frameRate: { ideal: 10, max: 15 } }, audio: false });
       this.video = document.createElement('video'); this.video.muted = true; this.video.playsInline = true; this.video.srcObject = this.stream;
       await this.video.play(); this.status('Webcam');
       const loop = () => { this.send(); this.timer = window.setTimeout(loop, this.period); }; loop();
@@ -33,7 +33,7 @@ export class SensorInput {
     const width = source instanceof HTMLVideoElement ? source.videoWidth : source.naturalWidth;
     const height = source instanceof HTMLVideoElement ? source.videoHeight : source.naturalHeight;
     if (!width || !height) return;
-    const scale = Math.min(1, 1600 / Math.max(width, height));
+    const scale = source instanceof HTMLVideoElement ? Math.min(1, 720 / width, 480 / height) : Math.min(1, 1600 / Math.max(width, height));
     const targetWidth=Math.max(1,Math.round(width*scale)), targetHeight=Math.max(1,Math.round(height*scale));
     if (this.canvas.width !== targetWidth) this.canvas.width=targetWidth;
     if (this.canvas.height !== targetHeight) this.canvas.height=targetHeight;

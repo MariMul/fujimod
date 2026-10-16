@@ -269,7 +269,7 @@ worker.onmessage = async ({ data }: MessageEvent<Message>) => {
       py.runPython("boot_module.board = session.board\nboot_module.trim_diagnostics()");
       const fault = stateFault(state); if (fault) throw new EngineError(fault);
       if (await recovery.capture(py)) send('cache', recovery.status(py));
-      publish(state, data.id, data.action === 'state' || data.action === 'key'); return;
+      publish(state, data.id, (data.action === 'state' && data.options?.pixels !== false) || data.action === 'key'); return;
     }
     if (data.type === 'sensor_reset') { recordInput('sensor_reset'); py.runPython('use_analytic_scene(session)'); configurePreview(); send('sensor_ready', { id: data.id }); return; }
     if (data.type === 'sensor') {

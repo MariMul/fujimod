@@ -4,7 +4,7 @@ import type { Engine, EngineConfig, Frame, Input, Scene, CardFile, CardState, Ca
 import { digest } from './checkpoint-store.js';
 import { errorReportZip } from './report.ts';
 
-type State = { virtual_ticks: number; display?: { width: number; height: number }; failure?: unknown; execution_error?: unknown };
+type State = { virtual_ticks: number; image_frames?: number; display?: { width: number; height: number }; failure?: unknown; execution_error?: unknown };
 type Reply = { state: State; frame?: ArrayBuffer; card: CardState };
 type CardReply = { card: CardState; tree?: CardTree; bytes?: ArrayBuffer };
 
@@ -27,6 +27,9 @@ export class WorkerEngine implements Engine {
   private wall = 0;
   private ticks = 0;
   private nextFrame = 0;
+  private nextPixels = 0;
+  private lastImageFrame = -1;
+  private presentedImageFrames = 0;
   private queue: Promise<unknown> = Promise.resolve();
   private inputs: Input[] = [];
   private powerInput?: string;
@@ -170,7 +173,7 @@ export class WorkerEngine implements Engine {
         const reply = await this.rpc<Reply>('restart', { cardFiles, initialPositions: this.selectedPositions }, cardFiles.map(file => file.bytes));
         this.state = reply.state; this.fault = undefined; this.publish(reply.frame);
         this.wall = performance.now(); this.ticks = this.state.virtual_ticks; this.pace.reset(this.ticks);
-        this.alive = true; this.nextFrame = 0;
+        this.alive = true; this.nextFrame = this.nextPixels = 0; this.lastImageFrame = -1;
         await this.setScene(this.scene);
         this.schedule();
       } catch (error) {
@@ -234,7 +237,8 @@ export class WorkerEngine implements Engine {
     const result = await this.rpc<Reply>('rollback', { seconds });
     this.state = result.state; this.fault = undefined; this.touches.clear();
     this.publish(result.frame); this.alive = true;
-    this.wall = performance.now(); this.ticks = this.state.virtual_ticks; this.pace.reset(this.ticks); this.nextFrame = 0; this.schedule();
+    this.wall = performance.now(); this.ticks = this.state.virtual_ticks; this.pace.reset(this.ticks);
+    this.nextFrame = this.nextPixels = 0; this.lastImageFrame = -1; this.schedule();
   }
   frames(listener: (frame: Frame) => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
   private schedule() { this.timer = window.setTimeout(() => void this.pump(), 0); }
@@ -243,17 +247,26 @@ export class WorkerEngine implements Engine {
     try {
       const started = performance.now();
       do {
-        const cap = this.ticks + Math.floor((performance.now() - this.wall) * 12000);
+        const wallCap = this.ticks + Math.floor((performance.now() - this.wall) * 12000);
+        const preview = this.latestRuntime.preview as { frames_per_second: number };
+        const frameTicks = 12000000 / preview.frames_per_second;
+        const cap = Math.min(wallCap, this.state.virtual_ticks + Math.floor(frameTicks / 2));
         const before = this.state.virtual_ticks;
         await this.request('advance', { limit: 200000, pause_at_tick: cap });
-        if (this.state.virtual_ticks === before) break;
+        if (this.state.virtual_ticks === before || this.state.image_frames !== this.lastImageFrame) break;
       } while (performance.now() - started < 12 && this.alive);
       if (!this.alive) return;
-      if (performance.now() >= this.nextFrame) {
-        const sample = await this.request('state'); this.publish(sample.frame);
-        this.nextFrame = performance.now() + 500;
+      if (this.state.image_frames !== this.lastImageFrame || performance.now() >= this.nextFrame) {
+        const pixels = this.state.image_frames !== this.lastImageFrame || performance.now() >= this.nextPixels;
+        const sample = await this.request('state', { pixels });
+        if (sample.frame?.byteLength) {
+          if (this.state.image_frames !== this.lastImageFrame) this.presentedImageFrames++;
+          this.publish(sample.frame); this.lastImageFrame = this.state.image_frames ?? -1;
+          this.nextPixels = performance.now() + 500;
+        }
+        this.nextFrame = performance.now() + 100;
       }
-      const metrics = this.pace.sample(this.state.virtual_ticks, { ...this.latestRuntime, presentation: this.presentation.actions });
+      const metrics = this.pace.sample(this.state.virtual_ticks, { ...this.latestRuntime, presentation: this.presentation.actions, presentedImageFrames: this.presentedImageFrames });
       if (performance.now() >= this.nextMetrics) {
         for (const listener of this.metricListeners) listener(metrics);
         this.nextMetrics = performance.now() + 250;
