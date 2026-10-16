@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import type { Frame } from '../engine/api';
+import type { Frame, Input } from '../engine/api';
+import { DetentFeedback } from '../feedback/detent';
+import { RotaryDrag } from './rotary-drag';
+import { RotaryPart } from './rotary-part';
 
 export interface ModelData {
   url: string;
@@ -34,6 +37,10 @@ export class ModelViewer {
   private homeTarget = new THREE.Vector3();
   private leaderSignature = '';
   private highlightId: string | null = null;
+  private rotary = new Map<string, { part: RotaryPart; negative: string; positive: string }>();
+  private rotaryStep?: (id: string, direction: number) => boolean;
+  private rotaryDrag: RotaryDrag;
+  private detent = new DetentFeedback();
   private dirty = true;
   private leadersDirty = true;
   onPointerDown?: (hit: ModelHit, event: PointerEvent) => void;
@@ -44,7 +51,9 @@ export class ModelViewer {
     host.prepend(this.renderer.domElement);
     this.camera.position.set(0, 0.6, 6);
     this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
-    this.orbit.enableDamping = true;
+    // No residual orbit velocity may move the camera during a dial gesture.
+    this.orbit.enableDamping = false;
+    this.rotaryDrag = new RotaryDrag(this.renderer.domElement, enabled => this.setOrbit(enabled));
     this.orbit.addEventListener('change', () => { this.dirty = this.leadersDirty = true; });
     window.addEventListener('scroll', () => { this.leadersDirty = true; }, true);
     this.orbit.minDistance = 2; this.orbit.maxDistance = 10;
@@ -62,10 +71,22 @@ export class ModelViewer {
     // Capture runs before OrbitControls' bubble handler, preventing control drags from orbiting.
     this.renderer.domElement.addEventListener('pointerdown', event => {
       const hit = this.pick(event);
+      const rotary = hit && this.rotary.get(hit.id);
+      const turn = rotary ? (direction: number) => {
+        const id = direction < 0 ? rotary.negative : rotary.positive;
+        if (!this.rotaryStep?.(id, rotary.negative === rotary.positive ? direction : 1)) return;
+        rotary.part.turn(direction); this.detent.step();
+        this.dirty = this.leadersDirty = true;
+        this.highlight(id); this.onHover?.(id); this.leaderSignature = '';
+      } : undefined;
+      if (this.rotaryDrag.begin(event, turn)) {
+        if (rotary) { this.detent.beginGesture(event); this.onHover?.(hit!.id); }
+        return;
+      }
       if (hit) this.onPointerDown?.(hit, event);
     }, { capture: true });
     this.renderer.domElement.addEventListener('pointermove', event => {
-      if (!event.buttons) this.onHover?.(this.pick(event)?.id ?? null);
+      if (!event.buttons && !this.rotaryDrag.dragging) this.onHover?.(this.pick(event)?.id ?? null);
     });
     this.renderer.domElement.addEventListener('pointerleave', () => this.onHover?.(null));
     this.renderer.setAnimationLoop(() => {
@@ -78,6 +99,7 @@ export class ModelViewer {
     });
   }
   private disposeRoot() {
+    this.rotaryDrag.cancel(); this.rotary.clear(); this.rotaryStep = undefined;
     this.targets.clear();
     this.root.traverse(object => {
       if (object instanceof THREE.Mesh) {
@@ -132,6 +154,52 @@ export class ModelViewer {
       }
     }
     this.root.updateMatrixWorld(true); this.fit();
+  }
+  /** The panel supplies input policy; all detents use its engine API path. */
+  configureRotary(inputs: Input[], onStep: (id: string, direction: number) => boolean) {
+    this.rotaryDrag.cancel(); this.rotaryStep = onStep;
+    const supported = new Map(inputs.filter(input => input.supported).map(input => [input.id, input]));
+    for (const input of supported.values()) {
+      if (input.kind !== 'dial' && input.kind !== 'ring') continue;
+      this.addRotary(input.id, input.id, input.id);
+    }
+    // A two-direction control with a center press shares one mesh. The part
+    // graph distinguishes this from a four-way selector without camera IDs.
+    for (const [name, regions] of Object.entries(this.data?.regions ?? {})) {
+      if (regions.up !== regions.center || regions.down !== regions.center || regions.left === regions.right) continue;
+      if (!supported.has(regions.left) || !supported.has(regions.right)) continue;
+      if (this.targets.get(regions.left)?.name !== name) continue;
+      this.addRotary(regions.center, regions.left, regions.right);
+    }
+    this.setRotaryEnabled(true);
+  }
+  setRotaryEnabled(enabled: boolean) { this.rotaryDrag.setEnabled(enabled); }
+  private addRotary(id: string, negative: string, positive: string) {
+    if (this.rotary.has(id)) return;
+    const target = this.targets.get(id) ?? this.targets.get(negative);
+    if (!target?.parent) return;
+    const bounds = this.localBounds(target), size = bounds.getSize(new THREE.Vector3());
+    const extents = size.toArray();
+    // Transparent textured decals may be exported as sibling nodes. Move
+    // contained decals with their part, leaving solid guides and switches fixed.
+    const labels = target.parent.children.filter(node => {
+      if (node === target || !this.visible(node) || node.userData.inputIds) return false;
+      const box = this.localBounds(node).applyMatrix4(node.matrix).applyMatrix4(target.matrix.clone().invert());
+      let decal = false, solid = false;
+      node.traverse(object => {
+        if (!(object instanceof THREE.Mesh)) return;
+        for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+          if (material.transparent && 'map' in material && material.map) decal = true;
+          else solid = true;
+        }
+      });
+      if (box.isEmpty() || !decal || solid) return false;
+      const expanded = bounds.clone().expandByScalar(Math.max(...extents) * .025);
+      return expanded.containsBox(box);
+    });
+    for (const label of labels) label.userData.inputIds = [id];
+    const rotary = { part: new RotaryPart(target, bounds, labels), negative, positive };
+    for (const alias of [id, negative, positive]) this.rotary.set(alias, rotary);
   }
   private screenUvs(geometry: THREE.BufferGeometry) {
     geometry.computeBoundingBox(); const bounds = geometry.boundingBox!;
@@ -206,7 +274,7 @@ export class ModelViewer {
       }
     });
   }
-  setOrbit(enabled: boolean) { this.orbit.enabled = enabled; }
+  setOrbit(enabled: boolean) { this.orbit.enabled = enabled && !this.rotaryDrag?.dragging; }
   faceScreen() { this.camera.position.copy(this.home); this.orbit.target.copy(this.homeTarget); this.orbit.update(); }
   faceLens() {
     this.camera.position.copy(this.home); this.camera.position.z = this.homeTarget.z - (this.home.z - this.homeTarget.z);
