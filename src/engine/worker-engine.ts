@@ -1,17 +1,26 @@
-import type { Engine, EngineConfig, Frame, Input, Scene } from './api';
+import { CameraPace, RequestTimings, type CameraPerformance } from './performance.ts';
+import { EngineError, faultFrom, stateFault, type EngineFault } from './fault.ts';
+import type { Engine, EngineConfig, Frame, Input, Scene, CardFile, CardState, CardTree, CardReadOptions } from './api';
 
 type State = { virtual_ticks: number; display?: { width: number; height: number }; failure?: unknown; execution_error?: unknown };
-type Reply = { state: State; frame?: ArrayBuffer };
+type Reply = { state: State; frame?: ArrayBuffer; card: CardState };
+type CardReply = { card: CardState; tree?: CardTree; bytes?: ArrayBuffer };
 
 /** Adapter for the current Pyodide session worker. No device IDs or register bindings. */
 export class WorkerEngine implements Engine {
   private worker: Worker;
-  private pending = new Map<number, { resolve: (reply: Reply) => void; reject: (error: Error) => void }>();
+  private onError: (error: Error) => void;
+  private pending = new Map<number, { resolve: (reply: unknown) => void; reject: (error: Error) => void }>();
   private listeners = new Set<(frame: Frame) => void>();
+  private cardListeners = new Set<(state: CardState) => void>();
+  private latestCard?: CardState;
   private serial = 0;
   private sequence = 0;
   private state: State = { virtual_ticks: 0 };
   private alive = false;
+  private disposed = false;
+  private fault?: EngineFault;
+  private errorListeners = new Set<(fault: EngineFault) => void>();
   private timer = 0;
   private wall = 0;
   private ticks = 0;
@@ -20,20 +29,35 @@ export class WorkerEngine implements Engine {
   private inputs: Input[] = [];
   private powerInput?: string;
   private touches = new Map<string, { x: number; y: number }>();
+  private progressListener?: (message: string, percent: number) => void;
+  private selectedPositions: Record<string, string> = {};
+  private scene: Scene | null = null;
+  private pace = new CameraPace();
+  private presentation = new RequestTimings();
+  private metricListeners = new Set<(metrics: CameraPerformance) => void>();
+  private latestRuntime: Record<string, unknown> = {};
+  private nextMetrics = 0;
   private bootReject?: (error: Error) => void;
-  constructor(createWorker: () => Worker, private onError: (error: Error) => void) {
+  constructor(createWorker: () => Worker, onError: (error: Error) => void) {
+    this.onError = onError;
     this.worker = createWorker();
     this.worker.onerror = event => this.fail(Error(event.message || 'Emulator worker failed.'));
   }
   private fail(error: Error) {
+    const first = !this.fault;
+    this.fault ??= faultFrom(error);
+    error = new EngineError(faultFrom(error));
     this.alive = false;
     clearTimeout(this.timer);
     this.bootReject?.(error);
     for (const pending of this.pending.values()) pending.reject(error);
     this.pending.clear();
+    if (!first) return;
+    for (const listener of this.errorListeners) listener(this.fault);
     this.onError(error);
   }
-  async boot(dat: ArrayBuffer, config: EngineConfig, progress: (message: string, percent: number) => void) {
+  async boot(dat: ArrayBuffer, config: EngineConfig, progress: (message: string, percent: number) => void, cardFiles: CardFile[] = []) {
+    this.progressListener = progress;
     const response = await fetch(new URL(config.inputs, document.baseURI));
     if (!response.ok) throw Error('Emulator inputs are unavailable.');
     const table = await response.json();
@@ -47,47 +71,128 @@ export class WorkerEngine implements Engine {
     await new Promise<void>((resolve, reject) => {
       this.bootReject = reject;
       this.worker.onmessage = ({ data }) => {
-        if (data.type === 'progress') progress(data.message, data.percent);
+        if (data.runtime) this.latestRuntime = data.runtime;
+        if (data.type === 'profile_result') {
+          const pending = this.pending.get(data.id); this.pending.delete(data.id); pending?.resolve(data.report);
+        }
+        if (data.type === 'progress') this.progressListener?.(data.message, data.percent);
         if (data.type === 'error') {
-          const error = Error(data.error);
           const pending = this.pending.get(data.id);
-          if (pending) { this.pending.delete(data.id); pending.reject(error); }
-          else this.fail(error);
+          if (!data.fault && pending) { this.pending.delete(data.id); pending.reject(Error(data.error)); }
+          else this.fail(new EngineError(data.fault ?? faultFrom(data.error)));
+        }
+        if (data.card) this.observeCard(data.card);
+        if (data.type === 'card_result') {
+          const pending = this.pending.get(data.id); this.pending.delete(data.id);
+          pending?.resolve(data);
         }
         if (data.type === 'ready') {
           this.bootReject = undefined;
           this.state = data.state;
           this.publish(data.frame);
           this.alive = true;
-          this.wall = performance.now(); this.ticks = this.state.virtual_ticks;
+          this.wall = performance.now(); this.ticks = this.state.virtual_ticks; this.pace.reset(this.ticks);
           this.schedule(); resolve();
         }
-        if (data.type === 'result') {
+        if (data.type === 'result' || data.type === 'restarted') {
           const pending = this.pending.get(data.id);
           this.pending.delete(data.id);
-          if (data.state.failure || data.state.execution_error) {
-            const error = Error(JSON.stringify(data.state.failure || data.state.execution_error));
+          const fault = stateFault(data.state);
+          if (fault) {
+            const error = new EngineError(fault);
             pending?.reject(error); this.fail(error); return;
           }
           this.state = { ...this.state, ...data.state };
           pending?.resolve(data);
         }
       };
-      this.worker.postMessage({ type: 'boot', dat, config, bundle: new URL(config.bundle, document.baseURI).href }, [dat]);
+      const files = cardFiles.map(file => ({ path: file.path, bytes: file.bytes.slice().buffer }));
+      this.worker.postMessage({ type: 'boot', dat, config, cardFiles: files, bundle: new URL(config.bundle, document.baseURI).href }, [dat, ...files.map(file => file.bytes)]);
     });
     return this.inputs;
   }
-  private request(action: string, options: Record<string, unknown> = {}): Promise<Reply> {
+  private rpc<T>(type: 'request' | 'card' | 'rollback' | 'restart' | 'profile', fields: Record<string, unknown>, transfer: Transferable[] = []): Promise<T> {
+    if (this.disposed) return Promise.reject(Error('Emulator closed.'));
     const id = ++this.serial;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
-      this.worker.postMessage({ type: 'request', id, action, options });
+      this.pending.set(id, { resolve: reply => resolve(reply as T), reject });
+      this.worker.postMessage({ type, id, ...fields }, transfer);
     });
+  }
+  private request(action: string, options: Record<string, unknown> = {}): Promise<Reply> {
+    if (!this.alive) return Promise.reject(Error('Emulator is not ready.'));
+    return this.rpc<Reply>('request', { action, options });
+  }
+  private observeCard(card: CardState) {
+    const previous = this.latestCard;
+    this.latestCard = card;
+    if (!previous || previous.revision !== card.revision || previous.present !== card.present ||
+        previous.busy !== card.busy || previous.supported !== card.supported) {
+      for (const listener of this.cardListeners) listener({ ...card });
+    }
+  }
+  restartWithCardFiles(files: CardFile[], progress: (message: string, percent: number) => void) {
+    const task = this.queue.then(async () => {
+      if (!this.alive && !this.fault) throw Error('Emulator is not ready.');
+      this.alive = false; clearTimeout(this.timer);
+      const previousProgress = this.progressListener;
+      this.progressListener = progress;
+      const cardFiles = files.map(file => ({ path: file.path, bytes: file.bytes.slice().buffer }));
+      try {
+        const reply = await this.rpc<Reply>('restart', { cardFiles, initialPositions: this.selectedPositions }, cardFiles.map(file => file.bytes));
+        this.state = reply.state; this.fault = undefined; this.publish(reply.frame);
+        this.wall = performance.now(); this.ticks = this.state.virtual_ticks; this.pace.reset(this.ticks);
+        this.alive = true; this.nextFrame = 0;
+        await this.setScene(this.scene);
+        this.schedule();
+      } catch (error) {
+        if (!this.fault && !this.disposed) { this.alive = true; this.schedule(); }
+        throw error;
+      } finally { this.progressListener = previousProgress; }
+    });
+    this.queue = task.catch(() => {});
+    return task;
+  }
+  private requireCardReady() {
+    if (!this.alive && !this.fault) throw Error('Emulator is restarting.');
+  }
+  async cardState() { this.requireCardReady(); return (await this.rpc<CardReply>('card', { action: 'state' })).card; }
+  async cardTree(revision?: number) {
+    this.requireCardReady();
+    return (await this.rpc<CardReply>('card', { action: 'tree', revision })).tree!;
+  }
+  async readCardFile(path: string, options: CardReadOptions = {}) {
+    this.requireCardReady();
+    const reply = await this.rpc<CardReply>('card', { action: 'read', path, ...options });
+    return new Uint8Array(reply.bytes!);
+  }
+  cardChanges(listener: (state: CardState) => void) {
+    this.cardListeners.add(listener);
+    if (this.latestCard) listener({ ...this.latestCard });
+    return () => { this.cardListeners.delete(listener); };
   }
   private publish(buffer?: ArrayBuffer) {
     if (!buffer?.byteLength || !this.state.display) return;
     const frame = { rgb: new Uint8Array(buffer), ...this.state.display, sequence: ++this.sequence };
-    for (const listener of this.listeners) listener(frame);
+    this.presentation.measure('lcdCopy', () => { for (const listener of this.listeners) listener(frame); });
+  }
+  metrics(listener: (metrics: CameraPerformance) => void) { this.metricListeners.add(listener); return () => { this.metricListeners.delete(listener); }; }
+  profile(limit = 2_000_000) {
+    const task = this.queue.then(async () => {
+      if (!this.alive) throw Error('Emulator is not ready.');
+      this.alive = false; clearTimeout(this.timer);
+      try { return await this.rpc<Record<string, unknown>>('profile', { limit }); }
+      finally { if (!this.fault && !this.disposed) { this.alive = true; this.schedule(); } }
+    });
+    this.queue = task.catch(() => {}); return task;
+  }
+  errors(listener: (fault: EngineFault) => void) { this.errorListeners.add(listener); return () => { this.errorListeners.delete(listener); }; }
+  async rollback(seconds: number) {
+    this.alive = false; clearTimeout(this.timer);
+    const result = await this.rpc<Reply>('rollback', { seconds });
+    this.state = result.state; this.fault = undefined; this.touches.clear();
+    this.publish(result.frame); this.alive = true;
+    this.wall = performance.now(); this.ticks = this.state.virtual_ticks; this.pace.reset(this.ticks); this.nextFrame = 0; this.schedule();
   }
   frames(listener: (frame: Frame) => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
   private schedule() { this.timer = window.setTimeout(() => void this.pump(), 0); }
@@ -101,16 +206,26 @@ export class WorkerEngine implements Engine {
         await this.request('advance', { limit: 200000, pause_at_tick: cap });
         if (this.state.virtual_ticks === before) break;
       } while (performance.now() - started < 12 && this.alive);
+      if (!this.alive) return;
       if (performance.now() >= this.nextFrame) {
         const sample = await this.request('state'); this.publish(sample.frame);
-        this.nextFrame = performance.now() + 100;
+        this.nextFrame = performance.now() + 500;
       }
-      if (this.alive) this.timer = window.setTimeout(() => void this.pump(), 16);
+      const metrics = this.pace.sample(this.state.virtual_ticks, { ...this.latestRuntime, presentation: this.presentation.actions });
+      if (performance.now() >= this.nextMetrics) {
+        for (const listener of this.metricListeners) listener(metrics);
+        this.nextMetrics = performance.now() + 250;
+      }
+      if (this.alive) this.timer = window.setTimeout(() => void this.pump(), metrics.virtualSeconds >= metrics.wallSeconds ? 8 : 0);
     } catch (error) { this.fail(error as Error); }
   }
   private input(action: string, options: Record<string, unknown>) {
+    if (!this.alive) return Promise.reject(new EngineError(this.fault ?? faultFrom('Camera is paused.')));
     // Serialize gestures, including quick pointerup before press acknowledgement.
-    const task = this.queue.then(async () => { await this.request(action, options); });
+    const task = this.queue.then(async () => {
+      if (!this.alive) throw new EngineError(this.fault ?? faultFrom('Camera is paused.'));
+      await this.request(action, options);
+    });
     this.queue = task.catch(() => {});
     return task;
   }
@@ -129,25 +244,30 @@ export class WorkerEngine implements Engine {
   }
   setPosition(id: string, position: string | number) {
     if (id === this.powerInput) return this.power(position === 'on');
-    return typeof position === 'number'
+    const result = typeof position === 'number'
       ? this.input('rotate', { id, steps: position })
       : this.input('set_position', { id, position });
+    return result.then(() => { if (typeof position === 'string') this.selectedPositions[id] = position; });
   }
+
   async setScene(scene: Scene | null) {
+    this.scene = scene;
+    if (!this.alive) return;
     if (!scene) { this.worker.postMessage({ type: 'sensor_reset' }); return; }
     const rgb = scene.rgb.slice().buffer;
     this.worker.postMessage({ type: 'sensor', rgb, width: scene.width, height: scene.height }, [rgb]);
   }
   async power(on: boolean) {
     await this.input(on ? 'power_on' : 'power_off', {});
-    this.wall = performance.now(); this.ticks = this.state.virtual_ticks;
+    this.wall = performance.now(); this.ticks = this.state.virtual_ticks; this.pace.reset(this.ticks);
   }
   dispose() {
+    this.disposed = true;
     this.alive = false; clearTimeout(this.timer);
     this.worker.terminate();
     const error = Error('Emulator closed.');
     this.bootReject?.(error); this.bootReject = undefined;
     for (const pending of this.pending.values()) pending.reject(error);
-    this.pending.clear(); this.listeners.clear();
+    this.pending.clear(); this.listeners.clear(); this.cardListeners.clear(); this.errorListeners.clear(); this.metricListeners.clear();
   }
 }
