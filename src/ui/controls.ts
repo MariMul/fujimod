@@ -8,6 +8,7 @@ export class InputPanel {
   private holds = new Map<number | string, string>();
   private lastHovered: string | null = null;
   private ready = false;
+  private pulseQueue: Promise<void> = Promise.resolve();
   private stopRotation?: () => void;
   constructor(private host: HTMLElement, private viewer: ModelViewer, private error: (error: unknown) => void) {
     viewer.onPointerDown = (hit, event) => this.modelDown(hit, event);
@@ -123,8 +124,11 @@ export class InputPanel {
       return true;
     }
     // Rear command detents are physical button actions selected by the viewer.
-    const engine = this.engine;
-    void engine.press(input.id).then(() => engine.release(input.id)).catch(this.error);
+    const engine = this.engine, id = input.id;
+    this.pulseQueue = this.pulseQueue.then(async () => {
+      await engine.press(id);
+      await engine.release(id);
+    }).catch(this.error);
     return true;
   }
   private rotate(input: Input, event: PointerEvent) {
