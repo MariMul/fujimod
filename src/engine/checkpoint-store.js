@@ -51,7 +51,7 @@ export class CheckpointStore {
       const bytes = await unpack(await file.getFile()); this.backend = 'opfs'; return bytes;
     } catch { /* Unavailable, absent or corrupt: try the transactional fallback. */ }
     try {
-      const bytes = await unpack(await indexed('get', key)); this.backend = 'indexeddb'; return bytes;
+      const bytes = await unpack(new Blob([await indexed('get', key)])); this.backend = 'indexeddb'; return bytes;
     } catch { return undefined; }
   }
   async write(key, bytes) {
@@ -64,7 +64,8 @@ export class CheckpointStore {
       catch (error) { await writer.abort().catch(() => {}); throw error; }
       this.backend = 'opfs'; return true;
     } catch { /* OPFS is optional; IndexedDB commits the complete blob atomically. */ }
-    try { await indexed('put', key, blob); this.backend = 'indexeddb'; return true; }
+    // ArrayBuffer has consistent structured-clone support in Safari workers.
+    try { await indexed('put', key, await blob.arrayBuffer()); this.backend = 'indexeddb'; return true; }
     catch { return false; }
   }
 }

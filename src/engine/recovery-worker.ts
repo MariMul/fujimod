@@ -11,6 +11,7 @@ export class WorkerRecovery {
   private store = new CheckpointStore();
   private key = '';
   private saved = false;
+  private saving = false;
   private cacheFailure?: string;
   private restoreSeconds = 0;
   mode = 'cold';
@@ -42,17 +43,21 @@ export class WorkerRecovery {
   async capture(py: RecoveryRuntime) {
     // History checks the two-second deadline and refuses unsafe boundaries without execution.
     let value: BytesProxy | undefined;
+    let ownsSave = false;
     try {
       const captured = py.runPython<boolean>('browser_history.capture(session)');
-      if (!captured || this.saved || this.persistenceDisabled) return;
+      if (!captured || this.saved || this.saving || this.persistenceDisabled) return;
+      this.saving = ownsSave = true;
       value = py.runPython<BytesProxy>('memoryview(export_initial(session))');
       const buffer = value.getBuffer('u8');
       let bytes: Uint8Array<ArrayBuffer>;
       try { bytes = Uint8Array.from(buffer.data); } finally { buffer.release(); }
+      value.destroy(); value = undefined;
       this.saved = await this.store.write(this.key, bytes);
+      if (!this.saved) this.persistenceDisabled = true;
       return this.saved;
-    } catch (error) { this.cacheFailure = String(error); }
-    finally { value?.destroy(); }
+    } catch (error) { this.cacheFailure = String(error); this.persistenceDisabled = true; return true; }
+    finally { value?.destroy(); if (ownsSave) this.saving = false; }
   }
   rollback(py: RecoveryRuntime, seconds: number) {
     py.globals.set('browser_undo_seconds', seconds);

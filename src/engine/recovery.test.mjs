@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { WorkerEngine } from './worker-engine.ts';
 import { faultFrom } from './fault.ts';
 import { cacheKey, CheckpointStore } from './checkpoint-store.js';
+import { WorkerRecovery } from './recovery-worker.ts';
 
 function setup() {
   globalThis.document = { baseURI: 'https://example.invalid/' };
@@ -60,4 +61,28 @@ test('OPFS rejects corrupt bytes and unavailable persistence degrades to a cold 
     globalThis.navigator.storage.getDirectory = async () => { throw Error('no permission'); };
     assert.equal(await store.write('key', bytes), false); assert.equal(await store.read('key'), undefined);
   } finally { if (previous) Object.defineProperty(globalThis, 'navigator', previous); else delete globalThis.navigator; }
+});
+
+test('an outstanding browser write prevents overlapping archive exports', async () => {
+  let enter, finish;
+  const entered = new Promise(resolve => { enter = resolve; });
+  const pending = new Promise(resolve => { finish = resolve; });
+  const dir = { getFileHandle: async () => ({ createWritable: async () => { enter(); await pending;
+    return { write: async () => {}, close: async () => {} }; } }) };
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { storage: { getDirectory: async () => ({ getDirectoryHandle: async () => dir }) } } });
+  let exports = 0, destroyed = 0;
+  const py = { runPython(source) {
+    if (source === 'browser_history.capture(session)') return true;
+    exports++;
+    return { getBuffer: () => ({ data: new Uint8Array([1,2,3]), release() {} }), destroy() { destroyed++; } };
+  } };
+  try {
+    const recovery = new WorkerRecovery(), saved = recovery.capture(py);
+    await entered;
+    await recovery.capture(py); await recovery.capture(py);
+    assert.equal(exports, 1); assert.equal(destroyed, 1);
+    finish(); assert.equal(await saved, true);
+    await recovery.capture(py); assert.equal(exports, 1);
+  } finally { finish(); if (previous) Object.defineProperty(globalThis, 'navigator', previous); else delete globalThis.navigator; }
 });
