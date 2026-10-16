@@ -34,6 +34,8 @@ export class ModelViewer {
   private homeTarget = new THREE.Vector3();
   private leaderSignature = '';
   private highlightId: string | null = null;
+  private dirty = true;
+  private leadersDirty = true;
   onPointerDown?: (hit: ModelHit, event: PointerEvent) => void;
   onHover?: (id: string | null) => void;
   constructor(private host: HTMLElement, private lines: SVGSVGElement, private workspace: HTMLElement) {
@@ -43,6 +45,8 @@ export class ModelViewer {
     this.camera.position.set(0, 0.6, 6);
     this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
     this.orbit.enableDamping = true;
+    this.orbit.addEventListener('change', () => { this.dirty = this.leadersDirty = true; });
+    window.addEventListener('scroll', () => { this.leadersDirty = true; }, true);
     this.orbit.minDistance = 2; this.orbit.maxDistance = 10;
     this.scene.add(new THREE.HemisphereLight(0xc9d4e1, 0x28221c, 2.1));
     const key = new THREE.DirectionalLight(0xffffff, 3.4); key.position.set(-3, 5, 5); this.scene.add(key);
@@ -54,6 +58,7 @@ export class ModelViewer {
     this.texture.generateMipmaps = false; this.texture.minFilter = THREE.LinearFilter;
     this.placeholder();
     new ResizeObserver(() => this.resize()).observe(host);
+    new MutationObserver(() => { this.leadersDirty = true; this.leaderSignature = ''; }).observe(document.getElementById('controls')!, { childList: true });
     // Capture runs before OrbitControls' bubble handler, preventing control drags from orbiting.
     this.renderer.domElement.addEventListener('pointerdown', event => {
       const hit = this.pick(event);
@@ -64,8 +69,12 @@ export class ModelViewer {
     });
     this.renderer.domElement.addEventListener('pointerleave', () => this.onHover?.(null));
     this.renderer.setAnimationLoop(() => {
-      this.orbit.update(); this.renderer.render(this.scene, this.camera); this.projectLeaders();
-      this.host.dataset.renderFrames = String(this.renderer.info.render.frame);
+      this.orbit.update();
+      if (this.dirty) {
+        this.renderer.render(this.scene, this.camera); this.dirty = false;
+        this.host.dataset.renderFrames = String(this.renderer.info.render.frame);
+      }
+      if (this.leadersDirty) { this.projectLeaders(); this.leadersDirty = false; }
     });
   }
   private disposeRoot() {
@@ -76,6 +85,7 @@ export class ModelViewer {
         for (const material of Array.isArray(object.material) ? object.material : [object.material]) material.dispose();
       }
     });
+    this.dirty = this.leadersDirty = true;
     this.root.clear(); this.root.rotation.set(0, 0, 0);
   }
   placeholder() {
@@ -144,7 +154,7 @@ export class ModelViewer {
     for (let s = 0, t = 0; s < frame.rgb.length; s += 3, t += 4) {
       image.data[t] = frame.rgb[s]; image.data[t + 1] = frame.rgb[s + 1]; image.data[t + 2] = frame.rgb[s + 2]; image.data[t + 3] = 255;
     }
-    context.putImageData(image, 0, 0); this.texture.needsUpdate = true;
+    context.putImageData(image, 0, 0); this.texture.needsUpdate = true; this.dirty = true;
     this.host.dataset.frames = String(frame.sequence);
   }
   private localBounds(target: THREE.Object3D) {
@@ -181,6 +191,8 @@ export class ModelViewer {
   }
   private visible(node: THREE.Object3D) { for (let n: THREE.Object3D | null = node; n; n = n.parent) if (!n.visible) return false; return true; }
   highlight(id: string | null) {
+    if (this.highlightId === id) return;
+    this.dirty = this.leadersDirty = true;
     this.highlightId = id;
     this.root.traverse(object => {
       if (!(object instanceof THREE.Mesh)) return;
@@ -190,7 +202,7 @@ export class ModelViewer {
         const target = id && this.targets.get(id);
         let selected = false;
         for (let n: THREE.Object3D | null = object; n; n = n.parent) if (n === target) selected = true;
-        material.emissive.copy(selected ? new THREE.Color(0x594522) : material.userData.baseEmissive);
+        material.emissive.copy(selected ? new THREE.Color(0x0A84FF) : material.userData.baseEmissive);
       }
     });
   }
@@ -201,6 +213,7 @@ export class ModelViewer {
     this.orbit.target.copy(this.homeTarget); this.orbit.update();
   }
   private fit() {
+    this.dirty = this.leadersDirty = true;
     this.root.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(this.root), size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3()), tangent = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
