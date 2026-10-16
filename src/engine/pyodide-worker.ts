@@ -174,6 +174,7 @@ async function startSession(config: EngineConfig, files: { path: string; bytes: 
     runtime.runPython('boot_module.board = session.board');
     send('progress', { message: 'Resuming saved camera…', percent: 95 });
   }
+  runtime.runPython('transport.configure(session)');
   for (const [id, position] of Object.entries(config.initialPositions ?? {})) {
     runtime.globals.set('initial_position', JSON.stringify({ id, position }));
     runtime.runPython("request(session, 'set_position', initial_position)");
