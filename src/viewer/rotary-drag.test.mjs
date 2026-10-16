@@ -54,6 +54,11 @@ test('empty-space touch is left to orbit; disable and blur stop a drag', () => {
   assert.equal(s.drag.begin(empty), false); assert.equal(empty.defaultPrevented, false);
   s.start(); s.drag.setEnabled(false);
   s.canvas.dispatchEvent(pointer('pointermove', 90, 0)); assert.deepEqual(s.changes, []);
+  const disabled = pointer('pointerdown', 0, 0);
+  assert.equal(s.drag.begin(disabled, n => s.changes.push(n)), true);
+  assert.equal(disabled.defaultPrevented, true);
+  s.canvas.dispatchEvent(pointer('pointermove', 90, 0)); assert.deepEqual(s.changes, []);
+  s.drag.setEnabled(false);
   s.drag.setEnabled(true); s.start(); window.dispatchEvent(new Event('blur'));
   assert.equal(s.drag.dragging, false); assert.equal(s.canvas.captured.size, 0);
 });

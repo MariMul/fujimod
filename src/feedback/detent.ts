@@ -9,6 +9,8 @@ export class DetentFeedback {
     if (!event.isTrusted) return;
     try {
       if (navigator.vibrate?.(0)) return;
+    } catch { /* Permissions or platform restrictions can reject vibration. */ }
+    try {
       // Transient maps to iOS's ambient session. Older WebKit already defaults
       // Web Audio to ambient; leave that default alone when AudioSession is absent.
       const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;

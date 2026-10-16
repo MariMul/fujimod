@@ -1,0 +1,31 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import * as THREE from 'three';
+import ts from 'typescript';
+const input = readFileSync(new URL('./rotary-part.ts', import.meta.url), 'utf8').replace("'three'", JSON.stringify(import.meta.resolve('three')));
+const source = ts.transpileModule(input, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+const { RotaryPart } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+
+test('exported body-origin meshes turn about their own center, with visible travel to a detent', () => {
+  const root = new THREE.Group(), target = new THREE.Group();
+  root.position.set(1, 2, 3); target.position.set(10, 2, 3); root.add(target);
+  const geometry = new THREE.CylinderGeometry(1, 1, .2, 20).translate(3, 4, 5);
+  const mesh = new THREE.Mesh(geometry); target.add(mesh); root.updateMatrixWorld(true);
+  geometry.computeBoundingBox();
+  const bounds = geometry.boundingBox.clone(), center = target.localToWorld(bounds.getCenter(new THREE.Vector3()));
+  const part = new RotaryPart(target, bounds);
+  assert.deepEqual(part.axis.toArray(), [0, 1, 0]);
+  assert.deepEqual(part.pivot.position.toArray(), [13, 6, 8]);
+  const initial = part.pivot.quaternion.clone(), start = performance.now();
+  part.turn(1); part.advance(start + 30);
+  assert(part.pivot.quaternion.angleTo(initial) > 0);
+  assert(part.pivot.quaternion.angleTo(initial) < Math.PI / 12);
+  part.advance(start + 100);
+  assert(Math.abs(part.pivot.quaternion.angleTo(initial) - Math.PI / 12) < 1e-7);
+  const finalCenter = mesh.localToWorld(bounds.getCenter(new THREE.Vector3()));
+  assert(finalCenter.distanceTo(center) < 1e-7);
+  assert.equal(part.advance(start + 200), false);
+  part.turn(-1); part.advance(start + 300);
+  assert(part.pivot.quaternion.angleTo(initial) < 1e-7);
+});

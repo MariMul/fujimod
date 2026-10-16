@@ -38,6 +38,7 @@ export class ModelViewer {
   private leaderSignature = '';
   private highlightId: string | null = null;
   private rotary = new Map<string, { part: RotaryPart; negative: string; positive: string }>();
+  private rotaryParts = new Set<RotaryPart>();
   private rotaryStep?: (id: string, direction: number) => boolean;
   private rotaryDrag: RotaryDrag;
   private detent = new DetentFeedback();
@@ -89,8 +90,11 @@ export class ModelViewer {
       if (!event.buttons && !this.rotaryDrag.dragging) this.onHover?.(this.pick(event)?.id ?? null);
     });
     this.renderer.domElement.addEventListener('pointerleave', () => this.onHover?.(null));
-    this.renderer.setAnimationLoop(() => {
+    this.renderer.setAnimationLoop(now => {
       this.orbit.update();
+      for (const part of this.rotaryParts) {
+        if (part.advance(now)) this.dirty = this.leadersDirty = true;
+      }
       if (this.dirty) {
         this.renderer.render(this.scene, this.camera); this.dirty = false;
         this.host.dataset.renderFrames = String(this.renderer.info.render.frame);
@@ -99,7 +103,7 @@ export class ModelViewer {
     });
   }
   private disposeRoot() {
-    this.rotaryDrag.cancel(); this.rotary.clear(); this.rotaryStep = undefined;
+    this.rotaryDrag.cancel(); this.rotary.clear(); this.rotaryParts.clear(); this.rotaryStep = undefined;
     this.targets.clear();
     this.root.traverse(object => {
       if (object instanceof THREE.Mesh) {
@@ -199,6 +203,7 @@ export class ModelViewer {
     });
     for (const label of labels) label.userData.inputIds = [id];
     const rotary = { part: new RotaryPart(target, bounds, labels), negative, positive };
+    this.rotaryParts.add(rotary.part);
     for (const alias of [id, negative, positive]) this.rotary.set(alias, rotary);
   }
   private screenUvs(geometry: THREE.BufferGeometry) {

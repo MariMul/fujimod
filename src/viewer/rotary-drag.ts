@@ -25,9 +25,9 @@ export class RotaryDrag {
       this.swallowed.add(event.pointerId); this.consume(event);
       this.canvas.setPointerCapture(event.pointerId); return true;
     }
-    if (!step || !this.enabled || event.button !== 0) return false;
+    if (!step || event.button !== 0) return false;
     this.consume(event); this.orbit(false);
-    this.active = { pointer: event.pointerId, x: event.clientX, y: event.clientY, remainder: 0, step };
+    this.active = { pointer: event.pointerId, x: event.clientX, y: event.clientY, remainder: 0, step: direction => { if (this.enabled) step(direction); } };
     this.canvas.setPointerCapture(event.pointerId); return true;
   }
 

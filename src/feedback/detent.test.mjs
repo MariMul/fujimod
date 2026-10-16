@@ -31,4 +31,6 @@ test('supported haptics avoid audio, rejected vibration falls back to audio', ()
   assert.deepEqual(vibrations, [0, 8]); assert.equal(contexts, 0);
   navigator.vibrate = () => false;
   feedback.beginGesture({ isTrusted: true }); assert.equal(contexts, 1);
+  navigator.vibrate = () => { throw Error('Unavailable'); };
+  new DetentFeedback().beginGesture({ isTrusted: true }); assert.equal(contexts, 2);
 });
