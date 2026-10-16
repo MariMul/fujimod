@@ -133,7 +133,8 @@ export class WorkerEngine implements Engine {
       ? this.input('rotate', { id, steps: position })
       : this.input('set_position', { id, position });
   }
-  async setScene(scene: Scene) {
+  async setScene(scene: Scene | null) {
+    if (!scene) { this.worker.postMessage({ type: 'sensor_reset' }); return; }
     const rgb = scene.rgb.slice().buffer;
     this.worker.postMessage({ type: 'sensor', rgb, width: scene.width, height: scene.height }, [rgb]);
   }

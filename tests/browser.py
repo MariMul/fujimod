@@ -26,10 +26,11 @@ async def check(playwright, args, engine):
     page.on('console', lambda message: errors.append(message.text) if message.type == 'error' else None)
     await page.add_init_script("""(() => {
       const WorkerClass = window.Worker;
-      window.__messages = [];
+      window.__messages = []; window.__sensorAcks = 0;
       window.Worker = class extends WorkerClass {
         constructor(...args) { super(...args); this.addEventListener('message', ({data}) => {
           if(data.state?.display) window.__state = data.state;
+          if(data.type === 'sensor_ready') window.__sensorAcks++;
           if(data.type === 'error') window.__messages.push(data);
         }); }
         postMessage(data, ...args) { if(data.type === 'request' && data.action !== 'advance' && data.action !== 'state') window.__messages.push(data); return super.postMessage(data,...args); }
@@ -80,6 +81,17 @@ async def check(playwright, args, engine):
         await page.screenshot(path=str(out / 'menu.png'), full_page=True)
         await page.get_by_role('button', name='Display / Back', exact=True).click()
         await page.wait_for_timeout(1500)
+        if args.scene:
+            # Reset the default scene without opening any host webcam.
+            await page.locator('#webcam').dispatch_event('change')
+            await page.wait_for_function('window.__sensorAcks >= 1', timeout=30000)
+            await page.locator('#image-file').set_input_files(str(args.scene))
+            await page.wait_for_function('window.__sensorAcks >= 2', timeout=30000)
+            # Off restores the chosen image without requesting any webcam.
+            assert not await page.locator('#webcam').is_checked()
+            await page.locator('#webcam').dispatch_event('change')
+            await page.wait_for_function('window.__sensorAcks >= 3', timeout=30000)
+            assert not await page.locator('#status').evaluate("e => e.classList.contains('error')")
         # Exercise download from the real patch worker, save and check the ZIP members.
         async with page.expect_download(timeout=60000) as pending:
             await page.get_by_role('button', name='Build SD files').click()
@@ -111,6 +123,7 @@ async def main():
     parser.add_argument('--url', default='http://127.0.0.1:5190/')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--expected', type=Path)
+    parser.add_argument('--scene', type=Path, help='Also check image input and reset to the analytic scene')
     parser.add_argument('--dat', type=Path, help='Choose a local DAT instead of automatic dev boot')
     parser.add_argument('--engine', choices=['chromium','webkit','both'], default='both')
     args = parser.parse_args()

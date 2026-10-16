@@ -138,10 +138,10 @@ $('viewer').addEventListener('dragover', event => { event.preventDefault(); $('v
 $('viewer').addEventListener('dragleave', () => $('viewer').classList.remove('dragging'));
 $('viewer').addEventListener('drop', event => { event.preventDefault(); $('viewer').classList.remove('dragging'); if (event.dataTransfer?.files.length !== 1) { status('Drop one firmware DAT.', true); return; } void processFile(event.dataTransfer.files[0]); });
 $('face-screen').onclick = () => viewer.faceScreen(); $('face-lens').onclick = () => viewer.faceLens();
-$<HTMLInputElement>('image-file').onchange = event => { const input = event.target as HTMLInputElement; if (input.files?.[0]) void sensor.useImage(input.files[0]).catch(error => status(String(error), true)); input.value = ''; };
+$<HTMLInputElement>('image-file').onchange = event => { const input = event.target as HTMLInputElement; if (input.files?.[0]) { $<HTMLInputElement>('webcam').checked = false; void sensor.useImage(input.files[0]).catch(error => status(String(error), true)); } input.value = ''; };
 $('image-drop').ondragover = event => { event.preventDefault(); $('image-drop').classList.add('over'); };
 $('image-drop').ondragleave = () => $('image-drop').classList.remove('over');
-$('image-drop').ondrop = event => { event.preventDefault(); event.stopPropagation(); $('image-drop').classList.remove('over'); if (event.dataTransfer?.files[0]) void sensor.useImage(event.dataTransfer.files[0]).catch(error => status(String(error), true)); };
+$('image-drop').ondrop = event => { event.preventDefault(); event.stopPropagation(); $('image-drop').classList.remove('over'); if (event.dataTransfer?.files[0]) { $<HTMLInputElement>('webcam').checked = false; void sensor.useImage(event.dataTransfer.files[0]).catch(error => status(String(error), true)); } };
 $<HTMLInputElement>('webcam').onchange = async event => { const input = event.target as HTMLInputElement; try { await sensor.webcam(input.checked); } catch (error) { input.checked = false; status(String(error), true); } };
 window.addEventListener('beforeunload', () => { sensor.dispose(); engine?.dispose(); });
 try {

@@ -23,7 +23,7 @@ export interface Engine {
   press(id: string, stage?: string, point?: { x: number; y: number }): Promise<void>;
   release(id: string): Promise<void>;
   setPosition(id: string, position: string | number): Promise<void>;
-  setScene(scene: Scene): Promise<void>;
+  setScene(scene: Scene | null): Promise<void>;
   power(on: boolean): Promise<void>;
   dispose(): void;
 }

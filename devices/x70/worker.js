@@ -143,6 +143,11 @@ self.onmessage = async ({ data }) => {
       handleRequest(data);
       return;
     }
+    if (data.type === "sensor_reset") {
+      py.runPython("use_analytic_scene(session)");
+      send("sensor_ready");
+      return;
+    }
     if (data.type === "sensor") {
       const bytes = py.toPy(new Uint8Array(data.rgb));
       py.globals.set("sensor_rgb_buffer", bytes);

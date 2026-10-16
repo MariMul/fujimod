@@ -7,7 +7,7 @@ export class SensorInput {
   private canvas = document.createElement('canvas');
   private engine?: Engine;
   constructor(private status: (message: string) => void) {}
-  connect(engine?: Engine) { this.engine = engine; }
+  connect(engine?: Engine) { this.engine = engine; if (engine && this.image) this.send(); }
   async useImage(file: File) {
     this.stopWebcam();
     const image = new Image(), url = URL.createObjectURL(file);
@@ -16,7 +16,7 @@ export class SensorInput {
   }
   async webcam(enabled: boolean) {
     this.stopWebcam();
-    if (!enabled) { this.send(); this.status(this.image ? 'Image' : 'Built-in scene'); return; }
+    if (!enabled) { if (this.image) this.send(); else await this.engine?.setScene(null); this.status(this.image ? 'Image' : 'Built-in scene'); return; }
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
       this.video = document.createElement('video'); this.video.muted = true; this.video.playsInline = true; this.video.srcObject = this.stream;
