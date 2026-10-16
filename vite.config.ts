@@ -1,17 +1,17 @@
-import { defineConfig, loadEnv, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin, type Connect } from 'vite';
 import { createReadStream, existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 
-// Opt-in local artifact mounts are dev-only and never enter a production build.
+// Opt-in local artifact mounts are served by the local server, never copied into dist.
 function localArtifacts(env: Record<string, string>): Plugin {
-  return { name: 'local-artifacts', apply: 'serve', configureServer(server) {
+  const configure = (middlewares: Connect.Server) => {
     const mounts = [
       ['/runtime/', env.FUJIMOD_RUNTIME],
       ['/artifacts/', env.FUJIMOD_PATCHES],
       ['/local/firmware.dat', env.FUJIMOD_DAT],
     ].filter((pair): pair is [string, string] => Boolean(pair[1]));
-    server.middlewares.use(async (req, res, next) => {
+    middlewares.use(async (req, res, next) => {
       const url = new URL(req.url || '/', 'http://localhost').pathname;
       const mount = mounts.find(([prefix]) => url.startsWith(prefix));
       if (!mount) return next();
@@ -33,10 +33,12 @@ function localArtifacts(env: Record<string, string>): Plugin {
         createReadStream(path).pipe(res);
       } catch { res.statusCode = 404; res.end(); }
     });
-  }};
+  };
+  return { name: 'local-artifacts', apply: 'serve', configureServer: server => configure(server.middlewares), configurePreviewServer: server => configure(server.middlewares) };
 }
 export default defineConfig(({ mode, command }) => ({
-  base: './', define: { __FUJIMOD_LOCAL_DAT__: command === 'serve' && Boolean(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_DAT), __FUJIMOD_CATALOG__: JSON.stringify(existsSync('public/runtime/catalog.json') ? 'runtime/catalog.json' : 'catalog.json') }, plugins: [localArtifacts(loadEnv(mode, process.cwd(), 'FUJIMOD_'))],
+  base: './', define: { __FUJIMOD_LOCAL_DAT__: (command === 'serve' || mode === 'local-preview') && Boolean(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_DAT), __FUJIMOD_CATALOG__: JSON.stringify(existsSync('public/runtime/catalog.json') ? 'runtime/catalog.json' : 'catalog.json') }, plugins: [localArtifacts(loadEnv(mode, process.cwd(), 'FUJIMOD_'))],
   server: { host: '127.0.0.1', fs: { strict: true } },
+  preview: { host: '127.0.0.1', allowedHosts: ['cozycat.tail2b5ca.ts.net'] },
   build: { target: 'es2022' }, worker: { format: 'es' },
 }));

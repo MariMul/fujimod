@@ -16,7 +16,22 @@ export interface Frame {
   sequence: number;
 }
 export interface Scene { rgb: Uint8Array; width: number; height: number }
-export interface EngineConfig { bundle: string; inputs: string }
+export interface BootProtocol {
+  datPath: string;
+  prepare: { module: string; function: string; options: Record<string, unknown> };
+  module: string;
+  sessionModule: string;
+  limit: number;
+  step: number;
+  readyLimit: number;
+  readyWhen: string[];
+}
+export interface EngineConfig {
+  bundle: string;
+  inputs: string;
+  boot: BootProtocol;
+  initialPositions?: Record<string, string>;
+}
 export interface Engine {
   boot(dat: ArrayBuffer, config: EngineConfig, progress: (message: string, percent: number) => void): Promise<Input[]>;
   frames(listener: (frame: Frame) => void): () => void;

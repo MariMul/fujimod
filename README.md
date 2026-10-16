@@ -15,13 +15,14 @@ and emulation are independent capabilities. Release-only patch entries also
 work without a site source change.
 
 `src/engine/api.ts` is the website's emulator boundary: boot, frames,
-press/release, setPosition, setScene and power. The current WorkerEngine adapter
+press/release, setPosition, setScene and power. The shared Pyodide WorkerEngine adapter
 owns pacing, request ordering and disposal; it wraps the existing Pyodide
 session worker. No register addresses or firmware bindings appear in rendering
 or panel code. The input artifact belongs to the emulator. Model nodes,
 physical panel order and plain display labels live in `devices/x70/parts.json`.
-The X70 worker is explicitly selected by the catalog; adding a body does not
-add conditionals to the viewer. `src/viewer/model.ts` ports LCD UV mapping,
+The catalog selects the shared Pyodide engine and supplies its Python boot
+protocol. Device directories contain model/part/initial-position data only;
+adding a body does not add conditionals to the worker or viewer. `src/viewer/model.ts` ports LCD UV mapping,
 picking, orbiting, visible leader lines and sizing from the research viewer.
 
 The model is **CAMERA ( Fujifilm X70 )** by
@@ -33,7 +34,7 @@ the glTF itself is unchanged. The page repeats attribution when loaded.
 
 ### Develop
 
-Use Node 22.12 or later, `git lfs install --local`, `git lfs pull`, then:
+Use Node 22.18 or later, `git lfs install --local`, `git lfs pull`, then:
 
 ```sh
 npm ci
@@ -53,9 +54,9 @@ The staged runtime directory contains `catalog.json` and firmware-ID folders
 with `_native.so`, `sources.zip`, `inputs.json`, `pyodide/` and
 `firmware-inputs.zip`. A release preparation stages this tree into
 `public/runtime/`, which Vite also serves directly without a mount. These mounts exist only in
-the dev server. Setting `FUJIMOD_DAT` enables automatic local boot; without it,
-the viewer remains a DAT drop target. Production builds never include that
-local DAT or read files through these mounts.
+the dev and preview servers. Setting `FUJIMOD_DAT` enables automatic local boot; without it,
+the viewer remains a DAT drop target. Public builds omit the automatic DAT fetch. The local DAT is served from its
+opt-in mount and is never copied into any build artifact.
 
 ```sh
 npm test
@@ -69,6 +70,18 @@ iPhone 13 emulation, checks live frames and a menu tap, saves page/model/LCD
 screenshots and verifies downloaded ZIP members against private builder output.
 WebKit emulation is a desktop browser check, not an iPhone hardware measurement.
 
+### Local production preview
+
+```sh
+npm run build:local-preview
+npm run preview -- --mode local-preview --port 5190 --strictPort
+```
+
+This serves the built `dist/` and enables automatic boot using `FUJIMOD_DAT` in
+ignored `.env.local`. The preview binds only `127.0.0.1` and permits the
+`cozycat.tail2b5ca.ts.net` Host header for `tailscale serve`. The ordinary public
+`npm run build` excludes the local automatic-boot setting.
+
 ### Release artifacts and deployment
 
 `npm run prepare:release` fetches a release index and verifies patches. Optional
@@ -76,7 +89,9 @@ WebKit emulation is a desktop browser check, not an iPhone hardware measurement.
 a capability catalog. `scripts/stage-browser.mjs` verifies each artifact before
 staging it under ignored `public/runtime/`. A patch-only release removes the
 emulation capability from the installed catalog. `npm run build` then bundles
-this repository into `dist/`. No private repository source is copied over the
+this repository into `dist/` and verifies every GLB is a real glTF 2 binary with
+identical source/deployment hashes. Pages checks out and pulls the LFS model
+objects before building. No private repository source is copied over the
 site, and neither a stock DAT nor boot ROM is a public input.
 
 The Pages workflow runs only from main or a release targeting main. Review
@@ -87,7 +102,7 @@ artifacts and never copies, commits or pushes website source.
 ## JavaScript API
 
 ```js
-import { patch } from './patcher.js';
+import { patch } from './src/patch/patcher.ts';
 const { ffboot, ffsys, metadata } = await patch(baseStockDatFile, compiledPatch);
 ```
 

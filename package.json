@@ -1,6 +1,26 @@
 {
-  "name": "fujimod", "private": true, "type": "module", "version": "0.1.0",
-  "scripts": { "dev": "vite --host 127.0.0.1", "build": "tsc --noEmit && vite build", "preview": "vite preview --host 127.0.0.1", "test": "node --test tests/*.test.mjs", "prepare:release": "node scripts/prepare-pages.mjs" },
-  "dependencies": { "three": "^0.180.0" },
-  "devDependencies": { "@types/three": "^0.180.0", "@types/node": "^24.0.0", "typescript": "^5.9.0", "vite": "^7.1.0" }
+  "name": "fujimod",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build && node scripts/verify-models.mjs dist",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --test tests/*.test.mjs",
+    "prepare:release": "node scripts/prepare-pages.mjs",
+    "build:local-preview": "tsc --noEmit && vite build --mode local-preview && node scripts/verify-models.mjs dist"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.180.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.1.0"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
 }

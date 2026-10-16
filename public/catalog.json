@@ -11,9 +11,28 @@
       "release_date": "2016-06-09",
       "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x70/",
       "emulate": {
-        "adapter": "x70",
+        "adapter": "pyodide",
         "bundle": "runtime/x70-110/",
-        "inputs": "runtime/x70-110/inputs.json"
+        "inputs": "runtime/x70-110/inputs.json",
+        "boot": {
+          "datPath": "/repo/firmware/original/FPUPDATE.DAT",
+          "prepare": {
+            "module": "tools.unpack_x70",
+            "function": "main",
+            "options": {
+              "export_strings": false
+            }
+          },
+          "module": "native.web.boot",
+          "sessionModule": "native.web.session",
+          "limit": 100000000,
+          "step": 2000000,
+          "readyLimit": 50000000,
+          "readyWhen": [
+            "rec_initialization_idle",
+            "display.last_frame.graphics"
+          ]
+        }
       },
       "model_asset": "x70"
     },

@@ -1,16 +1,18 @@
+import type { PatchFiles } from './patcher.ts';
 /** Store-only ZIP: one download containing both files, no third-party library. */
 const table = Uint32Array.from({ length: 256 }, (_, n) => {
   let c = n;
   for (let k = 0; k < 8; k++) c = (c >>> 1) ^ ((c & 1) ? 0xedb88320 : 0);
   return c >>> 0;
 });
-export function crc32(data) {
+export function crc32(data: Uint8Array) {
   let crc = 0xffffffff;
   for (const value of data) crc = (crc >>> 8) ^ table[(crc ^ value) & 255];
   return (crc ^ 0xffffffff) >>> 0;
 }
-export function cardZip({ ffboot, ffsys }) {
-  const files = [['ffboot.bin', ffboot], ['ffsys.bin', ffsys]], local = [], directory = [];
+export function cardZip({ ffboot, ffsys }: PatchFiles): Blob {
+  const files: [string, Uint8Array<ArrayBuffer>][] = [['ffboot.bin', ffboot], ['ffsys.bin', ffsys]];
+  const local: Uint8Array<ArrayBuffer>[] = [], directory: Uint8Array<ArrayBuffer>[] = [];
   let offset = 0, directorySize = 0;
   for (const [name, data] of files) {
     const filename = new TextEncoder().encode(name), crc = crc32(data);

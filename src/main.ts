@@ -1,8 +1,9 @@
 import './style.css';
-import { sha256 } from '../patcher.js';
-import { validateIndex } from '../catalog.js';
-import { cardZip } from '../download.js';
+import { sha256 } from './patch/patcher.ts';
+import { validateIndex } from './patch/catalog.ts';
+import { cardZip } from './patch/download.ts';
 import { validateCatalog, type Catalog, type Firmware } from './catalog';
+import { createEngine } from './engine';
 import type { Engine } from './engine/api';
 import { ModelViewer, type ModelData } from './viewer/model';
 import { InputPanel } from './ui/controls';
@@ -11,7 +12,7 @@ import { SensorInput } from './ui/sensor';
 declare const __FUJIMOD_LOCAL_DAT__: boolean;
 declare const __FUJIMOD_CATALOG__: string;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-const adapters = import.meta.glob<{ model: ModelData; initialPositions: Record<string, string>; createEngine: (onError: (error: Error) => void) => Engine }>('../devices/*/index.ts');
+const adapters = import.meta.glob<{ model: ModelData; initialPositions: Record<string, string> }>('../devices/*/index.ts');
 // Vite's glob is relative to this source file; data selects the implementation.
 const viewer = new ModelViewer($('viewer'), document.getElementById('leaders') as unknown as SVGSVGElement, $('workspace'));
 const panel = new InputPanel($('controls'), viewer, error => status(String(error), true));
@@ -61,7 +62,7 @@ async function processFile(file?: File) {
     $('camera-title').textContent = `${entry.model} · ${entry.version}`;
     const hasPatch = Boolean(release?.patches[digest]);
     $('patch-section').hidden = !hasPatch;
-    const moduleId = entry.emulate?.adapter ?? entry.model_asset;
+    const moduleId = entry.model_asset;
     const load = moduleId && adapters[`../devices/${moduleId}/index.ts`];
     const device = load ? await load() : undefined;
     if (current !== generation) return;
@@ -71,8 +72,8 @@ async function processFile(file?: File) {
       catch { status('3D model unavailable.'); }
     }
     if (current !== generation) return;
-    if (!entry.emulate || !device) { status(hasPatch ? 'SD patch available.' : hasModel ? 'Emulation unsupported.' : 'Unsupported firmware.'); return; }
-    const activeEngine = device.createEngine((error: Error) => {
+    if (!entry.emulate) { status(hasPatch ? 'SD patch available.' : hasModel ? 'Emulation unsupported.' : 'Unsupported firmware.'); return; }
+    const activeEngine = createEngine(entry.emulate.adapter, (error: Error) => {
       if (current !== generation) return;
       status(error.message, true); panel.disable(); $('live-label').textContent = 'STOPPED'; sensor.connect();
     });
@@ -87,12 +88,12 @@ async function processFile(file?: File) {
       }
     });
     const started = performance.now();
-    const inputs = await activeEngine.boot(bytes, entry.emulate, (message, percent) => {
+    const inputs = await activeEngine.boot(bytes, { ...entry.emulate, initialPositions: device?.initialPositions }, (message, percent) => {
       if (current !== generation) return;
       status(message); const progress = $<HTMLProgressElement>('boot-progress'); progress.hidden = false; progress.value = percent;
     });
     if (current !== generation) return;
-    panel.render(inputs, activeEngine, hasModel ? device.model : undefined, device.initialPositions);
+    panel.render(inputs, activeEngine, hasModel ? device?.model : undefined, device?.initialPositions);
     sensor.connect(activeEngine); $('panel').hidden = false; $('scene-controls').hidden = false;
     $('live-label').textContent = 'LIVE'; $('boot-progress').hidden = true;
     $('viewer').dataset.bootSeconds = ((performance.now() - started) / 1000).toFixed(3);
@@ -115,7 +116,7 @@ function addDownload(blob: Blob, filename: string, text: string, secondary = fal
 }
 $('build-patch').onclick = () => {
   if (!selectedFile || !release || !selectedFirmware || patchWorker) return;
-  const worker = new Worker(new URL('../worker.js', import.meta.url), { type: 'module' }); patchWorker = worker;
+  const worker = new Worker(new URL('./patch/worker.ts', import.meta.url), { type: 'module' }); patchWorker = worker;
   const button = $<HTMLButtonElement>('build-patch'); button.disabled = true;
   worker.onmessage = ({ data }) => {
     if (patchWorker !== worker) return;

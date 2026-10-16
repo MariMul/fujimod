@@ -1,27 +1,43 @@
 /** FJMODP01 interpreter. No camera/model maps, network access or dependencies. */
 export const MAGIC = 'FJMODP01';
-const names = ['ffboot', 'ffsys'];
-const fail = message => { throw new Error(message); };
+export const names = ['ffboot', 'ffsys'] as const;
+export type OutputName = typeof names[number];
+export type BinaryInput = Uint8Array | ArrayBuffer | { arrayBuffer(): Promise<ArrayBuffer> };
+export interface FileIdentity { bytes: number; sha256: string }
+export interface PatchMetadata {
+  schema: number;
+  source: FileIdentity;
+  outputs: Record<OutputName, FileIdentity>;
+  commands: number;
+  program_sha256: string;
+  firmware?: string;
+  release?: string;
+  mods?: string[];
+}
+export interface PatchFiles { ffboot: Uint8Array<ArrayBuffer>; ffsys: Uint8Array<ArrayBuffer> }
+export interface PatchResult extends PatchFiles { metadata: PatchMetadata }
+const fail = (message: string): never => { throw new Error(message); };
 const hashPattern = /^[0-9a-f]{64}$/;
-const integer = (value, max) => Number.isInteger(value) && value > 0 && value <= max;
-export async function bytes(value) {
-  if (value instanceof Uint8Array) return value;
+const integer = (value: number, max: number) => Number.isInteger(value) && value > 0 && value <= max;
+export async function bytes(value: BinaryInput): Promise<Uint8Array<ArrayBuffer>> {
+  if (value instanceof Uint8Array) return value.buffer instanceof ArrayBuffer
+    ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength) : Uint8Array.from(value);
   if (value instanceof ArrayBuffer) return new Uint8Array(value);
-  if (typeof value?.arrayBuffer === 'function') return new Uint8Array(await value.arrayBuffer());
+  if ('arrayBuffer' in value && typeof value.arrayBuffer === 'function') return new Uint8Array(await value.arrayBuffer());
   return fail('Expected a File, Blob, ArrayBuffer or Uint8Array.');
 }
-export async function sha256(value) {
+export async function sha256(value: BinaryInput) {
   const digest = await crypto.subtle.digest('SHA-256', await bytes(value));
   return Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, '0')).join('');
 }
-export function inspectPatch(input) {
+export function inspectPatch(input: Uint8Array) {
   const data = input;
   if (!(data instanceof Uint8Array) || data.length < 12 || new TextDecoder().decode(data.subarray(0, 8)) !== MAGIC)
     return fail('This is not a supported Fujimod patch.');
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const length = view.getUint32(8, true);
   if (!integer(length, 1048576) || length + 12 > data.length) return fail('Invalid patch metadata length.');
-  const meta = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(data.subarray(12, 12 + length)));
+  const meta: PatchMetadata = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(data.subarray(12, 12 + length)));
   if (meta.schema !== 1 || !integer(meta.source?.bytes, 256 * 1024 * 1024) || !hashPattern.test(meta.source.sha256) ||
       !integer(meta.commands, 1000000) || !hashPattern.test(meta.program_sha256)) return fail('Invalid patch metadata.');
   for (const name of names)
@@ -29,7 +45,7 @@ export function inspectPatch(input) {
       return fail('Invalid patch output metadata.');
   return { meta, program: data.subarray(12 + length) };
 }
-function decodeLZ(data, length) {
+function decodeLZ(data: Uint8Array, length: number): Uint8Array<ArrayBuffer> {
   if (data.length < 20) return fail('Truncated LZ header.');
   const header = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const packed = header.getUint32(4, true);
@@ -55,7 +71,7 @@ function decodeLZ(data, length) {
   return output;
 }
 /** async patch(baseStockDatFile, compiledPatch) -> {ffboot, ffsys, metadata}. */
-export async function patch(baseStockDatFile, compiledPatch) {
+export async function patch(baseStockDatFile: BinaryInput, compiledPatch: BinaryInput): Promise<PatchResult> {
   const [base, data] = await Promise.all([bytes(baseStockDatFile), bytes(compiledPatch)]);
   const { meta, program } = inspectPatch(data);
   if (base.length !== meta.source.bytes || await sha256(base) !== meta.source.sha256)

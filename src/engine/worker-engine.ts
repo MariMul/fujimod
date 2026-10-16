@@ -73,7 +73,7 @@ export class WorkerEngine implements Engine {
           pending?.resolve(data);
         }
       };
-      this.worker.postMessage({ type: 'boot', dat, bundle: new URL(config.bundle, document.baseURI).href }, [dat]);
+      this.worker.postMessage({ type: 'boot', dat, config, bundle: new URL(config.bundle, document.baseURI).href }, [dat]);
     });
     return this.inputs;
   }

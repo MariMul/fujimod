@@ -1,11 +1,20 @@
-import { inspectPatch, sha256 } from './patcher.js';
+import { inspectPatch, sha256 } from './patcher.ts';
+export interface PatchFirmware {
+  id: string; model: string; version: string; sha256: string; bytes: number;
+  release_date: string; download_url: string; patch_sha256: string; patch_bytes: number;
+  boot_instructions: string[]; mods?: string[];
+}
+export interface PatchIndex {
+  schema: number; release: string; patches: Record<string, string>; firmwares: PatchFirmware[];
+}
 const hash = /^[0-9a-f]{64}$/;
-const calendarDate = value => {
+const calendarDate = (value: unknown) => {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(value + 'T00:00:00Z');
   return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
 };
-export function validateIndex(index) {
+export function validateIndex(value: unknown): PatchIndex {
+  const index = value as PatchIndex;
   if (index?.schema !== 1 || typeof index.release !== 'string' || !index.release ||
       !index.patches || !Array.isArray(index.firmwares) || !index.firmwares.length)
     throw new Error('The release index is invalid.');
@@ -27,7 +36,7 @@ export function validateIndex(index) {
   return index;
 }
 
-export async function verifyPatch(index, entry, data) {
+export async function verifyPatch(index: PatchIndex, entry: PatchFirmware, data: Uint8Array) {
   if (data.length !== entry.patch_bytes || await sha256(data) !== entry.patch_sha256)
     throw new Error('The downloaded patch failed its integrity check.');
   const { meta, program } = inspectPatch(data);

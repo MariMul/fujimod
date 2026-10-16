@@ -1,7 +1,7 @@
 /** Stage verified released artifacts for Vite. Source comes only from this repo. */
 import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
-import { validateIndex, verifyPatch } from '../catalog.js';
+import { validateIndex, verifyPatch } from '../src/patch/catalog.ts';
 const repo = process.env.GITHUB_REPOSITORY || 'justjake/fujimod';
 const gh = args => execFileSync('gh', args, { encoding: 'utf8' }).trim();
 const tag = process.env.RELEASE_TAG || gh(['api', `repos/${repo}/releases`, '--jq', '[.[] | select(.draft == false)][0].tag_name']);
