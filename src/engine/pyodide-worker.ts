@@ -25,9 +25,10 @@ type Message =
   | { type: 'request'; id: number; action: string; options?: Record<string, unknown> }
   | { type: 'profile'; id: number; limit: number }
   | { type: 'recovery_status' }
+  | { type: 'error_report'; id: number }
   | { type: 'rollback'; id: number; seconds: number }
-  | { type: 'sensor_reset' }
-  | { type: 'sensor'; rgb: ArrayBuffer; width: number; height: number; sequence?: number };
+  | { type: 'sensor_reset'; id: number }
+  | { type: 'sensor'; id: number; rgb: ArrayBuffer; width: number; height: number; sequence?: number };
 
 const worker = self as unknown as DedicatedWorkerGlobalScope;
 let py: Pyodide | undefined;
@@ -38,16 +39,25 @@ let peakWasmMemoryBytes = 0;
 const requestTimings = new RequestTimings();
 const bootStages: { name: string; seconds: number }[] = [];
 let bootStarted = 0;
+let inputSerial = 0;
+let recentInputs: Record<string, unknown>[] = [];
+let errorTrigger: Record<string, unknown> | undefined;
+let previewPolicy: Record<string, unknown> = {};
+function recordInput(action: string, options: Record<string, unknown> = {}) {
+  const ticks=py?.runPython<number>("session.board.virtual_ticks if globals().get('session') is not None else None");
+  recentInputs.push({ sequence: ++inputSerial, action, options, guest_ticks: ticks ?? null, timestampSource: 'guest-boundary' });
+  recentInputs=recentInputs.slice(-256);
+}
 function bootStage(name: string) { bootStages.push({ name, seconds: (performance.now()-bootStarted)/1000 }); }
 function configurePreview() {
-  runtime().runPython("browser_stream = getattr(session.board, 'sensor_stream', None)\nif browser_stream is not None: browser_stream.set_fps(1)\ndel browser_stream");
+  previewPolicy = JSON.parse(runtime().runPython('transport.preview(session)'));
 }
 let activeConfig: EngineConfig | undefined;
 function runtime() { if (!py) throw Error('Runtime is not loaded.'); return py; }
 function runtimeMetrics() {
   const wasmMemoryBytes = py?._module.HEAPU8.buffer.byteLength || 0;
   peakWasmMemoryBytes = Math.max(peakWasmMemoryBytes, wasmMemoryBytes);
-  return { wasmMemoryBytes, peakWasmMemoryBytes, bootStages, requestTimings: requestTimings.actions };
+  return { wasmMemoryBytes, peakWasmMemoryBytes, bootStages, requestTimings: requestTimings.actions, identity: recovery.identity, preview: previewPolicy };
 }
 function send(type: string, fields: Record<string, unknown> = {}, transfer: Transferable[] = []) {
   worker.postMessage({ type, ...fields }, transfer);
@@ -105,7 +115,7 @@ async function boot(dat: ArrayBuffer, bundle: string, config: EngineConfig, file
   runtime.FS.writeFile(protocol.datPath, new Uint8Array(dat), { canOwn: true });
   runtime.globals.set('boot_config_json', JSON.stringify(protocol));
   runtime.runPython(`
-import gc, hashlib, importlib, json
+import gc, hashlib, importlib, json, functools
 from pathlib import Path
 for name, expected in json.loads(Path('/repo/web-inputs.json').read_text()).items():
     if hashlib.sha256((Path('/repo') / name).read_bytes()).hexdigest() != expected:
@@ -117,7 +127,8 @@ with Path(boot_config['datPath']).open('rb') as dat_source:
 prepare = boot_config['prepare']
 boot_module = importlib.import_module(boot_config['module'])
 transport = importlib.import_module(boot_config['sessionModule'])
-request = transport.request
+from native.web.errors import guarded_request
+request = functools.partial(guarded_request, transport.request)
 use_analytic_scene = transport.use_analytic_scene
 set_sensor_scene = transport.set_sensor_scene
 session = None
@@ -176,6 +187,7 @@ async function startSession(config: EngineConfig, files: { path: string; bytes: 
   }
   runtime.runPython('transport.configure(session)');
   for (const [id, position] of Object.entries(config.initialPositions ?? {})) {
+    recordInput('set_position', { id, position });
     runtime.globals.set('initial_position', JSON.stringify({ id, position }));
     runtime.runPython("request(session, 'set_position', initial_position)");
   }
@@ -195,16 +207,26 @@ async function startSession(config: EngineConfig, files: { path: string; bytes: 
   const frame = currentFrame();
   send('cache', recovery.status(runtime));
   stopped = false;
+  errorTrigger = undefined;
   return { state, frame, card: cardState(), runtime: runtimeMetrics() };
 }
 worker.onmessage = async ({ data }: MessageEvent<Message>) => {
   try {
+    if (data.type === 'error_report') {
+      let result: { checkpoint?: ArrayBuffer; snapshot: Record<string, unknown> };
+      try { result=recovery.errorSnapshot(runtime()); }
+      catch (error) { result={ snapshot: { unavailable: String(error) } }; }
+      send('error_report_result', { id: data.id, ...result, identity: recovery.identity, inputs: recentInputs, trigger: errorTrigger, runtime: runtimeMetrics() },
+        result.checkpoint ? [result.checkpoint] : []);
+      return;
+    }
     if (data.type === 'boot') {
       const result = await boot(data.dat, data.bundle, data.config, data.cardFiles);
       send('ready', result, [result.frame]); return;
     }
     if (data.type === 'restart') {
       if (!activeConfig) throw Error('Emulator has not booted.');
+      recordInput('restart_card', { files: data.cardFiles.map(file => ({ path: file.path, bytes: file.bytes.byteLength })) });
       activeConfig = { ...activeConfig, initialPositions: { ...activeConfig.initialPositions, ...data.initialPositions } };
       const result = await startSession(activeConfig, data.cardFiles, true);
       stopped = false;
@@ -213,7 +235,7 @@ worker.onmessage = async ({ data }: MessageEvent<Message>) => {
     const py = runtime();
     if (data.type === 'recovery_status') { send('cache', recovery.status(py)); return; }
     if (data.type === 'rollback') {
-      recovery.rollback(py, data.seconds); stopped = false;
+      recovery.rollback(py, data.seconds); stopped = false; errorTrigger = undefined;
       publish(currentState(), data.id, true); return;
     }
     if (stopped && data.type !== 'card') throw new EngineError({ kind: 'exception', message: 'The camera is paused. Use Undo or Restart to continue.', details: {} });
@@ -241,6 +263,7 @@ worker.onmessage = async ({ data }: MessageEvent<Message>) => {
       send('profile_result', { id: data.id, report, runtime: runtimeMetrics() }); return;
     }
     if (data.type === 'request') {
+      if (!['advance','state'].includes(data.action)) recordInput(data.action,data.options);
       py.globals.set('viewer_action', data.action); py.globals.set('viewer_options', JSON.stringify(data.options || {}));
       const state: State = requestTimings.measure(data.action, () => JSON.parse(py.runPython('request(session, viewer_action, viewer_options)')));
       py.runPython("boot_module.board = session.board\nboot_module.trim_diagnostics()");
@@ -248,17 +271,20 @@ worker.onmessage = async ({ data }: MessageEvent<Message>) => {
       if (await recovery.capture(py)) send('cache', recovery.status(py));
       publish(state, data.id, data.action === 'state' || data.action === 'key'); return;
     }
-    if (data.type === 'sensor_reset') { py.runPython('use_analytic_scene(session)'); configurePreview(); send('sensor_ready'); return; }
+    if (data.type === 'sensor_reset') { recordInput('sensor_reset'); py.runPython('use_analytic_scene(session)'); configurePreview(); send('sensor_ready', { id: data.id }); return; }
     if (data.type === 'sensor') {
+      recordInput('sensor', { width: data.width, height: data.height, sequence: data.sequence });
       const bytes = py.toPy(new Uint8Array(data.rgb));
       py.globals.set('sensor_rgb_buffer', bytes); py.globals.set('sensor_width', data.width); py.globals.set('sensor_height', data.height);
       try { py.runPython('set_sensor_scene(session, sensor_width, sensor_height, bytes(sensor_rgb_buffer))'); configurePreview(); }
       finally { py.globals.delete('sensor_rgb_buffer'); bytes.destroy(); }
-      send('sensor_ready', { sequence: data.sequence });
+      send('sensor_ready', { id: data.id, sequence: data.sequence });
     }
   } catch (error) {
     if (data.type === 'card') { send('error', { id: data.id, error: String(error) }); return; }
     stopped = true;
-    send('error', { id: 'id' in data ? data.id : null, fault: faultFrom(error) });
+    errorTrigger ??= data.type === 'boot' ? { type: data.type, config: data.config }
+      : data.type === 'sensor' ? { type: data.type, width: data.width, height: data.height } : { ...data };
+    send('error', { id: 'id' in data ? data.id : null, fault: faultFrom(error), identity: recovery.identity });
   }
 };

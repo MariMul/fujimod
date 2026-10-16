@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { patch, sha256, inspectPatch } from '../src/patch/patcher.ts';
 import { validateIndex } from '../src/patch/catalog.ts';
-import { cardZip, crc32 } from '../src/patch/download.ts';
+import { cardZip } from '../src/patch/download.ts';
+import { crc32 } from '../src/archive.ts';
 const text = value => new TextEncoder().encode(value);
 const concat = (...parts) => {
   const data = new Uint8Array(parts.reduce((n,p) => n+p.length, 0));

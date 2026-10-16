@@ -14,6 +14,7 @@ function setup() {
       messages.push({ ...message, transfer });
       if (message.type === 'boot') queueMicrotask(() => this.reply({ type: 'ready',
         state: { virtual_ticks: 0 }, frame: new ArrayBuffer(0), card: state(5) }));
+      if (message.type === 'sensor_reset') queueMicrotask(() => this.reply({ type: 'sensor_ready', id: message.id }));
     },
     reply(data) { this.onmessage({ data }); },
     terminate() { this.terminated = true; },
@@ -52,6 +53,20 @@ test('preload buffers are copied for transfer; file reads return binary; changes
   assert.equal(changes.length, 2);
   assert.deepEqual(errors, []);
   engine.dispose();
+});
+
+test('sensor transfer completion waits for the worker acknowledgement', async () => {
+  const { engine, worker, messages } = setup();
+  await engine.boot(new ArrayBuffer(3), config, () => {});
+  const rgb = new Uint8Array([1,2,3]);
+  let completed = false;
+  const change = engine.setScene({ width: 1, height: 1, rgb }).then(() => { completed = true; });
+  await Promise.resolve();
+  assert.equal(completed, false);
+  const sent=messages.at(-1);
+  assert.equal(sent.type, 'sensor'); assert.notEqual(sent.rgb, rgb.buffer);
+  worker.reply({ type: 'sensor_ready', id: sent.id });
+  await change; assert.equal(completed,true); engine.dispose();
 });
 
 test('a failed file read rejects its request without stopping emulation; dispose rejects pending reads', async () => {

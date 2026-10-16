@@ -58,6 +58,7 @@ export interface Engine {
   profile(limit?: number): Promise<Record<string, unknown>>;
   errors(listener: (fault: EngineFault) => void): () => void;
   rollback(seconds: number): Promise<void>;
+  errorReport(): Promise<Blob>;
   boot(dat: ArrayBuffer, config: EngineConfig, progress: (message: string, percent: number) => void, cardFiles?: CardFile[]): Promise<Input[]>;
   /** Restart with these files merged into existing media; matching paths are replaced. */
   restartWithCardFiles(files: CardFile[], progress: (message: string, percent: number) => void): Promise<void>;

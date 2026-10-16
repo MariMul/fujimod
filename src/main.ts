@@ -1,5 +1,6 @@
 import { CardBrowser } from './ui/card';
 import { EngineError, faultFrom, type EngineFault } from './engine/fault';
+import { errorReportZip } from './engine/report';
 import './style.css';
 import { sha256 } from './patch/patcher.ts';
 import { validateIndex } from './patch/catalog.ts';
@@ -29,12 +30,14 @@ let generation = 0;
 let downloadUrls: string[] = [];
 let patchSeeds: CardFile[] = [];
 let cameraReady = false;
+let latestFault: EngineFault | undefined;
 const cardBrowser = new CardBrowser($('card-section'), $('card-files'), $('card-status'));
 function status(message: string, error = false) {
   $('status').textContent = message; $('status').classList.toggle('error', error);
   $('status').setAttribute('role', error ? 'alert' : 'status');
 }
 function showFault(fault: EngineFault) {
+  latestFault = fault;
   cameraReady = false; $<HTMLButtonElement>('try-sd').disabled = true;
   status(fault.message, true); panel.disable(); $('live-label').textContent = 'STOPPED'; sensor.connect();
   $('boot-progress').hidden = true; $('recovery-actions').hidden = false;
@@ -60,7 +63,26 @@ $('undo').onclick = async () => {
   finally { button.disabled = false; }
 };
 $('restart').onclick = () => { void processFile(selectedFile, true); };
+$('error-report').onclick = async () => {
+  const button = $<HTMLButtonElement>('error-report'), current = generation;
+  button.disabled = true;
+  try {
+    const blob = engine ? await engine.errorReport() : errorReportZip({
+      schema: 'fujimod-error-report-v1', error: latestFault,
+      identity: { firmwareSha256: selectedFirmware?.sha256 }, browser: { userAgent: navigator.userAgent, platform: navigator.platform },
+      snapshot: { unavailable: 'Runtime did not initialize.' },
+    });
+    if (current !== generation) return;
+    const url = URL.createObjectURL(blob), link = document.createElement('a');
+    link.href = url; link.download = `fujimod-error-${new Date().toISOString().replace(/[:.]/g,'-')}.zip`;
+    document.body.append(link); link.click(); link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url),60000);
+  } catch { if (current === generation) button.textContent = 'Report download failed'; }
+  finally { if (current === generation) button.disabled = false; }
+};
 function reset() {
+  latestFault = undefined; $('error-report').textContent = 'Download error report'; $<HTMLButtonElement>('error-report').disabled = false;
+  $('preview-cadence').textContent = 'Scene input'; sensor.cadence(1);
   $('recovery-actions').hidden = true; $('fault-details').hidden = true;
   cardBrowser.connect(); cameraReady = false; patchSeeds = []; $('try-sd').hidden = true; $('camera-speed').textContent = ''; window.cameraPerformance = undefined; window.profileCamera = undefined;
   panel.clear(); engine?.dispose(); engine = undefined; sensor.connect();
@@ -115,6 +137,8 @@ async function processFile(file?: File, restart = false) {
     activeEngine.metrics(metrics => {
       if (current !== generation) return;
       window.cameraPerformance = metrics;
+      const fps = (metrics.runtime?.preview as { frames_per_second?: number } | undefined)?.frames_per_second;
+      if (typeof fps === 'number') { sensor.cadence(fps); $('preview-cadence').textContent = `Scene input · ${fps} fps`; }
       $('camera-speed').textContent = `${metrics.speed.toFixed(2)}× · ${metrics.virtualSeconds.toFixed(1)} s camera / ${metrics.wallSeconds.toFixed(1)} s wall`;
     });
     activeEngine.frames(frame => {
@@ -140,7 +164,7 @@ async function processFile(file?: File, restart = false) {
     $('live-label').textContent = 'LIVE'; $('boot-progress').hidden = true;
     $('viewer').dataset.bootSeconds = ((performance.now() - started) / 1000).toFixed(3);
     status('Camera ready');
-  } catch (error) { if (current === generation) { if (!(error instanceof EngineError)) status(String(error), true); $('boot-progress').hidden = true; } }
+  } catch (error) { if (current === generation) { if (!(error instanceof EngineError)) showFault(faultFrom(error)); $('boot-progress').hidden = true; } }
 }
 function firmwareRow(entry: Firmware) {
   const article = document.createElement('article'); article.className = 'firmware';

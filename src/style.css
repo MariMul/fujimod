@@ -41,7 +41,7 @@ footer { font-size: 10px; color: #666; line-height: 1.8; } #flat-lcd { position:
 
 #engine-status { padding: 16px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
 #engine-status #status { max-width: 100%; flex: 1; min-width: 180px; }
-#recovery-actions { display: flex; gap: 8px; }
+#recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 #fault-details { flex-basis: 100%; font-size: 12px; color: #888; overflow-wrap: anywhere; }
 #fault-details summary { cursor: pointer; }
 #fault-fields { margin: 12px 0; white-space: pre-wrap; }

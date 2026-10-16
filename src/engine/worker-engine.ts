@@ -1,6 +1,8 @@
 import { CameraPace, RequestTimings, type CameraPerformance } from './performance.ts';
 import { EngineError, faultFrom, stateFault, type EngineFault } from './fault.ts';
 import type { Engine, EngineConfig, Frame, Input, Scene, CardFile, CardState, CardTree, CardReadOptions } from './api';
+import { digest } from './checkpoint-store.js';
+import { errorReportZip } from './report.ts';
 
 type State = { virtual_ticks: number; display?: { width: number; height: number }; failure?: unknown; execution_error?: unknown };
 type Reply = { state: State; frame?: ArrayBuffer; card: CardState };
@@ -38,13 +40,24 @@ export class WorkerEngine implements Engine {
   private latestRuntime: Record<string, unknown> = {};
   private nextMetrics = 0;
   private bootReject?: (error: Error) => void;
+  private started = false;
+  private workerFailed = false;
+  private reportIdentity: Record<string, unknown> = {};
+  private rawErrors: unknown[] = [];
+  private recentInputs: Record<string, unknown>[] = [];
   constructor(createWorker: () => Worker, onError: (error: Error) => void) {
     this.onError = onError;
     this.worker = createWorker();
-    this.worker.onerror = event => this.fail(Error(event.message || 'Emulator worker failed.'));
+    this.worker.onerror = event => {
+      this.workerFailed = true;
+      this.rawErrors.push({ source: 'worker-event', message: event.message, filename: event.filename, line: event.lineno, column: event.colno });
+      this.fail(Error(event.message || 'Emulator worker failed.'));
+    };
   }
   private fail(error: Error) {
     const first = !this.fault;
+    this.rawErrors.push({ source: 'engine', guest_ticks: this.state.virtual_ticks, fault: faultFrom(error) });
+    this.rawErrors = this.rawErrors.slice(-32);
     this.fault ??= faultFrom(error);
     error = new EngineError(faultFrom(error));
     this.alive = false;
@@ -57,6 +70,7 @@ export class WorkerEngine implements Engine {
     this.onError(error);
   }
   async boot(dat: ArrayBuffer, config: EngineConfig, progress: (message: string, percent: number) => void, cardFiles: CardFile[] = []) {
+    this.reportIdentity = { firmwareSha256: await digest(dat), bundleVersion: null, sourcesSha256: null, nativeSha256: null, bundle: config.bundle, protocol: config.boot };
     this.progressListener = progress;
     const response = await fetch(new URL(config.inputs, document.baseURI));
     if (!response.ok) throw Error('Emulator inputs are unavailable.');
@@ -71,12 +85,18 @@ export class WorkerEngine implements Engine {
     await new Promise<void>((resolve, reject) => {
       this.bootReject = reject;
       this.worker.onmessage = ({ data }) => {
-        if (data.runtime) this.latestRuntime = data.runtime;
+        if (data.runtime) {
+          this.latestRuntime = data.runtime;
+          if (data.runtime.identity) this.reportIdentity = { ...this.reportIdentity, ...data.runtime.identity };
+        }
+        if (data.identity) this.reportIdentity = { ...this.reportIdentity, ...data.identity };
         if (data.type === 'profile_result') {
           const pending = this.pending.get(data.id); this.pending.delete(data.id); pending?.resolve(data.report);
         }
         if (data.type === 'progress') this.progressListener?.(data.message, data.percent);
         if (data.type === 'error') {
+          this.rawErrors.push({ source: 'worker', ...data });
+          this.rawErrors = this.rawErrors.slice(-32);
           const pending = this.pending.get(data.id);
           if (!data.fault && pending) { this.pending.delete(data.id); pending.reject(Error(data.error)); }
           else this.fail(new EngineError(data.fault ?? faultFrom(data.error)));
@@ -85,6 +105,12 @@ export class WorkerEngine implements Engine {
         if (data.type === 'card_result') {
           const pending = this.pending.get(data.id); this.pending.delete(data.id);
           pending?.resolve(data);
+        }
+        if (data.type === 'error_report_result') {
+          const pending = this.pending.get(data.id); this.pending.delete(data.id); pending?.resolve(data);
+        }
+        if (data.type === 'sensor_ready') {
+          const pending = this.pending.get(data.id); this.pending.delete(data.id); pending?.resolve(data);
         }
         if (data.type === 'ready') {
           this.bootReject = undefined;
@@ -107,15 +133,17 @@ export class WorkerEngine implements Engine {
         }
       };
       const files = cardFiles.map(file => ({ path: file.path, bytes: file.bytes.slice().buffer }));
+      this.started = true;
       this.worker.postMessage({ type: 'boot', dat, config, cardFiles: files, bundle: new URL(config.bundle, document.baseURI).href }, [dat, ...files.map(file => file.bytes)]);
     });
     return this.inputs;
   }
-  private rpc<T>(type: 'request' | 'card' | 'rollback' | 'restart' | 'profile', fields: Record<string, unknown>, transfer: Transferable[] = []): Promise<T> {
+  private rpc<T>(type: 'request' | 'card' | 'rollback' | 'restart' | 'profile' | 'error_report' | 'sensor' | 'sensor_reset', fields: Record<string, unknown>, transfer: Transferable[] = [], timeoutMs?: number): Promise<T> {
     if (this.disposed) return Promise.reject(Error('Emulator closed.'));
     const id = ++this.serial;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve: reply => resolve(reply as T), reject });
+      const timer = timeoutMs ? setTimeout(() => { this.pending.delete(id); reject(Error('Error report worker timed out.')); }, timeoutMs) : undefined;
+      this.pending.set(id, { resolve: reply => { clearTimeout(timer); resolve(reply as T); }, reject: error => { clearTimeout(timer); reject(error); } });
       this.worker.postMessage({ type, id, ...fields }, transfer);
     });
   }
@@ -187,6 +215,20 @@ export class WorkerEngine implements Engine {
     this.queue = task.catch(() => {}); return task;
   }
   errors(listener: (fault: EngineFault) => void) { this.errorListeners.add(listener); return () => { this.errorListeners.delete(listener); }; }
+  async errorReport(): Promise<Blob> {
+    let detail: Record<string, unknown> & { checkpoint?: ArrayBuffer } = {};
+    if (this.started && !this.workerFailed && !this.disposed) {
+      try { detail = await this.rpc('error_report', {}, [], 30000); }
+      catch (error) { detail = { snapshot: { unavailable: String(error) } }; }
+    } else detail = { snapshot: { unavailable: 'The emulator worker is unavailable or has not initialized.' } };
+    const { checkpoint, ...worker } = detail;
+    return errorReportZip({ schema: 'fujimod-error-report-v1', createdAt: new Date().toISOString(),
+      ...worker, error: this.fault ?? null, rawErrors: this.rawErrors,
+      identity: { ...this.reportIdentity, ...(worker.identity as object ?? {}) },
+      clientInputs: this.recentInputs, state: this.state, runtime: this.latestRuntime,
+      browser: { userAgent: navigator.userAgent, platform: navigator.platform, language: navigator.language },
+    }, checkpoint);
+  }
   async rollback(seconds: number) {
     this.alive = false; clearTimeout(this.timer);
     const result = await this.rpc<Reply>('rollback', { seconds });
@@ -220,6 +262,8 @@ export class WorkerEngine implements Engine {
     } catch (error) { this.fail(error as Error); }
   }
   private input(action: string, options: Record<string, unknown>) {
+    this.recentInputs.push({ action, options: { ...options }, guest_ticks: this.state.virtual_ticks, timestampSource: 'last-observed' });
+    this.recentInputs = this.recentInputs.slice(-256);
     if (!this.alive) return Promise.reject(new EngineError(this.fault ?? faultFrom('Camera is paused.')));
     // Serialize gestures, including quick pointerup before press acknowledgement.
     const task = this.queue.then(async () => {
@@ -253,9 +297,9 @@ export class WorkerEngine implements Engine {
   async setScene(scene: Scene | null) {
     this.scene = scene;
     if (!this.alive) return;
-    if (!scene) { this.worker.postMessage({ type: 'sensor_reset' }); return; }
+    if (!scene) { await this.rpc('sensor_reset', {}); return; }
     const rgb = scene.rgb.slice().buffer;
-    this.worker.postMessage({ type: 'sensor', rgb, width: scene.width, height: scene.height }, [rgb]);
+    await this.rpc('sensor', { rgb, width: scene.width, height: scene.height }, [rgb]);
   }
   async power(on: boolean) {
     await this.input(on ? 'power_on' : 'power_off', {});

@@ -14,13 +14,16 @@ export class WorkerRecovery {
   private saving = false;
   private cacheFailure?: string;
   private restoreSeconds = 0;
+  identity: Record<string, string> = {};
   mode = 'cold';
   private persistenceDisabled = false;
   bypassPersistence() { this.persistenceDisabled = true; this.saved = false; this.mode = 'cold'; }
   async identify(dat: ArrayBuffer, sources: ArrayBuffer, native: ArrayBuffer, inputs: ArrayBuffer, protocol: unknown, seeds: { path: string; bytes: ArrayBuffer }[] = []) {
-    const version = await digest(new TextEncoder().encode(JSON.stringify([await digest(sources), await digest(native), protocol, 'recovery-v1'])));
+    const [sourcesSha256,nativeSha256,firmwareSha256] = await Promise.all([digest(sources),digest(native),digest(dat)]);
+    const version = await digest(new TextEncoder().encode(JSON.stringify([sourcesSha256, nativeSha256, protocol, 'recovery-v1'])));
     const profile = await digest(new TextEncoder().encode(JSON.stringify([await digest(inputs), await Promise.all(seeds.map(async file => [file.path, await digest(file.bytes)]))])));
-    this.key = await cacheKey(await digest(dat), version, profile);
+    this.key = await cacheKey(firmwareSha256, version, profile);
+    this.identity = { firmwareSha256, bundleVersion: version, sourcesSha256, nativeSha256, storageProfileSha256: profile };
   }
   async restore(py: RecoveryRuntime, restart = false) {
     if (this.persistenceDisabled) return false;
@@ -62,6 +65,22 @@ export class WorkerRecovery {
   rollback(py: RecoveryRuntime, seconds: number) {
     py.globals.set('browser_undo_seconds', seconds);
     py.runPython('browser_history.rollback(session, browser_undo_seconds)');
+  }
+  errorSnapshot(py: RecoveryRuntime): { checkpoint?: ArrayBuffer; snapshot: Record<string, unknown> } {
+    let value: BytesProxy | undefined;
+    try {
+      py.runPython(`from native.web.recovery import error_snapshot
+browser_report_data, browser_report_meta = error_snapshot(browser_history, session) if globals().get('browser_history') is not None and globals().get('session') is not None else (None, {'unavailable': 'No pre-error snapshot was captured'})`);
+      const snapshot = JSON.parse(py.runPython<string>('json.dumps(browser_report_meta)'));
+      if (!py.runPython<boolean>('browser_report_data is not None')) return { snapshot };
+      value = py.runPython<BytesProxy>('memoryview(browser_report_data)');
+      const buffer=value.getBuffer('u8');
+      try { return { checkpoint: Uint8Array.from(buffer.data).buffer, snapshot }; }
+      finally { buffer.release(); }
+    } catch (error) { return { snapshot: { unavailable: String(error) } }; }
+    finally {
+      value?.destroy(); py.globals.delete('browser_report_data'); py.globals.delete('browser_report_meta');
+    }
   }
   status(py: RecoveryRuntime) {
     return { mode: this.mode, backend: this.store.backend, saved: this.saved, cacheFailure: this.cacheFailure,

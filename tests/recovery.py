@@ -8,6 +8,7 @@ import asyncio
 import json
 from pathlib import Path
 import time
+import zipfile
 
 from playwright.async_api import async_playwright
 
@@ -78,6 +79,28 @@ async def check(playwright, args, name):
         assert await page.locator('#fault-details').evaluate('e => !e.open')
         assert '{' not in await page.locator('#status').inner_text()
         await page.screenshot(path=str(out / 'fault.png'))
+        async with page.expect_download(timeout=60000) as pending:
+            await page.locator('#error-report').click()
+        download=await pending.value
+        report_path=out/'error-report.zip'
+        await download.save_as(report_path)
+        with zipfile.ZipFile(report_path) as archive:
+            report=json.loads(archive.read('report.json'))
+            snapshot=archive.read('snapshot.zip')
+        assert report['identity']['firmwareSha256'] and len(report['identity']['bundleVersion']) == 64, report
+        assert report['browser']['userAgent'] == await page.evaluate('navigator.userAgent')
+        assert report['snapshot']['ticks'] <= stopped_ticks
+        assert report['snapshot']['skipped'] == [], report['snapshot']
+        assert report['inputs'] and all(type(event['guest_ticks']) is int for event in report['inputs'])
+        assert 'Advance requires' in json.dumps(report['rawErrors'])
+        assert report['trigger']['action'] == 'advance' and report['trigger']['options']['limit'] == 200001
+        (out/'snapshot.zip').write_bytes(snapshot)
+        with zipfile.ZipFile(out/'snapshot.zip') as archive:
+            manifest=json.loads(archive.read('manifest.json'))
+        assert manifest['schema'] == 'browser-snapshot-v1' and manifest['ram']['size'] > 0
+        assert manifest['ram']['pages'] and len(manifest['architecture']) == 2
+        assert await page.locator('#lcd-source').evaluate('c => c.toDataURL()') == pixels
+        assert await page.evaluate('window.__state.virtual_ticks') == stopped_ticks
         await page.locator('#undo').click()
         await page.wait_for_function("document.querySelector('#live-label').textContent==='LIVE'")
         restored_ticks = await page.evaluate('window.__state.virtual_ticks')
@@ -89,6 +112,11 @@ async def check(playwright, args, name):
                       faults=await page.evaluate('window.__faults'), page_errors=page_errors)
         (out / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
         print(json.dumps(dict(browser=name, loads=[r['seconds'] for r in results], stopped_ticks=stopped_ticks, restored_ticks=restored_ticks)), flush=True)
+    except Exception:
+        diagnostic=await page.evaluate('({faults:window.__faults, cache:window.__cache, ready:window.__ready, state:window.__state, status:document.querySelector("#status")?.textContent, details:document.querySelector("#fault-raw")?.textContent})')
+        (out/'failure.json').write_text(json.dumps(dict(browser=diagnostic,page_errors=page_errors),indent=2)+'\n')
+        await page.screenshot(path=str(out/'failure.png'))
+        raise
     finally:
         await browser.close()
 
