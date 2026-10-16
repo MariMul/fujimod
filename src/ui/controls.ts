@@ -74,7 +74,7 @@ export class InputPanel {
     });
     this.viewer.setRotaryEnabled(true);
   }
-  disable() { this.viewer.setRotaryEnabled(false); this.releaseAll(); this.ready = false; for (const control of this.host.querySelectorAll<HTMLButtonElement | HTMLSelectElement>('button,select')) control.disabled = true; }
+  disable() { this.viewer.setRotaryEnabled(false); this.ready = false; this.holds.clear(); this.stopRotation?.(); this.feedback(null); this.viewer.setOrbit(true); for (const control of this.host.querySelectorAll<HTMLButtonElement | HTMLSelectElement>('button,select')) control.disabled = true; }
   resume() {
     this.ready = true; this.viewer.setRotaryEnabled(true);
     for (const row of this.host.querySelectorAll<HTMLElement>('.control-row')) {

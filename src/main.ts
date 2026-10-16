@@ -1,10 +1,12 @@
+import { CardBrowser } from './ui/card';
+import { EngineError, faultFrom, type EngineFault } from './engine/fault';
 import './style.css';
 import { sha256 } from './patch/patcher.ts';
 import { validateIndex } from './patch/catalog.ts';
 import { cardZip } from './patch/download.ts';
 import { validateCatalog, type Catalog, type Firmware } from './catalog';
 import { createEngine } from './engine';
-import type { Engine } from './engine/api';
+import type { Engine, CardFile } from './engine/api';
 import { ModelViewer, type ModelData } from './viewer/model';
 import { InputPanel } from './ui/controls';
 import { SensorInput } from './ui/sensor';
@@ -15,7 +17,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const adapters = import.meta.glob<{ model: ModelData; initialPositions: Record<string, string> }>('../devices/*/index.ts');
 // Vite's glob is relative to this source file; data selects the implementation.
 const viewer = new ModelViewer($('viewer'), document.getElementById('leaders') as unknown as SVGSVGElement, $('workspace'));
-const panel = new InputPanel($('controls'), viewer, error => status(String(error), true));
+const panel = new InputPanel($('controls'), viewer, error => { if (!(error instanceof EngineError)) status(String(error), true); });
 const sensor = new SensorInput(message => { $('sensor-status').textContent = message; });
 let catalog: Catalog;
 let release: ReturnType<typeof validateIndex> | undefined;
@@ -25,11 +27,42 @@ let selectedFirmware: Firmware | undefined;
 let patchWorker: Worker | undefined;
 let generation = 0;
 let downloadUrls: string[] = [];
+let patchSeeds: CardFile[] = [];
+let cameraReady = false;
+const cardBrowser = new CardBrowser($('card-section'), $('card-files'), $('card-status'));
 function status(message: string, error = false) {
   $('status').textContent = message; $('status').classList.toggle('error', error);
   $('status').setAttribute('role', error ? 'alert' : 'status');
 }
+function showFault(fault: EngineFault) {
+  cameraReady = false; $<HTMLButtonElement>('try-sd').disabled = true;
+  status(fault.message, true); panel.disable(); $('live-label').textContent = 'STOPPED'; sensor.connect();
+  $('boot-progress').hidden = true; $('recovery-actions').hidden = false;
+  const details = $<HTMLDetailsElement>('fault-details'); details.hidden = false; details.open = false;
+  const fields = $('fault-fields'); fields.replaceChildren();
+  const append = (name: string, value: unknown) => {
+    if (value && typeof value === 'object') {
+      for (const [key, item] of Object.entries(value)) append(`${name} · ${key}`, item);
+    } else if (value !== undefined) {
+      const term = document.createElement('dt'), text = document.createElement('dd');
+      term.textContent = name; text.textContent = String(value); fields.append(term, text);
+    }
+  };
+  append('Kind', fault.kind); for (const [key, value] of Object.entries(fault.details)) append(key, value);
+}
+$('undo').onclick = async () => {
+  const button = $<HTMLButtonElement>('undo'); button.disabled = true;
+  try {
+    await engine?.rollback(10); cameraReady = true; $<HTMLButtonElement>('try-sd').disabled = false; panel.resume(); sensor.connect(engine);
+    $('recovery-actions').hidden = true; $('fault-details').hidden = true;
+    $('live-label').textContent = 'LIVE'; status('Camera resumed');
+  } catch { status('Undo is unavailable for this point. Restart the camera to continue.', true); }
+  finally { button.disabled = false; }
+};
+$('restart').onclick = () => { void processFile(selectedFile, true); };
 function reset() {
+  $('recovery-actions').hidden = true; $('fault-details').hidden = true;
+  cardBrowser.connect(); cameraReady = false; patchSeeds = []; $('try-sd').hidden = true; $('camera-speed').textContent = ''; window.cameraPerformance = undefined; window.profileCamera = undefined;
   panel.clear(); engine?.dispose(); engine = undefined; sensor.connect();
   patchWorker?.terminate(); patchWorker = undefined;
   for (const url of downloadUrls) URL.revokeObjectURL(url); downloadUrls = [];
@@ -44,7 +77,7 @@ function credit(data: ModelData) {
   const link = (text: string, url: string) => { const a = document.createElement('a'); a.textContent = text; a.href = url; return a; };
   footer.append(link(data.credit.title, data.credit.url), ' by ', link(data.credit.author, data.credit.authorUrl), ' · ', link('CC BY 4.0', data.credit.license)); footer.hidden = false;
 }
-async function processFile(file?: File) {
+async function processFile(file?: File, restart = false) {
   if (!file) return;
   const current = ++generation; reset(); selectedFile = undefined; selectedFirmware = undefined;
   if (!catalog) { status('The firmware catalog is unavailable.', true); return; }
@@ -67,17 +100,23 @@ async function processFile(file?: File) {
     const device = load ? await load() : undefined;
     if (current !== generation) return;
     let hasModel = false;
-    if (entry.model_asset && device) {
-      try { await viewer.load(device.model); hasModel = true; credit(device.model); $('view-actions').hidden = false; }
-      catch { status('3D model unavailable.'); }
-    }
+    const modelReady = entry.model_asset && device ? viewer.load(device.model).then(() => {
+      if (current !== generation) return;
+      hasModel = true; credit(device.model); $('view-actions').hidden = false;
+    }).catch(() => { if (current === generation) status('3D model unavailable.'); }) : Promise.resolve();
     if (current !== generation) return;
-    if (!entry.emulate) { status(hasPatch ? 'SD patch available.' : hasModel ? 'Emulation unsupported.' : 'Unsupported firmware.'); return; }
+    if (!entry.emulate) { await modelReady; status(hasPatch ? 'SD patch available.' : hasModel ? 'Emulation unsupported.' : 'Unsupported firmware.'); return; }
     const activeEngine = createEngine(entry.emulate.adapter, (error: Error) => {
       if (current !== generation) return;
-      status(error.message, true); panel.disable(); $('live-label').textContent = 'STOPPED'; sensor.connect();
+      showFault(faultFrom(error));
     });
     engine = activeEngine;
+    window.profileCamera = limit => activeEngine.profile(limit);
+    activeEngine.metrics(metrics => {
+      if (current !== generation) return;
+      window.cameraPerformance = metrics;
+      $('camera-speed').textContent = `${metrics.speed.toFixed(2)}× · ${metrics.virtualSeconds.toFixed(1)} s camera / ${metrics.wallSeconds.toFixed(1)} s wall`;
+    });
     activeEngine.frames(frame => {
       if (current !== generation) return;
       viewer.frame(frame);
@@ -88,17 +127,20 @@ async function processFile(file?: File) {
       }
     });
     const started = performance.now();
-    const inputs = await activeEngine.boot(bytes, { ...entry.emulate, initialPositions: device?.initialPositions }, (message, percent) => {
+    const inputs = await activeEngine.boot(bytes, { ...entry.emulate, initialPositions: device?.initialPositions, restart }, (message, percent) => {
       if (current !== generation) return;
       status(message); const progress = $<HTMLProgressElement>('boot-progress'); progress.hidden = false; progress.value = percent;
     });
+    await modelReady;
     if (current !== generation) return;
+    $('flat-lcd').hidden = hasModel;
     panel.render(inputs, activeEngine, hasModel ? device?.model : undefined, device?.initialPositions);
+    cameraReady = true; cardBrowser.connect(activeEngine); $<HTMLButtonElement>('try-sd').disabled = false;
     sensor.connect(activeEngine); $('panel').hidden = false; $('scene-controls').hidden = false;
     $('live-label').textContent = 'LIVE'; $('boot-progress').hidden = true;
     $('viewer').dataset.bootSeconds = ((performance.now() - started) / 1000).toFixed(3);
     status('Camera ready');
-  } catch (error) { if (current === generation) { status(String(error), true); $('boot-progress').hidden = true; } }
+  } catch (error) { if (current === generation) { if (!(error instanceof EngineError)) status(String(error), true); $('boot-progress').hidden = true; } }
 }
 function firmwareRow(entry: Firmware) {
   const article = document.createElement('article'); article.className = 'firmware';
@@ -124,6 +166,8 @@ $('build-patch').onclick = () => {
     worker.terminate(); patchWorker = undefined; button.disabled = false;
     if (data.error || data.unsupported) { $('patch-status').textContent = data.error || 'Unsupported patch.'; return; }
     const { result, firmware } = data;
+    patchSeeds = ['ffboot','ffsys'].map(name => ({ path: `/${name}.bin`, bytes: new Uint8Array(result[name]) }));
+    $('try-sd').hidden = !engine; $<HTMLButtonElement>('try-sd').disabled = !cameraReady;
     $('downloads').replaceChildren(); for (const url of downloadUrls) URL.revokeObjectURL(url); downloadUrls = [];
     const archive = addDownload(cardZip(result), `fujimod-${firmware.id}-sd.zip`, 'Download SD boot files (.zip)');
     for (const name of ['ffboot','ffsys']) addDownload(new Blob([result[name]], { type: 'application/octet-stream' }), `${name}.bin`, `${name}.bin`, true);
@@ -133,6 +177,21 @@ $('build-patch').onclick = () => {
   };
   worker.onerror = event => { $('patch-status').textContent = event.message; worker.terminate(); patchWorker = undefined; button.disabled = false; };
   worker.postMessage({ file: selectedFile, index: release, artifactBase: new URL('artifacts/', document.baseURI).href });
+};
+$('try-sd').onclick = async () => {
+  if (!engine || !cameraReady || !patchSeeds.length) return;
+  const active = engine, current = generation, button = $<HTMLButtonElement>('try-sd');
+  button.disabled = true; cameraReady = false; panel.disable(); sensor.connect(); $('live-label').textContent = 'RESTARTING';
+  try {
+    await active.restartWithCardFiles(patchSeeds, (message, percent) => {
+      if (current !== generation) return;
+      status(message); const progress = $<HTMLProgressElement>('boot-progress'); progress.hidden = false; progress.value = percent;
+    });
+    if (current !== generation) return;
+    cameraReady = true; panel.resume(); sensor.connect(active); cardBrowser.connect(active);
+    $('boot-progress').hidden = true; $('live-label').textContent = 'LIVE'; status('Camera ready · SD boot files inserted');
+  } catch (error) { if (current === generation && !(error instanceof EngineError)) status('Could not restart with SD files.', true); }
+  finally { if (current === generation) button.disabled = !cameraReady; }
 };
 $<HTMLInputElement>('firmware-file').onchange = event => { const input = event.target as HTMLInputElement; void processFile(input.files?.[0]); input.value = ''; };
 $('viewer').addEventListener('dragover', event => { event.preventDefault(); $('viewer').classList.add('dragging'); });

@@ -21,7 +21,7 @@ export class SensorInput {
       this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
       this.video = document.createElement('video'); this.video.muted = true; this.video.playsInline = true; this.video.srcObject = this.stream;
       await this.video.play(); this.status('Webcam');
-      const loop = () => { this.send(); this.timer = window.setTimeout(loop, 250); }; loop();
+      const loop = () => { this.send(); this.timer = window.setTimeout(loop, 1000); }; loop();
     } catch (error) { this.stopWebcam(); throw error; }
   }
   private send() {
