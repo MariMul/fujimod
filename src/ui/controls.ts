@@ -67,8 +67,20 @@ export class InputPanel {
       });
       this.host.append(row);
     }
+    this.viewer.configureRotary(this.inputs, (id, direction) => {
+      const input = this.inputs.find(input => input.id === id);
+      return input ? this.step(input, direction) : false;
+    });
+    this.viewer.setRotaryEnabled(true);
   }
-  disable() { this.releaseAll(); this.ready = false; for (const control of this.host.querySelectorAll<HTMLButtonElement | HTMLSelectElement>('button,select')) control.disabled = true; }
+  disable() { this.viewer.setRotaryEnabled(false); this.releaseAll(); this.ready = false; for (const control of this.host.querySelectorAll<HTMLButtonElement | HTMLSelectElement>('button,select')) control.disabled = true; }
+  resume() {
+    this.ready = true; this.viewer.setRotaryEnabled(true);
+    for (const row of this.host.querySelectorAll<HTMLElement>('.control-row')) {
+      const supported = this.inputs.find(input => input.id === row.dataset.id)?.supported;
+      for (const control of row.querySelectorAll<HTMLButtonElement | HTMLSelectElement>('button,select')) control.disabled = !supported;
+    }
+  }
   clear() { this.disable(); this.host.replaceChildren(); this.inputs = []; this.engine = undefined; }
   private feedback(id: string | null) {
     this.lastHovered = id;
@@ -95,11 +107,25 @@ export class InputPanel {
     if (select) select.value = position;
     void this.engine!.setPosition(input.id, position).catch(this.error);
   }
-  private step(input: Input, direction: number) {
-    if (input.relative) { void this.engine!.setPosition(input.id, direction).catch(this.error); return; }
-    const positions = input.positions; if (!positions?.length) return;
-    const current = positions.findIndex(p => p.id === this.positions.get(input.id));
-    this.position(input, positions[Math.max(0, Math.min(positions.length - 1, current + direction))].id);
+  private step(input: Input, direction: number): boolean {
+    if (!this.ready || !input.supported || !this.engine || !direction) return false;
+    if (input.relative) {
+      void this.engine.setPosition(input.id, Math.sign(direction)).catch(this.error);
+      return true;
+    }
+    const positions = input.positions;
+    if (positions?.length) {
+      const current = positions.findIndex(p => p.id === this.positions.get(input.id));
+      if (current < 0) return false;
+      const next = Math.max(0, Math.min(positions.length - 1, current + Math.sign(direction)));
+      if (next === current) return false;
+      this.position(input, positions[next].id);
+      return true;
+    }
+    // Rear command detents are physical button actions selected by the viewer.
+    const engine = this.engine;
+    void engine.press(input.id).then(() => engine.release(input.id)).catch(this.error);
+    return true;
   }
   private rotate(input: Input, event: PointerEvent) {
     if (!this.ready || !input.supported) return;
@@ -121,11 +147,10 @@ export class InputPanel {
   }
   private modelDown(hit: ModelHit, event: PointerEvent) {
     const input = this.inputs.find(input => input.id === hit.id);
-    if (!input?.supported || !this.ready) return;
+    if (!input?.supported || !this.ready || input.kind === 'dial' || input.kind === 'ring') return;
     event.preventDefault(); event.stopPropagation(); this.viewer.setOrbit(false);
     this.viewer.renderer.domElement.setPointerCapture(event.pointerId); this.feedback(input.id);
-    if (input.kind === 'dial' || input.kind === 'ring') this.rotate(input, event);
-    else if (input.positions?.length) { this.step(input, 1); this.viewer.setOrbit(true); }
+    if (input.positions?.length) { this.step(input, 1); this.viewer.setOrbit(true); }
     else this.press(input, event.pointerId, input.stages ? 'full' : undefined, hit.point);
   }
 }
