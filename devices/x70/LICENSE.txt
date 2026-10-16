@@ -1,0 +1,11 @@
+Model Information:
+* title:	CAMERA ( Fujifilm X70 )
+* source:	https://sketchfab.com/3d-models/camera-fujifilm-x70-5fd32c3c004f4fe4aecaaab8e2b89783
+* author:	McCLOUD2101 (https://sketchfab.com/McCLOUD2101)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "CAMERA ( Fujifilm X70 )" (https://sketchfab.com/3d-models/camera-fujifilm-x70-5fd32c3c004f4fe4aecaaab8e2b89783) by McCLOUD2101 (https://sketchfab.com/McCLOUD2101) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

@@ -1,0 +1,195 @@
+{
+  "hidden": [
+    "ling_filter_21",
+    "ling_filter_glass_22",
+    "LBL_filter_14"
+  ],
+  "screen": "monitorr_screen_46",
+  "inputs": {
+    "shutter": [
+      "shutter_28"
+    ],
+    "shutter_speed": [
+      "shutter_speed_59"
+    ],
+    "exposure_compensation": [
+      "Exposure_27"
+    ],
+    "aperture": [
+      "ring_aperture_24"
+    ],
+    "control_ring": [
+      "ring_control_19"
+    ],
+    "drive": [
+      "drive_37"
+    ],
+    "delete": [
+      "trash_44"
+    ],
+    "play": [
+      "play_45"
+    ],
+    "menu_ok": {
+      "nodes": [
+        "menu_sw_49"
+      ],
+      "split": "four-way"
+    },
+    "power": [
+      "on-off_38"
+    ],
+    "auto": [
+      "sw_auto_41"
+    ],
+    "focus_mode": [
+      "MCS_31",
+      "MCS2_52",
+      "MCS3_53"
+    ],
+    "disp": [
+      "LBL_DISP_9"
+    ],
+    "up": {
+      "nodes": [
+        "menu_sw_49"
+      ],
+      "split": "four-way"
+    },
+    "down": {
+      "nodes": [
+        "menu_sw_49"
+      ],
+      "split": "four-way"
+    },
+    "left": {
+      "nodes": [
+        "menu_sw_49"
+      ],
+      "split": "four-way"
+    },
+    "right": {
+      "nodes": [
+        "menu_sw_49"
+      ],
+      "split": "four-way"
+    },
+    "q": [
+      "LBL_Q_6"
+    ],
+    "ae_af_lock": [
+      "LBL_AEAF_8"
+    ],
+    "movie": [
+      "rec_29"
+    ],
+    "command_left": {
+      "nodes": [
+        "zoom_sw_36"
+      ]
+    },
+    "command_right": {
+      "nodes": [
+        "zoom_sw_36"
+      ]
+    },
+    "command_push": {
+      "nodes": [
+        "zoom_sw_36"
+      ]
+    },
+    "fn7": [
+      "Fn_32"
+    ],
+    "wifi": [
+      "LBL_wifi_11"
+    ],
+    "lcd_touch": [
+      "monitorr_screen_46"
+    ],
+    "lcd_tilt": [
+      "monitorr_screen_46"
+    ],
+    "battery_cover": [
+      "body.bottom_set_50"
+    ]
+  },
+  "yaw": 3.141592653589793,
+  "regions": {
+    "menu_sw_49": {
+      "center": "menu_ok",
+      "left": "left",
+      "right": "right",
+      "up": "up",
+      "down": "down"
+    },
+    "zoom_sw_36": {
+      "center": "command_push",
+      "left": "command_left",
+      "right": "command_right",
+      "up": "command_push",
+      "down": "command_push"
+    }
+  },
+  "labels": {
+    "up": "Up",
+    "down": "Down",
+    "left": "Left",
+    "right": "Right",
+    "shutter": "Shutter",
+    "power": "Power",
+    "auto": "Auto",
+    "movie": "Record",
+    "wifi": "Wi-Fi",
+    "q": "Q",
+    "disp": "Display / Back",
+    "menu_ok": "Menu / OK",
+    "fn7": "Ring options",
+    "command_left": "Command left",
+    "command_right": "Command right",
+    "command_push": "Command press",
+    "lcd_touch": "Screen",
+    "battery_cover": "Battery cover",
+    "focus_mode": "Focus mode",
+    "delete": "Delete",
+    "drive": "Drive",
+    "ae_af_lock": "AE / AF lock"
+  },
+  "order": [
+    "shutter_speed",
+    "exposure_compensation",
+    "shutter",
+    "power",
+    "auto",
+    "movie",
+    "drive",
+    "command_left",
+    "command_push",
+    "command_right",
+    "delete",
+    "play",
+    "ae_af_lock",
+    "q",
+    "up",
+    "left",
+    "menu_ok",
+    "right",
+    "down",
+    "disp",
+    "fn7",
+    "wifi",
+    "focus_mode",
+    "aperture",
+    "control_ring",
+    "lcd_touch",
+    "lcd_tilt",
+    "battery_cover"
+  ],
+  "credit": {
+    "title": "CAMERA ( Fujifilm X70 )",
+    "author": "McCLOUD2101",
+    "url": "https://sketchfab.com/3d-models/camera-fujifilm-x70-5fd32c3c004f4fe4aecaaab8e2b89783",
+    "authorUrl": "https://sketchfab.com/McCLOUD2101",
+    "license": "https://creativecommons.org/licenses/by/4.0/"
+  }
+}

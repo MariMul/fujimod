@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "firmwares": [
+    {
+      "id": "x70-110",
+      "body": "x70",
+      "model": "X70",
+      "version": "1.10",
+      "sha256": "7dd5b358a66f38d1fc7dad899a77d35fe4e6ed0edd0ed1d04fbca512d5dc8fd6",
+      "bytes": 53085736,
+      "release_date": "2016-06-09",
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x70/",
+      "emulate": {
+        "adapter": "x70",
+        "bundle": "runtime/x70-110/",
+        "inputs": "runtime/x70-110/inputs.json"
+      },
+      "model_asset": "x70"
+    },
+    {
+      "id": "xm1-150",
+      "body": "xm1",
+      "model": "X-M1",
+      "version": "1.50",
+      "sha256": "43d67afa1a2bc9ae8481bc0acf02cb085ed0f515122dcbd26addcae102cd1490",
+      "bytes": 38405148,
+      "release_date": "2017-11-21",
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-m1/"
+    }
+  ]
+}

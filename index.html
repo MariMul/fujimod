@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Try your camera firmware in the browser and build Fujimod SD boot files.">
+  <title>Fujimod</title><link rel="icon" href="data:,">
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <a class="wordmark" href="./" aria-label="Fujimod"><img src="./brand.png" alt="Fujimod" width="110" height="28"></a>
+      <div class="build-info"><a href="https://github.com/justjake/fujimod">Source ↗</a><span id="release-label">Camera firmware, in your browser</span></div>
+    </header>
+    <main>
+      <div class="workspace" id="workspace">
+        <section id="viewer" aria-label="Camera viewer">
+          <label id="firmware-prompt" for="firmware-file"><strong>Drop your firmware DAT</strong><span>or choose a file</span></label>
+          <input id="firmware-file" type="file" accept=".dat,.DAT" aria-label="Choose firmware DAT">
+          <div class="viewer-top"><span id="camera-title"></span><label class="choose" for="firmware-file" id="change-file" hidden>Change firmware</label></div>
+          <div class="viewer-bottom"><span id="status" role="status" aria-live="polite"></span><div id="view-actions" hidden><button id="face-screen">Screen</button><button id="face-lens">Lens</button></div></div>
+          <progress id="boot-progress" max="100" value="0" hidden aria-label="Boot progress"></progress>
+          <canvas id="flat-lcd" hidden aria-label="Camera LCD"></canvas>
+        </section>
+        <svg id="leaders" aria-hidden="true"></svg>
+        <aside id="panel" hidden aria-label="Camera controls">
+          <div class="panel-heading"><h1 id="panel-title">Controls</h1><span id="live-label"></span></div>
+          <div id="controls"></div>
+          <div id="scene-controls" hidden>
+            <label id="image-drop" for="image-file">Drop an image <span>or choose</span></label>
+            <input id="image-file" type="file" accept="image/*" aria-label="Choose sensor image">
+            <label class="webcam"><span>Webcam</span><input id="webcam" type="checkbox" role="switch"></label>
+            <span class="note" id="sensor-status">Built-in scene</span>
+          </div>
+        </aside>
+      </div>
+      <section class="release-section" id="patch-section" hidden>
+        <div class="section-title"><h2>SD boot files</h2><button id="build-patch">Build SD files</button></div>
+        <p class="note" id="patch-status" role="status"></p>
+        <div id="result" hidden><p id="result-mods"></p><div id="downloads" class="downloads"></div><ol id="boot-instructions" class="instructions"></ol></div>
+      </section>
+      <section class="supported"><div class="section-title"><h2>Firmware</h2><span class="note">Your DAT stays in this browser.</span></div><div id="firmwares"></div></section>
+    </main>
+    <footer id="model-credit" hidden></footer>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
