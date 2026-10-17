@@ -222,6 +222,35 @@ class WalkthroughTests(unittest.TestCase):
         self.assertIs(found['child'].start_from,found['page'].function)
         self.assertEqual(found['page'].source.name,'navigation.py')
 
+    def test_menu_instruction_captures_highlight_before_activation_and_branch_starts_after(self):
+        source=self.root/'navigation.py'
+        source.write_text('from fujimod.walkthroughs import open_menu\n'
+                          'page = open_menu("item", title="Item settings")\n')
+        visit=discover(source)[0].function
+        def make_camera():
+            camera=Camera()
+            camera.menu_path=lambda item:'MENU > ITEM'
+            camera.select_menu_item=lambda item:setattr(camera,'png',png('blue'))
+            def activate(item):
+                self.assertEqual(camera.png,png('blue'))
+                camera.press()
+                camera.png=png('red')
+                camera.guide.frame(camera.png,.2)
+            camera.open_menu_item=activate
+            return camera
+        parent=Guide(make_camera(),self.root/'parent',identity={},title='Parent')
+        report=parent.run(visit)
+        self.assertEqual([s['title'] for s in report['steps']],['Choose MENU > ITEM'])
+        self.assertEqual((parent.output/report['steps'][0]['screenshot']).read_bytes(),png('blue'))
+        self.assertEqual(parent.video.last_png,png('red'))
+        self.assertGreater(report['presentation']['duration_seconds'],report['steps'][0]['video_end'])
+        child=Guide(make_camera(),self.root/'child',identity={},title='Child')
+        def continuation(camera,guide):
+            with guide.step('Item settings'):
+                self.assertEqual(camera.png,png('red'))
+        child.run(continuation,prerequisites=[('mod/navigation/page',visit)])
+        self.assertEqual((child.output/'poster.png').read_bytes(),png('red'))
+
     def test_branches_replay_parent_without_inheriting_steps_or_coverage(self):
         for number in range(2):
             camera=Camera();camera.value=0

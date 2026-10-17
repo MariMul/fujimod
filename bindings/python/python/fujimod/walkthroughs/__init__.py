@@ -28,15 +28,14 @@ def walkthrough(title, *, start_from=None):
 
 
 def open_menu(item, *, title, start_from=None):
-    """Create a guide that selects a menu item visibly, then opens its page."""
+    """Illustrate the highlighted menu destination before opening its page."""
     if not isinstance(item, str) or not item:
         raise ValueError('A menu starter needs an item name')
     @walkthrough(title, start_from=start_from)
     def visit(camera, guide):
-        with guide.step('Select ' + camera.menu_label(item)):
+        with guide.step('Choose ' + camera.menu_path(item)):
             camera.select_menu_item(item)
-        with guide.step(title):
-            camera.open_menu_item(item)
+        camera.open_menu_item(item)
     # Factory guides take their identity from their binding in the calling
     # module. Imported guides retain their original module ownership.
     visit.walkthrough_module = sys._getframe(1).f_globals['__name__']
@@ -291,7 +290,8 @@ class Guide:
             self.report['passed'] = error is None
             self.report['presentation'] = dict(fps=self.video.fps, idle_limit=self.video.idle_limit,
                 skipped_guest_seconds=self.video.skipped_seconds,
-                navigation_hold=self.navigation_hold, action_hold=self.action_hold)
+                navigation_hold=self.navigation_hold, action_hold=self.action_hold,
+                duration_seconds=self.video.seconds)
             artifacts = {str(p.relative_to(self.output)): _digest(p)
                          for p in self.output.rglob('*') if p.is_file() and p.name not in ('guide.json', '.guide.json.tmp')}
             self.report['artifacts'] = artifacts

@@ -6,12 +6,14 @@ The library has no camera, firmware or repository dependency.
 ```python
 from fujimod.walkthroughs import open_menu, walkthrough
 
-settings = open_menu('settings_item', title='Open Settings')
+settings = open_menu('settings_item', title='Settings')
 
 @walkthrough('Use a feature', start_from=settings)
 def example(camera, guide):
-    with guide.step('Choose the option', 'Turn the dial.'):
-        camera.press('right')
+    with guide.step('Choose ' + camera.menu_path('option_item')):
+        camera.select_menu_item('option_item')
+    camera.open_menu_item('option_item')
+    with guide.step('Example option'):
         assert camera.current_option() == 'example'
 ```
 
@@ -24,8 +26,9 @@ or coverage. Failed prerequisites prevent the child from executing. Checkpoint
 caching is not part of the authoring API.
 
 `open_menu(item, title=..., start_from=None)` creates an ordinary walkthrough
-with two illustrated steps: select the item, then open it. Its adapter implements
-`menu_label(item)`, `select_menu_item(item)` and `open_menu_item(item)`. Factory
+with one illustrated instruction: `Choose Menu > Item > Submenu`. The screenshot
+shows the destination highlighted, then the guide activates it. Its adapter implements
+`menu_path(item)`, `select_menu_item(item)` and `open_menu_item(item)`. Factory
 identity comes from the module variable name; decorated functions use their
 function name. Filenames and containing directories provide the remaining
 identity and ownership. There are no explicit IDs or mod lists.
@@ -67,7 +70,14 @@ extra captures run during prerequisite replay. The adapter marks navigation
 intent explicitly; a direction key can also operate a feature.
 
 `guide.step(title, text='', hold=.75)` captures on successful block exit, then
-holds that observation without advancing guest time. `guide.pause(seconds=.35)`
+holds that observation without advancing guest time. For menu navigation, use
+`Choose Menu > Item > Submenu`, matching the displayed labels. Select/highlight
+the destination inside the block, then activate it and assert success after the
+block. Screenshots explaining a setting or its effect show that resulting state.
+Use physical-button instructions only when needed, such as `Press MENU/OK to apply`.
+This follows the [Apple Style Guide's menu convention](https://help.apple.com/pdf/applestyleguide/en_US/apple-style-guide.pdf).
+
+`guide.pause(seconds=.35)`
 shows a settled action result without creating a documentation step. Explicit
 holds are never compressed. Unchanged frames without active/fading inputs keep
 at most 0.4 seconds of guest waiting; transitions and input intervals remain.
@@ -82,6 +92,10 @@ and fixtures fail the run even if author code catches their exception.
 numbered steps, screenshot hashes, local video timestamps, input edges,
 interactions, fixtures, presentation timing and artifact hashes. `poster.png`
 is the segment's actual starting frame, captured after prerequisite replay.
+That state includes inputs after the parent's last illustrated step; its last
+screenshot may still show a highlighted destination before activation.
+`presentation.duration_seconds` includes the complete video, including those
+trailing inputs, and can extend beyond the last step's `video_end`.
 The host records `start_from` as the parent identity so consumers can link guides.
 Failed runs retain diagnostics and never qualify coverage. Video is sampled at
 15 fps; websites consume these artifacts without executing walkthrough source.
