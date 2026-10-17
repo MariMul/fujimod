@@ -43,7 +43,8 @@ async def check(playwright, args, name):
     try:
         for phase in ('cold', 'warm'):
             started = time.perf_counter()
-            await page.goto(args.url)
+            if phase == 'cold': await page.goto(args.url)
+            else: await page.reload()
             if args.dat:
                 await page.locator('#firmware-file').set_input_files(str(args.dat))
             await page.wait_for_function("document.querySelector('#live-label').textContent==='LIVE' || document.querySelector('#status').classList.contains('error')", timeout=180000)

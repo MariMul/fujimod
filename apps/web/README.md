@@ -111,6 +111,32 @@ source/LCD frame cadence, a Full shutter tap, a JPEG download through the card
 UI, and the same saved file decoded by stock Playback. It saves viewport and
 LCD screenshots without modifying served source or installing firmware patches.
 
+The performance gate measures 30 wall seconds with Undo enabled, requires at
+least 0.5× virtual/wall speed and 9.5 source/presented frames per guest second,
+times an exact English MENU pixel match, and requires a real reload below five
+seconds. The capture gate requires a Wasm peak below 1024 MiB and also records
+whole-browser RSS and macOS physical footprint, which are separate quantities.
+
+```sh
+python tests/performance.py --persistent --output /fresh/ignored/performance
+python tests/capture.py --persistent --cold --output /fresh/ignored/capture
+python -m unittest discover -s tests -p test_source_archive.py
+```
+
+Persistent WebKit contexts support OPFS; private contexts can use IndexedDB.
+`--cold` explicitly clears this app's test-origin caches before loading. A fresh
+profile directory alone does not guarantee empty WebKit origin storage. The
+process sampler measures the host browser, including new WebKit XPC processes;
+run only one instance of that browser bundle while sampling.
+
+The engine prepares runtime downloads in parallel with DAT verification. Initial
+card bytes are requested only on a cold miss. ETags revalidate browser-local
+asset caches; catalog, runtime and package checks still verify their bytes.
+OPFS writes stream into atomic replacement files. The source archive loader
+materializes imported source/checked-hash bytecode while preserving ordinary
+source paths for inspection. The allocator hook is specific to the pinned
+Pyodide factory ABI and fails if that ABI changes.
+
 Compare the built page with an approved HTML design reference:
 
 ```sh

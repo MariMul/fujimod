@@ -1,10 +1,11 @@
 import "./style.css";
 import { validateCatalog, type Catalog, type Firmware } from "./catalog";
-import { validateIndex } from "./patch/catalog";
+import { validateIndex, verifyPatch } from "./patch/catalog";
 import { sha256 } from "./patch/patcher";
 import { createEngine } from "./engine";
 import { EngineError, faultFrom, type EngineFault } from "./engine/fault";
-import type { Engine, CardFile } from "./engine/api";
+import { cachedFetch } from "./asset-cache";
+import type { Engine, CardFile, BootMedia } from "./engine/api";
 import { errorReportZip } from "./engine/report";
 import { ModelViewer, type ModelData } from "./viewer/model";
 import { InputPanel } from "./ui/controls";
@@ -13,6 +14,8 @@ import { FaultPanel } from "./ui/fault";
 import { cameraCard, cameraTable, type CameraSupport } from "./ui/cameras";
 import type { DevicePanel, PowerCombo } from "./ui/layout";
 import generations from "../devices/generations.json";
+
+performance.mark("camera-module-ready");
 
 declare const __FUJIMOD_LOCAL_DAT__: boolean;
 declare const __FUJIMOD_CATALOG__: string;
@@ -50,7 +53,7 @@ let catalog: Catalog,
   release: ReturnType<typeof validateIndex> | undefined,
   engine: Engine | undefined;
 let generation = 0,
-  selectedFile: File | undefined,
+  selectedFile: (() => Promise<File>) | undefined,
   selectedFirmware: Firmware | undefined,
   latestFault: EngineFault | undefined;
 let firmwareHash: string | undefined;
@@ -58,6 +61,8 @@ let build = "Development",
   modelLoaded: string | undefined,
   modelData: ModelData | undefined;
 let patchWorker: Worker | undefined;
+let preparedEngine: { value: Engine; bundle: string; adapter: string } | undefined;
+let modelLoading: Promise<void> = Promise.resolve();
 function status(message: string, error = false) {
   $("status").textContent = message;
   $("status").classList.toggle("error", error);
@@ -108,7 +113,13 @@ async function undo() {
   }
 }
 $("undo").onclick = () => void undo();
-$("restart").onclick = () => void processFile(selectedFile, true);
+$("restart").onclick = async () => {
+  if (selectedFile) {
+    const reload = selectedFile;
+    try { await processFile(await reload(), true, undefined, reload); }
+    catch (error) { showFault(faultFrom(error)); }
+  }
+};
 $("error-report").onclick = async () => {
   const button = $<HTMLButtonElement>("error-report");
   button.disabled = true;
@@ -170,10 +181,10 @@ async function loadModel(body: string) {
   if (!load) return;
   const device = await load();
   if (modelLoaded !== body) {
-    await viewer.load(device.model);
     modelLoaded = body;
     modelData = device.model;
-    credit(device.model);
+    modelLoading = viewer.load(device.model).then(() => credit(device.model));
+    void modelLoading.catch(error => showFault(faultFrom(error)));
   }
   return device;
 }
@@ -197,6 +208,28 @@ function reset() {
   $("idle-cameras").hidden = false;
   $("boot-progress").hidden = true;
   title();
+}
+function makeEngine(adapter: string) {
+  let value: Engine;
+  value = createEngine(adapter, error => {
+    if (engine === value) showFault(faultFrom(error));
+    else if (preparedEngine?.value === value) { preparedEngine = undefined; value.dispose(); }
+  });
+  return value;
+}
+function bootMedia(file: File): BootMedia {
+  const index = release, selected = selectedFirmware!;
+  const firmware = index?.firmwares.find(entry => entry.sha256 === selected.sha256);
+  if (!index || !firmware || !index.patches[selected.sha256]) return {identities:Promise.resolve([]),load:async()=>[]};
+  const metadata = (async () => {
+    const response = await fetch(new URL(`artifacts/${index.patches[selected.sha256]}`, document.baseURI));
+    if (!response.ok) throw Error("The release patch could not be downloaded.");
+    return verifyPatch(index, firmware, new Uint8Array(await response.arrayBuffer()));
+  })();
+  return {
+    identities:metadata.then(meta => ["ffboot","ffsys"].map(name => ({path:`/${name}.bin`,sha256:meta.outputs[name as "ffboot"|"ffsys"].sha256}))),
+    load:()=>patchedFiles(file),
+  };
 }
 function patchedFiles(file: File): Promise<CardFile[]> {
   if (!release?.patches[selectedFirmware!.sha256]) return Promise.resolve([]);
@@ -229,8 +262,10 @@ function patchedFiles(file: File): Promise<CardFile[]> {
     });
   });
 }
-async function processFile(file?: File, restart = false) {
+async function processFile(file?: File, restart = false, preparedBytes?: ArrayBuffer,
+  reload?: () => Promise<File>) {
   if (!file) return;
+  performance.mark("camera-file-received");
   const current = ++generation;
   reset();
   selectedFile = undefined;
@@ -239,9 +274,10 @@ async function processFile(file?: File, restart = false) {
   try {
     if (!file.size || file.size > 256 * 1024 * 1024)
       throw Error("Choose a firmware DAT smaller than 256 MB.");
-    const bytes = await file.arrayBuffer(),
+    const bytes = preparedBytes ?? await file.arrayBuffer(),
       hash = await sha256(new Uint8Array(bytes));
     if (current !== generation) return;
+    performance.mark("camera-dat-verified");
     firmwareHash = hash;
     const entry: Firmware | undefined =
       catalog.firmwares.find((item) => item.sha256 === hash) ??
@@ -251,7 +287,7 @@ async function processFile(file?: File, restart = false) {
     if (!entry) throw Error(`Unsupported firmware · SHA-256 ${hash}`);
     if (file.size !== entry.bytes)
       throw Error("Firmware size differs from the catalog.");
-    selectedFile = file;
+    selectedFile = reload ?? (() => Promise.resolve(file));
     selectedFirmware = entry;
     const device = entry.model_asset
       ? await loadModel(entry.model_asset)
@@ -265,9 +301,10 @@ async function processFile(file?: File, restart = false) {
     $("firmware-prompt").hidden = true;
     $("idle-cameras").hidden = true;
     title();
-    const active = createEngine(entry.emulate.adapter, (error) => {
-      if (current === generation) showFault(faultFrom(error));
-    });
+    const active = preparedEngine?.bundle === entry.emulate.bundle && preparedEngine.adapter === entry.emulate.adapter
+      ? preparedEngine.value : makeEngine(entry.emulate.adapter);
+    if (preparedEngine && preparedEngine.value !== active) preparedEngine.value.dispose();
+    preparedEngine = undefined;
     engine = active;
     active.metrics((metrics) => {
       if (current !== generation) return;
@@ -279,16 +316,21 @@ async function processFile(file?: File, restart = false) {
     active.frames((frame) => {
       if (current === generation) viewer.frame(frame);
     });
-    const seeds = await patchedFiles(file);
+    const seeds = bootMedia(file);
     if (current !== generation) return;
     const started = performance.now();
+    performance.mark("camera-engine-boot");
     const inputs = await active.boot(
       bytes,
-      { ...entry.emulate, initialPositions: device.initialPositions, restart },
+      { ...entry.emulate, firmwareId:entry.id, initialPositions: device.initialPositions, restart },
       progress,
       seeds,
     );
     if (current !== generation) return;
+    performance.mark("camera-engine-ready");
+    await modelLoading;
+    if (current !== generation) return;
+    performance.mark("camera-model-ready");
     panel.render(inputs, active, device.panel, device.initialPositions);
     card.connect(active);
     $("boot-progress").hidden = true;
@@ -361,15 +403,33 @@ try {
     }));
   $("camera-cards").replaceChildren(...cameras.map(cameraCard));
   cameraTable($("camera-table"), generations, cameras);
+  performance.mark("camera-catalog-ready");
+  const localDat = __FUJIMOD_LOCAL_DAT__ ? cachedFetch("/local/firmware.dat") : undefined;
   const first = cameras.find((camera) => camera.firmware.model_asset);
+  if (localDat && first?.firmware.emulate) {
+    const config = first.firmware.emulate;
+    const value = makeEngine(config.adapter);
+    preparedEngine = {value, bundle:config.bundle, adapter:config.adapter};
+    value.prepare({...config,firmwareId:first.firmware.id});
+  }
   if (first?.firmware.model_asset) {
     const device = await loadModel(first.firmware.model_asset);
     if (device)
       $("viewer").style.setProperty("--body-preview", `url(${device.preview})`);
   }
-  if (__FUJIMOD_LOCAL_DAT__) {
-    const dat = await fetch("/local/firmware.dat");
-    if (dat.ok) await processFile(new File([await dat.blob()], "FPUPDATE.DAT"));
+  if (localDat) {
+    const dat = await localDat;
+    if (dat.ok) {
+      const bytes = await dat.arrayBuffer();
+      // The local preview can reread its verified DAT on Restart. Retaining a
+      // synthetic File here would keep another entire DAT in browser memory.
+      const reload = async () => {
+        const response = await cachedFetch("/local/firmware.dat");
+        if (!response.ok) throw Error("The local firmware could not be read.");
+        return new File([await response.arrayBuffer()], "FPUPDATE.DAT");
+      };
+      await processFile(new File([bytes], "FPUPDATE.DAT"), false, bytes, reload);
+    }
   }
 } catch (error) {
   showFault(faultFrom(error));

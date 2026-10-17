@@ -1,5 +1,9 @@
+import sourceArchiveLoader from "./source-archive.py?raw";
+import { cachedFetch } from "../asset-cache";
+import { boundedMemoryModule, type RuntimeSettings } from "./wasm-growth";
 import { RequestTimings } from "./performance";
 import { WorkerRecovery } from "./recovery-worker";
+import { digest } from "./checkpoint-store.js";
 import { EngineError, faultFrom, stateFault } from "./fault.ts";
 import type { EngineConfig, CardState } from "./api";
 
@@ -40,13 +44,15 @@ interface State {
   [key: string]: unknown;
 }
 type Message =
+  | { type: "prepare"; bundle: string }
   | {
       type: "boot";
       dat: ArrayBuffer;
       bundle: string;
       config: EngineConfig;
-      cardFiles: { path: string; bytes: ArrayBuffer }[];
+      seedIdentity: { path: string; sha256: string }[];
     }
+  | { type: "card_files"; files: {path:string;bytes:ArrayBuffer}[] }
   | {
       type: "restart";
       id: number;
@@ -86,6 +92,16 @@ type Message =
 
 const worker = self as unknown as DedicatedWorkerGlobalScope;
 let py: Pyodide | undefined;
+let preparation: Promise<Pyodide> | undefined;
+let seedIdentity: {path:string;sha256:string}[] = [];
+let provideFiles: ((files: {path:string;bytes:ArrayBuffer}[]) => void) | undefined;
+async function initialFiles() {
+  const pending = new Promise<{path:string;bytes:ArrayBuffer}[]>(resolve=>{provideFiles=resolve;});
+  send("card_files_needed");
+  const files = await pending;
+  if (JSON.stringify(await Promise.all(files.map(async file=>[file.path,await digest(file.bytes)]))) !== JSON.stringify(seedIdentity.map(file=>[file.path,file.sha256]))) throw Error("Initial card bytes differ from the declared seed identity.");
+  return files;
+}
 const recovery = new WorkerRecovery();
 let recoverySources: ArrayBuffer, recoveryNative: ArrayBuffer;
 let stopped = false;
@@ -164,34 +180,55 @@ function publish(state: State, id: number, includeFrame: boolean) {
     frame.byteLength ? [frame] : [],
   );
 }
-async function prepareRuntime(bundle: string) {
-  if (py) return py;
-  const assets = Promise.all(
-    ["sources.zip", "_native.so"].map(async (name) => {
-      const response = await fetch(new URL(name, bundle));
-      if (!response.ok) throw Error("Emulator bundle is unavailable.");
-      return response.arrayBuffer();
-    }),
-  );
-  const { loadPyodide } = (await import(
-    /* @vite-ignore */ new URL("pyodide/pyodide.mjs", bundle).href
-  )) as {
-    loadPyodide(options: { indexURL: string }): Promise<Pyodide>;
-  };
-  py = await loadPyodide({ indexURL: new URL("pyodide/", bundle).href });
-  await py.loadPackage(["numpy", "pillow"]);
-  [recoverySources, recoveryNative] = await assets;
-  py.unpackArchive(recoverySources, "zip", { extractDir: "/repo" });
-  py.FS.writeFile(
-    "/repo/native/python/camera_native/_native.so",
-    new Uint8Array(recoveryNative.slice(0)),
-    { canOwn: true },
-  );
-  py.runPython(
-    "import os,sys; os.chdir('/repo'); sys.path[:0]=['/repo/native/python','/repo','/repo/tools']",
-  );
-  return py;
+function prepareRuntime(bundle: string) {
+  return preparation ??= loadRuntime(bundle);
 }
+async function loadRuntime(bundle: string) {
+  if (py) return py;
+  const originalFetch = self.fetch.bind(self);
+  const runtimeRoot = new URL(bundle).href;
+  self.fetch = (input, init) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const method = init?.method || (input instanceof Request ? input.method : 'GET');
+    return method === 'GET' && url.startsWith(runtimeRoot)
+      ? cachedFetch(url, originalFetch) : originalFetch(input, init);
+  };
+  try {
+    const assets = Promise.all(
+      ["sources.zip", "_native.so"].map(async (name) => {
+        const response = await fetch(new URL(name, bundle));
+        if (!response.ok) throw Error("Emulator bundle is unavailable.");
+        return response.arrayBuffer();
+      }),
+    );
+    const { loadPyodide } = (await import(
+      /* @vite-ignore */ new URL("pyodide/pyodide.mjs", bundle).href
+    )) as {
+      loadPyodide(options: { indexURL: string; packages: string[]; createPyodideModule: unknown }): Promise<Pyodide>;
+    };
+    py = await loadPyodide({ indexURL: new URL("pyodide/", bundle).href,
+      packages: ["numpy", "pillow"],
+      createPyodideModule: async (settings: RuntimeSettings) => {
+        const {default: factory} = await import(/* @vite-ignore */ new URL("pyodide/pyodide.asm.mjs", bundle).href);
+        return boundedMemoryModule(factory)(settings);
+      },
+    });
+    [recoverySources, recoveryNative] = await assets;
+    py.FS.mkdirTree("/repo/native/python/camera_native");
+    py.FS.writeFile("/repo/runtime-sources.zip", new Uint8Array(recoverySources), {canOwn:true});
+    py.FS.writeFile(
+      "/repo/native/python/camera_native/_native.so",
+      new Uint8Array(recoveryNative),
+      { canOwn: true },
+    );
+    py.runPython(sourceArchiveLoader);
+    py.runPython(
+      "import os,sys; os.chdir('/repo'); sys.path[:0]=['/repo/native/python','/repo','/repo/tools']\nsource_archive_finder = install_source_archive('/repo/runtime-sources.zip','/repo',('native/python/','','tools/'))",
+    );
+    return py;
+  } finally { self.fetch = originalFetch; }
+}
+
 function ready(state: State, paths: string[]) {
   return paths.every((path) => {
     let value: unknown = state;
@@ -207,8 +244,9 @@ async function boot(
   dat: ArrayBuffer,
   bundle: string,
   config: EngineConfig,
-  files: { path: string; bytes: ArrayBuffer }[],
+  identities: { path: string; sha256: string }[],
 ) {
+  seedIdentity = identities;
   bootStarted = performance.now();
   bootStages.length = 0;
   send("progress", { message: "Loading camera runtime…", percent: 3 });
@@ -226,8 +264,8 @@ async function boot(
     recoverySources,
     recoveryNative,
     inputBytes,
-    { protocol, positions: config.initialPositions },
-    files,
+    { protocol, firmwareId: config.firmwareId, positions: config.initialPositions, sourceLoader: await digest(new TextEncoder().encode(sourceArchiveLoader)) },
+    identities,
   );
   runtime.unpackArchive(inputBytes, "zip", { extractDir: "/repo" });
   runtime.FS.mkdirTree(
@@ -235,6 +273,7 @@ async function boot(
   );
   runtime.FS.writeFile(protocol.datPath, new Uint8Array(dat), { canOwn: true });
   runtime.globals.set("boot_config_json", JSON.stringify(protocol));
+  runtime.globals.set("selected_firmware_id", config.firmwareId);
   runtime.runPython(`
 import gc, hashlib, importlib, json, functools
 from pathlib import Path
@@ -242,9 +281,7 @@ for name, expected in json.loads(Path('/repo/web-inputs.json').read_text()).item
     if hashlib.sha256((Path('/repo') / name).read_bytes()).hexdigest() != expected:
         raise ValueError('Input SHA-256 differs: ' + name)
 boot_config = json.loads(boot_config_json)
-from tools.firmware_registry import by_sha256
-with Path(boot_config['datPath']).open('rb') as dat_source:
-    firmware_id = by_sha256(hashlib.file_digest(dat_source, 'sha256').hexdigest())['id']
+firmware_id = selected_firmware_id
 prepare = boot_config['prepare']
 boot_module = importlib.import_module(boot_config['module'])
 transport = importlib.import_module(boot_config['sessionModule'])
@@ -257,11 +294,11 @@ gc.collect()
 `);
   bootStage("inputs-verified");
   activeConfig = config;
-  return startSession(config, files, false);
+  return startSession(config, undefined, false);
 }
 async function startSession(
   config: EngineConfig,
-  files: { path: string; bytes: ArrayBuffer }[],
+  files: { path: string; bytes: ArrayBuffer }[] | undefined,
   restarting: boolean,
   replaceCard = false,
   bootInputs: { id: string; stage?: string; position?: string }[] = [],
@@ -288,6 +325,7 @@ async function startSession(
     restarting || config.restart === true,
   );
   if (!resumed) {
+    files ??= await initialFiles();
     runtime.runPython(
       "getattr(importlib.import_module(prepare['module']), prepare['function'])(**prepare['options'])",
     );
@@ -373,10 +411,26 @@ async function startSession(
   send("cache", recovery.status(runtime));
   stopped = false;
   errorTrigger = undefined;
-  return { state, frame, card: cardState(), runtime: runtimeMetrics() };
+  const card = cardState();
+  bootStage("ready-reply");
+  return { state, frame, card, runtime: {
+    ...runtimeMetrics(),
+    startupResources: performance.getEntriesByType("resource").map(entry => {
+      const resource = entry as PerformanceResourceTiming;
+      return {name: resource.name, seconds: resource.duration/1000, transferredBytes: resource.transferSize};
+    }),
+  } };
 }
 worker.onmessage = async ({ data }: MessageEvent<Message>) => {
   try {
+    if (data.type === "card_files") {
+      if (!provideFiles) throw Error("No initial card request is pending.");
+      const resolve=provideFiles;provideFiles=undefined;resolve(data.files);return;
+    }
+    if (data.type === "prepare") {
+      await prepareRuntime(data.bundle);
+      return;
+    }
     if (data.type === "error_report") {
       let result: {
         checkpoint?: ArrayBuffer;
@@ -406,7 +460,7 @@ worker.onmessage = async ({ data }: MessageEvent<Message>) => {
         data.dat,
         data.bundle,
         data.config,
-        data.cardFiles,
+        data.seedIdentity,
       );
       send("ready", result, [result.frame]);
       return;
@@ -566,23 +620,23 @@ worker.onmessage = async ({ data }: MessageEvent<Message>) => {
         height: data.height,
         sequence: data.sequence,
       });
-      const bytes = py.toPy(new Uint8Array(data.rgb));
+      const bytes = requestTimings.measure("sensor-transfer", () => py!.toPy(new Uint8Array(data.rgb)));
       py.globals.set("sensor_rgb_buffer", bytes);
       py.globals.set(
         "sensor_geometry_json",
         JSON.stringify({ width: data.width, height: data.height }),
       );
       try {
-        py.runPython(
+        requestTimings.measure("sensor-install", () => py!.runPython(
           'sensor_geometry=json.loads(sensor_geometry_json)\nset_sensor_scene(session,sensor_geometry["width"],sensor_geometry["height"],bytes(sensor_rgb_buffer))',
-        );
+        ));
         configurePreview();
       } finally {
         py.globals.delete("sensor_rgb_buffer");
         py.globals.delete("sensor_geometry_json");
         bytes.destroy();
       }
-      send("sensor_ready", { id: data.id, sequence: data.sequence });
+      send("sensor_ready", { id: data.id, sequence: data.sequence, runtime: runtimeMetrics() });
     }
   } catch (error) {
     if (data.type === "card") {

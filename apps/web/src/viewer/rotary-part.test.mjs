@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
-import { stripTypeScriptTypes } from 'node:module';
+import { transformWithOxc } from 'vite';
 const input = readFileSync(new URL('./rotary-part.ts', import.meta.url), 'utf8').replace("'three'", JSON.stringify(import.meta.resolve('three')));
-const source = stripTypeScriptTypes(input, { mode: 'transform' });
+const { code: source } = await transformWithOxc(input, 'rotary-part.ts');
 const { RotaryPart } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 
 test('exported body-origin meshes turn about their own center, with visible travel to a detent', () => {

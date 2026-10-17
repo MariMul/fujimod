@@ -16,6 +16,7 @@ import type {
   Input,
   Scene,
   CardFile,
+  BootMedia,
   CardState,
   CardTree,
   CardReadOptions,
@@ -75,6 +76,8 @@ export class WorkerEngine implements Engine {
   private nextMetrics = 0;
   private bootReject?: (error: Error) => void;
   private started = false;
+  private bootMedia?: BootMedia;
+  private inputTable?: { url: string; value: Promise<{inputs: any[]}> };
   private workerFailed = false;
   private reportIdentity: Record<string, unknown> = {};
   private rawErrors: unknown[] = [];
@@ -113,12 +116,28 @@ export class WorkerEngine implements Engine {
     for (const listener of this.errorListeners) listener(this.fault);
     this.onError(error);
   }
+  private loadInputs(config: EngineConfig) {
+    const url = new URL(config.inputs, document.baseURI).href;
+    if (this.inputTable?.url !== url) this.inputTable = {url, value: (async () => {
+      const response = await fetch(url);
+      if (!response.ok) throw Error("Emulator inputs are unavailable.");
+      return response.json();
+    })()};
+    return this.inputTable.value;
+  }
+  prepare(config: EngineConfig) {
+    void this.loadInputs(config).catch(() => {});
+    this.worker.postMessage({ type: "prepare", bundle: new URL(config.bundle, document.baseURI).href });
+  }
   async boot(
     dat: ArrayBuffer,
     config: EngineConfig,
     progress: (message: string, percent: number) => void,
-    cardFiles: CardFile[] = [],
+    media?: BootMedia,
   ) {
+    this.bootMedia = media;
+    this.prepare(config);
+    const seeds = (media?.identities ?? Promise.resolve([])).then(identities => ({ identities, error: undefined }), error => ({ identities: undefined, error }));
     this.reportIdentity = {
       firmwareSha256: await digest(dat),
       bundleVersion: null,
@@ -127,10 +146,9 @@ export class WorkerEngine implements Engine {
       bundle: config.bundle,
       protocol: config.boot,
     };
+    performance.mark("camera-engine-dat-hashed");
     this.progressListener = progress;
-    const response = await fetch(new URL(config.inputs, document.baseURI));
-    if (!response.ok) throw Error("Emulator inputs are unavailable.");
-    const table = await response.json();
+    const table = await this.loadInputs(config);
     this.powerInput = table.inputs.find(
       (item: { id: string; binding?: { type: string } }) =>
         item.binding?.type === "session_power",
@@ -158,6 +176,7 @@ export class WorkerEngine implements Engine {
         stages: item.binding?.stages,
       }),
     );
+    performance.mark("camera-engine-inputs-ready");
     await new Promise<void>((resolve, reject) => {
       this.bootReject = reject;
       this.worker.onmessage = ({ data }) => {
@@ -171,6 +190,14 @@ export class WorkerEngine implements Engine {
         }
         if (data.identity)
           this.reportIdentity = { ...this.reportIdentity, ...data.identity };
+        if (data.type === "card_files_needed") {
+          void (this.bootMedia?.load() ?? Promise.resolve([])).then(seedFiles => {
+            if (this.disposed) return;
+            const files = seedFiles.map(file => ({path:file.path,bytes:file.bytes.slice().buffer}));
+            this.worker.postMessage({type:"card_files",files},files.map(file=>file.bytes));
+          }).catch(error => this.fail(error as Error));
+          return;
+        }
         if (data.type === "profile_result") {
           const pending = this.pending.get(data.id);
           this.pending.delete(data.id);
@@ -205,9 +232,12 @@ export class WorkerEngine implements Engine {
           pending?.resolve(data);
         }
         if (data.type === "ready") {
+          this.bootMedia = undefined;
+          performance.mark("camera-worker-ready");
           this.bootReject = undefined;
           this.state = data.state;
           this.publish(data.frame);
+          performance.mark("camera-first-frame-presented");
           this.alive = true;
           this.wall = performance.now();
           this.ticks = this.state.virtual_ticks;
@@ -229,21 +259,16 @@ export class WorkerEngine implements Engine {
           pending?.resolve(data);
         }
       };
-      const files = cardFiles.map((file) => ({
-        path: file.path,
-        bytes: file.bytes.slice().buffer,
-      }));
-      this.started = true;
-      this.worker.postMessage(
-        {
-          type: "boot",
-          dat,
-          config,
-          cardFiles: files,
-          bundle: new URL(config.bundle, document.baseURI).href,
-        },
-        [dat, ...files.map((file) => file.bytes)],
-      );
+      const bundle = new URL(config.bundle, document.baseURI).href;
+      void seeds.then(({ identities, error }) => {
+        if (!identities) throw error;
+        if (this.disposed) throw Error("Emulator closed.");
+        this.started = true;
+        performance.mark("camera-engine-sent");
+        this.worker.postMessage(
+          { type: "boot", dat, config, seedIdentity: identities, bundle }, [dat],
+        );
+      }).catch(reject);
     });
     return this.inputs;
   }
@@ -649,6 +674,7 @@ export class WorkerEngine implements Engine {
     this.pace.reset(this.ticks);
   }
   dispose() {
+    this.bootMedia = undefined;
     this.disposed = true;
     this.alive = false;
     clearTimeout(this.timer);

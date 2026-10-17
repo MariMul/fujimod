@@ -9,11 +9,14 @@ import base64
 import hashlib
 import json
 import io
+import os
 from pathlib import Path
 import time
 
 from playwright.async_api import async_playwright
+from browser_storage import clear_camera_storage
 from PIL import Image
+from memory import processes, memory_samples
 from interactions import set_dial, segment, touch_dial
 
 MENU_HEADER = 'e598e0535f6d69203cbd325edcedde2cd530f706f54e00442701481ce48610b8'
@@ -22,8 +25,18 @@ MENU_HEADER = 'e598e0535f6d69203cbd325edcedde2cd530f706f54e00442701481ce48610b8'
 async def check(args):
     args.output.mkdir(parents=True, exist_ok=False)
     async with async_playwright() as p:
-        browser = await p.webkit.launch(headless=False)
-        page = await browser.new_page(**p.devices['iPhone 13'], ignore_https_errors=True)
+        baseline = {pid for pid,*_ in await processes()}
+        stop, memory = asyncio.Event(), {}
+        sampler = asyncio.create_task(memory_samples(p._impl_obj._connection._transport._proc.pid,
+            memory, stop, baseline, str(Path(p.webkit.executable_path).parent)+os.sep))
+        if args.persistent:
+            options=dict(p.devices['iPhone 13']); options.pop('default_browser_type',None)
+            context=await p.webkit.launch_persistent_context(str(args.output/'profile'),headless=False,**options)
+            browser=context.browser
+            page=context.pages[0] if context.pages else await context.new_page()
+        else:
+            browser=await p.webkit.launch(headless=False)
+            page=await browser.new_page(**p.devices['iPhone 13'], ignore_https_errors=True)
         errors = []
         page.on('pageerror', lambda error: errors.append(str(error)))
         await page.add_init_script('''(() => {
@@ -59,6 +72,7 @@ async def check(args):
             await page.screenshot(path=str(args.output/f'{name}.png'))
             png=await page.locator('#lcd-source').evaluate("c=>c.toDataURL('image/png').split(',')[1]")
             (args.output/f'{name}-lcd.png').write_bytes(base64.b64decode(png))
+            report.setdefault('stages',{})[name] = dict(runtime=await page.evaluate('window.__runtime'))
             (args.output/f'{name}-state.json').write_text(json.dumps(await page.evaluate('window.__state'),indent=2)+'\n')
 
         async def tap(locator):
@@ -72,6 +86,7 @@ async def check(args):
           for(let s=0,t=0;s<rgba.length;s+=4,t+=3){rgb[t]=rgba[s];rgb[t+1]=rgba[s+1];rgb[t+2]=rgba[s+2];}
           return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',rgb)),n=>n.toString(16).padStart(2,'0')).join('');
         }'''
+        if args.cold: await clear_camera_storage(page,args.url)
         try:
             started=time.monotonic()
             await page.goto(args.url)
@@ -97,12 +112,14 @@ async def check(args):
             assert report['preview']['presented_guest_fps']>=9.5,report['preview']
             print('PREVIEW',report['preview'],flush=True)
 
+            menu_started=time.monotonic()
             await tap(page.locator('button[data-id="menu_ok"]'))
             deadline=time.monotonic()+60
             while await page.evaluate(header)!=MENU_HEADER:
                 if time.monotonic()>deadline: raise AssertionError('Exact English MENU header did not arrive')
                 await wait('!window.__faults.length',timeout=1)
                 await asyncio.sleep(.2)
+            report['menu_seconds']=time.monotonic()-menu_started
             await save('menu'); report['checks']['english_menu_header_sha256']=MENU_HEADER
             await tap(page.locator('button[data-id="disp"]'))
             await wait('window.__state.navigation.physical_input_queue.completed>=4 && !window.__state.navigation.physical_inputs.held.length')
@@ -110,6 +127,7 @@ async def check(args):
             while await page.evaluate(header)==MENU_HEADER:
                 if time.monotonic()>deadline: raise AssertionError('Shooting pixels did not return after BACK')
                 await asyncio.sleep(.2)
+            await save('shooting-after-back')
             print('MENU / BACK',flush=True)
 
             dial=page.locator('.dial[data-id="shutter_speed"]')
@@ -152,6 +170,8 @@ async def check(args):
             report['checks']['saved_full_image_playback']=True
             report['runtime']=await page.evaluate('window.__runtime')
             report['errors']=errors
+            report['peak_wasm_bytes']=report['runtime']['peakWasmMemoryBytes']
+            assert report['peak_wasm_bytes'] < args.max_wasm_mib*1024*1024, report['peak_wasm_bytes']
             assert not errors,errors
             print('PLAYBACK PASSED',flush=True)
         except BaseException:
@@ -159,6 +179,8 @@ async def check(args):
             report['failure']=await page.evaluate('({state:window.__state,faults:window.__faults,status:document.querySelector("#status")?.textContent})')
             raise
         finally:
+            stop.set(); await sampler
+            report['memory'] = memory
             report['inputs']=await page.evaluate('window.__requests')
             (args.output/'result.json').write_text(json.dumps(report,indent=2)+'\n')
             await browser.close()
@@ -169,4 +191,7 @@ if __name__=='__main__':
     parser.add_argument('--url',default='http://127.0.0.1:5190/')
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--dat',type=Path)
+    parser.add_argument('--cold',action='store_true',help="Clear this app's test-origin asset/checkpoint stores before loading")
+    parser.add_argument('--persistent',action='store_true',help='Use a fresh on-disk profile, including OPFS, instead of private browsing')
+    parser.add_argument('--max-wasm-mib',type=float,default=1024)
     asyncio.run(check(parser.parse_args()))

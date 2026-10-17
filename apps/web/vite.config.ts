@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv, type Plugin, type Connect } from 'vite';
 import { createReadStream, existsSync } from 'node:fs';
+import { createGzip } from 'node:zlib';
 import { stat } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 
@@ -27,10 +28,18 @@ function localArtifacts(env: Record<string, string>): Plugin {
       try {
         const info = await stat(path);
         if (!info.isFile()) throw Error('not a file');
-        res.setHeader('Cache-Control', 'no-store');
-        res.setHeader('Content-Length', info.size);
+        const gzip = /\bgzip\b/.test(` ${req.headers['accept-encoding'] || ''}`) && info.size > 65536 && /\.(dat|so|wasm|mjs|js)$/i.test(path);
+        const etag = `"${info.size.toString(16)}-${info.mtimeMs.toString(16)}${gzip ? '-gzip' : ''}"`;
+        res.setHeader('Vary', 'Accept-Encoding');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('ETag', etag);
+        if (req.headers['if-none-match'] === etag) { res.statusCode = 304; res.end(); return; }
+        if (gzip) res.setHeader('Content-Encoding', 'gzip');
+        else res.setHeader('Content-Length', info.size);
         res.setHeader('Content-Type', path.endsWith('.mjs') || path.endsWith('.js') ? 'text/javascript' : path.endsWith('.json') ? 'application/json' : path.endsWith('.wasm') ? 'application/wasm' : 'application/octet-stream');
-        createReadStream(path).pipe(res);
+        if (req.method === 'HEAD') { res.end(); return; }
+        const stream = createReadStream(path);
+        (gzip ? stream.pipe(createGzip({level:1})) : stream).pipe(res);
       } catch { res.statusCode = 404; res.end(); }
     });
   };

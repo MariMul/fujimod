@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WorkerEngine } from './worker-engine.ts';
+import { digest } from './checkpoint-store.js';
 
 const state = revision => ({ supported: true, present: true, busy: false, revision, capacity_bytes: 4294967296 });
 const config = { bundle: 'runtime/test/', inputs: 'runtime/test/inputs.json', boot: {} };
-function setup() {
+function setup(resume = false) {
   globalThis.document = { baseURI: 'https://example.invalid/' };
   globalThis.window = { setTimeout: () => 0 };
   globalThis.fetch = async () => new Response(JSON.stringify({ inputs: [] }));
@@ -12,7 +13,8 @@ function setup() {
   const worker = {
     postMessage(message, transfer) {
       messages.push({ ...message, transfer });
-      if (message.type === 'boot') queueMicrotask(() => this.reply({ type: 'ready',
+      if (message.type === 'boot' && !resume) queueMicrotask(() => this.reply({ type: 'card_files_needed' }));
+      if (message.type === 'card_files' || message.type === 'boot' && resume) queueMicrotask(() => this.reply({ type: 'ready',
         state: { virtual_ticks: 0 }, frame: new ArrayBuffer(0), card: state(5) }));
       if (message.type === 'sensor_reset') queueMicrotask(() => this.reply({ type: 'sensor_ready', id: message.id }));
     },
@@ -26,11 +28,14 @@ test('preload buffers are copied for transfer; file reads return binary; changes
   const { engine, worker, messages, errors } = setup();
   const changes = [], stop = engine.cardChanges(card => changes.push(card));
   const ffboot = new Uint8Array([0, 255, 1]);
-  await engine.boot(new ArrayBuffer(3), config, () => {}, [{ path: '/ffboot.bin', bytes: ffboot }]);
-  const boot = messages[0];
-  assert.equal(boot.cardFiles[0].path, '/ffboot.bin');
-  assert.notEqual(boot.cardFiles[0].bytes, ffboot.buffer);
-  assert.deepEqual(new Uint8Array(boot.cardFiles[0].bytes), ffboot);
+  await engine.boot(new ArrayBuffer(3), config, () => {}, {
+    identities: Promise.resolve([{ path: '/ffboot.bin', sha256: await digest(ffboot) }]),
+    load: async () => [{ path: '/ffboot.bin', bytes: ffboot }],
+  });
+  const files = messages.find(message => message.type === 'card_files');
+  assert.equal(files.files[0].path, '/ffboot.bin');
+  assert.notEqual(files.files[0].bytes, ffboot.buffer);
+  assert.deepEqual(new Uint8Array(files.files[0].bytes), ffboot);
   assert.deepEqual(changes.map(c => c.revision), [5]);
   const listing = engine.cardTree(5), listed = messages.at(-1);
   assert.deepEqual({ type: listed.type, action: listed.action, revision: listed.revision },
@@ -52,6 +57,34 @@ test('preload buffers are copied for transfer; file reads return binary; changes
   assert.equal((await status).revision, 7);
   assert.equal(changes.length, 2);
   assert.deepEqual(errors, []);
+  engine.dispose();
+});
+
+test('runtime preparation starts while independent card metadata is still loading', { timeout: 1000 }, async () => {
+  const { engine, worker, messages } = setup();
+  const post = worker.postMessage.bind(worker);
+  const prepared = new Promise(resolve => { worker.postMessage = (...args) => { post(...args); if (args[0].type === 'prepare') resolve(); }; });
+  let finish;
+  const seeds = new Promise(resolve => { finish = resolve; });
+  const booting = engine.boot(new ArrayBuffer(3), config, () => {}, {
+    identities: seeds, load: async () => [{path:'/ffboot.bin',bytes:new Uint8Array([1,2,3])}],
+  });
+  await prepared;
+  assert.deepEqual(messages.map(message => message.type), ['prepare']);
+  finish([{ path: '/ffboot.bin', sha256: 'test-digest' }]);
+  await booting;
+  assert.deepEqual(messages.map(message => message.type), ['prepare','boot','card_files']);
+  assert.equal(messages[1].seedIdentity[0].path, '/ffboot.bin');
+  engine.dispose();
+});
+
+test('a matching checkpoint resumes without building initial card files', async () => {
+  const {engine, messages} = setup(true);
+  await engine.boot(new ArrayBuffer(3), config, () => {}, {
+    identities: Promise.resolve([{path:'/ffboot.bin',sha256:'known-output'}]),
+    load: () => { throw Error('Warm resume must not build boot files'); },
+  });
+  assert.deepEqual(messages.map(message => message.type), ['prepare','boot']);
   engine.dispose();
 });
 

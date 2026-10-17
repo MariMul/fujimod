@@ -2,7 +2,7 @@ import type { EngineConfig } from './engine/api';
 export interface Firmware {
   id: string; body?: string; model: string; version: string; sha256: string; bytes: number;
   download_url: string; release_date: string;
-  emulate?: EngineConfig & { adapter: string };
+  emulate?: Omit<EngineConfig, 'firmwareId'> & { adapter: string };
   model_asset?: string;
 }
 export interface Catalog { schema: number; firmwares: Firmware[] }

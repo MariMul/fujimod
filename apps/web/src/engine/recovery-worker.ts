@@ -18,10 +18,10 @@ export class WorkerRecovery {
   mode = 'cold';
   private persistenceDisabled = false;
   bypassPersistence() { this.persistenceDisabled = true; this.saved = false; this.mode = 'cold'; }
-  async identify(dat: ArrayBuffer, sources: ArrayBuffer, native: ArrayBuffer, inputs: ArrayBuffer, protocol: unknown, seeds: { path: string; bytes: ArrayBuffer }[] = []) {
+  async identify(dat: ArrayBuffer, sources: ArrayBuffer, native: ArrayBuffer, inputs: ArrayBuffer, protocol: unknown, seeds: { path: string; sha256: string }[] = []) {
     const [sourcesSha256,nativeSha256,firmwareSha256] = await Promise.all([digest(sources),digest(native),digest(dat)]);
-    const version = await digest(new TextEncoder().encode(JSON.stringify([sourcesSha256, nativeSha256, protocol, 'recovery-v1'])));
-    const profile = await digest(new TextEncoder().encode(JSON.stringify([await digest(inputs), await Promise.all(seeds.map(async file => [file.path, await digest(file.bytes)]))])));
+    const version = await digest(new TextEncoder().encode(JSON.stringify([sourcesSha256, nativeSha256, protocol, 'recovery-v2'])));
+    const profile = await digest(new TextEncoder().encode(JSON.stringify([await digest(inputs), seeds.map(file => [file.path, file.sha256])])));
     this.key = await cacheKey(firmwareSha256, version, profile);
     this.identity = { firmwareSha256, bundleVersion: version, sourcesSha256, nativeSha256, storageProfileSha256: profile };
   }
@@ -33,7 +33,7 @@ export class WorkerRecovery {
     if (!bytes) return false;
     const proxy = py.toPy(new Uint8Array(bytes)); py.globals.set('browser_checkpoint', proxy);
     try {
-      py.runPython('from native.web.recovery import restore_initial\nbrowser_restore_timings = []\nsession = restore_initial(bytes(browser_checkpoint), timings=browser_restore_timings, clock_seconds_2000=clock_seconds_2000)');
+      py.runPython('from native.web.recovery import restore_session\nbrowser_restore_timings = []\nsession = restore_session(bytes(browser_checkpoint), timings=browser_restore_timings, clock_seconds_2000=clock_seconds_2000)');
       this.restoreSeconds = (performance.now()-started)/1000;
       this.mode = 'resume'; this.saved = true; return true;
     } catch (error) {
@@ -41,7 +41,7 @@ export class WorkerRecovery {
     } finally { py.globals.delete('browser_checkpoint'); proxy.destroy(); }
   }
   start(py: RecoveryRuntime) {
-    py.runPython('from native.web.recovery import History, export_initial\nbrowser_history = History()');
+    py.runPython('from native.web.recovery import History, export_snapshot\nbrowser_history = History()');
   }
   async capture(py: RecoveryRuntime) {
     // History checks the two-second deadline and refuses unsafe boundaries without execution.
@@ -51,7 +51,7 @@ export class WorkerRecovery {
       const captured = py.runPython<boolean>('browser_history.capture(session)');
       if (!captured || this.saved || this.saving || this.persistenceDisabled) return;
       this.saving = ownsSave = true;
-      value = py.runPython<BytesProxy>('memoryview(export_initial(session))');
+      value = py.runPython<BytesProxy>('memoryview(export_snapshot(browser_history.points[-1]))');
       const buffer = value.getBuffer('u8');
       let bytes: Uint8Array<ArrayBuffer>;
       try { bytes = Uint8Array.from(buffer.data); } finally { buffer.release(); }

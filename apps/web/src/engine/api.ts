@@ -27,6 +27,10 @@ export interface CardFile {
   path: string;
   bytes: Uint8Array;
 }
+export interface BootMedia {
+  identities: Promise<{ path: string; sha256: string }[]>;
+  load(): Promise<CardFile[]>;
+}
 export interface CardState {
   supported: boolean;
   present: boolean;
@@ -68,6 +72,7 @@ export interface BootProtocol {
   readyWhen: string[];
 }
 export interface EngineConfig {
+  firmwareId: string;
   bundle: string;
   inputs: string;
   boot: BootProtocol;
@@ -75,6 +80,7 @@ export interface EngineConfig {
   restart?: boolean;
 }
 export interface Engine {
+  prepare(config: EngineConfig): void;
   metrics(listener: (metrics: CameraPerformance) => void): () => void;
   profile(limit?: number): Promise<Record<string, unknown>>;
   errors(listener: (fault: EngineFault) => void): () => void;
@@ -84,7 +90,7 @@ export interface Engine {
     dat: ArrayBuffer,
     config: EngineConfig,
     progress: (message: string, percent: number) => void,
-    cardFiles?: CardFile[],
+    media?: BootMedia,
   ): Promise<Input[]>;
   /** Restart with these files merged into existing media; matching paths are replaced. */
   restartWithCardFiles(
