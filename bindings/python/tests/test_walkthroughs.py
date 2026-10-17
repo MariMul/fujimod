@@ -124,3 +124,85 @@ class WalkthroughTests(unittest.TestCase):
         guide.frame(camera.png, 1)
         with self.assertRaises(ValueError):
             guide.frame(camera.png, .5)
+
+    def test_relative_helpers_and_duplicate_function_alias(self):
+        (self.root/'helpers.py').write_text('TITLE="Helper title"\n')
+        source=self.root/'example.py'
+        source.write_text('from .helpers import TITLE\nfrom fujimod.walkthroughs import walkthrough\n'
+                          '@walkthrough(TITLE)\ndef first(camera,guide): pass\nalias=first\n')
+        found=discover(source)
+        self.assertEqual([(w.name,w.title) for w in found],[('first','Helper title')])
+
+    def test_discovery_does_not_reuse_same_size_timestamp_bytecode(self):
+        import os
+        source=self.root/'example.py'
+        source.write_text('from fujimod.walkthroughs import walkthrough\n@walkthrough("One")\ndef first(c,g): pass\n')
+        self.assertEqual(discover(source)[0].title,'One')
+        stamp=source.stat()
+        source.write_text(source.read_text().replace('"One"','"Two"'))
+        os.utime(source,ns=(stamp.st_atime_ns,stamp.st_mtime_ns))
+        self.assertEqual(discover(source)[0].title,'Two')
+
+    def test_input_edges_do_not_retroactively_overlay_prior_frames(self):
+        camera,guide=self.guide()
+        video=guide.video
+        observed=[]
+        def write(raw):
+            observed.append(set(video.active));video.frames+=1
+        with patch.object(video,'_write',side_effect=write):
+            guide.frame(camera.png,0)
+            guide.input('right',True,.5)
+            guide.frame(camera.png,1)
+        self.assertEqual(len(observed),15)
+        self.assertTrue(all(not labels for labels in observed[:7]))
+        self.assertTrue(all(labels=={'right'} for labels in observed[7:]))
+
+    def test_zero_hold_adds_no_frame(self):
+        camera,guide=self.guide()
+        with patch.object(guide.video,'_write') as write:
+            guide.video.still(camera.png,0)
+            write.assert_not_called()
+
+    def test_input_release_and_fixture_input_cannot_earn_coverage(self):
+        camera,guide=self.guide()
+        guide._recording=True
+        release=guide.input('right',False,0)
+        with self.assertRaises(ValueError):guide.interaction('menu','m/item',input_index=release)
+        with guide.fixture('Setup'):
+            setup=guide.input('right',True,0)
+        with self.assertRaises(ValueError):guide.interaction('menu','m/item',input_index=setup)
+
+    def test_catching_a_failed_step_does_not_make_run_pass(self):
+        camera,guide=self.guide()
+        def run(c,g):
+            try:
+                with g.step('Broken'):raise AssertionError('broken')
+            except AssertionError:pass
+            with g.step('Later',hold=0):pass
+        with self.assertRaisesRegex(AssertionError,'broken'):guide.run(run)
+        self.assertFalse(json.loads((guide.output/'guide.json').read_text())['passed'])
+
+    def test_final_observation_is_encoded_and_finish_is_idempotent(self):
+        from unittest.mock import Mock
+        camera,guide=self.guide();video=guide.video
+        observed=[]
+        def write(raw):
+            observed.append(raw);video.frames+=1
+            video.process=Mock();video.process.wait.return_value=0;video.log=Mock()
+        with patch.object(video,'_write',side_effect=write):
+            video.frame(camera.png,0)
+            video.frame(b'last observation',1)
+            video.finish();count=len(observed);video.finish()
+        self.assertEqual(observed[-1],b'last observation')
+        self.assertEqual(len(observed),count)
+
+    def test_helper_rewrite_with_unchanged_timestamp_is_not_cached(self):
+        import os
+        helper=self.root/'helpers.py';helper.write_text('TITLE="One"\n')
+        source=self.root/'example.py'
+        source.write_text('from .helpers import TITLE\nfrom fujimod.walkthroughs import walkthrough\n'
+                          '@walkthrough(TITLE)\ndef first(camera,guide): pass\n')
+        self.assertEqual(discover(source)[0].title,'One')
+        stamp=helper.stat();helper.write_text('TITLE="Two"\n')
+        os.utime(helper,ns=(stamp.st_atime_ns,stamp.st_mtime_ns))
+        self.assertEqual(discover(source)[0].title,'Two')

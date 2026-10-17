@@ -14,7 +14,8 @@ def example(camera, guide):
 ```
 
 `discover(path)` imports trusted local Python and returns decorated functions
-from that file. Several functions may share a file. The host derives identity
+from that file. Several functions may share a file. Relative sibling-helper
+imports work, and discovery reloads source instead of accepting stale bytecode. The host derives identity
 and mod ownership from paths; authors provide only titles, prose and code.
 
 Construct a fresh adapter per function, then call
@@ -33,13 +34,16 @@ It calls `guide.frame(png, seconds)` at monotonically increasing guest times,
 and `guide.interaction(surface, item, input_index=..., **evidence)` for observed
 interactions. Frame sampling must not drive device state. Input badges are
 rendered only into video, in the bottom-right, fading after release.
-The adapter should sample immediately before an input edge so its overlay
-starts and stops at that edge. It supplies evidence rather than accepting
+Input edges flush the preceding interval before changing the badge.
+The adapter should sample immediately before an input edge for fresh pixels. It supplies evidence rather than accepting
 coverage declarations from walkthrough authors.
 
 `guide.step(title, text='', hold=2)` captures on successful block exit, then
 holds that observation for presentation seconds without advancing guest time.
-An assertion failure prevents capture and makes the whole report fail.
+A zero hold adds no presentation time. The final frame is retained even when
+there is no later sample or hold.
+An assertion failure prevents capture and makes the whole report fail, even
+if walkthrough code catches the failed step's exception.
 `guide.fixture(description)` records setup interventions and suppresses their
 coverage. Fixtures are independent of guide steps.
 
@@ -49,3 +53,7 @@ interactions, fixtures, and artifact hashes. Failed runs keep diagnostics and
 never become successful guides. Video is sampled at 15 fps, independent of
 host execution speed. Hosts can build websites from these outputs without
 running the walkthrough source during the website build itself.
+
+Input records include a `fixture` boolean. Only non-fixture press records can
+anchor interaction coverage. Video timestamps are monotonic across both frames
+and input edges; cleanup closes the encoder after failures as well as success.
