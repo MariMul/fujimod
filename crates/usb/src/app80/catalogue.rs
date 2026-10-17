@@ -2,6 +2,24 @@
 use super::{CommandCode, Reply, Request};
 use crate::{Result as UsbResult, error::ProtocolError, ff80::commands::memory::Address};
 use fujimod_defs::service::{Codec, Definition, Entry, ServiceModes};
+mod scan;
+pub use scan::ScanSelection;
+mod pipeline;
+pub use pipeline::{
+    PipelineAction, PipelineDispatchOption, PipelineDispatchSelector, PipelinePreparationMode,
+    PipelineRequestMode, PipelineValue,
+};
+mod exposure;
+pub use exposure::{
+    AdjustmentPacketAction, AdjustmentPacketPayload2, AdjustmentPacketPayload3,
+    AdjustmentPacketPayload8, AdjustmentPacketRead, AdjustmentPacketReadData,
+    AdjustmentPacketWrite, ExposureDuration, ExposureModeOption, ExposureOption, ExposureReadiness,
+    ExposureStatusOption,
+};
+mod samples;
+pub use samples::AdjustmentControlAction;
+mod device9;
+pub use device9::{Device9Action, Device9Count, Device9Payload};
 mod adjustment;
 pub use adjustment::{AdjustmentOptionByte, AdjustmentOptionStatus};
 mod configuration;
@@ -74,10 +92,18 @@ pub enum ArgumentKind {
     TransferPairFirst,
     AdjustmentDuration,
     LensSelectionIndex,
+    Device9Count,
+    AdjustmentPacketLength,
+    PipelineValue,
+    ScanSelection,
 }
 impl std::fmt::Display for ArgumentKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
+            Self::ScanSelection => "scan index below the observed result count",
+            Self::PipelineValue => "pipeline request value (1..=255)",
+            Self::AdjustmentPacketLength => "adjustment packet payload length",
+            Self::Device9Count => "device-9 payload length (0..=29 bytes)",
             Self::PinBank => "pin bank",
             Self::ProfileIndex => "profile index",
             Self::WordAlignment => "word alignment",
@@ -370,6 +396,48 @@ pub enum Command {
     InvokeSecondaryParameterCallback {
         parameter: u8,
     },
+    /// Requests S53C lens positioning; callback delivery does not confirm movement.
+    SetLensPosition {
+        position: i16,
+    },
+    RequestLensPosition,
+    /// Low 16 bits returned by the parameter notifier, not a validated position.
+    ReadLensParameter,
+    AdjustmentControlOption {
+        action: AdjustmentControlAction,
+    },
+    AdjustmentCapture83,
+    AdjustmentCaptureSequence,
+    AdjustmentSelectSamples,
+    AdjustmentCapture8a,
+    AdjustmentAverageCaptures {
+        count: u8,
+    },
+    AdjustmentQueryPlaneSamples,
+    /// Reads one entry using a prior count observation, which may become stale.
+    ReadScan {
+        selection: ScanSelection,
+    },
+    ReportServiceSuccess,
+    ReportServiceFailure,
+    /// Firmware returns without signaling completion; the session may time out.
+    ReturnWithoutSignal,
+    Pipeline {
+        action: PipelineAction,
+    },
+    ReadAdjustmentStatusOption,
+    RequestExposure {
+        mode: ExposureModeOption,
+        duration: ExposureDuration,
+        option: ExposureOption,
+    },
+    AdjustmentPacket {
+        action: AdjustmentPacketAction,
+    },
+    ReadAdjustmentReadyOption,
+    Device9 {
+        action: Device9Action,
+    },
     QueryAdjustmentOption {
         option: AdjustmentOptionByte,
     },
@@ -456,7 +524,27 @@ impl Command {
             Self::InvokeSecondaryParameterCallback { .. } => {
                 Codec::InvokeSecondaryParameterCallback
             }
+            Self::AdjustmentControlOption { .. } => Codec::AdjustmentControlOption,
+            Self::AdjustmentCapture83 => Codec::AdjustmentCapture83,
+            Self::AdjustmentCaptureSequence => Codec::AdjustmentCaptureSequence,
+            Self::AdjustmentSelectSamples => Codec::AdjustmentSelectSamples,
+            Self::AdjustmentCapture8a => Codec::AdjustmentCapture8a,
+            Self::AdjustmentAverageCaptures { .. } => Codec::AdjustmentAverageCaptures,
+            Self::AdjustmentQueryPlaneSamples => Codec::AdjustmentQueryPlaneSamples,
+            Self::ReadScan { .. } => Codec::ReadScan,
+            Self::ReportServiceSuccess => Codec::ReportServiceSuccess,
+            Self::ReportServiceFailure => Codec::ReportServiceFailure,
+            Self::ReturnWithoutSignal => Codec::ReturnWithoutSignal,
+            Self::Pipeline { action } => action.codec(),
+            Self::ReadAdjustmentStatusOption => Codec::AdjustmentStatusOption,
+            Self::RequestExposure { .. } => Codec::AdjustmentExposure,
+            Self::AdjustmentPacket { .. } => Codec::AdjustmentPacket,
+            Self::ReadAdjustmentReadyOption => Codec::AdjustmentReadyOption,
+            Self::Device9 { .. } => Codec::Device9Exchange,
             Self::QueryAdjustmentOption { .. } => Codec::QueryAdjustmentOption,
+            Self::SetLensPosition { .. } => Codec::SetLensPosition,
+            Self::RequestLensPosition => Codec::RequestLensPosition,
+            Self::ReadLensParameter => Codec::ReadLensParameter,
         }
     }
 }
@@ -611,6 +699,27 @@ pub enum ReplyValue {
     LensOperation {
         raw_value: u8,
     },
+    LensParameter {
+        raw_value: i16,
+    },
+    ScanName {
+        data: [u8; 32],
+    },
+    Device9Data {
+        data: Vec<u8>,
+    },
+    AdjustmentStatusOption {
+        value: ExposureStatusOption,
+    },
+    AdjustmentReadyOption {
+        value: ExposureReadiness,
+    },
+    AdjustmentPacketRead {
+        data: AdjustmentPacketReadData,
+    },
+    AdjustmentControlOption {
+        raw_value: u8,
+    },
     LensCompletionParameter {
         flag: LensCompletionParameterFlag,
         encoded_value: u8,
@@ -654,7 +763,17 @@ impl PreparedCommand {
     pub fn request(&self) -> &Request {
         &self.request
     }
+    pub fn decode_bytes(&self, bytes: &[u8]) -> UsbResult<CommandReply> {
+        self.decode(Reply::decode_length(bytes, self.request.encoded_len())?)
+    }
     pub fn decode(&self, reply: Reply) -> UsbResult<CommandReply> {
+        if reply.raw().len() != self.request.encoded_len() {
+            return Err(ProtocolError::ReplyLength {
+                expected: self.request.encoded_len(),
+                actual: reply.raw().len(),
+            }
+            .into());
+        }
         let Decode::Typed(command) = self.decode else {
             return Ok(CommandReply {
                 value: ReplyValue::Research,
@@ -870,11 +989,81 @@ impl PreparedCommand {
             | Command::InvokeSecondaryParameterCallback { .. } => {
                 ReplyValue::AdjustmentCallback { raw_value: byte(1) }
             }
+            Command::ReadScan { .. } => ReplyValue::ScanName {
+                data: std::array::from_fn(|i| byte(i + 1)),
+            },
+            Command::ReportServiceSuccess
+            | Command::ReportServiceFailure
+            | Command::ReturnWithoutSignal => ReplyValue::NoPayload,
+            Command::Pipeline { .. } => ReplyValue::NoPayload,
+            Command::ReadAdjustmentStatusOption => ReplyValue::AdjustmentStatusOption {
+                value: ExposureStatusOption::decode(byte(0)),
+            },
+            Command::ReadAdjustmentReadyOption => ReplyValue::AdjustmentReadyOption {
+                value: ExposureReadiness::decode(byte(0)),
+            },
+            Command::AdjustmentPacket {
+                action: AdjustmentPacketAction::Read { kind },
+            } => ReplyValue::AdjustmentPacketRead {
+                data: match kind {
+                    AdjustmentPacketRead::Kind20 => AdjustmentPacketReadData::Kind20 {
+                        data: [
+                            byte(1),
+                            byte(2),
+                            byte(3),
+                            byte(4),
+                            byte(5),
+                            byte(6),
+                            byte(7),
+                        ],
+                    },
+                    AdjustmentPacketRead::Kind21 => {
+                        AdjustmentPacketReadData::Kind21 { value: byte(1) }
+                    }
+                    AdjustmentPacketRead::Kind22 => AdjustmentPacketReadData::Kind22 {
+                        data: [byte(1), byte(2), byte(3)],
+                    },
+                    AdjustmentPacketRead::Kind23 => {
+                        AdjustmentPacketReadData::Kind23 { value: byte(1) }
+                    }
+                },
+            },
+            Command::RequestExposure { .. }
+            | Command::AdjustmentPacket {
+                action: AdjustmentPacketAction::Write { .. },
+            } => ReplyValue::NoPayload,
+            Command::AdjustmentControlOption {
+                action: AdjustmentControlAction::Read { .. },
+            } => ReplyValue::AdjustmentControlOption { raw_value: byte(3) },
+            Command::AdjustmentControlOption {
+                action: AdjustmentControlAction::Write { .. },
+            }
+            | Command::AdjustmentCapture83
+            | Command::AdjustmentCaptureSequence
+            | Command::AdjustmentSelectSamples
+            | Command::AdjustmentCapture8a
+            | Command::AdjustmentAverageCaptures { .. }
+            | Command::AdjustmentQueryPlaneSamples => ReplyValue::NoPayload,
+            Command::Device9 {
+                action: Device9Action::Read { count, .. },
+            } => ReplyValue::Device9Data {
+                data: (0..usize::from(count.value()))
+                    .map(|i| byte(4 + i))
+                    .collect(),
+            },
+            Command::Device9 {
+                action: Device9Action::Write { .. },
+            } => ReplyValue::NoPayload,
+            Command::ReadLensParameter => ReplyValue::LensParameter {
+                raw_value: i16::from_be_bytes([byte(0), byte(1)]),
+            },
             Command::QueryAdjustmentOption { .. } => ReplyValue::AdjustmentOption {
                 status: AdjustmentOptionStatus::decode(byte(3)),
                 raw_value: half(1, 2),
             },
-            Command::LensOperation6
+            Command::SetLensPosition { .. }
+            | Command::RequestLensPosition
+            | Command::LensOperation6
             | Command::PrepareAdjustmentOutput
             | Command::PrepareAlternateAdjustmentOutput
             | Command::AdjustmentConfiguration {
@@ -989,6 +1178,23 @@ impl Catalogue {
         }
         Self::encode(entry, command)
     }
+    /// Select an explicit service identifier while retaining typed argument validation.
+    /// Useful when firmware gives the same operation several identifiers.
+    pub fn prepare_code(
+        &self,
+        code: CommandCode,
+        modes: ServiceModes,
+        command: Command,
+    ) -> Result<PreparedCommand, CommandError> {
+        let entry = self
+            .definition
+            .select(code.0, modes)
+            .ok_or(CommandError::Unavailable(code))?;
+        if entry.codec() != command.codec() {
+            return Err(CommandError::Unsupported(command.codec()));
+        }
+        Self::encode(entry, command)
+    }
     pub fn prepare_research(
         &self,
         code: CommandCode,
@@ -1006,7 +1212,7 @@ impl Catalogue {
         })
     }
     fn encode(entry: &Entry, command: Command) -> Result<PreparedCommand, CommandError> {
-        let mut arguments = [0; 32];
+        let mut arguments = vec![0; entry.codec().mailbox_arguments()];
         let mut put =
             |index: usize, value: u8| arguments[usize::from(entry.slots()[index])] = value;
         match command {
@@ -1058,6 +1264,59 @@ impl Catalogue {
             Command::InvokePrimaryParameterCallback { parameter }
             | Command::InvokeSecondaryParameterCallback { parameter } => {
                 put(0, parameter);
+                put(1, 255);
+            }
+            Command::ReportServiceSuccess
+            | Command::ReportServiceFailure
+            | Command::ReturnWithoutSignal => (),
+            Command::ReadScan { selection } => put(0, selection.value()),
+            Command::Pipeline { action } => action.encode(&mut put),
+            Command::ReadAdjustmentStatusOption | Command::ReadAdjustmentReadyOption => put(0, 255),
+            Command::RequestExposure {
+                mode,
+                duration,
+                option,
+            } => {
+                put(0, mode.wire());
+                let [high, low] = duration.wire();
+                put(1, high);
+                put(2, low);
+                put(3, option.wire());
+            }
+            Command::AdjustmentPacket {
+                action: AdjustmentPacketAction::Write { packet },
+            } => {
+                put(0, packet.kind());
+                let (bytes, length) = packet.payload();
+                for (index, &value) in bytes[..length].iter().enumerate() {
+                    put(index + 1, value);
+                }
+            }
+            Command::AdjustmentPacket {
+                action: AdjustmentPacketAction::Read { kind },
+            } => {
+                put(0, kind.kind());
+                for index in 1..11 {
+                    put(index, 255);
+                }
+            }
+            Command::AdjustmentControlOption { action } => action.encode(&mut put),
+            Command::AdjustmentAverageCaptures { count } => put(0, count),
+            Command::AdjustmentCapture83
+            | Command::AdjustmentCaptureSequence
+            | Command::AdjustmentSelectSamples
+            | Command::AdjustmentCapture8a
+            | Command::AdjustmentQueryPlaneSamples => (),
+            Command::Device9 { action } => action.encode(&mut put),
+            Command::SetLensPosition { position } => {
+                let [high, low] = position.to_be_bytes();
+                put(0, high);
+                put(1, low);
+                put(2, 255);
+            }
+            Command::RequestLensPosition => put(0, 255),
+            Command::ReadLensParameter => {
+                put(0, 255);
                 put(1, 255);
             }
             Command::QueryAdjustmentOption { option } => {
@@ -1315,8 +1574,7 @@ impl Catalogue {
             }
         }
         Ok(PreparedCommand {
-            request: Request::new(CommandCode(entry.code()), &arguments)
-                .expect("fixed 32-byte argument buffer"),
+            request: Request::from_mailbox(CommandCode(entry.code()), arguments),
             slots: entry.slots().to_vec(),
             decode: Decode::Typed(command),
         })
@@ -1345,3 +1603,7 @@ mod lens_tests;
 
 #[cfg(test)]
 mod adjustment_tests;
+
+#[cfg(test)]
+#[path = "catalogue/position_tests.rs"]
+mod position_tests;

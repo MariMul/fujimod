@@ -643,7 +643,9 @@ pub fn execute_app80(
     session: &Session,
     invocation: &service::App80Invocation,
 ) -> Result<js_sys::Promise, JsValue> {
-    if session.limits.configuration.get() < 33 {
+    if (session.limits.configuration.get() as usize)
+        < invocation.inner.command().request().encoded_len()
+    {
         return Err(fail(
             ErrorKind::InvalidArgument,
             "session configuration limit cannot carry an App80 mailbox",

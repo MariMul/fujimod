@@ -47,15 +47,16 @@ impl Mailbox {
     pub async fn exchange(&self, session: &mut Session, request: &Request) -> Result<Reply> {
         // Both setup writes have smaller replies; reject an insufficient final
         // read budget before staging arguments or publishing the command.
-        check_limit(36 + 33, session.max_reply_bytes().get())?;
+        let length = request.encoded_len() as u32;
+        check_limit(36 + length, session.max_reply_bytes().get())?;
         let stage =
             WriteConfiguration::new(self.parameters, request.arguments().to_vec(), self.limit)?;
-        let publish =
-            WriteConfiguration::new(self.location, request.encode().to_vec(), self.limit)?;
-        let read = ReadConfiguration::new(self.location, NonZeroU32::new(33).unwrap(), self.limit)?;
+        let publish = WriteConfiguration::new(self.location, request.encode(), self.limit)?;
+        let read =
+            ReadConfiguration::new(self.location, NonZeroU32::new(length).unwrap(), self.limit)?;
         session.write_configuration(stage).await?;
         session.write_configuration(publish).await?;
-        Reply::decode(&session.read_configuration(read).await?)
+        Reply::decode_length(&session.read_configuration(read).await?, length as usize)
     }
 }
 

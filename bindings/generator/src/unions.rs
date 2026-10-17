@@ -5,10 +5,19 @@ use std::collections::BTreeSet;
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ValueType {
-    Integer { bits: u8 },
-    Named { name: String },
+    Integer {
+        bits: u8,
+        signed: bool,
+    },
+    Named {
+        name: String,
+    },
     Bytes,
-    Array { bits: u8, length: usize },
+    Array {
+        bits: u8,
+        signed: bool,
+        length: usize,
+    },
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct Field {
@@ -34,19 +43,41 @@ pub struct Union {
 fn value_type(ty: &Type) -> Result<ValueType, String> {
     if let Some(name) = named(ty) {
         return Ok(match name.as_str() {
-            "u8" => ValueType::Integer { bits: 8 },
-            "u16" => ValueType::Integer { bits: 16 },
-            "u32" => ValueType::Integer { bits: 32 },
+            "u8" => ValueType::Integer {
+                bits: 8,
+                signed: false,
+            },
+            "i8" => ValueType::Integer {
+                bits: 8,
+                signed: true,
+            },
+            "u16" => ValueType::Integer {
+                bits: 16,
+                signed: false,
+            },
+            "i16" => ValueType::Integer {
+                bits: 16,
+                signed: true,
+            },
+            "u32" => ValueType::Integer {
+                bits: 32,
+                signed: false,
+            },
+            "i32" => ValueType::Integer {
+                bits: 32,
+                signed: true,
+            },
             _ => ValueType::Named { name },
         });
     }
     if let Type::Array(array) = ty
-        && let ValueType::Integer { bits } = value_type(&array.elem)?
+        && let ValueType::Integer { bits, signed } = value_type(&array.elem)?
         && let syn::Expr::Lit(lit) = &array.len
         && let syn::Lit::Int(length) = &lit.lit
     {
         return Ok(ValueType::Array {
             bits,
+            signed,
             length: length.base10_parse().map_err(|e| e.to_string())?,
         });
     }
@@ -60,7 +91,10 @@ fn value_type(ty: &Type) -> Result<ValueType, String> {
     {
         return Ok(ValueType::Bytes);
     }
-    Err("unsupported payload field type; use a named value, unsigned integer, bytes or fixed integer array".into())
+    Err(
+        "unsupported payload field type; use a named value, integer, bytes or fixed integer array"
+            .into(),
+    )
 }
 impl Union {
     pub fn parse(item: &syn::ItemEnum) -> Result<Self, String> {
@@ -88,7 +122,10 @@ impl Union {
                 {
                     vec![Field {
                         name: "raw_status".into(),
-                        ty: ValueType::Integer { bits: 8 },
+                        ty: ValueType::Integer {
+                            bits: 8,
+                            signed: false,
+                        },
                     }]
                 }
                 _ => {
@@ -316,12 +353,25 @@ impl Union {
 impl ValueType {
     fn python_type(&self) -> String {
         match self {
-            Self::Integer { bits } => format!("u{bits}"),
+            Self::Integer { bits, signed } => format!("{}{bits}", if *signed { "i" } else { "u" }),
             Self::Named { name } => name.clone(),
-            Self::Bytes | Self::Array { bits: 8, .. } => "Vec<u8>".into(),
-            Self::Array { bits, length } => format!(
+            Self::Bytes
+            | Self::Array {
+                bits: 8,
+                signed: false,
+                ..
+            } => "Vec<u8>".into(),
+            Self::Array {
+                bits,
+                signed,
+                length,
+            } => format!(
                 "({})",
-                std::iter::repeat_n(format!("u{bits},"), *length).collect::<String>()
+                std::iter::repeat_n(
+                    format!("{}{bits},", if *signed { "i" } else { "u" }),
+                    *length
+                )
+                .collect::<String>()
             ),
         }
     }
@@ -338,7 +388,11 @@ impl ValueType {
     fn python_output(&self, name: &str) -> String {
         match self {
             Self::Named { .. } => format!("{name}.into()"),
-            Self::Array { bits: 8, .. } => format!("{name}.to_vec()"),
+            Self::Array {
+                bits: 8,
+                signed: false,
+                ..
+            } => format!("{name}.to_vec()"),
             Self::Array { length, .. } => format!(
                 "({})",
                 (0..*length)
@@ -368,8 +422,17 @@ impl ValueType {
     }
     fn javascript_input(&self, name: &str, values: &Values) -> String {
         match self {
-            Self::Integer { bits: 32 } => format!("integer({name},u32::MAX)?"),
-            Self::Integer { bits } => format!("integer({name},u{bits}::MAX.into())? as u{bits}"),
+            Self::Integer { bits, signed: true } => format!(
+                "error::signed_integer({name},i{bits}::MIN.into(),i{bits}::MAX.into())? as i{bits}"
+            ),
+            Self::Integer {
+                bits: 32,
+                signed: false,
+            } => format!("integer({name},u32::MAX)?"),
+            Self::Integer {
+                bits,
+                signed: false,
+            } => format!("integer({name},u{bits}::MAX.into())? as u{bits}"),
             Self::Named { name: ty } if self.is_choice(values) => format!("{ty}::parse({name})?"),
             Self::Named { .. } => format!("{name}.inner"),
             _ => unreachable!(),
@@ -392,7 +455,12 @@ impl ValueType {
                     format!("{}::value({name})", u.kind_name)
                 }
             }
-            Self::Bytes | Self::Array { bits: 8, .. } => format!("error::bytes({name})"),
+            Self::Bytes
+            | Self::Array {
+                bits: 8,
+                signed: false,
+                ..
+            } => format!("error::bytes({name})"),
             Self::Array { .. } => format!(
                 "{{let array:js_sys::Array={name}.iter().map(|&n|JsValue::from(n)).collect();js_sys::Object::freeze(&array).into()}}"
             ),
@@ -402,7 +470,12 @@ impl ValueType {
         match self {
             Self::Integer { .. } => "number".into(),
             Self::Named { name } => name.clone(),
-            Self::Bytes | Self::Array { bits: 8, .. } => "Uint8Array".into(),
+            Self::Bytes
+            | Self::Array {
+                bits: 8,
+                signed: false,
+                ..
+            } => "Uint8Array".into(),
             Self::Array { length, .. } => format!(
                 "readonly [{}]",
                 std::iter::repeat_n("number", *length)

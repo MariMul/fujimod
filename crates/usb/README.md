@@ -457,3 +457,31 @@ success/failure/unknown status, including raw data on failure. The studied helpe
 invokes its callback with null data, which the callback dereferences; a reported
 success is not proof of a valid physical read. All commands await ordinary
 carrier completion without implicit polling, retries or callback repair.
+
+Typed service controls also cover signed lens-position requests, capture/sample
+requests, exposure packets and firmware pipeline/mode commands. `SetLensPosition`
+accepts an `i16`; `ReadLensParameter` retains the notifier's low 16 bits without
+claiming they are a measured position. Pipeline actions encode one firmware
+command even when that handler runs an internal sequence. Mode transitions and
+completion remain properties of the selected firmware definition.
+
+`Service::prepare_code` selects an explicit `CommandCode` while checking its
+codec and active modes. Use it when several identifiers implement the same
+operation; ordinary `prepare` rejects that ambiguity. Device-9 reads/writes
+accept a two-byte prefix and 0–29 data bytes. Their reviewed layout extends the
+mailbox by one byte, and the carrier stages and reads the complete layout.
+Payload and reply budgets are checked before any USB traffic.
+
+Constant firmware handlers have explicit `ReportServiceSuccess`,
+`ReportServiceFailure` and `ReturnWithoutSignal` requests. Select their identifiers
+with `prepare_code` when needed. A handler's C return value is separate from its
+completion signal: some error handlers return zero, and no-signal handlers may
+leave the request awaiting completion until its deadline. Firmware failures
+remain transport errors; the library never turns these values into host retries.
+
+`ReadScan` accepts `ScanSelection::new(index, observed_count)` using a prior
+station-scan count. This checks the observation, while the camera can replace
+its list before execution. The reply preserves 32 name bytes, with unused tail
+bytes initialized to zero. A full-length name makes the reviewed firmware write
+its terminator through the table's extra key (configuration key zero on the
+studied layout); the host does not add a compensating write.

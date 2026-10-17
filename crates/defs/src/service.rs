@@ -179,11 +179,78 @@ pub enum Codec {
     LensFixedPosition,
     InvokePrimaryParameterCallback,
     InvokeSecondaryParameterCallback,
+    AdjustmentControlOption,
+    AdjustmentCapture83,
+    AdjustmentCaptureSequence,
+    AdjustmentSelectSamples,
+    AdjustmentCapture8a,
+    AdjustmentAverageCaptures,
+    AdjustmentQueryPlaneSamples,
+    AdjustmentStatusOption,
+    AdjustmentExposure,
+    AdjustmentPacket,
+    AdjustmentReadyOption,
+    PipelineInitialize,
+    PipelineStartOutput,
+    PipelineModeConfigurationSequence,
+    PipelineRequestWait,
+    PipelineRequestValue,
+    PipelineFrameConfigurationSequence,
+    PipelineMessageSequence,
+    PipelinePrepareMode,
+    PipelineRequestReset,
+    PipelineDispatchCommand,
+    PipelineRequestMode,
+    ReportServiceSuccess,
+    ReportServiceFailure,
+    ReturnWithoutSignal,
+    ReadScan,
+    Device9Exchange,
     QueryAdjustmentOption,
+    SetLensPosition,
+    RequestLensPosition,
+    ReadLensParameter,
 }
 impl Codec {
+    /// Number of configuration bytes staged by this reviewed request.
+    pub fn mailbox_arguments(self) -> usize {
+        match self {
+            Self::Device9Exchange | Self::ReadScan => 33,
+            _ => 32,
+        }
+    }
     pub fn argument_slots(self) -> usize {
         match self {
+            Self::AdjustmentStatusOption => 1,
+            Self::AdjustmentExposure => 4,
+            Self::AdjustmentPacket => 11,
+            Self::AdjustmentReadyOption => 1,
+            Self::PipelineInitialize => 1,
+            Self::PipelineStartOutput => 0,
+            Self::PipelineModeConfigurationSequence => 0,
+            Self::PipelineRequestWait => 0,
+            Self::PipelineRequestValue => 1,
+            Self::PipelineFrameConfigurationSequence => 0,
+            Self::PipelineMessageSequence => 0,
+            Self::PipelinePrepareMode => 1,
+            Self::PipelineRequestReset => 0,
+            Self::PipelineDispatchCommand => 2,
+            Self::PipelineRequestMode => 1,
+            Self::ReportServiceSuccess => 0,
+            Self::ReportServiceFailure => 0,
+            Self::ReturnWithoutSignal => 0,
+            Self::ReadScan => 33,
+            Self::SetLensPosition => 3,
+            Self::RequestLensPosition => 1,
+            Self::ReadLensParameter => 2,
+            Self::AdjustmentControlOption => 4,
+            Self::AdjustmentCapture83 => 0,
+            Self::AdjustmentCaptureSequence => 0,
+            Self::AdjustmentSelectSamples => 0,
+            Self::AdjustmentCapture8a => 0,
+            Self::AdjustmentAverageCaptures => 1,
+            Self::AdjustmentQueryPlaneSamples => 0,
+            Self::Device9Exchange => 33,
             Self::Research => 0,
             Self::WritePins => 5,
             Self::ReadPins | Self::ReadChannel | Self::WriteChannel | Self::ProfileByte => 3,
@@ -357,7 +424,15 @@ impl Definition {
                 return Err(DefinitionError::EmptyLabel);
             }
             let valid = e.slots.len() == e.codec.argument_slots()
-                && e.slots.iter().all(|slot| *slot < 32)
+                && e.slots
+                    .iter()
+                    .all(|slot| usize::from(*slot) < e.codec.mailbox_arguments())
+                && raw
+                    .mailbox
+                    .offset
+                    .checked_add(1 + e.codec.mailbox_arguments() as u32)
+                    .is_some()
+                && limit.get() > e.codec.mailbox_arguments() as u32
                 && e.slots
                     .iter()
                     .enumerate()

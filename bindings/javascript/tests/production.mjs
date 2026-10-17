@@ -355,3 +355,8 @@ test('direct adjustment requests publish data without turning callback bytes int
   assert.throws(()=>a.Command.lensBoundedPosition(256,0));
  }finally{fixture.restore();}
 });
+
+import { checkExtendedService } from './extended-service.mjs';
+test('production signed fields and full device9 exchanges validate boundaries',async()=>{
+  await checkExtendedService(usb,defs,installWebUsb);
+});

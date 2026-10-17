@@ -27,7 +27,7 @@ fn new_rust_values_reach_every_language_without_copied_bounds() {
     assert!(!exports.contains("raw_status")); // Python's runtime supplies the common variant field.
     syn::parse_file(&python).unwrap();
     syn::parse_file(&javascript).unwrap();
-    assert_eq!(api.service.quantities[0].input, "u8");
+    assert_eq!(api.service.quantities[0].parameters[0].input, "u8");
 }
 #[test]
 fn source_order_does_not_change_generated_files() {
@@ -49,7 +49,7 @@ fn checked_values_require_a_public_observer_and_byte_input_is_distinct() {
         .contains("getter")
     );
     let api=Api::from_sources(["pub struct Packet([u8;6]);impl Packet {pub fn new(data:&[u8])->Result<Self,Error>{todo!()} pub fn data(&self)->&[u8;6]{&self.0}}"]).unwrap();
-    assert_eq!(api.service.quantities[0].input, "bytes");
+    assert_eq!(api.service.quantities[0].parameters[0].input, "bytes");
     assert!(api.python().contains("PyBytes::new"));
     assert!(api.javascript().contains("error::buffer"));
 }
@@ -175,4 +175,65 @@ fn infallible_value_constructors_preserve_core_signatures() {
     );
     syn::parse_file(&api.python()).unwrap();
     syn::parse_file(&api.javascript()).unwrap();
+}
+
+#[test]
+fn signed_numbers_generate_checked_factories_and_numeric_reply_arrays() {
+    let api = Api::from_sources([r#"
+        pub struct SignedLevel(i16);
+        impl SignedLevel {
+            pub fn new(value:i16)->Self {Self(value)}
+            pub fn value(self)->i16 {self.0}
+        }
+        pub enum Command { Set { a:i8, b:i16, c:i32, level:SignedLevel } }
+        pub enum ReplyValue { Data { a:i8, b:i16, c:i32, samples:[i8;3] } }
+    "#])
+    .unwrap();
+    let python = api.python();
+    let javascript = api.javascript();
+    syn::parse_file(&python).unwrap();
+    syn::parse_file(&javascript).unwrap();
+    for bits in [8, 16, 32] {
+        assert!(javascript.contains(&format!("i{bits}::MIN.into(),i{bits}::MAX.into()")));
+    }
+    assert!(python.contains("samples:(i8,i8,i8,)"));
+    assert!(javascript.contains("readonly [number,number,number]"));
+    let schema = serde_json::to_value(&api.service).unwrap();
+    assert_eq!(
+        schema["unions"][0]["variants"][0]["fields"][0]["ty"]["signed"],
+        true
+    );
+}
+
+#[test]
+fn multiple_integer_quantity_constructors_keep_names_and_validate_each_argument() {
+    let api = Api::from_sources([r#"
+        pub struct ScanSelection { index:u8, observed_count:u8 }
+        impl ScanSelection {
+            pub fn new(index:u8, observed_count:u8)->Result<Self,CommandError> {
+                Ok(Self { index, observed_count })
+            }
+            pub fn value(&self)->u8 { self.index }
+        }
+    "#])
+    .unwrap();
+    let python = api.python();
+    let javascript = api.javascript();
+    syn::parse_file(&python).unwrap();
+    syn::parse_file(&javascript).unwrap();
+    assert!(python.contains("fn new(py:Python<'_>,index:u8,observed_count:u8)->PyResult<Self>"));
+    assert!(javascript.contains(
+        "pub fn new(#[wasm_bindgen(unchecked_param_type=\"number\")] index:JsValue,#[wasm_bindgen(unchecked_param_type=\"number\")] observedCount:JsValue)"
+    ));
+    assert!(javascript.contains(
+        "integer(index,u8::MAX.into())? as u8,integer(observedCount,u8::MAX.into())? as u8"
+    ));
+    assert!(javascript.contains("pub fn value(&self)->u8{self.inner.value()}"));
+    let schema = serde_json::to_value(&api.service).unwrap();
+    let quantity = &schema["quantities"][0];
+    assert_eq!(quantity["name"], "ScanSelection");
+    assert_eq!(quantity["parameters"][0]["name"], "index");
+    assert_eq!(quantity["parameters"][0]["input"], "u8");
+    assert_eq!(quantity["parameters"][1]["name"], "observed_count");
+    assert_eq!(quantity["parameters"][1]["input"], "u8");
 }

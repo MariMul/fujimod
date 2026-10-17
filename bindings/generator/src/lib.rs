@@ -15,10 +15,17 @@ pub struct Choice {
     pub kind_name: Option<String>,
 }
 #[derive(Clone, Debug, Serialize)]
-pub struct Quantity {
+pub struct QuantityParameter {
     pub name: String,
     pub input: String,
+}
+#[derive(Clone, Debug, Serialize)]
+pub struct Quantity {
+    pub name: String,
+    pub parameters: Vec<QuantityParameter>,
     pub getter: String,
+    #[serde(skip_serializing)]
+    getter_type: String,
     pub fallible: bool,
 }
 #[derive(Clone, Debug, Serialize)]
@@ -41,7 +48,7 @@ fn named(ty: &Type) -> Option<String> {
 fn input(ty: &Type) -> Option<String> {
     if let Some(name) = named(ty) {
         return match name.as_str() {
-            "u8" | "u16" | "u32" | "Address" => Some(name),
+            "u8" | "u16" | "u32" | "i8" | "i16" | "i32" | "Address" => Some(name),
             _ => None,
         };
     }
@@ -52,6 +59,27 @@ fn input(ty: &Type) -> Option<String> {
         return Some("bytes".into());
     }
     None
+}
+fn scalar(ty: &Type) -> bool {
+    matches!(
+        named(ty).as_deref(),
+        Some("u8" | "u16" | "u32" | "i8" | "i16" | "i32")
+    )
+}
+fn getter_type(ty: &Type) -> Option<String> {
+    match named(ty).as_deref() {
+        Some("u8" | "u16" | "u32" | "i8" | "i16" | "i32" | "Address") => named(ty),
+        _ => None,
+    }
+}
+fn argument(arg: &FnArg) -> Option<(String, String)> {
+    let FnArg::Typed(arg) = arg else {
+        return None;
+    };
+    let syn::Pat::Ident(pattern) = arg.pat.as_ref() else {
+        return None;
+    };
+    Some((pattern.ident.to_string(), input(&arg.ty)?))
 }
 fn choice(item: &syn::ItemEnum) -> Option<Choice> {
     let mut variants = Vec::new();
@@ -178,18 +206,30 @@ impl Api {
             else {
                 continue;
             };
-            if new.sig.inputs.len() != 1 {
+            let Some(mut parameters) = new
+                .sig
+                .inputs
+                .iter()
+                .map(argument)
+                .collect::<Option<Vec<_>>>()
+            else {
+                continue;
+            };
+            if parameters.is_empty()
+                || (parameters.len() > 1
+                    && new.sig.inputs.iter().any(|arg| {
+                        let FnArg::Typed(arg) = arg else {
+                            return true;
+                        };
+                        !scalar(&arg.ty)
+                    }))
+            {
                 continue;
             }
-            let Some(FnArg::Typed(arg)) = new.sig.inputs.first() else {
-                continue;
-            };
-            let Some(input) = input(&arg.ty) else {
-                continue;
-            };
-            let getter = if input == "bytes" {
+            let single_input = (parameters.len() == 1).then(|| parameters[0].1.as_str());
+            let getter = if single_input == Some("bytes") {
                 "data"
-            } else if input == "Address" {
+            } else if single_input == Some("Address") {
                 "address"
             } else {
                 "value"
@@ -201,6 +241,16 @@ impl Api {
             if !matches!(method.sig.output, ReturnType::Type(..)) {
                 return Err(format!("{name}: getter has no result"));
             }
+            let ReturnType::Type(_, result_type) = &method.sig.output else {
+                unreachable!()
+            };
+            let getter_type = if single_input == Some("bytes") {
+                "bytes".into()
+            } else {
+                getter_type(result_type).ok_or_else(|| {
+                    format!("{name}: getter must return a supported integer value")
+                })?
+            };
             let fallible = match &new.sig.output {
                 ReturnType::Type(_, ty) => match ty.as_ref() {
                     Type::Path(path)
@@ -225,12 +275,24 @@ impl Api {
                     ));
                 }
             };
+            if parameters.len() == 1 {
+                let input = parameters[0].1.clone();
+                parameters[0].0 = if input == "bytes" {
+                    "data".into()
+                } else {
+                    "value".into()
+                };
+            }
             quantities.insert(
                 name.clone(),
                 Quantity {
                     name,
-                    input,
+                    parameters: parameters
+                        .into_iter()
+                        .map(|(name, input)| QuantityParameter { name, input })
+                        .collect(),
                     getter: getter.into(),
+                    getter_type,
                     fallible,
                 },
             );
@@ -545,86 +607,140 @@ fn python_choice(c: &Choice, module: &str, visibility: &str) -> String {
 }
 fn python_quantity(q: &Quantity) -> String {
     let n = &q.name;
-    let (arg, call, getter): (String, String, String) = if q.input == "bytes" {
-        ("Vec<u8>".into(),"&data".into(),"#[getter] fn data<'py>(&self,py:Python<'py>)->Bound<'py,PyBytes>{PyBytes::new(py,self.inner.data())}".into())
+    let multi = q.parameters.len() > 1;
+    let bytes = q.parameters.len() == 1 && q.parameters[0].input == "bytes";
+    let mut parameters = Vec::new();
+    let mut calls = Vec::new();
+    for parameter in &q.parameters {
+        let name = parameter.name.as_str();
+        let ty = parameter.input.as_str();
+        let py_type = match ty {
+            "bytes" => "Vec<u8>",
+            "Address" => "u32",
+            other => other,
+        };
+        parameters.push(format!("{name}:{py_type}"));
+        calls.push(match ty {
+            "bytes" => format!("&{name}"),
+            "Address" => format!("usb::ff80::commands::memory::Address({name})"),
+            _ => name.to_owned(),
+        });
+    }
+    let parameters = parameters.join(",");
+    let calls = calls.join(",");
+    let getter = if bytes {
+        "#[getter] fn data<'py>(&self,py:Python<'py>)->Bound<'py,PyBytes>{PyBytes::new(py,self.inner.data())}".into()
     } else {
-        let ty = if q.input == "Address" {
+        let ty = if q.getter_type == "Address" {
             "u32"
         } else {
-            &q.input
+            &q.getter_type
         };
-        let call = if q.input == "Address" {
-            "usb::ff80::commands::memory::Address(data)"
-        } else {
-            "data"
-        };
-        let get = if q.input == "Address" {
-            "self.inner.address().0".into()
+        let get = if q.getter_type == "Address" {
+            format!("self.inner.{}().0", q.getter)
         } else {
             format!("self.inner.{}()", q.getter)
         };
-        (
-            ty.into(),
-            call.into(),
-            format!("#[getter] fn value(&self)->{ty}{{{get}}}"),
-        )
-    };
-    let param = if q.input == "bytes" { "data" } else { "value" };
-    let call = if param == "value" {
-        call.replace("data", "value")
-    } else {
-        call
+        format!("#[getter] fn value(&self)->{ty}{{{get}}}")
     };
     let constructor = if q.fallible {
         format!(
-            "#[new] fn new(py:Python<'_>,{param}:{arg})->PyResult<Self>{{core::{n}::new({call}).map(|inner|Self{{inner}}).map_err(|e|command_error(py,e))}}"
+            "#[new] fn new(py:Python<'_>,{parameters})->PyResult<Self>{{core::{n}::new({calls}).map(|inner|Self{{inner}}).map_err(|e|command_error(py,e))}}"
         )
     } else {
-        format!("#[new] fn new({param}:{arg})->Self{{Self{{inner:core::{n}::new({call})}}}}")
+        format!("#[new] fn new({parameters})->Self{{Self{{inner:core::{n}::new({calls})}}}}")
+    };
+    let allow_non_snake_case = if multi {
+        "#[allow(non_snake_case)]"
+    } else {
+        ""
     };
     format!(
-        "#[pyclass(frozen,from_py_object,module=\"fujimod.usb.app80\")] #[derive(Clone)] pub(super) struct {n} {{pub(super) inner:core::{n}}}\nimpl From<core::{n}> for {n}{{fn from(inner:core::{n})->Self{{Self{{inner}}}}}}\n#[pymethods] impl {n} {{{constructor} {getter} }}\n"
+        "#[pyclass(frozen,from_py_object,module=\"fujimod.usb.app80\")] #[derive(Clone)] pub(super) struct {n} {{pub(super) inner:core::{n}}}\nimpl From<core::{n}> for {n}{{fn from(inner:core::{n})->Self{{Self{{inner}}}}}}\n#[pymethods] impl {n} {{{allow_non_snake_case}{constructor} {getter} }}\n"
     )
 }
 fn javascript_quantity(q: &Quantity) -> String {
     let n = &q.name;
-    let (arg, call, getter) = if q.input == "bytes" {
-        ("Uint8Array","&error::buffer(data)?".into(),"#[wasm_bindgen(getter,unchecked_return_type=\"Uint8Array\")] pub fn data(&self)->JsValue{error::bytes(self.inner.data())}".into())
+    let multi = q.parameters.len() > 1;
+    let bytes = q.parameters.len() == 1 && q.parameters[0].input == "bytes";
+    let mut parameters = Vec::new();
+    let mut calls = Vec::new();
+    for parameter in &q.parameters {
+        let ty = parameter.input.as_str();
+        let name = if multi {
+            camel_parameter(&parameter.name)
+        } else {
+            "data".to_owned()
+        };
+        let js_type = if ty == "bytes" {
+            "Uint8Array"
+        } else {
+            "number"
+        };
+        let checked = match ty {
+            "bytes" => format!("&error::buffer({name})?"),
+            "Address" => format!(
+                "usb::ff80::commands::memory::Address({})",
+                checked_integer(&name, "u32")
+            ),
+            _ => checked_integer(&name, ty),
+        };
+        parameters.push(format!(
+            "#[wasm_bindgen(unchecked_param_type=\"{js_type}\")] {name}:JsValue"
+        ));
+        calls.push(checked);
+    }
+    let parameters = parameters.join(",");
+    let calls = calls.join(",");
+    let body = if q.fallible {
+        format!("core::{n}::new({calls}).map(|inner|Self{{inner}}).map_err(invalid)")
     } else {
-        let ty = if q.input == "Address" {
+        format!("Ok(Self{{inner:core::{n}::new({calls})}})")
+    };
+    let getter = if bytes {
+        "#[wasm_bindgen(getter,unchecked_return_type=\"Uint8Array\")] pub fn data(&self)->JsValue{error::bytes(self.inner.data())}".into()
+    } else {
+        let ty = if q.getter_type == "Address" {
             "u32"
         } else {
-            &q.input
+            &q.getter_type
         };
-        let checked = if ty == "u32" {
-            "integer(data,u32::MAX)?".into()
-        } else {
-            format!("integer(data,{ty}::MAX.into())? as {ty}")
-        };
-        let call = if q.input == "Address" {
-            format!("usb::ff80::commands::memory::Address({checked})")
-        } else {
-            checked
-        };
-        let get = if q.input == "Address" {
-            "self.inner.address().0".into()
+        let get = if q.getter_type == "Address" {
+            format!("self.inner.{}().0", q.getter)
         } else {
             format!("self.inner.{}()", q.getter)
         };
-        (
-            "number",
-            call,
-            format!("#[wasm_bindgen(getter)] pub fn value(&self)->{ty}{{{get}}}"),
-        )
+        format!("#[wasm_bindgen(getter)] pub fn value(&self)->{ty}{{{get}}}")
     };
-    let body = if q.fallible {
-        format!("core::{n}::new({call}).map(|inner|Self{{inner}}).map_err(invalid)")
+    let allow_non_snake_case = if multi {
+        "#[allow(non_snake_case)]"
     } else {
-        format!("Ok(Self{{inner:core::{n}::new({call})}})")
+        ""
     };
     format!(
-        "#[wasm_bindgen] pub struct {n}{{pub(super) inner:core::{n}}}\n#[wasm_bindgen] impl {n}{{#[wasm_bindgen(constructor)] pub fn new(#[wasm_bindgen(unchecked_param_type=\"{arg}\")] data:JsValue)->Result<Self,JsValue>{{{body}}} {getter} }}\n"
+        "#[wasm_bindgen] pub struct {n}{{pub(super) inner:core::{n}}}\n#[wasm_bindgen] impl {n}{{#[wasm_bindgen(constructor)] {allow_non_snake_case} pub fn new({parameters})->Result<Self,JsValue>{{{body}}} {getter} }}\n"
     )
+}
+fn checked_integer(name: &str, ty: &str) -> String {
+    if ty.starts_with('i') {
+        format!("error::signed_integer({name},{ty}::MIN.into(),{ty}::MAX.into())? as {ty}")
+    } else if ty == "u32" {
+        format!("integer({name},u32::MAX)?")
+    } else {
+        format!("integer({name},{ty}::MAX.into())? as {ty}")
+    }
+}
+fn camel_parameter(name: &str) -> String {
+    let mut parts = name.split('_');
+    let mut camel = parts.next().unwrap_or_default().to_owned();
+    for part in parts {
+        let mut chars = part.chars();
+        if let Some(first) = chars.next() {
+            camel.extend(first.to_uppercase());
+            camel.extend(chars);
+        }
+    }
+    camel
 }
 fn javascript_codec(c: &Choice) -> String {
     let mut out = format!(

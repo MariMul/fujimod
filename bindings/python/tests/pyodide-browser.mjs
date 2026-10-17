@@ -17,6 +17,8 @@ const assets=new Map([
  ['/fixture.mjs',['../../javascript/tests/webusb-fixture.mjs','text/javascript']],
  ['/contract.py',['./webusb_contract.py','text/plain']],
  ['/media-contract.py',['./media_contract.py','text/plain']],
+ ['/exposure-contract.py',['./exposure_contract.py','text/plain']],
+ ['/extended-contract.py',['./extended_contract.py','text/plain']],
  ['/adjustment-contract.py',['./adjustment_contract.py','text/plain']],
  ['/lens-contract.py',['./lens_contract.py','text/plain']],
  ['/configuration-contract.py',['./configuration_contract.py','text/plain']],
@@ -55,7 +57,7 @@ try{
    py.FS.writeFile('/'+wheelName,wheel);
    await py.loadPackage('micropip');
    await py.runPythonAsync(`import micropip;await micropip.install(${JSON.stringify("emfs:/"+wheelName)})`);
-   const passed=await py.runPythonAsync((await(await fetch('/adjustment-contract.py')).text())+'\n'+(await(await fetch('/lens-contract.py')).text())+'\n'+(await(await fetch('/configuration-contract.py')).text())+'\n'+(await(await fetch('/transfer-contract.py')).text())+'\n'+(await(await fetch('/peripheral-contract.py')).text())+'\n'+(await(await fetch('/media-contract.py')).text())+'\n'+(await(await fetch('/network-contract.py')).text())+'\n'+(await(await fetch('/contract.py')).text())+'\nawait run()');
+   const passed=await py.runPythonAsync((await(await fetch('/exposure-contract.py')).text())+'\n'+(await(await fetch('/extended-contract.py')).text())+'\n'+(await(await fetch('/adjustment-contract.py')).text())+'\n'+(await(await fetch('/lens-contract.py')).text())+'\n'+(await(await fetch('/configuration-contract.py')).text())+'\n'+(await(await fetch('/transfer-contract.py')).text())+'\n'+(await(await fetch('/peripheral-contract.py')).text())+'\n'+(await(await fetch('/media-contract.py')).text())+'\n'+(await(await fetch('/network-contract.py')).text())+'\n'+(await(await fetch('/contract.py')).text())+'\nawait run()');
    return {passed,secure:isSecureContext,realWindow:window instanceof Window};
   }finally{fixture.restore();}
  },manifest.wheel);

@@ -91,6 +91,16 @@ class Service(Handle):
             )
         )
 
+    def prepare_code(self, code, modes, command):
+        return Invocation._wrap(
+            call(
+                self._js.prepareCode,
+                unwrap(code, CommandCode),
+                unwrap(modes, definitions.ServiceModes),
+                unwrap_variant(command, _v.Command),
+            )
+        )
+
     def prepare_research(self, code, modes, arguments):
         return Invocation._wrap(
             call(

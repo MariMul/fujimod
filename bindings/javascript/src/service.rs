@@ -76,8 +76,9 @@ impl App80Invocation {
         &self,
         #[wasm_bindgen(unchecked_param_type = "Uint8Array")] raw: JsValue,
     ) -> Result<App80CommandReply, JsValue> {
-        usb::app80::Reply::decode(&error::buffer(raw)?)
-            .and_then(|reply| self.inner.command().decode(reply))
+        self.inner
+            .command()
+            .decode_bytes(&error::buffer(raw)?)
             .map(|inner| App80CommandReply { inner })
             .map_err(error)
     }
@@ -101,6 +102,22 @@ impl App80Service {
     ) -> Result<App80Invocation, JsValue> {
         self.inner
             .prepare(modes.inner, command.inner)
+            .map(|inner| App80Invocation { inner })
+            .map_err(invalid)
+    }
+    #[wasm_bindgen(js_name=prepareCode)]
+    pub fn prepare_code(
+        &self,
+        code: &requests::App80CommandCode,
+        modes: &ServiceModes,
+        command: &App80Command,
+    ) -> Result<App80Invocation, JsValue> {
+        self.inner
+            .prepare_code(
+                usb::app80::CommandCode(code.value()),
+                modes.inner,
+                command.inner,
+            )
             .map(|inner| App80Invocation { inner })
             .map_err(invalid)
     }

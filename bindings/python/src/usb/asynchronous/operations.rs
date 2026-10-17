@@ -76,7 +76,10 @@ async fn execute(
     session: AsyncSession,
     invocation: app80::catalogue::Invocation,
 ) -> PyResult<app80::catalogue::CommandReply> {
-    app80::catalogue::check_limit(&session.limits)?;
+    app80::catalogue::check_limit(
+        &session.limits,
+        invocation.inner.command().request().encoded_len(),
+    )?;
     session
         .with(move |s| Box::pin(async move { invocation.inner.execute(s).await }))
         .await

@@ -215,16 +215,24 @@ pub(crate) fn bytes(data: impl AsRef<[u8]>) -> JsValue {
 }
 
 pub(crate) fn integer(value: JsValue, maximum: u32) -> Result<u32, JsValue> {
+    checked_integer(value, 0.0, f64::from(maximum)).map(|n| n as u32)
+}
+
+pub(crate) fn signed_integer(value: JsValue, minimum: i32, maximum: i32) -> Result<i32, JsValue> {
+    checked_integer(value, f64::from(minimum), f64::from(maximum)).map(|n| n as i32)
+}
+
+fn checked_integer(value: JsValue, minimum: f64, maximum: f64) -> Result<f64, JsValue> {
     let value = value
         .as_f64()
         .ok_or_else(|| fail(ErrorKind::InvalidArgument, "expected a JavaScript number"))?;
-    if !value.is_finite() || value.fract() != 0.0 || value < 0.0 || value > f64::from(maximum) {
+    if !value.is_finite() || value.fract() != 0.0 || value < minimum || value > maximum {
         return Err(fail(
             ErrorKind::InvalidArgument,
             "expected an integer within the protocol field's range",
         ));
     }
-    Ok(value as u32)
+    Ok(value)
 }
 
 pub(crate) fn buffer(value: JsValue) -> Result<Vec<u8>, JsValue> {

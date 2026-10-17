@@ -5,8 +5,9 @@ Constructors and byte ownership still go through the Rust/Wasm implementation.
 """
 
 import json
+from inspect import Parameter, Signature
 from enum import Enum
-from ._bridge import Handle, buffer_in, buffer_out, call, uint, unwrap
+from ._bridge import Handle, buffer_in, buffer_out, call, sint, uint, unwrap
 from ._variants import Sum, variant, unwrap_variant
 
 
@@ -35,15 +36,13 @@ def bind_values(schema, js, module):
         values[name] = cls
         decoders[cls] = decode
     for quantity in description["quantities"]:
-        name, input_type = quantity["name"], quantity["input"]
+        name = quantity["name"]
         constructor = getattr(js, name).new
-        if input_type == "bytes":
-            initialize = _bytes_constructor(constructor)
+        initialize = _quantity_constructor(constructor, quantity["parameters"])
+        if quantity["getter"] == "data":
             getter = property(lambda self: buffer_out(self._js.data))
             property_name = "data"
         else:
-            bits = {"u8": 8, "u16": 16, "u32": 32, "Address": 32}[input_type]
-            initialize = _number_constructor(constructor, bits)
             getter = property(lambda self: self._js.value)
             property_name = "value"
         values[name] = type(
@@ -82,16 +81,25 @@ def bind_values(schema, js, module):
     return values, decoders
 
 
-def _bytes_constructor(constructor):
-    def initialize(self, data):
-        self._js = call(constructor, buffer_in(data))
+def _quantity_constructor(constructor, parameters):
+    signature = Signature(
+        [Parameter(p["name"], Parameter.POSITIONAL_OR_KEYWORD) for p in parameters]
+    )
 
-    return initialize
-
-
-def _number_constructor(constructor, bits):
-    def initialize(self, value):
-        self._js = call(constructor, uint(value, bits))
+    def initialize(self, *args, **kwargs):
+        arguments = signature.bind(*args, **kwargs).arguments
+        converted = []
+        for parameter in parameters:
+            value = arguments[parameter["name"]]
+            input_type = parameter["input"]
+            if input_type == "bytes":
+                converted.append(buffer_in(value))
+            else:
+                bits = 32 if input_type == "Address" else int(input_type[1:])
+                converted.append(
+                    (sint if input_type.startswith("i") else uint)(value, bits)
+                )
+        self._js = call(constructor, *converted)
 
     return initialize
 
@@ -102,7 +110,7 @@ def _python_type(ty, values):
         return int
     if kind == "named":
         return values[ty["name"]]
-    if kind == "bytes" or ty["bits"] == 8:
+    if kind == "bytes" or (ty["bits"] == 8 and not ty["signed"]):
         return bytes
     return tuple
 
@@ -113,7 +121,7 @@ def _factory(factory, fields, values, js):
         for field, value in zip(fields, arguments):
             ty = field["ty"]
             if ty["kind"] == "integer":
-                converted.append(uint(value, ty["bits"]))
+                converted.append((sint if ty["signed"] else uint)(value, ty["bits"]))
                 continue
             cls = values[ty["name"]]
             if issubclass(cls, Enum):
@@ -146,7 +154,9 @@ def _decoder(constructors, values, decoders, js):
                     item = decoders[cls](item)
                 else:
                     item = cls._wrap(item)
-            elif ty["kind"] == "bytes" or (ty["kind"] == "array" and ty["bits"] == 8):
+            elif ty["kind"] == "bytes" or (
+                ty["kind"] == "array" and ty["bits"] == 8 and not ty["signed"]
+            ):
                 item = buffer_out(item)
             elif ty["kind"] == "array":
                 item = tuple(item)

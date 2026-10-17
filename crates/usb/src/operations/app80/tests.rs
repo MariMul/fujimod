@@ -107,6 +107,45 @@ mod replay {
         assert_eq!(script.remaining(), 0);
     }
     #[test]
+    fn extended_exchange_stages_and_reads_every_byte_and_checks_budget_before_io() {
+        let mut data = vec![0; 33];
+        data[32] = 0xab;
+        let command = Request::from_mailbox(CommandCode(0xe5), data);
+        let mut steps = write(0x81, command.arguments());
+        steps.extend(write(0x80, &command.encode()));
+        let result = command.encode();
+        steps.extend(read(0x80, &result));
+        let (mut session, script) = opened(steps, 128);
+        let mailbox = Mailbox::new(0, 0x80, nz(256)).unwrap();
+        assert_eq!(
+            block_on(mailbox.exchange(&mut session, &command))
+                .unwrap()
+                .raw(),
+            result
+        );
+        assert_eq!(script.remaining(), 0);
+        let (mut session, script) = opened(vec![], 69);
+        assert!(matches!(
+            block_on(mailbox.exchange(&mut session, &command)),
+            Err(Error::LengthLimit {
+                requested: 70,
+                limit: 69
+            })
+        ));
+        assert_eq!(script.remaining(), 0);
+        assert_eq!(session.state(), SessionState::Ready);
+        let (mut session, script) = opened(vec![], 128);
+        assert!(
+            block_on(
+                Mailbox::new(0, 0x80, nz(33))
+                    .unwrap()
+                    .exchange(&mut session, &command)
+            )
+            .is_err()
+        );
+        assert_eq!(script.remaining(), 0);
+    }
+    #[test]
     fn publish_error_is_a_completed_error_not_a_host_pending_instruction() {
         let command = Request::new(CommandCode(2), &[]).unwrap();
         let mut steps = write(0x81, command.arguments());
@@ -243,7 +282,7 @@ mod replay {
             .unwrap();
         let request = invocation.command().request().encode();
         assert_eq!(request[1], 0xff); // output sentinel; a missing result is not success
-        let mut response = request;
+        let mut response = request.clone();
         response[1] = 1;
         let steps = [
             write(0x81, &request[1..]),
@@ -271,7 +310,7 @@ mod replay {
             .prepare(ServiceModes::new(1).unwrap(), Command::FlushConfiguration)
             .unwrap();
         let request = invocation.command().request().encode();
-        let mut response = request;
+        let mut response = request.clone();
         response[0] = 0x23;
         let (mut session, script) = opened(
             [

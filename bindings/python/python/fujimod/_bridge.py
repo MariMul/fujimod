@@ -16,6 +16,14 @@ def uint(value, bits=32):
     return value
 
 
+def sint(value, bits):
+    if type(value) is not int:
+        raise TypeError("expected an integer quantity")
+    if not -(1 << (bits - 1)) <= value < (1 << (bits - 1)):
+        raise OverflowError(f"quantity must fit i{bits}")
+    return value
+
+
 def buffer_in(value):
     # Copy before yielding: JS/Rust must never retain a Python-memory view.
     return Uint8Array.new(to_js(memoryview(value).cast("B"), create_pyproxies=False))

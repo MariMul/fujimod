@@ -67,8 +67,9 @@ impl Invocation {
         self.inner.configuration_limit().get()
     }
     fn decode(&self, py: Python<'_>, raw: Vec<u8>) -> PyResult<CommandReply> {
-        usb::app80::Reply::decode(&raw)
-            .and_then(|reply| self.inner.command().decode(reply))
+        self.inner
+            .command()
+            .decode_bytes(&raw)
             .map(|inner| CommandReply { inner })
             .map_err(|e| convert_error(py, e))
     }
@@ -96,6 +97,18 @@ impl Service {
             .map(|inner| Invocation { inner })
             .map_err(|e| command_error(py, e))
     }
+    fn prepare_code(
+        &self,
+        py: Python<'_>,
+        code: &CommandCode,
+        modes: &ServiceModes,
+        command: Command,
+    ) -> PyResult<Invocation> {
+        self.inner
+            .prepare_code(code.inner, modes.inner, command.into())
+            .map(|inner| Invocation { inner })
+            .map_err(|e| command_error(py, e))
+    }
     fn prepare_research(
         &self,
         py: Python<'_>,
@@ -111,15 +124,18 @@ impl Service {
 }
 #[pyfunction]
 fn execute(py: Python<'_>, session: &Session, invocation: &Invocation) -> PyResult<CommandReply> {
-    check_limit(&session.limits)?;
+    check_limit(
+        &session.limits,
+        invocation.inner.command().request().encoded_len(),
+    )?;
     session
         .with(py, |s| block_on(invocation.inner.execute(s)))
         .map(|inner| CommandReply { inner })
 }
-pub(in crate::usb) fn check_limit(limits: &FirmwareLimits) -> PyResult<()> {
-    if limits.configuration.get() < 33 {
+pub(in crate::usb) fn check_limit(limits: &FirmwareLimits, length: usize) -> PyResult<()> {
+    if (limits.configuration.get() as usize) < length {
         return Err(PyValueError::new_err(
-            "service mailbox requires a 33-byte configuration command",
+            "session configuration limit cannot carry this service mailbox",
         ));
     }
     Ok(())

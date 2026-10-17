@@ -34,6 +34,17 @@ impl Service {
             mailbox: self.mailbox,
         })
     }
+    pub fn prepare_code(
+        &self,
+        code: crate::app80::CommandCode,
+        modes: ServiceModes,
+        command: Command,
+    ) -> std::result::Result<Invocation, CommandError> {
+        Ok(Invocation {
+            command: self.catalogue.prepare_code(code, modes, command)?,
+            mailbox: self.mailbox,
+        })
+    }
     pub fn prepare_research(
         &self,
         code: crate::app80::CommandCode,

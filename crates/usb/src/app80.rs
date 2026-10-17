@@ -1,4 +1,5 @@
-//! App80's command byte and 32-byte argument mailbox.
+//! App80 command mailboxes. Ordinary requests have 32 argument bytes;
+//! reviewed service codecs can declare additional configuration bytes.
 //!
 //! Command identifiers and argument meanings come from the selected firmware's
 //! service table. They are independent of ff80 status and callback dispositions.
@@ -17,7 +18,7 @@ pub struct CommandCode(pub u8);
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Request {
     code: CommandCode,
-    arguments: [u8; 32],
+    arguments: Vec<u8>,
 }
 impl Request {
     /// Unused argument bytes are zeroed; oversize input is rejected, never truncated.
@@ -28,17 +29,23 @@ impl Request {
         padded[..arguments.len()].copy_from_slice(arguments);
         Ok(Self {
             code,
-            arguments: padded,
+            arguments: padded.to_vec(),
         })
     }
     pub fn code(&self) -> CommandCode {
         self.code
     }
-    pub fn arguments(&self) -> &[u8; 32] {
+    pub fn arguments(&self) -> &[u8] {
         &self.arguments
     }
-    pub fn encode(&self) -> [u8; 33] {
-        let mut bytes = [0; 33];
+    pub(crate) fn from_mailbox(code: CommandCode, arguments: Vec<u8>) -> Self {
+        Self { code, arguments }
+    }
+    pub fn encoded_len(&self) -> usize {
+        1 + self.arguments.len()
+    }
+    pub fn encode(&self) -> Vec<u8> {
+        let mut bytes = vec![0; 1 + self.arguments.len()];
         bytes[0] = self.code.0;
         bytes[1..].copy_from_slice(&self.arguments);
         bytes
@@ -49,17 +56,25 @@ impl Request {
 /// neither the first byte nor any argument word is interpreted as readiness.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Reply {
-    raw: [u8; 33],
+    raw: Vec<u8>,
 }
 impl Reply {
     pub fn decode(bytes: &[u8]) -> Result<Self> {
-        let raw = bytes.try_into().map_err(|_| ProtocolError::ReplyLength {
-            expected: 33,
-            actual: bytes.len(),
-        })?;
-        Ok(Self { raw })
+        Self::decode_length(bytes, 33)
     }
-    pub fn raw(&self) -> &[u8; 33] {
+    pub(crate) fn decode_length(bytes: &[u8], expected: usize) -> Result<Self> {
+        if bytes.len() != expected {
+            return Err(ProtocolError::ReplyLength {
+                expected,
+                actual: bytes.len(),
+            }
+            .into());
+        }
+        Ok(Self {
+            raw: bytes.to_vec(),
+        })
+    }
+    pub fn raw(&self) -> &[u8] {
         &self.raw
     }
 }
