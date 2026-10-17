@@ -54,8 +54,8 @@ test('every field is required and physical device crashes have a separate form',
     for (const field of form.split('  - type:').slice(1))
       assert.match(field, /validations:\n      required: true/, `${name}: ${field}`);
     assert.match(form, /label: Firmware ID\n/);
-    assert.match(form, /label: Build\n/);
-    assert.equal(form.includes('label: Simulator Build'), name.startsWith('simulator-'));
+    assert.match(form, /label: Version\n/);
+    assert.equal(form.includes('label: Simulator version'), name.startsWith('simulator-'));
     assert.equal(form.includes('id: device-report'), name === 'device-crash');
   }
 });

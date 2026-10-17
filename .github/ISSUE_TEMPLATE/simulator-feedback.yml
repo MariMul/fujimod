@@ -17,13 +17,13 @@ body:
   - type: input
     id: mod-build
     attributes:
-      label: Build
+      label: Version
     validations:
       required: true
   - type: input
     id: simulator-build
     attributes:
-      label: Simulator Build
+      label: Simulator version
     validations:
       required: true
   - type: upload
