@@ -2,9 +2,11 @@ import type { Engine, Input } from "../engine/api";
 import type { ModelHit, ModelViewer } from "../viewer/model";
 import type { ControlNode, DevicePanel, PowerCombo } from "./layout";
 import { icon } from "./icons";
+import { DetentFeedback } from "../feedback/detent";
 
 /** Body data chooses the controls; shared components own gesture laws. */
 export class InputPanel {
+  private detent = new DetentFeedback();
   private inputs = new Map<string, Input>();
   private relativeSteps = new Map<string, number>();
   private modelFractions = new Map<string, number>();
@@ -298,10 +300,11 @@ export class InputPanel {
           )
         ) {
           event.preventDefault();
-          this.step(
+          this.detent.beginGesture(event);
+          if (this.step(
             id,
             ["ArrowLeft", "ArrowDown"].includes(event.key) ? -1 : 1,
-          );
+          )) this.detent.step();
         }
       };
       this.track(id, dial);
@@ -588,6 +591,7 @@ export class InputPanel {
       !this.inputs.get(id)?.supported
     ) return;
     if (this.stopRotation) return;
+    this.detent.beginGesture(event);
     event.preventDefault();
     dial.setPointerCapture(event.pointerId);
     this.viewer.setOrbit(false);
@@ -623,7 +627,9 @@ export class InputPanel {
           Math.abs(candidate - center) < Math.abs(centers[best] - center) ? index : best, 0);
         const current = Number(dial.getAttribute("aria-valuenow"));
         const direction = Math.sign(nearest - current);
-        for (let n = 0; n < Math.abs(nearest - current); n++) this.step(id, direction);
+        for (let n = 0; n < Math.abs(nearest - current); n++) {
+          if (this.step(id, direction)) this.detent.step();
+        }
         const index = Number(dial.getAttribute("aria-valuenow"));
         const distance = center - centers[index];
         const neighbor = centers[index + Math.sign(distance)];
@@ -634,7 +640,10 @@ export class InputPanel {
         const steps = Math.trunc(remainder / 16);
         remainder -= steps * 16;
         for (let n = 0; n < Math.abs(steps); n++) {
-          if (this.step(id, Math.sign(steps))) tickPosition += Math.sign(steps) * 16;
+          if (this.step(id, Math.sign(steps))) {
+            tickPosition += Math.sign(steps) * 16;
+            this.detent.step();
+          }
         }
         rotation.fraction = this.clampFraction(id, remainder / 16);
       }

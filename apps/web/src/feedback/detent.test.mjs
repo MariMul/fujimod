@@ -27,10 +27,20 @@ test('supported haptics avoid audio, rejected vibration falls back to audio', ()
   const vibrations = []; let contexts = 0;
   globalThis.navigator.vibrate = n => { vibrations.push(n); return true; };
   globalThis.AudioContext = class { constructor() { contexts++; } };
-  const feedback = new DetentFeedback(); feedback.beginGesture({ isTrusted: true }); feedback.step();
+  const feedback = new DetentFeedback(); feedback.beginGesture({ isTrusted: true, pointerType: 'touch' }); feedback.step();
   assert.deepEqual(vibrations, [0, 8]); assert.equal(contexts, 0);
   navigator.vibrate = () => false;
-  feedback.beginGesture({ isTrusted: true }); assert.equal(contexts, 1);
+  feedback.beginGesture({ isTrusted: true, pointerType: 'touch' }); assert.equal(contexts, 1);
   navigator.vibrate = () => { throw Error('Unavailable'); };
-  new DetentFeedback().beginGesture({ isTrusted: true }); assert.equal(contexts, 2);
+  new DetentFeedback().beginGesture({ isTrusted: true, pointerType: 'touch' }); assert.equal(contexts, 2);
+});
+
+test('mouse and keyboard use audio even when vibration requests are accepted', () => {
+  const vibrations = []; let contexts = 0;
+  navigator.vibrate = n => { vibrations.push(n); return true; };
+  globalThis.AudioContext = class { constructor() { contexts++; } };
+  new DetentFeedback().beginGesture({ isTrusted: true, pointerType: 'mouse' });
+  new DetentFeedback().beginGesture({ isTrusted: true });
+  assert.deepEqual(vibrations, []);
+  assert.equal(contexts, 2);
 });

@@ -4,11 +4,17 @@
  */
 export class DetentFeedback {
   private context?: AudioContext;
+  private haptics = false;
 
   beginGesture(event: Event) {
     if (!event.isTrusted) return;
+    this.haptics = false;
     try {
-      if (navigator.vibrate?.(0)) return;
+      // Reserve tactile feedback for touch; mouse and keyboard get an audible click.
+      if ("pointerType" in event && event.pointerType === 'touch') {
+        this.haptics = Boolean(navigator.vibrate?.(0));
+        if (this.haptics) return;
+      }
     } catch { /* Permissions or platform restrictions can reject vibration. */ }
     try {
       // Transient maps to iOS's ambient session. Older WebKit already defaults
@@ -22,7 +28,7 @@ export class DetentFeedback {
 
   step() {
     try {
-      if (navigator.vibrate?.(8)) return;
+      if (this.haptics && navigator.vibrate?.(8)) return;
     } catch { /* Unsupported vibration falls through to an already unlocked context. */ }
     const context = this.context;
     if (!context || context.state !== 'running' || document.hidden) return;

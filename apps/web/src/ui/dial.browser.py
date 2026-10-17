@@ -15,6 +15,16 @@ FIXTURE = '''<!doctype html><link rel="stylesheet" href="/src/style.css">
 <script type="module">
 import { InputPanel } from '/src/ui/controls.ts';
 window.requests = [];
+window.clicks = 0; window.vibrations = []; window.haptics = false;
+Object.defineProperty(navigator, 'vibrate', {configurable:true, value: duration => {
+  window.vibrations.push(duration); return window.haptics;
+}});
+const createOscillator = AudioContext.prototype.createOscillator;
+AudioContext.prototype.createOscillator = function (...args) {
+  const oscillator = createOscillator.apply(this, args), start = oscillator.start.bind(oscillator);
+  oscillator.start = (...args) => { window.clicks++; start(...args); };
+  return oscillator;
+};
 const viewer = new Proxy({}, {get: () => () => {}});
 window.panel = new InputPanel(document.querySelector('#controls'), viewer,
   error => { throw error; }, async () => {});
@@ -96,6 +106,7 @@ async def check(browser_type, url, output):
             await page.mouse.move(x+dx, y)
             await paint(page)
             samples.append(await snapshot(dial))
+            assert await page.evaluate('clicks === requests.length'), 'Expected one click per accepted detent'
         assert all(a['x'] < b['x'] for a,b in zip([initial]+samples, samples)), samples
         assert [s['selected'] for s in samples] == [initial_value]*3 + [preceding]*2, samples
         # The label strip must travel exactly as far as the captured thumb,
@@ -163,9 +174,44 @@ async def check(browser_type, url, output):
         await page.mouse.up()
         await settled(ticks)
         assert abs((await snapshot(ticks))['ticks'] - end) < .01, await snapshot(ticks)
+    assert await page.evaluate('clicks === requests.length'), 'Snap or cancellation produced an extra click'
+    assert await page.evaluate('clicks > 0'), 'No audio clicks were generated'
+    # Touch selects vibration when available; sub-detent movement and hard stops
+    # must not produce an extra pulse. These mocks verify requests, not hardware.
+    aperture = page.locator('.dial[data-id="aperture"]')
+    async def touch_move(distance):
+        await aperture.evaluate('''(node, distance) => node.addEventListener('pointerdown', event => {
+          queueMicrotask(() => window.dispatchEvent(new PointerEvent('pointermove', {
+            pointerId:event.pointerId,clientX:event.clientX+distance,clientY:event.clientY,buttons:1
+          })));
+        }, {once:true})''', distance)
+        await aperture.tap()
+        await settled(aperture)
+
+    await page.evaluate('window.haptics = true')
+    before = await page.evaluate('({requests:requests.length, clicks, vibrations:vibrations.length})')
+    distance = await aperture.evaluate('''node => {
+      const labels = [...node.querySelectorAll('.vals span')];
+      const center = label => label.offsetLeft + label.offsetWidth/2;
+      return center(labels[Number(node.getAttribute('aria-valuenow'))]) - center(labels.at(-1));
+    }''')
+    await touch_move(distance)
+    after = await page.evaluate('(before) => ({steps:requests.length-before.requests, clicks:clicks-before.clicks, vibrations:vibrations.slice(before.vibrations)})', before)
+    assert after == dict(steps=3, clicks=0, vibrations=[0,8,8,8]), after
+    before = await page.evaluate('({requests:requests.length, clicks, vibrations:vibrations.length})')
+    await touch_move(-40)
+    after = await page.evaluate('(before) => ({steps:requests.length-before.requests, clicks:clicks-before.clicks, vibrations:vibrations.slice(before.vibrations)})', before)
+    assert after == dict(steps=0, clicks=0, vibrations=[0]), after
+    # Unsupported touch vibration falls back to the same quiet audio click.
+    await page.evaluate('window.haptics = false')
+    before = await page.evaluate('({requests:requests.length, clicks})')
+    await touch_move(-distance)
+    after = await page.evaluate('(before) => ({steps:requests.length-before.requests, clicks:clicks-before.clicks})', before)
+    assert after == dict(steps=3, clicks=3), after
     await page.screenshot(path=str(output/'released.png'))
     assert not errors, errors
-    (output/'result.json').write_text(json.dumps(dict(dials=results, requests=await page.evaluate('requests')), indent=2)+'\n')
+    (output/'result.json').write_text(json.dumps(dict(dials=results, requests=await page.evaluate('requests'),
+        feedback=await page.evaluate('({clicks,vibrations})')), indent=2)+'\n')
     await browser.close()
 
 
@@ -179,7 +225,7 @@ async def main():
             output = args.output/name
             output.mkdir(parents=True, exist_ok=False)
             await check(getattr(playwright,name), args.url, output)
-            print(f'{name}: pixel-for-pixel drag, release snap, reversal, cancellation, keyboard and touch passed')
+            print(f'{name}: pixel-for-pixel drag, release snap, reversal, cancellation, keyboard, touch and detent feedback passed')
 
 
 if __name__ == '__main__':
