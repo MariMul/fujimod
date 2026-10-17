@@ -224,3 +224,33 @@ test('production transfer payload commands use one exchange for raw, rejected an
   }
  }finally{fixture.restore();}
 });
+
+test('configuration commands preserve raw snapshots and execute one mailbox exchange',async()=>{
+ const fixture=installWebUsb(),a=usb.app80;
+ try{
+  const [device]=await usb.discover(usb.DeviceFilter.Diagnostic),[iface]=await device.interfaces();
+  for(const [codec,count,command,input,outputs,expected] of [
+   ['configuration_flags',11,a.Command.readConfigurationFlags(a.ConfigurationBank.Bank1,a.Toggle.Enabled),[0,1,1,...Array(8).fill(255)],{3:0,4:1,5:127,6:128,7:253,8:254,9:255,10:42},{kind:a.ReplyKind.ConfigurationFlags,rawData:new Uint8Array([0,1,127,128,253,254,255,42])}],
+   ['configuration_flags',11,a.Command.readConfigurationFlags(a.ConfigurationBank.Bank0,a.Toggle.Disabled),[0,0,0,...Array(8).fill(255)],{},{kind:a.ReplyKind.ConfigurationFlags,rawData:new Uint8Array(8).fill(255)}],
+   ['configuration_flags',11,a.Command.applyConfigurationFlags(a.ConfigurationBank.Bank1,a.Toggle.Disabled),[1,1,0,...Array(8).fill(0)],{},{kind:a.ReplyKind.NoPayload}],
+   ['configuration_mode',2,a.Command.selectConfigurationMode(a.Toggle.Enabled,a.ConfigurationMode.Mode3),[1,3],{},{kind:a.ReplyKind.NoPayload}],
+   ['configuration_pack_options',4,a.Command.packConfigurationOptions(a.Toggle.Disabled,a.Toggle.Enabled,255,0),[0,1,255,0],{},{kind:a.ReplyKind.NoPayload}],
+   ['configuration_read_options',4,a.Command.readConfigurationOptions(),[255,255,255,255],{0:137,1:171,2:205,3:239},{kind:a.ReplyKind.ConfigurationOptions,rawValue:0x89abcdef}],
+   ['configuration_read_options',4,a.Command.readConfigurationOptions(),[255,255,255,255],{},{kind:a.ReplyKind.ConfigurationOptions,rawValue:0xffffffff}],
+  ]){
+   const slots=Array.from({length:count},(_,i)=>(i*5+7)%32);
+   const definition=defs.service.Definition.fromJson(JSON.stringify({schema:1,firmware:{id:'config-b',model:'Synthetic',version:'2',sha256:'ab'.repeat(32)},mailbox:{page:3,offset:576,configuration_limit:512},entries:[{code:153,label:codec,codec,slots,enabled_modes:4,next_mode:0,firmware_kind:1,handler:0,parameter_table:0}]}),new defs.FirmwareIdentity('config-b','ab'.repeat(32)));
+   const invocation=new a.Service(definition).prepare(new defs.service.ServiceModes(4),command);
+   assert.deepEqual(slots.map(i=>invocation.raw[1+i]),input);
+   fixture.state.onConfigurationWrite=(page,address)=>{if(page===3&&address===576)for(const [index,byte] of Object.entries(outputs))fixture.state.configuration.set(`3:${577+slots[Number(index)]}`,byte);};
+   const before=fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length;
+   const session=await usb.Session.open(device,iface,new usb.FirmwareLimits(256,256,256,256),new usb.TransferOptions(100,1024));
+   assert.deepEqual((await a.execute(session,invocation)).value,expected);
+   assert.equal(session.state,usb.SessionState.Ready);
+   assert.equal(fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length-before,3);
+   await session.close();
+  }
+  assert.throws(()=>a.Command.readConfigurationFlags(99,a.Toggle.Enabled));
+  assert.throws(()=>a.Command.packConfigurationOptions(a.Toggle.Enabled,a.Toggle.Disabled,256,0));
+ }finally{fixture.restore();}
+});

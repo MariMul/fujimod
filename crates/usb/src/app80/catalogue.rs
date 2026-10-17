@@ -2,6 +2,8 @@
 use super::{CommandCode, Reply, Request};
 use crate::{Result as UsbResult, error::ProtocolError, ff80::commands::memory::Address};
 use fujimod_defs::service::{Codec, Definition, Entry, ServiceModes};
+mod configuration;
+pub use configuration::{ConfigurationBank, ConfigurationMode};
 mod media;
 pub use media::{
     AudioCount, AudioPlayback, AudioResult, AudioRoute, ChargeAction, ChargePresence, ChargeQuery,
@@ -298,6 +300,26 @@ pub enum Command {
     TransferLoadTest {
         mode: TransferLoadMode,
     },
+    /// Submits flags (kind 0x14) before requesting the two raw bank snapshots.
+    ReadConfigurationFlags {
+        bank: ConfigurationBank,
+        option: Toggle,
+    },
+    ApplyConfigurationFlags {
+        bank: ConfigurationBank,
+        option: Toggle,
+    },
+    SelectConfigurationMode {
+        flag: Toggle,
+        mode: ConfigurationMode,
+    },
+    PackConfigurationOptions {
+        flag: Toggle,
+        option: Toggle,
+        upper: u8,
+        lower: u8,
+    },
+    ReadConfigurationOptions,
 }
 impl Command {
     pub fn codec(self) -> Codec {
@@ -355,6 +377,12 @@ impl Command {
             Self::TransferSetWord7 { .. } => Codec::TransferWord7,
             Self::TransferSetWord16 { .. } => Codec::TransferWord16,
             Self::TransferLoadTest { .. } => Codec::TransferLoadTest,
+            Self::ReadConfigurationFlags { .. } | Self::ApplyConfigurationFlags { .. } => {
+                Codec::ConfigurationFlags
+            }
+            Self::SelectConfigurationMode { .. } => Codec::ConfigurationMode,
+            Self::PackConfigurationOptions { .. } => Codec::ConfigurationPackOptions,
+            Self::ReadConfigurationOptions => Codec::ConfigurationReadOptions,
         }
     }
 }
@@ -379,44 +407,126 @@ pub enum WordWriteResult {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplyValue {
     NoPayload,
-    Pins { levels: u16 },
-    Channel { value: u16 },
-    ProfileByte { value: u8 },
-    DownloadStatus { raw_status: u8 },
-    ConfigurationSaved { status: SaveStatus },
-    ReadWord { result: WordReadResult },
-    WriteWord { result: WordWriteResult },
+    Pins {
+        levels: u16,
+    },
+    Channel {
+        value: u16,
+    },
+    ProfileByte {
+        value: u8,
+    },
+    DownloadStatus {
+        raw_status: u8,
+    },
+    ConfigurationSaved {
+        status: SaveStatus,
+    },
+    ReadWord {
+        result: WordReadResult,
+    },
+    WriteWord {
+        result: WordWriteResult,
+    },
     Research,
-    I2cData { data: Vec<u8> },
-    Accumulated { values: [u16; 3] },
-    PeripheralReport { data: [u8; 8] },
-    ChargeApplied { status: ChargeResult },
-    ChargePresence { status: ChargePresence },
-    ChargeState { status: ReportedChargeState },
-    AudioCaptured { status: AudioResult },
-    AudioPlayed { status: AudioResult },
-    StorageErased { status: StorageEraseResult },
-    StorageStatus { status: StorageStatus },
-    NandRead { status: NandReadResult },
-    Option41 { state: Option41State },
-    SignalStrength { raw_value: u8 },
-    Iperf { raw_result: u8 },
-    WpsCallback { snapshot: WpsCallbackResult },
-    WpsProgress { snapshot: WpsProgress },
-    StationConnection { raw_result: u8 },
-    StationScan { raw_result: u8, raw_count: u8 },
-    NetworkConfiguration { data: [u8; 6] },
-    TransferPrepared { result: TransferPrepareResult },
-    TransferOperationSelected { result: TransferResult },
-    TransferReadiness { result: TransferResult },
-    TransferChannelSelected { result: TransferResult },
-    TransferStarted { result: TransferResult },
-    TransferWordRead { result: TransferWordReadResult },
-    TransferWordWritten { result: TransferResult },
-    TransferPair { result: TransferPairResult },
-    TransferBytes { data: [u8; 2] },
-    TransferHalfword { raw_value: u16 },
-    TransferOptionWord { raw_value: u32 },
+    I2cData {
+        data: Vec<u8>,
+    },
+    Accumulated {
+        values: [u16; 3],
+    },
+    PeripheralReport {
+        data: [u8; 8],
+    },
+    ChargeApplied {
+        status: ChargeResult,
+    },
+    ChargePresence {
+        status: ChargePresence,
+    },
+    ChargeState {
+        status: ReportedChargeState,
+    },
+    AudioCaptured {
+        status: AudioResult,
+    },
+    AudioPlayed {
+        status: AudioResult,
+    },
+    StorageErased {
+        status: StorageEraseResult,
+    },
+    StorageStatus {
+        status: StorageStatus,
+    },
+    NandRead {
+        status: NandReadResult,
+    },
+    Option41 {
+        state: Option41State,
+    },
+    SignalStrength {
+        raw_value: u8,
+    },
+    Iperf {
+        raw_result: u8,
+    },
+    WpsCallback {
+        snapshot: WpsCallbackResult,
+    },
+    WpsProgress {
+        snapshot: WpsProgress,
+    },
+    StationConnection {
+        raw_result: u8,
+    },
+    StationScan {
+        raw_result: u8,
+        raw_count: u8,
+    },
+    NetworkConfiguration {
+        data: [u8; 6],
+    },
+    TransferPrepared {
+        result: TransferPrepareResult,
+    },
+    TransferOperationSelected {
+        result: TransferResult,
+    },
+    TransferReadiness {
+        result: TransferResult,
+    },
+    TransferChannelSelected {
+        result: TransferResult,
+    },
+    TransferStarted {
+        result: TransferResult,
+    },
+    TransferWordRead {
+        result: TransferWordReadResult,
+    },
+    TransferWordWritten {
+        result: TransferResult,
+    },
+    TransferPair {
+        result: TransferPairResult,
+    },
+    TransferBytes {
+        data: [u8; 2],
+    },
+    TransferHalfword {
+        raw_value: u16,
+    },
+    TransferOptionWord {
+        raw_value: u32,
+    },
+    /// Two four-byte snapshots in published slot order (1,0,3,2 per buffer).
+    ConfigurationFlags {
+        raw_data: [u8; 8],
+    },
+    ConfigurationOptions {
+        raw_value: u32,
+    },
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommandReply {
@@ -624,7 +734,25 @@ impl PreparedCommand {
             Command::TransferReadOptionWord { .. } => ReplyValue::TransferOptionWord {
                 raw_value: u32::from_be_bytes([byte(2), byte(3), byte(4), byte(5)]),
             },
-            Command::TransferBitfields { .. }
+            Command::ReadConfigurationFlags { .. } => ReplyValue::ConfigurationFlags {
+                raw_data: [
+                    byte(3),
+                    byte(4),
+                    byte(5),
+                    byte(6),
+                    byte(7),
+                    byte(8),
+                    byte(9),
+                    byte(10),
+                ],
+            },
+            Command::ReadConfigurationOptions => ReplyValue::ConfigurationOptions {
+                raw_value: u32::from_be_bytes([byte(0), byte(1), byte(2), byte(3)]),
+            },
+            Command::ApplyConfigurationFlags { .. }
+            | Command::SelectConfigurationMode { .. }
+            | Command::PackConfigurationOptions { .. }
+            | Command::TransferBitfields { .. }
             | Command::TransferWriteHalfword { .. }
             | Command::TransferSetSelectedWord { .. }
             | Command::TransferSetWord7 { .. }
@@ -939,6 +1067,40 @@ impl Catalogue {
                 put(2, lo);
             }
             Command::TransferLoadTest { mode } => put(0, mode.wire()),
+            Command::ReadConfigurationFlags { bank, option }
+            | Command::ApplyConfigurationFlags { bank, option } => {
+                put(
+                    0,
+                    u8::from(matches!(command, Command::ApplyConfigurationFlags { .. })),
+                );
+                put(1, bank.wire());
+                put(2, option.wire());
+                if matches!(command, Command::ReadConfigurationFlags { .. }) {
+                    for index in 3..11 {
+                        put(index, 255);
+                    }
+                }
+            }
+            Command::SelectConfigurationMode { flag, mode } => {
+                put(0, flag.wire());
+                put(1, mode.wire());
+            }
+            Command::PackConfigurationOptions {
+                flag,
+                option,
+                upper,
+                lower,
+            } => {
+                put(0, flag.wire());
+                put(1, option.wire());
+                put(2, upper);
+                put(3, lower);
+            }
+            Command::ReadConfigurationOptions => {
+                for index in 0..4 {
+                    put(index, 255);
+                }
+            }
             Command::SignalStrength { address } => {
                 for (i, &value) in address.data().iter().enumerate() {
                     put(i, value);
@@ -985,3 +1147,6 @@ mod network_tests;
 
 #[cfg(test)]
 mod transfer_tests;
+
+#[cfg(test)]
+mod configuration_tests;

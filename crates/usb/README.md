@@ -378,3 +378,17 @@ success path. `TransferLoadMode` selects the firmware's setup sequence, run
 sequence or kind-3 request with one/zero. These are single service commands;
 firmware performs their internal sequences. The host awaits normal ff80
 completion and adds no polling, inferred success, retries or setup/repair.
+
+Configuration service commands use `ConfigurationBank::Bank0/Bank1`,
+`ConfigurationMode::Mode0/Mode1/Mode2/Mode3` and explicit `Toggle` fields.
+`ReadConfigurationFlags` submits the flags request before reading two bank
+snapshots; it is not an observational settings read. `ApplyConfigurationFlags`
+only submits flags. The eight returned `raw_data` bytes preserve published
+slot order: buffer bytes 1,0,3,2 for the odd bank, then the even bank.
+`SelectConfigurationMode` asks firmware to reset its lower mode before applying
+its selector. `PackConfigurationOptions` forwards two flag fields and full-byte
+upper/lower quantities, which firmware packs at bits 10 and 2 respectively.
+`ReadConfigurationOptions` returns the four published bytes as a big-endian
+`raw_value`. Studied lower configuration helpers return zero without filling
+read buffers, so none of these snapshots certify valid settings. These remain
+single firmware commands; the host adds no setup, polling or persistence policy.

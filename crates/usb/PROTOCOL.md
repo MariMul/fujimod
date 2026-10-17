@@ -132,3 +132,16 @@ the firmware-selected App80 command byte:
 | Transfer byte/bitfields | One opaque byte or two 16-bit masks plus the byte. Byte replies preserve two raw bytes; firmware expands the masks internally. No host workflow or inferred bit meanings. |
 | Transfer halfword/options | Full-width halfword address or typed option 0–7. Replies preserve raw values because studied stubs may leave the firmware output buffer uninitialized. |
 | Transfer selected words/load | Separate kind enums for 9–14, 7/8, 16/17 and load selectors 0/1/3/4. No payload result. Stock kind-16/17 success may omit signaling; host completion rules and deadlines still apply. |
+
+The configuration service family has four codecs: flags (11 slots), mode
+(2 slots), packed options (4 slots) and raw options (4 output slots). Flags
+selector 0 submits a lower flags request then publishes two raw four-byte
+buffers; selector 1 submits flags without output. Both take bank and option
+0/1. Flags output retains each buffer's published 1,0,3,2 byte order. Mode
+forwards flag 0/1 and selector 0–3; firmware maps the selector to bits 2/0/4/6
+and first submits kind 3 with zero. Packed options forward flag/option 0/1
+and two full bytes; firmware assembles `flag | option<<1 | upper<<10 | lower<<2`.
+Raw options decode four big-endian bytes. Output slots start at `ff`, but a
+studied lower stub can write uninitialized stack bytes over them: neither an
+unchanged sentinel nor a different byte establishes validity. Read-flags is
+mutating, and command completion does not establish persistence.

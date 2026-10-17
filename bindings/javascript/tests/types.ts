@@ -158,3 +158,8 @@ usb.app80.Command.transferReadHalfword(new usb.app80.TransferWordAddress(4));
 usb.app80.Command.transferReadOptionWord(99);
 // @ts-expect-error Different selected-word command groups remain distinct.
 usb.app80.Command.transferSetWord7(usb.app80.TransferWord16Kind.Kind16,0);
+
+// @ts-expect-error Configuration mode and bank are different selector groups.
+usb.app80.Command.readConfigurationFlags(usb.app80.ConfigurationMode.Mode1,usb.app80.Toggle.Enabled);
+// @ts-expect-error Unknown configuration flag discriminants are rejected.
+usb.app80.Command.selectConfigurationMode(255,usb.app80.ConfigurationMode.Mode0);
