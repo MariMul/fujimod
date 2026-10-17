@@ -43,7 +43,7 @@ export function personalNote(host: HTMLElement) {
   const date = new Date();
   // Compare calendar dates in the visitor's timezone; DST cannot add a day.
   const today = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
-  const age = Math.max(0, Math.floor((today - Date.UTC(2026, 7, 10)) / 86_400_000));
+  const age = Math.max(0, Math.floor((today - Date.UTC(2026, 9, 3)) / 86_400_000));
   host.querySelector("#project-age")!.textContent = String(age);
   host.querySelector("#camera-count")!.textContent = String(
     new Set(cameraInventory.map((camera) => camera.name)).size,
