@@ -78,3 +78,13 @@ test('visual travel follows sub-detent motion and only settles when released', (
   s.start(); window.dispatchEvent(new Event('blur'));
   assert.equal(s.finishes.length, 2);
 });
+
+test('projected grab tangent follows either side of a dial without axis switching', () => {
+  for (const direction of [{x: -1, y: 0}, {x: 0, y: 1}, {x: .6, y: .8}]) {
+    const s = setup(); s.gesture.direction = direction; s.start(100, 100);
+    s.canvas.dispatchEvent(pointer('pointermove', 100 + direction.x * 32, 100 + direction.y * 32));
+    assert.deepEqual(s.changes, [1, 1]);
+    s.canvas.dispatchEvent(pointer('pointermove', 100, 100));
+    assert.deepEqual(s.changes, [1, 1, -1, -1]);
+  }
+});

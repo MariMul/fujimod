@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { Frame, Input } from "../engine/api";
 import { DetentFeedback } from "../feedback/detent";
@@ -87,6 +88,7 @@ export class ModelViewer {
       Math.min(devicePixelRatio, this.phoneViewport ? 1.5 : 2),
     );
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     host.prepend(this.renderer.domElement);
     this.inputMarker.className = "model-input-marker";
     this.inputFeedback.className = "model-input-feedback";
@@ -113,7 +115,17 @@ export class ModelViewer {
     );
     this.orbit.minDistance = 2;
     this.orbit.maxDistance = 10;
-    this.scene.add(new THREE.HemisphereLight(0xc9d4e1, 0x28221c, 2.1));
+    // Broad studio reflections illuminate metal as well as diffuse body panels.
+    const environment = new RoomEnvironment();
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(environment).texture;
+    this.scene.environmentIntensity = 1.4;
+    environment.dispose();
+    pmrem.dispose();
+    this.scene.add(new THREE.HemisphereLight(0xe8edf5, 0x888078, 3));
+    const fill = new THREE.DirectionalLight(0xffffff, 2.5);
+    this.camera.add(fill);
+    this.scene.add(this.camera);
     const key = new THREE.DirectionalLight(0xffffff, 3.4);
     key.position.set(-3, 5, 5);
     this.scene.add(key);
@@ -179,6 +191,7 @@ export class ModelViewer {
             }
           : undefined;
         const gesture = rotary && turn ? {
+          direction: this.rotaryDirection(rotary.part, hit!.surfacePoint),
           step: turn,
           preview: (fraction: number) => {
             rotary.part.preview(fraction);
@@ -378,6 +391,24 @@ export class ModelViewer {
   }
   setRotaryEnabled(enabled: boolean) {
     this.rotaryDrag.setEnabled(enabled);
+  }
+  private rotaryDirection(part: RotaryPart, surfacePoint?: THREE.Vector3) {
+    // Different sides of a dial move in opposite screen directions. Project
+    // the positive rotational tangent at the actual grab point, then keep it
+    // fixed until release so crossing the centre cannot reverse the gesture.
+    const pivot = part.pivot;
+    pivot.updateWorldMatrix(true, false);
+    const center = pivot.getWorldPosition(new THREE.Vector3());
+    const point = surfacePoint
+      ? this.root.localToWorld(surfacePoint.clone())
+      : center.clone();
+    const axis = part.axis.clone().transformDirection(pivot.matrixWorld);
+    const tangent = axis.cross(point.clone().sub(center));
+    const start = this.projectPoint(point);
+    const end = this.projectPoint(point.clone().add(tangent));
+    const x = end.x - start.x, y = end.y - start.y;
+    const length = Math.hypot(x, y);
+    return length > 0.5 ? { x: x / length, y: y / length } : { x: 1, y: 0 };
   }
   private addRotary(id: string, negative: string, positive: string) {
     if (this.rotary.has(id)) return;

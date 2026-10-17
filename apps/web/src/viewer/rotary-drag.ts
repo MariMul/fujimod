@@ -1,4 +1,6 @@
 export interface RotaryGesture {
+  /** Screen-space tangent of positive rotation, fixed for this gesture. */
+  direction?: { x: number; y: number };
   step: (direction: number) => void;
   preview: (fraction: number) => void;
   finish: () => void;
@@ -46,11 +48,14 @@ export class RotaryDrag {
     const dx = event.clientX - active.x, dy = active.y - event.clientY;
     // Lock to the first deliberate direction; vertical and horizontal swipes
     // both work when a dial is small or viewed edge-on on a phone.
-    if (!active.axis) {
+    if (!active.gesture.direction && !active.axis) {
       if (Math.max(Math.abs(dx), Math.abs(dy)) < 4) return;
       active.axis = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
     }
-    active.remainder += active.axis === 'x' ? dx : dy;
+    const direction = active.gesture.direction;
+    active.remainder += direction
+      ? dx * direction.x - dy * direction.y
+      : active.axis === 'x' ? dx : dy;
     active.x = event.clientX; active.y = event.clientY;
     const steps = Math.trunc(active.remainder / this.pixelsPerDetent);
     active.remainder -= steps * this.pixelsPerDetent;
