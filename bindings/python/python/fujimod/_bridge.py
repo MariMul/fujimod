@@ -2,18 +2,10 @@
 
 import asyncio
 from dataclasses import dataclass
+
+from _fujimod_js import usb as jsusb
 from js import Uint8Array
 from pyodide.ffi import JsException, to_js
-from _fujimod_js import usb as jsusb
-from ._errors import (
-    UsbError,
-    TransferError,
-    ProtocolError,
-    CompletionUnknownError,
-    DeviceCommandError,
-    ClosedSessionError,
-    SessionBusyError,
-)
 
 
 def uint(value, bits=32):
@@ -47,6 +39,28 @@ def enum_out(value, cls, group=None):
 def convert_error(value):
     kind = getattr(value, "kind", None)
     kinds = jsusb.ErrorKind
+    if kind == kinds.Definition:
+        from .defs import DefinitionError, _failure
+
+        error = DefinitionError(str(getattr(value, "message", value)))
+        error.reason = _failure(value.reason)
+        return error
+    if kind == kinds.ServiceCommand:
+        from .usb._catalogue import CommandError, _command_failure
+
+        error = CommandError(str(getattr(value, "message", value)))
+        error.reason = _command_failure(value.reason)
+        return error
+    from .usb._errors import (
+        ClosedSessionError,
+        CompletionUnknownError,
+        DeviceCommandError,
+        ProtocolError,
+        SessionBusyError,
+        TransferError,
+        UsbError,
+    )
+
     cls = {
         kinds.Transfer: TransferError,
         kinds.Protocol: ProtocolError,

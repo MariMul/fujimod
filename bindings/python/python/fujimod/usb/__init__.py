@@ -34,7 +34,7 @@ from ._types import (
     LogReply,
     ConsoleReply,
 )
-from ._bridge import (
+from .._bridge import (
     Handle,
     jsusb,
     call,
@@ -80,7 +80,7 @@ class Session(Handle):
             # The owner exists only once C0 completes. Consume a cancelled
             # open's outcome and abandon it without any cleanup request.
             import asyncio
-            from ._bridge import begin, wait_pending, Success
+            from .._bridge import begin, wait_pending, Success
 
             pending = begin(promise)
             try:

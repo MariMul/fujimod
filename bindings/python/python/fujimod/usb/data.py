@@ -2,7 +2,16 @@
 
 from dataclasses import dataclass
 from . import Session, Reader, DataWindow, DataWriteMode, DiagnosticReply
-from ._bridge import jsusb, uint, unwrap, enum_in, buffer_in, buffer_out, call, snapshot
+from .._bridge import (
+    jsusb,
+    uint,
+    unwrap,
+    enum_in,
+    buffer_in,
+    buffer_out,
+    call,
+    snapshot,
+)
 
 
 @dataclass(frozen=True)

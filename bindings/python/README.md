@@ -194,9 +194,9 @@ common header is validated; the selected firmware supplies other semantics.
 There is no implicit padding, polling, data transfer, retry or cleanup. The
 [command catalogue](../../crates/usb/PROTOCOL.md) describes effects and limits.
 
-## Native firmware-selected service controls
+## Firmware-selected service controls
 
-The native package exposes the shared JSON loader through `fujimod.defs`.
+Both native Python and Pyodide expose the shared JSON loader through `fujimod.defs`.
 Definitions and command codecs execute in Rust; Python selects typed inputs:
 
 ```python
@@ -236,6 +236,7 @@ typed reply fences the session. Cancellation and session ownership follow the
 same rules as other async compositions. Research invocations remain explicit
 through `service.prepare_research(code, modes, arguments)`.
 
-These Python catalogue bindings currently target native Python. JavaScript has
-equivalent typed bindings; the Pyodide catalogue adapter is being added above
-its working generic App80 wire/mailbox APIs.
+Pyodide uses the same imports and variant constructors through the initialized
+JavaScript module. Frozen Python variants own Rust command handles or retain
+decoded result values; they do not implement encoding, selection or completion
+rules. Shared buffer, handle, error and async adapters live at the package root.

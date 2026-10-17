@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from ._bridge import Handle, jsusb, call, uint, enum_in, enum_out, buffer_out, snapshot
+from .._bridge import Handle, jsusb, call, uint, enum_in, enum_out, buffer_out, snapshot
 
 
 class InfoSelector(Enum):

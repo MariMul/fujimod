@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from ._bridge import Handle, jsusb, uint, call, snapshot, buffer_out, enum_out
+from .._bridge import Handle, jsusb, uint, call, snapshot, buffer_out, enum_out
 
 
 class Stage(Enum):

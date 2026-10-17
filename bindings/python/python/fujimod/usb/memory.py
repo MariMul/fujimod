@@ -1,7 +1,7 @@
 """Compositions delegated to the Rust memory operations."""
 
 from . import Session, Reader
-from ._bridge import jsusb, uint, unwrap, buffer_in, buffer_out, call
+from .._bridge import jsusb, uint, unwrap, buffer_in, buffer_out, call
 
 
 async def read_range(session, address, length):

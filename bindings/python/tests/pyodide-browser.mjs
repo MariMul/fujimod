@@ -52,5 +52,5 @@ try{
   }finally{fixture.restore();}
  },manifest.wheel);
  assert.deepEqual(result,{passed:true,secure:true,realWindow:true});assert.deepEqual(errors,[]);
- console.log('PASS Chromium + Pyodide wheel: real Window, Python buffers/enums/errors, upload, async ranges, pending task/chunk cancellation, trace and timeout fence (fake USB)');
+ console.log('PASS Chromium + Pyodide wheel: shared definitions, typed service controls, real Window, buffers/enums/errors, async ranges, publication/task/chunk cancellation and completion fencing (fake USB)');
 }finally{await browser?.close();server.close();await once(server,'close');}

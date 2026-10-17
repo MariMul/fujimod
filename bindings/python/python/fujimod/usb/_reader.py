@@ -1,6 +1,6 @@
 """Python async iterator lifetime over Rust's owned range reader."""
 
-from ._bridge import call, buffer_out, begin, wait_pending, settled
+from .._bridge import call, buffer_out, begin, wait_pending, settled
 from ._errors import SessionBusyError
 
 

@@ -232,4 +232,345 @@ async def run():
     await check()
     await check_pending_reader()
     await check_commands()
+    await check_service_catalogue()
+    return True
+
+
+async def check_service_catalogue():
+    import importlib
+    import json
+    from js import Promise
+    from pyodide.ffi import create_proxy
+    from fujimod import defs
+    from fujimod.defs import service as definitions
+
+    def definition(rows=None, expected_id="synthetic-b-v2"):
+        if rows is None:
+            rows = [(153, "flush_configuration", [7], 4)]
+        document = dict(
+            schema=1,
+            firmware=dict(
+                id="synthetic-b-v2", model="Body B", version="2", sha256="ab" * 32
+            ),
+            mailbox=dict(page=3, offset=576, configuration_limit=512),
+            entries=[
+                dict(
+                    code=code,
+                    label=codec,
+                    codec=codec,
+                    slots=slots,
+                    enabled_modes=modes,
+                    next_mode=0,
+                    firmware_kind=19,
+                    handler=4294967296,
+                    parameter_table=8192,
+                )
+                for code, codec, slots, modes in rows
+            ],
+        )
+        return definitions.Definition.from_json(
+            json.dumps(document), defs.FirmwareIdentity(expected_id, "ab" * 32)
+        )
+
+    def failure(cls, action):
+        try:
+            action()
+        except cls as error:
+            return error
+        raise AssertionError(f"{cls.__name__} was not raised")
+
+    assert importlib.import_module("fujimod.defs") is defs
+    assert importlib.import_module("fujimod.defs.service") is definitions
+    modes = definitions.ServiceModes(4)
+    d = definition()
+    assert d.identity.id == "synthetic-b-v2" and d.identity.sha256 == "ab" * 32
+    assert (d.mailbox.page, d.mailbox.offset, d.mailbox.configuration_limit) == (
+        3,
+        576,
+        512,
+    )
+    (entry,) = d.entries
+    assert entry.handler == 4294967296 and entry.slots == (7,)
+    assert (
+        entry.codec == definitions.Codec.FlushConfiguration
+        and entry.firmware_kind == 19
+    )
+    assert (
+        isinstance(entry.enabled_modes, definitions.ModeAvailability.Modes)
+        and entry.enabled_modes.modes == modes
+    )
+    assert isinstance(entry.transition, definitions.ModeTransition.Keep)
+    assert d.select(153, modes).code == 153
+    assert d.select(153, definitions.ServiceModes(1)) is None
+    unreviewed = definition([(153, "flush_configuration", [7], None)])
+    assert isinstance(
+        unreviewed.entries[0].enabled_modes, definitions.ModeAvailability.Unreviewed
+    )
+    assert unreviewed.select(153, modes) is None
+    assert isinstance(
+        failure(
+            defs.DefinitionError, lambda: definition(expected_id="another-body")
+        ).reason,
+        defs.DefinitionFailure.FirmwareMismatch,
+    )
+    assert isinstance(
+        failure(
+            defs.DefinitionError, lambda: defs.FirmwareIdentity("wrong", "é" * 32)
+        ).reason,
+        defs.DefinitionFailure.InvalidDigest,
+    )
+    assert isinstance(
+        failure(defs.DefinitionError, lambda: definitions.ServiceModes(0)).reason,
+        defs.DefinitionFailure.EmptyModes,
+    )
+    assert isinstance(
+        failure(app80.CommandError, lambda: app80.PinBank(16)).reason,
+        app80.CommandFailure.Argument,
+    )
+    assert (
+        failure(app80.CommandError, lambda: app80.WordAddress(3)).reason.kind
+        == app80.ArgumentKind.WordAlignment
+    )
+    failure(TypeError, lambda: app80.Command())
+    failure(TypeError, lambda: app80.Command.ReadPins(bank=0))
+    failure(
+        TypeError, lambda: app80.ProfileAction.Read(bank=0, index=app80.ProfileIndex(0))
+    )
+    failure(TypeError, lambda: app80.Command.ProfileByte(action="read"))
+    assert app80.ProfileBank.First != 0 and app80.ProfileBank.First != "First"
+
+    C, P = app80.Command, app80.ProfileAction
+    cases = [
+        (
+            "write_pins",
+            C.WritePins(bank=app80.PinBank(2), levels=0x1234, exclude=0x5678),
+            [2, 0x12, 0x34, 0x56, 0x78],
+        ),
+        ("read_pins", C.ReadPins(bank=app80.PinBank(2)), [2, 0, 0]),
+        ("read_channel", C.ReadChannel(channel=30), [30, 0, 0]),
+        ("write_channel", C.WriteChannel(channel=30, value=0x1234), [30, 0x12, 0x34]),
+        (
+            "profile_byte",
+            C.ProfileByte(
+                action=P.Read(bank=app80.ProfileBank.First, index=app80.ProfileIndex(3))
+            ),
+            [1, 3, 0],
+        ),
+        (
+            "profile_byte",
+            C.ProfileByte(
+                action=P.Write(
+                    bank=app80.ProfileBank.Second, index=app80.ProfileIndex(4), value=37
+                )
+            ),
+            [4, 4, 37],
+        ),
+        ("profile_byte", C.ProfileByte(action=P.Reset()), [5, 0, 0]),
+        ("download_status", C.DownloadStatus(), [0]),
+        ("copy_configuration", C.CopyConfiguration(page=9), [9]),
+        ("flush_configuration", C.FlushConfiguration(), [255]),
+        (
+            "memory_word",
+            C.ReadWord(address=app80.WordAddress(0x40001000)),
+            [0, 0, 0x40, 0, 0x10, 0, 0, 0, 0, 0],
+        ),
+        (
+            "memory_word",
+            C.WriteWord(address=app80.WordAddress(0x40001000), value=0x12345678),
+            [1, 0, 0x40, 0, 0x10, 0, 0x12, 0x34, 0x56, 0x78],
+        ),
+    ]
+    for codec, command, expected in cases:
+        assert isinstance(command, C)
+        slots = [(i * 3 + 7) % 32 for i in range(len(expected))]
+        invocation = app80.Service(definition([(153, codec, slots, 4)])).prepare(
+            modes, command
+        )
+        assert invocation.raw[0] == 153
+        assert [invocation.raw[1 + s] for s in slots] == expected
+        assert invocation.configuration_limit == 512
+        if command.__match_args__:
+            failure(
+                AttributeError, lambda: setattr(command, command.__match_args__[0], 0)
+            )
+
+    def decode(codec, command, slots, changes):
+        invocation = app80.Service(definition([(153, codec, slots, 4)])).prepare(
+            modes, command
+        )
+        raw = bytearray(invocation.raw)
+        for position, byte in changes.items():
+            raw[1 + slots[position]] = byte
+        reply = invocation.decode(raw)
+        assert reply.raw == raw
+        assert isinstance(reply.value, app80.ReplyValue)
+        return reply.value
+
+    value = decode(
+        "read_pins", C.ReadPins(bank=app80.PinBank(0)), [7, 9, 3], {1: 0x12, 2: 0x34}
+    )
+    assert isinstance(value, app80.ReplyValue.Pins) and value.levels == 0x1234
+    value = decode(
+        "read_channel", C.ReadChannel(channel=30), [7, 9, 3], {1: 0x12, 2: 0x34}
+    )
+    assert isinstance(value, app80.ReplyValue.Channel) and value.value == 0x1234
+    value = decode(
+        "profile_byte",
+        C.ProfileByte(
+            action=P.Read(bank=app80.ProfileBank.First, index=app80.ProfileIndex(0))
+        ),
+        [7, 9, 3],
+        {2: 57},
+    )
+    assert isinstance(value, app80.ReplyValue.ProfileByte) and value.value == 57
+    value = decode("download_status", C.DownloadStatus(), [7], {0: 1})
+    assert isinstance(value, app80.ReplyValue.DownloadStatus) and value.raw_status == 1
+    assert isinstance(
+        decode("copy_configuration", C.CopyConfiguration(page=1), [7], {}),
+        app80.ReplyValue.NoPayload,
+    )
+    slots = list(range(10))
+    read, write = (
+        C.ReadWord(address=app80.WordAddress(0x40001000)),
+        C.WriteWord(address=app80.WordAddress(0x40001000), value=1),
+    )
+    value = decode(
+        "memory_word", read, slots, {1: 1, 6: 0x12, 7: 0x34, 8: 0x56, 9: 0x78}
+    )
+    assert (
+        isinstance(value.result, app80.WordReadResult.Value)
+        and value.result.value == 0x12345678
+    )
+    assert isinstance(
+        decode("memory_word", read, slots, {1: 0}).result, app80.WordReadResult.Rejected
+    )
+    assert decode("memory_word", read, slots, {1: 42}).result.raw_status == 42
+    assert isinstance(
+        decode("memory_word", write, slots, {1: 1}).result,
+        app80.WordWriteResult.Confirmed,
+    )
+    assert isinstance(
+        decode("memory_word", write, slots, {1: 0}).result,
+        app80.WordWriteResult.Rejected,
+    )
+    assert decode("memory_word", write, slots, {1: 42}).result.raw_status == 42
+    service = app80.Service(d)
+    invocation = service.prepare(modes, C.FlushConfiguration())
+    assert isinstance(
+        invocation.decode(invocation.raw).value.status, app80.SaveStatus.Unknown
+    )
+    assert invocation.decode(invocation.raw).value.status.raw_status == 255
+    research = service.prepare_research(app80.CommandCode(153), modes, b"")
+    assert isinstance(research.decode(bytes(33)).value, app80.ReplyValue.Research)
+    failure(usb.ProtocolError, lambda: invocation.decode(bytes(33)))
+    failure(TypeError, lambda: service.prepare(4, C.FlushConfiguration()))
+    failure(TypeError, lambda: service.prepare(modes, "save"))
+    assert isinstance(
+        failure(
+            app80.CommandError,
+            lambda: service.prepare(
+                definitions.ServiceModes(1), C.FlushConfiguration()
+            ),
+        ).reason,
+        app80.CommandFailure.Unsupported,
+    )
+    assert isinstance(
+        failure(
+            app80.CommandError,
+            lambda: service.prepare_research(
+                app80.CommandCode(153), definitions.ServiceModes(1), b""
+            ),
+        ).reason,
+        app80.CommandFailure.Unavailable,
+    )
+    assert isinstance(
+        failure(
+            app80.CommandError,
+            lambda: service.prepare_research(app80.CommandCode(153), modes, bytes(33)),
+        ).reason,
+        app80.CommandFailure.OversizeArguments,
+    )
+    ambiguous = app80.Service(
+        definition(
+            [(153, "flush_configuration", [7], 4), (154, "flush_configuration", [7], 4)]
+        )
+    )
+    assert isinstance(
+        failure(
+            app80.CommandError, lambda: ambiguous.prepare(modes, C.FlushConfiguration())
+        ).reason,
+        app80.CommandFailure.Ambiguous,
+    )
+
+    state.hangControl = None
+    device = (await usb.discover(usb.DeviceFilter.Diagnostic))[0]
+    interface = (await usb.interfaces(device))[0]
+    limits = usb.FirmwareLimits(
+        memory_read=256, memory_write=256, configuration=256, console=256
+    )
+    sessions = []
+    behavior = "failed"
+    published = 0
+    never = Promise.new(lambda resolve, reject: None)
+
+    def publish(page, address, raw):
+        nonlocal published
+        if page == 3 and address == 576:
+            published += 1
+            assert raw[0] == 153 and raw[8] == 255
+            if behavior == "foreign":
+                state.configuration.set("3:576", 0)
+            elif behavior == "pending":
+                return never
+            else:
+                state.configuration.set("3:584", 1)
+
+    callback = create_proxy(publish)
+    state.onConfigurationWrite = callback
+    try:
+        s = await usb.Session.open(device, interface, limits)
+        sessions.append(s)
+        reply = await app80.execute(s, invocation)
+        assert isinstance(reply.value.status, app80.SaveStatus.Failed)
+        assert s.state == usb.SessionState.Ready and published == 1
+        await s.close()
+        behavior = "foreign"
+        s = await usb.Session.open(device, interface, limits)
+        sessions.append(s)
+        try:
+            await app80.execute(s, invocation)
+        except usb.ProtocolError:
+            pass
+        else:
+            raise AssertionError("foreign nested reply accepted")
+        assert s.state == usb.SessionState.CompletionUnknown
+        s.abandon()
+        behavior = "pending"
+        s = await usb.Session.open(device, interface, limits)
+        sessions.append(s)
+        task = asyncio.create_task(app80.execute(s, invocation))
+
+        async def wait_for_publication():
+            while published < 3:
+                await asyncio.sleep(0)
+
+        await asyncio.wait_for(wait_for_publication(), 2)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        else:
+            raise AssertionError("service publication cancellation did not propagate")
+        assert s.state == usb.SessionState.CompletionUnknown
+        s.abandon()
+    finally:
+        state.onConfigurationWrite = None
+        callback.destroy()
+        for session in sessions:
+            if session.state not in (
+                usb.SessionState.Closed,
+                usb.SessionState.Abandoned,
+            ):
+                session.abandon()
     return True

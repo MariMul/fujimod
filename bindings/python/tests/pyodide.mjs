@@ -19,5 +19,5 @@ try{
  await py.runPythonAsync(`import micropip;await micropip.install(${JSON.stringify("emfs:/"+manifest.wheel)})`);
  const result=await py.runPythonAsync((await readFile(new URL('./webusb_contract.py',import.meta.url),'utf8'))+'\nawait run()');
  assert.equal(result,true);
- console.log('PASS Pyodide production WebUSB: Python namespace, discovery, explicit interface, bytes, enums, raw replies, upload, tracing, cancellation and completion fencing (mock USB)');
+ console.log('PASS Pyodide production WebUSB: shared definitions, typed service variants/errors, USB commands, buffers, tracing, cancellation and completion fencing (mock USB)');
 }catch(error){console.error(String(error));process.exitCode=1;}finally{fixture.restore();}

@@ -66,6 +66,20 @@ compiled Rust and the real nusb backend against fake WebUSB devices. Tests
 cover buffers, enums, uploads, iterator ownership, structured failures, tracing,
 timeouts and cancellation. No test contacts hardware or validates permission UI.
 
+The wheel also exposes shared firmware definitions as `fujimod.defs` and typed
+service controls as `fujimod.usb.app80`, using the
+[same Python interface](README.md#firmware-selected-service-controls) as native
+builds. `registerPyodide` registers both namespaces. JSON validation, ordered
+command selection, encoding, reply interpretation and I/O all execute in Rust.
+The Python adapter supplies frozen payload-enum variants and copied buffers.
+Definition and command-selection exceptions retain typed `.reason` values.
+
+The end-to-end contract exercises every supported service command/result variant,
+nondefault command codes and argument layouts, unreviewed definitions, explicit
+identity mismatches and unknown result bytes. It then executes a typed service
+request through nusb/WebUSB, checks a malformed nested reply, and cancels during
+publication. Both failures leave session completion unknown and issue no close.
+
 ## Same-memory extension experiment
 
 The native PyO3 extension does not compile unchanged for WebUSB: its async

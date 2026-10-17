@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from . import CommandStatus
-from ._bridge import (
+from .._bridge import (
     Handle,
     jsusb,
     uint,

@@ -1,7 +1,7 @@
 """Nested App80 wire types and the Rust mailbox composition."""
 
+from .._bridge import Handle, buffer_in, buffer_out, call, jsusb, uint, unwrap
 from . import Session
-from ._bridge import Handle, jsusb, uint, unwrap, buffer_in, buffer_out, call
 
 
 class CommandCode(Handle):
@@ -41,3 +41,49 @@ async def exchange(session, mailbox, request):
         unwrap(request, Request),
         decode=buffer_out,
     )
+
+
+# The catalogue uses CommandCode; finish the wire types before importing it.
+from ._catalogue import (  # noqa: E402
+    ArgumentKind,
+    Command,
+    CommandError,
+    CommandFailure,
+    CommandReply,
+    Invocation,
+    PinBank,
+    ProfileAction,
+    ProfileBank,
+    ProfileIndex,
+    ReplyValue,
+    SaveStatus,
+    Service,
+    WordAddress,
+    WordReadResult,
+    WordWriteResult,
+    execute,
+)
+
+__all__ = [
+    "CommandCode",
+    "Request",
+    "Mailbox",
+    "exchange",
+    "CommandError",
+    "CommandFailure",
+    "ArgumentKind",
+    "PinBank",
+    "ProfileIndex",
+    "WordAddress",
+    "ProfileBank",
+    "ProfileAction",
+    "Command",
+    "SaveStatus",
+    "WordReadResult",
+    "WordWriteResult",
+    "ReplyValue",
+    "CommandReply",
+    "Invocation",
+    "Service",
+    "execute",
+]
