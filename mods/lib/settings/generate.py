@@ -8,13 +8,19 @@ limits are documented in README.md before these parsers replace live settings.
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 
 
 COMPONENT = Path(__file__).resolve().parent
-UPSTREAM = COMPONENT / 'upstream'
+REPOSITORY = COMPONENT.parents[2]
+UPSTREAM = REPOSITORY / 'repos/json-schema-to-c'
+FIXTURE = COMPONENT / 'tests/section.schema.json'
+COMMITTED = COMPONENT / 'tests/generated'
+ARTIFACTS = ('section.c', 'section.h', 'generation.json')
 GENERATOR_REVISION = '570075656a080a6756add4dc209d8f8d5ed4c0da'
 JSMN_REVISION = '85695f3d5903b1cd5b4030efe50db3b4f5f3c928'
 
@@ -38,6 +44,8 @@ def checked_revision(directory, expected):
 
 def generate(schema, output, *, authorized_paths=()):
     """Generate section.c/.h and provenance into the caller's build directory."""
+    if sys.version_info < (3, 10):
+        raise GenerationError('Upstream generation requires Python 3.10 or newer')
     checked_revision(UPSTREAM, GENERATOR_REVISION)
     checked_revision(UPSTREAM / 'jsmn', JSMN_REVISION)
     schema, output = Path(schema).resolve(), Path(output).resolve()
@@ -66,22 +74,43 @@ print(json.dumps({p: hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() fo
     inputs = subprocess.check_output(
         [sys.executable, '-c', inventory, str(schema), *map(str, authorized_paths)],
         cwd=UPSTREAM, text=True)
+    # Relative names keep the committed provenance identical across checkouts.
+    # External schema roots are explicit; record names relative to the root
+    # schema too, rather than leaking a developer's absolute checkout path.
+    schema_hashes = {Path(os.path.relpath(path, schema.parent)).as_posix(): digest
+                     for path, digest in json.loads(inputs).items()}
     metadata = dict(generator_revision=GENERATOR_REVISION, jsmn_revision=JSMN_REVISION,
-                    schemas=json.loads(inputs), outputs={
+                    schemas=schema_hashes, outputs={
                         name: hashlib.sha256((output / name).read_bytes()).hexdigest()
                         for name in ('section.c', 'section.h')})
     (output / 'generation.json').write_text(json.dumps(metadata, indent=2)+'\n')
     return metadata
 
 
+def check_generated(schema, committed, *, authorized_paths=()):
+    """Regenerate without rewriting checked-in output; reject any byte drift."""
+    committed = Path(committed)
+    with tempfile.TemporaryDirectory(prefix='fujimod-settings-codegen-') as temporary:
+        regenerated = Path(temporary)
+        generate(schema, regenerated, authorized_paths=authorized_paths)
+        different = [name for name in ARTIFACTS
+                     if not (committed / name).is_file()
+                     or (committed / name).read_bytes() != (regenerated / name).read_bytes()]
+        if different:
+            raise GenerationError('Generated files are stale or missing: ' + ', '.join(different))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('schema', type=Path)
-    parser.add_argument('--out', required=True, type=Path)
+    parser.add_argument('schema', nargs='?', default=FIXTURE, type=Path)
+    parser.add_argument('--out', default=COMMITTED, type=Path)
+    parser.add_argument('--check', action='store_true',
+                        help='Compare regenerated output with --out; never rewrite it')
     parser.add_argument('--authorized-path', action='append', default=[], type=Path)
     args = parser.parse_args()
     try:
-        generate(args.schema, args.out, authorized_paths=args.authorized_path)
+        operation = check_generated if args.check else generate
+        operation(args.schema, args.out, authorized_paths=args.authorized_path)
     except (GenerationError, OSError) as error:
         parser.exit(1, f'{error}\n')
 

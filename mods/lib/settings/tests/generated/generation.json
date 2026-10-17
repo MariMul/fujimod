@@ -1,0 +1,11 @@
+{
+  "generator_revision": "570075656a080a6756add4dc209d8f8d5ed4c0da",
+  "jsmn_revision": "85695f3d5903b1cd5b4030efe50db3b4f5f3c928",
+  "schemas": {
+    "section.schema.json": "83973a1edf163bc5ab7073e20e20a8041fd5c9dec82bcc84ba3da1e3f08b4e06"
+  },
+  "outputs": {
+    "section.c": "565085c00b666d8ffe3aa289b723be49635344a891d38f2bffd3e0780e67005e",
+    "section.h": "fc37d3569daa3b4e526bcca9f2529511defb83d8f5d3419bf5ba94b7cd3ed53a"
+  }
+}

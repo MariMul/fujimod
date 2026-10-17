@@ -10,26 +10,50 @@ migrated and no compatibility layer was added.
 
 ## Build integration
 
-From the FujiMod repository root:
+Generated C, headers and their provenance are checked in under
+`tests/generated/`. They currently describe the qualification fixture only.
+Ordinary host tests compile those files, without running Python codegen or
+initializing any submodules:
 
 ```sh
-git submodule update --init --recursive -- mods/lib/settings/upstream
-python3 mods/lib/settings/generate.py mods/lib/settings/tests/section.schema.json \
-  --out mods/lib/settings/build/example
 python3 -m unittest discover -s mods/lib/settings/tests -v
 python3 mods/lib/settings/qualify.py
 ```
 
 The final command currently exits 1: it is the adoption gate, not a smoke
-test that treats known defects as acceptable behavior. All generated C,
-headers, host executables and reports stay in ignored `build/` directories.
+test that treats known defects as acceptable behavior. Host executables and
+qualification reports stay in ignored `build/` directories.
+
+Only schema/codegen changes and regeneration verification need the generator
+checkout and Python 3.10 or newer. From the FujiMod repository root:
+
+```sh
+git submodule update --init --recursive -- repos/json-schema-to-c
+python3 mods/lib/settings/generate.py
+python3 mods/lib/settings/generate.py --check
+```
+
+The default commands update/check all three committed fixture artifacts:
+`section.c`, `section.h` and `generation.json`. To generate another schema,
+pass its path and an explicit `--out` directory. `--check` regenerates into
+a temporary directory, compares every artifact byte for byte and exits
+nonzero for missing or different output. It never rewrites committed files.
+
+The [settings CI workflow](../../../.github/workflows/settings.yml) runs two
+independent jobs: compile/test committed C with submodules disabled, and
+initialize the pinned generator and check for generation drift. This is a
+reproducibility check; it does not certify the parser for production use.
 
 `generate.py` invokes upstream unchanged. It checks both dependency revisions
 and refuses modified dependency checkouts. It records generator/tokenizer
 revisions, hashes of every loaded schema and hashes of the generated `.c/.h`
-in `generation.json`. Local schema references work; additional authorized
+in `generation.json`. Schema paths are relative to the input schema's
+directory, so provenance is independent of checkout location. Local schema
+references work; additional authorized
 schema roots are explicit `--authorized-path` arguments. Python's standard
-library is sufficient. The generator and generated runtime retain their
+library is sufficient. Third-party code lives in `repos/json-schema-to-c`,
+outside this component; its nested jsmn checkout belongs to upstream.
+The generator and generated runtime retain their
 upstream MIT licenses; jsmn has its own MIT notice in the dependency.
 
 Pinned inputs:
@@ -53,7 +77,9 @@ behavior sanitizers. They establish:
 - Bad known-field values, unknown fields and duplicate known fields fail.
 - A caller-owned candidate can be published with a struct copy. Overwriting
   the JSON input after parsing does not change its copied strings.
-- Generation is reproducible for the same schema and dependency revisions.
+
+The separate regeneration check establishes reproducibility for the same
+schema and dependency revisions; ordinary tests do not invoke the generator.
 
 The negative qualification checks found these **adoption blockers**:
 
@@ -105,11 +131,9 @@ not individual heap allocations. No pointer into the input is retained for
 ordinary string fields. Upstream's optional `raw` reference representation is
 not suitable for a live setting after the input buffer is reused.
 
-JSON Schema is the source of definitions, not a document interpreted on the
-camera. Build-time per-mod section schemas will compose the shared SETTINGS
-file, while AF remains its own experimental file. Recipes and films will
-share processor-override rules. Stock settings and stock Q/Fn assignments
-remain in stock persistence; only custom-feature overrides belong in SETTINGS.
+See [framework design and implementation status](DESIGN.md) for section
+composition, error handling and serialization. None of those framework
+pieces is implemented by this qualification fixture.
 
 Before live adoption: fix/requalify the parser issues, supply serialization
 and the freestanding numeric dependencies, then integrate section registration,

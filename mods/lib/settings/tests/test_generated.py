@@ -1,9 +1,8 @@
-"""Exercise the actual generated C under ASan/UBSan, without a camera.
+"""Exercise committed generated C under ASan/UBSan, without generator checkouts.
 
 Known upstream failures are measured explicitly and reported as adoption
 blockers, not treated as acceptable settings semantics. See qualification().
 """
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -13,21 +12,19 @@ import unittest
 
 
 COMPONENT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('settings_codegen', COMPONENT / 'generate.py')
-codegen = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(codegen)
 BUILD = COMPONENT / 'build/tests'
+GENERATED = COMPONENT / 'tests/generated'
 
 
 def compile_driver():
     cc = os.environ.get('CC') or shutil.which('cc')
     if not cc:
         raise RuntimeError('A host C compiler is required')
-    codegen.generate(COMPONENT / 'tests/section.schema.json', BUILD)
+    BUILD.mkdir(parents=True, exist_ok=True)
     executable = BUILD / 'section-driver'
     subprocess.run([cc, '-std=c11', '-Wall', '-Wextra', '-Werror',
                     '-Wno-unused-function', '-fsanitize=address,undefined',
-                    '-I', str(BUILD), str(BUILD / 'section.c'),
+                    '-I', str(GENERATED), str(GENERATED / 'section.c'),
                     str(COMPONENT / 'tests/driver.c'), '-o', str(executable)], check=True)
     return executable
 
@@ -102,12 +99,6 @@ class GeneratedSettingsTests(unittest.TestCase):
     @unittest.expectedFailure
     def test_reject_trailing_document(self):
         self.assertEqual(run(self.executable, '{} {}')[0], 'error')
-
-    def test_generation_is_reproducible(self):
-        first = (BUILD / 'section.c').read_bytes(), (BUILD / 'section.h').read_bytes()
-        codegen.generate(COMPONENT / 'tests/section.schema.json', BUILD)
-        self.assertEqual(first, ((BUILD / 'section.c').read_bytes(), (BUILD / 'section.h').read_bytes()))
-
 
 if __name__ == '__main__':
     unittest.main()

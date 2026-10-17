@@ -3,7 +3,7 @@
 import json
 import sys
 
-from tests.test_codegen import BUILD, compile_driver, qualification
+from tests.test_generated import BUILD, compile_driver, qualification
 
 
 def main():
