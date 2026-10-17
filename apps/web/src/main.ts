@@ -291,6 +291,7 @@ function reset() {
   panel.clear();
   card.connect();
   connections.update([]);
+  viewer.setSceneConsumer();
   engine?.dispose();
   engine = undefined;
   patchWorker?.terminate();
@@ -411,6 +412,7 @@ async function processFile(file?: File, restart = false, preparedBytes?: ArrayBu
     if (preparedEngine && preparedEngine.value !== active) preparedEngine.value.dispose();
     preparedEngine = undefined;
     engine = active;
+    if (entry.emulate.boot.sceneInput) viewer.setSceneConsumer(scene => active.setScene(scene));
     active.metrics((metrics) => {
       if (current !== generation) return;
       window.cameraPerformance = metrics;

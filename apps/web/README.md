@@ -38,7 +38,7 @@ Chromium, plus the unsupported-browser state in WebKit. It never opens hardware.
 
 ## Camera viewer
 
-The TypeScript web app uses SolidJS 2 for new UI and three.js for the camera viewer.
+The TypeScript web app uses SolidJS 2 for new UI and Bevy 0.20.0 (Rust/Wasm/WebGPU) for the camera viewer.
 Vite Plus provides the development server, builds, Oxlint, Oxfmt and Vitest.
 The existing imperative UI will move to Solid components incrementally. Drop a
 DAT anywhere on the viewer, or choose it there. The whole-file SHA-256 selects
@@ -63,8 +63,9 @@ only an arrow, with a separate accessible name. Panel faces and captions describ
 the printed arrangement of the controls.
 The catalog selects the shared Pyodide engine and supplies its Python boot
 protocol. Device directories contain model, panel and initial-position data;
-adding a body does not add conditionals to the worker or viewer. `src/viewer/model.ts` ports LCD UV mapping,
-picking, orbiting and LCD projection from the research viewer. The panel is
+adding a body does not add conditionals to the worker or viewer. `src/viewer/model.ts` translates browser input and projects DOM overlays;
+`crates/simulation` owns glTF loading, LCD UV mapping, picking, orbiting and
+physical/observer camera poses. The panel is
 rendered from body data by shared dial, key, shutter and segmented controls.
 The SD tree shows actual FAT files, offers downloads and format, and retains
 media through power cycles. Generated patch files seed the initial card.
@@ -90,8 +91,8 @@ the glTF itself is unchanged. The page repeats attribution when loaded.
 Model taps show the selected button name and a marker that remains briefly after
 release. Touch picking accepts nearby visible buttons while preserving direct
 LCD contacts; the four-way selector marks one direction without lighting its
-entire shared mesh. `tests/model_touch.py` checks real WebKit touch delivery on
-the model against a Vite development server, without a DAT or emulator runtime.
+entire shared mesh. `tests/simulation_browser.py` checks the real Bevy viewer and firmware runtime,
+including movement, inspection and model control picking.
 
 X-M1 1.50 uses the same Wasm runtime with its checked REC graph, native LCD
 and calibrated menu/sub-command controls. It has no 3D model, host RGB scene,
@@ -356,3 +357,6 @@ The embedded-browser regression test replaces only GitHub navigation and makes
 python tests/feedback.py --url 'https://your-host.ts.net:port/?scenario=x70-movie' \
   --output build/fresh-feedback-proof
 ```
+
+See [the simulation crate](../../crates/simulation/README.md) for environment
+assets, native scenario rendering, input semantics and the current runtime boundary.

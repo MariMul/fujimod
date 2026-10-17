@@ -40,6 +40,7 @@ export class InputPanel {
       this.renders.get(id)?.();
       return fraction;
     };
+    viewer.onPointerEnd = pointer => this.release(pointer);
     viewer.onPointerDown = (hit, event) => this.modelDown(hit, event);
     viewer.onHover = (id) => this.feedback(id ? [id] : []);
     window.addEventListener("pointerup", (event) =>
@@ -694,7 +695,7 @@ export class InputPanel {
     event.preventDefault();
     event.stopPropagation();
     this.viewer.setOrbit(false);
-    this.viewer.renderer.domElement.setPointerCapture(event.pointerId);
+    if (this.viewer.isPointerHeld(event.pointerId)) this.viewer.canvas.setPointerCapture(event.pointerId);
     if (input.positions?.length) this.step(hit.id, 1);
     else
       this.press(

@@ -8,6 +8,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./simulation": {
+      "types": "./pkg/simulation/fujimod_simulation.d.ts",
+      "import": "./pkg/simulation/fujimod_simulation.js"
     }
   },
   "files": [

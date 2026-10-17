@@ -26,7 +26,7 @@ export class RotaryDrag {
   setEnabled(enabled: boolean) { this.enabled = enabled; if (!enabled) this.cancel(); }
   private consume(event: PointerEvent) { event.preventDefault(); event.stopImmediatePropagation(); }
 
-  /** Called in capture, before OrbitControls sees the down event. */
+  /** A picked dial captures the pointer before an orbit gesture begins. */
   begin(event: PointerEvent, gesture?: RotaryGesture): boolean {
     if (this.active) {
       // A second finger cannot transfer a dial gesture into a pinch/orbit.
