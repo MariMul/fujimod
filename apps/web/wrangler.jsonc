@@ -1,0 +1,15 @@
+{
+  "$schema": "../usb-sharing/node_modules/wrangler/config-schema.json",
+  "name": "fujimod-web",
+  "account_id": "1edee8e500839ee3dbf7338f44503075",
+  "compatibility_date": "2026-10-17",
+  "workers_dev": false,
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "404-page"
+  },
+  "routes": [
+    { "pattern": "fujimod.com", "custom_domain": true },
+    { "pattern": "www.fujimod.com", "custom_domain": true }
+  ]
+}

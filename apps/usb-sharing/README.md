@@ -1,8 +1,9 @@
 # USB sharing Worker
 
 Production rendezvous and temporary Cloudflare TURN credentials for the static
-[web application](../web/README.md). The app stays on GitHub Pages. No development
-server, DNS migration or custom domain is required in production.
+[web application](../web/README.md). Cloudflare serves the static app at
+`https://fujimod.com` and this Worker at `https://share.fujimod.com`.
+See the [hosting configuration](../web/DEPLOYMENT.md).
 
 Each share room is a hibernating SQLite Durable Object. It routes opaque,
 authenticated-encrypted SDP and assigns controller IDs. USB requests and payloads
@@ -24,17 +25,15 @@ npm run check
 npm run deploy
 ```
 
-Wrangler prints the actual `https://fujimod-usb-sharing.<account>.workers.dev`
-address. Set the GitHub repository variable `FUJIMOD_SIGNAL_URL` to its
-`wss://fujimod-usb-sharing.<account>.workers.dev/usb-proxy/signal` URL. The Pages
-release workflow passes this public URL to the static build. Rebuild/release
-Pages after changing it; no secret is included in the app. Production builds
-without a configured service disable Share. Local development and local-preview
+The production endpoint is `wss://share.fujimod.com/usb-proxy/signal`.
+The Cloudflare release workflow passes this public URL to the static build.
+Rebuild/release the site after changing it; no secret is included in the app.
+Production builds without a configured service disable Share. Local development and local-preview
 builds continue to use the existing local Rust signaling service by default.
 
 Set `ALLOWED_ORIGINS` in `wrangler.jsonc` to the app's exact HTTPS origin(s),
-comma-separated. The initial origin is `https://justjake.github.io`; a Pages
-project's `/fujimod/` path is not part of its origin. Native controllers send no
+comma-separated. Production allows `https://fujimod.com` and
+`https://www.fujimod.com`. Native controllers send no
 Origin and are accepted. Origin filtering is browser policy, not authentication.
 Room IDs and the URL fragment's separate encryption key remain the share
 capability; the Worker never receives that encryption key.
@@ -49,7 +48,7 @@ npx wrangler secret put TURN_KEY_ID
 npx wrangler secret put TURN_API_TOKEN
 ```
 
-Do not put either value in Git, GitHub Pages variables, browser code, or share
+Do not put either value in Git, static build variables, browser code, or share
 URLs. The Worker calls the Cloudflare credentials API once per room and sends
 only the resulting temporary `iceServers` credentials to its connected peers.
 Both secrets absent means STUN-only; partial configuration and issuance failures

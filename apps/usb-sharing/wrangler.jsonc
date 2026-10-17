@@ -1,9 +1,11 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "fujimod-usb-sharing",
+  "account_id": "1edee8e500839ee3dbf7338f44503075",
   "main": "worker.mjs",
   "compatibility_date": "2026-10-17",
-  "workers_dev": true,
+  "workers_dev": false,
+  "routes": [{ "pattern": "share.fujimod.com", "custom_domain": true }],
   "observability": { "enabled": false },
   "durable_objects": {
     "bindings": [
@@ -16,7 +18,7 @@
     { "name": "CONNECTIONS", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },
   ],
   "vars": {
-    "ALLOWED_ORIGINS": "https://justjake.github.io",
+    "ALLOWED_ORIGINS": "https://fujimod.com,https://www.fujimod.com",
     "TURN_TTL_SECONDS": "86400",
     "TURN_DAILY_ISSUE_LIMIT": "50",
   },

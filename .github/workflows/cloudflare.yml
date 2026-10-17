@@ -1,4 +1,4 @@
-name: Publish Fujimod
+name: Publish Fujimod to Cloudflare
 on:
   release:
     types: [published]
@@ -10,10 +10,8 @@ on:
         type: string
 permissions:
   contents: read
-  pages: write
-  id-token: write
 concurrency:
-  group: pages
+  group: cloudflare-production
   cancel-in-progress: true
 jobs:
   deploy:
@@ -24,8 +22,8 @@ jobs:
     if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'release' && github.event.release.target_commitish == 'main')
     runs-on: ubuntu-latest
     environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      name: cloudflare-production
+      url: https://fujimod.com
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,11 +53,12 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
       - run: npm run build
         env:
-          FUJIMOD_SIGNAL_URL: ${{ vars.FUJIMOD_SIGNAL_URL }}
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+          FUJIMOD_SIGNAL_URL: wss://share.fujimod.com/usb-proxy/signal
+      - name: Deploy static site to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
         with:
-          path: apps/web/dist
-      - name: Deploy Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 1edee8e500839ee3dbf7338f44503075
+          workingDirectory: apps/web
+          wranglerVersion: '4.151.1'
+          command: deploy
