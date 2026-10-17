@@ -127,3 +127,8 @@ Mode and piece size are required inputs. The operation sends data unchanged,
 without padding, readback, retries or destination-buffer policy. A refused setup
 is a structured `DeviceCommandError`; a failed exchange fences the session.
 The final four bytes remain opaque and do not certify application completion.
+
+`session.prepare_capabilities()` returns immutable `usb.CapabilitiesReply`
+metadata with `byte_length` and `raw`. It does not download or parse the table.
+Call `read_data(0, byte_length)` separately when the length is nonzero and within
+the chosen host budget; interpret those bytes using the selected firmware.

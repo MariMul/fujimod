@@ -1,4 +1,5 @@
 use super::super::commands::{
+    capabilities::{self, CapabilitiesReply},
     configuration::{
         ConfigurationGeometry, ConfigurationView, ReadConfiguration, WriteConfiguration,
     },
@@ -9,6 +10,12 @@ use super::*;
 use crate::ff80::framing::data_envelope;
 
 impl Session {
+    /// Select capability data and report its size. No E1 or E8 is sent.
+    /// Decode the downloaded table using the selected firmware's definition.
+    pub async fn prepare_capabilities(&mut self) -> Result<CapabilitiesReply> {
+        self.core.prepare_capabilities().await
+    }
+
     pub async fn configuration_geometry(
         &mut self,
         view: ConfigurationView,
@@ -61,6 +68,11 @@ impl Session {
     }
 }
 impl<I: Io> Core<I> {
+    pub(super) async fn prepare_capabilities(&mut self) -> Result<CapabilitiesReply> {
+        self.command(capabilities::request(), 32, capabilities::decode)
+            .await
+    }
+
     pub(super) async fn configuration_geometry(
         &mut self,
         view: ConfigurationView,

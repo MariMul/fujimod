@@ -5,6 +5,7 @@ use fujimod_usb::{
     ff80::{
         self,
         commands::{
+            capabilities,
             configuration::{self, ConfigurationLocation, ReadConfiguration, WriteConfiguration},
             debug, diagnostic, info,
             memory::{Address, DebugMemoryLimits, MemoryRange, ReadMemory, WriteMemory},
@@ -305,6 +306,22 @@ impl LogReply {
     #[getter]
     fn data<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         PyBytes::new(py, &self.inner.data)
+    }
+}
+
+#[pyclass(frozen, module = "fujimod.usb")]
+struct CapabilitiesReply {
+    inner: capabilities::CapabilitiesReply,
+}
+#[pymethods]
+impl CapabilitiesReply {
+    #[getter]
+    fn byte_length(&self) -> u32 {
+        self.inner.byte_length
+    }
+    #[getter]
+    fn raw<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.inner.raw)
     }
 }
 
@@ -651,6 +668,10 @@ impl Session {
         self.with(py, |s| block_on(s.diagnostic_query(tag.inner)))
             .map(|inner| DiagnosticReply { inner })
     }
+    fn prepare_capabilities(&self, py: Python<'_>) -> PyResult<CapabilitiesReply> {
+        self.with(py, |s| block_on(s.prepare_capabilities()))
+            .map(|inner| CapabilitiesReply { inner })
+    }
     fn prepare_data_read(&self, py: Python<'_>, mode: DataReadMode) -> PyResult<DiagnosticReply> {
         self.with(py, |s| block_on(s.prepare_data_read(mode.into())))
             .map(|inner| DiagnosticReply { inner })
@@ -763,6 +784,7 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     usb.add_class::<InterfaceSelection>()?;
     usb.add_class::<Device>()?;
     usb.add_class::<DiagnosticReply>()?;
+    usb.add_class::<CapabilitiesReply>()?;
     usb.add_class::<DiagnosticTag>()?;
     usb.add_class::<LogReply>()?;
     usb.add_class::<ConsoleReply>()?;

@@ -1,4 +1,5 @@
 //! Direct, reverse-engineered firmware commands; no chunking or hidden polling.
+pub mod capabilities;
 pub mod configuration;
 pub mod debug;
 pub mod diagnostic;

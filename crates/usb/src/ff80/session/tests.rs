@@ -371,3 +371,59 @@ fn geometry_error_must_belong_to_requested_function_and_have_valid_header() {
         assert!(steps.borrow().is_empty());
     }
 }
+
+#[test]
+fn capabilities_selects_data_without_a_hidden_download() {
+    let mut request = vec![0; 36];
+    request[..4].copy_from_slice(&0x580000u32.to_le_bytes());
+    request[20..24].copy_from_slice(&0x100u32.to_le_bytes());
+    let mut reply = vec![0; 32];
+    reply[..4].copy_from_slice(&0x580000u32.to_le_bytes());
+    reply[20..24].copy_from_slice(&128u32.to_le_bytes());
+    let (mut core, steps) = opened(command_steps(request, 32, Ok(reply)));
+    let metadata = block_on(core.prepare_capabilities()).unwrap();
+    assert_eq!(metadata.byte_length, 128);
+    assert_eq!(core.state, SessionState::Ready);
+    assert!(steps.borrow().is_empty());
+}
+
+#[test]
+fn capabilities_error_and_bad_function_have_different_session_outcomes() {
+    use crate::ff80::commands::capabilities;
+    for function in [0u32, 1] {
+        let mut reply = vec![0; 32];
+        reply[..4].copy_from_slice(&0x580000u32.to_le_bytes());
+        reply[4..8].copy_from_slice(&1u32.to_le_bytes());
+        reply[8..12].copy_from_slice(&0xffffu32.to_le_bytes());
+        reply[16..20].copy_from_slice(&function.to_le_bytes());
+        let (mut core, steps) = opened(command_steps(capabilities::request(), 32, Ok(reply)));
+        let result = block_on(core.prepare_capabilities());
+        if function == 0 {
+            assert!(matches!(result, Err(Error::DeviceStatus { .. })));
+            assert_eq!(core.state, SessionState::Ready);
+        } else {
+            assert!(matches!(result, Err(Error::Protocol(_))));
+            assert_eq!(core.state, SessionState::CompletionUnknown);
+            assert!(matches!(
+                block_on(core.close()),
+                Err(Error::CompletionUnknown)
+            ));
+        }
+        assert!(steps.borrow().is_empty());
+    }
+}
+
+#[test]
+fn capabilities_checks_metadata_budget_before_sending() {
+    let (mut core, steps) = opened(vec![]);
+    core.max_reply_bytes = 31;
+    assert!(matches!(
+        block_on(core.prepare_capabilities()),
+        Err(Error::LengthLimit {
+            requested: 32,
+            limit: 31
+        })
+    ));
+    assert_eq!(core.state, SessionState::Ready);
+    assert!(steps.borrow().is_empty());
+}

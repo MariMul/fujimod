@@ -4,7 +4,7 @@ Async Rust access to Fujifilm's reverse-engineered ff80 service/debug interface.
 This first implementation provides nusb discovery and explicit interface
 selection, C0/C2/C4 session lifecycle, D0/D1 command exchanges, information
 selectors, configuration commands, debug events and console polling, log reads,
-diagnostic queries, E0/E1/E8 data transfers and composed memory and diagnostic-data range operations.
+diagnostic queries, capabilities metadata, E0/E1/E8 data transfers and composed memory and diagnostic-data range operations.
 
 `ff80/commands/` encodes one firmware request at a time. `operations/` composes
 commands. nusb handles platform USB access; its adapter has a private test seam.
@@ -121,3 +121,11 @@ records (or an oversized record whole) and reports exact loss counts with each
 batch; it never truncates payloads silently or changes USB outcomes. Recording
 calls no user code. File writing, trace-loss policy and GUI presentation belong
 to callers. With tracing disabled, transfer payloads are not copied for logging.
+
+`Session::prepare_capabilities()` sends one `0x580000` command and returns
+`CapabilitiesReply { byte_length, raw }`. A later E1 `read_data` retrieves the
+table; that read remains a separate action. Length comes from the firmware and
+is not fixed to one body's table size. The library preserves metadata fields
+without treating the table as host timeouts or inferring firmware-specific
+record meanings. A nonzero device status is a completed `DeviceStatus` error;
+a malformed header fences the session.
