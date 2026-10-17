@@ -278,3 +278,29 @@ does not establish success or a physical storage condition. `FormatStorage`
 formats the firmware-selected drive; `DisplaySetup` runs the firmware's display
 setup sequence. Both have no payload result. They neither supply nor imply a
 host cleanup/retry sequence.
+
+`NandReadBlocks { spare, block_group }` requests eight firmware NAND blocks
+beginning at `block_group * 8`. `NandSpare` selects whether spare bytes are
+included. The command populates the firmware's selected RAM buffer; it does not
+download it. `NandReadResult` keeps success, the shared rejection/wait-error
+code, other errors and unknown bytes separate from host completion.
+
+`WlanControl(Toggle)` requests the WLAN control line action. The studied enable
+path also increments a firmware counter, so repeating it is not an idempotent
+state assignment. `RadioAction::Primary` separates `RadioMode`, checked
+`RadioChannel` (0–14), checked `RadioPower` (0–127) and an option flag. The option
+occupies the high power-field bit. Firmware transforms the remaining power
+field in mode 1 and preserves the raw byte in mode 0; these are encoded values,
+not dBm. `Secondary` has only mode and channel. The firmware can shut down LAN
+or restart the driver internally, and ignores some lower-level return values;
+`NoPayload` does not certify that a radio setting took effect.
+
+`Option41` returns `Option41State` for the firmware getter's zero/nonzero result,
+not a drive-presence assertion. `SignalStrength(PeerAddress)` copies an exact
+six-byte address and returns an opaque `raw_value`; firmware state selects the
+peer or connected-station path. Some failure paths leave output unchanged or
+copy an uninitialized firmware byte, so this is not a validated signal
+measurement. `Iperf` uses the command text already stored in camera
+configuration. Its opaque `raw_result` may be observed before completion,
+because firmware signals the service result before running the test. Reading
+or waiting for a later result is an explicit higher-level operation.

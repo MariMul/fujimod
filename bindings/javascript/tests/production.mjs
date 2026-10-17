@@ -120,3 +120,26 @@ test('production audio/storage results and payload-free commands finish without 
     }
   }finally{fixture.restore();}
 });
+
+test('production radio and NAND results do not request host completion polling',async()=>{
+ const fixture=installWebUsb(),a=usb.app80;
+ try{
+  const [device]=await usb.discover(usb.DeviceFilter.Diagnostic),[iface]=await device.interfaces();
+  for(const [codec,count,command,index,byte,expected] of [
+   ['nand_read_blocks',3,a.Command.nandReadBlocks(a.NandSpare.Include,255),2,1,{kind:a.ReplyKind.NandRead,status:{kind:a.NandReadResultKind.RejectedOrWaitError}}],
+   ['option41',1,a.Command.option41(),0,1,{kind:a.ReplyKind.Option41,state:{kind:a.Option41StateKind.Zero}}],
+   ['wlan_control',1,a.Command.wlanControl(a.Toggle.Enabled),null,null,{kind:a.ReplyKind.NoPayload}],
+   ['radio_control',4,a.Command.radioControl(a.RadioAction.primary(a.RadioMode.Mode1,new a.RadioChannel(14),new a.RadioPower(12),a.Toggle.Enabled)),null,null,{kind:a.ReplyKind.NoPayload}],
+   ['signal_strength',7,a.Command.signalStrength(new a.PeerAddress(new Uint8Array(6))),6,255,{kind:a.ReplyKind.SignalStrength,rawValue:255}],
+   ['iperf',1,a.Command.iperf(),0,1,{kind:a.ReplyKind.Iperf,rawResult:1}],
+  ]){
+   const definition=defs.service.Definition.fromJson(JSON.stringify({schema:1,firmware:{id:'radio-b',model:'Synthetic',version:'2',sha256:'ab'.repeat(32)},mailbox:{page:3,offset:576,configuration_limit:512},entries:[{code:153,label:codec,codec,slots:Array.from({length:count},(_,n)=>n+7),enabled_modes:4,next_mode:0,firmware_kind:1,handler:0,parameter_table:0}]}),new defs.FirmwareIdentity('radio-b','ab'.repeat(32)));
+   const invocation=new a.Service(definition).prepare(new defs.service.ServiceModes(4),command);
+   fixture.state.onConfigurationWrite=(page,address,raw)=>{if(page===3&&address===576&&index!==null){assert.equal(raw[8+index],255);fixture.state.configuration.set(`3:${584+index}`,byte);}};
+   const before=fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length;
+   const session=await usb.Session.open(device,iface,new usb.FirmwareLimits(256,256,256,256),new usb.TransferOptions(100,1024));
+   assert.deepEqual((await a.execute(session,invocation)).value,expected);assert.equal(session.state,usb.SessionState.Ready);
+   assert.equal(fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length-before,3);await session.close();
+  }
+ }finally{fixture.restore();}
+});

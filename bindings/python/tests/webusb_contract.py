@@ -235,6 +235,7 @@ async def run():
     await check_service_catalogue()
     assert check_peripheral_values()
     assert check_media_values()
+    assert check_network_values()
     return True
 
 

@@ -4,7 +4,7 @@ export type { Session, Device, InfoReply, ConfigurationGeometry, DiagnosticReply
 export type { FirmwareIdentity, ServiceModes, ServiceDefinition, ServiceEntry, ServiceMailbox,
   ModeAvailability, ModeTransition, DefinitionFailure, CommandFailure, App80Command,
   ProfileAction, App80Invocation, App80CommandReply, App80ReplyValue, SaveStatus,
-  WordReadResult, WordWriteResult, RegisterAction, I2cLength, I2cPayload, I2cAction, DisplayOptionAction, SoundAction, HdmiAction, SoundClip, HdmiValue, HdmiPacket, ChargeAction, ChargeResult, ChargePresence, ReportedChargeState, AudioCount, AudioResult, StorageEraseResult, StorageStatus } from '../pkg/fujimod.js';
+  WordReadResult, WordWriteResult, RegisterAction, I2cLength, I2cPayload, I2cAction, DisplayOptionAction, SoundAction, HdmiAction, SoundClip, HdmiValue, HdmiPacket, ChargeAction, ChargeResult, ChargePresence, ReportedChargeState, AudioCount, AudioResult, StorageEraseResult, StorageStatus, RadioAction, RadioChannel, RadioPower, PeerAddress, NandReadResult, Option41State } from '../pkg/fujimod.js';
 
 class ChunkIterator implements AsyncIterableIterator<Uint8Array> {
   constructor(private readonly reader: native.RangeReader) {}
@@ -129,6 +129,9 @@ export const usb = Object.freeze({
       displayOption: native.App80Command.displayOption, displayMode: native.App80Command.displayMode,
       sound: native.App80Command.sound, hdmi: native.App80Command.hdmi, parameterService: native.App80Command.parameterService,
       chargeControl: native.App80Command.chargeControl, chargeStatus: native.App80Command.chargeStatus,
+      nandReadBlocks: native.App80Command.nandReadBlocks, option41: native.App80Command.option41,
+      wlanControl: native.App80Command.wlanControl, radioControl: native.App80Command.radioControl,
+      signalStrength: native.App80Command.signalStrength, iperf: native.App80Command.iperf,
       audioCapture: native.App80Command.audioCapture, audioPlayback: native.App80Command.audioPlayback,
       eraseStorage: native.App80Command.eraseStorage, storageStatus: native.App80Command.storageStatus,
       formatStorage: native.App80Command.formatStorage, displaySetup: native.App80Command.displaySetup,
@@ -149,6 +152,10 @@ export const usb = Object.freeze({
     HdmiValue: native.HdmiValue, HdmiPacket: native.HdmiPacket,
     HdmiAction: Object.freeze({resetStub: native.HdmiAction.resetStub, packet: native.HdmiAction.packet, triplet: native.HdmiAction.triplet}),
     ChargeAction: Object.freeze({control: native.ChargeAction.control, enableAndSetFlag: native.ChargeAction.enableAndSetFlag}),
+    NandSpare: native.NandSpare, NandReadResultKind: native.NandReadResultKind,
+    Option41StateKind: native.Option41StateKind, PeerAddress: native.PeerAddress,
+    RadioMode: native.RadioMode, RadioChannel: native.RadioChannel, RadioPower: native.RadioPower,
+    RadioAction: Object.freeze({primary:native.RadioAction.primary,secondary:native.RadioAction.secondary}),
     AudioCount: native.AudioCount, AudioRoute: native.AudioRoute, AudioPlayback: native.AudioPlayback,
     StorageErase: native.StorageErase, AudioResultKind: native.AudioResultKind,
     StorageEraseResultKind: native.StorageEraseResultKind, StorageStatusKind: native.StorageStatusKind,

@@ -391,3 +391,32 @@ test('audio and storage codecs retain checked quantities, result bytes and zero-
     assert.deepEqual(decode(p,'storage_status',0,raw),{kind:a.ReplyKind.StorageStatus,status:kind===a.StorageStatusKind.Unknown?{kind,rawStatus:raw}:{kind}});
   for(const command of [C.formatStorage(),C.displaySetup()]){const invocation=prepare(command);assert.deepEqual(invocation.raw.slice(1),new Uint8Array(32));assert.deepEqual(invocation.decode(invocation.raw).value,{kind:a.ReplyKind.NoPayload});}
 });
+
+test('radio and NAND service requests preserve field types and opaque snapshots',()=>{
+ const a=usb.app80,C=a.Command;
+ const layouts=[['nand_read_blocks',3],['option41',1],['wlan_control',1],['radio_control',4],['signal_strength',7],['iperf',1]];
+ const slots=Object.fromEntries(layouts.map(([name,count])=>[name,Array.from({length:count},(_,n)=>(n*5+7)%32)]));
+ const service=new a.Service(serviceDefinition(layouts.map(([name],n)=>[200+n,name,slots[name],4]))),modes=serviceModes();
+ const prepare=command=>service.prepare(modes,command),logical=(p,name)=>slots[name].map(i=>p.raw[1+i]);
+ const decode=(p,name,index,value)=>{const raw=p.raw;raw[1+slots[name][index]]=value;return p.decode(raw).value;};
+ for(const [create,kind] of [[()=>new a.RadioChannel(15),a.ArgumentKind.RadioChannel],[()=>new a.RadioPower(128),a.ArgumentKind.RadioPower],[()=>new a.PeerAddress(new Uint8Array(5)),a.ArgumentKind.PeerAddressLength]])assert.throws(create,e=>a.isError(e)&&e.reason.argument===kind);
+ assert.throws(()=>C.nandReadBlocks(true,0));assert.throws(()=>a.RadioAction.secondary(99,new a.RadioChannel(1)));
+ for(const [mode,m] of [[a.RadioMode.Mode0,0],[a.RadioMode.Mode1,1]]){
+  for(const channel of [0,14])for(const power of [0,11,12,127])for(const [option,bit] of [[a.Toggle.Disabled,0],[a.Toggle.Enabled,128]]){
+   const p=prepare(C.radioControl(a.RadioAction.primary(mode,new a.RadioChannel(channel),new a.RadioPower(power),option)));
+   assert.equal(p.raw[0],203);assert.deepEqual(logical(p,'radio_control'),[m,channel,power|bit,0]);assert.deepEqual(p.decode(p.raw).value,{kind:a.ReplyKind.NoPayload});
+  }
+  assert.deepEqual(logical(prepare(C.radioControl(a.RadioAction.secondary(mode,new a.RadioChannel(14)))),'radio_control'),[m,14,0,1]);
+ }
+ for(const [enabled,wire] of [[a.Toggle.Disabled,0],[a.Toggle.Enabled,1]])assert.deepEqual(logical(prepare(C.wlanControl(enabled)),'wlan_control'),[wire]);
+ for(const [spare,wire] of [[a.NandSpare.Omit,0],[a.NandSpare.Include,1]]){
+  const p=prepare(C.nandReadBlocks(spare,255));assert.deepEqual(logical(p,'nand_read_blocks'),[wire,255,255]);
+  for(const [raw,kind] of [[0,a.NandReadResultKind.Success],[1,a.NandReadResultKind.RejectedOrWaitError],[2,a.NandReadResultKind.OtherError],[42,a.NandReadResultKind.Unknown],[255,a.NandReadResultKind.Unknown]])assert.deepEqual(decode(p,'nand_read_blocks',2,raw),{kind:a.ReplyKind.NandRead,status:kind===a.NandReadResultKind.Unknown?{kind,rawStatus:raw}:{kind}});
+ }
+ const option=prepare(C.option41());assert.deepEqual(logical(option,'option41'),[255]);
+ for(const [raw,kind] of [[0,a.Option41StateKind.NonZero],[1,a.Option41StateKind.Zero],[2,a.Option41StateKind.Unknown]])assert.deepEqual(decode(option,'option41',0,raw),{kind:a.ReplyKind.Option41,state:kind===a.Option41StateKind.Unknown?{kind,rawStatus:raw}:{kind}});
+ const original=new Uint8Array([1,2,3,4,5,6]),address=new a.PeerAddress(original);original.fill(0);assert.deepEqual(address.data,new Uint8Array([1,2,3,4,5,6]));
+ const signal=prepare(C.signalStrength(address));assert.deepEqual(logical(signal,'signal_strength'),[1,2,3,4,5,6,255]);
+ const iperf=prepare(C.iperf());assert.deepEqual(logical(iperf,'iperf'),[255]);
+ for(const raw of [0,1,128,255]){assert.deepEqual(decode(signal,'signal_strength',6,raw),{kind:a.ReplyKind.SignalStrength,rawValue:raw});assert.deepEqual(decode(iperf,'iperf',0,raw),{kind:a.ReplyKind.Iperf,rawResult:raw});}
+});

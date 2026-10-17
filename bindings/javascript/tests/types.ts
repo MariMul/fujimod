@@ -105,3 +105,22 @@ async function storageValues():Promise<void>{
  }
 }
 void storageValues;
+
+// @ts-expect-error Radio channels must be checked quantity objects.
+usb.app80.RadioAction.secondary(usb.app80.RadioMode.Mode0, 1);
+// @ts-expect-error Radio mode is a different enum group from a toggle.
+usb.app80.RadioAction.secondary(usb.app80.Toggle.Enabled, new usb.app80.RadioChannel(1));
+// @ts-expect-error NAND spare choice is not a boolean.
+usb.app80.Command.nandReadBlocks(true, 0);
+// @ts-expect-error A peer address must be an owned six-byte value.
+usb.app80.Command.signalStrength(new Uint8Array(6));
+async function networkValues():Promise<void>{
+ const value=(await typedReply).value;
+ if(value.kind===usb.app80.ReplyKind.NandRead){
+  if(value.status.kind===usb.app80.NandReadResultKind.Unknown){const raw:number=value.status.rawStatus;void raw;}
+  // @ts-expect-error NAND result is not a raw integer or host disposition.
+  const status:number=value.status;void status;
+ }
+ if(value.kind===usb.app80.ReplyKind.SignalStrength){const raw:number=value.rawValue;void raw;}
+}
+void networkValues;

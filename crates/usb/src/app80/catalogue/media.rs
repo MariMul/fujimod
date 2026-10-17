@@ -406,3 +406,35 @@ impl StorageStatus {
         }
     }
 }
+
+/// Include the NAND spare bytes in the firmware's selected storage buffer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NandSpare {
+    Omit,
+    Include,
+}
+impl NandSpare {
+    pub(super) fn wire(self) -> u8 {
+        match self {
+            Self::Omit => 0,
+            Self::Include => 1,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NandReadResult {
+    Success,
+    RejectedOrWaitError,
+    OtherError,
+    Unknown(u8),
+}
+impl NandReadResult {
+    pub(super) fn decode(raw: u8) -> Self {
+        match raw {
+            0 => Self::Success,
+            1 => Self::RejectedOrWaitError,
+            2 => Self::OtherError,
+            n => Self::Unknown(n),
+        }
+    }
+}

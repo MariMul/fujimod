@@ -39,6 +39,12 @@ class Codec(Enum):
     StorageStatus = auto()
     FormatStorage = auto()
     DisplaySetup = auto()
+    NandReadBlocks = auto()
+    Option41 = auto()
+    WlanControl = auto()
+    RadioControl = auto()
+    SignalStrength = auto()
+    Iperf = auto()
 
 
 class ServiceModes(Handle):

@@ -3,6 +3,7 @@ use super::*;
 use crate::defs::{Codec, Definition, ServiceModes};
 use usb::app80::catalogue as core;
 mod media;
+mod network;
 mod peripheral;
 use peripheral::{AccumulatorAction, I2cAction, RegisterAction};
 
@@ -20,6 +21,9 @@ enum ArgumentKind {
     HdmiValue,
     HdmiPacketLength,
     AudioCount,
+    RadioChannel,
+    RadioPower,
+    PeerAddressLength,
 }
 impl From<core::ArgumentKind> for ArgumentKind {
     fn from(value: core::ArgumentKind) -> Self {
@@ -33,6 +37,9 @@ impl From<core::ArgumentKind> for ArgumentKind {
             core::ArgumentKind::HdmiValue => Self::HdmiValue,
             core::ArgumentKind::HdmiPacketLength => Self::HdmiPacketLength,
             core::ArgumentKind::AudioCount => Self::AudioCount,
+            core::ArgumentKind::RadioChannel => Self::RadioChannel,
+            core::ArgumentKind::RadioPower => Self::RadioPower,
+            core::ArgumentKind::PeerAddressLength => Self::PeerAddressLength,
         }
     }
 }
@@ -155,6 +162,21 @@ impl From<ProfileAction> for core::ProfileAction {
 #[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
 #[derive(Clone)]
 enum Command {
+    NandReadBlocks {
+        spare: network::NandSpare,
+        block_group: u8,
+    },
+    Option41 {},
+    WlanControl {
+        enabled: media::Toggle,
+    },
+    RadioControl {
+        action: network::RadioAction,
+    },
+    SignalStrength {
+        address: network::PeerAddress,
+    },
+    Iperf {},
     AudioCapture {
         count: media::AudioCount,
         route: media::AudioRoute,
@@ -233,6 +255,15 @@ enum Command {
 impl From<Command> for core::Command {
     fn from(value: Command) -> Self {
         match value {
+            Command::NandReadBlocks { spare, block_group } => Self::NandReadBlocks {
+                spare: spare.into(),
+                block_group,
+            },
+            Command::Option41 {} => Self::Option41,
+            Command::WlanControl { enabled } => Self::WlanControl(enabled.into()),
+            Command::RadioControl { action } => Self::RadioControl(action.into()),
+            Command::SignalStrength { address } => Self::SignalStrength(address.inner),
+            Command::Iperf {} => Self::Iperf,
             Command::AudioCapture { count, route } => Self::AudioCapture {
                 count: count.inner,
                 route: route.into(),
@@ -330,6 +361,10 @@ impl From<core::WordWriteResult> for WordWriteResult {
 #[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
 #[derive(Clone)]
 enum ReplyValue {
+    NandRead { status: network::NandReadResult },
+    Option41 { state: network::Option41State },
+    SignalStrength { raw_value: u8 },
+    Iperf { raw_result: u8 },
     AudioCaptured { status: media::AudioResult },
     AudioPlayed { status: media::AudioResult },
     StorageErased { status: media::StorageEraseResult },
@@ -353,6 +388,14 @@ enum ReplyValue {
 impl From<core::ReplyValue> for ReplyValue {
     fn from(value: core::ReplyValue) -> Self {
         match value {
+            core::ReplyValue::NandRead(status) => Self::NandRead {
+                status: status.into(),
+            },
+            core::ReplyValue::Option41(state) => Self::Option41 {
+                state: state.into(),
+            },
+            core::ReplyValue::SignalStrength { raw_value } => Self::SignalStrength { raw_value },
+            core::ReplyValue::Iperf { raw_result } => Self::Iperf { raw_result },
             core::ReplyValue::AudioCaptured(status) => Self::AudioCaptured {
                 status: status.into(),
             },
@@ -490,6 +533,7 @@ pub(in crate::usb) fn check_limit(limits: &FirmwareLimits) -> PyResult<()> {
 pub(super) fn register(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     peripheral::register(module)?;
     media::register(module)?;
+    network::register(module)?;
     module.add("CommandError", py.get_type::<CommandError>())?;
     module.add_class::<ArgumentKind>()?;
     module.add_class::<CommandFailure>()?;

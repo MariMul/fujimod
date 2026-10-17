@@ -4,6 +4,7 @@ use defs::{ServiceCodec, ServiceDefinition, ServiceModes};
 use error::{integer, property, record};
 use usb::app80::catalogue as core;
 mod media;
+mod network;
 mod peripheral;
 
 #[wasm_bindgen]
@@ -27,6 +28,9 @@ pub enum ArgumentKind {
     HdmiValue,
     HdmiPacketLength,
     AudioCount,
+    RadioChannel,
+    RadioPower,
+    PeerAddressLength,
 }
 impl From<core::ArgumentKind> for ArgumentKind {
     fn from(value: core::ArgumentKind) -> Self {
@@ -40,6 +44,9 @@ impl From<core::ArgumentKind> for ArgumentKind {
             core::ArgumentKind::HdmiValue => Self::HdmiValue,
             core::ArgumentKind::HdmiPacketLength => Self::HdmiPacketLength,
             core::ArgumentKind::AudioCount => Self::AudioCount,
+            core::ArgumentKind::RadioChannel => Self::RadioChannel,
+            core::ArgumentKind::RadioPower => Self::RadioPower,
+            core::ArgumentKind::PeerAddressLength => Self::PeerAddressLength,
         }
     }
 }
@@ -173,6 +180,50 @@ pub struct App80Command {
 }
 #[wasm_bindgen]
 impl App80Command {
+    #[wasm_bindgen(js_name=nandReadBlocks)]
+    pub fn nand_read_blocks(
+        #[wasm_bindgen(unchecked_param_type = "NandSpare")] spare: JsValue,
+        #[wasm_bindgen(unchecked_param_type = "number")] block_group: JsValue,
+    ) -> Result<Self, JsValue> {
+        Ok(Self {
+            inner: core::Command::NandReadBlocks {
+                spare: network::NandSpare::parse(spare)?,
+                block_group: integer(block_group, u8::MAX.into())? as u8,
+            },
+        })
+    }
+    #[wasm_bindgen(js_name=option41)]
+    pub fn option_41() -> Self {
+        Self {
+            inner: core::Command::Option41,
+        }
+    }
+    #[wasm_bindgen(js_name=wlanControl)]
+    pub fn wlan_control(
+        #[wasm_bindgen(unchecked_param_type = "Toggle")] enabled: JsValue,
+    ) -> Result<Self, JsValue> {
+        Ok(Self {
+            inner: core::Command::WlanControl(media::Toggle::parse(enabled)?),
+        })
+    }
+    #[wasm_bindgen(js_name=radioControl)]
+    pub fn radio_control(action: &network::RadioAction) -> Self {
+        Self {
+            inner: core::Command::RadioControl(action.inner),
+        }
+    }
+    #[wasm_bindgen(js_name=signalStrength)]
+    pub fn signal_strength(address: &network::PeerAddress) -> Self {
+        Self {
+            inner: core::Command::SignalStrength(address.inner),
+        }
+    }
+    pub fn iperf() -> Self {
+        Self {
+            inner: core::Command::Iperf,
+        }
+    }
+
     #[wasm_bindgen(js_name=audioCapture)]
     pub fn audio_capture(
         count: &media::AudioCount,
@@ -383,6 +434,10 @@ impl App80Command {
 #[wasm_bindgen]
 #[derive(Clone, Copy)]
 pub enum App80ReplyKind {
+    NandRead,
+    Option41,
+    SignalStrength,
+    Iperf,
     AudioCaptured,
     AudioPlayed,
     StorageErased,
@@ -439,6 +494,21 @@ impl App80CommandReply {
         use App80ReplyKind as K;
         use core::ReplyValue as V;
         match self.inner.value() {
+            V::NandRead(status) => record(
+                K::NandRead as u32,
+                &[("status", network::NandReadResultKind::value(*status))],
+            ),
+            V::Option41(state) => record(
+                K::Option41 as u32,
+                &[("state", network::Option41StateKind::value(*state))],
+            ),
+            V::SignalStrength { raw_value } => record(
+                K::SignalStrength as u32,
+                &[("rawValue", (*raw_value).into())],
+            ),
+            V::Iperf { raw_result } => {
+                record(K::Iperf as u32, &[("rawResult", (*raw_result).into())])
+            }
             V::AudioCaptured(status) => record(
                 K::AudioCaptured as u32,
                 &[("status", media::AudioResultKind::value(*status))],
@@ -627,7 +697,17 @@ export type StorageEraseResult =
 export type StorageStatus =
  | Readonly<{kind: StorageStatusKind.Zero | StorageStatusKind.Value4 | StorageStatusKind.Value8 | StorageStatusKind.Value16 | StorageStatusKind.Value32}>
  | Readonly<{kind: StorageStatusKind.Unknown; rawStatus: number}>;
+export type NandReadResult =
+ | Readonly<{kind:NandReadResultKind.Success | NandReadResultKind.RejectedOrWaitError | NandReadResultKind.OtherError}>
+ | Readonly<{kind:NandReadResultKind.Unknown; rawStatus:number}>;
+export type Option41State =
+ | Readonly<{kind:Option41StateKind.Zero | Option41StateKind.NonZero}>
+ | Readonly<{kind:Option41StateKind.Unknown; rawStatus:number}>;
 export type App80ReplyValue =
+ | Readonly<{kind:App80ReplyKind.NandRead;status:NandReadResult}>
+ | Readonly<{kind:App80ReplyKind.Option41;state:Option41State}>
+ | Readonly<{kind:App80ReplyKind.SignalStrength;rawValue:number}>
+ | Readonly<{kind:App80ReplyKind.Iperf;rawResult:number}>
   | Readonly<{kind: App80ReplyKind.AudioCaptured; status: AudioResult}>
   | Readonly<{kind: App80ReplyKind.AudioPlayed; status: AudioResult}>
   | Readonly<{kind: App80ReplyKind.StorageErased; status: StorageEraseResult}>

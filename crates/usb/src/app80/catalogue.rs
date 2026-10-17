@@ -6,9 +6,11 @@ mod media;
 pub use media::{
     AudioCount, AudioPlayback, AudioResult, AudioRoute, ChargeAction, ChargePresence, ChargeQuery,
     ChargeResult, DisplayMode, DisplayOptionAction, HdmiAction, HdmiPacket, HdmiValue,
-    ReportedChargeState, SoundAction, SoundClip, SoundFormat, SoundOperation, SoundTrack,
-    StorageErase, StorageEraseResult, StorageStatus, Toggle,
+    NandReadResult, NandSpare, ReportedChargeState, SoundAction, SoundClip, SoundFormat,
+    SoundOperation, SoundTrack, StorageErase, StorageEraseResult, StorageStatus, Toggle,
 };
+mod network;
+pub use network::{Option41State, PeerAddress, RadioAction, RadioChannel, RadioMode, RadioPower};
 mod peripheral;
 pub use peripheral::{
     AccumulatorAction, I2cAction, I2cLength, I2cPayload, I2cPort, RegisterAction,
@@ -38,6 +40,9 @@ pub enum ArgumentKind {
     HdmiValue,
     HdmiPacketLength,
     AudioCount,
+    RadioChannel,
+    RadioPower,
+    PeerAddressLength,
 }
 impl std::fmt::Display for ArgumentKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -51,6 +56,9 @@ impl std::fmt::Display for ArgumentKind {
             Self::HdmiValue => "HDMI value (0..=4095)",
             Self::HdmiPacketLength => "HDMI packet length (16 bytes)",
             Self::AudioCount => "audio chunk count (0..=10)",
+            Self::RadioChannel => "radio channel field (0..=14)",
+            Self::RadioPower => "encoded radio power field (0..=127)",
+            Self::PeerAddressLength => "peer address length (6 bytes)",
         })
     }
 }
@@ -157,6 +165,15 @@ pub enum Command {
     StorageStatus,
     FormatStorage,
     DisplaySetup,
+    NandReadBlocks {
+        spare: NandSpare,
+        block_group: u8,
+    },
+    Option41,
+    WlanControl(Toggle),
+    RadioControl(RadioAction),
+    SignalStrength(PeerAddress),
+    Iperf,
 }
 impl Command {
     pub fn codec(self) -> Codec {
@@ -187,6 +204,12 @@ impl Command {
             Self::StorageStatus => Codec::StorageStatus,
             Self::FormatStorage => Codec::FormatStorage,
             Self::DisplaySetup => Codec::DisplaySetup,
+            Self::NandReadBlocks { .. } => Codec::NandReadBlocks,
+            Self::Option41 => Codec::Option41,
+            Self::WlanControl(_) => Codec::WlanControl,
+            Self::RadioControl(_) => Codec::RadioControl,
+            Self::SignalStrength(_) => Codec::SignalStrength,
+            Self::Iperf => Codec::Iperf,
         }
     }
 }
@@ -229,6 +252,10 @@ pub enum ReplyValue {
     AudioPlayed(AudioResult),
     StorageErased(StorageEraseResult),
     StorageStatus(StorageStatus),
+    NandRead(NandReadResult),
+    Option41(Option41State),
+    SignalStrength { raw_value: u8 },
+    Iperf { raw_result: u8 },
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommandReply {
@@ -321,7 +348,16 @@ impl PreparedCommand {
                 ReplyValue::StorageErased(StorageEraseResult::decode(byte(1)))
             }
             Command::StorageStatus => ReplyValue::StorageStatus(StorageStatus::decode(byte(0))),
-            Command::FormatStorage | Command::DisplaySetup => ReplyValue::NoPayload,
+            Command::NandReadBlocks { .. } => ReplyValue::NandRead(NandReadResult::decode(byte(2))),
+            Command::Option41 => ReplyValue::Option41(Option41State::decode(byte(0))),
+            Command::SignalStrength(_) => ReplyValue::SignalStrength { raw_value: byte(6) },
+            Command::Iperf => ReplyValue::Iperf {
+                raw_result: byte(0),
+            },
+            Command::WlanControl(Toggle::Disabled | Toggle::Enabled)
+            | Command::RadioControl(RadioAction::Primary { .. } | RadioAction::Secondary { .. })
+            | Command::FormatStorage
+            | Command::DisplaySetup => ReplyValue::NoPayload,
             Command::WritePins { .. }
             | Command::WriteChannel { .. }
             | Command::ProfileByte(ProfileAction::Write { .. } | ProfileAction::Reset)
@@ -481,6 +517,20 @@ impl Catalogue {
                 put(1, 255);
             }
             Command::StorageStatus => put(0, 255),
+            Command::NandReadBlocks { spare, block_group } => {
+                put(0, spare.wire());
+                put(1, block_group);
+                put(2, 255);
+            }
+            Command::Option41 | Command::Iperf => put(0, 255),
+            Command::WlanControl(enabled) => put(0, enabled.wire()),
+            Command::RadioControl(action) => action.encode(&mut put),
+            Command::SignalStrength(address) => {
+                for (i, &value) in address.data().iter().enumerate() {
+                    put(i, value);
+                }
+                put(6, 255);
+            }
             Command::FormatStorage | Command::DisplaySetup => (),
             Command::ReadWord { address } | Command::WriteWord { address, .. } => {
                 let value = address.address().0;
@@ -515,3 +565,6 @@ mod tests;
 
 #[cfg(test)]
 mod media_tests;
+
+#[cfg(test)]
+mod network_tests;

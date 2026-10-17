@@ -113,3 +113,12 @@ the firmware-selected App80 command byte:
 | Storage status | Numbering-snapshot classifications 0, 4, 8, 16, 32. Zero occurs on both success and error paths; physical meanings remain unspecified. Other bytes are unknown. |
 | Format storage | One firmware command formats its selected drive and awaits its internal callback. No payload result; the library adds no polling, reset or cleanup. |
 | Display setup | One firmware command runs its internal display setup/request sequence. No arguments or payload result. |
+
+| Storage/radio codec | Operations and replies |
+| --- | --- |
+| NAND read blocks | `NandSpare` and a byte-sized block-group index; firmware reads eight blocks beginning at index × 8 into its RAM buffer. No USB download is composed. Output 0 is success, 1 is rejection/wait error, 2 is another error, and other bytes remain unknown. |
+| Option 0x41 | Query whether the firmware getter returns zero. Reply 1 maps to `Zero`, 0 to `NonZero`; it does not establish drive presence. |
+| WLAN control | Explicit control-line disabled/enabled request. The enable path increments a firmware counter. No payload result or implied connection workflow. |
+| Radio control | Primary mode/channel/encoded-power/flag or secondary mode/channel. Channel 0–14 and power 0–127 are checked quantities; mode and flag are enum choices. Firmware may stop LAN/restart the driver and ignores lower-level failures. No payload result. |
+| Signal strength | Exact six-byte peer address; opaque output byte. A state-dependent firmware path may leave output unchanged or copy an uninitialized byte. No validated measurement or unit conversion. |
+| iPerf | Uses existing camera configuration text; opaque low result byte. Service completion can precede running the test, so the read is a snapshot without an implicit poll. |

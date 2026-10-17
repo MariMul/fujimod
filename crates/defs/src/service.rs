@@ -132,6 +132,12 @@ pub enum Codec {
     StorageStatus,
     FormatStorage,
     DisplaySetup,
+    NandReadBlocks,
+    Option41,
+    WlanControl,
+    RadioControl,
+    SignalStrength,
+    Iperf,
 }
 impl Codec {
     pub fn argument_slots(self) -> usize {
@@ -152,6 +158,12 @@ impl Codec {
             Self::AudioCapture => 3,
             Self::StorageStatus => 1,
             Self::FormatStorage | Self::DisplaySetup => 0,
+            Self::NandReadBlocks => 3,
+            Self::Option41 => 1,
+            Self::WlanControl => 1,
+            Self::RadioControl => 4,
+            Self::SignalStrength => 7,
+            Self::Iperf => 1,
         }
     }
 }

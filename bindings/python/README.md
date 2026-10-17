@@ -271,3 +271,19 @@ while `Value4`, `Value8`, `Value16`, `Value32` and `Unknown` preserve other enco
 classifications. `Command.FormatStorage()` formats the firmware-selected drive;
 `Command.DisplaySetup()` runs its display setup. Both have `NoPayload` results.
 All are single firmware commands selected from the supplied definition.
+
+`Command.NandReadBlocks(spare=NandSpare.Include, block_group=n)` reads eight
+firmware NAND blocks into its RAM buffer, without downloading them.
+`ReplyValue.NandRead.status` is a `NandReadResult` variant. `Command.Option41()`
+returns `ReplyValue.Option41.state`, a zero/nonzero `Option41State` rather than
+a drive-presence claim. `Command.WlanControl(enabled=Toggle.Enabled)` requests
+the control action; the enable path increments a firmware counter.
+
+`Command.RadioControl(action=RadioAction.Primary(...))` takes `RadioMode`,
+`RadioChannel` (0–14), `RadioPower` (encoded 0–127) and `Toggle` option.
+`RadioAction.Secondary` takes only mode/channel. `Command.SignalStrength` takes
+`PeerAddress(data)` (exactly six copied bytes); its `raw_value` is opaque and
+can reflect unchanged or uninitialized firmware output. `Command.Iperf()` uses
+stored command text and returns an opaque `raw_result` snapshot; the service
+can acknowledge before the test runs. Neither observation implies completion,
+validated signal units or a host poll.

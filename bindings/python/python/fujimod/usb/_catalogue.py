@@ -26,6 +26,9 @@ class ArgumentKind(Enum):
     HdmiValue = auto()
     HdmiPacketLength = auto()
     AudioCount = auto()
+    RadioChannel = auto()
+    RadioPower = auto()
+    PeerAddressLength = auto()
 
 
 class CommandFailure(Sum):
@@ -420,6 +423,70 @@ class StorageErase(Enum):
     ResetProfiles = auto()
 
 
+class NandSpare(Enum):
+    Omit = auto()
+    Include = auto()
+
+
+class RadioMode(Enum):
+    Mode0 = auto()
+    Mode1 = auto()
+
+
+class RadioChannel(Handle):
+    def __init__(self, value):
+        self._js = call(_js.RadioChannel.new, uint(value, 8))
+
+    value = property(lambda self: self._js.value)
+
+
+class RadioPower(Handle):
+    def __init__(self, value):
+        self._js = call(_js.RadioPower.new, uint(value, 8))
+
+    value = property(lambda self: self._js.value)
+
+
+class PeerAddress(Handle):
+    def __init__(self, data):
+        self._js = call(_js.PeerAddress.new, buffer_in(data))
+
+    data = property(lambda self: buffer_out(self._js.data))
+
+
+class RadioAction(Sum, Handle):
+    pass
+
+
+variant(
+    RadioAction,
+    "Primary",
+    [
+        ("mode", RadioMode),
+        ("channel", RadioChannel),
+        ("power", RadioPower),
+        ("option", Toggle),
+    ],
+    create=lambda mode, channel, power, option: call(
+        _js.RadioAction.primary,
+        _choice(mode, RadioMode, _js.RadioMode),
+        unwrap(channel, RadioChannel),
+        unwrap(power, RadioPower),
+        _choice(option, Toggle, _js.Toggle),
+    ),
+)
+variant(
+    RadioAction,
+    "Secondary",
+    [("mode", RadioMode), ("channel", RadioChannel)],
+    create=lambda mode, channel: call(
+        _js.RadioAction.secondary,
+        _choice(mode, RadioMode, _js.RadioMode),
+        unwrap(channel, RadioChannel),
+    ),
+)
+
+
 class Command(Sum, Handle):
     pass
 
@@ -596,6 +663,61 @@ variant(Command, "FormatStorage", create=lambda: call(_js.Command.formatStorage)
 variant(Command, "DisplaySetup", create=lambda: call(_js.Command.displaySetup))
 
 
+variant(
+    Command,
+    "NandReadBlocks",
+    [("spare", NandSpare), ("block_group", int)],
+    create=lambda spare, block_group: call(
+        _js.Command.nandReadBlocks,
+        _choice(spare, NandSpare, _js.NandSpare),
+        uint(block_group, 8),
+    ),
+)
+variant(Command, "Option41", create=lambda: call(_js.Command.option41))
+variant(
+    Command,
+    "WlanControl",
+    [("enabled", Toggle)],
+    create=lambda enabled: call(
+        _js.Command.wlanControl, _choice(enabled, Toggle, _js.Toggle)
+    ),
+)
+variant(
+    Command,
+    "RadioControl",
+    [("action", RadioAction)],
+    create=lambda action: call(_js.Command.radioControl, _owned(action, RadioAction)),
+)
+variant(
+    Command,
+    "SignalStrength",
+    [("address", PeerAddress)],
+    create=lambda address: call(
+        _js.Command.signalStrength, unwrap(address, PeerAddress)
+    ),
+)
+variant(Command, "Iperf", create=lambda: call(_js.Command.iperf))
+
+
+class NandReadResult(Sum):
+    pass
+
+
+variant(NandReadResult, "Success")
+variant(NandReadResult, "RejectedOrWaitError")
+variant(NandReadResult, "OtherError")
+variant(NandReadResult, "Unknown", [("raw_status", int)])
+
+
+class Option41State(Sum):
+    pass
+
+
+variant(Option41State, "Zero")
+variant(Option41State, "NonZero")
+variant(Option41State, "Unknown", [("raw_status", int)])
+
+
 class AudioResult(Sum):
     pass
 
@@ -697,6 +819,10 @@ variant(ReplyValue, "ConfigurationSaved", [("status", SaveStatus)])
 variant(ReplyValue, "ReadWord", [("result", WordReadResult)])
 variant(ReplyValue, "WriteWord", [("result", WordWriteResult)])
 variant(ReplyValue, "Research")
+variant(ReplyValue, "NandRead", [("status", NandReadResult)])
+variant(ReplyValue, "Option41", [("state", Option41State)])
+variant(ReplyValue, "SignalStrength", [("raw_value", int)])
+variant(ReplyValue, "Iperf", [("raw_result", int)])
 variant(ReplyValue, "AudioCaptured", [("status", AudioResult)])
 variant(ReplyValue, "AudioPlayed", [("status", AudioResult)])
 variant(ReplyValue, "StorageErased", [("status", StorageEraseResult)])
@@ -797,9 +923,32 @@ def _storage_status(value):
     }[value.kind]()
 
 
+def _nand_read(value):
+    kinds = _js.NandReadResultKind
+    return {
+        kinds.Success: NandReadResult.Success,
+        kinds.RejectedOrWaitError: NandReadResult.RejectedOrWaitError,
+        kinds.OtherError: NandReadResult.OtherError,
+        kinds.Unknown: lambda: NandReadResult.Unknown(value.rawStatus),
+    }[value.kind]()
+
+
+def _option_41(value):
+    kinds = _js.Option41StateKind
+    return {
+        kinds.Zero: Option41State.Zero,
+        kinds.NonZero: Option41State.NonZero,
+        kinds.Unknown: lambda: Option41State.Unknown(value.rawStatus),
+    }[value.kind]()
+
+
 def _value(value):
     kinds = _js.ReplyKind
     return {
+        kinds.NandRead: lambda: ReplyValue.NandRead(_nand_read(value.status)),
+        kinds.Option41: lambda: ReplyValue.Option41(_option_41(value.state)),
+        kinds.SignalStrength: lambda: ReplyValue.SignalStrength(value.rawValue),
+        kinds.Iperf: lambda: ReplyValue.Iperf(value.rawResult),
         kinds.AudioCaptured: lambda: ReplyValue.AudioCaptured(
             _audio_result(value.status)
         ),

@@ -248,3 +248,19 @@ persistent regions and profiles. `Command.storageStatus()` returns
 retain their numeric names. `Command.formatStorage()` formats the selected
 drive, and `Command.displaySetup()` invokes the internal display setup sequence.
 These last two have no payload result. No result starts host polling or cleanup.
+
+`Command.nandReadBlocks(NandSpare.Include, group)` reads eight firmware NAND
+blocks into its RAM buffer without downloading them. The reply uses
+`NandReadResultKind`; output 1 is an application result, never a host wait.
+`Command.option41()` returns `Option41StateKind.Zero`/`NonZero`/`Unknown` for the
+firmware getter, without asserting drive presence. `Command.wlanControl(Toggle)`
+requests a control-line action whose enable path also increments a counter.
+
+`RadioAction.primary(mode, channel, power, option)` uses `RadioMode`, checked
+`RadioChannel` (0–14), checked `RadioPower` (encoded 0–127) and `Toggle`.
+`secondary(mode, channel)` excludes the unused fields. Pass either to
+`Command.radioControl`. `Command.signalStrength(new PeerAddress(bytes))` owns
+six bytes and returns opaque `rawValue`, which can include unchanged or
+uninitialized firmware output. `Command.iperf()` uses stored configuration text
+and returns opaque `rawResult`; firmware service acknowledgement can precede
+running the test. Neither result starts a host poll or certifies a measurement.

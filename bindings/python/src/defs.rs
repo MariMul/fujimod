@@ -119,6 +119,12 @@ pub(crate) enum Codec {
     StorageStatus,
     FormatStorage,
     DisplaySetup,
+    NandReadBlocks,
+    Option41,
+    WlanControl,
+    RadioControl,
+    SignalStrength,
+    Iperf,
 }
 impl From<core::Codec> for Codec {
     fn from(value: core::Codec) -> Self {
@@ -150,6 +156,12 @@ impl From<core::Codec> for Codec {
             core::Codec::StorageStatus => Self::StorageStatus,
             core::Codec::FormatStorage => Self::FormatStorage,
             core::Codec::DisplaySetup => Self::DisplaySetup,
+            core::Codec::NandReadBlocks => Self::NandReadBlocks,
+            core::Codec::Option41 => Self::Option41,
+            core::Codec::WlanControl => Self::WlanControl,
+            core::Codec::RadioControl => Self::RadioControl,
+            core::Codec::SignalStrength => Self::SignalStrength,
+            core::Codec::Iperf => Self::Iperf,
         }
     }
 }
