@@ -1004,13 +1004,21 @@ footer {
   }
   .stage {
     grid-template-columns: 1fr;
+    /* Clip rounded corners without creating a scroll container for sticky. */
+    overflow: clip;
   }
   .panel {
     border-left: 0;
     border-top: 1px solid var(--line);
   }
   .viewer {
-    min-height: 330px;
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    align-self: start;
+    height: min(330px, 50svh);
+    min-height: 0;
+    overflow: hidden;
   }
   .shell {
     padding: 0 14px 36px;
