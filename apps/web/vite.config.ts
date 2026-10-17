@@ -7,10 +7,14 @@ import { resolve, sep } from 'node:path';
 // Opt-in local artifact mounts are served by the local server, never copied into dist.
 function localArtifacts(env: Record<string, string>): Plugin {
   const configure = (middlewares: Connect.Server) => {
+    const firmwares = Object.entries(JSON.parse(env.FUJIMOD_LOCAL_FIRMWARES || '{}'));
+    if (firmwares.some(([id, path]) => !/^[a-z0-9-]+$/.test(id) || typeof path !== 'string'))
+      throw Error('FUJIMOD_LOCAL_FIRMWARES must map firmware IDs to local DAT paths');
     const mounts = [
       ['/runtime/', env.FUJIMOD_RUNTIME],
       ['/artifacts/', env.FUJIMOD_PATCHES],
       ['/local/firmware.dat', env.FUJIMOD_DAT],
+      ...firmwares.map(([id, path]) => [`/local/firmware/${id}.dat`, path as string]),
     ].filter((pair): pair is [string, string] => Boolean(pair[1]));
     middlewares.use(async (req, res, next) => {
       const url = new URL(req.url || '/', 'http://localhost').pathname;
@@ -49,5 +53,5 @@ export default defineConfig(({ mode, command }) => ({
   base: './', define: { __FUJIMOD_LOCAL_DAT__: (command === 'serve' || mode === 'local-preview') && Boolean(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_DAT), __FUJIMOD_CATALOG__: JSON.stringify(existsSync('public/runtime/catalog.json') ? 'runtime/catalog.json' : 'catalog.json') }, plugins: [localArtifacts(loadEnv(mode, process.cwd(), 'FUJIMOD_'))],
   server: { host: '127.0.0.1', fs: { strict: true } },
   preview: { host: '127.0.0.1', allowedHosts: ['cozycat.tail2b5ca.ts.net'] },
-  build: { target: 'es2022' }, worker: { format: 'es' },
+  build: { target: 'es2022', outDir: mode === 'local-preview' ? 'dist-local-preview' : 'dist' }, worker: { format: 'es' },
 }));

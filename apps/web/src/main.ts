@@ -23,10 +23,10 @@ declare const __FUJIMOD_CATALOG__: string;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 const adapters = import.meta.glob<{
-  model: ModelData;
+  model?: ModelData;
   panel: DevicePanel;
   initialPositions: Record<string, string>;
-  preview: string;
+  preview?: string;
 }>("../devices/*/index.ts");
 const note = document.querySelector<HTMLElement>(".personal-note")!;
 personalNote(note);
@@ -69,6 +69,7 @@ let generation = 0,
   selectedFirmware: Firmware | undefined,
   latestFault: EngineFault | undefined;
 let firmwareHash: string | undefined;
+let manualSelection = false;
 let build = "Development",
   modelLoaded: string | undefined,
   modelData: ModelData | undefined;
@@ -188,14 +189,15 @@ function credit(data: ModelData) {
     a("CC BY 4.0", data.credit.license),
   );
 }
-async function loadModel(body: string) {
+async function loadDevice(body: string) {
   const load = adapters[`../devices/${body}/index.ts`];
   if (!load) return;
   const device = await load();
-  if (modelLoaded !== body) {
+  if (device.model && modelLoaded !== body) {
+    const model = device.model;
     modelLoaded = body;
-    modelData = device.model;
-    modelLoading = viewer.load(device.model).then(() => credit(device.model));
+    modelData = model;
+    modelLoading = viewer.load(model).then(() => credit(model));
     void modelLoading.catch(error => showFault(faultFrom(error)));
   }
   return device;
@@ -221,9 +223,9 @@ function reset() {
   $("boot-progress").hidden = true;
   title();
 }
-function makeEngine(adapter: string) {
+function makeEngine(config: NonNullable<Firmware['emulate']> & {firmwareId: string}) {
   let value: Engine;
-  value = createEngine(adapter, error => {
+  value = createEngine(config, error => {
     if (engine === value) showFault(faultFrom(error));
     else if (preparedEngine?.value === value) { preparedEngine = undefined; value.dispose(); }
   });
@@ -301,12 +303,15 @@ async function processFile(file?: File, restart = false, preparedBytes?: ArrayBu
       throw Error("Firmware size differs from the catalog.");
     selectedFile = reload ?? (() => Promise.resolve(file));
     selectedFirmware = entry;
-    const device = entry.model_asset
-      ? await loadModel(entry.model_asset)
+    const device = entry.body
+      ? await loadDevice(entry.body)
       : undefined;
     if (current !== generation) return;
     if (!entry.emulate || !device)
       throw Error("Emulation unsupported for this firmware.");
+    $("model-credit").hidden = !device.model;
+    $("view-3d").hidden = !device.model;
+    setView(device.model ? "3d" : "lcd");
     $("workspace").classList.remove("idle");
     $("panel").hidden = false;
     $("viewer-bar").hidden = false;
@@ -314,7 +319,7 @@ async function processFile(file?: File, restart = false, preparedBytes?: ArrayBu
     $("idle-cameras").hidden = true;
     title();
     const active = preparedEngine?.bundle === entry.emulate.bundle && preparedEngine.adapter === entry.emulate.adapter
-      ? preparedEngine.value : makeEngine(entry.emulate.adapter);
+      ? preparedEngine.value : makeEngine({...entry.emulate, firmwareId:entry.id});
     if (preparedEngine && preparedEngine.value !== active) preparedEngine.value.dispose();
     preparedEngine = undefined;
     engine = active;
@@ -358,16 +363,39 @@ async function processFile(file?: File, restart = false, preparedBytes?: ArrayBu
   }
 }
 $<HTMLInputElement>("firmware-file").onchange = (event) => {
+  manualSelection = true;
   const input = event.target as HTMLInputElement;
   void processFile(input.files?.[0]);
   input.value = "";
 };
+async function tryFirmware(firmware: Firmware) {
+  manualSelection = true;
+  if (__FUJIMOD_LOCAL_DAT__) {
+    const reload = async () => {
+      const response = await cachedFetch(`/local/firmware/${firmware.id}.dat`);
+      if (!response.ok) return undefined;
+      return new File([await response.arrayBuffer()], `${firmware.id}.DAT`);
+    };
+    const file = await reload();
+    if (file) {
+      await processFile(file, false, undefined, async () => {
+        const file = await reload();
+        if (!file) throw Error('The local firmware could not be read.');
+        return file;
+      });
+      return;
+    }
+  }
+  status(`Choose the ${firmware.model} firmware DAT`);
+  $<HTMLInputElement>("firmware-file").click();
+}
 $("viewer").ondragover = (event) => {
   event.preventDefault();
   $("viewer").classList.add("dragging");
 };
 $("viewer").ondragleave = () => $("viewer").classList.remove("dragging");
 $("viewer").ondrop = (event) => {
+  manualSelection = true;
   event.preventDefault();
   $("viewer").classList.remove("dragging");
   if (event.dataTransfer?.files[0])
@@ -375,14 +403,15 @@ $("viewer").ondrop = (event) => {
 };
 $("face-screen").onclick = () => viewer.faceScreen();
 $("face-lens").onclick = () => viewer.faceLens();
+function setView(mode: "3d" | "lcd") {
+  viewer.view(mode);
+  for (const value of ["3d", "lcd"]) {
+    $(`view-${value}`).classList.toggle("on", value === mode);
+    $(`view-${value}`).setAttribute("aria-pressed", String(value === mode));
+  }
+}
 for (const mode of ["3d", "lcd"] as const)
-  $(`view-${mode}`).onclick = () => {
-    viewer.view(mode);
-    for (const value of ["3d", "lcd"]) {
-      $(`view-${value}`).classList.toggle("on", value === mode);
-      $(`view-${value}`).setAttribute("aria-pressed", String(value === mode));
-    }
-  };
+  $(`view-${mode}`).onclick = () => setView(mode);
 window.addEventListener("beforeunload", () => engine?.dispose());
 try {
   const response = await fetch(new URL(__FUJIMOD_CATALOG__, document.baseURI));
@@ -413,26 +442,29 @@ try {
       mod: Boolean(release?.patches[firmware.sha256]),
       emu: Boolean(firmware.emulate),
     }));
-  $("camera-cards").replaceChildren(...cameras.map(cameraCard));
-  cameraTable($("camera-table"), generations, cameras);
+  const selectFirmware = (firmware: Firmware) => {
+    void tryFirmware(firmware).catch(error => showFault(faultFrom(error)));
+  };
+  $("camera-cards").replaceChildren(...cameras.map(camera => cameraCard(camera, selectFirmware)));
+  cameraTable($("camera-table"), generations, cameras, selectFirmware);
   noteCameraSupport(note, cameras);
   performance.mark("camera-catalog-ready");
   const localDat = __FUJIMOD_LOCAL_DAT__ ? cachedFetch("/local/firmware.dat") : undefined;
   const first = cameras.find((camera) => camera.firmware.model_asset);
   if (localDat && first?.firmware.emulate) {
     const config = first.firmware.emulate;
-    const value = makeEngine(config.adapter);
+    const value = makeEngine({...config,firmwareId:first.firmware.id});
     preparedEngine = {value, bundle:config.bundle, adapter:config.adapter};
     value.prepare({...config,firmwareId:first.firmware.id});
   }
   if (first?.firmware.model_asset) {
-    const device = await loadModel(first.firmware.model_asset);
+    const device = await loadDevice(first.firmware.model_asset);
     if (device)
       $("viewer").style.setProperty("--body-preview", `url(${device.preview})`);
   }
   if (localDat) {
     const dat = await localDat;
-    if (dat.ok) {
+    if (dat.ok && !manualSelection) {
       const bytes = await dat.arrayBuffer();
       // The local preview can reread its verified DAT on Restart. Retaining a
       // synthetic File here would keep another entire DAT in browser memory.
@@ -441,7 +473,8 @@ try {
         if (!response.ok) throw Error("The local firmware could not be read.");
         return new File([await response.arrayBuffer()], "FPUPDATE.DAT");
       };
-      await processFile(new File([bytes], "FPUPDATE.DAT"), false, bytes, reload);
+      if (!manualSelection)
+        await processFile(new File([bytes], "FPUPDATE.DAT"), false, bytes, reload);
     }
   }
 } catch (error) {

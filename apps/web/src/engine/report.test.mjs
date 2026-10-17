@@ -31,7 +31,7 @@ function setup() {
 }
 test('fault report includes binary snapshot, raw details, identities and guest input times',async()=>{
   const {worker,engine,sent,frames}=setup();
-  await engine.boot(new ArrayBuffer(1),{bundle:'runtime/',inputs:'inputs.json'},()=>{});
+  await engine.boot(new ArrayBuffer(1),{bundle:'runtime/',inputs:'inputs.json',boot:{sceneInput:true}},()=>{});
   const fault=faultFrom({type:'UnsupportedDevice',error:'unmodeled source',device:'SDIO',operation:'write',address:'0xfff80000',size:4,value:'0x7'});
   worker.reply({type:'error',fault});
   const pending=engine.errorReport(), request=sent.at(-1);
@@ -48,7 +48,7 @@ test('fault report includes binary snapshot, raw details, identities and guest i
 });
 test('a dead worker still produces a diagnostic ZIP with explicit snapshot unavailability',async()=>{
   const {worker,engine}=setup();
-  await engine.boot(new ArrayBuffer(1),{bundle:'runtime/',inputs:'inputs.json'},()=>{});
+  await engine.boot(new ArrayBuffer(1),{bundle:'runtime/',inputs:'inputs.json',boot:{sceneInput:true}},()=>{});
   worker.onerror({message:'worker crashed',filename:'worker.js',lineno:2,colno:3});
   const files=await entries(await engine.errorReport()),report=JSON.parse(new TextDecoder().decode(files['report.json']));
   assert.equal(files['snapshot.zip'],undefined); assert.match(report.snapshot.unavailable,/unavailable/);

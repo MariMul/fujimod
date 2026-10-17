@@ -18,10 +18,25 @@ function setup() {
   engine.frames(frame => frames.push(frame));
   return { worker, engine, sent, errors, frames };
 }
+test('an LCD-only runtime advances without a sensor preview clock', async () => {
+  const { engine, worker, sent, errors } = setup();
+  await engine.boot(new ArrayBuffer(1), {inputs:'inputs.json',bundle:'runtime/',boot:{sceneInput:false}}, () => {});
+  worker.reply({type:'metrics',runtime:{preview:null}});
+  worker.postMessage = data => {
+    sent.push(data);
+    queueMicrotask(() => worker.reply({type:'result',id:data.id,
+      state:{virtual_ticks:120100000,display:{width:1,height:1}},frame:new ArrayBuffer(0)}));
+  };
+  engine.wall -= 1000;
+  await engine.pump();
+  assert.deepEqual(errors, []);
+  assert.ok(Number.isFinite(sent.find(data=>data.action==='advance').options.pause_at_tick));
+  engine.dispose();
+});
 test('a structured fault pauses inputs and retains the LCD; rollback republishes and resumes', async () => {
   const { worker, engine, sent, errors, frames } = setup();
   const events = []; engine.errors(event => events.push(event));
-  await engine.boot(new ArrayBuffer(1), { inputs: 'inputs.json', bundle: 'runtime/' }, () => {});
+  await engine.boot(new ArrayBuffer(1), { inputs: 'inputs.json', bundle: 'runtime/', boot: { sceneInput: true } }, () => {});
   const pending = engine.press('menu'); await Promise.resolve();
   worker.reply({ type: 'error', id: sent.at(-1).id, fault: faultFrom({ type: 'UnsupportedDevice', error: 'unmodeled operation', pc: '0x123' }) });
   await assert.rejects(pending);
@@ -46,7 +61,7 @@ test('fault normalization distinguishes guest faults, unsupported models and Was
 });
 test('new guest images are presented immediately while unchanged status polls omit pixels', async () => {
   const { engine, worker, sent, frames } = setup();
-  await engine.boot(new ArrayBuffer(1), { inputs: 'inputs.json', bundle: 'runtime/' }, () => {});
+  await engine.boot(new ArrayBuffer(1), { inputs: 'inputs.json', bundle: 'runtime/', boot: { sceneInput: true } }, () => {});
   worker.reply({ type: 'metrics', runtime: { preview: { frames_per_second: 10 } } });
   let image = 1, tick = 120001000;
   worker.postMessage = data => {

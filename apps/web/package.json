@@ -9,7 +9,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --test tests/*.test.mjs src/engine/*.test.mjs src/viewer/*.test.mjs src/feedback/*.test.mjs",
     "prepare:release": "node scripts/prepare-pages.mjs",
-    "build:local-preview": "tsc --noEmit && vite build --mode local-preview && node scripts/verify-models.mjs dist"
+    "build:local-preview": "tsc --noEmit && vite build --mode local-preview && node scripts/verify-models.mjs dist-local-preview"
   },
   "dependencies": {
     "three": "^0.186.1"

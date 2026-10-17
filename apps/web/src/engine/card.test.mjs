@@ -4,7 +4,7 @@ import { WorkerEngine } from './worker-engine.ts';
 import { digest } from './checkpoint-store.js';
 
 const state = revision => ({ supported: true, present: true, busy: false, revision, capacity_bytes: 4294967296 });
-const config = { bundle: 'runtime/test/', inputs: 'runtime/test/inputs.json', boot: {} };
+const config = { bundle: 'runtime/test/', inputs: 'runtime/test/inputs.json', boot: { sceneInput: true } };
 function setup(resume = false) {
   globalThis.document = { baseURI: 'https://example.invalid/' };
   globalThis.window = { setTimeout: () => 0 };
@@ -23,6 +23,17 @@ function setup(resume = false) {
   };
   return { worker, messages, errors, engine: new WorkerEngine(() => worker, e => errors.push(e)) };
 }
+
+test('LCD-only cameras refuse RGB input and do not send a scene reset', async () => {
+  const { engine, messages } = setup(true);
+  await engine.boot(new ArrayBuffer(1), {...config, boot: {sceneInput:false}}, () => {});
+  const count = messages.length;
+  await engine.setScene(null);
+  assert.equal(messages.length, count);
+  await assert.rejects(engine.setScene({width:1,height:1,rgb:new Uint8Array(3)}), /does not accept host scene/);
+  assert.equal(messages.length, count);
+  engine.dispose();
+});
 
 test('preload buffers are copied for transfer; file reads return binary; changes unsubscribe', async () => {
   const { engine, worker, messages, errors } = setup();

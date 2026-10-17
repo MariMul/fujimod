@@ -86,6 +86,16 @@ header .meta a:first-child {
 .personal-note a {
   text-underline-offset: 3px;
 }
+.personal-note mark {
+  color: #e7f5df;
+  background: transparent;
+  padding: 0.1em 0.18em 0.14em;
+  margin: 0 -0.08em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 36' preserveAspectRatio='none'%3E%3Cpath fill='%232b7848' d='M0 7 3 3 9 4 15 2 42 3 67 1 94 3 121 2 148 4 174 2 192 4 199 3 198 9 200 12 198 19 200 26 197 32 187 31 174 34 143 32 119 35 92 33 68 34 39 32 15 34 7 32 1 33 2 26 0 22 2 15Z'/%3E%3Cpath stroke='%235bab70' opacity='.45' stroke-width='1.2' d='m3 6 61-2 43 1 69-1 20 2M7 30l48 1 39-1 65 2 34-3'/%3E%3C/svg%3E");
+  background-size: 100% 100%;
+}
 .feature-icon {
   display: inline-block;
   width: 1.25em;
@@ -949,6 +959,8 @@ hr {
   border: 1px solid #3a3a3c;
   border-radius: 14px;
   background: rgba(28, 28, 30, 0.7);
+  flex-wrap: wrap;
+  justify-content: center;
 }
 .cams .body .nm {
   font-size: 15px;
@@ -956,6 +968,8 @@ hr {
   margin-right: 2px;
 }
 .getfw {
+  border: 0;
+  font-family: inherit;
   display: inline-flex;
   align-items: center;
   gap: 3px;

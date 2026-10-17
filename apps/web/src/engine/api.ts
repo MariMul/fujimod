@@ -70,6 +70,7 @@ export interface BootProtocol {
   step: number;
   readyLimit: number;
   readyWhen: string[];
+  sceneInput: boolean;
 }
 export interface EngineConfig {
   firmwareId: string;

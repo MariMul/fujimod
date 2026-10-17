@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DefaultSceneEngine } from './default-scene-engine.ts';
 
-const config = { bundle: 'runtime/test/', inputs: 'runtime/test/inputs.json', boot: {} };
+const config = { bundle: 'runtime/test/', inputs: 'runtime/test/inputs.json', boot: { sceneInput: true } };
 const still = { width: 2, height: 1, rgb: new Uint8Array([20, 40, 60, 80, 100, 120]) };
 
 function setup(loadDefault = async () => still) {

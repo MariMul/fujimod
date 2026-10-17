@@ -38,19 +38,30 @@ function firmwareLink(camera: CameraSupport) {
   link.append("Firmware", icon("external", 11));
   return link;
 }
-export function cameraCard(camera: CameraSupport) {
+function emulateButton(camera: CameraSupport, emulate: (firmware: Firmware) => void) {
+  const button = document.createElement("button");
+  button.className = "getfw";
+  button.type = "button";
+  button.textContent = "Try emulator";
+  button.setAttribute("aria-label", `Try ${camera.firmware.model} emulator`);
+  button.onclick = () => emulate(camera.firmware);
+  return button;
+}
+export function cameraCard(camera: CameraSupport, emulate: (firmware: Firmware) => void) {
   const card = document.createElement("div");
   card.className = "body";
   const name = document.createElement("span");
   name.className = "nm";
   name.textContent = camera.firmware.model;
   card.append(name, ...chips(camera), firmwareLink(camera));
+  if (camera.emu) card.append(emulateButton(camera, emulate));
   return card;
 }
 export function cameraTable(
   host: HTMLElement,
   columns: Generation[][],
   cameras: CameraSupport[],
+  emulate: (firmware: Firmware) => void,
 ) {
   host.replaceChildren();
   for (const groups of columns) {
@@ -76,6 +87,7 @@ export function cameraTable(
         const link = firmwareLink(camera);
         link.style.marginTop = "8px";
         row.append(name, link);
+        if (camera.emu) row.append(" ", emulateButton(camera, emulate));
         section.append(row);
       }
       const remaining = group.models.filter(

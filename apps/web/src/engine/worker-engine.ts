@@ -69,6 +69,7 @@ export class WorkerEngine implements Engine {
   private progressListener?: (message: string, percent: number) => void;
   private selectedPositions: Record<string, string> = {};
   private scene: Scene | null = null;
+  private sceneInput = false;
   private pace = new CameraPace();
   private presentation = new RequestTimings();
   private metricListeners = new Set<(metrics: CameraPerformance) => void>();
@@ -136,6 +137,7 @@ export class WorkerEngine implements Engine {
     media?: BootMedia,
   ) {
     this.bootMedia = media;
+    this.sceneInput = config.boot.sceneInput;
     this.prepare(config);
     const seeds = (media?.identities ?? Promise.resolve([])).then(identities => ({ identities, error: undefined }), error => ({ identities: undefined, error }));
     this.reportIdentity = {
@@ -542,12 +544,11 @@ export class WorkerEngine implements Engine {
           this.ticks + Math.floor((performance.now() - this.wall) * 12000);
         const preview = this.latestRuntime.preview as {
           frames_per_second: number;
-        };
-        const frameTicks = 12000000 / preview.frames_per_second;
-        const cap = Math.min(
+        } | null;
+        const cap = preview ? Math.min(
           wallCap,
-          this.state.virtual_ticks + Math.floor(frameTicks / 2),
-        );
+          this.state.virtual_ticks + Math.floor(6000000 / preview.frames_per_second),
+        ) : wallCap;
         const before = this.state.virtual_ticks;
         await this.request("advance", { limit: 200000, pause_at_tick: cap });
         if (
@@ -645,6 +646,10 @@ export class WorkerEngine implements Engine {
   }
 
   async setScene(scene: Scene | null) {
+    if (!this.sceneInput) {
+      if (scene) throw Error('This camera does not accept host scene images.');
+      return;
+    }
     this.scene = scene;
     if (!this.alive) return;
     if (!scene) {

@@ -1,6 +1,7 @@
 node_modules/
 .vite/
 dist/
+dist-local-preview/
 _site/
 public/artifacts/
 public/runtime/

@@ -101,7 +101,7 @@ export class InputPanel {
       };
       combos.append(row);
     }
-    this.host.append(caption, combos);
+    if (data.combos.length) this.host.append(caption, combos);
     this.viewer.configureRotary(inputs, (id, direction) =>
       this.step(id, direction),
     );

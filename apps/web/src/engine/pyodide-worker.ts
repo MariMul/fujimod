@@ -375,9 +375,8 @@ async function startSession(
       if (progress.instructions >= protocol.limit) break;
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
-    runtime.runPython(
-      "session = boot_module.finish()\nuse_analytic_scene(session)",
-    );
+    runtime.runPython("session = boot_module.finish()");
+    if (protocol.sceneInput) runtime.runPython("use_analytic_scene(session)");
     bootStage("cold-boot-complete");
   } else {
     runtime.runPython("boot_module.board = session.board");

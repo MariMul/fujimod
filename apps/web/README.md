@@ -49,6 +49,12 @@ The model is **CAMERA ( Fujifilm X70 )** by
 The model uses Git LFS. Its hidden filter attachment is selected by node data;
 the glTF itself is unchanged. The page repeats attribution when loaded.
 
+X-M1 1.50 uses the same Wasm runtime with its checked REC graph, native LCD
+and calibrated menu/sub-command controls. It has no 3D model, host RGB scene,
+shutter-capture binding or main command dial. Its virtual card starts ejected;
+inserted-card boot has not passed the browser gate. “Try emulator” selects a
+local configured DAT, or opens the DAT chooser on the public site.
+
 ### Develop
 
 Use Node 22.18 or later, `git lfs install --local`, `git lfs pull`, then:
@@ -94,10 +100,18 @@ npm run build:local-preview
 npm run preview -- --mode local-preview --port 5190 --strictPort
 ```
 
-This serves the built `dist/` and enables automatic boot using `FUJIMOD_DAT` in
+This serves `dist-local-preview/` and enables automatic boot using `FUJIMOD_DAT` in
 ignored `.env.local`. The preview binds only `127.0.0.1` and permits the
 `cozycat.tail2b5ca.ts.net` Host header for `tailscale serve`. The ordinary public
-`npm run build` excludes the local automatic-boot setting.
+`npm run build` writes `dist/`, excludes automatic boot, and cannot overwrite
+the local preview. Restart the preview server after changing its environment.
+
+To switch cameras from a phone on the local preview, add an explicit map of
+firmware IDs to DAT files in `.env.local` (only configured files are served):
+
+```text
+FUJIMOD_LOCAL_FIRMWARES={"x70-110":"/path/to/FPUPDATE.DAT","xm1-150":"/path/to/FWUP0002.DAT"}
+```
 
 With a runtime that implements capture and Playback, verify the built preview:
 
