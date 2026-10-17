@@ -9,9 +9,13 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./simulation": {
-      "types": "./pkg/simulation/fujimod_simulation.d.ts",
-      "import": "./pkg/simulation/fujimod_simulation.js"
+    "./simulation/webgl2": {
+      "types": "./pkg/simulation/webgl2/fujimod_simulation.d.ts",
+      "import": "./pkg/simulation/webgl2/fujimod_simulation.js"
+    },
+    "./simulation/webgpu": {
+      "types": "./pkg/simulation/webgpu/fujimod_simulation.d.ts",
+      "import": "./pkg/simulation/webgpu/fujimod_simulation.js"
     }
   },
   "files": [

@@ -1291,9 +1291,14 @@ footer a {
 .viewer.lcd-mode #view-actions {
   display: none !important;
 }
+.renderer-backend { color: inherit; }
+
 #view-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: end;
+  min-width: 0;
 }
 #boot-progress {
   position: absolute;

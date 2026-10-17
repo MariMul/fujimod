@@ -1,4 +1,6 @@
 //! Thin browser entry points. JS sends input commands, never scene graphs.
+#[cfg(any(all(feature = "webgl2", feature = "webgpu"), not(any(feature = "webgl2", feature = "webgpu"))))]
+compile_error!("Select exactly one browser renderer: webgl2 or webgpu");
 use crate::rendering::{Bridge, Command, Presentation, SimulationPlugin};
 use bevy::{
     asset::AssetMetaCheck,
@@ -9,6 +11,10 @@ use bevy::{
 use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 thread_local! {static HOST:RefCell<Option<Bridge>>=const{RefCell::new(None)};}
+#[wasm_bindgen]
+pub fn backend() -> String {
+    if cfg!(feature = "webgpu") { "webgpu" } else { "webgl2" }.into()
+}
 fn bridge() -> Result<Bridge, JsValue> {
     HOST.with(|h| {
         h.borrow()

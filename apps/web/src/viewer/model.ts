@@ -1,4 +1,4 @@
-import init, * as simulation from 'fujimod/simulation';
+import { rendererBackend, rendererURL } from './renderer';
 import { badgeStyle, inputIcon, showInputBadge } from '../feedback/input';
 import type { Frame, Input, Scene } from '../engine/api';
 import type { DetentSound } from '../feedback/detent-sound';
@@ -47,6 +47,10 @@ interface Rotary {
   positive: string;
   position: number;
 }
+type SimulationModule = Pick<typeof import('fujimod/simulation/webgl2'),
+  'start' | 'backend' | 'command' | 'snapshot' | 'response' | 'lcd' | 'take_sensor'> & {
+  default(): Promise<{ memory: WebAssembly.Memory }>;
+};
 
 /** Browser input and DOM overlays. Bevy owns meshes, picking, poses and rendering. */
 export class ModelViewer {
@@ -64,6 +68,7 @@ export class ModelViewer {
   private get mode() {
     return this.pendingMode ?? this.state.mode ?? 'inspect';
   }
+  private simulation!: SimulationModule;
   private started = false;
   private rendererFailed = false;
   private wasmMemory?: WebAssembly.Memory;
@@ -120,6 +125,18 @@ export class ModelViewer {
     this.modeButton.onclick = () => this.toggleMode();
     host.append(this.inputMarker, this.inputFeedback, this.modeButton);
     this.rotaryDrag = new RotaryDrag(this.canvas, (enabled) => this.setOrbit(enabled));
+    const backend = rendererBackend(location.search);
+    const renderer = document.createElement('select');
+    renderer.className = 'renderer-backend pill';
+    renderer.setAttribute('aria-label', '3D renderer');
+    for (const [value, label] of [['webgl2', 'WebGL2'], ['webgpu', 'WebGPU']]) {
+      const option = new Option(label, value);
+      option.disabled = value === 'webgpu' && !('gpu' in navigator);
+      renderer.add(option);
+    }
+    renderer.value = backend;
+    renderer.onchange = () => location.assign(rendererURL(location.href, renderer.value));
+    document.querySelector('#view-actions')!.append(renderer);
     this.bindInput();
     this.canvas.addEventListener('webglcontextlost', () => {
       this.showRendererError('3D graphics context was lost. LCD mode is still available.');
@@ -145,15 +162,23 @@ export class ModelViewer {
   }
   private async start() {
     this.host.dataset.rendererStage = 'adapter';
-    if (!window.WebGL2RenderingContext) throw Error('3D view requires WebGL 2.');
+    const backend = rendererBackend(location.search);
+    this.host.dataset.rendererBackend = backend;
+    if (backend === 'webgpu') {
+      const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
+      if (!gpu || !(await gpu.requestAdapter())) throw Error('WebGPU is unavailable in this browser.');
+    } else if (!window.WebGL2RenderingContext) throw Error('3D view requires WebGL 2.');
     this.host.dataset.rendererStage = 'wasm';
-    this.wasmMemory = (await init()).memory;
+    this.simulation = backend === 'webgpu'
+      ? await import('fujimod/simulation/webgpu')
+      : await import('fujimod/simulation/webgl2');
+    this.wasmMemory = (await this.simulation.default()).memory;
+    if (this.simulation.backend() !== backend) throw Error('Simulation renderer build mismatch.');
     this.host.dataset.rendererStage = 'engine';
-    simulation.start('#simulation-canvas', new URL('.', document.baseURI).href);
+    this.simulation.start('#simulation-canvas', new URL('.', document.baseURI).href);
     this.host.dataset.rendererStage = 'running';
     this.started = true;
     this.host.dataset.renderer = 'bevy';
-    this.host.dataset.rendererBackend = 'webgl2';
     this.host.dataset.rendererVersion = '0.20.0';
     requestAnimationFrame(() => this.poll());
     const environment = new URLSearchParams(location.search).get('environment');
@@ -173,8 +198,8 @@ export class ModelViewer {
   }
   private send(command: Record<string, unknown>) {
     if (this.rendererFailed) return;
-    if (this.started) simulation.command(JSON.stringify(command));
-    else void this.ready.then(() => simulation.command(JSON.stringify(command))).catch(() => {
+    if (this.started) this.simulation.command(JSON.stringify(command));
+    else void this.ready.then(() => this.simulation.command(JSON.stringify(command))).catch(() => {
       // Startup failure is already displayed by showRendererError.
     });
   }
@@ -221,7 +246,7 @@ export class ModelViewer {
   }
   private pollFrame() {
     this.host.dataset.wasmMemoryBytes = String(this.wasmMemory?.buffer.byteLength ?? 0);
-    const json = simulation.snapshot();
+    const json = this.simulation.snapshot();
     this.state = JSON.parse(json) ?? {};
     if (this.state.mode === this.pendingMode) this.pendingMode = undefined;
     this.host.dataset.simulation = json;
@@ -230,7 +255,7 @@ export class ModelViewer {
     this.modeButton.textContent = this.mode === 'walk' ? 'Inspect' : 'Walk';
     this.modeButton.setAttribute('aria-pressed', String(this.mode === 'walk'));
     for (const [id, resolve] of this.requests) {
-      const result = simulation.response(id);
+      const result = this.simulation.response(id);
       if (result !== undefined) {
         this.requests.delete(id);
         resolve(JSON.parse(result));
@@ -243,7 +268,7 @@ export class ModelViewer {
     }
     this.projectOverlays();
     if (this.sceneConsumer && !this.publishingScene && this.state.environmentReady) {
-      const rgb = simulation.take_sensor();
+      const rgb = this.simulation.take_sensor();
       if (rgb) {
         this.publishingScene = true;
         void this.sceneConsumer({ rgb, width: 768, height: 512 })
@@ -585,7 +610,7 @@ export class ModelViewer {
   }
   private uploadLCD(image?: ImageData) {
     if (!this.started || this.rendererFailed || this.host.classList.contains('lcd-mode')) return;
-    simulation.lcd(
+    this.simulation.lcd(
       this.lcd.width,
       this.lcd.height,
       new Uint8Array(

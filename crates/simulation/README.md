@@ -80,7 +80,14 @@ python3 crates/simulation/environments/crouch-end-station/test_prepare.py
 
 The browser app's build/check/test pre-scripts build the Wasm module. Generated
 bindings and Wasm live under `bindings/javascript/pkg/simulation/`, never in
-source control; the app imports the maintained `fujimod/simulation` package entry.
+source control; the app imports `fujimod/simulation/webgl2` or
+`fujimod/simulation/webgpu` only after choosing a backend. The default build
+command produces both variants; pass `webgl2` or `webgpu` to build just one.
+The Cargo features have the same names and are mutually exclusive on Wasm.
+The viewer's renderer selector reloads into `?renderer=webgl2` (the default) or
+`?renderer=webgpu`, preserving environment/scenario parameters. It loads only
+the selected module; a WebGPU failure never silently substitutes WebGL2.
+Both browser backends use the same resolution, assets, lighting and effects.
 Every browser build uses size optimization, thin LTO, and Binaryen. The script
 caches generated bindings and optimization until the compiled Wasm changes.
 Only the rendering features in use are enabled; text, animation, gizmos and

@@ -7,9 +7,9 @@ import { createGzip } from 'node:zlib';
 const root = resolve(
   fileURLToPath(new URL('../../../crates/simulation/environments/', import.meta.url)),
 );
-const wasmPath = fileURLToPath(
+const wasmRoot = fileURLToPath(
   new URL(
-    '../../../bindings/javascript/pkg/simulation/fujimod_simulation_bg.wasm',
+    '../../../bindings/javascript/pkg/simulation/',
     import.meta.url,
   ),
 );
@@ -35,7 +35,10 @@ export function simulationAssets() {
   const serve = (server) => {
     server.middlewares.use(async (req, res, next) => {
       const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
-      if (pathname === `/@fs${wasmPath}`) {
+      const backend = ['webgl2', 'webgpu'].find((backend) =>
+        pathname === `/@fs${resolve(wasmRoot, backend, 'fujimod_simulation_bg.wasm')}`);
+      if (backend) {
+        const wasmPath = resolve(wasmRoot, backend, 'fujimod_simulation_bg.wasm');
         const info = await stat(wasmPath);
         const gzip = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
         const etag = `"${info.size}-${info.mtimeMs}${gzip ? '-gzip' : ''}"`;
