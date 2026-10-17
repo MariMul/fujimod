@@ -1,4 +1,7 @@
 //! Direct, reverse-engineered firmware commands; no chunking or hidden polling.
+pub mod configuration;
+pub mod debug;
+pub mod diagnostic;
 pub mod info;
 pub mod memory;
 
@@ -59,8 +62,9 @@ pub(crate) fn status(response: &[u8], command: u32, header: usize) -> Result<()>
     Ok(())
 }
 
-pub(crate) fn memory_reply(
+pub(crate) fn parameter_reply(
     response: Vec<u8>,
+    command: u32,
     function: u32,
     parameters: &[u8; 16],
     length: usize,
@@ -74,7 +78,7 @@ pub(crate) fn memory_reply(
         }
         .into());
     }
-    status(&response, 0x200001, HEADER)?;
+    status(&response, command, HEADER)?;
     let expected = HEADER + PARAMETERS + length;
     if response.len() != expected {
         return Err(ProtocolError::ReplyLength {

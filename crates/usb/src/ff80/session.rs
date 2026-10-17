@@ -190,3 +190,5 @@ fn exact<const N: usize>(data: Vec<u8>) -> Result<[u8; N]> {
 
 #[cfg(test)]
 mod tests;
+
+mod commands;

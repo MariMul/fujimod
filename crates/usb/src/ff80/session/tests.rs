@@ -290,3 +290,48 @@ fn short_lifecycle_reply_and_timeout_block_following_commands() {
         assert!(steps.borrow().is_empty());
     }
 }
+
+#[test]
+fn data_read_uses_exact_offset_and_collects_short_usb_transfers() {
+    let (mut core, steps) = opened(vec![
+        Step::Control([0xe1, 0, 0x89, 0xab, 0xcd, 0xef, 0, 0, 0, 5, 0x12, 0x34]),
+        Step::Read(5, Ok(vec![1, 2])),
+        Step::Read(3, Ok(vec![3, 4, 5])),
+    ]);
+    assert_eq!(
+        block_on(core.read_data(0x89abcdef, nz(5))).unwrap(),
+        [1, 2, 3, 4, 5]
+    );
+    assert_eq!(core.state, SessionState::Ready);
+    assert!(steps.borrow().is_empty());
+}
+#[test]
+fn failed_data_read_keeps_completed_bytes_and_blocks_reuse() {
+    let (mut core, steps) = opened(vec![
+        Step::Control(super::super::framing::data_envelope(
+            RequestKind::ReadData,
+            0,
+            5,
+            0x1234,
+        )),
+        Step::Read(5, Ok(vec![1, 2])),
+        Step::Read(3, Ok(vec![])),
+    ]);
+    assert!(
+        matches!(block_on(core.read_data(0,nz(5))),Err(Error::PartialRead { data_len:2, data, .. }) if data == [1,2])
+    );
+    assert_eq!(core.state, SessionState::CompletionUnknown);
+    assert!(steps.borrow().is_empty());
+}
+#[test]
+fn data_upload_does_not_implicitly_prepare_or_finalize() {
+    let (mut core, steps) = opened(vec![
+        Step::Control(envelope(RequestKind::WriteData, 3, 0x1234)),
+        Step::Write(vec![1, 2, 3]),
+        Step::Control(envelope(RequestKind::Ready, 32, 0x1234)),
+        Step::Read(32, Ok(vec![42, 0, 0, 0])),
+    ]);
+    block_on(core.write_data(&[1, 2, 3])).unwrap();
+    assert_eq!(block_on(core.data_status()).unwrap(), 42);
+    assert!(steps.borrow().is_empty());
+}

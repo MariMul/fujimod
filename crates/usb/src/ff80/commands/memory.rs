@@ -1,4 +1,4 @@
-use super::{memory_reply, memory_request};
+use super::{memory_request, parameter_reply};
 use crate::{Error, Result, error::check_limit};
 use std::num::NonZeroU32;
 
@@ -52,8 +52,9 @@ impl ReadMemory {
         memory_request(0x200001, 2, &self.parameters(), &[])
     }
     pub(crate) fn decode(self, response: Vec<u8>) -> Result<Vec<u8>> {
-        memory_reply(
+        parameter_reply(
             response,
+            0x200001,
             2,
             &self.parameters(),
             self.range.length.get() as usize,
@@ -85,7 +86,7 @@ impl WriteMemory {
         memory_request(0x200001, 3, &parameters(self.range), &self.data)
     }
     pub(crate) fn decode(&self, response: Vec<u8>) -> Result<()> {
-        memory_reply(response, 3, &parameters(self.range), 0).map(|_| ())
+        parameter_reply(response, 0x200001, 3, &parameters(self.range), 0).map(|_| ())
     }
 }
 

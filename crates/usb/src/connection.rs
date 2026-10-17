@@ -10,12 +10,43 @@ use nusb::{
 };
 use std::{num::NonZeroU32, time::Duration};
 
-/// Fuji diagnostic USB identity, not an identification of model or boot mode.
-pub async fn discover() -> Result<Vec<nusb::DeviceInfo>> {
+/// USB discovery scope; model/firmware identity is established separately.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DeviceFilter {
+    Fujifilm,
+    Diagnostic,
+}
+pub async fn discover(filter: DeviceFilter) -> Result<Vec<nusb::DeviceInfo>> {
     Ok(nusb::list_devices()
         .await?
-        .filter(|d| d.vendor_id() == 0x04cb && d.product_id() == 0xff80)
+        .filter(|d| {
+            d.vendor_id() == 0x04cb
+                && (filter == DeviceFilter::Fujifilm || d.product_id() == 0xff80)
+        })
         .collect())
+}
+
+/// Descriptor inspection only; does not claim or configure an interface.
+pub async fn interfaces(info: &nusb::DeviceInfo) -> Result<Vec<InterfaceSelection>> {
+    let device = info.open().await?;
+    let mut selections = Vec::new();
+    for config in device.configurations() {
+        for interface in config.interface_alt_settings() {
+            let addresses: Vec<_> = interface
+                .endpoints()
+                .filter(|e| e.transfer_type() == nusb::descriptors::TransferType::Bulk)
+                .map(|e| e.address())
+                .collect();
+            if bulk_pair(&addresses).is_ok() {
+                selections.push(InterfaceSelection {
+                    configuration: config.configuration_value(),
+                    interface: interface.interface_number(),
+                    alternate: interface.alternate_setting(),
+                });
+            }
+        }
+    }
+    Ok(selections)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

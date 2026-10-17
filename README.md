@@ -29,7 +29,8 @@ cargo test --workspace --all-features
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
 
-Language bindings will live in `bindings/python/` and `bindings/javascript/` as
+The [Python package](bindings/python/README.md) lives in `bindings/python/`.
+JavaScript/Wasm bindings will live in `bindings/javascript/`. Binding crates are
 members of this same workspace. Each directory owns its language package;
 implementation crates remain independent of PyO3 and wasm-bindgen. The browser
 application stays in `apps/web/` and consumes the JavaScript package as needed.

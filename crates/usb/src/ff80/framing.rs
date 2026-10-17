@@ -8,6 +8,9 @@ pub enum RequestKind {
     Close = 0xc4,
     WriteCommand = 0xd0,
     ReadCommand = 0xd1,
+    WriteData = 0xe0,
+    ReadData = 0xe1,
+    Ready = 0xe8,
 }
 
 pub(crate) fn envelope(kind: RequestKind, size: u32, session: u16) -> [u8; 12] {
@@ -15,6 +18,12 @@ pub(crate) fn envelope(kind: RequestKind, size: u32, session: u16) -> [u8; 12] {
     bytes[0] = kind as u8;
     bytes[6..10].copy_from_slice(&size.to_be_bytes());
     bytes[10..12].copy_from_slice(&session.to_be_bytes());
+    bytes
+}
+
+pub(crate) fn data_envelope(kind: RequestKind, offset: u32, size: u32, session: u16) -> [u8; 12] {
+    let mut bytes = envelope(kind, size, session);
+    bytes[2..6].copy_from_slice(&offset.to_be_bytes());
     bytes
 }
 

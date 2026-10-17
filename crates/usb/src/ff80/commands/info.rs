@@ -29,7 +29,7 @@ impl InfoSelector {
     pub(crate) fn decode(self, response: Vec<u8>) -> Result<DeviceInfo> {
         status(&response, 0x150000, 16)?;
         let mut words = Vec::new();
-        for pair in response[16..].chunks_exact(2) {
+        for pair in response[16..].as_chunks::<2>().0 {
             let value = u16::from_le_bytes([pair[0], pair[1]]);
             if value == 0 {
                 let text = String::from_utf16(&words).map_err(|_| ProtocolError::InvalidUtf16)?;

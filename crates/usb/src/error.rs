@@ -52,6 +52,14 @@ pub enum Error {
     AddressOverflow,
     #[error("length must be nonzero and representable in the protocol")]
     InvalidLength,
+    #[error("argument must be a bounded ASCII token")]
+    InvalidToken,
+    #[error("bulk read failed after {data_len} bytes: {source}")]
+    PartialRead {
+        data_len: usize,
+        data: Vec<u8>,
+        source: Box<Error>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -64,6 +72,7 @@ pub enum ProtocolError {
     ZeroPacketLimit,
     InvalidUtf16,
     UnterminatedString,
+    DataLength { available: usize, declared: usize },
 }
 
 impl From<ProtocolError> for Error {

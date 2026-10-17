@@ -1,0 +1,25 @@
+[build-system]
+requires = ["maturin>=1.15,<2"]
+build-backend = "maturin"
+
+[project]
+name = "fujimod"
+version = "0.1.0"
+requires-python = ">=3.10"
+description = "FujiMod camera tools"
+readme = "README.md"
+
+[tool.maturin]
+module-name = "fujimod"
+
+[tool.uv]
+# Rebuild local installs when either the binding or its Rust implementation changes.
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "src/**/*.rs" },
+    { file = "../../Cargo.toml" },
+    { file = "../../Cargo.lock" },
+    { file = "../../crates/usb/Cargo.toml" },
+    { file = "../../crates/usb/src/**/*.rs" },
+]

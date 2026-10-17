@@ -67,6 +67,47 @@ fn chunk(range: MemoryRange, offset: u32, maximum: u32) -> Option<MemoryRange> {
     )
 }
 
+/// Collect a range through the pull reader. Streaming users should keep the
+/// reader instead, so completed chunks stay in their own sink on interruption.
+pub async fn read_range(
+    session: &mut Session,
+    range: MemoryRange,
+    limits: DebugMemoryLimits,
+) -> Result<Vec<u8>> {
+    let mut reader = MemoryReader::new(session, range, limits);
+    let mut data = Vec::new();
+    while let Some(chunk) = reader.next_chunk().await? {
+        data.extend_from_slice(&chunk);
+    }
+    Ok(data)
+}
+
+/// Composed write: each firmware request remains independently bounded.
+pub async fn write_range(
+    session: &mut Session,
+    address: Address,
+    bytes: &[u8],
+    limits: DebugMemoryLimits,
+) -> Result<()> {
+    use crate::ff80::commands::memory::WriteMemory;
+    let length = u32::try_from(bytes.len())
+        .ok()
+        .and_then(NonZeroU32::new)
+        .ok_or(Error::InvalidLength)?;
+    MemoryRange::new(address, length)?;
+    let maximum = limits
+        .write
+        .get()
+        .min(session.info().advertised_packet_bytes.get()) as usize;
+    for (offset, part) in bytes.chunks(maximum).enumerate() {
+        let at = address.0 + u32::try_from(offset * maximum).map_err(|_| Error::AddressOverflow)?;
+        session
+            .write_memory(WriteMemory::new(Address(at), part.to_vec(), limits)?)
+            .await?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

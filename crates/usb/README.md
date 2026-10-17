@@ -3,7 +3,8 @@
 Async Rust access to Fujifilm's reverse-engineered ff80 service/debug interface.
 This first implementation provides nusb discovery and explicit interface
 selection, C0/C2/C4 session lifecycle, D0/D1 command exchanges, information
-selectors, direct memory reads/writes and a pull-based range reader.
+selectors, configuration commands, debug events and console polling, log reads,
+diagnostic queries, E0/E1/E8 data transfers and composed memory range operations.
 
 `ff80/commands/` encodes one firmware request at a time. `operations/` composes
 commands. nusb handles platform USB access; its adapter has a private test seam.
@@ -52,9 +53,9 @@ of successfully returned bytes. Previously returned buffers remain with the
 caller if a later chunk fails.
 
 The initial implementation is tested on native macOS with synthetic exchanges;
-no hardware access is part of the test suite. App80, configuration commands,
-bulk diagnostic strategies, Python bindings and browser builds are subsequent
-capabilities. All public I/O is async and the internal test interface does not
+no hardware access is part of the test suite. App80, firmware-specific bulk strategies and browser builds are subsequent
+capabilities. Native Python bindings live in `bindings/python/` at the workspace
+root. All public I/O is async and the internal test interface does not
 require `Send` futures. Browser execution is not yet validated.
 
 Protocol references are `fftlib.py` and `ffjlib.py` from
