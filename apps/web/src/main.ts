@@ -12,6 +12,7 @@ import { InputPanel } from "./ui/controls";
 import { CardBrowser, downloadBlob } from "./ui/card";
 import { FaultPanel } from "./ui/fault";
 import { cameraCard, cameraTable, type CameraSupport } from "./ui/cameras";
+import { personalNote, noteCameraSupport } from "./ui/personal-note";
 import type { DevicePanel, PowerCombo } from "./ui/layout";
 import generations from "../devices/generations.json";
 
@@ -27,6 +28,17 @@ const adapters = import.meta.glob<{
   initialPositions: Record<string, string>;
   preview: string;
 }>("../devices/*/index.ts");
+const note = document.querySelector<HTMLElement>(".personal-note")!;
+personalNote(note);
+const features = $<HTMLDetailsElement>("features");
+const openFeatures = () => {
+  if (location.hash === "#features") features.open = true;
+};
+window.addEventListener("hashchange", openFeatures);
+document.querySelector('a[href="#features"]')!.addEventListener("click", () => {
+  features.open = true;
+});
+openFeatures();
 const lines = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 lines.id = "leaders";
 $("workspace").append(lines);
@@ -403,6 +415,7 @@ try {
     }));
   $("camera-cards").replaceChildren(...cameras.map(cameraCard));
   cameraTable($("camera-table"), generations, cameras);
+  noteCameraSupport(note, cameras);
   performance.mark("camera-catalog-ready");
   const localDat = __FUJIMOD_LOCAL_DAT__ ? cachedFetch("/local/firmware.dat") : undefined;
   const first = cameras.find((camera) => camera.firmware.model_asset);

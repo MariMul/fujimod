@@ -25,6 +25,34 @@
         </div>
       </header>
       <main>
+        <aside class="personal-note" aria-label="A note from Jake">
+          <p>Hey,</p>
+          <p>
+            FujiMod is a <span id="project-age"></span> day old unauthorized
+            firmware modification for Fujifilm X-series cameras. It has features
+            like <span data-feature-icon="aspect"></span> aspect ratio crop
+            (<span id="crop-ratios"></span>),
+            <span data-feature-icon="highlight"></span> highlight metering,
+            <span data-feature-icon="snap"></span> snap focus, unlimited
+            <span data-feature-icon="recipes"></span> recipes (that save
+            <span data-feature-icon="white-balance"></span> white balance &amp;
+            <span data-feature-icon="shift"></span> shift), more
+            <span data-feature-icon="film"></span> film simulations
+            (<span data-feature-icon="eterna"></span> ETERNA 👍,
+            <span id="other-films"></span> 🤷) and <a href="#features">more</a>.
+            Although it currently supports <span id="supported-models">the cameras listed below</span>,
+            we have a plan to eventually support all <span id="camera-count"></span>
+            camera models.
+          </p>
+          <p>
+            FujiMod is not ready for your camera. It is too new and changing too
+            quickly. I’ll release <em>SD card dual boot</em> and then
+            <em>installable firmware</em> as I gain confidence in our design and
+            simulation testing system.
+          </p>
+          <p>Until then, you can try it in the <em>camera emulator</em> below.</p>
+          <p class="signature">-Jake</p>
+        </aside>
         <section class="stage idle" id="workspace">
           <div class="viewer" id="viewer" aria-label="Camera viewer">
             <div class="ghost" aria-hidden="true"></div>
@@ -100,6 +128,14 @@
             </div>
           </aside>
         </section>
+        <details class="features" id="features">
+          <summary>More features</summary>
+          <p>
+            Golden ratio composition guides, masked, darkened or bordered crop
+            surrounds, and an EV/ISO dial option that lets the exposure
+            compensation dial select ISO. Availability varies by camera and build.
+          </p>
+        </details>
         <section class="gens" id="camera-table" aria-label="Cameras"></section>
       </main>
       <footer id="model-credit"></footer>
