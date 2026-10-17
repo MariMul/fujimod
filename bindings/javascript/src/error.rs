@@ -13,6 +13,7 @@ pub enum ErrorKind {
     Busy,
     Closed,
     Abandoned,
+    Cancelled,
 }
 
 #[wasm_bindgen]

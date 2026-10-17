@@ -6,6 +6,7 @@ class ChunkIterator implements AsyncIterableIterator<Uint8Array> {
   constructor(private readonly reader: native.RangeReader) {}
   get bytesCompleted(): number { return this.reader.bytesCompleted; }
   close(): void { this.reader.close(); }
+  cancelPending(): void { this.reader.cancelPending(); }
   async next(): Promise<IteratorResult<Uint8Array>> {
     const value = await this.reader.nextChunk();
     return value === undefined ? { done: true, value: undefined } : { done: false, value };
@@ -85,3 +86,8 @@ export const usb = Object.freeze({
   research: Object.freeze({ CommandCode: native.ResearchCommandCode, Request: native.ResearchRequest, Reply: native.ResearchReply }),
   tracing: Object.freeze({ Trace: native.Trace, Stage: native.TraceStage, Phase: native.TracePhase, RequestKind: native.TraceRequestKind, FailureKind: native.TraceFailureKind }),
 });
+
+/** Make this initialized Rust module available to the FujiMod Python package. */
+export function registerPyodide(runtime: { registerJsModule(name: string, module: object): void }): void {
+  runtime.registerJsModule('_fujimod_js', { usb });
+}

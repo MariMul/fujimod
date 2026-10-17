@@ -3,7 +3,7 @@ use super::*;
 use error::{bytes, nz};
 use futures_channel::oneshot;
 use requests::DataWindow;
-use session::{Session, Slot, take_native};
+use session::{Cancellation, Session, Slot, take_native};
 use std::{cell::RefCell, rc::Rc};
 use usb::ff80::{
     Session as NativeSession,
@@ -40,7 +40,7 @@ pub(crate) struct ReaderState {
     completed: u32,
     busy: bool,
     closed: bool,
-    cancel: Option<oneshot::Sender<()>>,
+    cancel: Option<oneshot::Sender<Cancellation>>,
 }
 impl ReaderState {
     fn restore(&mut self) {
@@ -56,7 +56,7 @@ impl ReaderState {
     pub(crate) fn abandon(&mut self) {
         self.closed = true;
         if let Some(cancel) = self.cancel.take() {
-            let _ = cancel.send(());
+            let _ = cancel.send(Cancellation::Abandoned);
         }
         // SessionSlot is already Abandoned. Dropping never emits C4.
         self.reader.take();
@@ -126,11 +126,10 @@ impl RangeReader {
         Ok(wasm_bindgen_futures::future_to_promise(async move {
             let result = futures_lite::future::or(
                 async {
-                    let _ = (&mut cancelled).await;
-                    Err(fail(
-                        ErrorKind::Abandoned,
-                        "range read was abandoned; camera execution may continue",
-                    ))
+                    Err((&mut cancelled)
+                        .await
+                        .unwrap_or(Cancellation::Abandoned)
+                        .error())
                 },
                 async {
                     lease
@@ -169,6 +168,18 @@ impl RangeReader {
         state.closed = true;
         state.restore();
         Ok(())
+    }
+    /// Cancel a pending chunk and close the reader. Await its Promise before
+    /// issuing another session operation. No USB cleanup is sent.
+    #[wasm_bindgen(js_name=cancelPending)]
+    pub fn cancel_pending(&self) {
+        let mut state = self.inner.borrow_mut();
+        state.closed = true;
+        if let Some(cancel) = state.cancel.take() {
+            let _ = cancel.send(Cancellation::Interrupted);
+        } else if !state.busy {
+            state.restore();
+        }
     }
 }
 fn create(

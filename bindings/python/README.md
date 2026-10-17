@@ -2,7 +2,9 @@
 
 This directory builds the `fujimod` Python distribution. PyO3 source lives in
 `src/`; the USB implementation lives in the workspace's `crates/usb/`.
-There is one package and no separate top-level Python source tree.
+Python source lives in `python/fujimod/` inside this same distribution. Native
+wheels include the private `fujimod._native` extension; Pyodide uses the same
+public `fujimod.usb` namespace through the [WebUSB adapter](PYODIDE.md).
 
 Build from the repository root with maturin:
 
@@ -51,8 +53,8 @@ available.
 The native binding uses PyO3's `experimental-async` coroutine support and nusb's
 wakeups directly, without a background Python worker or an added Rust runtime.
 I/O polling releases the GIL. These native coroutines work with `await`,
-`asyncio.create_task`, cancellation and separate event loops. Pyodide packaging
-remains a separate integration target.
+`asyncio.create_task`, cancellation and separate event loops. The Pyodide wheel
+uses an async Python/JavaScript adapter over the same Rust core.
 
 Synchronous callers use the explicit `blocking` API:
 

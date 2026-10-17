@@ -14,7 +14,7 @@ export function installWebUsb(){
   const nav=globalThis.navigator;
   const previousUsb=Object.getOwnPropertyDescriptor(nav,'usb');
   const realWindow=typeof Window!=='undefined'&&globalThis instanceof Window;
-  const log=[],state={pending:new Uint8Array(),kind:undefined,cancelPicker:false,hangControl:undefined,pieces:[]};
+  const log=[],state={pending:new Uint8Array(),kind:undefined,cancelPicker:false,hangControl:undefined,pieces:[],memory:new Map(),configuration:new Map()};
   const iface={interfaceNumber:2,claimed:false,alternates:[{alternateSetting:3,interfaceClass:0xff,interfaceSubclass:0,interfaceProtocol:0,interfaceName:'fixture'}]};
   const config={configurationValue:1,interfaces:[iface]};
   const device={vendorId:0x04cb,productId:0xff80,deviceVersionMajor:1,deviceVersionMinor:0,deviceVersionSubminor:0,
@@ -51,8 +51,26 @@ export function installWebUsb(){
       if(state.kind===0xe0)state.pieces.push(bytes);
       else{
         assert.equal(state.kind,0xd0);const v=new DataView(bytes.buffer),code=v.getUint32(0,true);
-        if(code===0x150000){assert.equal(v.getUint32(16,true),4);const text=utf16le('SYNTHETIC\0');state.pending=new Uint8Array(16+text.length);state.pending.set(words(code,0,0,0));state.pending.set(text,16);}
-        else if(code===0x760001)state.pending=words(code,0,0,0,0,0,0,0);
+        if(code===0x150000){const selector=v.getUint32(16,true);assert.ok([4,0xf0001,0xf0002].includes(selector));const text=utf16le((selector===4?'SYNTHETIC':selector===0xf0001?'WRITING':'NORMAL')+'\0');state.pending=new Uint8Array(16+text.length);state.pending.set(words(code,0,0,0));state.pending.set(text,16);}
+        else if(code===0x760001||code===0x550001)state.pending=words(code,0,0,0,0,0,0,0);
+        else if(code===0x450006)state.pending=words(code,1,0xffff,0,9,8,7,6);
+        else if(code===0x580000)state.pending=words(code,0,0,0,0,48,0x5a5a5a5a,0x5a5a5a5a);
+        else if(code===0xdeadbeef){state.pending=bytes.slice();const reply=new DataView(state.pending.buffer);reply.setUint32(4,1,true);reply.setUint32(8,0xffff,true);}
+        else if(code===0x200001||code===0x1a0002){
+          const fn=v.getUint32(16,true);
+          if(code===0x1a0002&&fn===1){state.pending=bytes.slice(0,36);const reply=new DataView(state.pending.buffer);reply.setUint32(28,4096,true);reply.setUint32(32,256,true);}
+          else if(fn===2||fn===3){
+            const address=v.getUint32(28,true),length=v.getUint32(32,true),page=code===0x1a0002?v.getUint32(24,true):0;
+            const map=code===0x200001?state.memory:state.configuration;
+            const key=offset=>`${page}:${address+offset}`;
+            if(fn===3){for(let i=0;i<length;i++)map.set(key(i),bytes[36+i]);state.pending=bytes.slice(0,36);}
+            else{state.pending=new Uint8Array(36+length);state.pending.set(bytes.slice(0,36));for(let i=0;i<length;i++)state.pending[36+i]=map.get(key(i))??((address+i)&255);}
+          }else if(code===0x200001&&fn===5)state.pending=bytes.slice(0,36);
+          else if(code===0x200001&&fn===6)state.pending=words(code,0,0,0,6,0,0,0);
+          else if(code===0x200001&&fn===7)state.pending=new Uint8Array([...words(code,0,0,0,7,42,7,3),108,111,103]);
+          else if(code===0x200001&&fn===1)state.pending=new Uint8Array([...words(code,0,0,0,1,7,3),108,111,103]);
+          else throw new Error(`Unexpected fixture function ${fn}`);
+        }
         else throw new Error(`Unexpected fixture command ${code.toString(16)}`);
       }
       return {status:'ok',bytesWritten:bytes.length};

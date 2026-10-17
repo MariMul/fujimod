@@ -146,3 +146,25 @@ test('abandoning a pending close preserves explicit abandonment without retry',a
   await until(()=>script.remaining===0);session.abandon();await rejected;
   assert.equal(session.state,usb.SessionState.Abandoned);assert.equal(script.remaining,0);
 });
+
+test('cancelPending preserves Ready before dispatch and fences dispatched I/O',async()=>{
+  const early=await opened([]);
+  const never=early.session.ping();early.session.cancelPending();
+  await assert.rejects(never,kind(usb.ErrorKind.Cancelled));
+  assert.equal(early.session.state,usb.SessionState.Ready);assert.equal(early.script.remaining,0);
+  const {session,script}=await opened([E.control(env(0xc2,2)),E.pendingRead(2)]);
+  const pending=session.ping(),rejected=assert.rejects(pending,kind(usb.ErrorKind.Cancelled));
+  await until(()=>script.remaining===0);session.cancelPending();session.cancelPending();
+  assert.throws(()=>session.ping(),kind(usb.ErrorKind.Busy));
+  await rejected;assert.equal(session.state,usb.SessionState.CompletionUnknown);
+  await assert.rejects(async()=>session.close(),kind(usb.ErrorKind.CompletionUnknown));
+});
+
+test('cancelPending on a pending chunk closes the reader and restores fenced ownership',async()=>{
+  const {session,script}=await opened([E.control(env(0xe1,4)),E.pendingRead(4)]);
+  const reader=usb.data.readChunks(session,new usb.DataWindow(0x1000,0x1000,8,4,usb.OffsetMode.Checked),0x1000,8);
+  const pending=reader.next(),rejected=assert.rejects(pending,kind(usb.ErrorKind.Cancelled));
+  await until(()=>script.remaining===0);reader.cancelPending();await rejected;
+  reader.close();assert.deepEqual(await reader.next(),{done:true,value:undefined});
+  assert.equal(reader.bytesCompleted,0);assert.equal(session.state,usb.SessionState.CompletionUnknown);
+});

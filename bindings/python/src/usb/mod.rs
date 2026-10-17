@@ -832,7 +832,6 @@ fn interfaces(py: Python<'_>, device: &Device) -> PyResult<Vec<InterfaceSelectio
 pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     let usb = PyModule::new(py, "fujimod.usb")?;
     let blocking = PyModule::new(py, "fujimod.usb.blocking")?;
-    m.add("__path__", PyList::empty(py))?;
     usb.add("__path__", PyList::empty(py))?;
     usb.add_class::<InfoSelector>()?;
     usb.add_class::<ConfigurationView>()?;

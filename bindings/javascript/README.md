@@ -168,3 +168,12 @@ counts are JavaScript `bigint`; timestamps are Unix milliseconds.
 The recorder bounds event count and retained payload bytes. It reports loss
 without truncating payloads silently or changing USB outcomes. Consumers choose
 when to drain and whether losing trace data should stop their application.
+
+Python in Pyodide can use this same initialized module. Call
+`registerPyodide(pyodide)` and install the browser wheel from
+[`bindings/python`](../python/PYODIDE.md). `session.cancelPending()` and chunk
+iterators' `cancelPending()` cancel host work without abandoning the session.
+Await the pending Promise before reusing ownership; the session is fenced if
+an exchange was incomplete. Cancelling before dispatch leaves it ready. Host
+cancellation rejects with `ErrorKind.Cancelled`; it never stops camera code.
+`abandon()` remains the distinct terminal action.

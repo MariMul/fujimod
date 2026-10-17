@@ -32,7 +32,8 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 The core also builds for WebUSB. See the USB crate's
 [Wasm checks](crates/usb/README.md#wasm-core-checks) for the JS-runtime tests;
 the [JavaScript package](bindings/javascript/README.md) provides typed browser
-APIs over the same core.
+APIs over the same core. Python in Pyodide uses the
+[WebUSB adapter](bindings/python/PYODIDE.md) with that initialized module.
 
 The [Python package](bindings/python/README.md) lives in `bindings/python/`.
 The JavaScript/Wasm package lives in `bindings/javascript/`. Binding crates are

@@ -7,7 +7,7 @@ repository.workspace = true
 publish = false
 
 [lib]
-name = "fujimod"
+name = "_native"
 crate-type = ["cdylib"]
 test = false
 doctest = false
