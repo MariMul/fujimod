@@ -10,6 +10,18 @@ Gandi remains the registrar. Cloudflare hosts the entire DNS zone, delegated to
 mail service-discovery records were imported from Gandi before delegation changed.
 Worker custom domains manage the website's DNS records and HTTPS certificates.
 
+Initial migration completed on 2026-10-17. GitHub Pages is disabled. Both web
+hostnames passed HTTPS and build-hash checks; the sharing endpoint passed live
+owner/controller signaling and owner-revocation checks. The deployment token is
+stored in the repository's Actions secret.
+
+The initial static deployment uses committed source `04bd01c12db5` and no local
+simulator bundles or unpublished mod artifacts. There were no published GitHub
+releases to stage, so its catalog offers USB devices without simulator runtimes.
+The sharing Worker currently has no TURN secrets and provides STUN only. TURN
+usage monitoring and a budget cutoff must be implemented before enabling relay
+credentials; the existing issuance quota is not a spending cap.
+
 ## Releases
 
 `.github/workflows/cloudflare.yml` builds main, checks the application, stages
