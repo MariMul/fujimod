@@ -14,6 +14,14 @@ package and nusb's WebUSB backend. Connect opens the browser's FF80 device
 picker. A single bulk interface is selected automatically; multiple interfaces
 require a choice. WebUSB needs a supporting browser and HTTPS.
 
+The connection target selects Camera · USB or Simulator. Simulator runs the actual
+firmware in a dedicated worker. Its WebUSB device forwards descriptor, control
+and bulk transactions to the emulator's USB controller; nusb and the Rust FF80
+core process the same bytes as a hardware connection. The page's physical
+`navigator.usb` stays intact. Firmware is selected by its full DAT hash and must
+have a registered `emulate.usb` runtime and checked scenario. Locally configured
+DATs can be used directly; otherwise Connect simulator opens a DAT chooser.
+
 Commands are printable ASCII with a selectable line ending. Responses and
 connection events share one log pane. Pending responses are polled for up to
 ten seconds, then wait for an explicit Read response. Unknown progress or a
@@ -35,6 +43,13 @@ FUJIMOD_WEB_URL=https://your-host.ts.net/ npm run test:dev-tools:browser
 
 This checks production Wasm against a simulated WebUSB device in desktop/mobile
 Chromium, plus the unsupported-browser state in WebKit. It never opens hardware.
+
+The firmware integration check uses that same simulator connection, with physical
+USB forbidden in the page. It cold-boots firmware and checks the stock console:
+
+```sh
+FUJIMOD_WEB_URL=https://your-host.ts.net/ node src/dev-tools/browser-emulator.mjs
+```
 
 ## Camera viewer
 

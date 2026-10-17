@@ -1,6 +1,12 @@
 import { flush } from 'solid-js';
 import { expect, test } from 'vite-plus/test';
-import { Progress, type CameraBackend, type CameraLink, type ConsoleOutput } from './camera';
+import {
+  CameraTarget,
+  Progress,
+  type CameraBackend,
+  type CameraLink,
+  type ConsoleOutput,
+} from './camera';
 import { ConnectionState, ConsoleState, LineEnding, createDevTools } from './controller';
 import { Direction, Layer, Level, LogBuffer, exportLog, type NewEntry } from './log';
 function fixture() {
@@ -175,6 +181,52 @@ test('invalid console text is rejected locally before any submission', async () 
       expect(await tools.send(text, LineEnding.CrLf)).toBe(false);
     }
     expect(f.commands).toHaveLength(0);
+  } finally {
+    tools.dispose();
+  }
+});
+test('simulator can connect without physical WebUSB; physical USB remains unavailable', async () => {
+  const f = fixture(),
+    tools = createDevTools(f.backend, false);
+  const picked: unknown[] = [];
+  f.backend.pick = async (target) => {
+    picked.push(target);
+    return { name: 'Emulated firmware', interfaces: [{ id: 7, label: 'USB' }] };
+  };
+  try {
+    await tools.start();
+    await tools.connect();
+    expect(picked).toHaveLength(0);
+    await tools.connect(CameraTarget.Emulator);
+    flush();
+    expect(tools.connection()).toBe(ConnectionState.Connected);
+    expect(await tools.send('help', LineEnding.Lf)).toBe(true);
+    tools.disconnect();
+    flush();
+    expect(tools.connection()).toBe(ConnectionState.Unsupported);
+  } finally {
+    tools.dispose();
+  }
+});
+test('a cancelled boot failure cannot replace a newer connection', async () => {
+  const f = fixture(),
+    tools = createDevTools(f.backend, true);
+  let reject!: (error: Error) => void;
+  f.backend.pick = () =>
+    new Promise((_resolve, rejected) => {
+      reject = rejected;
+    });
+  try {
+    await tools.start();
+    const old = tools.connect(CameraTarget.Emulator);
+    tools.disconnect();
+    f.backend.pick = async () => ({ name: 'New camera', interfaces: [{ id: 7, label: 'USB' }] });
+    const fresh = tools.connect(CameraTarget.Emulator);
+    reject(Error('Old emulator was cancelled'));
+    await Promise.all([old, fresh]);
+    flush();
+    expect(tools.connection()).toBe(ConnectionState.Connected);
+    expect(tools.entries().some((e) => e.message === 'Old emulator was cancelled')).toBe(false);
   } finally {
     tools.dispose();
   }

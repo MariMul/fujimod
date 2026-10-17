@@ -1,5 +1,9 @@
 import { initialize, usb, type Device, type Session } from 'fujimod';
 import { Direction, Layer, Level, describeCommand, type NewEntry } from './log';
+export enum CameraTarget {
+  Usb = 'usb',
+  Emulator = 'simulator',
+}
 export enum Progress {
   Complete,
   Pending,
@@ -27,10 +31,11 @@ export interface CameraLink {
 }
 export interface CameraBackend {
   initialize(): Promise<void>;
-  pick(): Promise<CameraChoice | undefined>;
+  pick(target?: CameraTarget): Promise<CameraChoice | undefined>;
   open(id: number): Promise<CameraLink>;
   drain(): NewEntry[];
   onDisconnect(callback: () => void): () => void;
+  cancelPending?(): void;
   dispose(): void;
 }
 const CONSOLE_BYTES = 4096;

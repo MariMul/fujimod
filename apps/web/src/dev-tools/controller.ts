@@ -1,5 +1,11 @@
 import { createSignal } from 'solid-js';
-import { Progress, type CameraBackend, type CameraChoice, type CameraLink } from './camera';
+import {
+  CameraTarget,
+  Progress,
+  type CameraBackend,
+  type CameraChoice,
+  type CameraLink,
+} from './camera';
 import { Direction, Layer, Level, LogBuffer, type LogEntry, type NewEntry } from './log';
 export enum ConnectionState {
   Loading,
@@ -23,13 +29,13 @@ export enum LineEnding {
   None = 'None',
 }
 export function createDevTools(backend: CameraBackend, supported: boolean) {
-  const [connection, publishConnection] = createSignal(
-    supported ? ConnectionState.Loading : ConnectionState.Unsupported,
-  );
+  const offlineState = supported ? ConnectionState.Disconnected : ConnectionState.Unsupported;
+  const [connection, publishConnection] = createSignal(ConnectionState.Loading);
   const [consoleState, publishConsoleState] = createSignal(ConsoleState.Idle);
   // Application policy advances synchronously; Solid commits the displayed state
   // in a batch. Never use an uncommitted UI signal as an operation guard.
-  let state = supported ? ConnectionState.Loading : ConnectionState.Unsupported;
+  let state = ConnectionState.Loading;
+  let attempt = 0;
   let commandState = ConsoleState.Idle;
   const setConnection = (next: ConnectionState) => {
     state = next;
@@ -68,21 +74,28 @@ export function createDevTools(backend: CameraBackend, supported: boolean) {
     }
   };
   function disconnect() {
+    attempt++;
     stop = true;
+    backend.cancelPending?.();
     const old = link;
     link = undefined;
     old?.abandon();
     drain();
     setConsoleState(ConsoleState.Idle);
-    setConnection(ConnectionState.Disconnected);
+    setConnection(offlineState);
     if (old) message('Disconnected');
   }
   async function open(id: number) {
     if (currentConnection() !== ConnectionState.Selecting) return;
     setConnection(ConnectionState.Opening);
+    const currentAttempt = attempt;
     try {
       const opened = await backend.open(id);
-      if (disposed || currentConnection() !== ConnectionState.Opening) {
+      if (
+        disposed ||
+        currentAttempt !== attempt ||
+        currentConnection() !== ConnectionState.Opening
+      ) {
         opened.abandon();
         return;
       }
@@ -91,29 +104,44 @@ export function createDevTools(backend: CameraBackend, supported: boolean) {
       setConnection(ConnectionState.Connected);
       message(`Connected · ${camera()?.name ?? 'Fujifilm'}`);
     } catch (error) {
-      fail(error);
-      if (!disposed) setConnection(ConnectionState.Disconnected);
+      if (!disposed && currentAttempt === attempt) {
+        fail(error);
+        setConnection(offlineState);
+      }
     }
   }
-  async function connect() {
-    if (currentConnection() !== ConnectionState.Disconnected) return;
+  async function connect(target = CameraTarget.Usb) {
+    if (target === CameraTarget.Usb && !supported) return;
+    if (
+      currentConnection() !== ConnectionState.Disconnected &&
+      !(currentConnection() === ConnectionState.Unsupported && target === CameraTarget.Emulator)
+    )
+      return;
     setConnection(ConnectionState.Choosing);
+    const currentAttempt = ++attempt;
     try {
-      const choice = await backend.pick();
-      if (disposed || currentConnection() !== ConnectionState.Choosing) return;
+      const choice = await backend.pick(target);
+      if (
+        disposed ||
+        currentAttempt !== attempt ||
+        currentConnection() !== ConnectionState.Choosing
+      )
+        return;
       if (!choice) {
-        setConnection(ConnectionState.Disconnected);
+        setConnection(offlineState);
         return;
       }
       setCamera(choice);
       setConnection(ConnectionState.Selecting);
       if (!choice.interfaces.length) {
         message('No bulk USB interface is available.', Level.Error);
-        setConnection(ConnectionState.Disconnected);
+        setConnection(offlineState);
       } else if (choice.interfaces.length === 1) await open(choice.interfaces[0].id);
     } catch (error) {
-      fail(error);
-      if (!disposed) setConnection(ConnectionState.Disconnected);
+      if (!disposed && currentAttempt === attempt) {
+        fail(error);
+        setConnection(offlineState);
+      }
     }
   }
   async function poll(current: CameraLink) {
@@ -209,14 +237,10 @@ export function createDevTools(backend: CameraBackend, supported: boolean) {
     }
   }
   async function start() {
-    if (!supported) {
-      message('WebUSB requires Chrome or Edge over HTTPS.', Level.Warning);
-      return;
-    }
     try {
       await backend.initialize();
       if (disposed) return;
-      setConnection(ConnectionState.Disconnected);
+      setConnection(supported ? ConnectionState.Disconnected : ConnectionState.Unsupported);
       timer = setInterval(drain, 50);
       unlisten = backend.onDisconnect(() => {
         disconnect();

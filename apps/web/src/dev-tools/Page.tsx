@@ -1,7 +1,8 @@
 import { For, Show, createEffect, createMemo, createSignal, onSettled, untrack } from 'solid-js';
-import { WebUsbCamera, type CameraBackend } from './camera';
+import { CameraTarget, type CameraBackend } from './camera';
 import { ConnectionState, ConsoleState, LineEnding, createDevTools } from './controller';
 import { Direction, Layer, Level, exportLog, hex, type LogEntry } from './log';
+import { CameraSources } from './sources';
 import '../style.css';
 import './style.css';
 const layers = [Layer.Console, Layer.App80, Layer.Ff80, Layer.Usb];
@@ -71,13 +72,18 @@ function LogRow(props: { entry: LogEntry }) {
 }
 export function DevTools(props: { backend?: CameraBackend; supported?: boolean }) {
   const tools = createDevTools(
-    untrack(() => props.backend) ?? new WebUsbCamera(),
+    untrack(() => props.backend) ?? new CameraSources(),
     untrack(() => props.supported) ?? (isSecureContext && 'usb' in navigator),
   );
   const [activeLayers, setActiveLayers] = createSignal<ReadonlySet<Layer>>(
     new Set([Layer.Console, Layer.App80, Layer.Ff80]),
   );
   const [activeLevels, setActiveLevels] = createSignal<ReadonlySet<Level>>(new Set(levels));
+  const [target, setTarget] = createSignal(
+    new URLSearchParams(location.search).get('target') === CameraTarget.Emulator
+      ? CameraTarget.Emulator
+      : CameraTarget.Usb,
+  );
   const [draft, setDraft] = createSignal('');
   const [ending, setEnding] = createSignal(LineEnding.Lf);
   const [follow, setFollow] = createSignal(true);
@@ -102,7 +108,14 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean }
       tools.consoleState() === ConsoleState.Idle,
   );
   onSettled(() => {
-    void tools.start();
+    void tools.start().then(() => {
+      if (
+        import.meta.env.DEV &&
+        new URLSearchParams(location.search).get('target') === CameraTarget.Emulator &&
+        new URLSearchParams(location.search).get('connect') === '1'
+      )
+        void tools.connect(CameraTarget.Emulator);
+    });
     return tools.dispose;
   });
   createEffect(
@@ -176,21 +189,49 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean }
           </a>
         </nav>
         <div class="dt-connection">
+          <select
+            aria-label="Connection target"
+            value={target()}
+            disabled={
+              ![ConnectionState.Disconnected, ConnectionState.Unsupported].includes(
+                tools.connection(),
+              )
+            }
+            onChange={(event) => setTarget(event.currentTarget.value as CameraTarget)}
+          >
+            <option value={CameraTarget.Usb}>Camera · USB</option>
+            <option value={CameraTarget.Emulator}>Simulator</option>
+          </select>
           <span class="dt-status" role="status">
             <i class={tools.connection() === ConnectionState.Connected ? 'online' : ''} />
-            {connectionNames[tools.connection()]}
+            {tools.connection() === ConnectionState.Unsupported &&
+            target() === CameraTarget.Emulator
+              ? 'Disconnected'
+              : tools.connection() === ConnectionState.Choosing &&
+                  target() === CameraTarget.Emulator
+                ? 'Starting simulator'
+                : connectionNames[tools.connection()]}
           </span>
           <Show
-            when={tools.connection() === ConnectionState.Disconnected}
+            when={
+              tools.connection() === ConnectionState.Disconnected ||
+              (tools.connection() === ConnectionState.Unsupported &&
+                target() === CameraTarget.Emulator)
+            }
             fallback={
               <Show
                 when={
                   tools.connection() === ConnectionState.Connected ||
-                  tools.connection() === ConnectionState.Blocked
+                  tools.connection() === ConnectionState.Blocked ||
+                  tools.connection() === ConnectionState.Choosing ||
+                  tools.connection() === ConnectionState.Opening
                 }
               >
                 <button class="pill" onClick={tools.disconnect}>
-                  Disconnect
+                  {tools.connection() === ConnectionState.Choosing ||
+                  tools.connection() === ConnectionState.Opening
+                    ? 'Cancel'
+                    : 'Disconnect'}
                 </button>
               </Show>
             }
@@ -198,10 +239,10 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean }
             <button
               class="pill dt-primary"
               onClick={() => {
-                void tools.connect();
+                void tools.connect(target());
               }}
             >
-              Connect camera
+              {target() === CameraTarget.Emulator ? 'Connect simulator' : 'Connect camera'}
             </button>
           </Show>
         </div>

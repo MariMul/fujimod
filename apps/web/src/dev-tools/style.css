@@ -45,8 +45,18 @@
 .dt-connection {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 6px;
   margin-left: auto;
+}
+.dt-connection select {
+  min-width: 0;
+  color: #c7c7cc;
+  background: var(--key);
+  font: inherit;
+  font-size: 11px;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  padding: 3px;
 }
 .dt-status {
   display: flex;
