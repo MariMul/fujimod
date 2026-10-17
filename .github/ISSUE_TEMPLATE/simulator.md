@@ -8,6 +8,11 @@ labels: Simulator
 
 Describe what happened or what you would like to see.
 
+## Simulator
+
+Camera:
+Firmware:
+
 ## Simulator report
 
 Drag and drop the downloaded simulator report ZIP here to upload it before submitting this issue.

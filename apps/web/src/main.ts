@@ -11,7 +11,7 @@ import { ModelViewer, type ModelData } from "./viewer/model";
 import { InputPanel } from "./ui/controls";
 import { ConnectionsPanel } from "./ui/connections";
 import { CardBrowser, downloadBlob } from "./ui/card";
-import { simulatorIssueURL } from "./ui/simulator-feedback";
+import { simulatorIssueURL, type SimulatorIssueContext } from "./ui/simulator-feedback";
 import { FaultPanel } from "./ui/fault";
 import { cameraCard, cameraTable, type CameraSupport } from "./ui/cameras";
 import { personalNote, noteCameraSupport } from "./ui/personal-note";
@@ -140,15 +140,21 @@ $("restart").onclick = async () => {
 };
 const feedbackDialog = $<HTMLDialogElement>("feedback-dialog");
 const feedbackDescription = $<HTMLTextAreaElement>("feedback-description");
+let feedbackContext: SimulatorIssueContext = { event: "feedback" };
 // Open in the submit gesture so mobile browsers allow the new tab, even
 // when preparing the diagnostic download takes longer than user activation.
 feedbackDialog.querySelector("form")!.addEventListener("submit", event => {
   if ((event.submitter as HTMLButtonElement | null)?.value === "download")
-    window.open(simulatorIssueURL(feedbackDescription.value), "_blank", "noopener,noreferrer");
+    window.open(simulatorIssueURL(feedbackDescription.value, feedbackContext), "_blank", "noopener,noreferrer");
 });
 let preparingReport = false;
-function openFeedback() {
+function openFeedback(event: "feedback" | "crash") {
   if (preparingReport || feedbackDialog.open) return;
+  feedbackContext = {
+    event,
+    camera: selectedFirmware && { model: selectedFirmware.model, version: selectedFirmware.version, id: selectedFirmware.id },
+    fault: event === "crash" && latestFault ? structuredClone(latestFault) : undefined,
+  };
   feedbackDescription.value = "";
   $<HTMLImageElement>("feedback-preview").src = viewer.captureView();
   feedbackDialog.returnValue = "cancel";
@@ -183,8 +189,8 @@ function openFeedback() {
   feedbackDialog.showModal();
   feedbackDescription.focus();
 }
-$("error-report").onclick = openFeedback;
-$("feedback-open").onclick = openFeedback;
+$("error-report").onclick = () => openFeedback("crash");
+$("feedback-open").onclick = () => openFeedback("feedback");
 
 async function runCombo(combo: PowerCombo) {
   await restartOperation(() => engine!.powerCycle(combo.inputs, progress));
