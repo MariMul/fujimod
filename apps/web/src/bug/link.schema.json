@@ -1,0 +1,58 @@
+{
+  "$id": "report_link",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "type": "integer",
+      "default": 0,
+      "minimum": 0,
+      "maximum": 1
+    },
+    "firmware": {
+      "type": "string",
+      "maxLength": 16,
+      "default": ""
+    },
+    "commit": {
+      "type": "string",
+      "maxLength": 40,
+      "default": ""
+    },
+    "path": {
+      "type": "string",
+      "maxLength": 64,
+      "default": ""
+    },
+    "bytes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 67108864,
+      "default": 0
+    },
+    "crc32": {
+      "type": "string",
+      "maxLength": 8,
+      "default": ""
+    },
+    "mailbox": {
+      "type": "string",
+      "maxLength": 8,
+      "default": ""
+    },
+    "nonce": {
+      "type": "string",
+      "maxLength": 8,
+      "default": ""
+    },
+    "archive": {
+      "type": "string",
+      "maxLength": 2048,
+      "default": ""
+    }
+  },
+  "js2cSettings": {
+    "includeExternalBuiltinsFile": "x70_json_builtins.h"
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

@@ -176,7 +176,7 @@ export default defineConfig(({ mode, command }) => ({
     target: 'es2022',
     outDir: mode === 'local-preview' ? 'dist-local-preview' : 'dist',
     rolldownOptions: {
-      input: { main: resolve('index.html'), devTools: resolve('dev-tools/index.html') },
+      input: { main: resolve('index.html'), devTools: resolve('dev-tools/index.html'), bug: resolve('bug/index.html') },
     },
   },
   worker: { format: 'es' },

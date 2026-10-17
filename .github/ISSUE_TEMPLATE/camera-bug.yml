@@ -1,0 +1,30 @@
+name: Camera bug report
+description: Report a camera problem with a diagnostic archive
+labels: [bug]
+body:
+  - type: textarea
+    id: feedback
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware ID
+    validations:
+      required: true
+  - type: input
+    id: mod-build
+    attributes:
+      label: Version
+    validations:
+      required: true
+  - type: upload
+    id: camera-report
+    attributes:
+      label: Camera report
+      description: Attach the report downloaded by the bug-report page.
+    validations:
+      required: true
+      accept: ".gz,.tgz,.zip"

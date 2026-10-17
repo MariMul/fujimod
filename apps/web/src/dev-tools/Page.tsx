@@ -85,7 +85,7 @@ function LogRow(props: { entry: LogEntry }) {
     </div>
   );
 }
-export function DevTools(props: { backend?: CameraBackend; supported?: boolean }) {
+export function DevTools(props: { backend?: CameraBackend; supported?: boolean; connectOnMount?: boolean }) {
   const tools = createDevTools(
     untrack(() => props.backend) ?? new CameraSources(),
     untrack(() => props.supported) ?? (isSecureContext && 'usb' in navigator),
@@ -197,6 +197,7 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean }
   onSettled(() => {
     const unlisten = reports.listen();
     void tools.start().then(async () => {
+      if (props.connectOnMount) { await tools.connect(CameraTarget.Usb); return; }
       try {
         if (remoteControlUrl(location.href)) {
           setTarget(CameraTarget.Remote);

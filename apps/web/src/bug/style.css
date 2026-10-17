@@ -1,0 +1,78 @@
+.bug-report.shell {
+  max-width: 780px;
+  padding: 24px 20px 60px;
+}
+.bug-report header {
+  flex-wrap: wrap;
+  gap: 24px;
+}
+.bug-report h1 {
+  font-size: 24px;
+  font-weight: 500;
+}
+.bug-privacy {
+  margin: 40px 0;
+}
+.bug-privacy h2 {
+  font-size: clamp(30px, 6vw, 48px);
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+  max-width: 650px;
+  margin: 0 0 18px;
+}
+.bug-privacy p {
+  font-size: 20px;
+  line-height: 1.5;
+  color: var(--dim);
+  max-width: 580px;
+}
+.bug-card {
+  padding: 24px;
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  background: var(--panel, #151719);
+}
+.bug-card h2 {
+  margin: 0 0 16px;
+  font-size: 22px;
+}
+.bug-card p {
+  line-height: 1.5;
+}
+.bug-file {
+  color: var(--dim);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.bug-report label {
+  display: block;
+  margin: 20px 0;
+}
+.bug-report textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 10px 0 20px;
+  padding: 12px;
+  background: #08090a;
+  color: inherit;
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  font: inherit;
+  resize: vertical;
+}
+.bug-report button {
+  margin: 8px 10px 0 0;
+}
+.bug-file-picker {
+  font-size: 14px;
+  color: var(--dim);
+}
+.bug-file-picker input {
+  display: block;
+  margin-top: 10px;
+  max-width: 100%;
+}
+.bug-report [role='alert'] {
+  color: #ffa7a7;
+}
