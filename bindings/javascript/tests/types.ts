@@ -89,3 +89,19 @@ async function chargeValues(): Promise<void> {
   }
 }
 void chargeValues;
+
+// @ts-expect-error Audio count must be checked by Rust.
+usb.app80.Command.audioCapture(10,usb.app80.AudioRoute.Request82);
+// @ts-expect-error Playback lane choices cannot be supplied as display mode choices.
+usb.app80.Command.audioPlayback(usb.app80.DisplayMode.Option0);
+// @ts-expect-error Storage erase selectors are enum choices, not booleans.
+usb.app80.Command.eraseStorage(true);
+async function storageValues():Promise<void>{
+ const value=(await typedReply).value;
+ if(value.kind===usb.app80.ReplyKind.StorageStatus){
+  if(value.status.kind===usb.app80.StorageStatusKind.Unknown){const raw:number=value.status.rawStatus;void raw;}
+  // @ts-expect-error The ambiguous zero result is not a boolean success result.
+  const success:boolean=value.status;void success;
+ }
+}
+void storageValues;

@@ -33,6 +33,12 @@ class Codec(Enum):
     ParameterService = auto()
     ChargeControl = auto()
     ChargeStatus = auto()
+    AudioCapture = auto()
+    AudioPlayback = auto()
+    EraseStorage = auto()
+    StorageStatus = auto()
+    FormatStorage = auto()
+    DisplaySetup = auto()
 
 
 class ServiceModes(Handle):

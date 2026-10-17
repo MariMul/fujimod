@@ -237,3 +237,14 @@ action factories, `Toggle`, `DisplayMode`, sound enums and `ChargeQuery`.
 length and 12-bit values in Rust. Charge reply unions use different status enums
 for applying control, presence and reported register-state groups; unknown bytes
 retain `rawStatus`. No charge value starts an implicit poll.
+
+`Command.audioCapture(new AudioCount(n), AudioRoute.Request82)` checks 0–10
+firmware chunks; `Command.audioPlayback(AudioPlayback.AllLanes)` can instead
+zero either interleaved lane. Samples stay in camera buffers; USB transfer is a
+separate operation. Results use `AudioResultKind`. `Command.eraseStorage` takes
+`StorageErase` and returns `StorageEraseResultKind`. These selectors can clear
+persistent regions and profiles. `Command.storageStatus()` returns
+`StorageStatusKind`: zero is deliberately ambiguous, and other classifications
+retain their numeric names. `Command.formatStorage()` formats the selected
+drive, and `Command.displaySetup()` invokes the internal display setup sequence.
+These last two have no payload result. No result starts host polling or cleanup.

@@ -362,3 +362,32 @@ test('media commands use checked packets, canonical sound choices and typed char
   const state=prepare(C.chargeStatus(a.ChargeQuery.State));assert.deepEqual(logical(state,K.ChargeStatus),[1,255]);
   for(const [raw,kind] of [[0,a.ReportedChargeStateKind.Failed],[1,a.ReportedChargeStateKind.Unknown],[2,a.ReportedChargeStateKind.Unknown],[3,a.ReportedChargeStateKind.Value0],[4,a.ReportedChargeStateKind.Values2To5],[5,a.ReportedChargeStateKind.Value6],[6,a.ReportedChargeStateKind.OtherValue],[255,a.ReportedChargeStateKind.Unknown]])assert.deepEqual(decode(state,K.ChargeStatus,1,raw),{kind:a.ReplyKind.ChargeState,status:kind===a.ReportedChargeStateKind.Unknown?{kind,rawStatus:raw}:{kind}});
 });
+
+test('audio and storage codecs retain checked quantities, result bytes and zero-payload commands',()=>{
+  const a=usb.app80,C=a.Command;
+  const layouts=[['audio_capture',3],['audio_playback',2],['erase_storage',2],['storage_status',1],['format_storage',0],['display_setup',0]];
+  const slots=Object.fromEntries(layouts.map(([codec,n])=>[codec,Array.from({length:n},(_,i)=>(i*5+7)%32)]));
+  const service=new a.Service(serviceDefinition(layouts.map(([codec],i)=>[230+i,codec,slots[codec],4]))),modes=new defs.service.ServiceModes(4);
+  const prepare=command=>service.prepare(modes,command),logical=(p,codec)=>slots[codec].map(i=>p.raw[i+1]);
+  const decode=(p,codec,index,value)=>{const raw=p.raw;raw[1+slots[codec][index]]=value;return p.decode(raw).value;};
+  for(const value of [11,255])assert.throws(()=>new a.AudioCount(value),e=>a.isError(e)&&e.reason.argument===a.ArgumentKind.AudioCount);
+  assert.throws(()=>C.audioCapture(new a.AudioCount(1),true));
+  assert.throws(()=>C.audioPlayback(99));assert.throws(()=>C.eraseStorage(99));
+  for(const count of [0,10])for(const [route,wire] of [[a.AudioRoute.Request82,0],[a.AudioRoute.Request81,1]]){
+    const p=prepare(C.audioCapture(new a.AudioCount(count),route));assert.deepEqual(logical(p,'audio_capture'),[count,wire,255]);
+    for(const [raw,kind] of [[0,a.AudioResultKind.Success],[1,a.AudioResultKind.Failed],[42,a.AudioResultKind.Unknown],[255,a.AudioResultKind.Unknown]])
+      assert.deepEqual(decode(p,'audio_capture',2,raw),{kind:a.ReplyKind.AudioCaptured,status:kind===a.AudioResultKind.Unknown?{kind,rawStatus:raw}:{kind}});
+  }
+  for(const [mode,wire] of [[a.AudioPlayback.AllLanes,0],[a.AudioPlayback.ZeroSecondLane,1],[a.AudioPlayback.ZeroFirstLane,2]]){
+    const p=prepare(C.audioPlayback(mode));assert.deepEqual(logical(p,'audio_playback'),[wire,255]);assert.deepEqual(decode(p,'audio_playback',1,1),{kind:a.ReplyKind.AudioPlayed,status:{kind:a.AudioResultKind.Failed}});
+  }
+  for(const [action,wire] of [[a.StorageErase.Kind1Regions,1],[a.StorageErase.Kind0And2Regions,2],[a.StorageErase.Kind0And1And2Regions,3],[a.StorageErase.AuxiliaryRegion,4],[a.StorageErase.ResetProfiles,5]]){
+    const p=prepare(C.eraseStorage(action));assert.deepEqual(logical(p,'erase_storage'),[wire,255]);
+    assert.deepEqual(decode(p,'erase_storage',1,1),{kind:a.ReplyKind.StorageErased,status:{kind:a.StorageEraseResultKind.Failed}});
+    assert.deepEqual(decode(p,'erase_storage',1,255),{kind:a.ReplyKind.StorageErased,status:{kind:a.StorageEraseResultKind.Unknown,rawStatus:255}});
+  }
+  const p=prepare(C.storageStatus());assert.deepEqual(logical(p,'storage_status'),[255]);
+  for(const [raw,kind] of [[0,a.StorageStatusKind.Zero],[4,a.StorageStatusKind.Value4],[8,a.StorageStatusKind.Value8],[16,a.StorageStatusKind.Value16],[32,a.StorageStatusKind.Value32],[1,a.StorageStatusKind.Unknown],[255,a.StorageStatusKind.Unknown]])
+    assert.deepEqual(decode(p,'storage_status',0,raw),{kind:a.ReplyKind.StorageStatus,status:kind===a.StorageStatusKind.Unknown?{kind,rawStatus:raw}:{kind}});
+  for(const command of [C.formatStorage(),C.displaySetup()]){const invocation=prepare(command);assert.deepEqual(invocation.raw.slice(1),new Uint8Array(32));assert.deepEqual(invocation.decode(invocation.raw).value,{kind:a.ReplyKind.NoPayload});}
+});

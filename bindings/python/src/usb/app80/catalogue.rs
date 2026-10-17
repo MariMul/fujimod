@@ -19,6 +19,7 @@ enum ArgumentKind {
     SoundClip,
     HdmiValue,
     HdmiPacketLength,
+    AudioCount,
 }
 impl From<core::ArgumentKind> for ArgumentKind {
     fn from(value: core::ArgumentKind) -> Self {
@@ -31,6 +32,7 @@ impl From<core::ArgumentKind> for ArgumentKind {
             core::ArgumentKind::SoundClip => Self::SoundClip,
             core::ArgumentKind::HdmiValue => Self::HdmiValue,
             core::ArgumentKind::HdmiPacketLength => Self::HdmiPacketLength,
+            core::ArgumentKind::AudioCount => Self::AudioCount,
         }
     }
 }
@@ -153,6 +155,19 @@ impl From<ProfileAction> for core::ProfileAction {
 #[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
 #[derive(Clone)]
 enum Command {
+    AudioCapture {
+        count: media::AudioCount,
+        route: media::AudioRoute,
+    },
+    AudioPlayback {
+        mode: media::AudioPlayback,
+    },
+    EraseStorage {
+        action: media::StorageErase,
+    },
+    StorageStatus {},
+    FormatStorage {},
+    DisplaySetup {},
     DisplayOption {
         action: media::DisplayOptionAction,
     },
@@ -218,6 +233,15 @@ enum Command {
 impl From<Command> for core::Command {
     fn from(value: Command) -> Self {
         match value {
+            Command::AudioCapture { count, route } => Self::AudioCapture {
+                count: count.inner,
+                route: route.into(),
+            },
+            Command::AudioPlayback { mode } => Self::AudioPlayback(mode.into()),
+            Command::EraseStorage { action } => Self::EraseStorage(action.into()),
+            Command::StorageStatus {} => Self::StorageStatus,
+            Command::FormatStorage {} => Self::FormatStorage,
+            Command::DisplaySetup {} => Self::DisplaySetup,
             Command::DisplayOption { action } => Self::DisplayOption(action.into()),
             Command::DisplayMode { mode } => Self::DisplayMode(mode.into()),
             Command::Sound { action } => Self::Sound(action.into()),
@@ -306,6 +330,10 @@ impl From<core::WordWriteResult> for WordWriteResult {
 #[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
 #[derive(Clone)]
 enum ReplyValue {
+    AudioCaptured { status: media::AudioResult },
+    AudioPlayed { status: media::AudioResult },
+    StorageErased { status: media::StorageEraseResult },
+    StorageStatus { status: media::StorageStatus },
     ChargeApplied { status: media::ChargeResult },
     ChargePresence { status: media::ChargePresence },
     ChargeState { status: media::ReportedChargeState },
@@ -325,6 +353,18 @@ enum ReplyValue {
 impl From<core::ReplyValue> for ReplyValue {
     fn from(value: core::ReplyValue) -> Self {
         match value {
+            core::ReplyValue::AudioCaptured(status) => Self::AudioCaptured {
+                status: status.into(),
+            },
+            core::ReplyValue::AudioPlayed(status) => Self::AudioPlayed {
+                status: status.into(),
+            },
+            core::ReplyValue::StorageErased(status) => Self::StorageErased {
+                status: status.into(),
+            },
+            core::ReplyValue::StorageStatus(status) => Self::StorageStatus {
+                status: status.into(),
+            },
             core::ReplyValue::ChargeApplied(status) => Self::ChargeApplied {
                 status: status.into(),
             },

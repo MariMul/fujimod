@@ -286,3 +286,123 @@ impl ReportedChargeState {
         }
     }
 }
+
+/// Number of firmware audio chunks (0..=10), not a host USB transfer size.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AudioCount(u8);
+impl AudioCount {
+    pub fn new(value: u8) -> Result<Self, CommandError> {
+        if value <= 10 {
+            Ok(Self(value))
+        } else {
+            Err(CommandError::Argument(ArgumentKind::AudioCount))
+        }
+    }
+    pub fn value(self) -> u8 {
+        self.0
+    }
+}
+/// AV-output request used before capture; physical routing is firmware-specific.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AudioRoute {
+    Request82,
+    Request81,
+}
+impl AudioRoute {
+    pub(super) fn wire(self) -> u8 {
+        match self {
+            Self::Request82 => 0,
+            Self::Request81 => 1,
+        }
+    }
+}
+/// Playback copies the firmware capture buffer, optionally zeroing one interleaved lane.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AudioPlayback {
+    AllLanes,
+    ZeroSecondLane,
+    ZeroFirstLane,
+}
+impl AudioPlayback {
+    pub(super) fn wire(self) -> u8 {
+        match self {
+            Self::AllLanes => 0,
+            Self::ZeroSecondLane => 1,
+            Self::ZeroFirstLane => 2,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AudioResult {
+    Success,
+    Failed,
+    Unknown(u8),
+}
+impl AudioResult {
+    pub(super) fn decode(raw: u8) -> Self {
+        match raw {
+            0 => Self::Success,
+            1 => Self::Failed,
+            n => Self::Unknown(n),
+        }
+    }
+}
+/// Each variant invokes one firmware command. Region kinds are firmware terms.
+/// Kinds 1 clear diagnostic records; kinds 0/2 clear service diagnostics and reset profiles.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StorageErase {
+    Kind1Regions,
+    Kind0And2Regions,
+    Kind0And1And2Regions,
+    AuxiliaryRegion,
+    ResetProfiles,
+}
+impl StorageErase {
+    pub(super) fn wire(self) -> u8 {
+        match self {
+            Self::Kind1Regions => 1,
+            Self::Kind0And2Regions => 2,
+            Self::Kind0And1And2Regions => 3,
+            Self::AuxiliaryRegion => 4,
+            Self::ResetProfiles => 5,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StorageEraseResult {
+    Success,
+    Failed,
+    Unknown(u8),
+}
+impl StorageEraseResult {
+    pub(super) fn decode(raw: u8) -> Self {
+        match raw {
+            0 => Self::Success,
+            1 => Self::Failed,
+            n => Self::Unknown(n),
+        }
+    }
+}
+/// Encoded numbering-snapshot classification. Zero is shared by success/error
+/// paths; this byte alone cannot establish success or physical storage state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StorageStatus {
+    Zero,
+    Value4,
+    Value8,
+    Value16,
+    Value32,
+    Unknown(u8),
+}
+impl StorageStatus {
+    pub(super) fn decode(raw: u8) -> Self {
+        match raw {
+            0 => Self::Zero,
+            4 => Self::Value4,
+            8 => Self::Value8,
+            16 => Self::Value16,
+            32 => Self::Value32,
+            n => Self::Unknown(n),
+        }
+    }
+}

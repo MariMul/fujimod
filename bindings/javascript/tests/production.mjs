@@ -93,3 +93,30 @@ test('production charge status one is a failed result without another host reque
     await session.close();
   }finally{fixture.restore();}
 });
+
+test('production audio/storage results and payload-free commands finish without extra polling',async()=>{
+  const fixture=installWebUsb(),a=usb.app80;
+  try{
+    const [device]=await usb.discover(usb.DeviceFilter.Diagnostic),[iface]=await device.interfaces();
+    for(const [codec,count,command,index,status,expected] of [
+      ['audio_capture',3,a.Command.audioCapture(new a.AudioCount(10),a.AudioRoute.Request82),2,1,{kind:a.ReplyKind.AudioCaptured,status:{kind:a.AudioResultKind.Failed}}],
+      ['audio_playback',2,a.Command.audioPlayback(a.AudioPlayback.AllLanes),1,255,{kind:a.ReplyKind.AudioPlayed,status:{kind:a.AudioResultKind.Unknown,rawStatus:255}}],
+      ['erase_storage',2,a.Command.eraseStorage(a.StorageErase.ResetProfiles),1,1,{kind:a.ReplyKind.StorageErased,status:{kind:a.StorageEraseResultKind.Failed}}],
+      ['storage_status',1,a.Command.storageStatus(),0,0,{kind:a.ReplyKind.StorageStatus,status:{kind:a.StorageStatusKind.Zero}}],
+      ['format_storage',0,a.Command.formatStorage(),null,null,{kind:a.ReplyKind.NoPayload}],
+      ['display_setup',0,a.Command.displaySetup(),null,null,{kind:a.ReplyKind.NoPayload}],
+    ]){
+      const definition=defs.service.Definition.fromJson(JSON.stringify({schema:1,
+        firmware:{id:'synthetic-storage-v2',model:'Synthetic',version:'2',sha256:'ab'.repeat(32)},
+        mailbox:{page:3,offset:576,configuration_limit:512},entries:[{code:153,label:codec,codec,slots:Array.from({length:count},(_,n)=>7+n),enabled_modes:4,next_mode:0,firmware_kind:1,handler:0,parameter_table:0}]}),new defs.FirmwareIdentity('synthetic-storage-v2','ab'.repeat(32)));
+      const invocation=new a.Service(definition).prepare(new defs.service.ServiceModes(4),command);
+      fixture.state.onConfigurationWrite=(page,address,raw)=>{if(page===3&&address===576&&index!==null){assert.equal(raw[8+index],255);fixture.state.configuration.set(`3:${584+index}`,status);}};
+      const before=fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length;
+      const session=await usb.Session.open(device,iface,new usb.FirmwareLimits(256,256,256,256),new usb.TransferOptions(100,1024));
+      assert.deepEqual((await a.execute(session,invocation)).value,expected);
+      assert.equal(session.state,usb.SessionState.Ready);
+      assert.equal(fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length-before,3);
+      await session.close();
+    }
+  }finally{fixture.restore();}
+});

@@ -1,7 +1,7 @@
 use super::*;
 use fujimod_defs::service::FirmwareIdentity;
 fn catalogue(reverse: bool) -> Catalogue {
-    let entries:Vec<_>=[("display_option",4),("display_mode",1),("sound",3),("hdmi",19),("parameter_service",1),("charge_control",3),("charge_status",2)].into_iter().enumerate().map(|(index,(codec,count))|{
+    let entries:Vec<_>=[("display_option",4),("display_mode",1),("sound",3),("hdmi",19),("parameter_service",1),("charge_control",3),("charge_status",2),("audio_capture",3),("audio_playback",2),("erase_storage",2),("storage_status",1),("format_storage",0),("display_setup",0)].into_iter().enumerate().map(|(index,(codec,count))|{
   let slots:Vec<_>=(0..count).map(|slot|if reverse {31-slot}else{slot}).collect();
   serde_json::json!({"code":210+index,"label":codec,"codec":codec,"slots":slots,"enabled_modes":4,"next_mode":0,"firmware_kind":1,"handler":0,"parameter_table":0})
  }).collect();
@@ -197,6 +197,105 @@ fn charge_results_are_application_enums_and_absent_output_stays_unknown() {
             assert_eq!(
                 p.decode(response(&p, 1, raw)).unwrap().value(),
                 &ReplyValue::ChargeState(value)
+            );
+        }
+    }
+}
+
+#[test]
+fn audio_storage_requests_and_results_use_remapped_slots_without_completion_instructions() {
+    assert!(AudioCount::new(11).is_err());
+    assert!(AudioCount::new(255).is_err());
+    for reverse in [false, true] {
+        let c = catalogue(reverse);
+        for count in [0, 10] {
+            for (route, wire) in [(AudioRoute::Request82, 0), (AudioRoute::Request81, 1)] {
+                let p = prepare(
+                    &c,
+                    Command::AudioCapture {
+                        count: AudioCount::new(count).unwrap(),
+                        route,
+                    },
+                );
+                assert_eq!(logical(&p), [count, wire, 255]);
+                for raw in 0..=255 {
+                    let expected = match raw {
+                        0 => AudioResult::Success,
+                        1 => AudioResult::Failed,
+                        n => AudioResult::Unknown(n),
+                    };
+                    assert_eq!(
+                        p.decode(response(&p, 2, raw)).unwrap().value(),
+                        &ReplyValue::AudioCaptured(expected)
+                    );
+                }
+            }
+        }
+        for (mode, wire) in [
+            (AudioPlayback::AllLanes, 0),
+            (AudioPlayback::ZeroSecondLane, 1),
+            (AudioPlayback::ZeroFirstLane, 2),
+        ] {
+            let p = prepare(&c, Command::AudioPlayback(mode));
+            assert_eq!(logical(&p), [wire, 255]);
+            for raw in 0..=255 {
+                let expected = match raw {
+                    0 => AudioResult::Success,
+                    1 => AudioResult::Failed,
+                    n => AudioResult::Unknown(n),
+                };
+                assert_eq!(
+                    p.decode(response(&p, 1, raw)).unwrap().value(),
+                    &ReplyValue::AudioPlayed(expected)
+                );
+            }
+        }
+        for (action, wire) in [
+            (StorageErase::Kind1Regions, 1),
+            (StorageErase::Kind0And2Regions, 2),
+            (StorageErase::Kind0And1And2Regions, 3),
+            (StorageErase::AuxiliaryRegion, 4),
+            (StorageErase::ResetProfiles, 5),
+        ] {
+            let p = prepare(&c, Command::EraseStorage(action));
+            assert_eq!(logical(&p), [wire, 255]);
+            for raw in 0..=255 {
+                let expected = match raw {
+                    0 => StorageEraseResult::Success,
+                    1 => StorageEraseResult::Failed,
+                    n => StorageEraseResult::Unknown(n),
+                };
+                assert_eq!(
+                    p.decode(response(&p, 1, raw)).unwrap().value(),
+                    &ReplyValue::StorageErased(expected)
+                );
+            }
+        }
+        let p = prepare(&c, Command::StorageStatus);
+        assert_eq!(logical(&p), [255]);
+        for raw in 0..=255 {
+            let expected = match raw {
+                0 => StorageStatus::Zero,
+                4 => StorageStatus::Value4,
+                8 => StorageStatus::Value8,
+                16 => StorageStatus::Value16,
+                32 => StorageStatus::Value32,
+                n => StorageStatus::Unknown(n),
+            };
+            assert_eq!(
+                p.decode(response(&p, 0, raw)).unwrap().value(),
+                &ReplyValue::StorageStatus(expected)
+            );
+        }
+        for command in [Command::FormatStorage, Command::DisplaySetup] {
+            let p = prepare(&c, command);
+            assert_eq!(p.request.arguments(), &[0; 32]);
+            assert!(p.slots.is_empty());
+            assert_eq!(
+                p.decode(Reply::decode(&p.request.encode()).unwrap())
+                    .unwrap()
+                    .value(),
+                &ReplyValue::NoPayload
             );
         }
     }

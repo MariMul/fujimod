@@ -173,7 +173,38 @@ macro_rules! result {
 result!(ChargeResult,{Success,Failed});
 result!(ChargePresence,{Failed,Absent,Present});
 result!(ReportedChargeState,{Failed,Value0,Values2To5,Value6,OtherValue});
+choice!(AudioRoute,{Request82,Request81});
+choice!(AudioPlayback,{AllLanes,ZeroSecondLane,ZeroFirstLane});
+choice!(StorageErase,{Kind1Regions,Kind0And2Regions,Kind0And1And2Regions,AuxiliaryRegion,ResetProfiles});
+result!(AudioResult,{Success,Failed});
+result!(StorageEraseResult,{Success,Failed});
+result!(StorageStatus,{Zero,Value4,Value8,Value16,Value32});
+#[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
+#[derive(Clone)]
+pub(super) struct AudioCount {
+    pub(super) inner: core::AudioCount,
+}
+#[pymethods]
+impl AudioCount {
+    #[new]
+    fn new(py: Python<'_>, value: u8) -> PyResult<Self> {
+        core::AudioCount::new(value)
+            .map(|inner| Self { inner })
+            .map_err(|e| command_error(py, e))
+    }
+    #[getter]
+    fn value(&self) -> u8 {
+        self.inner.value()
+    }
+}
 pub(super) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_class::<AudioCount>()?;
+    module.add_class::<AudioRoute>()?;
+    module.add_class::<AudioPlayback>()?;
+    module.add_class::<AudioResult>()?;
+    module.add_class::<StorageErase>()?;
+    module.add_class::<StorageEraseResult>()?;
+    module.add_class::<StorageStatus>()?;
     module.add_class::<Toggle>()?;
     module.add_class::<DisplayMode>()?;
     module.add_class::<DisplayOptionAction>()?;

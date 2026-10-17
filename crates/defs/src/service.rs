@@ -126,6 +126,12 @@ pub enum Codec {
     ParameterService,
     ChargeControl,
     ChargeStatus,
+    AudioCapture,
+    AudioPlayback,
+    EraseStorage,
+    StorageStatus,
+    FormatStorage,
+    DisplaySetup,
 }
 impl Codec {
     pub fn argument_slots(self) -> usize {
@@ -142,7 +148,10 @@ impl Codec {
             Self::DisplayMode | Self::ParameterService => 1,
             Self::Sound | Self::ChargeControl => 3,
             Self::Hdmi => 19,
-            Self::ChargeStatus => 2,
+            Self::ChargeStatus | Self::AudioPlayback | Self::EraseStorage => 2,
+            Self::AudioCapture => 3,
+            Self::StorageStatus => 1,
+            Self::FormatStorage | Self::DisplaySetup => 0,
         }
     }
 }

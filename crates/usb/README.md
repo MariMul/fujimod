@@ -260,3 +260,21 @@ different enum types. A value of 1 never instructs the host to poll or wait.
 Reply decoding exhaustively matches the supported commands and subactions.
 Adding a new response-bearing command requires explicit decoding rather than
 silently falling through to `NoPayload`.
+
+Audio capture uses a checked `AudioCount` (0–10 firmware chunks) and an
+`AudioRoute` request choice. Playback selects both interleaved lanes or zeroes
+one lane in the firmware's copied capture buffer. Neither command uploads or
+downloads samples: buffer addresses and any transfer workflow belong in the
+selected firmware's definitions and higher-level operations. Both return an
+`AudioResult`; an early failure may leave the output sentinel unchanged, which
+remains `Unknown(255)` rather than success.
+
+`StorageErase` distinguishes the firmware's five erase/reset selectors. These
+can clear persistent regions, diagnostics and profiles; they are individual
+firmware commands, not a host reset workflow. `StorageEraseResult` retains
+success, failure and unknown output. `StorageStatus` preserves the encoded
+numbering classification: `Zero` can come from a success or error path, so it
+does not establish success or a physical storage condition. `FormatStorage`
+formats the firmware-selected drive; `DisplaySetup` runs the firmware's display
+setup sequence. Both have no payload result. They neither supply nor imply a
+host cleanup/retry sequence.

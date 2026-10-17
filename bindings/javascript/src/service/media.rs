@@ -195,3 +195,29 @@ macro_rules! result {
 result!(ChargeResultKind,ChargeResult,{Success,Failed});
 result!(ChargePresenceKind,ChargePresence,{Failed,Absent,Present});
 result!(ReportedChargeStateKind,ReportedChargeState,{Failed,Value0,Values2To5,Value6,OtherValue});
+
+choice!(AudioRoute,{Request82,Request81});
+choice!(AudioPlayback,{AllLanes,ZeroSecondLane,ZeroFirstLane});
+choice!(StorageErase,{Kind1Regions,Kind0And2Regions,Kind0And1And2Regions,AuxiliaryRegion,ResetProfiles});
+result!(AudioResultKind,AudioResult,{Success,Failed});
+result!(StorageEraseResultKind,StorageEraseResult,{Success,Failed});
+result!(StorageStatusKind,StorageStatus,{Zero,Value4,Value8,Value16,Value32});
+#[wasm_bindgen]
+pub struct AudioCount {
+    pub(super) inner: core::AudioCount,
+}
+#[wasm_bindgen]
+impl AudioCount {
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        #[wasm_bindgen(unchecked_param_type = "number")] value: JsValue,
+    ) -> Result<Self, JsValue> {
+        core::AudioCount::new(integer(value, u8::MAX.into())? as u8)
+            .map(|inner| Self { inner })
+            .map_err(invalid)
+    }
+    #[wasm_bindgen(getter)]
+    pub fn value(&self) -> u8 {
+        self.inner.value()
+    }
+}

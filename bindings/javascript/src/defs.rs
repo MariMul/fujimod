@@ -41,6 +41,12 @@ pub enum ServiceCodec {
     ParameterService,
     ChargeControl,
     ChargeStatus,
+    AudioCapture,
+    AudioPlayback,
+    EraseStorage,
+    StorageStatus,
+    FormatStorage,
+    DisplaySetup,
 }
 impl From<core::Codec> for ServiceCodec {
     fn from(value: core::Codec) -> Self {
@@ -66,6 +72,12 @@ impl From<core::Codec> for ServiceCodec {
             core::Codec::ParameterService => Self::ParameterService,
             core::Codec::ChargeControl => Self::ChargeControl,
             core::Codec::ChargeStatus => Self::ChargeStatus,
+            core::Codec::AudioCapture => Self::AudioCapture,
+            core::Codec::AudioPlayback => Self::AudioPlayback,
+            core::Codec::EraseStorage => Self::EraseStorage,
+            core::Codec::StorageStatus => Self::StorageStatus,
+            core::Codec::FormatStorage => Self::FormatStorage,
+            core::Codec::DisplaySetup => Self::DisplaySetup,
         }
     }
 }

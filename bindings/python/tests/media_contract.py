@@ -15,6 +15,12 @@ def check_media_values():
         ("parameter_service", 1),
         ("charge_control", 3),
         ("charge_status", 2),
+        ("audio_capture", 3),
+        ("audio_playback", 2),
+        ("erase_storage", 2),
+        ("storage_status", 1),
+        ("format_storage", 0),
+        ("display_setup", 0),
     ]
     slots = {
         codec: [(n * 5 + 7) % 32 for n in range(count)] for codec, count in layouts
@@ -237,4 +243,100 @@ def check_media_values():
         pass
     else:
         raise AssertionError("wrong enum group accepted")
+    invalid(lambda: a.AudioCount(11), a.ArgumentKind.AudioCount)
+    invalid(lambda: a.AudioCount(255), a.ArgumentKind.AudioCount)
+    for count in [0, 10]:
+        assert a.AudioCount(count).value == count
+        for route, wire in [(a.AudioRoute.Request82, 0), (a.AudioRoute.Request81, 1)]:
+            invocation = prepare(
+                a.Command.AudioCapture(count=a.AudioCount(count), route=route)
+            )
+            assert logical(invocation, "audio_capture") == [count, wire, 255]
+            for raw, result in [
+                (0, a.AudioResult.Success),
+                (1, a.AudioResult.Failed),
+                (42, a.AudioResult.Unknown),
+                (255, a.AudioResult.Unknown),
+            ]:
+                reply = decode(invocation, "audio_capture", 2, raw)
+                assert isinstance(reply, a.ReplyValue.AudioCaptured) and isinstance(
+                    reply.status, result
+                )
+                if result is a.AudioResult.Unknown:
+                    assert reply.status.raw_status == raw
+    for mode, wire in [
+        (a.AudioPlayback.AllLanes, 0),
+        (a.AudioPlayback.ZeroSecondLane, 1),
+        (a.AudioPlayback.ZeroFirstLane, 2),
+    ]:
+        invocation = prepare(a.Command.AudioPlayback(mode=mode))
+        assert logical(invocation, "audio_playback") == [wire, 255]
+        for raw, result in [
+            (0, a.AudioResult.Success),
+            (1, a.AudioResult.Failed),
+            (255, a.AudioResult.Unknown),
+        ]:
+            reply = decode(invocation, "audio_playback", 1, raw)
+            assert isinstance(reply, a.ReplyValue.AudioPlayed) and isinstance(
+                reply.status, result
+            )
+    for action, wire in [
+        (a.StorageErase.Kind1Regions, 1),
+        (a.StorageErase.Kind0And2Regions, 2),
+        (a.StorageErase.Kind0And1And2Regions, 3),
+        (a.StorageErase.AuxiliaryRegion, 4),
+        (a.StorageErase.ResetProfiles, 5),
+    ]:
+        invocation = prepare(a.Command.EraseStorage(action=action))
+        assert logical(invocation, "erase_storage") == [wire, 255]
+        for raw, result in [
+            (0, a.StorageEraseResult.Success),
+            (1, a.StorageEraseResult.Failed),
+            (42, a.StorageEraseResult.Unknown),
+            (255, a.StorageEraseResult.Unknown),
+        ]:
+            reply = decode(invocation, "erase_storage", 1, raw)
+            assert isinstance(reply, a.ReplyValue.StorageErased) and isinstance(
+                reply.status, result
+            )
+            if result is a.StorageEraseResult.Unknown:
+                assert reply.status.raw_status == raw
+    invocation = prepare(a.Command.StorageStatus())
+    assert logical(invocation, "storage_status") == [255]
+    for raw, result in [
+        (0, a.StorageStatus.Zero),
+        (4, a.StorageStatus.Value4),
+        (8, a.StorageStatus.Value8),
+        (16, a.StorageStatus.Value16),
+        (32, a.StorageStatus.Value32),
+        (1, a.StorageStatus.Unknown),
+        (255, a.StorageStatus.Unknown),
+    ]:
+        reply = decode(invocation, "storage_status", 0, raw)
+        assert isinstance(reply, a.ReplyValue.StorageStatus) and isinstance(
+            reply.status, result
+        )
+        if result is a.StorageStatus.Unknown:
+            assert reply.status.raw_status == raw
+    for command, codec in [
+        (a.Command.FormatStorage(), "format_storage"),
+        (a.Command.DisplaySetup(), "display_setup"),
+    ]:
+        invocation = prepare(command)
+        assert logical(invocation, codec) == []
+        assert invocation.raw[1:] == bytes(32)
+        assert isinstance(
+            invocation.decode(invocation.raw).value, a.ReplyValue.NoPayload
+        )
+    for create in [
+        lambda: a.Command.AudioCapture(count=1, route=a.AudioRoute.Request81),
+        lambda: a.Command.AudioPlayback(mode=a.DisplayMode.Option0),
+        lambda: a.Command.EraseStorage(action=1),
+    ]:
+        try:
+            create()
+        except TypeError:
+            pass
+        else:
+            raise AssertionError("untyped audio/storage choice accepted")
     return True

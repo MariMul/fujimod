@@ -104,3 +104,12 @@ the firmware-selected App80 command byte:
 | Parameter service | Explicit enabled/disabled choice; no implicit configuration save. |
 | Charge control | Set control or enable it and set the register flag in one firmware command. Output byte 0/1 means success/failure, with unknown values preserved. |
 | Charge status | Separate presence and reported-state queries. Presence maps 1/2 to absent/present; state groups remain named for the register values instead of inferred charging meanings. Unknown values are retained. |
+
+| Audio/storage codec | Operations and replies |
+| --- | --- |
+| Audio capture | Checked 0–10 firmware chunks and explicit AV-output request 82/81. Firmware retains samples in its own RAM. Output 0/1 is success/failure; unchanged or other output remains unknown. |
+| Audio playback | Copy the existing firmware capture buffer and play both lanes, zero the second lane or zero the first. Does not upload data. Output 0/1 is success/failure, with unknown values retained. |
+| Erase storage | Typed choices for kind-1 regions, kinds 0/2, all three kinds, auxiliary region or profile reset. The first three also clear diagnostics; kinds 0/2 reset profiles. Persistent effects are part of the selected firmware command. Output 0/1 is success/failure. |
+| Storage status | Numbering-snapshot classifications 0, 4, 8, 16, 32. Zero occurs on both success and error paths; physical meanings remain unspecified. Other bytes are unknown. |
+| Format storage | One firmware command formats its selected drive and awaits its internal callback. No payload result; the library adds no polling, reset or cleanup. |
+| Display setup | One firmware command runs its internal display setup/request sequence. No arguments or payload result. |

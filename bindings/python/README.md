@@ -256,3 +256,18 @@ and distinct enum choices. `SoundClip` checks indices 0–22; `HdmiPacket` copie
 exactly 16 bytes; `HdmiValue` checks the 12-bit range. Replies distinguish
 `ReplyValue.ChargeApplied`, `ChargePresence` and `ChargeState`, each with its
 own status enum and explicit `Unknown(raw_status=...)` variant.
+
+`Command.AudioCapture(count=AudioCount(n), route=AudioRoute.Request82)` checks
+0–10 firmware chunks. `Command.AudioPlayback(mode=AudioPlayback.AllLanes)` also
+supports `ZeroSecondLane` and `ZeroFirstLane`. These commands operate on camera
+buffers; sample transfer stays separate. `ReplyValue.AudioCaptured` and
+`AudioPlayed` carry `AudioResult` variants.
+
+`Command.EraseStorage(action=StorageErase.ResetProfiles)` selects one of five
+firmware erase/reset controls and returns `ReplyValue.StorageErased` with a
+`StorageEraseResult`. `Command.StorageStatus()` returns
+`ReplyValue.StorageStatus`: `StorageStatus.Zero` preserves an ambiguous result,
+while `Value4`, `Value8`, `Value16`, `Value32` and `Unknown` preserve other encoded
+classifications. `Command.FormatStorage()` formats the firmware-selected drive;
+`Command.DisplaySetup()` runs its display setup. Both have `NoPayload` results.
+All are single firmware commands selected from the supplied definition.

@@ -4,9 +4,10 @@ use crate::{Result as UsbResult, error::ProtocolError, ff80::commands::memory::A
 use fujimod_defs::service::{Codec, Definition, Entry, ServiceModes};
 mod media;
 pub use media::{
-    ChargeAction, ChargePresence, ChargeQuery, ChargeResult, DisplayMode, DisplayOptionAction,
-    HdmiAction, HdmiPacket, HdmiValue, ReportedChargeState, SoundAction, SoundClip, SoundFormat,
-    SoundOperation, SoundTrack, Toggle,
+    AudioCount, AudioPlayback, AudioResult, AudioRoute, ChargeAction, ChargePresence, ChargeQuery,
+    ChargeResult, DisplayMode, DisplayOptionAction, HdmiAction, HdmiPacket, HdmiValue,
+    ReportedChargeState, SoundAction, SoundClip, SoundFormat, SoundOperation, SoundTrack,
+    StorageErase, StorageEraseResult, StorageStatus, Toggle,
 };
 mod peripheral;
 pub use peripheral::{
@@ -36,6 +37,7 @@ pub enum ArgumentKind {
     SoundClip,
     HdmiValue,
     HdmiPacketLength,
+    AudioCount,
 }
 impl std::fmt::Display for ArgumentKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -48,6 +50,7 @@ impl std::fmt::Display for ArgumentKind {
             Self::SoundClip => "sound clip index (0..=22)",
             Self::HdmiValue => "HDMI value (0..=4095)",
             Self::HdmiPacketLength => "HDMI packet length (16 bytes)",
+            Self::AudioCount => "audio chunk count (0..=10)",
         })
     }
 }
@@ -145,6 +148,15 @@ pub enum Command {
     ParameterService(Toggle),
     ChargeControl(ChargeAction),
     ChargeStatus(ChargeQuery),
+    AudioCapture {
+        count: AudioCount,
+        route: AudioRoute,
+    },
+    AudioPlayback(AudioPlayback),
+    EraseStorage(StorageErase),
+    StorageStatus,
+    FormatStorage,
+    DisplaySetup,
 }
 impl Command {
     pub fn codec(self) -> Codec {
@@ -169,6 +181,12 @@ impl Command {
             Self::ParameterService(_) => Codec::ParameterService,
             Self::ChargeControl(_) => Codec::ChargeControl,
             Self::ChargeStatus(_) => Codec::ChargeStatus,
+            Self::AudioCapture { .. } => Codec::AudioCapture,
+            Self::AudioPlayback(_) => Codec::AudioPlayback,
+            Self::EraseStorage(_) => Codec::EraseStorage,
+            Self::StorageStatus => Codec::StorageStatus,
+            Self::FormatStorage => Codec::FormatStorage,
+            Self::DisplaySetup => Codec::DisplaySetup,
         }
     }
 }
@@ -207,6 +225,10 @@ pub enum ReplyValue {
     ChargeApplied(ChargeResult),
     ChargePresence(ChargePresence),
     ChargeState(ReportedChargeState),
+    AudioCaptured(AudioResult),
+    AudioPlayed(AudioResult),
+    StorageErased(StorageEraseResult),
+    StorageStatus(StorageStatus),
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommandReply {
@@ -293,6 +315,13 @@ impl PreparedCommand {
             Command::ChargeStatus(ChargeQuery::State) => {
                 ReplyValue::ChargeState(ReportedChargeState::decode(byte(1)))
             }
+            Command::AudioCapture { .. } => ReplyValue::AudioCaptured(AudioResult::decode(byte(2))),
+            Command::AudioPlayback(_) => ReplyValue::AudioPlayed(AudioResult::decode(byte(1))),
+            Command::EraseStorage(_) => {
+                ReplyValue::StorageErased(StorageEraseResult::decode(byte(1)))
+            }
+            Command::StorageStatus => ReplyValue::StorageStatus(StorageStatus::decode(byte(0))),
+            Command::FormatStorage | Command::DisplaySetup => ReplyValue::NoPayload,
             Command::WritePins { .. }
             | Command::WriteChannel { .. }
             | Command::ProfileByte(ProfileAction::Write { .. } | ProfileAction::Reset)
@@ -438,6 +467,21 @@ impl Catalogue {
             Command::ParameterService(value) => put(0, value.wire()),
             Command::ChargeControl(action) => action.encode(&mut put),
             Command::ChargeStatus(query) => query.encode(&mut put),
+            Command::AudioCapture { count, route } => {
+                put(0, count.value());
+                put(1, route.wire());
+                put(2, 255);
+            }
+            Command::AudioPlayback(mode) => {
+                put(0, mode.wire());
+                put(1, 255);
+            }
+            Command::EraseStorage(action) => {
+                put(0, action.wire());
+                put(1, 255);
+            }
+            Command::StorageStatus => put(0, 255),
+            Command::FormatStorage | Command::DisplaySetup => (),
             Command::ReadWord { address } | Command::WriteWord { address, .. } => {
                 let value = address.address().0;
                 if value > 0x1fff_ffff && value.wrapping_add(0xc000_0000) > 0x1fff_ffff {

@@ -25,6 +25,7 @@ class ArgumentKind(Enum):
     SoundClip = auto()
     HdmiValue = auto()
     HdmiPacketLength = auto()
+    AudioCount = auto()
 
 
 class CommandFailure(Sum):
@@ -393,6 +394,32 @@ class ChargeQuery(Enum):
     State = auto()
 
 
+class AudioCount(Handle):
+    def __init__(self, value):
+        self._js = call(_js.AudioCount.new, uint(value, 8))
+
+    value = property(lambda self: self._js.value)
+
+
+class AudioRoute(Enum):
+    Request82 = auto()
+    Request81 = auto()
+
+
+class AudioPlayback(Enum):
+    AllLanes = auto()
+    ZeroSecondLane = auto()
+    ZeroFirstLane = auto()
+
+
+class StorageErase(Enum):
+    Kind1Regions = auto()
+    Kind0And2Regions = auto()
+    Kind0And1And2Regions = auto()
+    AuxiliaryRegion = auto()
+    ResetProfiles = auto()
+
+
 class Command(Sum, Handle):
     pass
 
@@ -538,6 +565,67 @@ variant(
 )
 
 
+variant(
+    Command,
+    "AudioCapture",
+    [("count", AudioCount), ("route", AudioRoute)],
+    create=lambda count, route: call(
+        _js.Command.audioCapture,
+        unwrap(count, AudioCount),
+        _choice(route, AudioRoute, _js.AudioRoute),
+    ),
+)
+variant(
+    Command,
+    "AudioPlayback",
+    [("mode", AudioPlayback)],
+    create=lambda mode: call(
+        _js.Command.audioPlayback, _choice(mode, AudioPlayback, _js.AudioPlayback)
+    ),
+)
+variant(
+    Command,
+    "EraseStorage",
+    [("action", StorageErase)],
+    create=lambda action: call(
+        _js.Command.eraseStorage, _choice(action, StorageErase, _js.StorageErase)
+    ),
+)
+variant(Command, "StorageStatus", create=lambda: call(_js.Command.storageStatus))
+variant(Command, "FormatStorage", create=lambda: call(_js.Command.formatStorage))
+variant(Command, "DisplaySetup", create=lambda: call(_js.Command.displaySetup))
+
+
+class AudioResult(Sum):
+    pass
+
+
+variant(AudioResult, "Success")
+variant(AudioResult, "Failed")
+variant(AudioResult, "Unknown", [("raw_status", int)])
+
+
+class StorageEraseResult(Sum):
+    pass
+
+
+variant(StorageEraseResult, "Success")
+variant(StorageEraseResult, "Failed")
+variant(StorageEraseResult, "Unknown", [("raw_status", int)])
+
+
+class StorageStatus(Sum):
+    pass
+
+
+variant(StorageStatus, "Zero")
+variant(StorageStatus, "Value4")
+variant(StorageStatus, "Value8")
+variant(StorageStatus, "Value16")
+variant(StorageStatus, "Value32")
+variant(StorageStatus, "Unknown", [("raw_status", int)])
+
+
 class ChargeResult(Sum):
     pass
 
@@ -609,6 +697,10 @@ variant(ReplyValue, "ConfigurationSaved", [("status", SaveStatus)])
 variant(ReplyValue, "ReadWord", [("result", WordReadResult)])
 variant(ReplyValue, "WriteWord", [("result", WordWriteResult)])
 variant(ReplyValue, "Research")
+variant(ReplyValue, "AudioCaptured", [("status", AudioResult)])
+variant(ReplyValue, "AudioPlayed", [("status", AudioResult)])
+variant(ReplyValue, "StorageErased", [("status", StorageEraseResult)])
+variant(ReplyValue, "StorageStatus", [("status", StorageStatus)])
 variant(ReplyValue, "ChargeApplied", [("status", ChargeResult)])
 variant(ReplyValue, "ChargePresence", [("status", ChargePresence)])
 variant(ReplyValue, "ChargeState", [("status", ReportedChargeState)])
@@ -675,9 +767,49 @@ def _charge_state(value):
     }[value.kind]()
 
 
+def _audio_result(value):
+    kinds = _js.AudioResultKind
+    return {
+        kinds.Success: AudioResult.Success,
+        kinds.Failed: AudioResult.Failed,
+        kinds.Unknown: lambda: AudioResult.Unknown(value.rawStatus),
+    }[value.kind]()
+
+
+def _storage_erase_result(value):
+    kinds = _js.StorageEraseResultKind
+    return {
+        kinds.Success: StorageEraseResult.Success,
+        kinds.Failed: StorageEraseResult.Failed,
+        kinds.Unknown: lambda: StorageEraseResult.Unknown(value.rawStatus),
+    }[value.kind]()
+
+
+def _storage_status(value):
+    kinds = _js.StorageStatusKind
+    return {
+        kinds.Zero: StorageStatus.Zero,
+        kinds.Value4: StorageStatus.Value4,
+        kinds.Value8: StorageStatus.Value8,
+        kinds.Value16: StorageStatus.Value16,
+        kinds.Value32: StorageStatus.Value32,
+        kinds.Unknown: lambda: StorageStatus.Unknown(value.rawStatus),
+    }[value.kind]()
+
+
 def _value(value):
     kinds = _js.ReplyKind
     return {
+        kinds.AudioCaptured: lambda: ReplyValue.AudioCaptured(
+            _audio_result(value.status)
+        ),
+        kinds.AudioPlayed: lambda: ReplyValue.AudioPlayed(_audio_result(value.status)),
+        kinds.StorageErased: lambda: ReplyValue.StorageErased(
+            _storage_erase_result(value.status)
+        ),
+        kinds.StorageStatus: lambda: ReplyValue.StorageStatus(
+            _storage_status(value.status)
+        ),
         kinds.ChargeApplied: lambda: ReplyValue.ChargeApplied(
             _charge_result(value.status)
         ),

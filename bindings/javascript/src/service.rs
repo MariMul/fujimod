@@ -26,6 +26,7 @@ pub enum ArgumentKind {
     SoundClip,
     HdmiValue,
     HdmiPacketLength,
+    AudioCount,
 }
 impl From<core::ArgumentKind> for ArgumentKind {
     fn from(value: core::ArgumentKind) -> Self {
@@ -38,6 +39,7 @@ impl From<core::ArgumentKind> for ArgumentKind {
             core::ArgumentKind::SoundClip => Self::SoundClip,
             core::ArgumentKind::HdmiValue => Self::HdmiValue,
             core::ArgumentKind::HdmiPacketLength => Self::HdmiPacketLength,
+            core::ArgumentKind::AudioCount => Self::AudioCount,
         }
     }
 }
@@ -171,6 +173,52 @@ pub struct App80Command {
 }
 #[wasm_bindgen]
 impl App80Command {
+    #[wasm_bindgen(js_name=audioCapture)]
+    pub fn audio_capture(
+        count: &media::AudioCount,
+        #[wasm_bindgen(unchecked_param_type = "AudioRoute")] route: JsValue,
+    ) -> Result<Self, JsValue> {
+        Ok(Self {
+            inner: core::Command::AudioCapture {
+                count: count.inner,
+                route: media::AudioRoute::parse(route)?,
+            },
+        })
+    }
+    #[wasm_bindgen(js_name=audioPlayback)]
+    pub fn audio_playback(
+        #[wasm_bindgen(unchecked_param_type = "AudioPlayback")] mode: JsValue,
+    ) -> Result<Self, JsValue> {
+        Ok(Self {
+            inner: core::Command::AudioPlayback(media::AudioPlayback::parse(mode)?),
+        })
+    }
+    #[wasm_bindgen(js_name=eraseStorage)]
+    pub fn erase_storage(
+        #[wasm_bindgen(unchecked_param_type = "StorageErase")] action: JsValue,
+    ) -> Result<Self, JsValue> {
+        Ok(Self {
+            inner: core::Command::EraseStorage(media::StorageErase::parse(action)?),
+        })
+    }
+    #[wasm_bindgen(js_name=storageStatus)]
+    pub fn storage_status() -> Self {
+        Self {
+            inner: core::Command::StorageStatus,
+        }
+    }
+    #[wasm_bindgen(js_name=formatStorage)]
+    pub fn format_storage() -> Self {
+        Self {
+            inner: core::Command::FormatStorage,
+        }
+    }
+    #[wasm_bindgen(js_name=displaySetup)]
+    pub fn display_setup() -> Self {
+        Self {
+            inner: core::Command::DisplaySetup,
+        }
+    }
     #[wasm_bindgen(js_name=displayOption)]
     pub fn display_option(action: &media::DisplayOptionAction) -> Self {
         Self {
@@ -335,6 +383,10 @@ impl App80Command {
 #[wasm_bindgen]
 #[derive(Clone, Copy)]
 pub enum App80ReplyKind {
+    AudioCaptured,
+    AudioPlayed,
+    StorageErased,
+    StorageStatus,
     ChargeApplied,
     ChargePresence,
     ChargeState,
@@ -387,6 +439,22 @@ impl App80CommandReply {
         use App80ReplyKind as K;
         use core::ReplyValue as V;
         match self.inner.value() {
+            V::AudioCaptured(status) => record(
+                K::AudioCaptured as u32,
+                &[("status", media::AudioResultKind::value(*status))],
+            ),
+            V::AudioPlayed(status) => record(
+                K::AudioPlayed as u32,
+                &[("status", media::AudioResultKind::value(*status))],
+            ),
+            V::StorageErased(status) => record(
+                K::StorageErased as u32,
+                &[("status", media::StorageEraseResultKind::value(*status))],
+            ),
+            V::StorageStatus(status) => record(
+                K::StorageStatus as u32,
+                &[("status", media::StorageStatusKind::value(*status))],
+            ),
             V::ChargeApplied(status) => record(
                 K::ChargeApplied as u32,
                 &[("status", media::ChargeResultKind::value(*status))],
@@ -550,7 +618,20 @@ export type ChargePresence =
 export type ReportedChargeState =
  | Readonly<{kind: ReportedChargeStateKind.Failed | ReportedChargeStateKind.Value0 | ReportedChargeStateKind.Values2To5 | ReportedChargeStateKind.Value6 | ReportedChargeStateKind.OtherValue}>
  | Readonly<{kind: ReportedChargeStateKind.Unknown; rawStatus: number}>;
+export type AudioResult =
+ | Readonly<{kind: AudioResultKind.Success | AudioResultKind.Failed}>
+ | Readonly<{kind: AudioResultKind.Unknown; rawStatus: number}>;
+export type StorageEraseResult =
+ | Readonly<{kind: StorageEraseResultKind.Success | StorageEraseResultKind.Failed}>
+ | Readonly<{kind: StorageEraseResultKind.Unknown; rawStatus: number}>;
+export type StorageStatus =
+ | Readonly<{kind: StorageStatusKind.Zero | StorageStatusKind.Value4 | StorageStatusKind.Value8 | StorageStatusKind.Value16 | StorageStatusKind.Value32}>
+ | Readonly<{kind: StorageStatusKind.Unknown; rawStatus: number}>;
 export type App80ReplyValue =
+  | Readonly<{kind: App80ReplyKind.AudioCaptured; status: AudioResult}>
+  | Readonly<{kind: App80ReplyKind.AudioPlayed; status: AudioResult}>
+  | Readonly<{kind: App80ReplyKind.StorageErased; status: StorageEraseResult}>
+  | Readonly<{kind: App80ReplyKind.StorageStatus; status: StorageStatus}>
   | Readonly<{kind: App80ReplyKind.ChargeApplied; status: ChargeResult}>
   | Readonly<{kind: App80ReplyKind.ChargePresence; status: ChargePresence}>
   | Readonly<{kind: App80ReplyKind.ChargeState; status: ReportedChargeState}>

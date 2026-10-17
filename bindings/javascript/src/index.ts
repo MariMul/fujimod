@@ -4,7 +4,7 @@ export type { Session, Device, InfoReply, ConfigurationGeometry, DiagnosticReply
 export type { FirmwareIdentity, ServiceModes, ServiceDefinition, ServiceEntry, ServiceMailbox,
   ModeAvailability, ModeTransition, DefinitionFailure, CommandFailure, App80Command,
   ProfileAction, App80Invocation, App80CommandReply, App80ReplyValue, SaveStatus,
-  WordReadResult, WordWriteResult, RegisterAction, I2cLength, I2cPayload, I2cAction, DisplayOptionAction, SoundAction, HdmiAction, SoundClip, HdmiValue, HdmiPacket, ChargeAction, ChargeResult, ChargePresence, ReportedChargeState } from '../pkg/fujimod.js';
+  WordReadResult, WordWriteResult, RegisterAction, I2cLength, I2cPayload, I2cAction, DisplayOptionAction, SoundAction, HdmiAction, SoundClip, HdmiValue, HdmiPacket, ChargeAction, ChargeResult, ChargePresence, ReportedChargeState, AudioCount, AudioResult, StorageEraseResult, StorageStatus } from '../pkg/fujimod.js';
 
 class ChunkIterator implements AsyncIterableIterator<Uint8Array> {
   constructor(private readonly reader: native.RangeReader) {}
@@ -129,6 +129,9 @@ export const usb = Object.freeze({
       displayOption: native.App80Command.displayOption, displayMode: native.App80Command.displayMode,
       sound: native.App80Command.sound, hdmi: native.App80Command.hdmi, parameterService: native.App80Command.parameterService,
       chargeControl: native.App80Command.chargeControl, chargeStatus: native.App80Command.chargeStatus,
+      audioCapture: native.App80Command.audioCapture, audioPlayback: native.App80Command.audioPlayback,
+      eraseStorage: native.App80Command.eraseStorage, storageStatus: native.App80Command.storageStatus,
+      formatStorage: native.App80Command.formatStorage, displaySetup: native.App80Command.displaySetup,
     }),
     ProfileAction: Object.freeze({ read: native.ProfileAction.read, write: native.ProfileAction.write, reset: native.ProfileAction.reset }),
     ProfileBank: native.ProfileBank,
@@ -146,6 +149,9 @@ export const usb = Object.freeze({
     HdmiValue: native.HdmiValue, HdmiPacket: native.HdmiPacket,
     HdmiAction: Object.freeze({resetStub: native.HdmiAction.resetStub, packet: native.HdmiAction.packet, triplet: native.HdmiAction.triplet}),
     ChargeAction: Object.freeze({control: native.ChargeAction.control, enableAndSetFlag: native.ChargeAction.enableAndSetFlag}),
+    AudioCount: native.AudioCount, AudioRoute: native.AudioRoute, AudioPlayback: native.AudioPlayback,
+    StorageErase: native.StorageErase, AudioResultKind: native.AudioResultKind,
+    StorageEraseResultKind: native.StorageEraseResultKind, StorageStatusKind: native.StorageStatusKind,
     ChargeQuery: native.ChargeQuery, ChargeResultKind: native.ChargeResultKind,
     ChargePresenceKind: native.ChargePresenceKind, ReportedChargeStateKind: native.ReportedChargeStateKind,
     PinBank: native.PinBank, ProfileIndex: native.ProfileIndex, WordAddress: native.WordAddress,
