@@ -36,6 +36,7 @@ def open_menu(item, *, title, start_from=None):
         with guide.step('Choose ' + camera.menu_path(item)):
             camera.select_menu_item(item)
         camera.open_menu_item(item)
+        guide.pause(1.5)
     # Factory guides take their identity from their binding in the calling
     # module. Imported guides retain their original module ownership.
     visit.walkthrough_module = sys._getframe(1).f_globals['__name__']
@@ -190,7 +191,7 @@ class Guide:
             self._recording = previous
 
     @contextmanager
-    def step(self, title, text='', *, hold=.75):
+    def step(self, title, text='', *, hold=1.5):
         if self._inside_step:
             raise ValueError('Guide steps cannot nest')
         if not isinstance(title, str) or not title.strip() or not isinstance(text, str):

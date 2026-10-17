@@ -71,7 +71,7 @@ recorder captures the ready result and adds its configured presentation hold:
 extra captures run during prerequisite replay. The adapter marks navigation
 intent explicitly; a direction key can also operate a feature.
 
-`guide.step(title, text='', hold=.75)` captures on successful block exit, then
+`guide.step(title, text='', hold=1.5)` captures on successful block exit, then
 holds that observation without advancing guest time. For menu navigation, use
 `Choose Menu > Item > Submenu`, matching the displayed labels. Select/highlight
 the destination inside the block, then activate it and assert success after the
@@ -85,6 +85,9 @@ holds are never compressed. Unchanged frames without active/fading inputs keep
 at most 0.4 seconds of guest waiting; transitions and input intervals remain.
 Input records retain their actual guest times and presentation timestamps.
 Neither video pacing nor holds change emulator execution or CPU speed.
+
+Use `guide.pause(1.5)` after opening a menu before navigating within it. The
+shared `open_menu` starter adds this pause automatically, after activation.
 
 A zero hold adds no presentation time. The final frame is retained. Failed steps
 and fixtures fail the run even if author code catches their exception.
