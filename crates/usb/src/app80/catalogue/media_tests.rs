@@ -1,0 +1,203 @@
+use super::*;
+use fujimod_defs::service::FirmwareIdentity;
+fn catalogue(reverse: bool) -> Catalogue {
+    let entries:Vec<_>=[("display_option",4),("display_mode",1),("sound",3),("hdmi",19),("parameter_service",1),("charge_control",3),("charge_status",2)].into_iter().enumerate().map(|(index,(codec,count))|{
+  let slots:Vec<_>=(0..count).map(|slot|if reverse {31-slot}else{slot}).collect();
+  serde_json::json!({"code":210+index,"label":codec,"codec":codec,"slots":slots,"enabled_modes":4,"next_mode":0,"firmware_kind":1,"handler":0,"parameter_table":0})
+ }).collect();
+    let json = serde_json::json!({"schema":1,"firmware":{"id":"media-v2","model":"Synthetic","version":"2","sha256":"ab".repeat(32)},"mailbox":{"page":3,"offset":576,"configuration_limit":512},"entries":entries});
+    Catalogue::new(
+        Definition::from_json(
+            &json.to_string(),
+            &FirmwareIdentity::new("media-v2", &"ab".repeat(32)).unwrap(),
+        )
+        .unwrap(),
+    )
+}
+fn prepare(c: &Catalogue, command: Command) -> PreparedCommand {
+    c.prepare(ServiceModes::new(4).unwrap(), command).unwrap()
+}
+fn logical(p: &PreparedCommand) -> Vec<u8> {
+    p.slots
+        .iter()
+        .map(|&slot| p.request.arguments()[usize::from(slot)])
+        .collect()
+}
+fn response(p: &PreparedCommand, index: usize, value: u8) -> Reply {
+    let mut raw = p.request.encode();
+    raw[1 + usize::from(p.slots[index])] = value;
+    Reply::decode(&raw).unwrap()
+}
+#[test]
+fn display_forwarding_modes_and_parameter_boolean_have_distinct_typed_choices() {
+    for reverse in [false, true] {
+        let c = catalogue(reverse);
+        for (command, expected) in [
+            (
+                Command::DisplayOption(DisplayOptionAction::IdlePins),
+                vec![0, 0, 0, 0],
+            ),
+            (
+                Command::DisplayOption(DisplayOptionAction::ForwardPair {
+                    first: 7,
+                    second: 8,
+                }),
+                vec![0, 1, 7, 8],
+            ),
+            (Command::DisplayMode(DisplayMode::Option0), vec![0]),
+            (Command::DisplayMode(DisplayMode::Option1), vec![1]),
+            (Command::ParameterService(Toggle::Disabled), vec![0]),
+            (Command::ParameterService(Toggle::Enabled), vec![1]),
+        ] {
+            let p = prepare(&c, command);
+            assert_eq!(logical(&p), expected);
+            assert_eq!(
+                p.decode(Reply::decode(&p.request.encode()).unwrap())
+                    .unwrap()
+                    .value(),
+                &ReplyValue::NoPayload
+            );
+        }
+    }
+}
+#[test]
+fn sound_clip_and_track_variants_choose_canonical_codes_and_formats() {
+    assert!(SoundClip::new(23).is_err());
+    for reverse in [false, true] {
+        let c = catalogue(reverse);
+        for (format, wire) in [
+            (SoundFormat::Format1, 0),
+            (SoundFormat::Format2, 1),
+            (SoundFormat::Format3, 2),
+        ] {
+            for clip in [0, 22] {
+                let p = prepare(
+                    &c,
+                    Command::Sound(SoundAction::Clip {
+                        clip: SoundClip::new(clip).unwrap(),
+                        format,
+                    }),
+                );
+                assert_eq!(logical(&p), [1, clip, wire]);
+            }
+            for (track, base) in [
+                (SoundTrack::Track2, 23),
+                (SoundTrack::Track3, 26),
+                (SoundTrack::Track4, 29),
+            ] {
+                for (operation, offset) in [
+                    (SoundOperation::First, 0),
+                    (SoundOperation::Second, 1),
+                    (SoundOperation::Third, 2),
+                ] {
+                    let p = prepare(
+                        &c,
+                        Command::Sound(SoundAction::Track {
+                            track,
+                            operation,
+                            format,
+                        }),
+                    );
+                    assert_eq!(p.request.code(), CommandCode(212));
+                    assert_eq!(logical(&p), [1, base + offset, wire]);
+                }
+            }
+        }
+        assert_eq!(
+            logical(&prepare(&c, Command::Sound(SoundAction::Noop))),
+            [0, 0, 0]
+        );
+    }
+}
+#[test]
+fn hdmi_packet_is_owned_reversed_and_exactly_sixteen_bytes_with_checked_triplets() {
+    for length in [0, 15, 17] {
+        assert!(HdmiPacket::new(&vec![0; length]).is_err());
+    }
+    assert!(HdmiValue::new(4096).is_err());
+    assert_eq!(HdmiValue::new(4095).unwrap().value(), 4095);
+    let mut original = std::array::from_fn::<_, 16, _>(|n| n as u8);
+    let packet = HdmiPacket::new(&original).unwrap();
+    original.fill(255);
+    assert_eq!(packet.data()[0], 0);
+    for reverse in [false, true] {
+        let c = catalogue(reverse);
+        let p = prepare(&c, Command::Hdmi(HdmiAction::Packet(packet)));
+        let mut expected = vec![0, 1, 0];
+        expected.extend((0..16).rev());
+        assert_eq!(logical(&p), expected);
+        let p = prepare(
+            &c,
+            Command::Hdmi(HdmiAction::Triplet {
+                first: HdmiValue::new(0x123).unwrap(),
+                second: HdmiValue::new(0x456).unwrap(),
+                third: HdmiValue::new(4095).unwrap(),
+            }),
+        );
+        assert_eq!(&logical(&p)[..9], &[1, 0, 0, 1, 0x23, 4, 0x56, 15, 255]);
+        assert!(
+            logical(&prepare(&c, Command::Hdmi(HdmiAction::ResetStub)))
+                .iter()
+                .all(|&value| value == 0)
+        );
+    }
+}
+#[test]
+fn charge_results_are_application_enums_and_absent_output_stays_unknown() {
+    for reverse in [false, true] {
+        let c = catalogue(reverse);
+        for (action, expected) in [
+            (ChargeAction::Control(Toggle::Disabled), [0, 0, 255]),
+            (ChargeAction::Control(Toggle::Enabled), [0, 1, 255]),
+            (
+                ChargeAction::EnableAndSetFlag(Toggle::Disabled),
+                [1, 0, 255],
+            ),
+            (ChargeAction::EnableAndSetFlag(Toggle::Enabled), [1, 1, 255]),
+        ] {
+            let p = prepare(&c, Command::ChargeControl(action));
+            assert_eq!(logical(&p), expected);
+            for (raw, status) in [
+                (0, ChargeResult::Success),
+                (1, ChargeResult::Failed),
+                (42, ChargeResult::Unknown(42)),
+                (255, ChargeResult::Unknown(255)),
+            ] {
+                assert_eq!(
+                    p.decode(response(&p, 2, raw)).unwrap().value(),
+                    &ReplyValue::ChargeApplied(status)
+                );
+            }
+        }
+        let p = prepare(&c, Command::ChargeStatus(ChargeQuery::Presence));
+        assert_eq!(logical(&p), [0, 255]);
+        for (raw, value) in [
+            (0, ChargePresence::Failed),
+            (1, ChargePresence::Absent),
+            (2, ChargePresence::Present),
+            (3, ChargePresence::Unknown(3)),
+        ] {
+            assert_eq!(
+                p.decode(response(&p, 1, raw)).unwrap().value(),
+                &ReplyValue::ChargePresence(value)
+            );
+        }
+        let p = prepare(&c, Command::ChargeStatus(ChargeQuery::State));
+        assert_eq!(logical(&p), [1, 255]);
+        for (raw, value) in [
+            (0, ReportedChargeState::Failed),
+            (1, ReportedChargeState::Unknown(1)),
+            (2, ReportedChargeState::Unknown(2)),
+            (3, ReportedChargeState::Value0),
+            (4, ReportedChargeState::Values2To5),
+            (5, ReportedChargeState::Value6),
+            (6, ReportedChargeState::OtherValue),
+            (255, ReportedChargeState::Unknown(255)),
+        ] {
+            assert_eq!(
+                p.decode(response(&p, 1, raw)).unwrap().value(),
+                &ReplyValue::ChargeState(value)
+            );
+        }
+    }
+}

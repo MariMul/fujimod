@@ -3,6 +3,7 @@ use super::*;
 use defs::{ServiceCodec, ServiceDefinition, ServiceModes};
 use error::{integer, property, record};
 use usb::app80::catalogue as core;
+mod media;
 mod peripheral;
 
 #[wasm_bindgen]
@@ -22,6 +23,9 @@ pub enum ArgumentKind {
     WordAlignment,
     WordAddress,
     I2cLength,
+    SoundClip,
+    HdmiValue,
+    HdmiPacketLength,
 }
 impl From<core::ArgumentKind> for ArgumentKind {
     fn from(value: core::ArgumentKind) -> Self {
@@ -31,6 +35,9 @@ impl From<core::ArgumentKind> for ArgumentKind {
             core::ArgumentKind::WordAlignment => Self::WordAlignment,
             core::ArgumentKind::WordAddress => Self::WordAddress,
             core::ArgumentKind::I2cLength => Self::I2cLength,
+            core::ArgumentKind::SoundClip => Self::SoundClip,
+            core::ArgumentKind::HdmiValue => Self::HdmiValue,
+            core::ArgumentKind::HdmiPacketLength => Self::HdmiPacketLength,
         }
     }
 }
@@ -164,6 +171,52 @@ pub struct App80Command {
 }
 #[wasm_bindgen]
 impl App80Command {
+    #[wasm_bindgen(js_name=displayOption)]
+    pub fn display_option(action: &media::DisplayOptionAction) -> Self {
+        Self {
+            inner: core::Command::DisplayOption(action.inner),
+        }
+    }
+    #[wasm_bindgen(js_name=displayMode)]
+    pub fn display_mode(
+        #[wasm_bindgen(unchecked_param_type = "DisplayMode")] mode: JsValue,
+    ) -> Result<Self, JsValue> {
+        Ok(Self {
+            inner: core::Command::DisplayMode(media::DisplayMode::parse(mode)?),
+        })
+    }
+    pub fn sound(action: &media::SoundAction) -> Self {
+        Self {
+            inner: core::Command::Sound(action.inner),
+        }
+    }
+    pub fn hdmi(action: &media::HdmiAction) -> Self {
+        Self {
+            inner: core::Command::Hdmi(action.inner),
+        }
+    }
+    #[wasm_bindgen(js_name=parameterService)]
+    pub fn parameter_service(
+        #[wasm_bindgen(unchecked_param_type = "Toggle")] enabled: JsValue,
+    ) -> Result<Self, JsValue> {
+        Ok(Self {
+            inner: core::Command::ParameterService(media::Toggle::parse(enabled)?),
+        })
+    }
+    #[wasm_bindgen(js_name=chargeControl)]
+    pub fn charge_control(action: &media::ChargeAction) -> Self {
+        Self {
+            inner: core::Command::ChargeControl(action.inner),
+        }
+    }
+    #[wasm_bindgen(js_name=chargeStatus)]
+    pub fn charge_status(
+        #[wasm_bindgen(unchecked_param_type = "ChargeQuery")] query: JsValue,
+    ) -> Result<Self, JsValue> {
+        Ok(Self {
+            inner: core::Command::ChargeStatus(media::ChargeQuery::parse(query)?),
+        })
+    }
     #[wasm_bindgen(js_name=registerControl)]
     pub fn register_control(action: &peripheral::RegisterAction) -> Self {
         Self {
@@ -282,6 +335,9 @@ impl App80Command {
 #[wasm_bindgen]
 #[derive(Clone, Copy)]
 pub enum App80ReplyKind {
+    ChargeApplied,
+    ChargePresence,
+    ChargeState,
     NoPayload,
     Pins,
     Channel,
@@ -331,6 +387,18 @@ impl App80CommandReply {
         use App80ReplyKind as K;
         use core::ReplyValue as V;
         match self.inner.value() {
+            V::ChargeApplied(status) => record(
+                K::ChargeApplied as u32,
+                &[("status", media::ChargeResultKind::value(*status))],
+            ),
+            V::ChargePresence(status) => record(
+                K::ChargePresence as u32,
+                &[("status", media::ChargePresenceKind::value(*status))],
+            ),
+            V::ChargeState(status) => record(
+                K::ChargeState as u32,
+                &[("status", media::ReportedChargeStateKind::value(*status))],
+            ),
             V::NoPayload => record(K::NoPayload as u32, &[]),
             V::Pins(levels) => record(K::Pins as u32, &[("levels", (*levels).into())]),
             V::Channel(value) => record(K::Channel as u32, &[("value", (*value).into())]),
@@ -473,7 +541,19 @@ export type WordReadResult =
 export type WordWriteResult =
   | Readonly<{ kind: WordWriteKind.Confirmed | WordWriteKind.Rejected }>
   | Readonly<{ kind: WordWriteKind.Unknown; rawStatus: number }>;
+export type ChargeResult =
+ | Readonly<{kind: ChargeResultKind.Success | ChargeResultKind.Failed}>
+ | Readonly<{kind: ChargeResultKind.Unknown; rawStatus: number}>;
+export type ChargePresence =
+ | Readonly<{kind: ChargePresenceKind.Failed | ChargePresenceKind.Absent | ChargePresenceKind.Present}>
+ | Readonly<{kind: ChargePresenceKind.Unknown; rawStatus: number}>;
+export type ReportedChargeState =
+ | Readonly<{kind: ReportedChargeStateKind.Failed | ReportedChargeStateKind.Value0 | ReportedChargeStateKind.Values2To5 | ReportedChargeStateKind.Value6 | ReportedChargeStateKind.OtherValue}>
+ | Readonly<{kind: ReportedChargeStateKind.Unknown; rawStatus: number}>;
 export type App80ReplyValue =
+  | Readonly<{kind: App80ReplyKind.ChargeApplied; status: ChargeResult}>
+  | Readonly<{kind: App80ReplyKind.ChargePresence; status: ChargePresence}>
+  | Readonly<{kind: App80ReplyKind.ChargeState; status: ReportedChargeState}>
   | Readonly<{ kind: App80ReplyKind.NoPayload | App80ReplyKind.Research }>
   | Readonly<{ kind: App80ReplyKind.Pins; levels: number }>
   | Readonly<{ kind: App80ReplyKind.Channel | App80ReplyKind.ProfileByte; value: number }>

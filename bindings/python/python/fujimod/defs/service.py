@@ -26,6 +26,13 @@ class Codec(Enum):
     I2c = auto()
     Accumulator = auto()
     PeripheralReport = auto()
+    DisplayOption = auto()
+    DisplayMode = auto()
+    Sound = auto()
+    Hdmi = auto()
+    ParameterService = auto()
+    ChargeControl = auto()
+    ChargeStatus = auto()
 
 
 class ServiceModes(Handle):

@@ -248,3 +248,11 @@ Peripheral commands use `Command.RegisterControl(action=RegisterAction.PowerWrit
 The write-only route has the distinct `I2cAction.WriteSingle(command=..., value=...)`
 variant. Replies are `ReplyValue.I2cData`, `Accumulated` or `PeripheralReport`.
 Accumulator values are three low halfwords; report bytes remain opaque.
+
+Media variants include `Command.DisplayOption`, `DisplayMode`, `Sound`, `Hdmi`,
+`ParameterService`, `ChargeControl` and `ChargeStatus`. Their inputs use
+`DisplayOptionAction`, `SoundAction`, `HdmiAction`, `ChargeAction`, `ChargeQuery`
+and distinct enum choices. `SoundClip` checks indices 0–22; `HdmiPacket` copies
+exactly 16 bytes; `HdmiValue` checks the 12-bit range. Replies distinguish
+`ReplyValue.ChargeApplied`, `ChargePresence` and `ChargeState`, each with its
+own status enum and explicit `Unknown(raw_status=...)` variant.

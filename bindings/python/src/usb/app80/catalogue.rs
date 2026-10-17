@@ -2,6 +2,7 @@
 use super::*;
 use crate::defs::{Codec, Definition, ServiceModes};
 use usb::app80::catalogue as core;
+mod media;
 mod peripheral;
 use peripheral::{AccumulatorAction, I2cAction, RegisterAction};
 
@@ -15,6 +16,9 @@ enum ArgumentKind {
     WordAlignment,
     WordAddress,
     I2cLength,
+    SoundClip,
+    HdmiValue,
+    HdmiPacketLength,
 }
 impl From<core::ArgumentKind> for ArgumentKind {
     fn from(value: core::ArgumentKind) -> Self {
@@ -24,6 +28,9 @@ impl From<core::ArgumentKind> for ArgumentKind {
             core::ArgumentKind::WordAlignment => Self::WordAlignment,
             core::ArgumentKind::WordAddress => Self::WordAddress,
             core::ArgumentKind::I2cLength => Self::I2cLength,
+            core::ArgumentKind::SoundClip => Self::SoundClip,
+            core::ArgumentKind::HdmiValue => Self::HdmiValue,
+            core::ArgumentKind::HdmiPacketLength => Self::HdmiPacketLength,
         }
     }
 }
@@ -146,6 +153,27 @@ impl From<ProfileAction> for core::ProfileAction {
 #[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
 #[derive(Clone)]
 enum Command {
+    DisplayOption {
+        action: media::DisplayOptionAction,
+    },
+    DisplayMode {
+        mode: media::DisplayMode,
+    },
+    Sound {
+        action: media::SoundAction,
+    },
+    Hdmi {
+        action: media::HdmiAction,
+    },
+    ParameterService {
+        enabled: media::Toggle,
+    },
+    ChargeControl {
+        action: media::ChargeAction,
+    },
+    ChargeStatus {
+        query: media::ChargeQuery,
+    },
     WritePins {
         bank: PinBank,
         levels: u16,
@@ -190,6 +218,13 @@ enum Command {
 impl From<Command> for core::Command {
     fn from(value: Command) -> Self {
         match value {
+            Command::DisplayOption { action } => Self::DisplayOption(action.into()),
+            Command::DisplayMode { mode } => Self::DisplayMode(mode.into()),
+            Command::Sound { action } => Self::Sound(action.into()),
+            Command::Hdmi { action } => Self::Hdmi(action.into()),
+            Command::ParameterService { enabled } => Self::ParameterService(enabled.into()),
+            Command::ChargeControl { action } => Self::ChargeControl(action.into()),
+            Command::ChargeStatus { query } => Self::ChargeStatus(query.into()),
             Command::WritePins {
                 bank,
                 levels,
@@ -271,6 +306,9 @@ impl From<core::WordWriteResult> for WordWriteResult {
 #[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
 #[derive(Clone)]
 enum ReplyValue {
+    ChargeApplied { status: media::ChargeResult },
+    ChargePresence { status: media::ChargePresence },
+    ChargeState { status: media::ReportedChargeState },
     NoPayload {},
     Pins { levels: u16 },
     Channel { value: u16 },
@@ -287,6 +325,15 @@ enum ReplyValue {
 impl From<core::ReplyValue> for ReplyValue {
     fn from(value: core::ReplyValue) -> Self {
         match value {
+            core::ReplyValue::ChargeApplied(status) => Self::ChargeApplied {
+                status: status.into(),
+            },
+            core::ReplyValue::ChargePresence(status) => Self::ChargePresence {
+                status: status.into(),
+            },
+            core::ReplyValue::ChargeState(status) => Self::ChargeState {
+                status: status.into(),
+            },
             core::ReplyValue::NoPayload => Self::NoPayload {},
             core::ReplyValue::Pins(levels) => Self::Pins { levels },
             core::ReplyValue::Channel(value) => Self::Channel { value },
@@ -402,6 +449,7 @@ pub(in crate::usb) fn check_limit(limits: &FirmwareLimits) -> PyResult<()> {
 }
 pub(super) fn register(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     peripheral::register(module)?;
+    media::register(module)?;
     module.add("CommandError", py.get_type::<CommandError>())?;
     module.add_class::<ArgumentKind>()?;
     module.add_class::<CommandFailure>()?;

@@ -4,7 +4,7 @@ export type { Session, Device, InfoReply, ConfigurationGeometry, DiagnosticReply
 export type { FirmwareIdentity, ServiceModes, ServiceDefinition, ServiceEntry, ServiceMailbox,
   ModeAvailability, ModeTransition, DefinitionFailure, CommandFailure, App80Command,
   ProfileAction, App80Invocation, App80CommandReply, App80ReplyValue, SaveStatus,
-  WordReadResult, WordWriteResult, RegisterAction, I2cLength, I2cPayload, I2cAction } from '../pkg/fujimod.js';
+  WordReadResult, WordWriteResult, RegisterAction, I2cLength, I2cPayload, I2cAction, DisplayOptionAction, SoundAction, HdmiAction, SoundClip, HdmiValue, HdmiPacket, ChargeAction, ChargeResult, ChargePresence, ReportedChargeState } from '../pkg/fujimod.js';
 
 class ChunkIterator implements AsyncIterableIterator<Uint8Array> {
   constructor(private readonly reader: native.RangeReader) {}
@@ -126,6 +126,9 @@ export const usb = Object.freeze({
       readWord: native.App80Command.readWord, writeWord: native.App80Command.writeWord,
       registerControl: native.App80Command.registerControl, i2c: native.App80Command.i2c,
       accumulator: native.App80Command.accumulator, peripheralReport: native.App80Command.peripheralReport,
+      displayOption: native.App80Command.displayOption, displayMode: native.App80Command.displayMode,
+      sound: native.App80Command.sound, hdmi: native.App80Command.hdmi, parameterService: native.App80Command.parameterService,
+      chargeControl: native.App80Command.chargeControl, chargeStatus: native.App80Command.chargeStatus,
     }),
     ProfileAction: Object.freeze({ read: native.ProfileAction.read, write: native.ProfileAction.write, reset: native.ProfileAction.reset }),
     ProfileBank: native.ProfileBank,
@@ -136,6 +139,15 @@ export const usb = Object.freeze({
     I2cLength: native.I2cLength, I2cPayload: native.I2cPayload, I2cPort: native.I2cPort,
     I2cAction: Object.freeze({ read: native.I2cAction.read, write: native.I2cAction.write, writeSingle: native.I2cAction.writeSingle }),
     AccumulatorAction: native.AccumulatorAction,
+    Toggle: native.Toggle, DisplayMode: native.DisplayMode,
+    DisplayOptionAction: Object.freeze({idlePins: native.DisplayOptionAction.idlePins, forwardPair: native.DisplayOptionAction.forwardPair}),
+    SoundClip: native.SoundClip, SoundFormat: native.SoundFormat, SoundTrack: native.SoundTrack, SoundOperation: native.SoundOperation,
+    SoundAction: Object.freeze({clip: native.SoundAction.clip, track: native.SoundAction.track, noop: native.SoundAction.noop}),
+    HdmiValue: native.HdmiValue, HdmiPacket: native.HdmiPacket,
+    HdmiAction: Object.freeze({resetStub: native.HdmiAction.resetStub, packet: native.HdmiAction.packet, triplet: native.HdmiAction.triplet}),
+    ChargeAction: Object.freeze({control: native.ChargeAction.control, enableAndSetFlag: native.ChargeAction.enableAndSetFlag}),
+    ChargeQuery: native.ChargeQuery, ChargeResultKind: native.ChargeResultKind,
+    ChargePresenceKind: native.ChargePresenceKind, ReportedChargeStateKind: native.ReportedChargeStateKind,
     PinBank: native.PinBank, ProfileIndex: native.ProfileIndex, WordAddress: native.WordAddress,
     ReplyKind: native.App80ReplyKind, SaveStatusKind: native.SaveStatusKind,
     WordReadKind: native.WordReadKind, WordWriteKind: native.WordWriteKind,

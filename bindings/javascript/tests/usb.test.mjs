@@ -323,3 +323,42 @@ test('peripheral commands preserve typed ports, checked payloads and low-halfwor
   assert.deepEqual(values,{kind:S.ReplyKind.Accumulated,values:[0x1234,0xabcd,0xfffe]});assert.ok(Object.isFrozen(values.values));
   const report=service.prepare(modes,C.peripheralReport());assert.deepEqual(decode(report,K.PeripheralReport,[1,2,3,4,5,6,7,8]),{kind:S.ReplyKind.PeripheralReport,data:new Uint8Array([1,2,3,4,5,6,7,8])});
 });
+
+test('media commands use checked packets, canonical sound choices and typed charge results',()=>{
+  const a=usb.app80,C=a.Command,K=defs.service.Codec;
+  const layouts=[['display_option',4],['display_mode',1],['sound',3],['hdmi',19],['parameter_service',1],['charge_control',3],['charge_status',2]];
+  const definition=serviceDefinition(layouts.map(([name,count],n)=>[210+n,name,Array.from({length:count},(_,i)=>(i*5+7)%32),4]));
+  const service=new a.Service(definition),modes=serviceModes();
+  const slots=codec=>definition.entries.find(e=>e.codec===codec).slots;
+  const prepare=command=>service.prepare(modes,command);
+  const logical=(invocation,codec)=>[...slots(codec)].map(slot=>invocation.raw[1+slot]);
+  const decode=(invocation,codec,index,value)=>{const raw=invocation.raw;raw[1+slots(codec)[index]]=value;const reply=invocation.decode(raw);assert.deepEqual(reply.raw,raw);return reply.value;};
+  for(const [command,codec,expected] of [[C.displayOption(a.DisplayOptionAction.idlePins()),K.DisplayOption,[0,0,0,0]],
+    [C.displayOption(a.DisplayOptionAction.forwardPair(7,8)),K.DisplayOption,[0,1,7,8]],
+    [C.displayMode(a.DisplayMode.Option0),K.DisplayMode,[0]],[C.displayMode(a.DisplayMode.Option1),K.DisplayMode,[1]],
+    [C.parameterService(a.Toggle.Disabled),K.ParameterService,[0]],[C.parameterService(a.Toggle.Enabled),K.ParameterService,[1]]]){
+    const invocation=prepare(command);assert.deepEqual(logical(invocation,codec),expected);assert.deepEqual(invocation.decode(invocation.raw).value,{kind:a.ReplyKind.NoPayload});
+  }
+  assert.throws(()=>new a.SoundClip(23),e=>a.isError(e)&&e.reason.argument===a.ArgumentKind.SoundClip);
+  for(const [format,wire] of [[a.SoundFormat.Format1,0],[a.SoundFormat.Format2,1],[a.SoundFormat.Format3,2]]){
+    for(const clip of [0,22])assert.deepEqual(logical(prepare(C.sound(a.SoundAction.clip(new a.SoundClip(clip),format))),K.Sound),[1,clip,wire]);
+    for(const [track,base] of [[a.SoundTrack.Track2,23],[a.SoundTrack.Track3,26],[a.SoundTrack.Track4,29]]){
+      for(const [operation,offset] of [[a.SoundOperation.First,0],[a.SoundOperation.Second,1],[a.SoundOperation.Third,2]])assert.deepEqual(logical(prepare(C.sound(a.SoundAction.track(track,operation,format))),K.Sound),[1,base+offset,wire]);
+    }
+  }
+  assert.deepEqual(logical(prepare(C.sound(a.SoundAction.noop())),K.Sound),[0,0,0]);
+  for(const size of [0,15,17])assert.throws(()=>new a.HdmiPacket(new Uint8Array(size)),e=>a.isError(e)&&e.reason.argument===a.ArgumentKind.HdmiPacketLength);
+  assert.throws(()=>new a.HdmiValue(4096),e=>a.isError(e)&&e.reason.argument===a.ArgumentKind.HdmiValue);
+  const original=Uint8Array.from({length:16},(_,n)=>n),packet=new a.HdmiPacket(original);original.fill(255);assert.deepEqual(packet.data,Uint8Array.from({length:16},(_,n)=>n));
+  assert.deepEqual(logical(prepare(C.hdmi(a.HdmiAction.packet(packet))),K.Hdmi),[0,1,0,...Array.from({length:16},(_,n)=>15-n)]);
+  assert.deepEqual(logical(prepare(C.hdmi(a.HdmiAction.triplet(new a.HdmiValue(0x123),new a.HdmiValue(0x456),new a.HdmiValue(4095)))),K.Hdmi),[1,0,0,1,0x23,4,0x56,15,255,...Array(10).fill(0)]);
+  assert.deepEqual(logical(prepare(C.hdmi(a.HdmiAction.resetStub())),K.Hdmi),Array(19).fill(0));
+  for(const [action,expected] of [[a.ChargeAction.control(a.Toggle.Disabled),[0,0,255]],[a.ChargeAction.control(a.Toggle.Enabled),[0,1,255]],[a.ChargeAction.enableAndSetFlag(a.Toggle.Disabled),[1,0,255]],[a.ChargeAction.enableAndSetFlag(a.Toggle.Enabled),[1,1,255]]]){
+    const invocation=prepare(C.chargeControl(action));assert.deepEqual(logical(invocation,K.ChargeControl),expected);
+    for(const [raw,kind] of [[0,a.ChargeResultKind.Success],[1,a.ChargeResultKind.Failed],[42,a.ChargeResultKind.Unknown],[255,a.ChargeResultKind.Unknown]])assert.deepEqual(decode(invocation,K.ChargeControl,2,raw),{kind:a.ReplyKind.ChargeApplied,status:kind===a.ChargeResultKind.Unknown?{kind,rawStatus:raw}:{kind}});
+  }
+  const presence=prepare(C.chargeStatus(a.ChargeQuery.Presence));assert.deepEqual(logical(presence,K.ChargeStatus),[0,255]);
+  for(const [raw,kind] of [[0,a.ChargePresenceKind.Failed],[1,a.ChargePresenceKind.Absent],[2,a.ChargePresenceKind.Present],[3,a.ChargePresenceKind.Unknown]])assert.deepEqual(decode(presence,K.ChargeStatus,1,raw),{kind:a.ReplyKind.ChargePresence,status:kind===a.ChargePresenceKind.Unknown?{kind,rawStatus:raw}:{kind}});
+  const state=prepare(C.chargeStatus(a.ChargeQuery.State));assert.deepEqual(logical(state,K.ChargeStatus),[1,255]);
+  for(const [raw,kind] of [[0,a.ReportedChargeStateKind.Failed],[1,a.ReportedChargeStateKind.Unknown],[2,a.ReportedChargeStateKind.Unknown],[3,a.ReportedChargeStateKind.Value0],[4,a.ReportedChargeStateKind.Values2To5],[5,a.ReportedChargeStateKind.Value6],[6,a.ReportedChargeStateKind.OtherValue],[255,a.ReportedChargeStateKind.Unknown]])assert.deepEqual(decode(state,K.ChargeStatus,1,raw),{kind:a.ReplyKind.ChargeState,status:kind===a.ReportedChargeStateKind.Unknown?{kind,rawStatus:raw}:{kind}});
+});

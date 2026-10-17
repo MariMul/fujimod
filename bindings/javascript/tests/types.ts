@@ -73,3 +73,19 @@ usb.app80.I2cAction.read(usb.app80.I2cPort.Port0, 1, 3);
 // @ts-expect-error Port enum groups remain distinct from other choices.
 usb.app80.I2cAction.read(usb.app80.ProfileBank.First, 1, new usb.app80.I2cLength(1));
 void peripheral;
+
+// @ts-expect-error HDMI quantities must be checked value objects.
+usb.app80.HdmiAction.triplet(1, 2, 3);
+// @ts-expect-error Toggle choices are enums, not booleans.
+usb.app80.ChargeAction.control(true);
+// @ts-expect-error Sound formats cannot be substituted with a display mode enum.
+usb.app80.SoundAction.clip(new usb.app80.SoundClip(0), usb.app80.DisplayMode.Option0);
+async function chargeValues(): Promise<void> {
+  const value=(await typedReply).value;
+  if(value.kind===usb.app80.ReplyKind.ChargePresence){
+    if(value.status.kind===usb.app80.ChargePresenceKind.Unknown){const raw:number=value.status.rawStatus;void raw;}
+    // @ts-expect-error Presence results do not have a numeric state value field.
+    value.status.value;
+  }
+}
+void chargeValues;

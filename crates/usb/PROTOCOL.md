@@ -95,3 +95,12 @@ the firmware-selected App80 command byte:
 | I²C | Read or write 1–10 bytes through typed ports; a separate single-byte write variant represents the write-only route. Read data is bounded by the requested length; all mailbox bytes remain available. A route may call firmware stubs, so completion does not certify a physical bus transfer. |
 | Accumulator | Explicit start or stop-and-read. Stop returns the low 16 bits of three counters, not full-width totals. |
 | Peripheral report | Eight opaque result bytes. Callback and flag helpers can be stubbed or unreviewed; no hardware-state interpretation is supplied. |
+
+| Media codec | Operations and replies |
+| --- | --- |
+| Display option/mode | Idle pins or forward a byte pair; select setup option 0/1. These are not UI-mode transitions. No result payload. |
+| Sound | Checked clip 0–22 or typed track/operation/format choices; canonical codes represent the reviewed mapping. Completion acknowledges submission, not playback completion. |
+| HDMI | Exact 16-byte packet, three checked 12-bit values or explicit reset-stub request. Packet bytes are reversed into the parameter slots. Studied hardware callees are stubs. |
+| Parameter service | Explicit enabled/disabled choice; no implicit configuration save. |
+| Charge control | Set control or enable it and set the register flag in one firmware command. Output byte 0/1 means success/failure, with unknown values preserved. |
+| Charge status | Separate presence and reported-state queries. Presence maps 1/2 to absent/present; state groups remain named for the register values instead of inferred charging meanings. Unknown values are retained. |

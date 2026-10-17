@@ -229,3 +229,11 @@ Peripheral factories include `Command.registerControl(RegisterAction.powerWrite(
 under `usb.app80`. `new I2cPayload(bytes)` owns a checked 1–10 byte copy; the
 write-only route uses `I2cAction.writeSingle(command, value)`. Result variants
 carry copied bytes or an immutable tuple of three low counter halfwords.
+
+Media factories add `Command.displayOption`, `displayMode`, `sound`, `hdmi`,
+`parameterService`, `chargeControl` and `chargeStatus`. Inputs use the corresponding
+action factories, `Toggle`, `DisplayMode`, sound enums and `ChargeQuery`.
+`SoundClip`, `HdmiPacket` and `HdmiValue` validate the clip index, exact packet
+length and 12-bit values in Rust. Charge reply unions use different status enums
+for applying control, presence and reported register-state groups; unknown bytes
+retain `rawStatus`. No charge value starts an implicit poll.

@@ -22,6 +22,9 @@ class ArgumentKind(Enum):
     WordAlignment = auto()
     WordAddress = auto()
     I2cLength = auto()
+    SoundClip = auto()
+    HdmiValue = auto()
+    HdmiPacketLength = auto()
 
 
 class CommandFailure(Sum):
@@ -243,6 +246,153 @@ class AccumulatorAction(Enum):
     StopAndRead = auto()
 
 
+class Toggle(Enum):
+    Disabled = auto()
+    Enabled = auto()
+
+
+class DisplayMode(Enum):
+    Option0 = auto()
+    Option1 = auto()
+
+
+class DisplayOptionAction(Sum, Handle):
+    pass
+
+
+variant(
+    DisplayOptionAction,
+    "IdlePins",
+    create=lambda: call(_js.DisplayOptionAction.idlePins),
+)
+variant(
+    DisplayOptionAction,
+    "ForwardPair",
+    [("first", int), ("second", int)],
+    create=lambda first, second: call(
+        _js.DisplayOptionAction.forwardPair, uint(first, 8), uint(second, 8)
+    ),
+)
+
+
+class SoundClip(Handle):
+    def __init__(self, value):
+        self._js = call(_js.SoundClip.new, uint(value, 8))
+
+    value = property(lambda self: self._js.value)
+
+
+class SoundFormat(Enum):
+    Format1 = auto()
+    Format2 = auto()
+    Format3 = auto()
+
+
+class SoundTrack(Enum):
+    Track2 = auto()
+    Track3 = auto()
+    Track4 = auto()
+
+
+class SoundOperation(Enum):
+    First = auto()
+    Second = auto()
+    Third = auto()
+
+
+class SoundAction(Sum, Handle):
+    pass
+
+
+variant(
+    SoundAction,
+    "Clip",
+    [("clip", SoundClip), ("format", SoundFormat)],
+    create=lambda clip, format: call(
+        _js.SoundAction.clip,
+        unwrap(clip, SoundClip),
+        _choice(format, SoundFormat, _js.SoundFormat),
+    ),
+)
+variant(
+    SoundAction,
+    "Track",
+    [("track", SoundTrack), ("operation", SoundOperation), ("format", SoundFormat)],
+    create=lambda track, operation, format: call(
+        _js.SoundAction.track,
+        _choice(track, SoundTrack, _js.SoundTrack),
+        _choice(operation, SoundOperation, _js.SoundOperation),
+        _choice(format, SoundFormat, _js.SoundFormat),
+    ),
+)
+variant(SoundAction, "Noop", create=lambda: call(_js.SoundAction.noop))
+
+
+class HdmiValue(Handle):
+    def __init__(self, value):
+        self._js = call(_js.HdmiValue.new, uint(value, 16))
+
+    value = property(lambda self: self._js.value)
+
+
+class HdmiPacket(Handle):
+    def __init__(self, data):
+        self._js = call(_js.HdmiPacket.new, buffer_in(data))
+
+    data = property(lambda self: buffer_out(self._js.data))
+
+
+class HdmiAction(Sum, Handle):
+    pass
+
+
+variant(HdmiAction, "ResetStub", create=lambda: call(_js.HdmiAction.resetStub))
+variant(
+    HdmiAction,
+    "Packet",
+    [("packet", HdmiPacket)],
+    create=lambda packet: call(_js.HdmiAction.packet, unwrap(packet, HdmiPacket)),
+)
+variant(
+    HdmiAction,
+    "Triplet",
+    [("first", HdmiValue), ("second", HdmiValue), ("third", HdmiValue)],
+    create=lambda first, second, third: call(
+        _js.HdmiAction.triplet,
+        unwrap(first, HdmiValue),
+        unwrap(second, HdmiValue),
+        unwrap(third, HdmiValue),
+    ),
+)
+
+
+class ChargeAction(Sum, Handle):
+    pass
+
+
+variant(
+    ChargeAction,
+    "Control",
+    [("enabled", Toggle)],
+    create=lambda enabled: call(
+        _js.ChargeAction.control, _choice(enabled, Toggle, _js.Toggle)
+    ),
+)
+variant(
+    ChargeAction,
+    "EnableAndSetFlag",
+    [("enabled", Toggle)],
+    create=lambda enabled: call(
+        _js.ChargeAction.enableAndSetFlag, _choice(enabled, Toggle, _js.Toggle)
+    ),
+)
+
+
+class ChargeQuery(Enum):
+    Presence = auto()
+    State = auto()
+
+
 class Command(Sum, Handle):
     pass
 
@@ -336,6 +486,89 @@ variant(
 variant(Command, "PeripheralReport", create=lambda: call(_js.Command.peripheralReport))
 
 
+variant(
+    Command,
+    "DisplayOption",
+    [("action", DisplayOptionAction)],
+    create=lambda action: call(
+        _js.Command.displayOption, _owned(action, DisplayOptionAction)
+    ),
+)
+variant(
+    Command,
+    "DisplayMode",
+    [("mode", DisplayMode)],
+    create=lambda mode: call(
+        _js.Command.displayMode, _choice(mode, DisplayMode, _js.DisplayMode)
+    ),
+)
+variant(
+    Command,
+    "Sound",
+    [("action", SoundAction)],
+    create=lambda action: call(_js.Command.sound, _owned(action, SoundAction)),
+)
+variant(
+    Command,
+    "Hdmi",
+    [("action", HdmiAction)],
+    create=lambda action: call(_js.Command.hdmi, _owned(action, HdmiAction)),
+)
+variant(
+    Command,
+    "ParameterService",
+    [("enabled", Toggle)],
+    create=lambda enabled: call(
+        _js.Command.parameterService, _choice(enabled, Toggle, _js.Toggle)
+    ),
+)
+variant(
+    Command,
+    "ChargeControl",
+    [("action", ChargeAction)],
+    create=lambda action: call(_js.Command.chargeControl, _owned(action, ChargeAction)),
+)
+variant(
+    Command,
+    "ChargeStatus",
+    [("query", ChargeQuery)],
+    create=lambda query: call(
+        _js.Command.chargeStatus, _choice(query, ChargeQuery, _js.ChargeQuery)
+    ),
+)
+
+
+class ChargeResult(Sum):
+    pass
+
+
+variant(ChargeResult, "Success")
+variant(ChargeResult, "Failed")
+variant(ChargeResult, "Unknown", [("raw_status", int)])
+
+
+class ChargePresence(Sum):
+    pass
+
+
+variant(ChargePresence, "Failed")
+variant(ChargePresence, "Absent")
+variant(ChargePresence, "Present")
+variant(ChargePresence, "Unknown", [("raw_status", int)])
+
+
+class ReportedChargeState(Sum):
+    pass
+
+
+variant(ReportedChargeState, "Failed")
+variant(ReportedChargeState, "Value0")
+variant(ReportedChargeState, "Values2To5")
+variant(ReportedChargeState, "Value6")
+variant(ReportedChargeState, "OtherValue")
+variant(ReportedChargeState, "Unknown", [("raw_status", int)])
+
+
 class SaveStatus(Sum):
     pass
 
@@ -376,6 +609,9 @@ variant(ReplyValue, "ConfigurationSaved", [("status", SaveStatus)])
 variant(ReplyValue, "ReadWord", [("result", WordReadResult)])
 variant(ReplyValue, "WriteWord", [("result", WordWriteResult)])
 variant(ReplyValue, "Research")
+variant(ReplyValue, "ChargeApplied", [("status", ChargeResult)])
+variant(ReplyValue, "ChargePresence", [("status", ChargePresence)])
+variant(ReplyValue, "ChargeState", [("status", ReportedChargeState)])
 variant(ReplyValue, "I2cData", [("data", bytes)])
 variant(ReplyValue, "Accumulated", [("values", tuple)])
 variant(ReplyValue, "PeripheralReport", [("data", bytes)])
@@ -408,9 +644,47 @@ def _word_write(value):
     }[value.kind]()
 
 
+def _charge_result(value):
+    kinds = _js.ChargeResultKind
+    return {
+        kinds.Success: ChargeResult.Success,
+        kinds.Failed: ChargeResult.Failed,
+        kinds.Unknown: lambda: ChargeResult.Unknown(value.rawStatus),
+    }[value.kind]()
+
+
+def _charge_presence(value):
+    kinds = _js.ChargePresenceKind
+    return {
+        kinds.Failed: ChargePresence.Failed,
+        kinds.Absent: ChargePresence.Absent,
+        kinds.Present: ChargePresence.Present,
+        kinds.Unknown: lambda: ChargePresence.Unknown(value.rawStatus),
+    }[value.kind]()
+
+
+def _charge_state(value):
+    kinds = _js.ReportedChargeStateKind
+    return {
+        kinds.Failed: ReportedChargeState.Failed,
+        kinds.Value0: ReportedChargeState.Value0,
+        kinds.Values2To5: ReportedChargeState.Values2To5,
+        kinds.Value6: ReportedChargeState.Value6,
+        kinds.OtherValue: ReportedChargeState.OtherValue,
+        kinds.Unknown: lambda: ReportedChargeState.Unknown(value.rawStatus),
+    }[value.kind]()
+
+
 def _value(value):
     kinds = _js.ReplyKind
     return {
+        kinds.ChargeApplied: lambda: ReplyValue.ChargeApplied(
+            _charge_result(value.status)
+        ),
+        kinds.ChargePresence: lambda: ReplyValue.ChargePresence(
+            _charge_presence(value.status)
+        ),
+        kinds.ChargeState: lambda: ReplyValue.ChargeState(_charge_state(value.status)),
         kinds.NoPayload: ReplyValue.NoPayload,
         kinds.Pins: lambda: ReplyValue.Pins(value.levels),
         kinds.Channel: lambda: ReplyValue.Channel(value.value),

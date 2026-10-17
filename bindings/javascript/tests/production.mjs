@@ -74,3 +74,22 @@ test('production WebUSB executes firmware-selected service requests and fences b
     bad.abandon();
   }finally{fixture.restore();}
 });
+
+test('production charge status one is a failed result without another host request',async()=>{
+  const fixture=installWebUsb();
+  try{
+    const definition=defs.service.Definition.fromJson(JSON.stringify({schema:1,
+      firmware:{id:'synthetic-charge-v2',model:'Synthetic',version:'2',sha256:'ab'.repeat(32)},
+      mailbox:{page:3,offset:576,configuration_limit:512},entries:[{code:153,label:'charge',codec:'charge_control',slots:[0,1,2],enabled_modes:4,next_mode:0,firmware_kind:1,handler:0,parameter_table:0}]}),
+      new defs.FirmwareIdentity('synthetic-charge-v2','ab'.repeat(32)));
+    const invocation=new usb.app80.Service(definition).prepare(new defs.service.ServiceModes(4),usb.app80.Command.chargeControl(usb.app80.ChargeAction.control(usb.app80.Toggle.Enabled)));
+    fixture.state.onConfigurationWrite=(page,address,raw)=>{if(page===3&&address===576){assert.equal(raw[3],255);fixture.state.configuration.set('3:579',1);}};
+    const [device]=await usb.discover(usb.DeviceFilter.Diagnostic),[iface]=await device.interfaces();
+    const session=await usb.Session.open(device,iface,new usb.FirmwareLimits(256,256,256,256),new usb.TransferOptions(100,1024));
+    const reply=await usb.app80.execute(session,invocation);
+    assert.deepEqual(reply.value,{kind:usb.app80.ReplyKind.ChargeApplied,status:{kind:usb.app80.ChargeResultKind.Failed}});
+    assert.equal(session.state,usb.SessionState.Ready);
+    assert.equal(fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length,3);
+    await session.close();
+  }finally{fixture.restore();}
+});

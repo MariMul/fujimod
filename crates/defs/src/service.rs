@@ -119,6 +119,13 @@ pub enum Codec {
     I2c,
     Accumulator,
     PeripheralReport,
+    DisplayOption,
+    DisplayMode,
+    Sound,
+    Hdmi,
+    ParameterService,
+    ChargeControl,
+    ChargeStatus,
 }
 impl Codec {
     pub fn argument_slots(self) -> usize {
@@ -131,6 +138,11 @@ impl Codec {
             Self::RegisterControl | Self::Accumulator => 7,
             Self::I2c => 14,
             Self::PeripheralReport => 8,
+            Self::DisplayOption => 4,
+            Self::DisplayMode | Self::ParameterService => 1,
+            Self::Sound | Self::ChargeControl => 3,
+            Self::Hdmi => 19,
+            Self::ChargeStatus => 2,
         }
     }
 }

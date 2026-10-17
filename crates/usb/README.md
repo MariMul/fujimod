@@ -241,3 +241,22 @@ studied read modes call stubs that leave output uninitialized; they stay behind
 the explicit research API rather than returning invented register values.
 `PeripheralReport` preserves eight opaque bytes without assigning hardware
 meaning to flags derived from unreviewed or stubbed callees.
+
+Media codecs cover display pin/option requests, sound clips/tracks, HDMI packets
+and triplets, parameter-service toggling, and charging control/status. Display
+options are distinct from camera UI modes and service-dispatch flags. Sound
+requests acknowledge queue submission; they do not wait for playback to finish.
+Track/operation enums choose canonical wire codes without exposing equivalent
+numeric aliases.
+
+`HdmiPacket` owns exactly 16 bytes and `HdmiValue` is a checked 12-bit quantity.
+The codec handles the packet's reversed byte order. Studied HDMI callees are
+stubs, so these requests do not establish that an output was enabled.
+`ChargeAction::EnableAndSetFlag` is one firmware command that first enables the
+control and then sets the flag. Charge output starts at an unknown sentinel;
+failure, presence, reported register-state groups and unknown bytes have
+different enum types. A value of 1 never instructs the host to poll or wait.
+
+Reply decoding exhaustively matches the supported commands and subactions.
+Adding a new response-bearing command requires explicit decoding rather than
+silently falling through to `NoPayload`.

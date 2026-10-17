@@ -2,6 +2,12 @@
 use super::{CommandCode, Reply, Request};
 use crate::{Result as UsbResult, error::ProtocolError, ff80::commands::memory::Address};
 use fujimod_defs::service::{Codec, Definition, Entry, ServiceModes};
+mod media;
+pub use media::{
+    ChargeAction, ChargePresence, ChargeQuery, ChargeResult, DisplayMode, DisplayOptionAction,
+    HdmiAction, HdmiPacket, HdmiValue, ReportedChargeState, SoundAction, SoundClip, SoundFormat,
+    SoundOperation, SoundTrack, Toggle,
+};
 mod peripheral;
 pub use peripheral::{
     AccumulatorAction, I2cAction, I2cLength, I2cPayload, I2cPort, RegisterAction,
@@ -27,6 +33,9 @@ pub enum ArgumentKind {
     WordAlignment,
     WordAddress,
     I2cLength,
+    SoundClip,
+    HdmiValue,
+    HdmiPacketLength,
 }
 impl std::fmt::Display for ArgumentKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -36,6 +45,9 @@ impl std::fmt::Display for ArgumentKind {
             Self::WordAlignment => "word alignment",
             Self::WordAddress => "service word address",
             Self::I2cLength => "I2C payload length (1..=10 bytes)",
+            Self::SoundClip => "sound clip index (0..=22)",
+            Self::HdmiValue => "HDMI value (0..=4095)",
+            Self::HdmiPacketLength => "HDMI packet length (16 bytes)",
         })
     }
 }
@@ -126,6 +138,13 @@ pub enum Command {
     I2c(I2cAction),
     Accumulator(AccumulatorAction),
     PeripheralReport,
+    DisplayOption(DisplayOptionAction),
+    DisplayMode(DisplayMode),
+    Sound(SoundAction),
+    Hdmi(HdmiAction),
+    ParameterService(Toggle),
+    ChargeControl(ChargeAction),
+    ChargeStatus(ChargeQuery),
 }
 impl Command {
     pub fn codec(self) -> Codec {
@@ -143,6 +162,13 @@ impl Command {
             Self::I2c(_) => Codec::I2c,
             Self::Accumulator(_) => Codec::Accumulator,
             Self::PeripheralReport => Codec::PeripheralReport,
+            Self::DisplayOption(_) => Codec::DisplayOption,
+            Self::DisplayMode(_) => Codec::DisplayMode,
+            Self::Sound(_) => Codec::Sound,
+            Self::Hdmi(_) => Codec::Hdmi,
+            Self::ParameterService(_) => Codec::ParameterService,
+            Self::ChargeControl(_) => Codec::ChargeControl,
+            Self::ChargeStatus(_) => Codec::ChargeStatus,
         }
     }
 }
@@ -178,6 +204,9 @@ pub enum ReplyValue {
     I2cData(Vec<u8>),
     Accumulated([u16; 3]),
     PeripheralReport([u8; 8]),
+    ChargeApplied(ChargeResult),
+    ChargePresence(ChargePresence),
+    ChargeState(ReportedChargeState),
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommandReply {
@@ -257,7 +286,42 @@ impl PreparedCommand {
                 ReplyValue::Accumulated([half(1, 2), half(3, 4), half(5, 6)])
             }
             Command::PeripheralReport => ReplyValue::PeripheralReport(std::array::from_fn(byte)),
-            _ => ReplyValue::NoPayload,
+            Command::ChargeControl(_) => ReplyValue::ChargeApplied(ChargeResult::decode(byte(2))),
+            Command::ChargeStatus(ChargeQuery::Presence) => {
+                ReplyValue::ChargePresence(ChargePresence::decode(byte(1)))
+            }
+            Command::ChargeStatus(ChargeQuery::State) => {
+                ReplyValue::ChargeState(ReportedChargeState::decode(byte(1)))
+            }
+            Command::WritePins { .. }
+            | Command::WriteChannel { .. }
+            | Command::ProfileByte(ProfileAction::Write { .. } | ProfileAction::Reset)
+            | Command::CopyConfiguration { .. }
+            | Command::RegisterControl(
+                RegisterAction::AudioValue { .. }
+                | RegisterAction::DisplayFirst { .. }
+                | RegisterAction::DisplayStub { .. }
+                | RegisterAction::DisplaySecond { .. }
+                | RegisterAction::PowerWrite { .. }
+                | RegisterAction::PositionPair { .. }
+                | RegisterAction::NoopFirst
+                | RegisterAction::NoopSecond,
+            )
+            | Command::I2c(I2cAction::Write { .. } | I2cAction::WriteSingle { .. })
+            | Command::Accumulator(AccumulatorAction::Start)
+            | Command::DisplayOption(
+                DisplayOptionAction::IdlePins | DisplayOptionAction::ForwardPair { .. },
+            )
+            | Command::DisplayMode(DisplayMode::Option0 | DisplayMode::Option1)
+            | Command::Sound(
+                SoundAction::Clip { .. } | SoundAction::Track { .. } | SoundAction::Noop,
+            )
+            | Command::Hdmi(
+                HdmiAction::ResetStub | HdmiAction::Packet(_) | HdmiAction::Triplet { .. },
+            )
+            | Command::ParameterService(Toggle::Disabled | Toggle::Enabled) => {
+                ReplyValue::NoPayload
+            }
         };
         Ok(CommandReply { value, raw: reply })
     }
@@ -367,6 +431,13 @@ impl Catalogue {
             Command::I2c(action) => action.encode(&mut put),
             Command::Accumulator(action) => action.encode(&mut put),
             Command::PeripheralReport => (),
+            Command::DisplayOption(action) => action.encode(&mut put),
+            Command::DisplayMode(mode) => put(0, mode.wire()),
+            Command::Sound(action) => action.encode(&mut put),
+            Command::Hdmi(action) => action.encode(&mut put),
+            Command::ParameterService(value) => put(0, value.wire()),
+            Command::ChargeControl(action) => action.encode(&mut put),
+            Command::ChargeStatus(query) => query.encode(&mut put),
             Command::ReadWord { address } | Command::WriteWord { address, .. } => {
                 let value = address.address().0;
                 if value > 0x1fff_ffff && value.wrapping_add(0xc000_0000) > 0x1fff_ffff {
@@ -397,3 +468,6 @@ impl Catalogue {
 mod peripheral_tests;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod media_tests;

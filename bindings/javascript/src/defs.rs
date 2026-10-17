@@ -34,6 +34,13 @@ pub enum ServiceCodec {
     I2c,
     Accumulator,
     PeripheralReport,
+    DisplayOption,
+    DisplayMode,
+    Sound,
+    Hdmi,
+    ParameterService,
+    ChargeControl,
+    ChargeStatus,
 }
 impl From<core::Codec> for ServiceCodec {
     fn from(value: core::Codec) -> Self {
@@ -52,6 +59,13 @@ impl From<core::Codec> for ServiceCodec {
             core::Codec::I2c => Self::I2c,
             core::Codec::Accumulator => Self::Accumulator,
             core::Codec::PeripheralReport => Self::PeripheralReport,
+            core::Codec::DisplayOption => Self::DisplayOption,
+            core::Codec::DisplayMode => Self::DisplayMode,
+            core::Codec::Sound => Self::Sound,
+            core::Codec::Hdmi => Self::Hdmi,
+            core::Codec::ParameterService => Self::ParameterService,
+            core::Codec::ChargeControl => Self::ChargeControl,
+            core::Codec::ChargeStatus => Self::ChargeStatus,
         }
     }
 }
