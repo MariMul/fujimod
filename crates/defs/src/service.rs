@@ -171,6 +171,15 @@ pub enum Codec {
     LensOperation3,
     LensOperation4,
     LensOperation5,
+    LensOperation6,
+    PublishLensCompletionParameter,
+    PrepareAdjustmentOutput,
+    PrepareAlternateAdjustmentOutput,
+    LensBoundedPosition,
+    LensFixedPosition,
+    InvokePrimaryParameterCallback,
+    InvokeSecondaryParameterCallback,
+    QueryAdjustmentOption,
 }
 impl Codec {
     pub fn argument_slots(self) -> usize {
@@ -215,6 +224,15 @@ impl Codec {
             Self::AdjustmentConfiguration | Self::LensSelect => 5,
             Self::SelectAdjustmentMode | Self::LensOperation2 | Self::LensOperation3 => 1,
             Self::LensOperation4 | Self::LensOperation5 => 0,
+            Self::LensOperation6
+            | Self::PrepareAdjustmentOutput
+            | Self::PrepareAlternateAdjustmentOutput => 0,
+            Self::PublishLensCompletionParameter
+            | Self::InvokePrimaryParameterCallback
+            | Self::InvokeSecondaryParameterCallback => 2,
+            Self::LensBoundedPosition => 3,
+            Self::LensFixedPosition => 1,
+            Self::QueryAdjustmentOption => 4,
             Self::BatteryControl => 2,
             Self::InitializeDisplay => 1,
             Self::DisplayPattern => 5,

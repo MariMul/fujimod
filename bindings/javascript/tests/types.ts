@@ -175,3 +175,6 @@ usb.app80.Command.selectAdjustmentMode(usb.app80.ConfigurationMode.Mode0);
 usb.app80.AdjustmentConfigurationAction.apply(usb.app80.AdjustmentProfile.Profile0,new usb.app80.LensSelectionIndex(1));
 // @ts-expect-error A lens index must use its checked type, not an arbitrary quantity.
 usb.app80.LensTarget.index(new usb.app80.TransferPayloadByte(1));
+
+// @ts-expect-error Opaque option bytes have a distinct checked handle type.
+usb.app80.Command.queryAdjustmentOption(new usb.app80.TransferPayloadByte(1));

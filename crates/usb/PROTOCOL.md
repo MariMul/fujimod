@@ -182,3 +182,25 @@ so output 2 equal to zero only means no range rejection was published.
 Lens operations 2/3 clear their single output byte and wait for either callback
 event; 4/5 have no payload and wait on a separate event. None defines a host
 pending disposition, and the library does not reconstruct a lost callback status.
+
+Lens operation 6 and both adjustment-output preparation commands take no mailbox
+arguments. Preparation submits the firmware's `0204/0205` sequence and waits
+inside firmware; it is not a host-side composition or USB data preparation API.
+Completion-parameter publication uses two definition-selected literal keys:
+flag 1/encoded 255 for parameter `80`, otherwise flag 0 and the low byte of
+parameter+1. Replies preserve both fields, including unknown flag values.
+
+Bounded position has two input bytes and one output flag, initialized to zero
+by firmware. Callback result -97 writes 1 to a literal configuration key. The
+private extractor checks that the selected parameter table's output key agrees
+with that callback key; the public codec contains no key address. Other callback
+errors can leave the flag zero. Fixed position initializes a single output byte
+and submits its internal parameter `ff`; no callback result code is published.
+Primary/secondary parameter-callback commands take one input and return one raw
+byte initialized to zero, independently of callback event status.
+
+Option query uses input slot 0, high/low result bytes 1/2, and status 3. Status
+0/1 reports success/failure; other bytes remain unknown. Firmware signals normal
+completion even when its internal wait or callback reports failure. Raw data is
+preserved in every case and never drives host completion logic. A studied lower
+stub passes null to the callback, so no buffer-validity guarantee is inferred.

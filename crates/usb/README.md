@@ -433,3 +433,27 @@ callback-success code. `LensOperation4` and `LensOperation5` have no payload.
 These handlers wait for firmware events, but some discard the callback's status.
 The host awaits ordinary completion without treating any reply byte as an
 instruction to poll, retry or repair the lens state.
+
+`LensOperation6` submits the remaining opaque lens operation. The explicit
+`PublishLensCompletionParameter` command writes two configuration bytes: a flag
+for the firmware parameter `0x80` and an encoded byte. Other parameter values
+publish `(parameter+1)&255`; the `0x80` case publishes 255. The typed reply keeps
+the flag and encoded byte separate instead of guessing an index or wait state.
+
+`LensBoundedPosition { position, value }` forwards two byte-sized quantities.
+Firmware checks its own position limit. `LensPositionRange::OutOfRange` represents
+the published rejection; `NotRejected` does not certify successful movement.
+`LensFixedPosition` submits the firmware's fixed request and returns its raw
+output byte. `InvokePrimaryParameterCallback` and
+`InvokeSecondaryParameterCallback` forward a byte the handler reads, then retain
+a raw output snapshot. Studied lower routines ignore that parameter and invoke
+the callback; these APIs make no promise of changing a camera setting.
+
+`PrepareAdjustmentOutput` and `PrepareAlternateAdjustmentOutput` are distinct
+firmware commands with the same studied internal request sequence. They return
+no payload and do not prepare a host bulk read. `QueryAdjustmentOption` takes an
+opaque `AdjustmentOptionByte` and returns a raw halfword plus explicit reported
+success/failure/unknown status, including raw data on failure. The studied helper
+invokes its callback with null data, which the callback dereferences; a reported
+success is not proof of a valid physical read. All commands await ordinary
+carrier completion without implicit polling, retries or callback repair.

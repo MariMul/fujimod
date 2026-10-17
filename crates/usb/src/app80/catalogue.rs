@@ -2,13 +2,18 @@
 use super::{CommandCode, Reply, Request};
 use crate::{Result as UsbResult, error::ProtocolError, ff80::commands::memory::Address};
 use fujimod_defs::service::{Codec, Definition, Entry, ServiceModes};
+mod adjustment;
+pub use adjustment::{AdjustmentOptionByte, AdjustmentOptionStatus};
 mod configuration;
 pub use configuration::{
     AdjustmentConfigurationAction, AdjustmentConfigurationState, AdjustmentDuration,
     AdjustmentMode, AdjustmentProfile, ConfigurationBank, ConfigurationMode,
 };
 mod lens;
-pub use lens::{LensSelectionIndex, LensSelectionRange, LensTarget};
+pub use lens::{
+    LensCompletionParameterFlag, LensPositionRange, LensSelectionIndex, LensSelectionRange,
+    LensTarget,
+};
 mod media;
 pub use media::{
     AudioCount, AudioPlayback, AudioResult, AudioRoute, ChargeAction, ChargePresence, ChargeQuery,
@@ -350,6 +355,24 @@ pub enum Command {
     LensOperation3,
     LensOperation4,
     LensOperation5,
+    LensOperation6,
+    PublishLensCompletionParameter,
+    PrepareAdjustmentOutput,
+    PrepareAlternateAdjustmentOutput,
+    LensBoundedPosition {
+        position: u8,
+        value: u8,
+    },
+    LensFixedPosition,
+    InvokePrimaryParameterCallback {
+        parameter: u8,
+    },
+    InvokeSecondaryParameterCallback {
+        parameter: u8,
+    },
+    QueryAdjustmentOption {
+        option: AdjustmentOptionByte,
+    },
 }
 impl Command {
     pub fn codec(self) -> Codec {
@@ -423,6 +446,17 @@ impl Command {
             Self::LensOperation3 => Codec::LensOperation3,
             Self::LensOperation4 => Codec::LensOperation4,
             Self::LensOperation5 => Codec::LensOperation5,
+            Self::LensOperation6 => Codec::LensOperation6,
+            Self::PublishLensCompletionParameter => Codec::PublishLensCompletionParameter,
+            Self::PrepareAdjustmentOutput => Codec::PrepareAdjustmentOutput,
+            Self::PrepareAlternateAdjustmentOutput => Codec::PrepareAlternateAdjustmentOutput,
+            Self::LensBoundedPosition { .. } => Codec::LensBoundedPosition,
+            Self::LensFixedPosition => Codec::LensFixedPosition,
+            Self::InvokePrimaryParameterCallback { .. } => Codec::InvokePrimaryParameterCallback,
+            Self::InvokeSecondaryParameterCallback { .. } => {
+                Codec::InvokeSecondaryParameterCallback
+            }
+            Self::QueryAdjustmentOption { .. } => Codec::QueryAdjustmentOption,
         }
     }
 }
@@ -576,6 +610,20 @@ pub enum ReplyValue {
     },
     LensOperation {
         raw_value: u8,
+    },
+    LensCompletionParameter {
+        flag: LensCompletionParameterFlag,
+        encoded_value: u8,
+    },
+    LensPosition {
+        range: LensPositionRange,
+    },
+    AdjustmentCallback {
+        raw_value: u8,
+    },
+    AdjustmentOption {
+        status: AdjustmentOptionStatus,
+        raw_value: u16,
     },
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -808,10 +856,28 @@ impl PreparedCommand {
                 range: LensSelectionRange::decode(byte(2)),
                 raw_detail: [byte(3), byte(4)],
             },
-            Command::LensOperation2 | Command::LensOperation3 => {
+            Command::LensOperation2 | Command::LensOperation3 | Command::LensFixedPosition => {
                 ReplyValue::LensOperation { raw_value: byte(0) }
             }
-            Command::AdjustmentConfiguration {
+            Command::PublishLensCompletionParameter => ReplyValue::LensCompletionParameter {
+                flag: LensCompletionParameterFlag::decode(byte(0)),
+                encoded_value: byte(1),
+            },
+            Command::LensBoundedPosition { .. } => ReplyValue::LensPosition {
+                range: LensPositionRange::decode(byte(2)),
+            },
+            Command::InvokePrimaryParameterCallback { .. }
+            | Command::InvokeSecondaryParameterCallback { .. } => {
+                ReplyValue::AdjustmentCallback { raw_value: byte(1) }
+            }
+            Command::QueryAdjustmentOption { .. } => ReplyValue::AdjustmentOption {
+                status: AdjustmentOptionStatus::decode(byte(3)),
+                raw_value: half(1, 2),
+            },
+            Command::LensOperation6
+            | Command::PrepareAdjustmentOutput
+            | Command::PrepareAlternateAdjustmentOutput
+            | Command::AdjustmentConfiguration {
                 action: AdjustmentConfigurationAction::Apply { .. },
             }
             | Command::SelectAdjustmentMode { .. }
@@ -977,7 +1043,32 @@ impl Catalogue {
                     put(i, 255);
                 }
             }
-            Command::LensOperation2 | Command::LensOperation3 => put(0, 255),
+            Command::LensOperation2 | Command::LensOperation3 | Command::LensFixedPosition => {
+                put(0, 255)
+            }
+            Command::PublishLensCompletionParameter => {
+                put(0, 255);
+                put(1, 255);
+            }
+            Command::LensBoundedPosition { position, value } => {
+                put(0, position);
+                put(1, value);
+                put(2, 255);
+            }
+            Command::InvokePrimaryParameterCallback { parameter }
+            | Command::InvokeSecondaryParameterCallback { parameter } => {
+                put(0, parameter);
+                put(1, 255);
+            }
+            Command::QueryAdjustmentOption { option } => {
+                put(0, option.value());
+                for i in 1..4 {
+                    put(i, 255);
+                }
+            }
+            Command::LensOperation6
+            | Command::PrepareAdjustmentOutput
+            | Command::PrepareAlternateAdjustmentOutput => (),
             Command::LensOperation4 | Command::LensOperation5 => (),
             Command::BatteryControl { action } => action.encode(&mut put),
             Command::InitializeDisplay => put(0, 0),
@@ -1251,3 +1342,6 @@ mod configuration_tests;
 
 #[cfg(test)]
 mod lens_tests;
+
+#[cfg(test)]
+mod adjustment_tests;

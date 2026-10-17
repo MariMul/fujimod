@@ -320,3 +320,38 @@ test('adjustment and lens requests preserve state snapshots without host complet
   assert.throws(()=>new a.LensSelectionIndex(255));
  }finally{fixture.restore();}
 });
+
+test('direct adjustment requests publish data without turning callback bytes into host waits',async()=>{
+ const fixture=installWebUsb(),a=usb.app80;
+ try{
+  const [device]=await usb.discover(usb.DeviceFilter.Diagnostic),[iface]=await device.interfaces();
+  for(const [codec,count,command,input,outputs,expected] of [
+   ['lens_operation6',0,a.Command.lensOperation6(),[],{},{kind:a.ReplyKind.NoPayload}],
+   ['publish_lens_completion_parameter',2,a.Command.publishLensCompletionParameter(),[255,255],{0:1,1:255},{kind:a.ReplyKind.LensCompletionParameter,flag:{kind:a.LensCompletionParameterFlagKind.Parameter80},encodedValue:255}],
+   ['publish_lens_completion_parameter',2,a.Command.publishLensCompletionParameter(),[255,255],{},{kind:a.ReplyKind.LensCompletionParameter,flag:{kind:a.LensCompletionParameterFlagKind.Unknown,rawStatus:255},encodedValue:255}],
+   ['prepare_adjustment_output',0,a.Command.prepareAdjustmentOutput(),[],{},{kind:a.ReplyKind.NoPayload}],
+   ['prepare_alternate_adjustment_output',0,a.Command.prepareAlternateAdjustmentOutput(),[],{},{kind:a.ReplyKind.NoPayload}],
+   ['lens_bounded_position',3,a.Command.lensBoundedPosition(18,52),[18,52,255],{2:1},{kind:a.ReplyKind.LensPosition,range:{kind:a.LensPositionRangeKind.OutOfRange}}],
+   ['lens_bounded_position',3,a.Command.lensBoundedPosition(0,255),[0,255,255],{2:0},{kind:a.ReplyKind.LensPosition,range:{kind:a.LensPositionRangeKind.NotRejected}}],
+   ['lens_fixed_position',1,a.Command.lensFixedPosition(),[255],{0:0},{kind:a.ReplyKind.LensOperation,rawValue:0}],
+   ['invoke_primary_parameter_callback',2,a.Command.invokePrimaryParameterCallback(255),[255,255],{1:1},{kind:a.ReplyKind.AdjustmentCallback,rawValue:1}],
+   ['invoke_secondary_parameter_callback',2,a.Command.invokeSecondaryParameterCallback(18),[18,255],{},{kind:a.ReplyKind.AdjustmentCallback,rawValue:255}],
+   ['query_adjustment_option',4,a.Command.queryAdjustmentOption(new a.AdjustmentOptionByte(255)),[255,255,255,255],{1:137,2:171,3:1},{kind:a.ReplyKind.AdjustmentOption,status:{kind:a.AdjustmentOptionStatusKind.ReportedFailure},rawValue:0x89ab}],
+   ['query_adjustment_option',4,a.Command.queryAdjustmentOption(new a.AdjustmentOptionByte(0)),[0,255,255,255],{},{kind:a.ReplyKind.AdjustmentOption,status:{kind:a.AdjustmentOptionStatusKind.Unknown,rawStatus:255},rawValue:65535}],
+  ]){
+   const slots=Array.from({length:count},(_,i)=>(i*5+7)%32);
+   const definition=defs.service.Definition.fromJson(JSON.stringify({schema:1,firmware:{id:'adjustment-b',model:'Synthetic',version:'2',sha256:'ab'.repeat(32)},mailbox:{page:3,offset:576,configuration_limit:512},entries:[{code:153,label:codec,codec,slots,enabled_modes:4,next_mode:0,firmware_kind:1,handler:0,parameter_table:0}]}),new defs.FirmwareIdentity('adjustment-b','ab'.repeat(32)));
+   const invocation=new a.Service(definition).prepare(new defs.service.ServiceModes(4),command);
+   assert.deepEqual(slots.map(i=>invocation.raw[1+i]),input);
+   fixture.state.onConfigurationWrite=(page,address)=>{if(page===3&&address===576)for(const [index,byte] of Object.entries(outputs))fixture.state.configuration.set(`3:${577+slots[Number(index)]}`,byte);};
+   const before=fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length;
+   const session=await usb.Session.open(device,iface,new usb.FirmwareLimits(256,256,256,256),new usb.TransferOptions(100,1024));
+   assert.deepEqual((await a.execute(session,invocation)).value,expected);
+   assert.equal(session.state,usb.SessionState.Ready);
+   assert.equal(fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length-before,3);
+   await session.close();
+  }
+  assert.throws(()=>a.Command.queryAdjustmentOption(new a.TransferPayloadByte(1)));
+  assert.throws(()=>a.Command.lensBoundedPosition(256,0));
+ }finally{fixture.restore();}
+});
