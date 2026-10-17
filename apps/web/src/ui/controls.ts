@@ -477,7 +477,7 @@ export class InputPanel {
   private pulse(id: string) {
     const engine = this.engine!,
       task = this.pulseQueue
-        .then(() => engine.press(id))
+        .then(() => { this.viewer.pressFeedback(id); return engine.press(id); })
         .then(() => engine.release(id));
     this.pulseQueue = task.catch((error) => {
       if (this.engine === engine && this.ready) this.error(error);
@@ -499,6 +499,7 @@ export class InputPanel {
       return;
     this.holds.set(pointer, id);
     this.feedback([id]);
+    this.viewer.pressFeedback(id);
     void this.engine!.press(id, stage, point).catch(this.error);
   }
   private release(pointer: number | string) {

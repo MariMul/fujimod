@@ -48,6 +48,11 @@ The model is **CAMERA ( Fujifilm X70 )** by
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 The model uses Git LFS. Its hidden filter attachment is selected by node data;
 the glTF itself is unchanged. The page repeats attribution when loaded.
+Model taps show the selected button name and a marker that remains briefly after
+release. Touch picking accepts nearby visible buttons while preserving direct
+LCD contacts; the four-way selector marks one direction without lighting its
+entire shared mesh. `tests/model_touch.py` checks real WebKit touch delivery on
+the model against a Vite development server, without a DAT or emulator runtime.
 
 X-M1 1.50 uses the same Wasm runtime with its checked REC graph, native LCD
 and calibrated menu/sub-command controls. It has no 3D model, host RGB scene,

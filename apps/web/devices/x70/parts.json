@@ -32,7 +32,9 @@
     ],
     "menu_ok": {
       "nodes": [
-        "menu_sw_49"
+        "menu_frame_48",
+        "menu_sw_49",
+        "LBL_MENU_10"
       ],
       "split": "four-way"
     },
@@ -52,24 +54,28 @@
     ],
     "up": {
       "nodes": [
+        "menu_frame_48",
         "menu_sw_49"
       ],
       "split": "four-way"
     },
     "down": {
       "nodes": [
+        "menu_frame_48",
         "menu_sw_49"
       ],
       "split": "four-way"
     },
     "left": {
       "nodes": [
+        "menu_frame_48",
         "menu_sw_49"
       ],
       "split": "four-way"
     },
     "right": {
       "nodes": [
+        "menu_frame_48",
         "menu_sw_49"
       ],
       "split": "four-way"
@@ -118,8 +124,8 @@
   "regions": {
     "menu_sw_49": {
       "center": "menu_ok",
-      "left": "left",
-      "right": "right",
+      "left": "right",
+      "right": "left",
       "up": "up",
       "down": "down"
     },
@@ -129,13 +135,20 @@
       "right": "command_right",
       "up": "command_push",
       "down": "command_push"
+    },
+    "menu_frame_48": {
+      "center": "menu_ok",
+      "left": "right",
+      "right": "left",
+      "up": "up",
+      "down": "down"
     }
   },
   "labels": {
-    "up": "Up",
-    "down": "Down",
-    "left": "Left",
-    "right": "Right",
+    "up": "↑ Up",
+    "down": "↓ Down",
+    "left": "← Left",
+    "right": "→ Right",
     "shutter": "Shutter",
     "power": "Power",
     "auto": "Auto",

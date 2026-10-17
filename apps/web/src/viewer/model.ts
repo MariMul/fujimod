@@ -51,6 +51,11 @@ export class ModelViewer {
   private homeTarget = new THREE.Vector3();
   private leaderSignature = "";
   private highlightId: string | null = null;
+  private buttonInputs = new Set<string>();
+  private inputMarker = document.createElement("div");
+  private inputFeedback = document.createElement("div");
+  private feedbackId?: string;
+  private feedbackUntil = 0;
   private faulted = false;
   private undoFault?: () => void;
   private orientation?: {
@@ -81,6 +86,12 @@ export class ModelViewer {
     );
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     host.prepend(this.renderer.domElement);
+    this.inputMarker.className = "model-input-marker";
+    this.inputFeedback.className = "model-input-feedback";
+    this.inputFeedback.setAttribute("role", "status");
+    this.inputFeedback.setAttribute("aria-live", "polite");
+    this.inputMarker.hidden = this.inputFeedback.hidden = true;
+    host.append(this.inputMarker, this.inputFeedback);
     this.camera.position.set(0, 0.6, 6);
     this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
     // No residual orbit velocity may move the camera during a dial gesture.
@@ -177,13 +188,18 @@ export class ModelViewer {
       { capture: true },
     );
     this.renderer.domElement.addEventListener("pointermove", (event) => {
-      if (!event.buttons && !this.rotaryDrag.dragging)
+      if (event.pointerType !== "touch" && !event.buttons && !this.rotaryDrag.dragging)
         this.onHover?.(this.pick(event)?.id ?? null);
     });
     this.renderer.domElement.addEventListener("pointerleave", () =>
       this.onHover?.(null),
     );
     this.renderer.setAnimationLoop((now) => {
+      if (this.feedbackId && now >= this.feedbackUntil) {
+        this.feedbackId = undefined;
+        this.inputFeedback.hidden = true;
+        this.leadersDirty = true;
+      }
       if (this.orientation) {
         const a = this.orientation,
           t = Math.min(1, (now - a.start) / 350),
@@ -205,6 +221,7 @@ export class ModelViewer {
         );
       }
       if (this.leadersDirty) {
+        this.projectInputMarker();
         this.projectLeaders();
         this.leadersDirty = false;
       }
@@ -216,6 +233,10 @@ export class ModelViewer {
     this.rotaryParts.clear();
     this.rotaryStep = undefined;
     this.targets.clear();
+    this.buttonInputs.clear();
+    this.highlightId = null;
+    this.feedbackId = undefined;
+    this.inputMarker.hidden = this.inputFeedback.hidden = true;
     this.root.traverse((object) => {
       if (object instanceof THREE.Mesh) {
         object.geometry.dispose();
@@ -320,6 +341,8 @@ export class ModelViewer {
         .filter((input) => input.supported)
         .map((input) => [input.id, input]),
     );
+    this.buttonInputs = new Set([...supported.values()]
+      .filter(input => input.kind.includes("button")).map(input => input.id));
     for (const input of supported.values()) {
       if (input.kind !== "dial" && input.kind !== "ring") continue;
       this.addRotary(input.id, input.id, input.id);
@@ -461,10 +484,16 @@ export class ModelViewer {
     const hit = this.ray
       .intersectObjects(this.root.children, true)
       .find((hit) => this.visible(hit.object));
-    if (!hit) return null;
-    let node: THREE.Object3D | null = hit.object;
+    let node: THREE.Object3D | null = hit?.object ?? null;
     while (node && !node.userData.inputIds) node = node.parent;
-    if (!node) return null;
+    // Decals and the body can cover a button's edge. On touch, also consider
+    // nearby visible button centers; never reach through the camera body.
+    if (!this.faulted && (!node || node.name !== this.data.screen
+      && !node.userData.inputIds.some((id: string) => this.buttonInputs.has(id)))) {
+      const nearby = this.nearbyButton(event);
+      if (nearby) return nearby;
+    }
+    if (!node || !hit) return null;
     const bounds = this.localBounds(node);
     const local = node.worldToLocal(hit.point.clone());
     const x =
@@ -492,6 +521,96 @@ export class ModelViewer {
       point: hit.uv ? { x: hit.uv.x, y: 1 - hit.uv.y } : undefined,
     };
   }
+  private regionPoint(target: THREE.Object3D, id?: string) {
+    const bounds = this.localBounds(target), size = bounds.getSize(new THREE.Vector3());
+    const region = Object.entries(this.data?.regions[target.name] ?? {}).find(([, value]) => value === id)?.[0];
+    const offsets: Record<string, [number, number]> = {
+      up: [.5, .81], down: [.5, .19], left: [.19, .5], right: [.81, .5], center: [.5, .5],
+    };
+    const [x, y] = offsets[region ?? "center"] ?? offsets.center;
+    return target.localToWorld(new THREE.Vector3(bounds.min.x + size.x * x,
+      bounds.min.y + size.y * y, bounds.min.z + size.z * .08));
+  }
+  private projectPoint(point: THREE.Vector3) {
+    const rect = this.renderer.domElement.getBoundingClientRect(), p = point.clone().project(this.camera);
+    return { x: rect.left + (p.x * .5 + .5) * rect.width,
+      y: rect.top + (-p.y * .5 + .5) * rect.height, z: p.z };
+  }
+  private targetVisible(target: THREE.Object3D, point: THREE.Vector3) {
+    const origin = this.camera.getWorldPosition(new THREE.Vector3());
+    this.ray.set(origin, point.clone().sub(origin).normalize());
+    const hits = this.ray.intersectObjects(this.root.children, true)
+      .filter(hit => this.visible(hit.object));
+    const own = hits.find(hit => {
+      for (let node: THREE.Object3D | null = hit.object; node; node = node.parent)
+        if (node === target) return true;
+      return false;
+    });
+    // Permit a thin label on the same button, but not an intervening body panel.
+    return Boolean(own && own.distance <= hits[0].distance + .012);
+  }
+  private nearbyButton(event: PointerEvent): ModelHit | null {
+    let best: { target: THREE.Object3D; id: string; distance: number } | undefined;
+    const visited = new Set<THREE.Object3D>();
+    for (const id of this.buttonInputs) {
+      const target = this.targets.get(id);
+      if (!target || visited.has(target) || !this.visible(target)) continue;
+      visited.add(target);
+      const point = this.regionPoint(target), center = this.projectPoint(point);
+      if (center.z < -1 || center.z > 1) continue;
+      const distance = Math.hypot(event.clientX - center.x, event.clientY - center.y);
+      const radius = event.pointerType === "touch"
+        ? this.data?.regions[target.name] ? 32 : 22
+        : 8;
+      if (distance > radius || best && distance >= best.distance) continue;
+      if (!this.targetVisible(target, point)) continue;
+      best = { target, id, distance };
+    }
+    if (!best) return null;
+    const regions = this.data?.regions[best.target.name];
+    if (!regions) return { id: best.id };
+    // Use the projected axes so regions follow the camera while it is orbited.
+    const center = this.projectPoint(this.regionPoint(best.target));
+    const right = this.projectPoint(this.regionPoint(best.target, regions.right));
+    const up = this.projectPoint(this.regionPoint(best.target, regions.up));
+    const rx = right.x - center.x, ry = right.y - center.y,
+      ux = up.x - center.x, uy = up.y - center.y,
+      dx = event.clientX - center.x, dy = event.clientY - center.y,
+      determinant = rx * uy - ry * ux;
+    if (Math.abs(determinant) < .01) return { id: regions.center };
+    const x = (dx * uy - dy * ux) / determinant, y = (rx * dy - ry * dx) / determinant;
+    const direction = Math.max(Math.abs(x), Math.abs(y)) <= .7 ? "center"
+      : Math.abs(x) > Math.abs(y) ? x < 0 ? "left" : "right" : y < 0 ? "down" : "up";
+    return { id: regions[direction] };
+  }
+  /** Immediate acknowledgment, retained after release so a finger cannot hide it. */
+  pressFeedback(id: string) {
+    this.feedbackId = id;
+    this.feedbackUntil = performance.now() + 1100;
+    this.inputFeedback.textContent = this.inputLabel(id);
+    this.inputFeedback.dataset.input = id;
+    this.inputFeedback.hidden = false;
+    this.leadersDirty = true;
+  }
+  private inputLabel(id: string) {
+    return this.data?.labels[id] ?? id;
+  }
+  private projectInputMarker() {
+    const id = this.feedbackId ?? this.highlightId?.split("|")[0], target = id && this.targets.get(id);
+    this.inputMarker.hidden = !target || this.host.classList.contains("lcd-mode");
+    if (!target || !id) return;
+    const world = this.regionPoint(target, id), point = this.projectPoint(world);
+    if (point.z < -1 || point.z > 1 || !this.targetVisible(target, world)) {
+      this.inputMarker.hidden = true;
+      return;
+    }
+    const rect = this.host.getBoundingClientRect();
+    this.inputMarker.style.left = `${point.x - rect.left}px`;
+    this.inputMarker.style.top = `${point.y - rect.top}px`;
+    this.inputMarker.dataset.input = id;
+    this.inputMarker.textContent = this.inputLabel(id).match(/^[↑↓←→]/)?.[0] ?? "";
+    this.inputMarker.classList.toggle("pressed", Boolean(this.feedbackId));
+  }
   private visible(node: THREE.Object3D) {
     for (let n: THREE.Object3D | null = node; n; n = n.parent)
       if (!n.visible) return false;
@@ -512,7 +631,8 @@ export class ModelViewer {
         if (material instanceof THREE.MeshStandardMaterial) {
           if (!material.userData.baseEmissive)
             material.userData.baseEmissive = material.emissive.clone();
-          const targets = ids.map((id) => this.targets.get(id));
+          const targets = ids.map((id) => this.targets.get(id))
+            .filter(target => target && !this.data?.regions[target.name]);
           let selected = false;
           for (let n: THREE.Object3D | null = object; n; n = n.parent)
             if (targets.includes(n)) selected = true;
