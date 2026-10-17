@@ -283,3 +283,40 @@ test('battery and display controls use firmware slots without invented result se
   assert.throws(()=>a.DisplayPatternAction.solid(256,0,0));
  }finally{fixture.restore();}
 });
+
+test('adjustment and lens requests preserve state snapshots without host completion instructions',async()=>{
+ const fixture=installWebUsb(),a=usb.app80;
+ try{
+  const [device]=await usb.discover(usb.DeviceFilter.Diagnostic),[iface]=await device.interfaces();
+  for(const [codec,count,command,input,outputs,expected] of [
+   ['adjustment_configuration',5,a.Command.adjustmentConfiguration(a.AdjustmentConfigurationAction.readStatus()),[0,0,0,0,255],{4:1},{kind:a.ReplyKind.AdjustmentConfiguration,state:{kind:a.AdjustmentConfigurationStateKind.Configured}}],
+   ['adjustment_configuration',5,a.Command.adjustmentConfiguration(a.AdjustmentConfigurationAction.readStatus()),[0,0,0,0,255],{},{kind:a.ReplyKind.AdjustmentConfiguration,state:{kind:a.AdjustmentConfigurationStateKind.Unknown,rawStatus:255}}],
+   ['adjustment_configuration',5,a.Command.adjustmentConfiguration(a.AdjustmentConfigurationAction.apply(a.AdjustmentProfile.Profile6,new a.AdjustmentDuration(15360))),[1,6,255,60,0],{},{kind:a.ReplyKind.NoPayload}],
+   ['select_adjustment_mode',1,a.Command.selectAdjustmentMode(a.AdjustmentMode.Mode8),[1],{},{kind:a.ReplyKind.NoPayload}],
+   ['select_adjustment_mode',1,a.Command.selectAdjustmentMode(a.AdjustmentMode.Mode16),[0],{},{kind:a.ReplyKind.NoPayload}],
+   ['lens_select',5,a.Command.lensSelect(a.LensTarget.initialize()),[0,0,255,255,255],{2:0,3:0,4:0},{kind:a.ReplyKind.LensSelection,range:{kind:a.LensSelectionRangeKind.NotRejected},rawDetail:new Uint8Array([0,0])}],
+   ['lens_select',5,a.Command.lensSelect(a.LensTarget.index(new a.LensSelectionIndex(254))),[255,0,255,255,255],{2:1,3:0,4:0},{kind:a.ReplyKind.LensSelection,range:{kind:a.LensSelectionRangeKind.OutOfRange},rawDetail:new Uint8Array([0,0])}],
+   ['lens_select',5,a.Command.lensSelect(a.LensTarget.initialize()),[0,0,255,255,255],{},{kind:a.ReplyKind.LensSelection,range:{kind:a.LensSelectionRangeKind.Unknown,rawStatus:255},rawDetail:new Uint8Array([255,255])}],
+   ['lens_operation2',1,a.Command.lensOperation2(),[255],{0:0},{kind:a.ReplyKind.LensOperation,rawValue:0}],
+   ['lens_operation3',1,a.Command.lensOperation3(),[255],{0:1},{kind:a.ReplyKind.LensOperation,rawValue:1}],
+   ['lens_operation4',0,a.Command.lensOperation4(),[],{},{kind:a.ReplyKind.NoPayload}],
+   ['lens_operation5',0,a.Command.lensOperation5(),[],{},{kind:a.ReplyKind.NoPayload}],
+  ]){
+   const slots=Array.from({length:count},(_,i)=>(i*5+7)%32);
+   const definition=defs.service.Definition.fromJson(JSON.stringify({schema:1,firmware:{id:'requests-b',model:'Synthetic',version:'2',sha256:'ab'.repeat(32)},mailbox:{page:3,offset:576,configuration_limit:512},entries:[{code:153,label:codec,codec,slots,enabled_modes:4,next_mode:0,firmware_kind:1,handler:0,parameter_table:0}]}),new defs.FirmwareIdentity('requests-b','ab'.repeat(32)));
+   const invocation=new a.Service(definition).prepare(new defs.service.ServiceModes(4),command);
+   assert.deepEqual(slots.map(i=>invocation.raw[1+i]),input);
+   fixture.state.onConfigurationWrite=(page,address)=>{if(page===3&&address===576)for(const [index,byte] of Object.entries(outputs))fixture.state.configuration.set(`3:${577+slots[Number(index)]}`,byte);};
+   const before=fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length;
+   const session=await usb.Session.open(device,iface,new usb.FirmwareLimits(256,256,256,256),new usb.TransferOptions(100,1024));
+   assert.deepEqual((await a.execute(session,invocation)).value,expected);
+   assert.equal(session.state,usb.SessionState.Ready);
+   assert.equal(fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length-before,3);
+   await session.close();
+  }
+  assert.throws(()=>new a.AdjustmentDuration(0));
+  assert.throws(()=>new a.AdjustmentDuration(15361));
+  assert.throws(()=>new a.LensSelectionIndex(160));
+  assert.throws(()=>new a.LensSelectionIndex(255));
+ }finally{fixture.restore();}
+});

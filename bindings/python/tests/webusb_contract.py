@@ -236,6 +236,7 @@ async def run():
     assert check_peripheral_values()
     assert check_media_values()
     assert check_network_values()
+    assert check_lens_values()
     assert check_configuration_values()
     assert check_transfer_values()
     return True

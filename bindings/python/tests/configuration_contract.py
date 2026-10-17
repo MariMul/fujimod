@@ -12,6 +12,8 @@ def check_configuration_values():
         ("configuration_mode", 2),
         ("configuration_pack_options", 4),
         ("configuration_read_options", 4),
+        ("adjustment_configuration", 5),
+        ("select_adjustment_mode", 1),
     ]
     slots = {name: [(i * 5 + 7) % 32 for i in range(n)] for name, n in layouts}
     doc = {
@@ -114,4 +116,65 @@ def check_configuration_values():
             pass
         else:
             raise AssertionError("invalid configuration selector type accepted")
+    for raw in [0, 15361, 65535]:
+        try:
+            a.AdjustmentDuration(raw)
+        except a.CommandError as error:
+            assert error.reason.kind == a.ArgumentKind.AdjustmentDuration
+        else:
+            raise AssertionError("invalid adjustment duration accepted")
+    for profile, selector in [
+        (getattr(a.AdjustmentProfile, f"Profile{n}"), n) for n in range(7)
+    ]:
+        for seconds, minutes, remainder in [
+            (1, 0, 1),
+            (60, 1, 0),
+            (61, 1, 1),
+            (15360, 255, 60),
+        ]:
+            duration = a.AdjustmentDuration(seconds)
+            assert duration.value == seconds
+            p = prepare(
+                a.Command.AdjustmentConfiguration(
+                    action=a.AdjustmentConfigurationAction.Apply(
+                        profile=profile, duration=duration
+                    )
+                ),
+                "adjustment_configuration",
+                [1, selector, minutes, remainder, 0],
+            )
+            assert isinstance(p.decode(p.raw).value, a.ReplyValue.NoPayload)
+    p = prepare(
+        a.Command.AdjustmentConfiguration(
+            action=a.AdjustmentConfigurationAction.ReadStatus()
+        ),
+        "adjustment_configuration",
+        [0, 0, 0, 0, 255],
+    )
+    for raw, cls in [
+        (0, a.AdjustmentConfigurationState.NotConfigured),
+        (1, a.AdjustmentConfigurationState.Configured),
+        (255, a.AdjustmentConfigurationState.Unknown),
+    ]:
+        data = bytearray(p.raw)
+        data[1 + slots["adjustment_configuration"][4]] = raw
+        value = p.decode(data).value
+        assert isinstance(value, a.ReplyValue.AdjustmentConfiguration) and isinstance(
+            value.state, cls
+        )
+        if raw == 255:
+            assert value.state.raw_status == 255
+    for mode, selector in [(a.AdjustmentMode.Mode8, 1), (a.AdjustmentMode.Mode16, 0)]:
+        p = prepare(
+            a.Command.SelectAdjustmentMode(mode=mode),
+            "select_adjustment_mode",
+            [selector],
+        )
+        assert isinstance(p.decode(p.raw).value, a.ReplyValue.NoPayload)
+    try:
+        a.Command.SelectAdjustmentMode(mode=a.ConfigurationMode.Mode0)
+    except TypeError:
+        pass
+    else:
+        raise AssertionError("foreign mode enum accepted")
     return True

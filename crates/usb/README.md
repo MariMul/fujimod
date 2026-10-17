@@ -407,3 +407,29 @@ bytes and retains the other two byte fields; the names make no RGB/YUV claim.
 Bars draws into firmware-selected buffers, applies the layout and waits for
 firmware events. These three codecs expose no result payload. A completed
 request does not verify a visible display, and no setup or polling is implicit.
+
+`AdjustmentConfiguration` reads the firmware's configured flag or applies an
+`AdjustmentProfile::Profile0`–`Profile6` for a checked `AdjustmentDuration` of
+1–15360 seconds. The duration encodes as minutes plus seconds; the maximum uses
+255 minutes and 60 seconds. Apply changes service flags before running the
+firmware's configuration sequence and uses other configuration already on the
+camera. Read status returns configured/not-configured/unknown explicitly.
+`SelectAdjustmentMode` requests internal `AdjustmentMode::Mode8/Mode16`, encoding
+1/0 respectively. Firmware requires the opposite current mode, changes its flags
+before submitting the request, and can fail afterward. No host retry, mode repair
+or inferred rollback is performed; these are not camera UI or shooting modes.
+
+`LensSelect` takes `LensTarget::Initialize` or a checked `LensSelectionIndex`.
+Indices encode as index plus one; 255 overflows the field and 160 aliases the
+lower initialization sentinel, so neither is accepted as an index. The firmware
+checks its own available-count limit. `LensSelectionRange::NotRejected` reports
+only absence of range rejection, not successful movement. Two additional raw
+bytes remain in the reply. The otherwise-unused initialization parameter byte
+is canonical zero.
+
+`LensOperation2` and `LensOperation3` invoke the corresponding firmware lens
+requests and retain a raw byte initialized to zero by firmware; it is not a
+callback-success code. `LensOperation4` and `LensOperation5` have no payload.
+These handlers wait for firmware events, but some discard the callback's status.
+The host awaits ordinary completion without treating any reply byte as an
+instruction to poll, retry or repair the lens state.

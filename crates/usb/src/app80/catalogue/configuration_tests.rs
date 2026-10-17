@@ -1,7 +1,7 @@
 use super::*;
 use fujimod_defs::service::FirmwareIdentity;
 fn catalogue(reverse: bool) -> Catalogue {
-    let entries: Vec<_> = [("configuration_flags",11),("configuration_mode",2),("configuration_pack_options",4),("configuration_read_options",4)]
+    let entries: Vec<_> = [("configuration_flags",11),("configuration_mode",2),("configuration_pack_options",4),("configuration_read_options",4),("adjustment_configuration",5),("select_adjustment_mode",1)]
         .into_iter().enumerate().map(|(n,(codec,count))| {
             let slots: Vec<_> = (0..count).map(|i| if reverse {31-i} else {i}).collect();
             serde_json::json!({"code":200+n,"codec":codec,"label":codec,"slots":slots,"enabled_modes":4,"next_mode":0,"firmware_kind":1,"handler":0,"parameter_table":0})
@@ -127,6 +127,84 @@ fn raw_configuration_snapshots_preserve_order_and_do_not_infer_validity() {
             assert_eq!(
                 p.decode(Reply::decode(&raw).unwrap()).unwrap().value(),
                 &ReplyValue::ConfigurationOptions { raw_value: value }
+            );
+        }
+    }
+}
+
+#[test]
+fn adjustment_duration_profile_and_mode_choices_keep_valid_wire_states() {
+    for invalid in [0, 15361, u16::MAX] {
+        assert!(matches!(
+            AdjustmentDuration::new(invalid),
+            Err(CommandError::Argument(ArgumentKind::AdjustmentDuration))
+        ));
+    }
+    for reverse in [false, true] {
+        let c = catalogue(reverse);
+        for (profile, selector) in [
+            (AdjustmentProfile::Profile0, 0),
+            (AdjustmentProfile::Profile1, 1),
+            (AdjustmentProfile::Profile2, 2),
+            (AdjustmentProfile::Profile3, 3),
+            (AdjustmentProfile::Profile4, 4),
+            (AdjustmentProfile::Profile5, 5),
+            (AdjustmentProfile::Profile6, 6),
+        ] {
+            for (seconds, minutes, remainder) in [
+                (1, 0, 1),
+                (59, 0, 59),
+                (60, 1, 0),
+                (61, 1, 1),
+                (15300, 255, 0),
+                (15359, 255, 59),
+                (15360, 255, 60),
+            ] {
+                let duration = AdjustmentDuration::new(seconds).unwrap();
+                assert_eq!(duration.value(), seconds);
+                let p = prepare(
+                    &c,
+                    Command::AdjustmentConfiguration {
+                        action: AdjustmentConfigurationAction::Apply { profile, duration },
+                    },
+                );
+                assert_eq!(logical(&p), [1, selector, minutes, remainder, 0]);
+                assert_eq!(
+                    p.decode(Reply::decode(&p.request.encode()).unwrap())
+                        .unwrap()
+                        .value(),
+                    &ReplyValue::NoPayload
+                );
+            }
+        }
+        for (mode, selector) in [(AdjustmentMode::Mode8, 1), (AdjustmentMode::Mode16, 0)] {
+            let p = prepare(&c, Command::SelectAdjustmentMode { mode });
+            assert_eq!(logical(&p), [selector]);
+            assert_eq!(
+                p.decode(Reply::decode(&p.request.encode()).unwrap())
+                    .unwrap()
+                    .value(),
+                &ReplyValue::NoPayload
+            );
+        }
+        let p = prepare(
+            &c,
+            Command::AdjustmentConfiguration {
+                action: AdjustmentConfigurationAction::ReadStatus,
+            },
+        );
+        assert_eq!(logical(&p), [0, 0, 0, 0, 255]);
+        for raw in 0..=255 {
+            let mut reply = p.request.encode();
+            reply[1 + usize::from(p.slots[4])] = raw;
+            let expected = match raw {
+                0 => AdjustmentConfigurationState::NotConfigured,
+                1 => AdjustmentConfigurationState::Configured,
+                n => AdjustmentConfigurationState::Unknown(n),
+            };
+            assert_eq!(
+                p.decode(Reply::decode(&reply).unwrap()).unwrap().value(),
+                &ReplyValue::AdjustmentConfiguration { state: expected }
             );
         }
     }

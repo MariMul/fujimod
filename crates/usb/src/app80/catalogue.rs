@@ -3,7 +3,12 @@ use super::{CommandCode, Reply, Request};
 use crate::{Result as UsbResult, error::ProtocolError, ff80::commands::memory::Address};
 use fujimod_defs::service::{Codec, Definition, Entry, ServiceModes};
 mod configuration;
-pub use configuration::{ConfigurationBank, ConfigurationMode};
+pub use configuration::{
+    AdjustmentConfigurationAction, AdjustmentConfigurationState, AdjustmentDuration,
+    AdjustmentMode, AdjustmentProfile, ConfigurationBank, ConfigurationMode,
+};
+mod lens;
+pub use lens::{LensSelectionIndex, LensSelectionRange, LensTarget};
 mod media;
 pub use media::{
     AudioCount, AudioPlayback, AudioResult, AudioRoute, ChargeAction, ChargePresence, ChargeQuery,
@@ -62,6 +67,8 @@ pub enum ArgumentKind {
     CountryLength,
     TransferWordAddress,
     TransferPairFirst,
+    AdjustmentDuration,
+    LensSelectionIndex,
 }
 impl std::fmt::Display for ArgumentKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -82,6 +89,8 @@ impl std::fmt::Display for ArgumentKind {
             Self::CountryLength => "country field length (2 bytes)",
             Self::TransferWordAddress => "transfer word address (aligned, below 64 KiB)",
             Self::TransferPairFirst => "first transfer pair field (0..=511)",
+            Self::AdjustmentDuration => "adjustment duration (1..=15360 seconds)",
+            Self::LensSelectionIndex => "lens selection index (0..=254, excluding sentinel 160)",
         })
     }
 }
@@ -328,6 +337,19 @@ pub enum Command {
         lower: u8,
     },
     ReadConfigurationOptions,
+    AdjustmentConfiguration {
+        action: AdjustmentConfigurationAction,
+    },
+    SelectAdjustmentMode {
+        mode: AdjustmentMode,
+    },
+    LensSelect {
+        target: LensTarget,
+    },
+    LensOperation2,
+    LensOperation3,
+    LensOperation4,
+    LensOperation5,
 }
 impl Command {
     pub fn codec(self) -> Codec {
@@ -394,6 +416,13 @@ impl Command {
             Self::SelectConfigurationMode { .. } => Codec::ConfigurationMode,
             Self::PackConfigurationOptions { .. } => Codec::ConfigurationPackOptions,
             Self::ReadConfigurationOptions => Codec::ConfigurationReadOptions,
+            Self::AdjustmentConfiguration { .. } => Codec::AdjustmentConfiguration,
+            Self::SelectAdjustmentMode { .. } => Codec::SelectAdjustmentMode,
+            Self::LensSelect { .. } => Codec::LensSelect,
+            Self::LensOperation2 => Codec::LensOperation2,
+            Self::LensOperation3 => Codec::LensOperation3,
+            Self::LensOperation4 => Codec::LensOperation4,
+            Self::LensOperation5 => Codec::LensOperation5,
         }
     }
 }
@@ -537,6 +566,16 @@ pub enum ReplyValue {
     },
     ConfigurationOptions {
         raw_value: u32,
+    },
+    AdjustmentConfiguration {
+        state: AdjustmentConfigurationState,
+    },
+    LensSelection {
+        range: LensSelectionRange,
+        raw_detail: [u8; 2],
+    },
+    LensOperation {
+        raw_value: u8,
     },
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -760,7 +799,25 @@ impl PreparedCommand {
             Command::ReadConfigurationOptions => ReplyValue::ConfigurationOptions {
                 raw_value: u32::from_be_bytes([byte(0), byte(1), byte(2), byte(3)]),
             },
-            Command::BatteryControl { .. }
+            Command::AdjustmentConfiguration {
+                action: AdjustmentConfigurationAction::ReadStatus,
+            } => ReplyValue::AdjustmentConfiguration {
+                state: AdjustmentConfigurationState::decode(byte(4)),
+            },
+            Command::LensSelect { .. } => ReplyValue::LensSelection {
+                range: LensSelectionRange::decode(byte(2)),
+                raw_detail: [byte(3), byte(4)],
+            },
+            Command::LensOperation2 | Command::LensOperation3 => {
+                ReplyValue::LensOperation { raw_value: byte(0) }
+            }
+            Command::AdjustmentConfiguration {
+                action: AdjustmentConfigurationAction::Apply { .. },
+            }
+            | Command::SelectAdjustmentMode { .. }
+            | Command::LensOperation4
+            | Command::LensOperation5
+            | Command::BatteryControl { .. }
             | Command::InitializeDisplay
             | Command::DisplayPattern { .. }
             | Command::ApplyConfigurationFlags { .. }
@@ -898,6 +955,30 @@ impl Catalogue {
                     put(i, v);
                 }
             }
+            Command::AdjustmentConfiguration { action } => match action {
+                AdjustmentConfigurationAction::ReadStatus => {
+                    put(0, 0);
+                    put(4, 255);
+                }
+                AdjustmentConfigurationAction::Apply { profile, duration } => {
+                    let (minutes, seconds) = duration.wire();
+                    put(0, 1);
+                    put(1, profile.wire());
+                    put(2, minutes);
+                    put(3, seconds);
+                }
+            },
+            Command::SelectAdjustmentMode { mode } => put(0, mode.wire()),
+            Command::LensSelect { target } => {
+                put(0, target.wire());
+                // Initialization's extra byte is read but ignored by the lower helper.
+                put(1, 0);
+                for i in 2..5 {
+                    put(i, 255);
+                }
+            }
+            Command::LensOperation2 | Command::LensOperation3 => put(0, 255),
+            Command::LensOperation4 | Command::LensOperation5 => (),
             Command::BatteryControl { action } => action.encode(&mut put),
             Command::InitializeDisplay => put(0, 0),
             Command::DisplayPattern { action } => action.encode(&mut put),
@@ -1167,3 +1248,6 @@ mod transfer_tests;
 
 #[cfg(test)]
 mod configuration_tests;
+
+#[cfg(test)]
+mod lens_tests;

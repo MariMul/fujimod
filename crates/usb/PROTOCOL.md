@@ -161,3 +161,24 @@ selector 0 resets the preset, 1 draws bars, and 2 takes `repeated` in slot 2,
 `repeated<<24 | repeated<<16 | middle<<8 | low`. Firmware waits on its own events
 for reset/bars; the host uses the ordinary ff80 completion and does not poll.
 These commands have no payload result, and no host preparation is implied.
+
+Adjustment configuration has five slots: action 0 reads configured state into
+slot 4, action 1 applies profile 0–6, minutes and seconds from slots 1–3.
+Durations are nonzero and at most 15360 seconds; the canonical maximum encodes
+255/60. The wrapper sets internal service flags to `20` before apply. Its
+configuration sequence also uses existing firmware state outside this mailbox.
+Adjustment mode selection has one slot: 0 requires flags `8` and changes them
+to `10`; canonical 1 requires `10` and changes them to `8`. A later request
+failure does not undo that change. The firmware's global key tables, rather
+than the dispatch row's null parameter pointer, determine these layouts.
+
+Lens selection has five slots: 0 initializes, otherwise the selector denotes
+index plus one; a lower index of `a0` has initialization semantics. Slot 1 is
+read on the initialization path but ignored by the reviewed lower initializer;
+the typed request sends zero. Firmware clears outputs 2–4, checks its own
+available-count limit and writes 1 to output 2 on range rejection. Other output
+bytes stay raw. Callback errors can still lead to normal command completion,
+so output 2 equal to zero only means no range rejection was published.
+Lens operations 2/3 clear their single output byte and wait for either callback
+event; 4/5 have no payload and wait on a separate event. None defines a host
+pending disposition, and the library does not reconstruct a lost callback status.

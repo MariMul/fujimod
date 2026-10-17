@@ -164,6 +164,13 @@ pub enum Codec {
     BatteryControl,
     InitializeDisplay,
     DisplayPattern,
+    AdjustmentConfiguration,
+    SelectAdjustmentMode,
+    LensSelect,
+    LensOperation2,
+    LensOperation3,
+    LensOperation4,
+    LensOperation5,
 }
 impl Codec {
     pub fn argument_slots(self) -> usize {
@@ -205,6 +212,9 @@ impl Codec {
             Self::TransferOptionWord => 6,
             Self::TransferSelectedWord => 4,
             Self::TransferLoadTest => 1,
+            Self::AdjustmentConfiguration | Self::LensSelect => 5,
+            Self::SelectAdjustmentMode | Self::LensOperation2 | Self::LensOperation3 => 1,
+            Self::LensOperation4 | Self::LensOperation5 => 0,
             Self::BatteryControl => 2,
             Self::InitializeDisplay => 1,
             Self::DisplayPattern => 5,
