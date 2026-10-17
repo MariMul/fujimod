@@ -8,7 +8,12 @@ There are no device-specific quality variants.
 
 ## Interaction and time
 
-The player is 1.75 m tall and holds the physical camera at 1.45 m, 0.30 m forward.
+The player is 1.75 m tall, with eyes at 1.64 m, and holds the physical camera
+at 1.45 m, 0.40 m forward and 0.055 m to the right when looking level.
+The head glances down in Walk mode to frame the camera slightly right of centre,
+with its bottom about 5% above the viewport edge. Framing follows the viewport
+aspect ratio and remains stable while looking up/down or turning. The camera
+is a physical world object; entering Inspect moves only the observer.
 In Walk mode, WASD moves at 1.4 m/s and captured mouse movement turns the player
 and camera. Right click enters Inspect, releases the mouse and moves the
 observer close to the camera's rear glass. Dragging orbits the observer; the

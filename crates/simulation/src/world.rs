@@ -118,17 +118,29 @@ impl Simulation {
     pub fn rotation(&self) -> Quat {
         Quat::from_euler(EulerRot::YXZ, self.yaw, self.pitch, 0.)
     }
-    pub fn camera_pose(&self) -> Transform {
-        Transform::from_translation(
-            self.position
-                + Vec3::Y * self.camera_height
-                + Quat::from_rotation_y(self.yaw) * Vec3::new(0., 0., -0.30),
-        )
-        .with_rotation(self.rotation())
+    fn eye_position(&self) -> Vec3 {
+        // Standing height includes the crown of the head, not the eyes.
+        self.position + Vec3::Y * (self.height - 0.11)
     }
-    pub fn observer_pose(&self) -> Transform {
+    pub fn camera_pose(&self) -> Transform {
+        let held = Vec3::new(0.055, self.camera_height - (self.height - 0.11), -0.40);
+        Transform::from_translation(self.eye_position() + self.rotation() * held)
+            .with_rotation(self.rotation())
+    }
+    pub fn observer_pose(&self, vertical_fov: f32, aspect: f32) -> Transform {
         let physical = self.camera_pose();
-        let eye = self.position + Vec3::Y * self.height;
+        let eye = self.eye_position();
+        let held = self.rotation().inverse() * (physical.translation - eye);
+        let tangent = (vertical_fov * 0.5).tan();
+        // The head glances down at the held body. Keep its centre slightly
+        // right of centre and its nearest bottom corner 5% above the edge.
+        // Both views still observe the very same physical camera in the world.
+        let head_yaw = (0.2 * tangent * aspect).atan() - held.x.atan2(-held.z);
+        let bottom = Quat::from_rotation_y(-head_yaw)
+            * (held + Vec3::new(0.0565 * head_yaw.signum(), -0.035, 0.025));
+        let head_pitch = bottom.y.atan2(-bottom.z) + (0.9 * tangent).atan();
+        let walking_rotation =
+            self.rotation() * Quat::from_euler(EulerRot::YXZ, head_yaw, head_pitch, 0.);
         let offset = Quat::from_euler(EulerRot::YXZ, self.orbit.x, -self.orbit.y, 0.)
             * Vec3::Z
             * self.distance;
@@ -137,13 +149,59 @@ impl Simulation {
             Transform::from_translation(close).looking_at(physical.translation, Vec3::Y);
         let a = self.transition * self.transition * (3. - 2. * self.transition);
         Transform::from_translation(eye.lerp(inspecting.translation, a))
-            .with_rotation(self.rotation().slerp(inspecting.rotation, a))
+            .with_rotation(walking_rotation.slerp(inspecting.rotation, a))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn walking_keeps_the_physical_body_above_the_lower_edge_across_viewports_and_look_angles() {
+        for aspect in [0.6, 1., 1.3, 1.8, 2.4] {
+            for pitch in [-1.3, 0., 1.3] {
+                let s = Simulation {
+                    mode: InteractionMode::Walk,
+                    transition: 0.,
+                    yaw: 1.2,
+                    pitch,
+                    ..default()
+                };
+                let fov = 45_f32.to_radians();
+                let observer = s.observer_pose(fov, aspect);
+                let physical = s.camera_pose();
+                let project = |p: Vec3| {
+                    let p = observer.rotation.inverse()
+                        * (physical.transform_point(p) - observer.translation);
+                    assert!(p.z < -0.005);
+                    Vec2::new(
+                        0.5 + p.x / (-p.z * (fov * 0.5).tan() * aspect) * 0.5,
+                        0.5 - p.y / (-p.z * (fov * 0.5).tan()) * 0.5,
+                    )
+                };
+                let centre = project(Vec3::ZERO);
+                assert!(
+                    (0.53..0.66).contains(&centre.x),
+                    "centre: {centre:?}, aspect: {aspect}"
+                );
+                let mut bottom = 0_f32;
+                for x in [-0.0565, 0.0565] {
+                    for y in [-0.035, 0.035] {
+                        for z in [-0.025, 0.025] {
+                            let p = project(Vec3::new(x, y, z));
+                            assert!(
+                                (0. ..=1.).contains(&p.x) && (0. ..=1.).contains(&p.y),
+                                "body clipped: {p:?}"
+                            );
+                            bottom = bottom.max(p.y);
+                        }
+                    }
+                }
+                assert!((bottom - 0.95).abs() < 0.001, "bottom: {bottom}");
+                assert_eq!(physical, s.camera_pose());
+            }
+        }
+    }
     #[test]
     fn inspecting_changes_only_observer_even_during_transition() {
         let mut s = Simulation {
@@ -153,12 +211,12 @@ mod tests {
         };
         s.look(Vec2::new(100., -40.));
         let camera = s.camera_pose();
-        let observer = s.observer_pose();
+        let observer = s.observer_pose(45_f32.to_radians(), 1.5);
         s.toggle();
         s.advance(0.1);
         s.orbit(Vec2::new(80., 30.));
         assert_eq!(camera, s.camera_pose());
-        assert_ne!(observer, s.observer_pose());
+        assert_ne!(observer, s.observer_pose(45_f32.to_radians(), 1.5));
         s.advance(1.);
         assert_eq!(camera, s.camera_pose());
     }

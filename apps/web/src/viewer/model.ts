@@ -186,6 +186,10 @@ export class ModelViewer {
     this.simulation.start('#simulation-canvas', new URL('.', document.baseURI).href);
     this.host.dataset.rendererStage = 'running';
     this.started = true;
+    if (new URLSearchParams(location.search).get('mode') === 'walk') {
+      this.pendingMode = 'walk';
+      this.send({ type: 'toggle_inspect' });
+    }
     const resize = () => {
       const rect = this.canvas.getBoundingClientRect();
       this.send({ type: 'viewport', width: Math.round(rect.width), height: Math.round(rect.height) });

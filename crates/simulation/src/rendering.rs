@@ -726,7 +726,10 @@ fn update_poses(
             let half_height = 0.035_f32.max(0.0565 / p.aspect_ratio);
             observer.distance *= (half_height / (p.fov * 0.5).tan() + 0.015) * 1.06 / 0.13;
         }
-        *t = observer.observer_pose();
+        *t = match projection {
+            Projection::Perspective(p) => observer.observer_pose(p.fov, p.aspect_ratio),
+            _ => continue,
+        };
     }
     for (mut t, mut camera, mut projection) in &mut transforms.p2() {
         *t = s.camera_pose();
@@ -1465,6 +1468,7 @@ fn publish(world: &mut World) {
         .iter(world)
         .next()
         .map(|(c, t)| (c.clone(), *t));
+    let observer_position = camera.as_ref().map(|(_, t)| t.translation().to_array());
     let mut key = world
         .resource::<ViewerState>()
         .viewport
@@ -1521,7 +1525,7 @@ fn publish(world: &mut World) {
     let pose = sim.camera_pose();
     let snapshot = json!({"renderer":"bevy","version":"0.20.0","ready":state.prepared,"environmentReady":state.environment_ready,
         "mode":sim.mode,"worldSeconds":sim.elapsed,"cameraPosition":pose.translation.to_array(),"cameraRotation":pose.rotation.to_array(),
-        "observerPosition":sim.observer_pose().translation.to_array(),"sensorSequence":state.sequence,"grounded":state.grounded,"renderSize":state.viewport.map(|v| v.to_array()),"targets":state.projected,"error":state.error});
+        "observerPosition":observer_position,"sensorSequence":state.sequence,"grounded":state.grounded,"renderSize":state.viewport.map(|v| v.to_array()),"targets":state.projected,"error":state.error});
     world.resource::<Host>().0.0.lock().unwrap().snapshot = snapshot;
 }
 
