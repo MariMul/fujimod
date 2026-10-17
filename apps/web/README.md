@@ -35,6 +35,13 @@ Power-on combinations apply external input levels through the checked body
 graph; they do not patch guest RAM or guarantee that every ROM boot mode is
 modeled.
 
+With no image or webcam input, the app supplies the bundled abstract dunes
+still through the ordinary RGB scene input. Clearing an input restores this
+still, which is retained across power cycles and card restarts. The diagnostic
+analytic chart remains available to the underlying emulator and its tests.
+The 1536×1024 PNG in `src/engine/assets/default-dunes.png` was generated with
+OpenAI's built-in image generator and selected for the emulator background.
+
 The model is **CAMERA ( Fujifilm X70 )** by
 [McCLOUD2101](https://sketchfab.com/McCLOUD2101),
 [original model](https://sketchfab.com/3d-models/camera-fujifilm-x70-5fd32c3c004f4fe4aecaaab8e2b89783),
