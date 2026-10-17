@@ -9,7 +9,7 @@ on review branches; the Pages workflow deploys approved main builds only.
 
 ## Camera viewer
 
-The TypeScript web app uses SolidJS for new UI and three.js for the camera viewer.
+The TypeScript web app uses SolidJS 2 for new UI and three.js for the camera viewer.
 Vite Plus provides the development server, builds, Oxlint, Oxfmt and Vitest.
 The existing imperative UI will move to Solid components incrementally. Drop a
 DAT anywhere on the viewer, or choose it there. The whole-file SHA-256 selects
@@ -106,9 +106,11 @@ PLAYWRIGHT_BROWSERS_PATH=/path/to/browsers python tests/browser.py \
 ```
 
 `npm run test:watch` runs tests interactively. Tests stay alongside their
-implementation; use `.test.tsx` and `// @vitest-environment jsdom` for Solid DOM
-tests, and import test APIs from `vite-plus/test`. Other tests run in isolated
-Node processes. The existing Python browser checks remain integration gates.
+implementation; use `.test.tsx` for Solid DOM tests, and import test APIs from
+`vite-plus/test`. The components project uses jsdom and the browser runtime;
+the unit project runs `.test.ts` and `.test.mjs` in isolated Node processes.
+Solid 2 batches updates: call `flush()` before asserting rendered changes.
+The existing Python browser checks remain integration gates.
 
 `npm run format -- src/path/to/file.tsx` formats selected files with Oxfmt.
 `npm run format:check` checks formatting across the app. The ordinary check
@@ -116,12 +118,17 @@ command runs lint and types without requiring a formatting sweep of existing
 source. `npm run lint` runs Oxlint independently. From the repository root,
 `mise run web-check`, `web-lint`, `web-format` and `web-test` run the same tools.
 
-Solid's [official documentation](https://docs.solidjs.com/) and
-[agent-readable index](https://docs.solidjs.com/llms.txt) are the reference for
-Solid 1.x. `npm run docs:solid` downloads that index and the core reactivity,
-component, TypeScript and testing guides into ignored `build/docs/solidjs/`.
-Rerun it to refresh the local copies. The installed docs cover the stable 1.x
-APIs; the index also links to 2.0 docs.
+Solid 2's [official documentation](https://v2.solidjs.com/) and
+[agent-readable index](https://v2.solidjs.com/llms.txt) are the API reference.
+`npm run docs:solid` downloads the index, short agent primer and full corpus into
+ignored `build/docs/solidjs/`; rerun it to refresh them. The installed runtime
+includes `CHEATSHEET.md` and the official reactivity diagnostics skill under
+`node_modules/solid-js/skills/`.
+
+The runtime and DOM package are pinned to Solid 2.0.0-rc.15, with the Solid 2
+compiler plugin `@solidjs/vite-plugin`. DOM APIs come from `@solidjs/web`,
+and TypeScript's JSX import source is `@solidjs/web`. Oxlint enables Solid 2
+rules for removed APIs, effect signatures, store writes and reactive props.
 
 The browser check boots the real local DAT on desktop Chromium and WebKit's
 iPhone 13 emulation, checks live frames and a menu tap, saves page/model/LCD

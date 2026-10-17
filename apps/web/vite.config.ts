@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite-plus';
 import { loadEnv, type Plugin, type Connect } from 'vite';
-import solid from 'vite-plugin-solid';
+import solid from '@solidjs/vite-plugin';
 import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync } from 'node:fs';
 import { createGzip } from 'node:zlib';
@@ -111,6 +111,7 @@ export default defineConfig(({ mode, command }) => ({
   plugins: [solid(), localArtifacts(loadEnv(mode, process.cwd(), 'FUJIMOD_'))],
   lint: {
     jsPlugins: ['eslint-plugin-solid'],
+    settings: { solid: { version: 2 } },
     overrides: [
       {
         files: ['**/*.{jsx,tsx}'],
@@ -119,6 +120,11 @@ export default defineConfig(({ mode, command }) => ({
           'solid/no-destructure': 'error',
           'solid/components-return-once': 'error',
           'solid/no-react-deps': 'error',
+          'solid/removed-api': 'error',
+          'solid/no-single-arg-create-effect': 'error',
+          'solid/no-accessor-as-prop': 'error',
+          'solid/no-store-mutation-outside-setter': 'error',
+          'solid/no-write-in-pure-computation': 'error',
         },
       },
     ],
@@ -142,9 +148,25 @@ export default defineConfig(({ mode, command }) => ({
     ],
   },
   test: {
-    environment: 'node',
     pool: 'forks',
-    include: ['src/**/*.test.{ts,tsx,mjs}', 'tests/**/*.test.mjs'],
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          environment: 'node',
+          include: ['src/**/*.test.{ts,mjs}', 'tests/**/*.test.mjs'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'components',
+          environment: 'jsdom',
+          include: ['src/**/*.test.tsx'],
+        },
+      },
+    ],
   },
   server: { host: '127.0.0.1', fs: { strict: true } },
   preview: { host: '127.0.0.1', allowedHosts: ['cozycat.tail2b5ca.ts.net'] },

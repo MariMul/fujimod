@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { createSignal, onCleanup } from 'solid-js';
-import { render } from 'solid-js/web';
+import { createSignal, flush, onSettled } from 'solid-js';
+import { render } from '@solidjs/web';
 import { expect, test } from 'vite-plus/test';
 
 test('TSX views track shared state and dispose subscriptions on unmount', () => {
@@ -10,11 +10,13 @@ test('TSX views track shared state and dispose subscriptions on unmount', () => 
   let notify = () => {};
   let subscribed = false;
   function Connection() {
-    subscribed = true;
-    notify = () => setConnected(true);
-    onCleanup(() => {
-      subscribed = false;
-      notify = () => {};
+    onSettled(() => {
+      subscribed = true;
+      notify = () => setConnected(true);
+      return () => {
+        subscribed = false;
+        notify = () => {};
+      };
     });
     return (
       <>
@@ -26,16 +28,21 @@ test('TSX views track shared state and dispose subscriptions on unmount', () => 
     );
   }
   const dispose = render(() => <Connection />, host);
+  flush();
   try {
     const button = host.querySelector('button')!;
     const output = host.querySelector('output')!;
     expect(output.textContent).toBe('Disconnected');
     expect(button.disabled).toBe(false);
     button.click();
+    flush();
     expect(output.textContent).toBe('Connected');
     expect(button.disabled).toBe(true);
     setConnected(false);
+    flush();
+    expect(output.textContent).toBe('Disconnected');
     notify();
+    flush();
     expect(output.textContent).toBe('Connected');
     expect(button.disabled).toBe(true);
   } finally {
