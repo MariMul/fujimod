@@ -81,8 +81,9 @@ async def check(playwright, args, name):
         assert await page.locator('#engine-status details').count()==0
         assert '{' not in await page.locator('#status').inner_text()
         await page.screenshot(path=str(out / 'fault.png'))
+        await page.locator('#error-report').click()
         async with page.expect_download(timeout=60000) as pending:
-            await page.locator('#error-report').click()
+            await page.locator('#feedback-prepare').click()
         download=await pending.value
         report_path=out/'error-report.zip'
         await download.save_as(report_path)

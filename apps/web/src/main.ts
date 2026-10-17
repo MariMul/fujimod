@@ -11,6 +11,7 @@ import { ModelViewer, type ModelData } from "./viewer/model";
 import { InputPanel } from "./ui/controls";
 import { ConnectionsPanel } from "./ui/connections";
 import { CardBrowser, downloadBlob } from "./ui/card";
+import { readPendingReport, storePendingReport, deliverReport, type PendingReport } from "./ui/report-delivery";
 import { simulatorIssueURL, type SimulatorIssueContext } from "./ui/simulator-feedback";
 import { FaultPanel } from "./ui/fault";
 import { cameraCard, cameraTable, type CameraSupport } from "./ui/cameras";
@@ -144,12 +145,6 @@ $("restart").onclick = async () => {
 const feedbackDialog = $<HTMLDialogElement>("feedback-dialog");
 const feedbackDescription = $<HTMLTextAreaElement>("feedback-description");
 let feedbackContext: SimulatorIssueContext = { event: "feedback", modBuild: "Not identified", simulatorBuild: __FUJIMOD_SIMULATOR_BUILD__ };
-// Open in the submit gesture so mobile browsers allow the new tab, even
-// when preparing the diagnostic download takes longer than user activation.
-feedbackDialog.querySelector("form")!.addEventListener("submit", event => {
-  if ((event.submitter as HTMLButtonElement | null)?.value === "download")
-    window.open(simulatorIssueURL(feedbackDescription.value, feedbackContext), "_blank", "noopener,noreferrer");
-});
 let preparingReport = false;
 function openFeedback(event: "feedback" | "crash") {
   if (preparingReport || feedbackDialog.open) return;
@@ -177,28 +172,66 @@ function openFeedback(event: "feedback" | "crash") {
     snapshot: { unavailable: "Runtime did not initialize." },
   }));
   const result = capture.then(blob => ({ blob }), error => ({ error }));
-  feedbackDialog.onclose = async () => {
-    describe(feedbackDescription.value);
-    if (feedbackDialog.returnValue !== "download") return;
+  const prepare = $<HTMLButtonElement>("feedback-prepare");
+  const issue = $<HTMLAnchorElement>("feedback-issue");
+  const message = $("feedback-status");
+  prepare.hidden = false;
+  prepare.disabled = false;
+  prepare.textContent = "Download and report";
+  issue.hidden = message.hidden = true;
+  feedbackDescription.readOnly = false;
+  let pending: PendingReport | undefined;
+  let closed = false;
+  feedbackDialog.querySelector("form")!.onsubmit = async event => {
+    if ((event.submitter as HTMLButtonElement | null)?.value !== "download") return;
+    event.preventDefault();
+    if (preparingReport) return;
     preparingReport = true;
-    const buttons = [$("error-report"), $("feedback-open")] as HTMLButtonElement[];
-    buttons.forEach(button => { button.disabled = true; });
+    prepare.disabled = true;
+    feedbackDescription.readOnly = true;
+    describe(feedbackDescription.value);
+    message.textContent = "Preparing report…";
+    message.hidden = false;
     try {
-      const report = await result;
-      if ("error" in report) throw report.error;
-      downloadBlob(report.blob, `fujimod-feedback-${Date.now()}.zip`);
+      if (!pending) {
+        const report = await result;
+        if (closed) return;
+        if ("error" in report) throw report.error;
+        pending = {blob: report.blob, name: `fujimod-feedback-${Date.now()}.zip`,
+          issueURL: simulatorIssueURL(feedbackDescription.value, feedbackContext)};
+      }
+      await storePendingReport(pending);
+      if (closed) return;
+      savedReport = pending;
+      $("feedback-recover").hidden = false;
+      issue.href = pending.issueURL;
+      issue.hidden = message.hidden = true;
+      deliverReport(pending, downloadBlob);
+      issue.hidden = false;
+      prepare.textContent = "Download again";
     } catch (error) {
-      showFault(faultFrom(error));
+      if (!closed) message.textContent = `Could not prepare report: ${String(error)}`;
     } finally {
       preparingReport = false;
-      buttons.forEach(button => { button.disabled = false; });
+      prepare.disabled = false;
     }
+  };
+  feedbackDialog.onclose = () => {
+    closed = true;
+    describe(feedbackDescription.value);
   };
   feedbackDialog.showModal();
   feedbackDescription.focus();
 }
 $("error-report").onclick = () => openFeedback("crash");
 $("feedback-open").onclick = () => openFeedback("feedback");
+let savedReport: PendingReport | undefined;
+void readPendingReport().then(report => {
+  if (report) { savedReport = report; $("feedback-recover").hidden = false; }
+});
+$("feedback-recover").onclick = () => {
+  if (savedReport) downloadBlob(savedReport.blob, savedReport.name);
+};
 
 async function runCombo(combo: PowerCombo) {
   await restartOperation(() => engine!.powerCycle(combo.inputs, progress));

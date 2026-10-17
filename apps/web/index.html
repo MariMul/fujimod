@@ -68,6 +68,7 @@
               </div>
             </div>
             <button class="pill feedback-button" id="feedback-open">Feedback</button>
+            <button class="pill" id="feedback-recover" hidden>Download saved report</button>
             <label class="dropbox" id="firmware-prompt" for="firmware-file"
               ><strong>Drop FPUPDATE.DAT firmware file from Fujifilm</strong
               ><span>or click to choose it</span></label
@@ -154,9 +155,11 @@
             <textarea aria-label="Feedback (optional)" id="feedback-description" rows="5" placeholder="Share a bug, idea, or other feedback…"></textarea>
           </div>
         </div>
+        <p id="feedback-status" role="status" hidden></p>
         <div class="act">
           <button class="pill" value="cancel">Cancel</button>
-          <button class="pill primary" value="download">Download and report</button>
+          <button class="pill primary" id="feedback-prepare" value="download">Download and report</button>
+          <a class="pill" id="feedback-issue" target="_blank" rel="noopener noreferrer" hidden>Open GitHub</a>
         </div>
       </form>
     </dialog>

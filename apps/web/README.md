@@ -267,3 +267,16 @@ operations. A genuinely new codec would require an interpreter update.
 `firmwares` array. Each entry supplies model/version, source hash/size, Fuji
 download page and original release date, patch hash/size, included mods and model-specific boot instructions. Patch filenames are simple
 local filenames. Pages serves index and patches from the same origin.
+
+Report delivery saves the latest report ZIP and its issue URL in the browser's
+IndexedDB before starting the download and opening GitHub. “Download saved
+report” recovers those same bytes after navigation or a reload. If a popup is
+blocked, the dialog also retains an ordinary “Open GitHub” link. Reports stay
+local to that browser and origin; clearing site data removes the saved copy.
+The embedded-browser regression test replaces only GitHub navigation and makes
+`window.open` navigate the current tab; the fault comes from real replay execution:
+
+```sh
+python tests/feedback.py --url 'https://your-host.ts.net:port/?scenario=x70-movie' \
+  --output build/fresh-feedback-proof
+```
