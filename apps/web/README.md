@@ -359,15 +359,36 @@ local filenames. Pages serves index and patches from the same origin.
 fields (including labels, firmware ID, version and simulator version). The ZIP
 and the GitHub link use the same submission object; GitHub indexes the capture.
 
-Report delivery saves the latest report ZIP and its issue URL in the browser's
-IndexedDB before starting the download and opening GitHub. “Download saved
+In published builds, report delivery saves the latest report ZIP and its issue
+URL in the browser's IndexedDB before starting the download and opening GitHub. “Download saved
 report” recovers those same bytes after navigation or a reload. If a popup is
 blocked, the dialog also retains an ordinary “Open GitHub” link. Reports stay
 local to that browser and origin; clearing site data removes the saved copy.
-The embedded-browser regression test replaces only GitHub navigation and makes
-`window.open` navigate the current tab; the fault comes from real replay execution:
+The published-delivery regression removes development upload hooks, replaces
+GitHub navigation and makes `window.open` navigate the current tab; the fault
+comes from real replay execution:
 
 ```sh
 python tests/feedback.py --url 'https://your-host.ts.net:port/?scenario=x70-movie' \
   --output build/fresh-feedback-proof
+```
+
+## Local simulator reports
+
+The development server saves feedback and detected simulator, worker and JavaScript
+faults from Emulator and Dev Tools under `reports/<report-id>/`. `metadata.json`
+is written first; `report.zip` adds guest state, runtime identity, recent inputs
+and logs. The ZIP’s `report.json` is saved alongside it for direct inspection.
+Dev Tools includes binary USB traces. Unavailable snapshots are recorded
+explicitly. Inspection snapshots preserve the captured boundary and are not resume
+points. Release builds keep the browser download and GitHub issue workflow.
+
+Replay the firmware USB fault at
+`/dev-tools/?target=simulator&firmware=x70-110&connect=1&scenario=console-jpeg`.
+The checked cold boot runs the real `help` and `dcfcc` console commands. Test both
+automatic fault reports and submitted feedback with:
+
+```sh
+FUJIMOD_WEB_URL=https://your-host.ts.net:port/ FUJIMOD_BROWSER=webkit \
+  node src/dev-tools/browser-reports.mjs
 ```

@@ -395,8 +395,8 @@
   }
   .dev-tools header {
     display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 2px 20px;
+    grid-template-columns: auto 1fr auto;
+    gap: 2px 10px;
     padding: 4px 3px;
   }
   .dt-connection {

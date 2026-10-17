@@ -15,6 +15,16 @@ export class CameraSources implements CameraBackend {
     this.selected = target === CameraTarget.Emulator ? this.emulator : this.physical;
     return this.selected.pick();
   }
+  errors(listener: (error: Error) => void) {
+    return this.emulator.errors(listener);
+  }
+  async diagnostics() {
+    return (
+      this.selected.diagnostics?.() ?? {
+        snapshot: { unavailable: 'Physical USB connections have no emulator snapshot.' },
+      }
+    );
+  }
   open(id: number) {
     return this.selected.open(id);
   }

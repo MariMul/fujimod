@@ -1,4 +1,5 @@
 import "./style.css";
+import { LocalReports } from "./ui/local-reports";
 import { validateCatalog, type Catalog, type Firmware } from "./catalog";
 import { validateIndex, verifyPatch } from "./patch/catalog";
 import { sha256 } from "./patch/patcher";
@@ -116,6 +117,7 @@ function showFault(fault: EngineFault) {
       : undefined,
   });
   viewer.fault(true);
+  localReports.crash(new EngineError(fault));
 }
 async function undo() {
   const button = $<HTMLButtonElement>("undo");
@@ -146,6 +148,14 @@ const feedbackDialog = $<HTMLDialogElement>("feedback-dialog");
 const feedbackDescription = $<HTMLTextAreaElement>("feedback-description");
 let feedbackContext: SimulatorIssueContext = { event: "feedback", modBuild: "Not identified", simulatorBuild: __FUJIMOD_SIMULATOR_BUILD__ };
 let preparingReport = false;
+const localReports = new LocalReports("emulator", () => ({
+  event: "feedback", camera: selectedFirmware && { id: selectedFirmware.id, model: selectedFirmware.model },
+  modBuild: build, simulatorBuild: __FUJIMOD_SIMULATOR_BUILD__,
+}), submission => engine ? engine.errorReport(submission) : submission.then(value => errorReportZip({
+  ...value, error: latestFault, identity: { firmwareSha256: firmwareHash },
+  snapshot: { unavailable: "Runtime did not initialize." },
+})));
+localReports.listen();
 function openFeedback(event: "feedback" | "crash") {
   if (preparingReport || feedbackDialog.open) return;
   feedbackContext = {
@@ -177,7 +187,7 @@ function openFeedback(event: "feedback" | "crash") {
   const message = $("feedback-status");
   prepare.hidden = false;
   prepare.disabled = false;
-  prepare.textContent = "Download and report";
+  prepare.textContent = localReports.available() ? "Save report" : "Download and report";
   issue.hidden = message.hidden = true;
   feedbackDescription.readOnly = false;
   let submitted: ReturnType<typeof simulatorIssue> | undefined;
@@ -195,6 +205,17 @@ function openFeedback(event: "feedback" | "crash") {
     message.textContent = "Preparing report…";
     message.hidden = false;
     try {
+      if (localReports.available()) {
+        await localReports.submit(submitted, async () => {
+          const report = await result;
+          if ("error" in report) throw report.error;
+          return report.blob;
+        }, feedbackContext);
+        message.textContent = "Saved locally";
+        message.hidden = false;
+        prepare.textContent = "Save again";
+        return;
+      }
       if (!pending) {
         const report = await result;
         if (closed) return;

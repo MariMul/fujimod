@@ -1,5 +1,11 @@
 import { validateCatalog, type Catalog, type Firmware } from '../catalog';
-import type { CameraBackend, CameraChoice, CameraLink, ConsoleOutput } from './camera';
+import type {
+  CameraBackend,
+  CameraChoice,
+  CameraLink,
+  ConsoleOutput,
+  CameraDiagnostics,
+} from './camera';
 import { EmulatorCall, type EmulatorRequest, type EmulatorReply } from './emulator-protocol';
 import type { NewEntry } from './log';
 declare const __FUJIMOD_CATALOG__: string;
@@ -22,7 +28,15 @@ function chooseFirmware(): Promise<File | undefined> {
 }
 export class EmulatorCamera implements CameraBackend {
   private worker?: Worker;
+  private errorListeners = new Set<(error: Error) => void>();
+  errors(listener: (error: Error) => void) {
+    this.errorListeners.add(listener);
+    return () => {
+      this.errorListeners.delete(listener);
+    };
+  }
   private serial = 0;
+  private firmware?: Firmware;
   private pending = new Map<
     number,
     { resolve: (result: unknown) => void; reject: (error: Error) => void }
@@ -31,18 +45,55 @@ export class EmulatorCamera implements CameraBackend {
   private ready = false;
   private generation = 0;
   async initialize() {}
+  async diagnostics(): Promise<CameraDiagnostics> {
+    const identity = this.firmware && {
+      firmwareId: this.firmware.id,
+      model: this.firmware.model,
+      firmwareSha256: this.firmware.sha256,
+    };
+    if (!this.worker)
+      return { identity, snapshot: { unavailable: 'Firmware emulator worker is unavailable.' } };
+    try {
+      const result = (await this.request({ call: EmulatorCall.Diagnostics })) as CameraDiagnostics;
+      return { ...result, identity: { ...(result.identity as object), ...identity } };
+    } catch (error) {
+      return { identity, snapshot: { unavailable: String(error) } };
+    }
+  }
   private request(
     request:
       | Omit<Extract<EmulatorRequest, { call: EmulatorCall.Boot }>, 'id'>
       | Omit<Extract<EmulatorRequest, { call: EmulatorCall.Open }>, 'id'>
       | Omit<Extract<EmulatorRequest, { call: EmulatorCall.Submit }>, 'id'>
-      | Omit<Extract<EmulatorRequest, { call: EmulatorCall.Poll | EmulatorCall.Abandon }>, 'id'>,
+      | Omit<
+          Extract<
+            EmulatorRequest,
+            { call: EmulatorCall.Poll | EmulatorCall.Abandon | EmulatorCall.Diagnostics }
+          >,
+          'id'
+        >,
   ): Promise<unknown> {
     const worker = this.worker;
     if (!worker) return Promise.reject(Error('Firmware emulator is not running.'));
     const id = ++this.serial;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const timeout =
+        request.call === EmulatorCall.Diagnostics
+          ? setTimeout(() => {
+              this.pending.delete(id);
+              reject(Error('Firmware diagnostic capture timed out.'));
+            }, 30000)
+          : undefined;
+      this.pending.set(id, {
+        resolve: (value) => {
+          if (timeout) clearTimeout(timeout);
+          resolve(value);
+        },
+        reject: (error) => {
+          if (timeout) clearTimeout(timeout);
+          reject(error);
+        },
+      });
       worker.postMessage(
         { ...request, id },
         request.call === EmulatorCall.Boot ? [request.dat] : [],
@@ -76,6 +127,7 @@ export class EmulatorCamera implements CameraBackend {
       if (!firmware?.emulate?.usb) throw Error('This firmware has no configured USB emulator.');
     }
     if (generation !== this.generation) return;
+    this.firmware = firmware;
     this.worker = new Worker(new URL('./emulator-worker.ts', import.meta.url), { type: 'module' });
     this.worker.onmessage = ({ data }: MessageEvent<EmulatorReply>) => {
       if (data.type === 'trace') {
@@ -89,7 +141,9 @@ export class EmulatorCamera implements CameraBackend {
       else pending?.resolve(data.result);
     };
     this.worker.onerror = (event) => {
-      this.stop(Error(event.message || 'Firmware emulator worker failed.'));
+      const error = Error(event.message || 'Firmware emulator worker failed.');
+      this.stop(error);
+      for (const listener of this.errorListeners) listener(error);
     };
     try {
       return (await this.request({
@@ -99,7 +153,7 @@ export class EmulatorCamera implements CameraBackend {
         baseUrl,
       })) as CameraChoice;
     } catch (error) {
-      this.stop();
+      this.ready = false;
       throw error;
     }
   }

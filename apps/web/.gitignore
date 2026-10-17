@@ -6,3 +6,6 @@ public/artifacts/
 public/runtime/
 .env.local
 build/
+
+# Local simulator captures retained independently of build cleanup.
+reports/

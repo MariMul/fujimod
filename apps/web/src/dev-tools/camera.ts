@@ -20,6 +20,7 @@ export interface InterfaceChoice {
   label: string;
 }
 export interface CameraChoice {
+  firmware?: { id: string; model: string; version: string; sha256: string };
   name: string;
   interfaces: InterfaceChoice[];
 }
@@ -29,7 +30,13 @@ export interface CameraLink {
   usable(): boolean;
   abandon(): void;
 }
+export interface CameraDiagnostics extends Record<string, unknown> {
+  checkpoint?: ArrayBuffer;
+  snapshot: Record<string, unknown>;
+}
 export interface CameraBackend {
+  errors?(listener: (error: Error) => void): () => void;
+  diagnostics?(): Promise<CameraDiagnostics>;
   initialize(): Promise<void>;
   pick(target?: CameraTarget): Promise<CameraChoice | undefined>;
   open(id: number): Promise<CameraLink>;

@@ -1,0 +1,38 @@
+.simulator-feedback {
+  width: min(480px, calc(100% - 16px));
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
+  padding: 10px;
+  background: #111;
+  color: var(--ink);
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+}
+.simulator-feedback::backdrop {
+  background: rgb(0 0 0 / 65%);
+}
+.simulator-feedback h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.simulator-feedback textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px;
+  font: inherit;
+  color: inherit;
+  background: #000;
+  border: 1px solid var(--edge);
+  resize: vertical;
+}
+.simulator-feedback p {
+  margin: 6px 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.simulator-feedback .act {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}

@@ -1,3 +1,4 @@
+import { errorReportZip, type ReportSubmission } from '../engine/report';
 import { createSignal } from 'solid-js';
 import {
   CameraTarget,
@@ -28,7 +29,11 @@ export enum LineEnding {
   CrLf = 'CRLF',
   None = 'None',
 }
-export function createDevTools(backend: CameraBackend, supported: boolean) {
+export function createDevTools(
+  backend: CameraBackend,
+  supported: boolean,
+  onError: (error: unknown) => void = () => {},
+) {
   const offlineState = supported ? ConnectionState.Disconnected : ConnectionState.Unsupported;
   const [connection, publishConnection] = createSignal(ConnectionState.Loading);
   const [consoleState, publishConsoleState] = createSignal(ConsoleState.Idle);
@@ -50,11 +55,13 @@ export function createDevTools(backend: CameraBackend, supported: boolean) {
   const [entries, setEntries] = createSignal<LogEntry[]>([]);
   const [discarded, setDiscarded] = createSignal(0);
   const buffer = new LogBuffer();
+  let lastError: unknown;
   let link: CameraLink | undefined,
     disposed = false,
     stop = false;
   let decoder = new TextDecoder('utf-8');
   let timer: ReturnType<typeof setInterval> | undefined;
+  let unlistenError: (() => void) | undefined;
   let unlisten: (() => void) | undefined;
   const log = (values: NewEntry[]) => {
     if (disposed || !values.length) return;
@@ -66,12 +73,15 @@ export function createDevTools(backend: CameraBackend, supported: boolean) {
     log([{ layer: Layer.Connection, level, direction: Direction.Host, message: text }]);
   const drain = () => log(backend.drain());
   const fail = (error: unknown) => {
+    if (lastError === error) return;
+    lastError = error;
     drain();
     message(error instanceof Error ? error.message : String(error), Level.Error);
     if (link && !link.usable()) {
       setConnection(ConnectionState.Blocked);
       setConsoleState(ConsoleState.Unknown);
     }
+    onError(error);
   };
   function disconnect() {
     attempt++;
@@ -242,6 +252,7 @@ export function createDevTools(backend: CameraBackend, supported: boolean) {
       if (disposed) return;
       setConnection(supported ? ConnectionState.Disconnected : ConnectionState.Unsupported);
       timer = setInterval(drain, 50);
+      unlistenError = backend.errors?.(fail);
       unlisten = backend.onDisconnect(() => {
         disconnect();
         message('USB device removed', Level.Warning);
@@ -258,6 +269,7 @@ export function createDevTools(backend: CameraBackend, supported: boolean) {
     link = undefined;
     if (timer) clearInterval(timer);
     unlisten?.();
+    unlistenError?.();
     backend.dispose();
     disposed = true;
   }
@@ -267,6 +279,69 @@ export function createDevTools(backend: CameraBackend, supported: boolean) {
     camera,
     entries,
     discarded,
+    reportContext() {
+      return {
+        connection: ConnectionState[state],
+        console: ConsoleState[commandState],
+        commands: buffer.entries
+          .filter((entry) => entry.layer === Layer.Console && entry.direction === Direction.Out)
+          .slice(-8)
+          .map((entry) => entry.message),
+        logTail: buffer.entries
+          .slice(-64)
+          .map((entry) => ({
+            time: entry.time,
+            layer: entry.layer,
+            level: entry.level,
+            direction: entry.direction,
+            message: entry.message.slice(0, 2048),
+          })),
+      };
+    },
+    async errorReport(
+      this: void,
+      submission: Promise<ReportSubmission> = Promise.resolve({ description: '' }),
+    ) {
+      drain();
+      const logs = buffer.entries.slice(),
+        choice = camera();
+      let diagnostics;
+      try {
+        diagnostics = (await backend.diagnostics?.()) ?? {
+          snapshot: { unavailable: 'No emulator diagnostics provider.' },
+        };
+      } catch (error) {
+        diagnostics = { snapshot: { unavailable: String(error) } };
+      }
+      const { checkpoint, ...detail } = diagnostics;
+      const attachments: [string, Uint8Array<ArrayBuffer>][] = logs
+        .filter((entry) => entry.data?.length)
+        .map((entry) => [`usb/${entry.id}.bin`, entry.data!.slice()]);
+      return errorReportZip(
+        {
+          schema: 'fujimod-error-report-v1',
+          createdAt: new Date().toISOString(),
+          ...detail,
+          source: 'dev-tools',
+          identity: { ...(detail.identity as object), ...choice?.firmware },
+          connection: ConnectionState[state],
+          console: ConsoleState[commandState],
+          error:
+            lastError instanceof Error
+              ? { name: lastError.name, message: lastError.message, stack: lastError.stack }
+              : lastError,
+          logs: logs.map((entry) => ({
+            ...entry,
+            data: undefined,
+            attachment: entry.data?.length ? `usb/${entry.id}.bin` : undefined,
+          })),
+          browser: { userAgent: navigator.userAgent },
+          ...(await submission),
+        },
+        checkpoint,
+        attachments,
+      );
+    },
     start,
     connect,
     open,

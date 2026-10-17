@@ -2,9 +2,13 @@ import { For, Show, createEffect, createMemo, createSignal, onSettled, untrack }
 import { CameraTarget, type CameraBackend } from './camera';
 import { ConnectionState, ConsoleState, LineEnding, createDevTools } from './controller';
 import { Direction, Layer, Level, exportLog, hex, type LogEntry } from './log';
+import { scenarios } from './scenarios';
+import { LocalReports } from '../ui/local-reports';
+import { Feedback } from '../ui/Feedback';
 import { CameraSources } from './sources';
 import '../style.css';
 import './style.css';
+declare const __FUJIMOD_SIMULATOR_BUILD__: string;
 const layers = [Layer.Console, Layer.App80, Layer.Ff80, Layer.Usb];
 const levels = [Level.Error, Level.Warning, Level.Info, Level.Debug, Level.Trace];
 const connectionNames: Record<ConnectionState, string> = {
@@ -74,7 +78,17 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean }
   const tools = createDevTools(
     untrack(() => props.backend) ?? new CameraSources(),
     untrack(() => props.supported) ?? (isSecureContext && 'usb' in navigator),
+    (error) => reports.crash(error),
   );
+  const context = () => ({
+    event:
+      tools.connection() === ConnectionState.Blocked ? ('crash' as const) : ('feedback' as const),
+    camera: tools.camera()?.firmware,
+    diagnostics: tools.reportContext(),
+    modBuild: 'Stock firmware (no mods)',
+    simulatorBuild: __FUJIMOD_SIMULATOR_BUILD__,
+  });
+  const reports = new LocalReports('dev-tools', context, tools.errorReport);
   const [activeLayers, setActiveLayers] = createSignal<ReadonlySet<Layer>>(
     new Set([Layer.Console, Layer.App80, Layer.Ff80]),
   );
@@ -108,15 +122,26 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean }
       tools.consoleState() === ConsoleState.Idle,
   );
   onSettled(() => {
-    void tools.start().then(() => {
+    const unlisten = reports.listen();
+    void tools.start().then(async () => {
       if (
         import.meta.env.DEV &&
         new URLSearchParams(location.search).get('target') === CameraTarget.Emulator &&
         new URLSearchParams(location.search).get('connect') === '1'
-      )
-        void tools.connect(CameraTarget.Emulator);
+      ) {
+        await tools.connect(CameraTarget.Emulator);
+        const scenario = scenarios[new URLSearchParams(location.search).get('scenario') ?? ''];
+        if (scenario && tools.camera()?.firmware?.id === scenario.firmware) {
+          for (const command of scenario.commands) {
+            if (!(await tools.send(command, LineEnding.Lf))) break;
+          }
+        }
+      }
     });
-    return tools.dispose;
+    return () => {
+      unlisten();
+      tools.dispose();
+    };
   });
   createEffect(
     () => ({ count: entries().length, follow: follow() }),
@@ -188,6 +213,9 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean }
             Dev Tools
           </a>
         </nav>
+        <Show when={target() === CameraTarget.Emulator}>
+          <Feedback context={context} capture={tools.errorReport} local={reports} />
+        </Show>
         <div class="dt-connection">
           <select
             aria-label="Connection target"

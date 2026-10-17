@@ -8,9 +8,17 @@ const camera = new WebUsbCamera();
 let py: Pyodide;
 let link: CameraLink | undefined;
 let transferTimeoutMs: number;
+let identity: Record<string, unknown> = {};
+let recentInputs: Record<string, unknown>[] = [];
+let failures: Record<string, unknown>[] = [];
+let trigger: Record<string, unknown> | undefined;
 type TransferStep = { state: 'pending' } | { state: 'read' } | { state: 'written'; bytes: number };
 function send(reply: EmulatorReply) {
-  worker.postMessage(reply);
+  const checkpoint =
+    reply.type === 'result' && reply.result && 'checkpoint' in reply.result
+      ? reply.result.checkpoint
+      : undefined;
+  worker.postMessage(reply, checkpoint ? [checkpoint] : []);
 }
 function finish(reply: EmulatorReply) {
   send({ type: 'trace', entries: camera.drain() });
@@ -72,6 +80,14 @@ async function transfer(
       }
     }
   } catch (error) {
+    failures = [
+      ...failures.slice(-31),
+      {
+        name: error instanceof Error ? error.name : 'Error',
+        message: String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+    ];
     // nusb maps WebUSB rejections to USB status; retain the simulator cause.
     send({
       type: 'trace',
@@ -96,7 +112,19 @@ async function boot(request: Extract<EmulatorRequest, { call: EmulatorCall.Boot 
     usb = config?.usb;
   if (!config || !usb) throw Error('This firmware has no USB emulator configuration.');
   progress('Loading firmware emulator');
-  ({ py } = await loadCameraRuntime(new URL(usb.bundle, request.baseUrl).href));
+  const runtime = await loadCameraRuntime(new URL(usb.bundle, request.baseUrl).href);
+  py = runtime.py;
+  const digest = async (bytes: ArrayBuffer) =>
+    [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
+      .map((value) => value.toString(16).padStart(2, '0'))
+      .join('');
+  identity = {
+    firmwareSha256: firmware.sha256,
+    firmwareId: firmware.id,
+    bundle: usb.bundle,
+    nativeSha256: await digest(runtime.native),
+    sourcesSha256: await digest(runtime.sources),
+  };
   const inputs = await fetch(new URL('firmware-inputs.zip', new URL(usb.bundle, request.baseUrl)));
   if (!inputs.ok) throw Error('USB emulator inputs are unavailable.');
   py.unpackArchive(await inputs.arrayBuffer(), 'zip', { extractDir: '/repo' });
@@ -173,9 +201,30 @@ usb_runtime.start(config['firmware'],config['scenario'])
   await camera.initialize();
   const choice = await camera.pick();
   if (!choice) throw Error('Firmware did not enumerate as an FF80 device.');
-  return { ...choice, name: `Simulator · ${firmware.model} ${firmware.version}` };
+  return {
+    ...choice,
+    firmware: {
+      id: firmware.id,
+      model: firmware.model,
+      version: firmware.version,
+      sha256: firmware.sha256,
+    },
+    name: `Simulator · ${firmware.model} ${firmware.version}`,
+  };
 }
 async function handle(request: EmulatorRequest) {
+  if (request.call !== EmulatorCall.Diagnostics) {
+    trigger = {
+      call: EmulatorCall[request.call],
+      data: request.call === EmulatorCall.Submit ? Array.from(request.data) : undefined,
+      guest_ticks:
+        py &&
+        py.runPython<unknown>(
+          "usb_runtime.board.virtual_ticks if 'usb_runtime' in globals() and hasattr(usb_runtime, 'board') else None",
+        ),
+    };
+    recentInputs = [...recentInputs.slice(-127), trigger];
+  }
   try {
     let result;
     switch (request.call) {
@@ -193,6 +242,24 @@ async function handle(request: EmulatorRequest) {
         if (!link) throw Error('USB session is not open.');
         result = await link.poll();
         break;
+      case EmulatorCall.Diagnostics: {
+        if (!py) throw Error('Firmware emulator has not initialized.');
+        result = JSON.parse(py.runPython<string>('usb_runtime.capture_report()'));
+        const checkpoint = py.runPython<boolean>('usb_runtime.report_checkpoint is not None')
+          ? readBytes('usb_runtime.report_checkpoint').buffer
+          : undefined;
+        py.runPython('usb_runtime.report_checkpoint = None');
+        result = {
+          ...result,
+          checkpoint,
+          identity,
+          inputs: recentInputs,
+          trigger,
+          rawErrors: [...result.rawErrors, ...failures],
+          runtime: { wasmMemoryBytes: py._module.HEAPU8.byteLength },
+        };
+        break;
+      }
       case EmulatorCall.Abandon:
         link?.abandon();
         link = undefined;

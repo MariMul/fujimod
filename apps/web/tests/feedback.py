@@ -1,11 +1,12 @@
 """Verify one-click delivery and recovery after a real emulator execution fault.
 
-Only external GitHub navigation is substituted. window.open is made to navigate
+The development upload marker and external GitHub navigation are substituted. window.open is made to navigate
 the current tab, matching the embedded-browser behavior under test.
 """
 import argparse
 import asyncio
 import json
+import re
 import hashlib
 import zipfile
 from urllib.parse import urlparse, parse_qsl
@@ -25,6 +26,15 @@ async def check(args):
               window.open = url => { location.assign(url); return null; };
             ''')
             page = await context.new_page()
+            # Exercise published download/navigation behavior against the local runtime.
+            async def published_page(route):
+                response = await route.fetch()
+                if 'text/html' not in response.headers.get('content-type', ''):
+                    return await route.fulfill(response=response)
+                source = re.sub(r'<meta[^>]*name="fujimod-local-reports"[^>]*>', '', await response.text())
+                source = re.sub(r'<script[^>]*src="/__simulator-reports.js"[^>]*></script>', '', source)
+                await route.fulfill(response=response, body=source)
+            await page.route(args.url.split('?')[0] + '*', published_page)
             await page.goto(args.url)
             await page.wait_for_function("document.querySelector('#live-label').textContent === 'STOPPED'", timeout=240000)
             assert 'Runtime did not initialize' not in await page.locator('#fault-raw').inner_text()

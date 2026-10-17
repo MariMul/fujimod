@@ -28,6 +28,14 @@ try {
   });
   const memoryCheck = process.env.FUJIMOD_MEMORY_CHECK === '1';
   if (memoryCheck) {
+    // Fault-package capture has its own test and changes the allocation profile.
+    await page.route(url.href, async (route) => {
+      const response = await route.fetch();
+      await route.fulfill({
+        response,
+        body: (await response.text()).replace(/<meta[^>]*name="fujimod-local-reports"[^>]*>/g, ''),
+      });
+    });
     await page.route('**/emulator-worker.ts*', async (route) => {
       const response = await route.fetch();
       await route.fulfill({
