@@ -63,6 +63,9 @@ pub enum Error {
         expected: Option<Box<crate::testing::Exchange>>,
         actual: Box<crate::testing::Exchange>,
     },
+    #[cfg(feature = "testing")]
+    #[error("virtual USB peer failed: {0}")]
+    TestPeer(#[source] Box<dyn std::error::Error + Send + Sync>),
     #[error("bulk read failed after {data_len} bytes: {source}")]
     PartialRead {
         data_len: usize,

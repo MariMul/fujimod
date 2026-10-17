@@ -63,6 +63,20 @@ impl Session {
             .await?,
         })
     }
+    #[cfg(feature = "testing")]
+    pub(crate) async fn from_peer(
+        peer: crate::testing::Model,
+        max_reply_bytes: u32,
+        trace: Option<crate::trace::Trace>,
+    ) -> Result<Self> {
+        Ok(Self {
+            core: Core::open(
+                crate::trace::Observed::new(Backend::Model(peer), trace),
+                max_reply_bytes,
+            )
+            .await?,
+        })
+    }
     pub fn info(&self) -> SessionInfo {
         self.core.info
     }

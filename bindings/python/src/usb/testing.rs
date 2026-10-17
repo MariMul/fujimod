@@ -88,10 +88,107 @@ fn session(
         Script { inner: script },
     ))
 }
+/// Test-only callback owner. No Python peer can be installed into a production
+/// connection; this backend is absent without the testing feature.
+struct PythonPeer {
+    inner: Py<PyAny>,
+    ep_in: u8,
+    ep_out: u8,
+}
+impl PythonPeer {
+    fn no_result(&self, method: &str, data: &[u8]) -> usb::Result<()> {
+        Python::attach(|py| {
+            let result = self
+                .inner
+                .call_method1(py, method, (PyBytes::new(py, data),))?;
+            if !result.is_none(py) {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "virtual USB control/write must return None",
+                ));
+            }
+            Ok(())
+        })
+        .map_err(|error: PyErr| usb::Error::TestPeer(Box::new(error)))
+    }
+}
+impl usb::testing::Peer for PythonPeer {
+    fn control(
+        &mut self,
+        _kind: usb::ff80::framing::RequestKind,
+        envelope: [u8; 12],
+    ) -> usb::Result<()> {
+        self.no_result("control", &envelope)
+    }
+    fn write(&mut self, data: &[u8]) -> usb::Result<()> {
+        self.no_result("write", data)
+    }
+    fn read(&mut self, maximum: usize) -> usb::Result<Vec<u8>> {
+        Python::attach(|py| {
+            let result = self.inner.call_method1(py, "read", (maximum,))?;
+            Ok(result.bind(py).cast::<PyBytes>()?.as_bytes().to_vec())
+        })
+        .map_err(|error: PyErr| usb::Error::TestPeer(Box::new(error)))
+    }
+    fn endpoint(&self, stage: usb::error::TransferStage) -> Option<u8> {
+        Some(match stage {
+            usb::error::TransferStage::Control(_) => 0,
+            usb::error::TransferStage::BulkIn => self.ep_in,
+            usb::error::TransferStage::BulkOut => self.ep_out,
+        })
+    }
+}
+
+/// Callbacks synchronously advance a virtual camera, never a physical device.
+/// control(envelope: bytes)/write(data: bytes) return None; read(maximum: int)
+/// returns bytes. They must not call back into this session or its readers.
+#[pyfunction]
+#[pyo3(signature=(peer,limits,*,ep_in,ep_out,max_reply_bytes=8388608,trace=None))]
+fn peer_session(
+    py: Python<'_>,
+    peer: Py<PyAny>,
+    limits: FirmwareLimits,
+    ep_in: u8,
+    ep_out: u8,
+    max_reply_bytes: u32,
+    trace: Option<&tracing::Trace>,
+) -> PyResult<Session> {
+    nz(max_reply_bytes)?;
+    if !(0x81..=0x8f).contains(&ep_in) || !(1..=0x0f).contains(&ep_out) {
+        return Err(PyValueError::new_err(
+            "require explicit bulk IN/OUT endpoint addresses",
+        ));
+    }
+    for method in ["control", "write", "read"] {
+        if !peer.bind(py).getattr(method)?.is_callable() {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "virtual USB methods must be callable",
+            ));
+        }
+    }
+    let trace = trace.map(|t| t.inner.clone());
+    let native = py
+        .detach(|| {
+            block_on(usb::testing::peer_session(
+                PythonPeer {
+                    inner: peer,
+                    ep_in,
+                    ep_out,
+                },
+                max_reply_bytes,
+                trace,
+            ))
+        })
+        .map_err(|error| convert_error(py, error))?;
+    Ok(Session {
+        inner: Arc::new(Mutex::new(SessionSlot::Open(native))),
+        limits,
+    })
+}
 pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     let module = PyModule::new(py, "fujimod.usb.testing")?;
     module.add_class::<Exchange>()?;
     module.add_class::<Script>()?;
     module.add_function(wrap_pyfunction!(session, &module)?)?;
+    module.add_function(wrap_pyfunction!(peer_session, &module)?)?;
     Ok(module)
 }

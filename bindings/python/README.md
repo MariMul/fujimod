@@ -109,3 +109,13 @@ transfer counts, and a Unix timestamp. Drain after each operation for complete
 logs, including after an exception or failed session open. The recorder remains
 usable while a range reader owns the session. USB work never invokes Python
 callbacks. Callers choose whether trace loss stops their capture.
+
+Emulator integration tests can use `testing.peer_session(peer, limits, ep_in=...,
+ep_out=...)` instead of a fixed transcript. The peer's `control(envelope: bytes)`
+and `write(data: bytes)` return `None`; `read(maximum: int)` returns bytes. These
+callbacks advance the virtual endpoint model synchronously and must not reenter
+the session or its range readers. Callback errors retain their original Python
+exception and fence the session. All framing, validation and compositions still
+run in Rust; no USB discovery or physical connection is involved. This injection
+path is absent from regular builds. Production USB and trace recording never
+call Python callbacks.

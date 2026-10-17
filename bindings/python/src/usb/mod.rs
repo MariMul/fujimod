@@ -35,6 +35,14 @@ fn nz(n: u32) -> PyResult<NonZeroU32> {
     NonZeroU32::new(n).ok_or_else(|| PyValueError::new_err("length/limit must be nonzero"))
 }
 fn convert_error(py: Python<'_>, error: usb::Error) -> PyErr {
+    #[cfg(feature = "testing")]
+    let error = match error {
+        usb::Error::TestPeer(source) => match source.downcast::<PyErr>() {
+            Ok(error) => return *error,
+            Err(source) => usb::Error::TestPeer(source),
+        },
+        other => other,
+    };
     let message = error.to_string();
     let exception = match &error {
         usb::Error::CompletionUnknown => CompletionUnknownError::new_err(message),

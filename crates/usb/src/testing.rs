@@ -134,3 +134,40 @@ impl Io for Script {
         }
     }
 }
+
+/// Stateful virtual USB endpoint for emulator integration tests. This is
+/// excluded from production builds. Callbacks must not reenter their session.
+/// Framing, validation and uncertain-completion fencing still run in the core.
+pub trait Peer: Send + Sync + 'static {
+    fn control(&mut self, kind: RequestKind, envelope: [u8; 12]) -> Result<()>;
+    fn write(&mut self, data: &[u8]) -> Result<()>;
+    fn read(&mut self, maximum: usize) -> Result<Vec<u8>>;
+    fn endpoint(&self, _stage: TransferStage) -> Option<u8> {
+        None
+    }
+}
+
+/// Open a session against a virtual endpoint without device discovery or nusb.
+pub async fn peer_session(
+    peer: impl Peer,
+    max_reply_bytes: u32,
+    trace: Option<crate::trace::Trace>,
+) -> Result<Session> {
+    Session::from_peer(Model(Box::new(peer)), max_reply_bytes, trace).await
+}
+
+pub(crate) struct Model(pub(crate) Box<dyn Peer>);
+impl Io for Model {
+    fn endpoint(&self, stage: TransferStage) -> Option<u8> {
+        self.0.endpoint(stage)
+    }
+    async fn control(&mut self, kind: RequestKind, envelope: [u8; 12]) -> Result<()> {
+        self.0.control(kind, envelope)
+    }
+    async fn write(&mut self, data: &[u8]) -> Result<()> {
+        self.0.write(data)
+    }
+    async fn read(&mut self, maximum: usize) -> Result<Vec<u8>> {
+        self.0.read(maximum)
+    }
+}

@@ -265,6 +265,8 @@ pub(crate) enum Backend {
     Usb(UsbIo),
     #[cfg(feature = "testing")]
     Replay(crate::testing::Script),
+    #[cfg(feature = "testing")]
+    Model(crate::testing::Model),
 }
 impl Io for Backend {
     fn endpoint(&self, stage: TransferStage) -> Option<u8> {
@@ -272,6 +274,8 @@ impl Io for Backend {
             Self::Usb(io) => io.endpoint(stage),
             #[cfg(feature = "testing")]
             Self::Replay(io) => io.endpoint(stage),
+            #[cfg(feature = "testing")]
+            Self::Model(io) => io.endpoint(stage),
         }
     }
     async fn control(&mut self, kind: RequestKind, envelope: [u8; 12]) -> Result<()> {
@@ -279,6 +283,8 @@ impl Io for Backend {
             Self::Usb(io) => io.control(kind, envelope).await,
             #[cfg(feature = "testing")]
             Self::Replay(io) => io.control(kind, envelope).await,
+            #[cfg(feature = "testing")]
+            Self::Model(io) => io.control(kind, envelope).await,
         }
     }
     async fn write(&mut self, bytes: &[u8]) -> Result<()> {
@@ -286,6 +292,8 @@ impl Io for Backend {
             Self::Usb(io) => io.write(bytes).await,
             #[cfg(feature = "testing")]
             Self::Replay(io) => io.write(bytes).await,
+            #[cfg(feature = "testing")]
+            Self::Model(io) => io.write(bytes).await,
         }
     }
     async fn read(&mut self, maximum: usize) -> Result<Vec<u8>> {
@@ -293,6 +301,8 @@ impl Io for Backend {
             Self::Usb(io) => io.read(maximum).await,
             #[cfg(feature = "testing")]
             Self::Replay(io) => io.read(maximum).await,
+            #[cfg(feature = "testing")]
+            Self::Model(io) => io.read(maximum).await,
         }
     }
 }
