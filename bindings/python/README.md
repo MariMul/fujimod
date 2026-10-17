@@ -132,3 +132,18 @@ The final four bytes remain opaque and do not certify application completion.
 metadata with `byte_length` and `raw`. It does not download or parse the table.
 Call `read_data(0, byte_length)` separately when the length is nonzero and within
 the chosen host budget; interpret those bytes using the selected firmware.
+
+`session.firmware_download_status()` reads firmware application state once.
+`session.clear_firmware_download_status()` is a separate mutating command. Their
+`FirmwareDownloadReply` exposes a `FirmwareDownloadState` enum, `failure_code`
+when known, and exact `text`/`raw` fields. Writing does not trigger polling.
+Clearing a status field does not stop an active firmware write.
+
+Unclassified ff80 requests use `fujimod.usb.research`: construct
+`Request(CommandCode(value), body, reply_capacity=...)`, then call
+`session.research_command(request)`. The body starts after the 16-byte common
+header and needs at least 16 bytes. The reply exposes typed status, primary and
+secondary values, a distinct command identifier, body and raw bytes. Only the
+common header is validated; the selected firmware supplies other semantics.
+There is no implicit padding, polling, data transfer, retry or cleanup. The
+[command catalogue](../../crates/usb/PROTOCOL.md) describes effects and limits.

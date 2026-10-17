@@ -129,3 +129,15 @@ is not fixed to one body's table size. The library preserves metadata fields
 without treating the table as host timeouts or inferring firmware-specific
 record meanings. A nonzero device status is a completed `DeviceStatus` error;
 a malformed header fences the session.
+
+The [service command catalogue](PROTOCOL.md) lists direct APIs, their effects,
+and unclassified operations. `firmware_download_status()` reads state once;
+`clear_firmware_download_status()` explicitly mutates it. Both retain text and
+raw bytes alongside a `FirmwareDownloadState` enum. Writing is application
+state, never an implicit instruction to poll, wait or retry.
+
+Use `ff80::commands::research::{CommandCode, Request}` and
+`Session::research_command` for unclassified requests. The explicit reply
+capacity is checked before sending. The result validates the common header,
+preserves raw status/body bytes and performs no command-specific interpretation.
+It is distinct from App80's one-byte identifier and mailbox codec.

@@ -309,6 +309,49 @@ impl LogReply {
     }
 }
 
+#[pyclass(module = "fujimod.usb", eq, from_py_object)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum FirmwareDownloadState {
+    Normal,
+    Writing,
+    Success,
+    Failed,
+    Unknown,
+}
+
+#[pyclass(frozen, module = "fujimod.usb")]
+struct FirmwareDownloadReply {
+    inner: info::FirmwareDownloadReply,
+}
+#[pymethods]
+impl FirmwareDownloadReply {
+    #[getter]
+    fn state(&self) -> FirmwareDownloadState {
+        match self.inner.state {
+            info::FirmwareDownloadState::Normal => FirmwareDownloadState::Normal,
+            info::FirmwareDownloadState::Writing => FirmwareDownloadState::Writing,
+            info::FirmwareDownloadState::Success => FirmwareDownloadState::Success,
+            info::FirmwareDownloadState::Failed { .. } => FirmwareDownloadState::Failed,
+            info::FirmwareDownloadState::Unknown(_) => FirmwareDownloadState::Unknown,
+        }
+    }
+    #[getter]
+    fn failure_code(&self) -> Option<u8> {
+        match self.inner.state {
+            info::FirmwareDownloadState::Failed { code } => Some(code),
+            _ => None,
+        }
+    }
+    #[getter]
+    fn text(&self) -> &str {
+        &self.inner.text
+    }
+    #[getter]
+    fn raw<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.inner.raw)
+    }
+}
+
 #[pyclass(frozen, module = "fujimod.usb")]
 struct CapabilitiesReply {
     inner: capabilities::CapabilitiesReply,
@@ -668,6 +711,22 @@ impl Session {
         self.with(py, |s| block_on(s.diagnostic_query(tag.inner)))
             .map(|inner| DiagnosticReply { inner })
     }
+    fn firmware_download_status(&self, py: Python<'_>) -> PyResult<FirmwareDownloadReply> {
+        self.with(py, |s| block_on(s.firmware_download_status()))
+            .map(|inner| FirmwareDownloadReply { inner })
+    }
+    fn clear_firmware_download_status(&self, py: Python<'_>) -> PyResult<FirmwareDownloadReply> {
+        self.with(py, |s| block_on(s.clear_firmware_download_status()))
+            .map(|inner| FirmwareDownloadReply { inner })
+    }
+    fn research_command(
+        &self,
+        py: Python<'_>,
+        request: &research::Request,
+    ) -> PyResult<research::Reply> {
+        self.with(py, |s| block_on(s.research_command(&request.inner)))
+            .map(|inner| research::Reply { inner })
+    }
     fn prepare_capabilities(&self, py: Python<'_>) -> PyResult<CapabilitiesReply> {
         self.with(py, |s| block_on(s.prepare_capabilities()))
             .map(|inner| CapabilitiesReply { inner })
@@ -785,6 +844,8 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     usb.add_class::<Device>()?;
     usb.add_class::<DiagnosticReply>()?;
     usb.add_class::<CapabilitiesReply>()?;
+    usb.add_class::<FirmwareDownloadState>()?;
+    usb.add_class::<FirmwareDownloadReply>()?;
     usb.add_class::<DiagnosticTag>()?;
     usb.add_class::<LogReply>()?;
     usb.add_class::<ConsoleReply>()?;
@@ -800,6 +861,8 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     usb.add("ClosedSessionError", py.get_type::<ClosedSessionError>())?;
     usb.add("SessionBusyError", py.get_type::<SessionBusyError>())?;
     blocking.add("__path__", PyList::empty(py))?;
+    let research = research::module(py)?;
+    usb.add_submodule(&research)?;
     let tracing = tracing::module(py)?;
     usb.add_submodule(&tracing)?;
     let app80 = app80::types_module(py)?;
@@ -822,6 +885,7 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
         .getattr("modules")?
         .cast_into::<PyDict>()?;
     modules.set_item("fujimod.usb", &usb)?;
+    modules.set_item("fujimod.usb.research", &research)?;
     modules.set_item("fujimod.usb.tracing", &tracing)?;
     modules.set_item("fujimod.usb.app80", &app80)?;
     modules.set_item("fujimod.usb.blocking.app80", &app80_blocking)?;
@@ -841,6 +905,7 @@ mod app80;
 mod data;
 mod memory;
 mod range;
+mod research;
 mod tracing;
 
 #[cfg(feature = "testing")]

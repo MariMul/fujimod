@@ -427,3 +427,107 @@ fn capabilities_checks_metadata_budget_before_sending() {
     assert_eq!(core.state, SessionState::Ready);
     assert!(steps.borrow().is_empty());
 }
+
+#[test]
+fn download_state_is_read_once_and_only_explicit_clear_mutates_status() {
+    use crate::ff80::commands::info::{DownloadStatusAction, FirmwareDownloadState};
+    fn reply(text: &str) -> Vec<u8> {
+        let mut bytes = vec![0; 16];
+        bytes[..4].copy_from_slice(&0x150000u32.to_le_bytes());
+        for word in text.encode_utf16().chain([0]) {
+            bytes.extend_from_slice(&word.to_le_bytes());
+        }
+        bytes
+    }
+    let mut script = command_steps(
+        DownloadStatusAction::Read.encode(),
+        128,
+        Ok(reply("WRITING")),
+    );
+    script.extend(command_steps(
+        DownloadStatusAction::Clear.encode(),
+        128,
+        Ok(reply("NORMAL")),
+    ));
+    let (mut core, steps) = opened(script);
+    assert_eq!(
+        block_on(core.download_status(DownloadStatusAction::Read))
+            .unwrap()
+            .state,
+        FirmwareDownloadState::Writing
+    );
+    assert_eq!(core.state, SessionState::Ready);
+    assert_eq!(steps.borrow().len(), 4);
+    assert_eq!(
+        block_on(core.download_status(DownloadStatusAction::Clear))
+            .unwrap()
+            .state,
+        FirmwareDownloadState::Normal
+    );
+    assert_eq!(core.state, SessionState::Ready);
+    assert!(steps.borrow().is_empty());
+}
+
+#[test]
+fn research_statuses_do_not_drive_wait_retry_or_cleanup() {
+    use crate::ff80::commands::{
+        diagnostic::CommandStatus,
+        research::{CommandCode, Request},
+    };
+    let request = Request::new(CommandCode(0x1a0001), vec![0; 16], nz(32)).unwrap();
+    let mut reply = request.encode();
+    reply[4..8].copy_from_slice(&1u32.to_le_bytes());
+    reply[8..12].copy_from_slice(&0xffffu32.to_le_bytes());
+    let (mut core, steps) = opened(command_steps(request.encode(), 32, Ok(reply)));
+    assert_eq!(
+        block_on(core.research_command(&request)).unwrap().status,
+        CommandStatus::DeviceError {
+            primary: 1,
+            secondary: 0xffff
+        }
+    );
+    assert_eq!(core.state, SessionState::Ready);
+    assert!(steps.borrow().is_empty());
+}
+
+#[test]
+fn cancelled_research_exchange_owns_the_unfinished_reply() {
+    use crate::ff80::commands::research::{CommandCode, Request};
+    let request = Request::new(CommandCode(0x1a0001), vec![0; 16], nz(32)).unwrap();
+    let mut script = command_steps(request.encode(), 32, Ok(vec![]));
+    *script.last_mut().unwrap() = Step::PendingRead;
+    let (mut core, steps) = opened(script);
+    assert!(block_on(poll_once(core.research_command(&request))).is_none());
+    assert_eq!(core.state, SessionState::CompletionUnknown);
+    assert!(matches!(
+        block_on(core.ping()),
+        Err(Error::CompletionUnknown)
+    ));
+    assert!(steps.borrow().is_empty());
+}
+
+#[test]
+fn research_budget_is_checked_before_sending_and_bad_echo_fences() {
+    use crate::ff80::commands::research::{CommandCode, Request};
+    let request = Request::new(CommandCode(0x1a0001), vec![0; 16], nz(32)).unwrap();
+    let (mut core, steps) = opened(vec![]);
+    core.max_reply_bytes = 31;
+    assert!(matches!(
+        block_on(core.research_command(&request)),
+        Err(Error::LengthLimit {
+            requested: 32,
+            limit: 31
+        })
+    ));
+    assert_eq!(core.state, SessionState::Ready);
+    assert!(steps.borrow().is_empty());
+    let mut reply = request.encode();
+    reply[0] ^= 1;
+    let (mut core, steps) = opened(command_steps(request.encode(), 32, Ok(reply)));
+    assert!(matches!(
+        block_on(core.research_command(&request)),
+        Err(Error::Protocol(_))
+    ));
+    assert_eq!(core.state, SessionState::CompletionUnknown);
+    assert!(steps.borrow().is_empty());
+}

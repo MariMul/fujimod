@@ -5,11 +5,32 @@ use super::super::commands::{
     },
     debug::{self, ConsoleCommand, ConsoleReply, DebugEvent, LogReply},
     diagnostic::{self, DataReadMode, DataWriteMode, DiagnosticReply, DiagnosticTag},
+    info::{DownloadStatusAction, FirmwareDownloadReply},
+    research,
 };
 use super::*;
 use crate::ff80::framing::data_envelope;
 
 impl Session {
+    /// One unclassified command, with only common-header validation. This never
+    /// retries, waits on application fields, downloads data or sends cleanup.
+    pub async fn research_command(
+        &mut self,
+        request: &research::Request,
+    ) -> Result<research::Reply> {
+        self.core.research_command(request).await
+    }
+
+    /// Read application download state once. Does not wait for `Writing` to end.
+    pub async fn firmware_download_status(&mut self) -> Result<FirmwareDownloadReply> {
+        self.core.download_status(DownloadStatusAction::Read).await
+    }
+    /// Clear the firmware's download-status field. This is a mutating command,
+    /// separate from identification and from reading download state.
+    pub async fn clear_firmware_download_status(&mut self) -> Result<FirmwareDownloadReply> {
+        self.core.download_status(DownloadStatusAction::Clear).await
+    }
+
     /// Select capability data and report its size. No E1 or E8 is sent.
     /// Decode the downloaded table using the selected firmware's definition.
     pub async fn prepare_capabilities(&mut self) -> Result<CapabilitiesReply> {
@@ -63,11 +84,32 @@ impl Session {
     pub async fn poll_console(&mut self, capacity: NonZeroU32) -> Result<ConsoleReply> {
         self.core.poll_console(capacity).await
     }
+    /// Retrieve up to `capacity` log bytes. Treat as consuming: firmware may
+    /// advance its cursor and clear overrun state. This is not an observational
+    /// RAM read or a safely repeatable retry.
     pub async fn read_log(&mut self, capacity: NonZeroU32) -> Result<LogReply> {
         self.core.read_log(capacity).await
     }
 }
 impl<I: Io> Core<I> {
+    pub(super) async fn research_command(
+        &mut self,
+        request: &research::Request,
+    ) -> Result<research::Reply> {
+        self.command(request.encode(), request.reply_capacity().get(), |r| {
+            request.decode(r)
+        })
+        .await
+    }
+
+    pub(super) async fn download_status(
+        &mut self,
+        action: DownloadStatusAction,
+    ) -> Result<FirmwareDownloadReply> {
+        self.command(action.encode(), 128, |r| action.decode(r))
+            .await
+    }
+
     pub(super) async fn prepare_capabilities(&mut self) -> Result<CapabilitiesReply> {
         self.command(capabilities::request(), 32, capabilities::decode)
             .await

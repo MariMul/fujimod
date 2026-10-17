@@ -5,6 +5,7 @@ pub mod debug;
 pub mod diagnostic;
 pub mod info;
 pub mod memory;
+pub mod research;
 
 use crate::{Error, Result, error::ProtocolError};
 
