@@ -1,6 +1,12 @@
+export interface RotaryGesture {
+  step: (direction: number) => void;
+  preview: (fraction: number) => void;
+  finish: () => void;
+}
+
 /** A captured pointer belongs to its starting dial until release/cancel. */
 export class RotaryDrag {
-  private active?: { pointer: number; x: number; y: number; axis?: 'x' | 'y'; remainder: number; step: (direction: number) => void };
+  private active?: { pointer: number; x: number; y: number; axis?: 'x' | 'y'; remainder: number; gesture: RotaryGesture };
   private swallowed = new Set<number>();
   private enabled = true;
   readonly pixelsPerDetent = 16;
@@ -19,15 +25,16 @@ export class RotaryDrag {
   private consume(event: PointerEvent) { event.preventDefault(); event.stopImmediatePropagation(); }
 
   /** Called in capture, before OrbitControls sees the down event. */
-  begin(event: PointerEvent, step?: (direction: number) => void): boolean {
+  begin(event: PointerEvent, gesture?: RotaryGesture): boolean {
     if (this.active) {
       // A second finger cannot transfer a dial gesture into a pinch/orbit.
       this.swallowed.add(event.pointerId); this.consume(event);
       this.canvas.setPointerCapture(event.pointerId); return true;
     }
-    if (!step || event.button !== 0) return false;
+    if (!gesture || event.button !== 0) return false;
     this.consume(event); this.orbit(false);
-    this.active = { pointer: event.pointerId, x: event.clientX, y: event.clientY, remainder: 0, step: direction => { if (this.enabled) step(direction); } };
+    this.active = { pointer: event.pointerId, x: event.clientX, y: event.clientY, remainder: 0, gesture };
+    if (this.enabled) gesture.preview(0);
     this.canvas.setPointerCapture(event.pointerId); return true;
   }
 
@@ -47,7 +54,10 @@ export class RotaryDrag {
     active.x = event.clientX; active.y = event.clientY;
     const steps = Math.trunc(active.remainder / this.pixelsPerDetent);
     active.remainder -= steps * this.pixelsPerDetent;
-    for (let i = 0; i < Math.abs(steps); i++) active.step(Math.sign(steps));
+    if (this.enabled) {
+      for (let i = 0; i < Math.abs(steps); i++) active.gesture.step(Math.sign(steps));
+      active.gesture.preview(active.remainder / this.pixelsPerDetent);
+    }
   }
 
   private end(event: PointerEvent) {
@@ -57,8 +67,10 @@ export class RotaryDrag {
   }
 
   cancel() {
-    const pointer = this.active?.pointer;
+    const active = this.active;
+    const pointer = active?.pointer;
     this.active = undefined;
+    active?.gesture.finish();
     if (pointer !== undefined && this.canvas.hasPointerCapture(pointer)) this.canvas.releasePointerCapture(pointer);
     // Keep secondary pointers swallowed until their own release.
     this.orbit(true);

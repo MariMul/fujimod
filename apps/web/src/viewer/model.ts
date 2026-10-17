@@ -176,7 +176,18 @@ export class ModelViewer {
               this.leaderSignature = "";
             }
           : undefined;
-        if (this.rotaryDrag.begin(event, turn)) {
+        const gesture = rotary && turn ? {
+          step: turn,
+          preview: (fraction: number) => {
+            rotary.part.preview(fraction);
+            this.dirty = this.leadersDirty = true;
+          },
+          finish: () => {
+            rotary.part.settle();
+            this.dirty = this.leadersDirty = true;
+          },
+        } : undefined;
+        if (this.rotaryDrag.begin(event, gesture)) {
           if (rotary) {
             this.detent.beginGesture(event);
             this.onHover?.(hit!.id);

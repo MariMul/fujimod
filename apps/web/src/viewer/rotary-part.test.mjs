@@ -29,3 +29,19 @@ test('exported body-origin meshes turn about their own center, with visible trav
   part.turn(-1); part.advance(start + 300);
   assert(part.pivot.quaternion.angleTo(initial) < 1e-7);
 });
+
+test('a held dial follows fractional motion without animation toward a detent', () => {
+  const root = new THREE.Group(), target = new THREE.Group(); root.add(target);
+  const part = new RotaryPart(target, new THREE.Box3(new THREE.Vector3(-1, -.1, -1), new THREE.Vector3(1, .1, 1)));
+  const origin = part.pivot.quaternion.clone();
+  for (const fraction of [.25, .5, .75]) {
+    part.preview(fraction);
+    assert(Math.abs(part.pivot.quaternion.angleTo(origin) - fraction * Math.PI / 12) < 1e-7);
+    assert.equal(part.advance(performance.now() + 1000), false);
+  }
+  part.turn(1); part.preview(.25);
+  assert(Math.abs(part.pivot.quaternion.angleTo(origin) - 1.25 * Math.PI / 12) < 1e-7);
+  const release = performance.now(); part.settle();
+  part.advance(release + 100);
+  assert(Math.abs(part.pivot.quaternion.angleTo(origin) - Math.PI / 12) < 1e-7);
+});

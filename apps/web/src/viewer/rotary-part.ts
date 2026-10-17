@@ -7,6 +7,7 @@ export class RotaryPart {
   private angle = 0;
   private destination = 0;
   private updatedAt = 0;
+  private dragging = false;
   constructor(readonly target: THREE.Object3D, bounds: THREE.Box3, labels: THREE.Object3D[] = []) {
     const extent = bounds.getSize(new THREE.Vector3()).toArray();
     const axisIndex = extent.indexOf(Math.min(...extent));
@@ -21,15 +22,27 @@ export class RotaryPart {
     if (this.angle === this.destination) this.updatedAt = performance.now();
     this.destination += direction * Math.PI / 12;
   }
+  preview(fraction: number) {
+    this.dragging = true;
+    this.angle = this.destination + fraction * Math.PI / 12;
+    this.applyAngle();
+  }
+  settle() {
+    this.dragging = false;
+    this.updatedAt = performance.now();
+  }
+  private applyAngle() {
+    this.pivot.quaternion.setFromAxisAngle(this.axis, this.angle);
+    this.pivot.updateWorldMatrix(false, true);
+  }
   /** Travel between detents makes even an unmarked, knurled ring readable. */
   advance(now: number): boolean {
-    if (this.angle === this.destination) return false;
+    if (this.dragging || this.angle === this.destination) return false;
     const remaining = this.destination - this.angle;
     const travel = Math.max(0, now - this.updatedAt) * (Math.PI / 12) / 60;
     this.updatedAt = now;
     this.angle = Math.abs(remaining) <= travel ? this.destination : this.angle + Math.sign(remaining) * travel;
-    this.pivot.quaternion.setFromAxisAngle(this.axis, this.angle);
-    this.pivot.updateWorldMatrix(false, true);
+    this.applyAngle();
     return true;
   }
 }

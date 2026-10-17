@@ -6,3 +6,4 @@ _site/
 public/artifacts/
 public/runtime/
 .env.local
+build/

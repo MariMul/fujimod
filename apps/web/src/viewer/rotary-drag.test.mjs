@@ -18,9 +18,10 @@ function pointer(type, x, y, id = 1) {
 }
 function setup() {
   globalThis.window = new EventTarget(); globalThis.document = new EventTarget();
-  const canvas = new Canvas(), changes = [], orbit = [];
+  const canvas = new Canvas(), changes = [], orbit = [], previews = [], finishes = [];
   const drag = new RotaryDrag(canvas, enabled => orbit.push(enabled));
-  return { canvas, changes, orbit, drag, start(x = 0, y = 0) { return drag.begin(pointer('pointerdown', x, y), n => changes.push(n)); } };
+  const gesture = { step: n => changes.push(n), preview: n => previews.push(n), finish: () => finishes.push(true) };
+  return { canvas, changes, orbit, drag, previews, finishes, gesture, start(x = 0, y = 0) { return drag.begin(pointer('pointerdown', x, y), gesture); } };
 }
 test('dial consumes every detent, preserves remainder and reverses; a tap has no step', () => {
   const s = setup(); s.start();
@@ -55,10 +56,25 @@ test('empty-space touch is left to orbit; disable and blur stop a drag', () => {
   s.start(); s.drag.setEnabled(false);
   s.canvas.dispatchEvent(pointer('pointermove', 90, 0)); assert.deepEqual(s.changes, []);
   const disabled = pointer('pointerdown', 0, 0);
-  assert.equal(s.drag.begin(disabled, n => s.changes.push(n)), true);
+  assert.equal(s.drag.begin(disabled, s.gesture), true);
   assert.equal(disabled.defaultPrevented, true);
   s.canvas.dispatchEvent(pointer('pointermove', 90, 0)); assert.deepEqual(s.changes, []);
   s.drag.setEnabled(false);
   s.drag.setEnabled(true); s.start(); window.dispatchEvent(new Event('blur'));
   assert.equal(s.drag.dragging, false); assert.equal(s.canvas.captured.size, 0);
+});
+
+test('visual travel follows sub-detent motion and only settles when released', () => {
+  const s = setup(); s.start();
+  for (const x of [4, 8, 12]) s.canvas.dispatchEvent(pointer('pointermove', x, 0));
+  assert.deepEqual(s.changes, []);
+  assert.deepEqual(s.previews, [0, .25, .5, .75]);
+  s.canvas.dispatchEvent(pointer('pointermove', 20, 0));
+  assert.deepEqual(s.changes, [1]);
+  assert.equal(s.previews.at(-1), .25);
+  assert.deepEqual(s.finishes, []);
+  s.canvas.dispatchEvent(pointer('pointerup', 20, 0));
+  assert.deepEqual(s.finishes, [true]);
+  s.start(); window.dispatchEvent(new Event('blur'));
+  assert.equal(s.finishes.length, 2);
 });

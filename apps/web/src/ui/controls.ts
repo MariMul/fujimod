@@ -16,6 +16,7 @@ export class InputPanel {
   private powerID?: string;
   private stopShutter?: (release?: boolean) => void;
   private stopRotation?: () => void;
+  private rotation?: { dial: HTMLElement; fraction: number };
   private pulseQueue: Promise<unknown> = Promise.resolve();
   private observers: ResizeObserver[] = [];
   constructor(
@@ -218,36 +219,55 @@ export class InputPanel {
       const values = document.createElement("div");
       values.className = "vals";
       dial.append(values);
+      const positions = this.inputs.get(id)?.positions ?? [];
+      const labels: HTMLElement[] = [];
+      for (const position of positions) {
+        const value = document.createElement("span");
+        value.dataset.value = position.id;
+        value.textContent = node.labels?.[position.id] ?? position.label;
+        values.append(value);
+        labels.push(value);
+      }
+      let pending = false;
+      const selectedIndex = () => Math.max(
+        0, positions.findIndex((p) => p.id === this.positions.get(id)),
+      );
       const update = () => {
         if (node.variant === "ticks") return;
-        values.replaceChildren();
-        const positions = this.inputs.get(id)?.positions ?? [];
-        for (const position of positions) {
-          const value = document.createElement("span");
-          value.dataset.value = position.id;
-          value.textContent = node.labels?.[position.id] ?? position.label;
-          value.classList.toggle("on", position.id === this.positions.get(id));
-          values.append(value);
-        }
-        dial.setAttribute(
-          "aria-valuenow",
-          String(
-            Math.max(
-              0,
-              positions.findIndex((p) => p.id === this.positions.get(id)),
-            ),
-          ),
-        );
+        for (const value of labels)
+          value.classList.toggle("on", value.dataset.value === this.positions.get(id));
+        dial.setAttribute("aria-valuenow", String(selectedIndex()));
         dial.setAttribute("aria-valuemin", "0");
         dial.setAttribute(
-          "aria-valuemax",
-          String(Math.max(0, positions.length - 1)),
+          "aria-valuemax", String(Math.max(0, positions.length - 1)),
         );
         dial.setAttribute("aria-valuetext", this.positions.get(id) ?? "");
+        if (pending) return;
+        pending = true;
         requestAnimationFrame(() => {
-          const on = values.querySelector<HTMLElement>(".on");
-          if (on)
-            values.style.transform = `translateX(${dial.clientWidth / 2 - on.offsetLeft - on.offsetWidth / 2}px)`;
+          pending = false;
+          if (!dial.isConnected) return;
+          // Reserve each label's selected width so changing the selected face
+          // cannot reflow the strip underneath a captured pointer.
+          for (const value of labels) {
+            if (!value.style.width) {
+              const selected = value.classList.contains("on");
+              value.classList.add("on");
+              value.style.width = `${value.offsetWidth}px`;
+              value.style.flexShrink = "0";
+              value.classList.toggle("on", selected);
+            }
+          }
+          const index = selectedIndex();
+          const fraction = this.rotation?.dial === dial ? this.rotation.fraction : 0;
+          const visual = Math.max(0, Math.min(positions.length - 1, index + fraction));
+          const left = labels[Math.floor(visual)];
+          const right = labels[Math.ceil(visual)];
+          if (left && right) {
+            const center = (item: HTMLElement) => item.offsetLeft + item.offsetWidth / 2;
+            const offset = center(left) + (center(right) - center(left)) * (visual % 1);
+            values.style.transform = `translateX(${dial.clientWidth / 2 - offset}px)`;
+          }
         });
       };
       this.renders.set(id, update);
@@ -529,20 +549,35 @@ export class InputPanel {
     this.viewer.highlight(ids);
   }
   private rotate(id: string, dial: HTMLElement, event: PointerEvent) {
-    if (!this.ready || !this.powered || !this.inputs.get(id)?.supported) return;
+    if (
+      event.button !== 0 || !this.ready || !this.powered ||
+      !this.inputs.get(id)?.supported
+    ) return;
+    if (this.stopRotation) return;
     event.preventDefault();
     dial.setPointerCapture(event.pointerId);
     this.viewer.setOrbit(false);
+    const values = dial.querySelector<HTMLElement>(".vals")!;
+    const ticks = dial.classList.contains("ticks");
+    const initialTicks = parseFloat(values.style.backgroundPositionX) || 0;
+    const rotation = { dial, fraction: 0 };
+    this.rotation = rotation;
+    values.style.transition = "none";
     let previous = event.clientX;
+    let remainder = 0;
+    let tickPosition = initialTicks;
     const move = (next: PointerEvent) => {
       if (next.pointerId !== event.pointerId) return;
-      const delta = next.clientX - previous,
-        steps = Math.trunc(delta / 16);
-      for (let n = 0; n < Math.abs(steps); n++) this.step(id, Math.sign(steps));
-      previous += steps * 16;
-      if (dial.classList.contains("ticks"))
-        dial.querySelector<HTMLElement>(".vals")!.style.backgroundPositionX =
-          `${next.clientX - event.clientX}px`;
+      remainder += next.clientX - previous;
+      previous = next.clientX;
+      const steps = Math.trunc(remainder / 16);
+      remainder -= steps * 16;
+      for (let n = 0; n < Math.abs(steps); n++) {
+        if (this.step(id, Math.sign(steps))) tickPosition += Math.sign(steps) * 16;
+      }
+      rotation.fraction = remainder / 16;
+      if (ticks) values.style.backgroundPositionX = `${tickPosition + remainder}px`;
+      else this.renders.get(id)?.();
     };
     const end = (up: PointerEvent) => {
       if (up.pointerId === event.pointerId) cleanup();
@@ -551,6 +586,14 @@ export class InputPanel {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", end);
       window.removeEventListener("pointercancel", end);
+      dial.removeEventListener("lostpointercapture", end);
+      this.rotation = undefined;
+      values.style.transition = ticks
+        ? "background-position-x 140ms ease-out"
+        : "transform 140ms ease-out";
+      if (ticks) values.style.backgroundPositionX = `${tickPosition}px`;
+      else this.renders.get(id)?.();
+      if (dial.hasPointerCapture(event.pointerId)) dial.releasePointerCapture(event.pointerId);
       this.viewer.setOrbit(true);
       this.stopRotation = undefined;
     };
@@ -558,6 +601,7 @@ export class InputPanel {
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", end);
     window.addEventListener("pointercancel", end);
+    dial.addEventListener("lostpointercapture", end);
   }
   private modelDown(hit: ModelHit, event: PointerEvent) {
     const input = this.inputs.get(hit.id);
