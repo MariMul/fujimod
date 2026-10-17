@@ -6,6 +6,18 @@ rust = { version = "1.99.1", profile = "minimal", components = ["rustfmt", "clip
 dir = "{{config_root}}/apps/web"
 run = "npm run build"
 
+[tasks.web-check]
+dir = "{{config_root}}/apps/web"
+run = "npm run check"
+
+[tasks.web-lint]
+dir = "{{config_root}}/apps/web"
+run = "npm run lint"
+
+[tasks.web-format]
+dir = "{{config_root}}/apps/web"
+run = "npm run format"
+
 [tasks.web-test]
 dir = "{{config_root}}/apps/web"
 run = "npm test"

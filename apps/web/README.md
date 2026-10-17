@@ -9,7 +9,9 @@ on review branches; the Pages workflow deploys approved main builds only.
 
 ## Camera viewer
 
-The Vite + TypeScript web app uses three.js from npm, with no UI framework. Drop a
+The TypeScript web app uses SolidJS for new UI and three.js for the camera viewer.
+Vite Plus provides the development server, builds, Oxlint, Oxfmt and Vitest.
+The existing imperative UI will move to Solid components incrementally. Drop a
 DAT anywhere on the viewer, or choose it there. The whole-file SHA-256 selects
 `public/catalog.json`: firmware ID, body, model, optional engine artifact and
 optional 3D model. Unrecognized files stay on the neutral camera silhouette;
@@ -70,7 +72,8 @@ local configured DAT, or opens the DAT chooser on the public web app.
 
 ### Develop
 
-Use Node 22.18 or later, `git lfs install --local`, `git lfs pull`, then:
+Use the Node version in the repository's `mise.toml` (`mise install`),
+`git lfs install --local`, `git lfs pull`, then:
 
 ```sh
 npm ci
@@ -95,11 +98,30 @@ the viewer remains a DAT drop target. Public builds omit the automatic DAT fetch
 opt-in mount and is never copied into any build artifact.
 
 ```sh
-npm test
+npm run check  # lint, Solid reactivity rules and TypeScript checks
+npm test       # Vitest through Vite Plus, including TSX/DOM tests
 npm run build
 PLAYWRIGHT_BROWSERS_PATH=/path/to/browsers python tests/browser.py \
   --output /fresh/ignored/proof --expected /path/to/private/sd-card
 ```
+
+`npm run test:watch` runs tests interactively. Tests stay alongside their
+implementation; use `.test.tsx` and `// @vitest-environment jsdom` for Solid DOM
+tests, and import test APIs from `vite-plus/test`. Other tests run in isolated
+Node processes. The existing Python browser checks remain integration gates.
+
+`npm run format -- src/path/to/file.tsx` formats selected files with Oxfmt.
+`npm run format:check` checks formatting across the app. The ordinary check
+command runs lint and types without requiring a formatting sweep of existing
+source. `npm run lint` runs Oxlint independently. From the repository root,
+`mise run web-check`, `web-lint`, `web-format` and `web-test` run the same tools.
+
+Solid's [official documentation](https://docs.solidjs.com/) and
+[agent-readable index](https://docs.solidjs.com/llms.txt) are the reference for
+Solid 1.x. `npm run docs:solid` downloads that index and the core reactivity,
+component, TypeScript and testing guides into ignored `build/docs/solidjs/`.
+Rerun it to refresh the local copies. The installed docs cover the stable 1.x
+APIs; the index also links to 2.0 docs.
 
 The browser check boots the real local DAT on desktop Chromium and WebKit's
 iPhone 13 emulation, checks live frames and a menu tap, saves page/model/LCD
@@ -203,6 +225,10 @@ Check early faults and repeated Undo against a Vite development
 server with `python tests/undo.py --url http://127.0.0.1:5191/ --output /fresh/ignored/undo-proof`.
 
 ### Release artifacts and deployment
+
+The Web checks workflow runs lint, type checks, tests and the public build on
+web changes in pull requests and on main. It does not deploy. The release
+workflow repeats those checks before publishing Pages.
 
 `npm run prepare:release` fetches a release index and verifies patches. Optional
 `browser.json` supplies a hash/size inventory of generated runtime artifacts and

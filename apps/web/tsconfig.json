@@ -8,22 +8,12 @@
     "resolveJsonModule": true,
     "allowJs": true,
     "checkJs": false,
-    "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable",
-      "WebWorker"
-    ],
-    "types": [
-      "vite/client",
-      "node"
-    ],
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+    "types": ["vite/client", "node"],
     "noEmit": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js"
   },
-  "include": [
-    "src",
-    "devices",
-    "vite.config.ts"
-  ]
+  "include": ["src", "devices", "vite.config.ts"]
 }

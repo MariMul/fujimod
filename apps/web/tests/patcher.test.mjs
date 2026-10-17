@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vite-plus/test';
 import assert from 'node:assert/strict';
 import { patch, sha256, inspectPatch } from '../src/patch/patcher.ts';
 import { validateIndex } from '../src/patch/catalog.ts';

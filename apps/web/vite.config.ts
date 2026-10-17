@@ -1,4 +1,6 @@
-import { defineConfig, loadEnv, type Plugin, type Connect } from 'vite';
+import { defineConfig } from 'vite-plus';
+import { loadEnv, type Plugin, type Connect } from 'vite';
+import solid from 'vite-plugin-solid';
 import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync } from 'node:fs';
 import { createGzip } from 'node:zlib';
@@ -23,36 +25,129 @@ function localArtifacts(env: Record<string, string>): Plugin {
       if (!mount) return next();
       const [prefix, root] = mount;
       let relative: string;
-      try { relative = decodeURIComponent(url.slice(prefix.length)); }
-      catch { res.statusCode = 400; res.end(); return; }
-      if (prefix === '/runtime/' && !/^(catalog\.json|[a-zA-Z0-9_-]+\/(pyodide\/[a-zA-Z0-9_.-]+|sources\.zip|_native\.so|inputs\.json|firmware-inputs\.zip))$/.test(relative)) {
-        res.statusCode = 404; res.end(); return;
+      try {
+        relative = decodeURIComponent(url.slice(prefix.length));
+      } catch {
+        res.statusCode = 400;
+        res.end();
+        return;
+      }
+      if (
+        prefix === '/runtime/' &&
+        !/^(catalog\.json|[a-zA-Z0-9_-]+\/(pyodide\/[a-zA-Z0-9_.-]+|sources\.zip|_native\.so|inputs\.json|firmware-inputs\.zip))$/.test(
+          relative,
+        )
+      ) {
+        res.statusCode = 404;
+        res.end();
+        return;
       }
       const path = relative ? resolve(root, relative) : resolve(root);
-      if (relative && !path.startsWith(resolve(root) + sep)) { res.statusCode = 403; res.end(); return; }
+      if (relative && !path.startsWith(resolve(root) + sep)) {
+        res.statusCode = 403;
+        res.end();
+        return;
+      }
       try {
         const info = await stat(path);
         if (!info.isFile()) throw Error('not a file');
-        const gzip = /\bgzip\b/.test(` ${req.headers['accept-encoding'] || ''}`) && info.size > 65536 && /\.(dat|so|wasm|mjs|js)$/i.test(path);
+        const gzip =
+          /\bgzip\b/.test(` ${req.headers['accept-encoding'] || ''}`) &&
+          info.size > 65536 &&
+          /\.(dat|so|wasm|mjs|js)$/i.test(path);
         const etag = `"${info.size.toString(16)}-${info.mtimeMs.toString(16)}${gzip ? '-gzip' : ''}"`;
         res.setHeader('Vary', 'Accept-Encoding');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('ETag', etag);
-        if (req.headers['if-none-match'] === etag) { res.statusCode = 304; res.end(); return; }
+        if (req.headers['if-none-match'] === etag) {
+          res.statusCode = 304;
+          res.end();
+          return;
+        }
         if (gzip) res.setHeader('Content-Encoding', 'gzip');
         else res.setHeader('Content-Length', info.size);
-        res.setHeader('Content-Type', path.endsWith('.mjs') || path.endsWith('.js') ? 'text/javascript' : path.endsWith('.json') ? 'application/json' : path.endsWith('.wasm') ? 'application/wasm' : 'application/octet-stream');
-        if (req.method === 'HEAD') { res.end(); return; }
+        res.setHeader(
+          'Content-Type',
+          path.endsWith('.mjs') || path.endsWith('.js')
+            ? 'text/javascript'
+            : path.endsWith('.json')
+              ? 'application/json'
+              : path.endsWith('.wasm')
+                ? 'application/wasm'
+                : 'application/octet-stream',
+        );
+        if (req.method === 'HEAD') {
+          res.end();
+          return;
+        }
         const stream = createReadStream(path);
-        (gzip ? stream.pipe(createGzip({level:1})) : stream).pipe(res);
-      } catch { res.statusCode = 404; res.end(); }
+        (gzip ? stream.pipe(createGzip({ level: 1 })) : stream).pipe(res);
+      } catch {
+        res.statusCode = 404;
+        res.end();
+      }
     });
   };
-  return { name: 'local-artifacts', apply: 'serve', configureServer: server => configure(server.middlewares), configurePreviewServer: server => configure(server.middlewares) };
+  return {
+    name: 'local-artifacts',
+    apply: 'serve',
+    configureServer: (server) => configure(server.middlewares),
+    configurePreviewServer: (server) => configure(server.middlewares),
+  };
 }
 export default defineConfig(({ mode, command }) => ({
-  base: './', define: { __FUJIMOD_SIMULATOR_BUILD__: JSON.stringify(`${execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {encoding:'utf8'}).trim()} / ${new Date().toISOString()}`), __FUJIMOD_LOCAL_DAT__: (command === 'serve' || mode === 'local-preview') && Boolean(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_DAT), __FUJIMOD_CATALOG__: JSON.stringify(existsSync('public/runtime/catalog.json') ? 'runtime/catalog.json' : 'catalog.json') }, plugins: [localArtifacts(loadEnv(mode, process.cwd(), 'FUJIMOD_'))],
+  base: './',
+  define: {
+    __FUJIMOD_SIMULATOR_BUILD__: JSON.stringify(
+      `${execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], { encoding: 'utf8' }).trim()} / ${new Date().toISOString()}`,
+    ),
+    __FUJIMOD_LOCAL_DAT__:
+      (command === 'serve' || mode === 'local-preview') &&
+      Boolean(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_DAT),
+    __FUJIMOD_CATALOG__: JSON.stringify(
+      existsSync('public/runtime/catalog.json') ? 'runtime/catalog.json' : 'catalog.json',
+    ),
+  },
+  plugins: [solid(), localArtifacts(loadEnv(mode, process.cwd(), 'FUJIMOD_'))],
+  lint: {
+    jsPlugins: ['eslint-plugin-solid'],
+    overrides: [
+      {
+        files: ['**/*.{jsx,tsx}'],
+        rules: {
+          'solid/reactivity': 'error',
+          'solid/no-destructure': 'error',
+          'solid/components-return-once': 'error',
+          'solid/no-react-deps': 'error',
+        },
+      },
+    ],
+    options: { typeAware: true, typeCheck: true },
+    ignorePatterns: [
+      'build/**',
+      'dist/**',
+      'dist-local-preview/**',
+      'public/runtime/**',
+      'public/artifacts/**',
+    ],
+  },
+  fmt: {
+    singleQuote: true,
+    ignorePatterns: [
+      'build/**',
+      'dist/**',
+      'dist-local-preview/**',
+      'public/runtime/**',
+      'public/artifacts/**',
+    ],
+  },
+  test: {
+    environment: 'node',
+    pool: 'forks',
+    include: ['src/**/*.test.{ts,tsx,mjs}', 'tests/**/*.test.mjs'],
+  },
   server: { host: '127.0.0.1', fs: { strict: true } },
   preview: { host: '127.0.0.1', allowedHosts: ['cozycat.tail2b5ca.ts.net'] },
-  build: { target: 'es2022', outDir: mode === 'local-preview' ? 'dist-local-preview' : 'dist' }, worker: { format: 'es' },
+  build: { target: 'es2022', outDir: mode === 'local-preview' ? 'dist-local-preview' : 'dist' },
+  worker: { format: 'es' },
 }));

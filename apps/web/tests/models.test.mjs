@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vite-plus/test';
 import assert from 'node:assert/strict';
 import { validateGlb } from '../scripts/verify-models.mjs';
 test('deployment rejects LFS pointers, truncated GLBs and wrong declared lengths', () => {
