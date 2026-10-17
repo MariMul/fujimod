@@ -31,10 +31,11 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 The core also builds for WebUSB. See the USB crate's
 [Wasm checks](crates/usb/README.md#wasm-core-checks) for the JS-runtime tests;
-the browser binding package is still to be implemented.
+the [JavaScript package](bindings/javascript/README.md) provides typed browser
+APIs over the same core.
 
 The [Python package](bindings/python/README.md) lives in `bindings/python/`.
-JavaScript/Wasm bindings will live in `bindings/javascript/`. Binding crates are
+The JavaScript/Wasm package lives in `bindings/javascript/`. Binding crates are
 members of this same workspace. Each directory owns its language package;
 implementation crates remain independent of PyO3 and wasm-bindgen. The browser
 application stays in `apps/web/` and consumes the JavaScript package as needed.

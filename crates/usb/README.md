@@ -74,9 +74,10 @@ composition. The debug memory packet limit does not constrain E0 data pieces.
 not a readiness poll or a wait-for-execution API.
 
 The core is tested on native macOS and as Wasm in a JavaScript runtime using
-synthetic exchanges. nusb's WebUSB backend compiles for `wasm32-unknown-unknown`;
-JavaScript bindings and physical browser/camera integration remain subsequent
-work. No hardware access is part of the test suite. Native Python bindings live
+synthetic exchanges. nusb's WebUSB backend compiles for `wasm32-unknown-unknown`.
+The [JavaScript bindings](../../bindings/javascript/README.md) expose that
+backend; physical browser/camera integration remains unvalidated. No hardware
+access is part of the test suite. Native Python bindings live
 in `bindings/python/` at the workspace root. All public I/O is async and the
 internal test interface does not require `Send` futures.
 
@@ -167,3 +168,8 @@ nusb cannot apply a control-transfer timeout itself. On expiration the session
 is fenced; the camera may still be processing the transfer. Trace timestamps
 use the JavaScript wall clock on Wasm and preserve the same epoch/type as native
 builds, without calling the unsupported Wasm standard-library wall clock.
+
+Browser bindings expose asynchronous sessions, owned chunk iterators, structured
+errors, explicit abandonment and pull-based tracing through one `usb` namespace.
+They reside in `bindings/javascript/`, separately from the implementation crate
+and `apps/web`. See their README for the static-host build and mock-WebUSB tests.

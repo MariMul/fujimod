@@ -22,3 +22,15 @@ run = "cargo clippy --workspace --all-targets --all-features -- -D warnings"
 
 [tasks.rust-wasm-test]
 run = 'PATH="$PWD/target/tooling/bin:$PATH" cargo test -p fujimod-usb --target wasm32-unknown-unknown --features testing --lib --test wasm_core'
+
+[tasks.javascript-build]
+dir = "{{config_root}}/bindings/javascript"
+run = "npm run build"
+
+[tasks.javascript-test]
+dir = "{{config_root}}/bindings/javascript"
+run = "npm test"
+
+[tasks.javascript-browser-test]
+dir = "{{config_root}}/bindings/javascript"
+run = "npm run test:browser"

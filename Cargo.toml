@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/fujimod", "crates/usb", "bindings/python"]
+members = ["crates/fujimod", "crates/usb", "bindings/python", "bindings/javascript"]
 resolver = "3"
 
 [workspace.package]
@@ -19,3 +19,6 @@ pyo3 = { version = "=0.30.1", features = ["extension-module", "abi3-py310"] }
 
 js-sys = "0.3"
 wasm-bindgen-test = "0.3"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+futures-channel = "0.3"

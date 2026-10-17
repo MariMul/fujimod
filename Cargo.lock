@@ -171,6 +171,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-javascript"
+version = "0.1.0"
+dependencies = [
+ "fujimod-usb",
+ "futures-channel",
+ "futures-lite",
+ "js-sys",
+ "nusb",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
 name = "fujimod-python"
 version = "0.1.0"
 dependencies = [
