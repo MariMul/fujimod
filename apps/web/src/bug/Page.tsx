@@ -152,7 +152,14 @@ export function BugReport(props: {
                   fallback={
                     <>
                       <h2>Connect your camera</h2>
-                      <p>Plug in the camera that captured this report, then connect below.</p>
+                      <p>
+                        Leave the camera’s QR screen open, plug in USB, then connect below.
+                        Reconnect USB if it was already plugged in.
+                      </p>
+                      <p>
+                        If you restarted the camera, turn on SET UP → FUJIMOD DEVTOOLS → USB
+                        DEBUGGING before connecting.
+                      </p>
                       <p class="bug-file">
                         {reportName(value())} · {value().bytes.toLocaleString()} bytes
                       </p>

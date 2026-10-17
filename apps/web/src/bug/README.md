@@ -23,7 +23,11 @@ magic and build tag before writing. It never sends console commands to download
 reports, calls stock functions by address, changes modes or modifies settings.
 The camera validates filenames and constructs the path in `FUJIMOD/REPORTS`.
 The channel is initialized at boot, so a QR can retrieve a saved report after a
-restart of the same build. JIG/service mode is refused.
+restart of the same build. JIG/service mode is refused. The camera temporarily
+enables diagnostic USB in RAM while its report screen is open. Reconnect a
+cable that was already attached. The prior flag is restored after dismissal
+and disconnect, keeping an established Dev Tools session available. After a
+camera restart, enable USB DEBUGGING in FUJIMOD DEVTOOLS before connecting.
 
 | Offset | Little-endian 32-bit field                                               |
 | ------ | ------------------------------------------------------------------------ |
