@@ -6,6 +6,8 @@ import { icon } from "./icons";
 /** Body data chooses the controls; shared components own gesture laws. */
 export class InputPanel {
   private inputs = new Map<string, Input>();
+  private relativeSteps = new Map<string, number>();
+  private modelFractions = new Map<string, number>();
   private positions = new Map<string, string>();
   private controls = new Map<string, HTMLElement[]>();
   private renders = new Map<string, () => void>();
@@ -25,6 +27,14 @@ export class InputPanel {
     private error: (error: unknown) => void,
     private combo: (combo: PowerCombo) => Promise<void>,
   ) {
+    viewer.onRotaryPreview = (id, fraction) => {
+      fraction = this.clampFraction(id, fraction);
+      this.modelFractions.set(id, fraction);
+      const ticks = this.host.querySelector<HTMLElement>(`.dial.ticks[data-id="${CSS.escape(id)}"] .vals`);
+      if (ticks) ticks.style.backgroundPositionX = `${((this.relativeSteps.get(id) ?? 0) + fraction) * 16}px`;
+      this.renders.get(id)?.();
+      return fraction;
+    };
     viewer.onPointerDown = (hit, event) => this.modelDown(hit, event);
     viewer.onHover = (id) => this.feedback(id ? [id] : []);
     window.addEventListener("pointerup", (event) =>
@@ -106,6 +116,7 @@ export class InputPanel {
     this.viewer.configureRotary(inputs, (id, direction) =>
       this.step(id, direction),
     );
+    for (const id of this.positions.keys()) this.syncRotary(id);
     this.viewer.setRotaryEnabled(true);
   }
   private node(node: ControlNode): HTMLElement {
@@ -259,7 +270,7 @@ export class InputPanel {
             }
           }
           const index = selectedIndex();
-          const fraction = this.rotation?.dial === dial ? this.rotation.fraction : 0;
+          const fraction = this.rotation?.dial === dial ? this.rotation.fraction : (this.modelFractions.get(id) ?? 0);
           const visual = Math.max(0, Math.min(positions.length - 1, index + fraction));
           const left = labels[Math.floor(visual)];
           const right = labels[Math.ceil(visual)];
@@ -443,6 +454,19 @@ export class InputPanel {
     };
     return tray;
   }
+  private clampFraction(id: string, fraction: number) {
+    const positions = this.inputs.get(id)?.positions;
+    if (!positions?.length) return fraction;
+    const index = positions.findIndex(p => p.id === this.positions.get(id));
+    return Math.max(-index, Math.min(positions.length - 1 - index, fraction));
+  }
+  private syncRotary(id: string) {
+    const input = this.inputs.get(id);
+    if (!input?.positions?.length) return;
+    const index = input.positions.findIndex(p => p.id === this.positions.get(id));
+    const initial = input.positions.findIndex(p => p.id === (input.initial ?? input.positions![0].id));
+    if (index >= 0) this.viewer.setRotaryPosition(id, index - Math.max(0, initial));
+  }
   private position(id: string, value: string) {
     if (
       !this.ready ||
@@ -452,6 +476,7 @@ export class InputPanel {
     )
       return;
     this.positions.set(id, value);
+    this.syncRotary(id);
     this.renders.get(id)?.();
     this.feedback([id]);
     const engine = this.engine!;
@@ -476,6 +501,10 @@ export class InputPanel {
     const input = this.inputs.get(id);
     if (!this.ready || !this.powered || !input?.supported) return false;
     if (input.relative) {
+      this.relativeSteps.set(id, (this.relativeSteps.get(id) ?? 0) + Math.sign(direction));
+      const ticks = this.host.querySelector<HTMLElement>(`.dial.ticks[data-id="${CSS.escape(id)}"] .vals`);
+      if (ticks) ticks.style.backgroundPositionX = `${this.relativeSteps.get(id)! * 16}px`;
+      this.viewer.turnRotary(id, Math.sign(direction));
       void this.engine!.setPosition(id, Math.sign(direction)).catch(this.error);
       return true;
     }
@@ -578,7 +607,8 @@ export class InputPanel {
       for (let n = 0; n < Math.abs(steps); n++) {
         if (this.step(id, Math.sign(steps))) tickPosition += Math.sign(steps) * 16;
       }
-      rotation.fraction = remainder / 16;
+      rotation.fraction = this.clampFraction(id, remainder / 16);
+      this.viewer.previewRotary(id, rotation.fraction, true);
       if (ticks) values.style.backgroundPositionX = `${tickPosition + remainder}px`;
       else this.renders.get(id)?.();
     };
@@ -591,6 +621,7 @@ export class InputPanel {
       window.removeEventListener("pointercancel", end);
       dial.removeEventListener("lostpointercapture", end);
       this.rotation = undefined;
+      this.viewer.previewRotary(id, 0, false);
       values.style.transition = ticks
         ? "background-position-x 140ms ease-out"
         : "transform 140ms ease-out";
@@ -661,6 +692,7 @@ export class InputPanel {
   synchronize(positions: Record<string, string>) {
     for (const [id, value] of Object.entries(positions)) {
       this.positions.set(id, value);
+      this.syncRotary(id);
       this.renders.get(id)?.();
     }
     if (this.powerID && positions[this.powerID])
@@ -679,6 +711,8 @@ export class InputPanel {
     this.host.replaceChildren();
     this.inputs.clear();
     this.positions.clear();
+    this.modelFractions.clear();
+    this.relativeSteps.clear();
     this.controls.clear();
     this.renders.clear();
     this.engine = undefined;

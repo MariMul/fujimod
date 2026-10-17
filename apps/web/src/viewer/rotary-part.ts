@@ -18,6 +18,10 @@ export class RotaryPart {
     this.pivot.updateWorldMatrix(true, false);
     for (const node of [target, ...labels]) this.pivot.attach(node);
   }
+  setPosition(index: number) {
+    this.angle = this.destination = index * Math.PI / 12;
+    this.applyAngle();
+  }
   turn(direction: number) {
     if (this.angle === this.destination) this.updatedAt = performance.now();
     this.destination += direction * Math.PI / 12;

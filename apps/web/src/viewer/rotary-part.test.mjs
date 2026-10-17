@@ -45,3 +45,18 @@ test('a held dial follows fractional motion without animation toward a detent', 
   part.advance(release + 100);
   assert(Math.abs(part.pivot.quaternion.angleTo(origin) - Math.PI / 12) < 1e-7);
 });
+
+ test('absolute positions replace prior turns and restore the shared detent immediately', () => {
+  const root = new THREE.Group(), target = new THREE.Group(); root.add(target);
+  const part = new RotaryPart(target, new THREE.Box3(new THREE.Vector3(-1, -.1, -1), new THREE.Vector3(1, .1, 1)));
+  const origin = part.pivot.quaternion.clone();
+  part.turn(7);
+  part.setPosition(2);
+  assert(Math.abs(part.pivot.quaternion.angleTo(origin) - Math.PI / 6) < 1e-7);
+  assert.equal(part.advance(performance.now() + 1000), false);
+  part.preview(.5);
+  part.setPosition(-1);
+  assert(Math.abs(part.pivot.quaternion.angleTo(origin) - Math.PI / 12) < 1e-7);
+  part.setPosition(0);
+  assert(part.pivot.quaternion.angleTo(origin) < 1e-7);
+});

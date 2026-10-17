@@ -182,7 +182,7 @@ export class ModelViewer {
                 )
               )
                 return;
-              rotary.part.turn(direction);
+              if (rotary.negative !== rotary.positive) rotary.part.turn(direction);
               this.detent.step();
               this.dirty = this.leadersDirty = true;
               this.highlight(id);
@@ -194,10 +194,12 @@ export class ModelViewer {
           direction: this.rotaryDirection(rotary.part, hit!.surfacePoint),
           step: turn,
           preview: (fraction: number) => {
-            rotary.part.preview(fraction);
+            const visual = this.onRotaryPreview?.(hit!.id, fraction) ?? fraction;
+            rotary.part.preview(visual);
             this.dirty = this.leadersDirty = true;
           },
           finish: () => {
+            this.onRotaryPreview?.(hit!.id, 0);
             rotary.part.settle();
             this.dirty = this.leadersDirty = true;
           },
@@ -388,6 +390,21 @@ export class ModelViewer {
       this.addRotary(regions.center, regions.left, regions.right);
     }
     this.setRotaryEnabled(true);
+  }
+  onRotaryPreview?: (id: string, fraction: number) => number;
+  setRotaryPosition(id: string, index: number) {
+    this.rotary.get(id)?.part.setPosition(index);
+    this.dirty = this.leadersDirty = true;
+  }
+  turnRotary(id: string, direction: number) {
+    this.rotary.get(id)?.part.turn(direction);
+    this.dirty = this.leadersDirty = true;
+  }
+  previewRotary(id: string, fraction: number, held: boolean) {
+    const part = this.rotary.get(id)?.part;
+    if (held) part?.preview(fraction);
+    else part?.settle();
+    this.dirty = this.leadersDirty = true;
   }
   setRotaryEnabled(enabled: boolean) {
     this.rotaryDrag.setEnabled(enabled);
