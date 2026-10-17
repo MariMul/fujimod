@@ -83,6 +83,10 @@ impl Session {
     pub fn state(&self) -> SessionState {
         self.core.state
     }
+    /// A composition observed an invalid nested response after its USB exchange.
+    pub(crate) fn invalidate_completion(&mut self) {
+        self.core.state = SessionState::CompletionUnknown;
+    }
     pub fn max_reply_bytes(&self) -> NonZeroU32 {
         NonZeroU32::new(self.core.max_reply_bytes).expect("validated before session open")
     }

@@ -59,5 +59,8 @@ impl Mailbox {
     }
 }
 
+mod service;
+pub use service::{Invocation, Service};
+
 #[cfg(test)]
 mod tests;

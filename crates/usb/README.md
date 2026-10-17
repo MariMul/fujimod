@@ -174,3 +174,50 @@ Browser bindings expose asynchronous sessions, owned chunk iterators, structured
 errors, explicit abandonment and pull-based tracing through one `usb` namespace.
 They reside in `bindings/javascript/`, separately from the implementation crate
 and `apps/web`. See their README for the static-host build and mock-WebUSB tests.
+
+## Firmware-qualified App80 controls
+
+`fujimod::defs::service::Definition` loads the selected firmware's service data.
+`app80::catalogue::Catalogue` resolves its ordered mode rules and typed codecs;
+`operations::app80::Service` binds those codecs to that definition's ff80
+mailbox. The resulting `Invocation` keeps its request and carrier together.
+Preparation does no I/O and never changes the camera's service mode.
+
+```rust,ignore
+let identity = FirmwareIdentity::new(firmware_id, firmware_sha256)?;
+let definition = Definition::from_json(&definition_json, &identity)?;
+let service = Service::new(definition)?;
+let request = service.prepare(
+    ServiceModes::new(current_service_flags)?,
+    Command::ReadPins { bank: PinBank::new(0)? },
+)?;
+let reply = request.execute(&mut session).await?;
+```
+
+These internal service flags are distinct from camera UI or shooting modes.
+Missing, ambiguous, disabled or unreviewed entries fail selection. Command
+identifiers, slot positions and mailbox locations come from data, with no
+fallback to another body. Typed inputs cover pin reads/writes, channel access,
+profile-byte bank reads/writes/reset, download status, configuration copy/save,
+and service word access. Remaining entries retain explicit research envelopes.
+These are wire codecs; a firmware handler may ignore lower-level hardware
+errors, and `NoPayload` does not certify a physical effect.
+
+Typed results preserve the raw mailbox alongside `ReplyValue`. A save result
+of 1 is `SaveStatus::Failed`, never a host wait instruction; unknown result
+values remain `Unknown`. The save output starts at an unknown sentinel. Word
+read/write results distinguish values, firmware rejection and unknown status.
+The reviewed word codec encodes big-endian address/value bytes and checks its
+known alignment/address windows before I/O. Research replies stay opaque.
+A wrong command echo in a typed nested reply fences the session, preventing
+further requests or implicit close. No polling, retry or cleanup is added.
+
+Run the read-only catalogue inspector with an explicit identity:
+
+```sh
+cargo run -p fujimod-usb --example service_catalogue -- definition.json firmware-id SHA256
+```
+
+It prints metadata and performs no USB discovery. Native/Pyodide/JavaScript
+bindings for these catalogue controls are the next integration step; the
+existing explicit App80 wire and mailbox bindings remain available.

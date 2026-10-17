@@ -8,7 +8,9 @@ publish.workspace = true
 
 [features]
 default = []
-usb = ["dep:fujimod-usb"]
+defs = ["dep:fujimod-defs"]
+usb = ["defs", "dep:fujimod-usb"]
 
 [dependencies]
+fujimod-defs = { workspace = true, optional = true }
 fujimod-usb = { workspace = true, optional = true }

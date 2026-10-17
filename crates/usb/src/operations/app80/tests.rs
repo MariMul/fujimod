@@ -196,4 +196,99 @@ mod replay {
         assert_eq!(session.state(), SessionState::Ready);
         assert_eq!(script.remaining(), 0);
     }
+    fn read(offset: u32, bytes: &[u8]) -> Vec<E> {
+        let command = ReadConfiguration::new(
+            ConfigurationLocation {
+                view: ConfigurationView::Ram,
+                page: 0,
+                offset,
+            },
+            nz(bytes.len() as u32),
+            nz(256),
+        )
+        .unwrap()
+        .encode();
+        let mut response = command.clone();
+        response.extend_from_slice(bytes);
+        vec![
+            E::Control(envelope(0xd0, 36)),
+            E::Write(command),
+            E::Control(envelope(0xd1, response.len() as u32)),
+            E::Read {
+                maximum: response.len(),
+                data: response,
+            },
+        ]
+    }
+    fn selected_service() -> Service {
+        use fujimod_defs::service::{Definition, FirmwareIdentity};
+        let json = serde_json::json!({"schema":1,"firmware":{"id":"body-a-v1","model":"Synthetic","version":"1","sha256":"ab".repeat(32)},
+          "mailbox":{"page":0,"offset":128,"configuration_limit":256},"entries":[
+          {"code":34,"label":"save","codec":"flush_configuration","slots":[0],"enabled_modes":1,"next_mode":0,"firmware_kind":1,"handler":0,"parameter_table":0}]});
+        Service::new(
+            Definition::from_json(
+                &json.to_string(),
+                &FirmwareIdentity::new("body-a-v1", &"ab".repeat(32)).unwrap(),
+            )
+            .unwrap(),
+        )
+        .unwrap()
+    }
+    #[test]
+    fn typed_save_awaits_publish_and_returns_status_one_without_polling() {
+        use crate::app80::catalogue::{Command, ReplyValue, SaveStatus};
+        use fujimod_defs::service::ServiceModes;
+        let invocation = selected_service()
+            .prepare(ServiceModes::new(1).unwrap(), Command::FlushConfiguration)
+            .unwrap();
+        let request = invocation.command().request().encode();
+        assert_eq!(request[1], 0xff); // output sentinel; a missing result is not success
+        let mut response = request;
+        response[1] = 1;
+        let steps = [
+            write(0x81, &request[1..]),
+            write(0x80, &request),
+            read(0x80, &response),
+        ]
+        .concat();
+        let (mut session, script) = opened(steps, 1024);
+        let result = block_on(invocation.execute(&mut session)).unwrap();
+        assert_eq!(
+            result.value(),
+            &ReplyValue::ConfigurationSaved(SaveStatus::Failed)
+        );
+        assert_eq!(result.raw().raw(), &response);
+        assert_eq!(session.state(), SessionState::Ready);
+        assert_eq!(script.remaining(), 0);
+    }
+    #[test]
+    fn foreign_nested_reply_fences_the_session_after_completed_ff80_read() {
+        use crate::app80::catalogue::Command;
+        use fujimod_defs::service::ServiceModes;
+        let invocation = selected_service()
+            .prepare(ServiceModes::new(1).unwrap(), Command::FlushConfiguration)
+            .unwrap();
+        let request = invocation.command().request().encode();
+        let mut response = request;
+        response[0] = 0x23;
+        let (mut session, script) = opened(
+            [
+                write(0x81, &request[1..]),
+                write(0x80, &request),
+                read(0x80, &response),
+            ]
+            .concat(),
+            1024,
+        );
+        assert!(matches!(
+            block_on(invocation.execute(&mut session)),
+            Err(Error::Protocol(_))
+        ));
+        assert_eq!(session.state(), SessionState::CompletionUnknown);
+        assert!(matches!(
+            block_on(session.close()),
+            Err(Error::CompletionUnknown)
+        ));
+        assert_eq!(script.remaining(), 0);
+    }
 }

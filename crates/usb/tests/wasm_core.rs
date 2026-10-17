@@ -36,6 +36,48 @@ fn script(extra: Vec<E>) -> Script {
 }
 
 #[wasm_bindgen_test]
+fn selected_catalogue_and_typed_replies_execute_in_wasm() {
+    use fujimod_defs::service::{Definition, FirmwareIdentity, ServiceModes};
+    use fujimod_usb::{
+        app80::{
+            Reply,
+            catalogue::{Command, ReplyValue, SaveStatus},
+        },
+        operations::app80::Service,
+    };
+    let json = serde_json::json!({
+        "schema": 1,
+        "firmware": {"id": "synthetic-b-v2", "model": "Body B", "version": "2", "sha256": "ab".repeat(32)},
+        "mailbox": {"page": 3, "offset": 576, "configuration_limit": 512},
+        "entries": [{"code": 153, "label": "save", "codec": "flush_configuration", "slots": [7],
+            "enabled_modes": 4, "next_mode": 0, "firmware_kind": 19, "handler": 4096, "parameter_table": 8192}]
+    });
+    let identity = FirmwareIdentity::new("synthetic-b-v2", &"ab".repeat(32)).unwrap();
+    let definition = Definition::from_json(&json.to_string(), &identity).unwrap();
+    let service = Service::new(definition).unwrap();
+    let invocation = service
+        .prepare(ServiceModes::new(4).unwrap(), Command::FlushConfiguration)
+        .unwrap();
+    assert_eq!(invocation.command().request().code().0, 153);
+    let mut bytes = invocation.command().request().encode();
+    assert_eq!(bytes[8], 255);
+    bytes[8] = 1;
+    let reply = invocation
+        .command()
+        .decode(Reply::decode(&bytes).unwrap())
+        .unwrap();
+    assert_eq!(
+        reply.value(),
+        &ReplyValue::ConfigurationSaved(SaveStatus::Failed)
+    );
+    assert!(
+        service
+            .prepare(ServiceModes::new(1).unwrap(), Command::FlushConfiguration)
+            .is_err()
+    );
+}
+
+#[wasm_bindgen_test]
 async fn traced_session_executes_without_std_wall_clock_or_blocking() {
     let script = script(vec![
         E::Control(envelope(0xc2, 2)),

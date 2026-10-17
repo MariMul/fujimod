@@ -23,6 +23,8 @@ The root Cargo workspace contains reusable implementation crates under `crates/`
 The `fujimod` facade exposes components through optional features; enable `usb`
 for `fujimod::usb`. The [USB crate](crates/usb/README.md) provides the initial
 asynchronous service/debug protocol implementation.
+The [definitions crate](crates/defs/README.md) loads caller-selected firmware
+data through `fujimod::defs`, shared by USB and future emulator/SDK components.
 
 ```sh
 cargo test --workspace --all-features

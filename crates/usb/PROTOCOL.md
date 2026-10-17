@@ -76,3 +76,12 @@ The upstream protocol reference is
 [fffw's ff80 sources](https://github.com/tiredboffin/fffw/tree/bedc091e0b54a1a34aaf6929dd08e1db36d13b08/ff80).
 The retained [MIT notice](LICENSE.fffw) accompanies that reference. Experimental
 upstream names, such as `get_timeouts`, do not establish field semantics.
+
+Firmware-qualified App80 catalogues use the shared `fujimod-defs` data schema.
+The command codec layer accepts enum inputs and resolves the selected table's
+command byte and argument slots. Its mode rules preserve firmware order,
+including duplicate identifiers and unreviewed entries. The ff80 `Service`
+composition binds a prepared command to that same definition's mailbox.
+Callback-kind words remain metadata; transport completion still comes from
+awaiting ff80. Typed results retain all 33 raw bytes and explicit unknown values.
+No universal service table is bundled with this mechanism.

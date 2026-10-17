@@ -2,6 +2,8 @@
 //!
 //! Command identifiers and argument meanings come from the selected firmware's
 //! service table. They are independent of ff80 status and callback dispositions.
+pub mod catalogue;
+
 use crate::{
     Error, Result,
     error::{ProtocolError, check_limit},

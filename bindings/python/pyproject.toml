@@ -25,5 +25,7 @@ cache-keys = [
     { file = "../../Cargo.toml" },
     { file = "../../Cargo.lock" },
     { file = "../../crates/usb/Cargo.toml" },
+    { file = "../../crates/defs/Cargo.toml" },
+    { file = "../../crates/defs/src/**/*.rs" },
     { file = "../../crates/usb/src/**/*.rs" },
 ]
