@@ -440,7 +440,10 @@ function setView(mode: "3d" | "lcd") {
 for (const mode of ["3d", "lcd"] as const)
   $(`view-${mode}`).onclick = () => setView(mode);
 window.addEventListener("beforeunload", () => engine?.dispose());
-try {
+if (import.meta.env.DEV && new URLSearchParams(location.search).get("preview") === "crash") {
+  const { showCrashPreview } = await import("./ui/crash-preview");
+  await showCrashPreview(viewer, showFault);
+} else try {
   const response = await fetch(new URL(__FUJIMOD_CATALOG__, document.baseURI));
   if (!response.ok) throw Error("Firmware catalog unavailable.");
   catalog = validateCatalog(await response.json());

@@ -103,6 +103,11 @@ iPhone 13 emulation, checks live frames and a menu tap, saves page/model/LCD
 screenshots and verifies downloaded ZIP members against private builder output.
 WebKit emulation is a desktop browser check, not an iPhone hardware measurement.
 
+For a direct crash-overlay preview in the development server, open
+`?preview=crash`. This uses the bundled scene and the real LCD fault renderer
+without booting firmware or loading a DAT. The handler is excluded from production
+builds.
+
 ### Local production preview
 
 ```sh
