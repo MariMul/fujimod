@@ -51,8 +51,54 @@ fn read_chunks(
     range::Reader::new(session, range::Operation::Data(window.inner, range))
 }
 
+#[pyclass(frozen, module = "fujimod.usb.blocking.data")]
+struct UploadReply {
+    inner: usb::operations::data::UploadReply,
+}
+#[pymethods]
+impl UploadReply {
+    #[getter]
+    fn setup(&self) -> DiagnosticReply {
+        DiagnosticReply {
+            inner: self.inner.setup.clone(),
+        }
+    }
+    #[getter]
+    fn acknowledgement<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.inner.acknowledgement)
+    }
+    #[getter]
+    fn bytes_written(&self) -> u32 {
+        self.inner.bytes_written
+    }
+}
+
+#[pyfunction]
+#[pyo3(signature=(session,data,*,piece_bytes,mode))]
+fn upload(
+    py: Python<'_>,
+    session: &Session,
+    data: Vec<u8>,
+    piece_bytes: u32,
+    mode: DataWriteMode,
+) -> PyResult<UploadReply> {
+    let piece_bytes = nz(piece_bytes)?;
+    session
+        .with(py, |s| {
+            block_on(usb::operations::data::upload(
+                s,
+                &data,
+                piece_bytes,
+                mode.into(),
+            ))
+        })
+        .map(|inner| UploadReply { inner })
+}
+
 pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     let module = PyModule::new(py, "fujimod.usb.blocking.data")?;
     module.add_function(wrap_pyfunction!(read_chunks, &module)?)?;
+    module.add_function(wrap_pyfunction!(upload, &module)?)?;
+    module.add_class::<UploadReply>()?;
     Ok(module)
 }

@@ -170,3 +170,50 @@ mod replay {
         assert_eq!(script.remaining(), 0);
     }
 }
+
+#[cfg(feature = "testing")]
+#[test]
+fn cancelling_final_upload_acknowledgement_fences_the_session() {
+    use crate::{
+        ff80::{
+            SessionState,
+            commands::diagnostic::DataWriteMode,
+            framing::{RequestKind, envelope},
+        },
+        testing::{Exchange as E, Script},
+    };
+    use futures_lite::future::{block_on, poll_once};
+    let mut setup = vec![0; 32];
+    setup[..4].copy_from_slice(&0x760001u32.to_le_bytes());
+    setup[20..24].copy_from_slice(&3u32.to_le_bytes());
+    let script = Script::new([
+        E::Control(envelope(RequestKind::Open, 8, 0)),
+        E::Read {
+            maximum: 8,
+            data: vec![0x34, 0x12, 0, 0, 0, 0, 0, 1],
+        },
+        E::Control(envelope(RequestKind::WriteCommand, 32, 0x1234)),
+        E::Write(setup.clone()),
+        E::Control(envelope(RequestKind::ReadCommand, 32, 0x1234)),
+        E::Read {
+            maximum: 32,
+            data: setup,
+        },
+        E::Control(envelope(RequestKind::WriteData, 2, 0x1234)),
+        E::Write(b"ab".to_vec()),
+        E::Control(envelope(RequestKind::WriteData, 1, 0x1234)),
+        E::Write(b"c".to_vec()),
+        E::Control(envelope(RequestKind::EmptyResponse, 32, 0x1234)),
+        E::PendingRead { maximum: 32 },
+    ]);
+    let mut session = block_on(script.begin_session(32, None)).unwrap();
+    let mut future = Box::pin(upload(&mut session, b"abc", nz(2), DataWriteMode::Preserve));
+    assert!(block_on(poll_once(future.as_mut())).is_none());
+    drop(future);
+    assert_eq!(session.state(), SessionState::CompletionUnknown);
+    assert!(matches!(
+        block_on(session.close()),
+        Err(Error::CompletionUnknown)
+    ));
+    assert_eq!(script.remaining(), 0);
+}

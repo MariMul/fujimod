@@ -119,3 +119,11 @@ exception and fence the session. All framing, validation and compositions still
 run in Rust; no USB discovery or physical connection is involved. This injection
 path is absent from regular builds. Production USB and trace recording never
 call Python callbacks.
+
+`blocking.data.upload(session, data, piece_bytes=..., mode=usb.DataWriteMode.Preserve)`
+holds one session lock across the setup, every E0 piece and final E8. It returns
+an immutable `UploadReply` with `setup`, `acknowledgement` and `bytes_written`.
+Mode and piece size are required inputs. The operation sends data unchanged,
+without padding, readback, retries or destination-buffer policy. A refused setup
+is a structured `DeviceCommandError`; a failed exchange fences the session.
+The final four bytes remain opaque and do not certify application completion.

@@ -110,5 +110,52 @@ impl<S: BorrowMut<Session>> DataReader<S> {
     }
 }
 
+/// Completed transport stages of a prepared upload. E8's raw bytes are opaque;
+/// they do not certify that uploaded application data was consumed or executed.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UploadReply {
+    pub setup: crate::ff80::commands::diagnostic::DiagnosticReply,
+    pub acknowledgement: [u8; 4],
+    pub bytes_written: u32,
+}
+
+/// Prepare a diagnostic write, send bounded E0 pieces, then request E8 once.
+///
+/// Piece size and setup mode are explicit firmware/workflow inputs. There is no
+/// padding, retry, readback, destination-address selection or buffer ownership
+/// policy here. Borrowing the session serializes this entire composition.
+pub async fn upload(
+    session: &mut Session,
+    data: &[u8],
+    piece_bytes: NonZeroU32,
+    mode: crate::ff80::commands::diagnostic::DataWriteMode,
+) -> Result<UploadReply> {
+    use crate::ff80::commands::diagnostic::CommandStatus;
+    let length = u32::try_from(data.len())
+        .ok()
+        .and_then(NonZeroU32::new)
+        .ok_or(Error::InvalidLength)?;
+    // Both setup and the final E8 require a 32-byte host receive budget. Refuse
+    // before preparing the camera if the complete operation cannot fit.
+    crate::error::check_limit(32, session.max_reply_bytes().get())?;
+    let setup = session.prepare_data_write(length, mode).await?;
+    if let CommandStatus::DeviceError { primary, secondary } = setup.status {
+        return Err(Error::DeviceStatus {
+            command: 0x760001,
+            primary,
+            secondary,
+        });
+    }
+    for part in data.chunks(piece_bytes.get() as usize) {
+        session.write_data(part).await?;
+    }
+    let acknowledgement = session.empty_response().await?;
+    Ok(UploadReply {
+        setup,
+        acknowledgement,
+        bytes_written: length.get(),
+    })
+}
+
 #[cfg(test)]
 mod tests;
