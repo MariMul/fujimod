@@ -43,6 +43,7 @@ interface State {
   execution_error?: unknown;
   [key: string]: unknown;
 }
+type SceneInput = { width: number; height: number; rgb: ArrayBuffer };
 type Message =
   | { type: "prepare"; bundle: string }
   | {
@@ -51,6 +52,7 @@ type Message =
       bundle: string;
       config: EngineConfig;
       seedIdentity: { path: string; sha256: string }[];
+      scene?: SceneInput;
     }
   | { type: "card_files"; files: {path:string;bytes:ArrayBuffer}[] }
   | {
@@ -60,6 +62,7 @@ type Message =
       cardFiles: { path: string; bytes: ArrayBuffer }[];
       replaceCard?: boolean;
       bootInputs?: { id: string; stage?: string; position?: string }[];
+      scene?: SceneInput;
     }
   | {
       type: "card";
@@ -170,7 +173,22 @@ function cardState(): CardState {
   return JSON.parse(runtime().runPython("transport.card_state(session)"));
 }
 function currentState(): State {
-  return JSON.parse(runtime().runPython("json.dumps(session.sample())"));
+  return JSON.parse(runtime().runPython("transport.request(session, 'state')"));
+}
+function installScene(scene: SceneInput) {
+  const py = runtime();
+  const bytes = requestTimings.measure("sensor-transfer", () => py.toPy(new Uint8Array(scene.rgb)));
+  py.globals.set("sensor_rgb_buffer", bytes);
+  py.globals.set("sensor_geometry_json", JSON.stringify({ width: scene.width, height: scene.height }));
+  try {
+    requestTimings.measure("sensor-install", () => py.runPython(
+      'sensor_geometry=json.loads(sensor_geometry_json)\nset_sensor_scene(session,sensor_geometry["width"],sensor_geometry["height"],bytes(sensor_rgb_buffer))',
+    ));
+  } finally {
+    py.globals.delete("sensor_rgb_buffer");
+    py.globals.delete("sensor_geometry_json");
+    bytes.destroy();
+  }
 }
 function publish(state: State, id: number, includeFrame: boolean) {
   const frame = includeFrame ? currentFrame() : new ArrayBuffer(0);
@@ -245,6 +263,7 @@ async function boot(
   bundle: string,
   config: EngineConfig,
   identities: { path: string; sha256: string }[],
+  scene?: SceneInput,
 ) {
   seedIdentity = identities;
   bootStarted = performance.now();
@@ -294,7 +313,7 @@ gc.collect()
 `);
   bootStage("inputs-verified");
   activeConfig = config;
-  return startSession(config, undefined, false);
+  return startSession(config, undefined, false, false, [], scene);
 }
 async function startSession(
   config: EngineConfig,
@@ -302,6 +321,7 @@ async function startSession(
   restarting: boolean,
   replaceCard = false,
   bootInputs: { id: string; stage?: string; position?: string }[] = [],
+  scene?: SceneInput,
 ) {
   const runtime = py!,
     protocol = config.boot;
@@ -383,22 +403,30 @@ async function startSession(
     send("progress", { message: "Resuming saved camera…", percent: 95 });
   }
   runtime.runPython("transport.configure(session)");
+  const replacingScene = protocol.sceneInput && scene;
+  const initialImageFrames = replacingScene ? Number(currentState().image_frames ?? 0) : 0;
+  if (replacingScene) {
+    recordInput("sensor", { width: scene.width, height: scene.height });
+    installScene(scene);
+  }
   for (const [id, position] of Object.entries(config.initialPositions ?? {})) {
     recordInput("set_position", { id, position });
     runtime.globals.set("initial_position", JSON.stringify({ id, position }));
     runtime.runPython("request(session, 'set_position', initial_position)");
   }
   let state: State = {};
+  const displayReady = () => ready(state, protocol.readyWhen)
+    && (!replacingScene || Number(state.image_frames ?? 0) > initialImageFrames);
   for (let spent = 0; spent < protocol.readyLimit; spent += protocol.step) {
-    if (!resumed) runtime.runPython("session._advance(boot_step)");
+    if (!resumed || replacingScene) runtime.runPython("session._advance(boot_step)");
     state = currentState();
     const fault = stateFault(state);
     if (fault) throw new EngineError(fault);
-    if (ready(state, protocol.readyWhen)) break;
+    if (displayReady()) break;
     send("progress", { message: "Preparing camera display…", percent: 92 });
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
-  if (!ready(state, protocol.readyWhen))
+  if (!displayReady())
     throw Error(
       "Camera display did not become ready within its instruction budget.",
     );
@@ -460,6 +488,7 @@ worker.onmessage = async ({ data }: MessageEvent<Message>) => {
         data.bundle,
         data.config,
         data.seedIdentity,
+        data.scene,
       );
       send("ready", result, [result.frame]);
       return;
@@ -493,6 +522,7 @@ worker.onmessage = async ({ data }: MessageEvent<Message>) => {
         true,
         data.replaceCard,
         data.bootInputs,
+        data.scene,
       );
       stopped = false;
       send("restarted", { id: data.id, ...result }, [result.frame]);
@@ -619,22 +649,8 @@ worker.onmessage = async ({ data }: MessageEvent<Message>) => {
         height: data.height,
         sequence: data.sequence,
       });
-      const bytes = requestTimings.measure("sensor-transfer", () => py!.toPy(new Uint8Array(data.rgb)));
-      py.globals.set("sensor_rgb_buffer", bytes);
-      py.globals.set(
-        "sensor_geometry_json",
-        JSON.stringify({ width: data.width, height: data.height }),
-      );
-      try {
-        requestTimings.measure("sensor-install", () => py!.runPython(
-          'sensor_geometry=json.loads(sensor_geometry_json)\nset_sensor_scene(session,sensor_geometry["width"],sensor_geometry["height"],bytes(sensor_rgb_buffer))',
-        ));
-        configurePreview();
-      } finally {
-        py.globals.delete("sensor_rgb_buffer");
-        py.globals.delete("sensor_geometry_json");
-        bytes.destroy();
-      }
+      installScene(data);
+      configurePreview();
       send("sensor_ready", { id: data.id, sequence: data.sequence, runtime: runtimeMetrics() });
     }
   } catch (error) {

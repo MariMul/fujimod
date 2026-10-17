@@ -135,9 +135,11 @@ export class WorkerEngine implements Engine {
     config: EngineConfig,
     progress: (message: string, percent: number) => void,
     media?: BootMedia,
+    initialScene: Scene | null = this.scene,
   ) {
     this.bootMedia = media;
     this.sceneInput = config.boot.sceneInput;
+    this.scene = initialScene;
     this.prepare(config);
     const seeds = (media?.identities ?? Promise.resolve([])).then(identities => ({ identities, error: undefined }), error => ({ identities: undefined, error }));
     this.reportIdentity = {
@@ -267,8 +269,10 @@ export class WorkerEngine implements Engine {
         if (this.disposed) throw Error("Emulator closed.");
         this.started = true;
         performance.mark("camera-engine-sent");
+        const scene = this.scenePayload();
         this.worker.postMessage(
-          { type: "boot", dat, config, seedIdentity: identities, bundle }, [dat],
+          { type: "boot", dat, config, seedIdentity: identities, bundle, scene },
+          scene ? [dat, scene.rgb] : [dat],
         );
       }).catch(reject);
     });
@@ -366,6 +370,7 @@ export class WorkerEngine implements Engine {
         bytes: file.bytes.slice().buffer,
       }));
       try {
+        const scene = this.scenePayload();
         const reply = await this.rpc<Reply>(
           "restart",
           {
@@ -373,8 +378,9 @@ export class WorkerEngine implements Engine {
             initialPositions: this.selectedPositions,
             replaceCard,
             bootInputs,
+            scene,
           },
-          cardFiles.map((file) => file.bytes),
+          [...cardFiles.map((file) => file.bytes), ...(scene ? [scene.rgb] : [])],
         );
         this.state = reply.state;
         this.fault = undefined;
@@ -645,6 +651,10 @@ export class WorkerEngine implements Engine {
     });
   }
 
+  private scenePayload() {
+    return this.scene ? { width: this.scene.width, height: this.scene.height,
+      rgb: this.scene.rgb.slice().buffer } : undefined;
+  }
   async setScene(scene: Scene | null) {
     if (!this.sceneInput) {
       if (scene) throw Error('This camera does not accept host scene images.');

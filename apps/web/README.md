@@ -39,6 +39,8 @@ With no image or webcam input, the app supplies the bundled abstract dunes
 still through the ordinary RGB scene input. Clearing an input restores this
 still, which is retained across power cycles and card restarts. The diagnostic
 analytic chart remains available to the underlying emulator and its tests.
+The initial image travels with boot/restart, and readiness waits for a new
+scene frame so the chart is not published as the camera's first ready image.
 The 1536×1024 PNG in `src/engine/assets/default-dunes.png` was generated with
 OpenAI's built-in image generator and selected for the emulator background.
 

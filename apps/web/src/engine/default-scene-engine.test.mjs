@@ -29,12 +29,14 @@ test('boot, clear input and card restart supply the still through RGB input', as
   const { engine, messages, errors } = setup(async () => { loads++; return still; });
   try {
     await engine.boot(new ArrayBuffer(1), config, () => {});
+    assert.deepEqual(new Uint8Array(messages.find(message => message.type === 'boot').scene.rgb), still.rgb);
     assert.equal(messages.at(-1).type, 'sensor');
     assert.deepEqual(new Uint8Array(messages.at(-1).rgb), still.rgb);
     assert.notEqual(messages.at(-1).rgb, still.rgb.buffer);
     const custom = { width: 1, height: 1, rgb: new Uint8Array([255, 0, 0]) };
     await engine.setScene(custom);
     await engine.restartWithCardFiles([], () => {});
+    assert.deepEqual(new Uint8Array(messages.find(message => message.type === 'restart').scene.rgb), custom.rgb);
     assert.deepEqual(new Uint8Array(messages.at(-1).rgb), custom.rgb);
     await engine.setScene(null);
     assert.deepEqual(new Uint8Array(messages.at(-1).rgb), still.rgb);
