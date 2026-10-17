@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { initialize, usb } from '../dist/index.js';
+import { initialize, usb, defs } from '../dist/index.js';
 import * as raw from '../pkg/fujimod.js';
 await initialize({ module_or_path: await readFile(new URL('../pkg/fujimod_bg.wasm', import.meta.url)) });
 test('production build excludes synthetic endpoint entry points',()=>{
@@ -46,4 +46,31 @@ test('picker cancellation returns no device and sends no USB commands',async()=>
   const fixture=installWebUsb();fixture.state.cancelPicker=true;
   try{assert.equal(await usb.requestDevice(usb.DeviceFilter.Fujifilm),undefined);assert.deepEqual(fixture.log,[['picker',[{vendorId:0x04cb}]]]);}
   finally{fixture.restore();}
+});
+
+
+test('production WebUSB executes firmware-selected service requests and fences bad nested replies',async()=>{
+  const fixture=installWebUsb();
+  try{
+    const definition=defs.service.Definition.fromJson(JSON.stringify({schema:1,
+      firmware:{id:'synthetic-b-v2',model:'Body B',version:'2',sha256:'ab'.repeat(32)},
+      mailbox:{page:3,offset:0x240,configuration_limit:512},
+      entries:[{code:153,label:'save',codec:'flush_configuration',slots:[7],enabled_modes:4,next_mode:0,firmware_kind:19,handler:4096,parameter_table:8192}]}),
+      new defs.FirmwareIdentity('synthetic-b-v2','ab'.repeat(32)));
+    const invocation=new usb.app80.Service(definition).prepare(new defs.service.ServiceModes(4),usb.app80.Command.flushConfiguration());
+    const [device]=await usb.discover(usb.DeviceFilter.Diagnostic),[iface]=await device.interfaces();
+    const open=()=>usb.Session.open(device,iface,new usb.FirmwareLimits(256,256,256,256),new usb.TransferOptions(100,1024));
+    fixture.state.onConfigurationWrite=(page,address,bytes)=>{
+      if(page===3&&address===0x240){assert.equal(bytes[0],153);assert.equal(bytes[8],255);fixture.state.configuration.set('3:584',1);}
+    };
+    const session=await open(),reply=await usb.app80.execute(session,invocation);
+    assert.deepEqual(reply.value,{kind:usb.app80.ReplyKind.ConfigurationSaved,status:{kind:usb.app80.SaveStatusKind.Failed}});
+    assert.equal(session.state,usb.SessionState.Ready);await session.close();
+    fixture.state.onConfigurationWrite=(page,address)=>{if(page===3&&address===0x240)fixture.state.configuration.set('3:576',0);};
+    const bad=await open();await assert.rejects(usb.app80.execute(bad,invocation),e=>e.kind===usb.ErrorKind.Protocol&&e.protocolKind===usb.ProtocolFailureKind.CommandEcho);
+    assert.equal(bad.state,usb.SessionState.CompletionUnknown);
+    await assert.rejects(bad.close(),e=>e.kind===usb.ErrorKind.CompletionUnknown);
+    assert.equal(fixture.log.filter(e=>e[0]==='control'&&e[1]===0xc4).length,1);
+    bad.abandon();
+  }finally{fixture.restore();}
 });

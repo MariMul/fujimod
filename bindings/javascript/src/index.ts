@@ -1,6 +1,10 @@
 import * as native from '../pkg/fujimod.js';
 export { default as initialize } from '../pkg/fujimod.js';
 export type { Session, Device, InfoReply, ConfigurationGeometry, DiagnosticReply, ConsoleReply, LogReply, CapabilitiesReply, FirmwareDownloadReply, DataWindow, UploadReply, ResearchRequest, ResearchReply, App80Request, Mailbox } from '../pkg/fujimod.js';
+export type { FirmwareIdentity, ServiceModes, ServiceDefinition, ServiceEntry, ServiceMailbox,
+  ModeAvailability, ModeTransition, DefinitionFailure, CommandFailure, App80Command,
+  ProfileAction, App80Invocation, App80CommandReply, App80ReplyValue, SaveStatus,
+  WordReadResult, WordWriteResult } from '../pkg/fujimod.js';
 
 class ChunkIterator implements AsyncIterableIterator<Uint8Array> {
   constructor(private readonly reader: native.RangeReader) {}
@@ -30,10 +34,38 @@ export interface UsbError extends Error {
   readonly available?: number; readonly declared?: number; readonly requested?: number; readonly limit?: number;
   readonly reserved?: number; readonly backendCode?: number;
   readonly partial?: Uint8Array; readonly cause?: UsbError;
+  readonly reason?: native.DefinitionFailure | native.CommandFailure;
 }
 function isUsbError(error: unknown): error is UsbError {
   return error instanceof Error && 'kind' in error && typeof error.kind === 'number' && Object.values(native.ErrorKind).includes(error.kind);
 }
+export interface DefinitionError extends UsbError {
+  readonly kind: native.ErrorKind.Definition;
+  readonly reason: native.DefinitionFailure;
+}
+export interface ServiceCommandError extends UsbError {
+  readonly kind: native.ErrorKind.ServiceCommand;
+  readonly reason: native.CommandFailure;
+}
+function isDefinitionError(error: unknown): error is DefinitionError {
+  return isUsbError(error) && error.kind === native.ErrorKind.Definition;
+}
+function isServiceCommandError(error: unknown): error is ServiceCommandError {
+  return isUsbError(error) && error.kind === native.ErrorKind.ServiceCommand;
+}
+/** Caller-selected data shared by USB and future emulator/SDK consumers. */
+export const defs = Object.freeze({
+  FirmwareIdentity: native.FirmwareIdentity,
+  DefinitionFailureKind: native.DefinitionFailureKind,
+  isError: isDefinitionError,
+  service: Object.freeze({
+    Definition: Object.freeze({ fromJson: native.ServiceDefinition.fromJson }),
+    ServiceModes: native.ServiceModes,
+    Codec: native.ServiceCodec,
+    ModeAvailabilityKind: native.ModeAvailabilityKind,
+    ModeTransitionKind: native.ModeTransitionKind,
+  }),
+});
 export const usb = Object.freeze({
   Device: native.Device,
   Session: native.Session,
@@ -82,12 +114,30 @@ export const usb = Object.freeze({
       return new ChunkIterator(native.dataChunks(session, window, address, length));
     },
   }),
-  app80: Object.freeze({ CommandCode: native.App80CommandCode, Request: native.App80Request, Mailbox: native.Mailbox, exchange: native.exchangeApp80 }),
+  app80: Object.freeze({
+    CommandCode: native.App80CommandCode, Request: native.App80Request,
+    Mailbox: native.Mailbox, exchange: native.exchangeApp80,
+    Service: native.App80Service,
+    Command: Object.freeze({
+      writePins: native.App80Command.writePins, readPins: native.App80Command.readPins,
+      readChannel: native.App80Command.readChannel, writeChannel: native.App80Command.writeChannel,
+      profileByte: native.App80Command.profileByte, downloadStatus: native.App80Command.downloadStatus,
+      copyConfiguration: native.App80Command.copyConfiguration, flushConfiguration: native.App80Command.flushConfiguration,
+      readWord: native.App80Command.readWord, writeWord: native.App80Command.writeWord,
+    }),
+    ProfileAction: Object.freeze({ read: native.ProfileAction.read, write: native.ProfileAction.write, reset: native.ProfileAction.reset }),
+    ProfileBank: native.ProfileBank,
+    PinBank: native.PinBank, ProfileIndex: native.ProfileIndex, WordAddress: native.WordAddress,
+    ReplyKind: native.App80ReplyKind, SaveStatusKind: native.SaveStatusKind,
+    WordReadKind: native.WordReadKind, WordWriteKind: native.WordWriteKind,
+    CommandFailureKind: native.CommandFailureKind, ArgumentKind: native.ArgumentKind,
+    isError: isServiceCommandError, execute: native.executeApp80,
+  }),
   research: Object.freeze({ CommandCode: native.ResearchCommandCode, Request: native.ResearchRequest, Reply: native.ResearchReply }),
   tracing: Object.freeze({ Trace: native.Trace, Stage: native.TraceStage, Phase: native.TracePhase, RequestKind: native.TraceRequestKind, FailureKind: native.TraceFailureKind }),
 });
 
 /** Make this initialized Rust module available to the FujiMod Python package. */
 export function registerPyodide(runtime: { registerJsModule(name: string, module: object): void }): void {
-  runtime.registerJsModule('_fujimod_js', { usb });
+  runtime.registerJsModule('_fujimod_js', { usb, defs });
 }

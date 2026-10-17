@@ -24,3 +24,43 @@ new usb.Session();
 // @ts-expect-error Observational state cannot be assigned.
 session.state=usb.SessionState.Ready;
 void bytes; void opened; void inspect; void errors;
+
+import { defs, type App80CommandReply, type App80ReplyValue } from '../src/index.js';
+const selected = defs.service.Definition.fromJson('{}', new defs.FirmwareIdentity('body-v1', 'ab'.repeat(32)));
+const service = new usb.app80.Service(selected);
+const invocation = service.prepare(new defs.service.ServiceModes(4), usb.app80.Command.readPins(new usb.app80.PinBank(0)));
+const typedReply: Promise<App80CommandReply> = usb.app80.execute(session, invocation);
+async function serviceValues(): Promise<void> {
+  const reply = await typedReply;
+  const value: NotAny<App80ReplyValue> = reply.value;
+  if (value.kind === usb.app80.ReplyKind.Pins) {
+    const levels: number = value.levels;
+    // @ts-expect-error Pin replies do not contain save status.
+    value.status;
+    // @ts-expect-error Result variants are immutable.
+    value.levels = 3;
+    void levels;
+  }
+  if (value.kind === usb.app80.ReplyKind.ConfigurationSaved && value.status.kind === usb.app80.SaveStatusKind.Unknown) {
+    const raw: number = value.status.rawStatus; void raw;
+  }
+}
+function serviceErrors(error: unknown): void {
+  if (usb.app80.isError(error) && error.reason.kind === usb.app80.CommandFailureKind.Unsupported) {
+    const codec = error.reason.codec; void codec;
+    // @ts-expect-error Unsupported has a codec, not an argument.
+    error.reason.argument;
+  }
+  if (defs.isError(error) && error.reason.kind === defs.DefinitionFailureKind.InvalidLayout) {
+    const code: number = error.reason.code; void code;
+  }
+}
+// @ts-expect-error Checked pin-bank objects are required.
+usb.app80.Command.readPins(0);
+// @ts-expect-error Modes are a distinct checked quantity.
+service.prepare(4, usb.app80.Command.flushConfiguration());
+// @ts-expect-error Command variants have named factories, not a raw constructor.
+new usb.app80.Command();
+// @ts-expect-error Profile choices require the right enum group.
+usb.app80.ProfileAction.read(usb.DataReadMode.Echo, new usb.app80.ProfileIndex(0));
+void serviceValues; void serviceErrors;

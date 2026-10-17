@@ -184,6 +184,7 @@ dependencies = [
 name = "fujimod-javascript"
 version = "0.1.0"
 dependencies = [
+ "fujimod-defs",
  "fujimod-usb",
  "futures-channel",
  "futures-lite",

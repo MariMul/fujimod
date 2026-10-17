@@ -499,6 +499,7 @@ pub(crate) enum Operation {
     Research(usb::ff80::commands::research::Request),
     Upload(Vec<u8>, NonZeroU32, DataWriteMode),
     App80(usb::operations::app80::Mailbox, usb::app80::Request),
+    Service(usb::operations::app80::Invocation),
     ReadRange(MemoryRange, usb::ff80::commands::memory::DebugMemoryLimits),
     WriteRange(
         Address,
@@ -589,6 +590,10 @@ impl Operation {
             Self::App80(mailbox, request) => {
                 mailbox.exchange(s, &request).await.map(|r| bytes(r.raw()))
             }
+            Self::Service(invocation) => invocation
+                .execute(s)
+                .await
+                .map(|inner| service::App80CommandReply { inner }.into()),
             Self::ReadRange(range, limits) => usb::operations::memory::read_range(s, range, limits)
                 .await
                 .map(bytes),
@@ -632,6 +637,19 @@ pub fn exchange_app80(
         ));
     }
     session.call(Operation::App80(mailbox.inner, request.inner.clone()))
+}
+#[wasm_bindgen(js_name=executeApp80,unchecked_return_type="Promise<App80CommandReply>")]
+pub fn execute_app80(
+    session: &Session,
+    invocation: &service::App80Invocation,
+) -> Result<js_sys::Promise, JsValue> {
+    if session.limits.configuration.get() < 33 {
+        return Err(fail(
+            ErrorKind::InvalidArgument,
+            "session configuration limit cannot carry an App80 mailbox",
+        ));
+    }
+    session.call(Operation::Service(invocation.inner.clone()))
 }
 #[wasm_bindgen(js_name=readMemoryRange,unchecked_return_type="Promise<Uint8Array>")]
 pub fn read_memory_range(

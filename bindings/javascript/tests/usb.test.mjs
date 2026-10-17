@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { initialize, usb } from '../dist/index.js';
+import { initialize, usb, defs } from '../dist/index.js';
 import { TestExchange as E, TestScript } from '../pkg/fujimod.js';
 await initialize({ module_or_path: await readFile(new URL('../pkg/fujimod_bg.wasm', import.meta.url)) });
 const words = (...values) => { const data=new Uint8Array(values.length*4); const view=new DataView(data.buffer); values.forEach((n,i)=>view.setUint32(i*4,n,true)); return data; };
@@ -167,4 +167,120 @@ test('cancelPending on a pending chunk closes the reader and restores fenced own
   await until(()=>script.remaining===0);reader.cancelPending();await rejected;
   reader.close();assert.deepEqual(await reader.next(),{done:true,value:undefined});
   assert.equal(reader.bytesCompleted,0);assert.equal(session.state,usb.SessionState.CompletionUnknown);
+});
+
+// These synthetic bodies deliberately differ from the studied firmware's codes,
+// mode flags, mailbox and argument positions.
+function serviceDefinition(rows = [[153,'flush_configuration',[7],4]], expectedId='synthetic-b-v2') {
+  const document={schema:1,firmware:{id:'synthetic-b-v2',model:'Body B',version:'2',sha256:'ab'.repeat(32)},
+    mailbox:{page:3,offset:0x240,configuration_limit:512},entries:rows.map(([code,codec,slots,enabled_modes])=>({code,label:codec,codec,slots,enabled_modes,next_mode:0,firmware_kind:19,handler:4294967296,parameter_table:8192}))};
+  return defs.service.Definition.fromJson(JSON.stringify(document),new defs.FirmwareIdentity(expectedId,'ab'.repeat(32)));
+}
+const serviceModes=()=>new defs.service.ServiceModes(4);
+const saveInvocation=()=>new usb.app80.Service(serviceDefinition()).prepare(serviceModes(),usb.app80.Command.flushConfiguration());
+function serviceExchange(invocation,result) {
+  const payload=invocation.raw;
+  const stage=concat(words(0x1a0002,0,0,0,3,1,3,0x241,32),payload.slice(1)),
+    publish=concat(words(0x1a0002,0,0,0,3,1,3,0x240,33),payload),
+    read=words(0x1a0002,0,0,0,2,1,3,0x240,33);
+  return [...command(stage,36,stage.slice(0,36)),...command(publish,36,publish.slice(0,36)),...command(read,69,concat(read,result))];
+}
+test('shared data loader preserves enums, explicit identity and unreviewed rows',()=>{
+  const d=serviceDefinition([[153,'flush_configuration',[7],null]]),entry=d.entries[0];
+  assert.equal(d.identity.id,'synthetic-b-v2');assert.equal(d.identity.sha256,'ab'.repeat(32));
+  assert.equal(entry.codec,defs.service.Codec.FlushConfiguration);assert.equal(entry.handler,4294967296n);
+  assert.equal(entry.enabledModes.kind,defs.service.ModeAvailabilityKind.Unreviewed);
+  assert.equal(entry.transition.kind,defs.service.ModeTransitionKind.Keep);
+  assert.deepEqual(entry.slots,new Uint8Array([7]));assert.equal(entry.firmwareKind,19);
+  assert.equal(d.select(153,serviceModes()),undefined);
+  assert.deepEqual([d.mailbox.page,d.mailbox.offset,d.mailbox.configurationLimit],[3,0x240,512]);
+  assert.throws(()=>serviceDefinition(undefined,'another-body'),e=>defs.isError(e)&&e.reason.kind===defs.DefinitionFailureKind.FirmwareMismatch);
+  assert.throws(()=>new defs.FirmwareIdentity('body','é'.repeat(32)),e=>defs.isError(e)&&e.reason.kind===defs.DefinitionFailureKind.InvalidDigest);
+  assert.throws(()=>new defs.service.ServiceModes(0),e=>defs.isError(e)&&e.reason.kind===defs.DefinitionFailureKind.EmptyModes);
+  assert.throws(()=>defs.service.Definition.fromJson('{}',d.identity),e=>defs.isError(e)&&e.reason.kind===defs.DefinitionFailureKind.Json);
+  assert.throws(()=>{entry.codec=defs.service.Codec.Research;},TypeError);
+});
+
+test('typed command selection errors retain enum reasons without fallback',()=>{
+  const service=new usb.app80.Service(serviceDefinition()),modes=serviceModes();
+  assert.throws(()=>new usb.app80.PinBank(16),e=>usb.app80.isError(e)&&e.reason.kind===usb.app80.CommandFailureKind.Argument&&e.reason.argument===usb.app80.ArgumentKind.PinBank);
+  assert.throws(()=>new usb.app80.WordAddress(3),e=>usb.app80.isError(e)&&e.reason.argument===usb.app80.ArgumentKind.WordAlignment);
+  assert.throws(()=>service.prepare(new defs.service.ServiceModes(1),usb.app80.Command.flushConfiguration()),e=>usb.app80.isError(e)&&e.reason.kind===usb.app80.CommandFailureKind.Unsupported&&e.reason.codec===defs.service.Codec.FlushConfiguration);
+  assert.throws(()=>service.prepareResearch(new usb.app80.CommandCode(153),new defs.service.ServiceModes(1),new Uint8Array()),e=>usb.app80.isError(e)&&e.reason.kind===usb.app80.CommandFailureKind.Unavailable&&e.reason.code===153);
+  assert.throws(()=>service.prepareResearch(new usb.app80.CommandCode(153),modes,new Uint8Array(33)),e=>usb.app80.isError(e)&&e.reason.kind===usb.app80.CommandFailureKind.OversizeArguments);
+  const ambiguous=new usb.app80.Service(serviceDefinition([[153,'flush_configuration',[7],4],[154,'flush_configuration',[7],4]]));
+  assert.throws(()=>ambiguous.prepare(modes,usb.app80.Command.flushConfiguration()),e=>usb.app80.isError(e)&&e.reason.kind===usb.app80.CommandFailureKind.Ambiguous);
+  assert.throws(()=>new usb.app80.Command());assert.throws(()=>service.prepare(4,usb.app80.Command.flushConfiguration()));
+  assert.throws(()=>usb.app80.Command.readPins(0));assert.throws(()=>usb.app80.Command.profileByte('read'));
+  for(const value of ['1',false,NaN,Infinity,1.5,-1,256])assert.throws(()=>usb.app80.Command.readChannel(value),kind(usb.ErrorKind.InvalidArgument));
+  assert.throws(()=>usb.app80.ProfileAction.read('First',new usb.app80.ProfileIndex(0)),kind(usb.ErrorKind.InvalidArgument));
+});
+
+test('all typed command variants delegate encoding and slot selection to Rust',()=>{
+  const C=usb.app80.Command,P=usb.app80.ProfileAction;
+  const cases=[
+    ['write_pins',C.writePins(new usb.app80.PinBank(2),0x1234,0x5678),[2,0x12,0x34,0x56,0x78]],
+    ['read_pins',C.readPins(new usb.app80.PinBank(2)),[2,0,0]],
+    ['read_channel',C.readChannel(30),[30,0,0]],
+    ['write_channel',C.writeChannel(30,0x1234),[30,0x12,0x34]],
+    ['profile_byte',C.profileByte(P.read(usb.app80.ProfileBank.First,new usb.app80.ProfileIndex(3))),[1,3,0]],
+    ['profile_byte',C.profileByte(P.write(usb.app80.ProfileBank.Second,new usb.app80.ProfileIndex(4),37)),[4,4,37]],
+    ['profile_byte',C.profileByte(P.reset()),[5,0,0]],
+    ['download_status',C.downloadStatus(),[0]],['copy_configuration',C.copyConfiguration(9),[9]],
+    ['flush_configuration',C.flushConfiguration(),[255]],
+    ['memory_word',C.readWord(new usb.app80.WordAddress(0x40001000)),[0,0,0x40,0,0x10,0,0,0,0,0]],
+    ['memory_word',C.writeWord(new usb.app80.WordAddress(0x40001000),0x12345678),[1,0,0x40,0,0x10,0,0x12,0x34,0x56,0x78]],
+  ];
+  for(const [codec,command,expected] of cases) {
+    const slots=expected.map((_,i)=>(i*3+7)%32),service=new usb.app80.Service(serviceDefinition([[153,codec,slots,4]]));
+    const invocation=service.prepare(serviceModes(),command),raw=invocation.raw;
+    assert.equal(raw[0],153);assert.deepEqual(slots.map(s=>raw[1+s]),expected);assert.equal(invocation.configurationLimit,512);
+    raw[0]=0;assert.equal(invocation.raw[0],153);
+  }
+});
+
+test('typed result unions retain rejection, unknown bytes and immutable payloads',()=>{
+  const C=usb.app80.Command,R=usb.app80.ReplyKind;
+  function decode(codec,slots,command,changes={}) {
+    const invocation=new usb.app80.Service(serviceDefinition([[153,codec,slots,4]])).prepare(serviceModes(),command),raw=invocation.raw;
+    for(const [position,byte] of Object.entries(changes))raw[1+slots[position]]=byte;
+    const reply=invocation.decode(raw);assert.deepEqual(reply.raw,raw);assert.ok(Object.isFrozen(reply.value));return reply.value;
+  }
+  assert.deepEqual(decode('read_pins',[7,9,3],C.readPins(new usb.app80.PinBank(2)),{1:0x12,2:0x34}),{kind:R.Pins,levels:0x1234});
+  assert.deepEqual(decode('read_channel',[7,9,3],C.readChannel(30),{1:0x12,2:0x34}),{kind:R.Channel,value:0x1234});
+  assert.deepEqual(decode('profile_byte',[7,9,3],C.profileByte(usb.app80.ProfileAction.read(usb.app80.ProfileBank.First,new usb.app80.ProfileIndex(0))),{2:57}),{kind:R.ProfileByte,value:57});
+  assert.deepEqual(decode('download_status',[7],C.downloadStatus(),{0:1}),{kind:R.DownloadStatus,rawStatus:1});
+  assert.deepEqual(decode('copy_configuration',[7],C.copyConfiguration(1)),{kind:R.NoPayload});
+  assert.deepEqual(decode('flush_configuration',[7],C.flushConfiguration()),{kind:R.ConfigurationSaved,status:{kind:usb.app80.SaveStatusKind.Unknown,rawStatus:255}});
+  const read=C.readWord(new usb.app80.WordAddress(0x40001000)),write=C.writeWord(new usb.app80.WordAddress(0x40001000),0x12345678),slots=[0,1,2,3,4,5,6,7,8,9];
+  assert.deepEqual(decode('memory_word',slots,read,{1:1,6:0x12,7:0x34,8:0x56,9:0x78}),{kind:R.ReadWord,result:{kind:usb.app80.WordReadKind.Value,value:0x12345678}});
+  assert.deepEqual(decode('memory_word',slots,read,{1:0}).result,{kind:usb.app80.WordReadKind.Rejected});
+  assert.deepEqual(decode('memory_word',slots,read,{1:42}).result,{kind:usb.app80.WordReadKind.Unknown,rawStatus:42});
+  assert.deepEqual(decode('memory_word',slots,write,{1:1}).result,{kind:usb.app80.WordWriteKind.Confirmed});
+  assert.deepEqual(decode('memory_word',slots,write,{1:0}).result,{kind:usb.app80.WordWriteKind.Rejected});
+  assert.deepEqual(decode('memory_word',slots,write,{1:42}).result,{kind:usb.app80.WordWriteKind.Unknown,rawStatus:42});
+  const invocation=saveInvocation();assert.throws(()=>invocation.decode(new Uint8Array(33)),kind(usb.ErrorKind.Protocol));
+  const research=new usb.app80.Service(serviceDefinition()).prepareResearch(new usb.app80.CommandCode(153),serviceModes(),new Uint8Array());
+  assert.deepEqual(research.decode(new Uint8Array(33)).value,{kind:R.Research});
+});
+
+test('typed invocation awaits publish and status one never starts a poll',async()=>{
+  const invocation=saveInvocation(),raw=invocation.raw;raw[8]=1;
+  const {session,script}=await opened(serviceExchange(invocation,raw));
+  const pending=usb.app80.execute(session,invocation);assert.equal(session.state,usb.SessionState.InFlight);
+  const reply=await pending;assert.deepEqual(reply.value,{kind:usb.app80.ReplyKind.ConfigurationSaved,status:{kind:usb.app80.SaveStatusKind.Failed}});
+  assert.equal(session.state,usb.SessionState.Ready);assert.equal(script.remaining,0);session.abandon();
+  const small=await opened([],{firmware:new usb.FirmwareLimits(256,256,32,256)});
+  assert.throws(()=>usb.app80.execute(small.session,invocation),kind(usb.ErrorKind.InvalidArgument));
+  assert.equal(small.session.state,usb.SessionState.Ready);assert.equal(small.script.remaining,0);small.session.abandon();
+});
+
+test('typed foreign reply and interrupted publication fence session ownership',async()=>{
+  const invocation=saveInvocation(),bad=await opened(serviceExchange(invocation,new Uint8Array(33)));
+  await assert.rejects(usb.app80.execute(bad.session,invocation),e=>e.kind===usb.ErrorKind.Protocol&&e.protocolKind===usb.ProtocolFailureKind.CommandEcho);
+  assert.equal(bad.session.state,usb.SessionState.CompletionUnknown);await assert.rejects(bad.session.close(),kind(usb.ErrorKind.CompletionUnknown));assert.equal(bad.script.remaining,0);
+  const steps=serviceExchange(invocation,invocation.raw).slice(0,8);steps[7]=E.pendingRead(36);
+  const {session,script}=await opened(steps),pending=usb.app80.execute(session,invocation),rejected=assert.rejects(pending,kind(usb.ErrorKind.Cancelled));
+  await until(()=>script.remaining===0);session.cancelPending();await rejected;
+  assert.equal(session.state,usb.SessionState.CompletionUnknown);assert.throws(()=>session.ping(),kind(usb.ErrorKind.CompletionUnknown));
 });

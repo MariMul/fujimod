@@ -221,5 +221,7 @@ cargo run -p fujimod-usb --example service_catalogue -- definition.json firmware
 It prints metadata and performs no USB discovery. The native
 [Python bindings](../../bindings/python/README.md#native-firmware-selected-service-controls)
 expose these definitions, enum commands and typed replies through async and
-blocking adapters. JavaScript/Pyodide catalogue bindings are the next integration
-step; their explicit App80 wire and mailbox bindings remain available.
+blocking adapters. The [JavaScript package](../../bindings/javascript/README.md#firmware-selected-service-controls)
+exposes the same core through typed factories and discriminated reply unions.
+Pyodide catalogue bindings are the next integration step; its explicit App80
+wire and mailbox bindings remain available.

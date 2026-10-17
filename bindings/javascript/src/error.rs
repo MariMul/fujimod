@@ -14,6 +14,8 @@ pub enum ErrorKind {
     Closed,
     Abandoned,
     Cancelled,
+    Definition,
+    ServiceCommand,
 }
 
 #[wasm_bindgen]
@@ -106,6 +108,15 @@ fn protocol(value: &JsValue, source: usb::error::ProtocolError) {
 
 pub(crate) fn property(object: &JsValue, name: &str, value: impl Into<JsValue>) {
     Reflect::set(object, &JsValue::from_str(name), &value.into()).expect("setting an error field");
+}
+/// Immutable tagged values created only from typed Rust variants.
+pub(crate) fn record(kind: u32, fields: &[(&str, JsValue)]) -> JsValue {
+    let object = js_sys::Object::new();
+    property(&object, "kind", kind);
+    for (name, value) in fields {
+        property(&object, name, value.clone());
+    }
+    js_sys::Object::freeze(&object).into()
 }
 pub(crate) fn fail(kind: ErrorKind, message: &str) -> JsValue {
     let value: JsValue = JsError::new(message).into();

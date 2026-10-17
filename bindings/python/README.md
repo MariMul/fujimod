@@ -236,6 +236,6 @@ typed reply fences the session. Cancellation and session ownership follow the
 same rules as other async compositions. Research invocations remain explicit
 through `service.prepare_research(code, modes, arguments)`.
 
-These catalogue bindings currently target native Python. JavaScript and Pyodide
-still expose the generic App80 wire/mailbox APIs while their typed catalogue
-adapters are being added.
+These Python catalogue bindings currently target native Python. JavaScript has
+equivalent typed bindings; the Pyodide catalogue adapter is being added above
+its working generic App80 wire/mailbox APIs.

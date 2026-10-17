@@ -177,3 +177,48 @@ Await the pending Promise before reusing ownership; the session is fenced if
 an exchange was incomplete. Cancelling before dispatch leaves it ready. Host
 cancellation rejects with `ErrorKind.Cancelled`; it never stops camera code.
 `abandon()` remains the distinct terminal action.
+
+## Firmware-selected service controls
+
+`defs` loads the shared firmware data. `usb.app80` exposes typed command factories
+and executes their invocations through the same Rust codecs as native Python:
+
+```ts
+import { defs, usb } from 'fujimod';
+
+const identity = new defs.FirmwareIdentity(firmwareId, firmwareSha256);
+const definition = defs.service.Definition.fromJson(definitionJson, identity);
+const service = new usb.app80.Service(definition);
+const invocation = service.prepare(
+  new defs.service.ServiceModes(currentServiceFlags),
+  usb.app80.Command.readPins(new usb.app80.PinBank(0)),
+);
+const reply = await usb.app80.execute(session, invocation);
+const value = reply.value;
+if (value.kind === usb.app80.ReplyKind.Pins) {
+  console.log(value.levels);
+}
+```
+
+The identity qualifies the loaded data; the caller still identifies the camera
+and checks execution eligibility. Preparation performs no USB I/O or mode change.
+Command codes, argument positions, mode rules and mailbox come from the selected
+definition. An invocation keeps the request and mailbox together. Commands and
+profile actions have named factories rather than raw selector constructors.
+
+Definitions preserve ordered entries, duplicate codes, mode availability and
+transitions. Handler and parameter-table addresses use `bigint`. Metadata and
+reply values use immutable unions tagged by enums; TypeScript narrows payload
+fields using their `kind`. Raw mailbox getters return independent `Uint8Array`
+copies. `invocation.decode(raw)` supports offline decoding without a session.
+
+`defs.isError(error)` exposes a typed `DefinitionFailure` in `error.reason`;
+`usb.app80.isError(error)` similarly exposes `CommandFailure`. Unsupported,
+ambiguous, disabled or unreviewed controls do not fall back to another body.
+Research remains explicit through `service.prepareResearch(code, modes, bytes)`.
+
+Save failure and unknown status values remain data. Word results distinguish a
+returned value, rejection, confirmation and unknown status. A malformed typed
+reply fences the session; an interrupted publication follows normal cancellation
+and ownership rules. There is no implicit poll, retry or close. The Node and
+Chromium production tests execute this path through nusb and fake WebUSB.

@@ -4,9 +4,11 @@
 use fujimod_usb as usb;
 use wasm_bindgen::prelude::*;
 mod connection;
+mod defs;
 mod error;
 mod range;
 mod requests;
+mod service;
 mod session;
 #[cfg(feature = "testing")]
 mod testing;

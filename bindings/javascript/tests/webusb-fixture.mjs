@@ -63,7 +63,7 @@ export function installWebUsb(){
             const address=v.getUint32(28,true),length=v.getUint32(32,true),page=code===0x1a0002?v.getUint32(24,true):0;
             const map=code===0x200001?state.memory:state.configuration;
             const key=offset=>`${page}:${address+offset}`;
-            if(fn===3){for(let i=0;i<length;i++)map.set(key(i),bytes[36+i]);state.pending=bytes.slice(0,36);}
+            if(fn===3){for(let i=0;i<length;i++)map.set(key(i),bytes[36+i]);state.pending=bytes.slice(0,36);if(code===0x1a0002)await state.onConfigurationWrite?.(page,address,bytes.slice(36));}
             else{state.pending=new Uint8Array(36+length);state.pending.set(bytes.slice(0,36));for(let i=0;i<length;i++)state.pending[36+i]=map.get(key(i))??((address+i)&255);}
           }else if(code===0x200001&&fn===5)state.pending=bytes.slice(0,36);
           else if(code===0x200001&&fn===6)state.pending=words(code,0,0,0,6,0,0,0);
