@@ -135,23 +135,48 @@ $("restart").onclick = async () => {
     catch (error) { showFault(faultFrom(error)); }
   }
 };
-$("error-report").onclick = async () => {
-  const button = $<HTMLButtonElement>("error-report");
-  button.disabled = true;
-  try {
-    const blob = engine
-      ? await engine.errorReport()
-      : errorReportZip({
-          error: latestFault,
-          browser: { userAgent: navigator.userAgent },
-          identity: { firmwareSha256: firmwareHash },
-          snapshot: { unavailable: "Runtime did not initialize." },
-        });
-    downloadBlob(blob, `fujimod-error-${Date.now()}.zip`);
-  } finally {
-    button.disabled = false;
-  }
-};
+const feedbackDialog = $<HTMLDialogElement>("feedback-dialog");
+const feedbackDescription = $<HTMLTextAreaElement>("feedback-description");
+let preparingReport = false;
+function openFeedback() {
+  if (preparingReport || feedbackDialog.open) return;
+  feedbackDescription.value = "";
+  $<HTMLImageElement>("feedback-preview").src = viewer.captureView();
+  feedbackDialog.returnValue = "cancel";
+  let describe!: (value: string) => void;
+  const description = new Promise<string>(resolve => { describe = resolve; });
+  // Capture at the moment feedback is requested, before the user writes a comment.
+  const capture = engine ? engine.errorReport(description) : description.then(value => errorReportZip({
+    description: value,
+    error: latestFault,
+    browser: { userAgent: navigator.userAgent },
+    identity: { firmwareSha256: firmwareHash },
+    snapshot: { unavailable: "Runtime did not initialize." },
+  }));
+  const result = capture.then(blob => ({ blob }), error => ({ error }));
+  feedbackDialog.onclose = async () => {
+    describe(feedbackDescription.value);
+    if (feedbackDialog.returnValue !== "download") return;
+    preparingReport = true;
+    const buttons = [$("error-report"), $("bug-idea")] as HTMLButtonElement[];
+    buttons.forEach(button => { button.disabled = true; });
+    try {
+      const report = await result;
+      if ("error" in report) throw report.error;
+      downloadBlob(report.blob, `fujimod-feedback-${Date.now()}.zip`);
+    } catch (error) {
+      showFault(faultFrom(error));
+    } finally {
+      preparingReport = false;
+      buttons.forEach(button => { button.disabled = false; });
+    }
+  };
+  feedbackDialog.showModal();
+  feedbackDescription.focus();
+}
+$("error-report").onclick = openFeedback;
+$("bug-idea").onclick = openFeedback;
+
 async function runCombo(combo: PowerCombo) {
   await restartOperation(() => engine!.powerCycle(combo.inputs, progress));
 }

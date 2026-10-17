@@ -86,7 +86,7 @@ export interface Engine {
   profile(limit?: number): Promise<Record<string, unknown>>;
   errors(listener: (fault: EngineFault) => void): () => void;
   rollback(seconds: number): Promise<Record<string, string>>;
-  errorReport(): Promise<Blob>;
+  errorReport(description?: Promise<string>): Promise<Blob>;
   boot(
     dat: ArrayBuffer,
     config: EngineConfig,

@@ -721,6 +721,11 @@ export class ModelViewer {
       target: this.homeTarget.clone(),
     };
   }
+  captureView(): string {
+    if (this.host.classList.contains("lcd-mode")) return this.lcd.toDataURL("image/png");
+    this.renderer.render(this.scene, this.camera);
+    return this.renderer.domElement.toDataURL("image/png");
+  }
   view(mode: "3d" | "lcd") {
     this.host.classList.toggle("lcd-mode", mode === "lcd");
     this.lcd.hidden = mode !== "lcd";

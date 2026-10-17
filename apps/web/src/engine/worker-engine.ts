@@ -474,7 +474,7 @@ export class WorkerEngine implements Engine {
       this.errorListeners.delete(listener);
     };
   }
-  async errorReport(): Promise<Blob> {
+  async errorReport(description: Promise<string> = Promise.resolve("")): Promise<Blob> {
     let detail: Record<string, unknown> & { checkpoint?: ArrayBuffer } = {};
     if (this.started && !this.workerFailed && !this.disposed) {
       try {
@@ -490,8 +490,7 @@ export class WorkerEngine implements Engine {
         },
       };
     const { checkpoint, ...worker } = detail;
-    return errorReportZip(
-      {
+    const report = {
         schema: "fujimod-error-report-v1",
         createdAt: new Date().toISOString(),
         ...worker,
@@ -509,9 +508,8 @@ export class WorkerEngine implements Engine {
           platform: navigator.platform,
           language: navigator.language,
         },
-      },
-      checkpoint,
-    );
+      };
+    return errorReportZip({ ...report, description: await description }, checkpoint);
   }
   async rollback(seconds: number) {
     this.alive = false;
