@@ -1473,3 +1473,10 @@ header > a {
 .feedback-content figure { margin: 0; align-self: center; }
 #feedback-preview { display: block; width: 100%; max-height: 220px; object-fit: contain; background: #000; border-radius: 8px; }
 .feedback-content figcaption { margin-top: 8px; font-size: 12px; color: var(--dim); }
+
+.connections { border-top: 1px solid var(--line); padding: 18px 0 0; margin-top: 18px; }
+.connections summary { cursor: pointer; color: var(--dim); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.connections ul { list-style: none; padding: 0; margin: 12px 0 0; }
+.connections li { display: grid; gap: 5px; padding: 12px 0; border-top: 1px solid var(--line); }
+.connections b { font-size: 12px; font-weight: 500; }
+.connections span, .connections small { color: var(--dim); font-size: 11px; line-height: 1.5; }

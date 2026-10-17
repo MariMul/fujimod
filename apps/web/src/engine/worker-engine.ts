@@ -11,6 +11,7 @@ import {
 } from "./fault.ts";
 import type {
   Engine,
+  Connection,
   EngineConfig,
   Frame,
   Input,
@@ -26,6 +27,7 @@ import { digest } from "./checkpoint-store.js";
 import { errorReportZip } from "./report.ts";
 
 type State = {
+  connections?: Connection[];
   input_positions?: Record<string, string>;
   virtual_ticks: number;
   image_frames?: number;
@@ -48,6 +50,8 @@ export class WorkerEngine implements Engine {
   private listeners = new Set<(frame: Frame) => void>();
   private cardListeners = new Set<(state: CardState) => void>();
   private latestCard?: CardState;
+  private connectionListeners = new Set<(rows: Connection[]) => void>();
+  private latestConnections: Connection[] = [];
   private serial = 0;
   private sequence = 0;
   private state: State = { virtual_ticks: 0 };
@@ -220,6 +224,10 @@ export class WorkerEngine implements Engine {
             this.fail(new EngineError(data.fault ?? faultFrom(data.error)));
         }
         if (data.card) this.observeCard(data.card);
+        if (data.state?.connections) {
+          this.latestConnections = data.state.connections;
+          for (const listener of this.connectionListeners) listener(this.latestConnections);
+        }
         if (data.type === "card_result") {
           const pending = this.pending.get(data.id);
           this.pending.delete(data.id);
@@ -426,6 +434,11 @@ export class WorkerEngine implements Engine {
       ...options,
     });
     return new Uint8Array(reply.bytes!);
+  }
+  connections(listener: (rows: Connection[]) => void) {
+    this.connectionListeners.add(listener);
+    listener(this.latestConnections);
+    return () => { this.connectionListeners.delete(listener); };
   }
   cardChanges(listener: (state: CardState) => void) {
     this.cardListeners.add(listener);
@@ -699,6 +712,7 @@ export class WorkerEngine implements Engine {
     this.pending.clear();
     this.listeners.clear();
     this.cardListeners.clear();
+    this.connectionListeners.clear();
     this.errorListeners.clear();
     this.metricListeners.clear();
   }

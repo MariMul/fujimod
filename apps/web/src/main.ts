@@ -9,6 +9,7 @@ import type { Engine, CardFile, BootMedia } from "./engine/api";
 import { errorReportZip } from "./engine/report";
 import { ModelViewer, type ModelData } from "./viewer/model";
 import { InputPanel } from "./ui/controls";
+import { ConnectionsPanel } from "./ui/connections";
 import { CardBrowser, downloadBlob } from "./ui/card";
 import { FaultPanel } from "./ui/fault";
 import { cameraCard, cameraTable, type CameraSupport } from "./ui/cameras";
@@ -50,6 +51,7 @@ const panel = new InputPanel(
   (error) => showFault(faultFrom(error)),
   runCombo,
 );
+const connections = new ConnectionsPanel($("connections"));
 const card = new CardBrowser(
   $("card-section"),
   $("card-files"),
@@ -232,6 +234,7 @@ async function loadDevice(body: string) {
 function reset() {
   panel.clear();
   card.connect();
+  connections.update([]);
   engine?.dispose();
   engine = undefined;
   patchWorker?.terminate();
@@ -357,6 +360,9 @@ async function processFile(file?: File, restart = false, preparedBytes?: ArrayBu
       $("boot-progress").hidden = true;
     });
     window.profileCamera = (limit) => active.profile(limit);
+    active.connections(rows => {
+      if (current === generation) connections.update(rows);
+    });
     active.frames((frame) => {
       if (current === generation) viewer.frame(frame);
     });

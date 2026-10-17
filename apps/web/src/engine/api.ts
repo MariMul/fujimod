@@ -12,6 +12,13 @@ export interface Input {
   relative?: boolean;
   stages?: { id: string; label: string }[];
 }
+export interface Connection {
+  id: string;
+  label: string;
+  connection: "connected" | "disconnected" | "unknown";
+  support: "modeled" | "partial" | "unmodeled";
+  limits: string;
+}
 export interface Frame {
   rgb: Uint8Array;
   width: number;
@@ -109,6 +116,8 @@ export interface Engine {
   cardState(): Promise<CardState>;
   cardTree(revision?: number): Promise<CardTree>;
   readCardFile(path: string, options?: CardReadOptions): Promise<Uint8Array>;
+  /** Live presence and modeled support, independently reported by the emulator. */
+  connections(listener: (rows: Connection[]) => void): () => void;
   /** Media changes, including busy transitions; refresh the tree after writes settle. */
   cardChanges(listener: (state: CardState) => void): () => void;
   frames(listener: (frame: Frame) => void): () => void;
