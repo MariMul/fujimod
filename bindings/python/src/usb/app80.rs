@@ -1,5 +1,6 @@
 //! App80 wire types and the blocking adapter for its ff80 mailbox operation.
 use super::*;
+pub(super) mod catalogue;
 
 #[pyclass(frozen, eq, hash, from_py_object, module = "fujimod.usb.app80")]
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
@@ -77,10 +78,12 @@ pub(super) fn types_module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     module.add_class::<CommandCode>()?;
     module.add_class::<Request>()?;
     module.add_class::<Mailbox>()?;
+    catalogue::register(py, &module)?;
     Ok(module)
 }
 pub(super) fn blocking_module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     let module = PyModule::new(py, "fujimod.usb.blocking.app80")?;
     module.add_function(wrap_pyfunction!(exchange, &module)?)?;
+    catalogue::register_blocking(&module)?;
     Ok(module)
 }

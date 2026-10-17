@@ -71,6 +71,17 @@ async fn exchange(
         .await
         .map(|reply| bytes(reply.raw()))
 }
+#[pyfunction]
+async fn execute(
+    session: AsyncSession,
+    invocation: app80::catalogue::Invocation,
+) -> PyResult<app80::catalogue::CommandReply> {
+    app80::catalogue::check_limit(&session.limits)?;
+    session
+        .with(move |s| Box::pin(async move { invocation.inner.execute(s).await }))
+        .await
+        .map(|inner| app80::catalogue::CommandReply { inner })
+}
 pub(super) fn register(
     py: Python<'_>,
     module: &Bound<'_, PyModule>,
@@ -85,6 +96,7 @@ pub(super) fn register(
     data.add_function(wrap_pyfunction!(upload, &data)?)?;
     data.add_class::<data::UploadReply>()?;
     app80.add_function(wrap_pyfunction!(exchange, app80)?)?;
+    app80.add_function(wrap_pyfunction!(execute, app80)?)?;
     module.add_submodule(&memory)?;
     module.add_submodule(&data)?;
     let modules = py

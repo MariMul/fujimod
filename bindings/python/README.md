@@ -193,3 +193,49 @@ secondary values, a distinct command identifier, body and raw bytes. Only the
 common header is validated; the selected firmware supplies other semantics.
 There is no implicit padding, polling, data transfer, retry or cleanup. The
 [command catalogue](../../crates/usb/PROTOCOL.md) describes effects and limits.
+
+## Native firmware-selected service controls
+
+The native package exposes the shared JSON loader through `fujimod.defs`.
+Definitions and command codecs execute in Rust; Python selects typed inputs:
+
+```python
+from fujimod import defs, usb
+from fujimod.defs import service as data
+
+identity = defs.FirmwareIdentity(firmware_id, firmware_sha256)
+definition = data.Definition.from_json(definition_json, identity)
+service = usb.app80.Service(definition)
+invocation = service.prepare(
+    data.ServiceModes(current_service_flags),
+    usb.app80.Command.ReadPins(bank=usb.app80.PinBank(0)),
+)
+reply = await usb.app80.execute(session, invocation)
+if isinstance(reply.value, usb.app80.ReplyValue.Pins):
+    levels = reply.value.levels
+```
+
+`blocking.app80.execute` runs the same invocation for synchronous callers.
+`invocation.raw` and `invocation.decode(raw)` support offline inspection; neither
+performs USB I/O. `Definition.entries` preserves firmware order and typed codec,
+availability and transition metadata. The identity is supplied explicitly and
+qualifies the data, not the connected camera or its execution eligibility.
+
+`Command`, `ProfileAction`, `ReplyValue`, `SaveStatus` and word results are enums
+with payload variants. Construct `Command.ProfileByte(action=ProfileAction.Read(...))`
+or `ProfileAction.Write(...)`; reset is the explicit `ProfileAction.Reset()`.
+Quantities use checked `PinBank`, `ProfileIndex` and `WordAddress` types. Selection
+errors raise `app80.CommandError` with a typed `CommandFailure` in `.reason`.
+Definition errors similarly expose `defs.DefinitionFailure` through
+`defs.DefinitionError.reason`.
+Missing, ambiguous and unreviewed controls do not fall back to another body.
+
+The returned `CommandReply` keeps all 33 raw bytes. Save failure and unknown
+result bytes remain data, and no result starts host polling or retry. A malformed
+typed reply fences the session. Cancellation and session ownership follow the
+same rules as other async compositions. Research invocations remain explicit
+through `service.prepare_research(code, modes, arguments)`.
+
+These catalogue bindings currently target native Python. JavaScript and Pyodide
+still expose the generic App80 wire/mailbox APIs while their typed catalogue
+adapters are being added.

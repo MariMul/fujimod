@@ -218,6 +218,8 @@ Run the read-only catalogue inspector with an explicit identity:
 cargo run -p fujimod-usb --example service_catalogue -- definition.json firmware-id SHA256
 ```
 
-It prints metadata and performs no USB discovery. Native/Pyodide/JavaScript
-bindings for these catalogue controls are the next integration step; the
-existing explicit App80 wire and mailbox bindings remain available.
+It prints metadata and performs no USB discovery. The native
+[Python bindings](../../bindings/python/README.md#native-firmware-selected-service-controls)
+expose these definitions, enum commands and typed replies through async and
+blocking adapters. JavaScript/Pyodide catalogue bindings are the next integration
+step; their explicit App80 wire and mailbox bindings remain available.

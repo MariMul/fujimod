@@ -2,11 +2,16 @@
 import importlib
 import pytest
 
-from fujimod import usb
+from fujimod import defs, usb
 from fujimod.usb import blocking
 
 
 def test_one_package_supports_direct_submodule_imports():
+    assert importlib.import_module("fujimod.defs") is defs
+    assert importlib.import_module("fujimod.defs.service") is defs.service
+    assert defs.FirmwareIdentity("synthetic-v1", "ab" * 32).id == "synthetic-v1"
+    assert defs.service.ServiceModes(4).mask == 4
+    assert isinstance(usb.app80.Command.FlushConfiguration(), usb.app80.Command)
     assert importlib.import_module("fujimod.usb") is usb
     assert importlib.import_module("fujimod.usb.blocking") is blocking
     assert blocking.Session.__module__ == "fujimod.usb.blocking"
