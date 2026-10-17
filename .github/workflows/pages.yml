@@ -54,6 +54,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
       - run: npm run build
+        env:
+          FUJIMOD_SIGNAL_URL: ${{ vars.FUJIMOD_SIGNAL_URL }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

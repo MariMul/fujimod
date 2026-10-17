@@ -9,6 +9,7 @@ import {
   remoteControlUrl,
   signalUrl,
   useShareSheet,
+  sharingConfigured,
 } from './sharing';
 import './sharing.css';
 import { scenarios } from './scenarios';
@@ -309,6 +310,7 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
           <button
             class="pill"
             disabled={
+              !sharingConfigured() ||
               !tools.canShare() ||
               ![ConnectionState.Connected, ConnectionState.Sharing].includes(tools.connection())
             }

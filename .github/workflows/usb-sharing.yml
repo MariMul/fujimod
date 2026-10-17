@@ -1,0 +1,27 @@
+name: USB sharing Worker
+on:
+  push:
+    branches: [main]
+    paths: ['apps/usb-sharing/**', '.github/workflows/usb-sharing.yml']
+  pull_request:
+    paths: ['apps/usb-sharing/**', '.github/workflows/usb-sharing.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/usb-sharing
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.12.0'
+          cache: npm
+          cache-dependency-path: apps/usb-sharing/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run check

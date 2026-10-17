@@ -187,7 +187,11 @@ async fn run(
     }
     std_socket.set_nonblocking(true).map_err(error)?;
     let udp = async_net::UdpSocket::from(async_io::Async::new(std_socket).map_err(error)?);
-    let (mut signal, _) = connect_async(&ticket.signal).await.map_err(error)?;
+    let mut signal_url = url::Url::parse(&ticket.signal).map_err(error)?;
+    signal_url
+        .query_pairs_mut()
+        .append_pair("room", &ticket.room);
+    let (mut signal, _) = connect_async(signal_url.as_str()).await.map_err(error)?;
     write(
         &mut signal,
         json!({"type":"join","role":"client","room":ticket.room}),

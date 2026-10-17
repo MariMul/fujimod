@@ -77,7 +77,9 @@ async function unseal(ticket, peer, value) {
   return JSON.parse(new TextDecoder().decode(data));
 }
 function signaling(ticket, role, message, ended) {
-  const socket = new WebSocket(ticket.signal);
+  const url = new URL(ticket.signal);
+  url.searchParams.set('room', ticket.room);
+  const socket = new WebSocket(url);
   const ready = new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       socket.close();
@@ -88,7 +90,13 @@ function signaling(ticket, role, message, ended) {
       const frame = JSON.parse(data);
       if (frame.type === 'ready') {
         clearTimeout(timer);
-        resolve(frame.peer);
+        resolve(frame);
+      } else if (frame.type === 'error') {
+        clearTimeout(timer);
+        const error = Error(frame.message || 'Camera share unavailable');
+        reject(error);
+        ended(error);
+        socket.close();
       } else if (frame.type === 'ended') {
         socket.close();
         ended(Error('Camera sharing ended'));
@@ -254,7 +262,9 @@ export async function connectPeer(url) {
   }, 25000);
   let id;
   try {
-    id = await signal.ready;
+    const ready = await signal.ready;
+    id = ready.peer;
+    if (ready.ice_servers) pc.setConfiguration({ iceServers: ready.ice_servers });
     await pc.setLocalDescription(await pc.createOffer());
     await gather(pc);
     signal.send({ type: 'signal', data: await seal(ticket, id, pc.localDescription.toJSON()) });
@@ -273,7 +283,8 @@ export class ShareHost {
   static async create(ticket, device, callbacks = {}) {
     const host = new ShareHost(ticket, device, callbacks);
     try {
-      await host.signal.ready;
+      const ready = await host.signal.ready;
+      host.iceServers = ready.ice_servers || configuration(ticket.stun || []).iceServers;
       return host;
     } catch (error) {
       host.stop();
@@ -313,7 +324,7 @@ export class ShareHost {
     if (frame.type !== 'signal' || this.peers.has(frame.from)) return;
     const offer = await unseal(this.ticket, frame.from, frame.data);
     if (offer.type !== 'offer') throw Error('Invalid peer offer');
-    const pc = new RTCPeerConnection(configuration(this.ticket.stun || []));
+    const pc = new RTCPeerConnection({ iceServers: this.iceServers });
     this.peers.set(frame.from, { close: () => pc.close() });
     const timer = setTimeout(() => {
       if (pc.connectionState !== 'connected') {

@@ -5,6 +5,13 @@ import {
   parseShare,
 } from '../../../../crates/usb-proxy/web/peer.js';
 export { ShareHost, newTicket, shareUrl };
+export function sharingConfigured(): boolean {
+  return (
+    Boolean(__FUJIMOD_SIGNAL_URL__) ||
+    import.meta.env.DEV ||
+    import.meta.env.MODE === 'local-preview'
+  );
+}
 export function remoteControlUrl(current: string): boolean {
   const fragment = new URLSearchParams(new URL(current).hash.slice(1).replace(/^\?/, ''));
   if (!fragment.has('remotecontrol')) return false;
@@ -12,6 +19,7 @@ export function remoteControlUrl(current: string): boolean {
   return true;
 }
 export function signalUrl(current: string): string {
+  if (!sharingConfigured()) throw Error('USB sharing service is not configured');
   const url = new URL(__FUJIMOD_SIGNAL_URL__ || '/usb-proxy/signal', current);
   url.protocol =
     url.protocol === 'https:' ? 'wss:' : url.protocol === 'http:' ? 'ws:' : url.protocol;

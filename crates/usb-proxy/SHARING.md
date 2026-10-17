@@ -39,10 +39,17 @@ chunks. Transfer capacities and timeout fencing remain the USB proxy's existing
 8 MiB and 120-second limits.
 
 WebSockets provide rendezvous, not NAT traversal. The signaling endpoint is
-`/usb-proxy/signal` on the existing Rust service. It routes encrypted SDP between
+`/usb-proxy/signal` on the Rust development service or the production
+[Cloudflare Worker](../../apps/usb-sharing/README.md). It routes encrypted SDP between
 an ephemeral owner room and its clients. It never receives USB requests or
 payloads. A room disappears when its owner disconnects; links are not persistent
 camera identities. Stop sharing or close the owner's page to revoke the link.
+
+Production remains static JavaScript on GitHub Pages. The Worker provides
+rendezvous and temporary TURN credentials independently of the static host;
+Cloudflare DNS is not required. Set the GitHub repository variable
+`FUJIMOD_SIGNAL_URL` to the deployed Worker WebSocket endpoint before releasing
+the Pages app. An unconfigured production build disables Share.
 
 For the local Vite development and preview servers, `/usb-proxy/` forwards to
 the local Rust service. Static deployments must set `FUJIMOD_SIGNAL_URL` at
@@ -60,8 +67,13 @@ USB traffic. Possessing the URL authorizes control of the selected device.
 
 The default tickets include Cloudflare's
 [public STUN service](https://developers.cloudflare.com/realtime/sfu/get-started/connection-patterns/).
-STUN discovers mapped addresses; it does not relay USB data. There is no TURN
-server or automatic payload-relay fallback. Direct connections work where ICE
+STUN discovers mapped addresses; it does not relay USB data. A configured
+production Worker adds temporary Cloudflare TURN credentials to its ready frames,
+keeping both the master API token and the temporary credentials out of share URLs.
+Browsers prefer direct connections and can fall back to TURN. Native controllers
+use outbound UDP, including to the browser owner's TURN relay; native TURN-over-
+TCP/TLS allocation is not implemented. The development Rust service remains
+STUN-only. Direct connections work where ICE
 finds a viable path, including ordinary LAN and reachable tailnet addresses;
 restrictive NATs/firewalls can prevent a connection. See the
 [WebRTC connection guide](https://webrtc.org/getting-started/peer-connections)
@@ -109,3 +121,8 @@ executes a firmware console command remotely, exercises native Python with the
 URL as its only USB environment setting on a separate cold simulator boot, and
 checks link revocation for both runs. Proof
 images and results go to ignored `apps/web/build/sharing-browser/`.
+
+Worker runtime and forced-relay integration checks are described in
+[`apps/usb-sharing`](../../apps/usb-sharing/README.md#test). The Workers runtime
+checks use a mocked Cloudflare credentials API; live Cloudflare deployment and
+account credentials are separate from those offline checks.
