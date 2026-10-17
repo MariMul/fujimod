@@ -1,0 +1,39 @@
+name: Simulator crash
+description: Report a simulator crash with a diagnostic capture
+labels: [Simulator, bug]
+body:
+  - type: textarea
+    id: feedback
+    attributes:
+      label: What happened?
+      description: Share what happened or what you would like to see.
+    validations:
+      required: false
+  - type: input
+    id: camera
+    attributes:
+      label: Camera model
+      description: Filled automatically by the simulator.
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware
+      description: Filled automatically by the simulator.
+  - type: input
+    id: mod-build
+    attributes:
+      label: Mod build / build date
+      description: Filled automatically by the simulator; stock firmware is marked as having no mods.
+  - type: textarea
+    id: crash
+    attributes:
+      label: Crash details
+      description: Filled automatically by the simulator.
+  - type: upload
+    id: simulator-report
+    attributes:
+      label: Simulator report
+      description: Drag and drop the downloaded simulator report ZIP here to upload it before submitting this issue.
+    validations:
+      required: true
+      accept: ".zip"

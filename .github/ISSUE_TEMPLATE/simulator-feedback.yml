@@ -1,0 +1,34 @@
+name: Simulator feedback
+description: Share a simulator bug, idea, or improvement
+labels: [Simulator]
+body:
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Feedback
+      description: Share what happened or what you would like to see.
+    validations:
+      required: false
+  - type: input
+    id: camera
+    attributes:
+      label: Camera model
+      description: Filled automatically by the simulator.
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware
+      description: Filled automatically by the simulator.
+  - type: input
+    id: mod-build
+    attributes:
+      label: Mod build / build date
+      description: Filled automatically by the simulator; stock firmware is marked as having no mods.
+  - type: upload
+    id: simulator-report
+    attributes:
+      label: Simulator report
+      description: Drag and drop the downloaded simulator report ZIP here to upload it before submitting this issue.
+    validations:
+      required: false
+      accept: ".zip"

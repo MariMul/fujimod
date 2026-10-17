@@ -142,7 +142,7 @@ $("restart").onclick = async () => {
 };
 const feedbackDialog = $<HTMLDialogElement>("feedback-dialog");
 const feedbackDescription = $<HTMLTextAreaElement>("feedback-description");
-let feedbackContext: SimulatorIssueContext = { event: "feedback" };
+let feedbackContext: SimulatorIssueContext = { event: "feedback", modBuild: "Not identified" };
 // Open in the submit gesture so mobile browsers allow the new tab, even
 // when preparing the diagnostic download takes longer than user activation.
 feedbackDialog.querySelector("form")!.addEventListener("submit", event => {
@@ -154,6 +154,10 @@ function openFeedback(event: "feedback" | "crash") {
   if (preparingReport || feedbackDialog.open) return;
   feedbackContext = {
     event,
+    modBuild: !selectedFirmware ? "Not identified"
+      : release?.patches[selectedFirmware.sha256]
+        ? `${release.release}${release.built_utc ? ` / ${release.built_utc}` : " / Build date unavailable"}`
+        : "Stock firmware (no mods)",
     camera: selectedFirmware && { model: selectedFirmware.model, version: selectedFirmware.version, id: selectedFirmware.id },
     fault: event === "crash" && latestFault ? structuredClone(latestFault) : undefined,
   };

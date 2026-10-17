@@ -5,7 +5,7 @@ export interface PatchFirmware {
   boot_instructions: string[]; mods?: string[];
 }
 export interface PatchIndex {
-  schema: number; release: string; patches: Record<string, string>; firmwares: PatchFirmware[];
+  schema: number; release: string; built_utc?: string; patches: Record<string, string>; firmwares: PatchFirmware[];
 }
 const hash = /^[0-9a-f]{64}$/;
 const calendarDate = (value: unknown) => {
@@ -16,6 +16,7 @@ const calendarDate = (value: unknown) => {
 export function validateIndex(value: unknown): PatchIndex {
   const index = value as PatchIndex;
   if (index?.schema !== 1 || typeof index.release !== 'string' || !index.release ||
+      (index.built_utc !== undefined && (typeof index.built_utc !== 'string' || Number.isNaN(Date.parse(index.built_utc)))) ||
       !index.patches || !Array.isArray(index.firmwares) || !index.firmwares.length)
     throw new Error('The release index is invalid.');
   const seen = new Set();
