@@ -2,7 +2,7 @@ import type { EngineFault } from '../engine/fault';
 
 export interface SimulatorIssueContext {
   event: 'feedback' | 'crash';
-  camera?: { model: string; version: string; id: string };
+  camera?: { model: string; id: string };
   fault?: EngineFault;
   modBuild: string;
 }
@@ -18,8 +18,7 @@ export function simulatorIssueURL(description: string, context: SimulatorIssueCo
   const camera = context.camera;
   url.searchParams.set('title', `[Simulator${camera ? ` · ${camera.model}` : ''}] ${context.event === 'crash' ? 'Crash' : 'Feedback'}`);
   url.searchParams.set('feedback', description.trim());
-  url.searchParams.set('camera', camera?.model ?? 'Not identified');
-  url.searchParams.set('firmware', camera ? `${camera.version} (${camera.id})` : 'Not identified');
+  url.searchParams.set('firmware', camera?.id ?? 'Not identified');
   url.searchParams.set('mod-build', context.modBuild);
   if (context.event === 'crash' && context.fault) {
     const fault = context.fault;

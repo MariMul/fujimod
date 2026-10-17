@@ -158,7 +158,7 @@ function openFeedback(event: "feedback" | "crash") {
       : release?.patches[selectedFirmware.sha256]
         ? `${release.release}${release.built_utc ? ` / ${release.built_utc}` : " / Build date unavailable"}`
         : "Stock firmware (no mods)",
-    camera: selectedFirmware && { model: selectedFirmware.model, version: selectedFirmware.version, id: selectedFirmware.id },
+    camera: selectedFirmware && { model: selectedFirmware.model, id: selectedFirmware.id },
     fault: event === "crash" && latestFault ? structuredClone(latestFault) : undefined,
   };
   feedbackDescription.value = "";

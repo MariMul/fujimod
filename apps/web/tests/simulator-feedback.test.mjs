@@ -15,8 +15,8 @@ test('crashes require a ZIP upload; general feedback permits an optional upload'
   }
 });
 test('both pathways prefill separate fields and preserve Unicode and punctuation', () => {
-  for (const model of ['X70', 'X-M1']) {
-    const camera = {model, version: '1.10', id: 'camera-110'};
+  for (const [model, id] of [['X70', 'x70-110'], ['X-M1', 'xm1-150']]) {
+    const camera = {model, id};
     const fault = {kind:'guest-fault', message:'Execution fault', details:{device:'SDIO', pc:'0x1234', stack:'private long stack'}};
     for (const event of ['feedback', 'crash']) {
       for (const description of ['', 'Dial freezes & resets? + idea 🦊']) {
@@ -26,14 +26,15 @@ test('both pathways prefill separate fields and preserve Unicode and punctuation
         const labels = query.get('labels').split(',');
         assert(labels.includes(`Camera: ${model}`));
         assert.equal(labels.includes('bug'), event === 'crash');
-        assert.equal(query.get('camera'), model);
-        assert.equal(query.get('firmware'), '1.10 (camera-110)');
+        assert(!query.has('camera'));
+        assert(!template(event).includes('id: camera\n'));
+        assert.equal(query.get('firmware'), id);
         assert.equal(query.get('feedback'), description);
         assert.equal(query.get('mod-build'), modBuild);
         assert.equal(query.has('crash'), event === 'crash');
         assert(!query.toString().includes('private+long+stack'));
         assert(!query.has('simulator-report'), 'a report attachment cannot be prefilled');
-        for (const field of ['camera','firmware','feedback','mod-build'])
+        for (const field of ['firmware','feedback','mod-build'])
           assert(template(event).includes(`id: ${field}\n`));
       }
     }
@@ -41,7 +42,7 @@ test('both pathways prefill separate fields and preserve Unicode and punctuation
 });
 test('unknown camera and stock firmware remain explicit without asking users to supply metadata', () => {
   const query = new URL(simulatorIssueURL('', {event:'feedback', modBuild:'Stock firmware (no mods)'})).searchParams;
-  assert.equal(query.get('camera'), 'Not identified');
+  assert(!query.has('camera'));
   assert.equal(query.get('firmware'), 'Not identified');
   assert.equal(query.get('mod-build'), 'Stock firmware (no mods)');
   assert.equal(query.get('labels'), 'Simulator');

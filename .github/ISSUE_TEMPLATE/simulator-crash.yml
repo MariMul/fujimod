@@ -10,15 +10,10 @@ body:
     validations:
       required: false
   - type: input
-    id: camera
-    attributes:
-      label: Camera model
-      description: Filled automatically by the simulator.
-  - type: input
     id: firmware
     attributes:
-      label: Firmware
-      description: Filled automatically by the simulator.
+      label: Camera / firmware ID
+      description: Filled automatically from the loaded firmware, for example x70-110 or xm1-150.
   - type: input
     id: mod-build
     attributes:
