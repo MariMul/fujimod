@@ -39,7 +39,8 @@ Construct a fresh camera adapter per segment, then call
 `Guide(camera, fresh_output, identity=identity, title=title).run(function,
 prerequisites=[(parent_identity, parent_function), ...])` with prerequisites in
 root-to-parent order. The host owns build and execution/source identity. Python
-assertions must be enabled.
+assertions must be enabled. The optional `navigation_hold=.12` and
+`action_hold=.45` constructor arguments set recording-only result holds.
 
 A camera adapter implements:
 
@@ -52,9 +53,18 @@ It calls `guide.frame(png, seconds)` at monotonically increasing guest times,
 `guide.input(name, pressed, seconds)` for real input edges (returns an index),
 and `guide.interaction(surface, item, input_index=..., **evidence)` for observed
 interactions. Frame sampling never drives device state. Only non-fixture press
-inputs can anchor coverage. Input badges appear in the video's bottom-right,
-fading for 0.4 presentation seconds after release. Input edges flush the prior
-interval before changing the badge.
+inputs can anchor coverage. Input badges push onto a bottom-right stack, newest
+at the bottom, retaining up to five presses. Repeated presses have separate
+entries; each fades independently for 0.4 presentation seconds after release.
+Input edges flush the prior interval before changing the stack.
+
+Adapters wrap completed user actions in `with guide.action(navigation=False):`.
+The adapter executes only as far as real input/render readiness requires; it
+must not add fixed settling delays for the video. On successful exit the
+recorder captures the ready result and adds its configured presentation hold:
+0.12 seconds for navigation, 0.45 seconds for feature actions. Neither holds nor
+extra captures run during prerequisite replay. The adapter marks navigation
+intent explicitly; a direction key can also operate a feature.
 
 `guide.step(title, text='', hold=.75)` captures on successful block exit, then
 holds that observation without advancing guest time. `guide.pause(seconds=.35)`

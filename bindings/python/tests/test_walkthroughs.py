@@ -95,7 +95,7 @@ class WalkthroughTests(unittest.TestCase):
                 camera.press()
             with guide.step('Example', hold=0):
                 pass
-        with patch.object(Video, 'finish'), patch.object(Video, 'still'):
+        with patch.object(Video, 'finish'), patch.object(Video, 'still'), patch.object(Video, '_write'):
             report = guide.run(run)
         self.assertEqual(report['interactions'], [])
         self.assertTrue(report['fixtures'][0]['passed'])
@@ -152,7 +152,7 @@ class WalkthroughTests(unittest.TestCase):
         video=guide.video
         observed=[]
         def write(raw):
-            observed.append(set(video.active));video.frames+=1
+            observed.append({b['name'] for b in video.badges if b['released'] is None});video.frames+=1
         with patch.object(video,'_write',side_effect=write):
             guide.frame(camera.png,0)
             guide.input('right',True,.5)
@@ -273,3 +273,46 @@ class WalkthroughTests(unittest.TestCase):
         with patch.object(video,'_write',side_effect=write):
             video.still(camera.png,2)
         self.assertEqual(video.frames,30)
+
+    def test_action_holds_only_present_the_result_and_replay_has_no_hold(self):
+        camera,guide=self.guide()
+        from unittest.mock import Mock
+        camera.capture=Mock(return_value=camera.png)
+        with patch.object(guide.video,'still') as still:
+            with guide.action(navigation=True):pass
+            self.assertEqual(still.call_args.args,(camera.png,.12))
+            with guide.action():pass
+            self.assertEqual(still.call_args.args,(camera.png,.45))
+            guide._preparing=True
+            with guide.action():pass
+            self.assertEqual(still.call_count,2)
+            self.assertEqual(camera.capture.call_count,2)
+        self.assertIsNone(guide.video.last_time)
+
+    def test_failed_action_never_adds_a_presentation_hold(self):
+        camera,guide=self.guide()
+        with patch.object(guide.video,'still') as still:
+            with self.assertRaises(AssertionError):
+                with guide.action():raise AssertionError('input failed')
+            still.assert_not_called()
+
+    def test_repeated_presses_stack_independently_and_fade_on_release(self):
+        camera,guide=self.guide();video=guide.video
+        video.input('down',True,0)
+        video.input('down',False,0)
+        video.frames=2
+        video.input('down',True,0)
+        self.assertEqual(video._labels(),[('down',170),('down',255)])
+        video.input('down',False,0)
+        video.frames=6
+        self.assertEqual(video._labels(),[('down',85)])
+        video.frames=8
+        self.assertEqual(video._labels(),[])
+
+    def test_stack_retains_five_most_recent_presses_in_order(self):
+        camera,guide=self.guide();video=guide.video
+        names=['up','down','left','right','q','menu_ok']
+        for name in names:
+            video.input(name,True,0)
+            video.input(name,False,0)
+        self.assertEqual([name for name,alpha in video._labels()],names[-5:])

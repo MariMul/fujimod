@@ -119,10 +119,13 @@ class Guide:
     observes all adapter input paths; it must not infer coverage from prose.
     The factory is called once per run and must provide a fresh camera.
     """
-    def __init__(self, camera, output, *, identity, title, fps=15):
+    def __init__(self, camera, output, *, identity, title, fps=15,
+                 navigation_hold=.12, action_hold=.45):
         if not __debug__:
             raise RuntimeError('Walkthroughs require Python assertions')
-        from .media import Video
+        from .media import Video, seconds_value
+        self.navigation_hold = seconds_value(navigation_hold)
+        self.action_hold = seconds_value(action_hold)
         self.camera, self.output = camera, Path(output)
         self.video = Video(self.output, fps=fps)
         self.output.mkdir(parents=True, exist_ok=False)
@@ -228,6 +231,18 @@ class Guide:
         if not self._preparing:
             self.video.still(png, seconds)
 
+    @contextmanager
+    def action(self, *, navigation=False):
+        """Adapter boundary: present a completed input without advancing time.
+
+        Execution readiness belongs to the adapter. These are recording-only
+        result holds: short for finding a destination, longer for operating it.
+        Prerequisite replay incurs neither hold nor extra capture.
+        """
+        yield
+        if not self._preparing:
+            self.video.still(self.camera.capture(), self.navigation_hold if navigation else self.action_hold)
+
     def run(self, function, *, prerequisites=()):
         if self._used:
             raise RuntimeError('A Guide can run only once')
@@ -275,7 +290,8 @@ class Guide:
                     self.report['error'] = f'{type(caught).__name__}: {caught}'
             self.report['passed'] = error is None
             self.report['presentation'] = dict(fps=self.video.fps, idle_limit=self.video.idle_limit,
-                skipped_guest_seconds=self.video.skipped_seconds)
+                skipped_guest_seconds=self.video.skipped_seconds,
+                navigation_hold=self.navigation_hold, action_hold=self.action_hold)
             artifacts = {str(p.relative_to(self.output)): _digest(p)
                          for p in self.output.rglob('*') if p.is_file() and p.name not in ('guide.json', '.guide.json.tmp')}
             self.report['artifacts'] = artifacts

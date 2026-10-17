@@ -33,3 +33,14 @@ class InputPresentationTests(unittest.TestCase):
         self.assertGreater(bounds[0], 0)
         self.assertLess(bounds[2], blank.width)
         self.assertLessEqual(bounds[3], blank.height-SPEC['badge']['bottom'])
+
+    def test_stack_is_vertical_at_bottom_right_with_newest_at_bottom(self):
+        blank = Image.new('RGBA', (720,480), 'white')
+        output = draw_badges(blank, [('down',64),('menu_ok',255)],align='right',layout='stack')
+        bounds = ImageChops.difference(blank,output).convert('RGB').getbbox()
+        height=SPEC['badge']['icon_size']+2*SPEC['badge']['padding_y']+2*SPEC['badge']['border_width']
+        self.assertEqual(bounds[3],480-SPEC['badge']['bottom'])
+        self.assertEqual(bounds[3]-bounds[1],2*height+SPEC['badge']['gap'])
+        self.assertEqual(bounds[2],708)
+        self.assertLess(output.getpixel((700,400))[1],100)
+        self.assertGreater(output.getpixel((700,360))[1],150)

@@ -24,11 +24,13 @@ def _badge_font():
     return ImageFont.load_default(size=SPEC['badge']['font_size'])
 
 
-def draw_badges(picture, labels, *, font=None, align='center'):
+def draw_badges(picture, labels, *, font=None, align='center', layout='rows'):
     """Return an annotated copy; labels are (canonical input ID, opacity)."""
     from PIL import Image, ImageDraw
     if align not in ('center', 'right'):
         raise ValueError('Badge alignment must be center or right')
+    if layout not in ('rows', 'stack'):
+        raise ValueError('Badge layout must be rows or stack')
     style = SPEC['badge']
     font = font or _badge_font()
     layer = Image.new('RGBA', picture.size)
@@ -45,7 +47,8 @@ def draw_badges(picture, labels, *, font=None, align='center'):
     rows = [[]]
     for entry in entries:
         row = rows[-1]
-        if row and sum(e[3] for e in row) + style['gap']*len(row) + entry[3] > picture.width-24:
+        if row and (layout == 'stack' or
+                    sum(e[3] for e in row) + style['gap']*len(row) + entry[3] > picture.width-24):
             rows.append([])
         rows[-1].append(entry)
     y = picture.height-style['bottom']-height*len(rows)-style['gap']*(len(rows)-1)

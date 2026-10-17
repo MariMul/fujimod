@@ -24,8 +24,7 @@ class Video:
         self.frames = 0
         self.last_time = None
         self.last_png = None
-        self.active = set()
-        self.released = {}
+        self.badges = []
         self.size = None
         self.log = None
         self._fractional_frames = 0.0
@@ -52,7 +51,7 @@ class Video:
         if self.last_time is not None and self.last_png:
             elapsed = seconds-self.last_time
             duration = elapsed
-            if not self.active and not self.released:
+            if not self.badges:
                 duration = min(duration, max(0, self.idle_limit-self._idle_kept))
                 self._idle_kept += duration
             self.skipped_seconds += elapsed-duration
@@ -74,11 +73,21 @@ class Video:
         self._advance(seconds)
         self._idle_kept = 0
         if pressed:
-            self.active.add(name)
-            self.released.pop(name, None)
+            self.badges.append(dict(name=name, released=None))
+            self.badges = self.badges[-5:]
         else:
-            self.active.discard(name)
-            self.released[name] = self.frames
+            for badge in reversed(self.badges):
+                if badge['name'] == name and badge['released'] is None:
+                    badge['released'] = self.frames
+                    break
+
+    def _labels(self):
+        fade_frames = max(1, round(self.fps*SPEC['badge']['release_ms']/1000))
+        self.badges = [badge for badge in self.badges if badge['released'] is None
+                       or self.frames-badge['released'] < fade_frames]
+        return [(badge['name'], 255 if badge['released'] is None else
+                 round(255*(1-(self.frames-badge['released'])/fade_frames)))
+                for badge in self.badges]
 
     def _write(self, png):
         from PIL import Image
@@ -103,15 +112,8 @@ class Video:
                 raise
         if picture.size != self.size:
             raise ValueError('LCD dimensions changed during walkthrough')
-        labels = [(name, 255) for name in sorted(self.active)]
-        fade_frames = max(1, round(self.fps*SPEC['badge']['release_ms']/1000))
-        for name, released in list(self.released.items()):
-            age = self.frames-released
-            if age >= fade_frames:
-                del self.released[name]
-            else:
-                labels.append((name, round(255*(1-age/fade_frames))))
-        self.process.stdin.write(draw_badges(picture, labels, align='right').convert('RGB').tobytes())
+        self.process.stdin.write(draw_badges(picture, self._labels(), align='right',
+                                            layout='stack').convert('RGB').tobytes())
         self.frames += 1
 
     def frame(self, png, seconds):
