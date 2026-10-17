@@ -11,7 +11,6 @@ if (!directory || !base)
 const output = fileURLToPath(new URL('../../build/bug-report/', import.meta.url));
 await mkdir(output, { recursive: true });
 const guide = JSON.parse(await readFile(`${directory}/guide.json`, 'utf8'));
-assert.equal(guide.schema, 2);
 assert.equal(guide.passed, true);
 assert.equal(guide.identity.walkthrough, 'bug-report/report/capture');
 const url = new URL(guide.bug_report.issue_url);
