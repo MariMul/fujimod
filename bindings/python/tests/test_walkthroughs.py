@@ -325,17 +325,21 @@ class WalkthroughTests(unittest.TestCase):
                 with guide.action():raise AssertionError('input failed')
             still.assert_not_called()
 
-    def test_repeated_presses_stack_independently_and_fade_on_release(self):
+    def test_repeated_presses_stay_visible_for_five_seconds_after_release(self):
         camera,guide=self.guide();video=guide.video
         video.input('down',True,0)
         video.input('down',False,0)
         video.frames=2
         video.input('down',True,0)
-        self.assertEqual(video._labels(),[('down',170),('down',255)])
+        self.assertEqual(video._labels(),[('down',255),('down',255)])
         video.input('down',False,0)
-        video.frames=6
+        video.frames=4*video.fps
+        self.assertEqual(video._labels(),[('down',255),('down',255)])
+        video.frames=71
+        self.assertEqual(video._labels(),[('down',170),('down',255)])
+        video.frames=5*video.fps
         self.assertEqual(video._labels(),[('down',85)])
-        video.frames=8
+        video.frames=5*video.fps+2
         self.assertEqual(video._labels(),[])
 
     def test_stack_retains_five_most_recent_presses_in_order(self):

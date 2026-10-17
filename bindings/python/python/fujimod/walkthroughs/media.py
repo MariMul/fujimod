@@ -82,11 +82,12 @@ class Video:
                     break
 
     def _labels(self):
+        lifetime_frames = 5*self.fps
         fade_frames = max(1, round(self.fps*SPEC['badge']['release_ms']/1000))
         self.badges = [badge for badge in self.badges if badge['released'] is None
-                       or self.frames-badge['released'] < fade_frames]
+                       or self.frames-badge['released'] < lifetime_frames]
         return [(badge['name'], 255 if badge['released'] is None else
-                 round(255*(1-(self.frames-badge['released'])/fade_frames)))
+                 round(255*min(1, (lifetime_frames-(self.frames-badge['released']))/fade_frames)))
                 for badge in self.badges]
 
     def _write(self, png):

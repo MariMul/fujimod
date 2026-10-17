@@ -58,7 +58,9 @@ and `guide.interaction(surface, item, input_index=..., **evidence)` for observed
 interactions. Frame sampling never drives device state. Only non-fixture press
 inputs can anchor coverage. Input badges push onto a bottom-right stack, newest
 at the bottom, retaining up to five presses. Repeated presses have separate
-entries; each fades independently for 0.4 presentation seconds after release.
+entries; each remains visible for five presentation seconds after release,
+fading only during the final 0.4 seconds. New presses push the oldest entries
+off the top when the stack is full.
 Input edges flush the prior interval before changing the stack.
 
 Adapters wrap completed user actions in `with guide.action(navigation=False):`.
