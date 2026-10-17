@@ -1,4 +1,4 @@
-"""Compare the built site with the approved HTML reference, in real browsers.
+"""Compare the built web app with the approved HTML reference, in real browsers.
 
 Requires a local preview with DAT auto-loading. Reference art is supplied
 explicitly, so the public repository does not depend on a private checkout.

@@ -1,4 +1,4 @@
-"""Built-site virtual SD insertion, downloads, retained power cycle and format.
+"""Built web app virtual SD insertion, downloads, retained power cycle and format.
 
 Uses only visible controls and observes the existing worker protocol. No
 firmware patches, guest-memory writes or physical camera access.

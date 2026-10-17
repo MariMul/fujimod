@@ -20,7 +20,7 @@ jobs:
     defaults:
       run:
         working-directory: apps/web
-    # Review branches cannot redeploy the site, even via workflow dispatch.
+    # Review branches cannot redeploy the web app, even via workflow dispatch.
     if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'release' && github.event.release.target_commitish == 'main')
     runs-on: ubuntu-latest
     environment:

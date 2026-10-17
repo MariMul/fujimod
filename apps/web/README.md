@@ -4,20 +4,20 @@ This app lives in `apps/web/` of the FujiMod repository. Run the commands
 below from that directory.
 
 Try camera firmware and build SD boot files in your browser. Firmware is
-identified by its complete SHA-256 and never uploaded. The site is developed
+identified by its complete SHA-256 and never uploaded. The web app is developed
 on review branches; the Pages workflow deploys approved main builds only.
 
 ## Camera viewer
 
-The Vite + TypeScript site uses three.js from npm, with no UI framework. Drop a
+The Vite + TypeScript web app uses three.js from npm, with no UI framework. Drop a
 DAT anywhere on the viewer, or choose it there. The whole-file SHA-256 selects
 `public/catalog.json`: firmware ID, body, model, optional engine artifact and
 optional 3D model. Unrecognized files stay on the neutral camera silhouette;
 recognized bodies without installed capabilities show unsupported. Patching
 and emulation are independent capabilities. Release-only patch entries also
-work without a site source change.
+work without a web app source change.
 
-`src/engine/api.ts` is the website's emulator boundary: boot, frames,
+`src/engine/api.ts` is the web app's emulator boundary: boot, frames,
 press/release, setPosition, setScene and power. The shared Pyodide WorkerEngine adapter
 owns pacing, request ordering and disposal; it wraps the existing Pyodide
 session worker. No register addresses or firmware bindings appear in rendering
@@ -63,7 +63,7 @@ X-M1 1.50 uses the same Wasm runtime with its checked REC graph, native LCD
 and calibrated menu/sub-command controls. It has no 3D model, host RGB scene,
 shutter-capture binding or main command dial. Its virtual card starts ejected;
 inserted-card boot has not passed the browser gate. “Try emulator” selects a
-local configured DAT, or opens the DAT chooser on the public site.
+local configured DAT, or opens the DAT chooser on the public web app.
 
 ### Develop
 
@@ -209,12 +209,12 @@ emulation capability from the installed catalog. `npm run build` then bundles
 this repository into `dist/` and verifies every GLB is a real glTF 2 binary with
 identical source/deployment hashes. Pages checks out and pulls the LFS model
 objects before building. No private repository source is copied over the
-site, and neither a stock DAT nor boot ROM is a public input.
+web app, and neither a stock DAT nor boot ROM is a public input.
 
 The Pages workflow runs only from main or a release targeting main. Review
 branches never deploy. The research repository pins the reviewed public commit
 as its `web` submodule. The private patch builder creates/verifies release
-artifacts and never copies, commits or pushes website source.
+artifacts and never copies, commits or pushes web app source.
 
 ## JavaScript API
 

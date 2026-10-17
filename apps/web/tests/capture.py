@@ -1,4 +1,4 @@
-"""Built-site WebKit/iPhone boot, MENU, touch dial, card JPEG and Playback gate.
+"""Built web app WebKit/iPhone boot, MENU, touch dial, card JPEG and Playback gate.
 
 Observe the existing worker protocol; all camera actions and the card download
 use the visible UI. No source routes, firmware patches or private engine hooks.

@@ -1,7 +1,7 @@
 import type { CameraPerformance } from "./performance";
 import type { EngineFault } from "./fault";
 export type { EngineFault } from "./fault";
-/** The only emulator contract used by the website. All scheduling is engine-owned. */
+/** The only emulator contract used by the web app. All scheduling is engine-owned. */
 export interface Input {
   id: string;
   label: string;

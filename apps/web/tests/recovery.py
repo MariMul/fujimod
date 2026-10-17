@@ -1,7 +1,7 @@
 """Headed browser recovery/cache gate. Requires Playwright and a local runtime.
 
 Outputs go to a new caller-selected directory. No hardware access. The served
-site may opt into local DAT loading, or --dat supplies an explicit input file.
+web app may opt into local DAT loading, or --dat supplies an explicit input file.
 """
 import argparse
 import asyncio
