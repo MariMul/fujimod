@@ -73,6 +73,7 @@ export class ModelViewer {
   private simulation!: SimulationModule;
   private started = false;
   private rendererFailed = false;
+  private pendingPicks = new Map<number, { points: {x: number; y: number}[]; cancelled: boolean }>();
   private worldProgress = { seconds: -1, at: performance.now() };
   private wasmMemory?: WebAssembly.Memory;
   private ready: Promise<void>;
@@ -155,6 +156,9 @@ export class ModelViewer {
   }
   showRendererError(error: unknown) {
     this.rendererFailed = true;
+    this.pendingPicks.clear();
+    for (const resolve of this.requests.values()) resolve(null);
+    this.requests.clear();
     console.error(error);
     this.host.dataset.rendererError = String(error);
     this.host.dataset.rendererStage = 'failed';
@@ -318,10 +322,16 @@ export class ModelViewer {
         return;
       }
       event.preventDefault();
+      this.canvas.setPointerCapture(event.pointerId);
+      const pending = { points: [] as {x: number; y: number}[], cancelled: false };
+      this.pendingPicks.set(event.pointerId, pending);
       void this.pick(event).then((hit) => {
+        if (this.pendingPicks.get(event.pointerId) !== pending) return;
+        this.pendingPicks.delete(event.pointerId);
+        if (pending.cancelled) return;
         if (hit && !this.faulted) {
           const part = this.rotary.get(hit.id);
-          if (part && this.held.has(event.pointerId)) {
+          if (part) {
             const gesture = {
               direction: hit.direction,
               step: (direction: number) => {
@@ -347,21 +357,28 @@ export class ModelViewer {
                 this.previewRotary(part.id, 0, false);
               },
             };
-            if (this.rotaryDrag.begin(event, gesture)) {
-              this.detent.beginGesture(event);
+            this.detent.beginGesture(event);
+            if (!this.held.has(event.pointerId)) {
+              this.rotaryDrag.replay(event, gesture, pending.points);
               return;
             }
+            if (this.rotaryDrag.begin(event, gesture, pending.points)) return;
           }
           this.onPointerDown?.(hit, event);
           if (!this.held.has(event.pointerId)) this.onPointerEnd?.(event.pointerId);
         }
-        if (this.held.has(event.pointerId) && this.orbitEnabled && !this.rotaryDrag.dragging) {
-          this.orbitPointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
-          this.canvas.setPointerCapture(event.pointerId);
+        if (this.orbitEnabled && !this.rotaryDrag.dragging) {
+          let x = event.clientX, y = event.clientY;
+          for (const point of pending.points) {
+            this.send({ type: 'orbit', x: point.x - x, y: point.y - y });
+            x = point.x; y = point.y;
+          }
+          if (this.held.has(event.pointerId)) this.orbitPointer = { id: event.pointerId, x, y };
         }
       });
     });
     this.canvas.addEventListener('pointermove', (event) => {
+      this.pendingPicks.get(event.pointerId)?.points.push({x: event.clientX, y: event.clientY});
       if (document.pointerLockElement === this.canvas) {
         return;
       }
@@ -379,6 +396,11 @@ export class ModelViewer {
       }
     });
     const end = (event: PointerEvent) => {
+      const pending = this.pendingPicks.get(event.pointerId);
+      if (pending) {
+        if (event.type === 'pointerup') pending.points.push({x: event.clientX, y: event.clientY});
+        else if (event.type === 'pointercancel' || this.held.has(event.pointerId)) pending.cancelled = true;
+      }
       this.held.delete(event.pointerId);
       if (this.orbitPointer?.id === event.pointerId) this.orbitPointer = undefined;
     };
@@ -421,6 +443,7 @@ export class ModelViewer {
     const pause = () => {
       this.keys.clear();
       this.held.clear();
+      this.pendingPicks.clear();
       this.orbitPointer = undefined;
       this.touchMove = undefined;
       this.send({ type: 'pause_input' });
@@ -452,6 +475,7 @@ export class ModelViewer {
     this.movement();
     this.rotaryDrag.cancel();
     this.orbitPointer = undefined;
+    this.pendingPicks.clear();
     this.send({ type: 'toggle_inspect' });
     if (wasWalking) document.exitPointerLock?.();
     else if (matchMedia('(pointer:fine)').matches) this.captureMouse();

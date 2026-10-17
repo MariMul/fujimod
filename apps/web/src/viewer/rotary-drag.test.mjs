@@ -88,3 +88,23 @@ test('projected grab tangent follows either side of a dial without axis switchin
     assert.deepEqual(s.changes, [1, 1, -1, -1]);
   }
 });
+
+test('a swipe completed before picking returns preserves detents and reversal without pointer capture', () => {
+  const s = setup();
+  s.canvas.setPointerCapture = () => { throw Error('Pointer already released'); };
+  s.drag.replay(pointer('pointerdown', 0, 0), s.gesture,
+    [{x: 40, y: 0}, {x: 48, y: 0}, {x: 16, y: 0}]);
+  assert.deepEqual(s.changes, [1, 1, 1, -1, -1]);
+  assert.deepEqual(s.finishes, [true]);
+  assert.deepEqual(s.orbit, [false, true]);
+  assert.equal(s.drag.dragging, false);
+});
+
+test('a held pointer consumes movement recorded while its pick was pending', () => {
+  const s = setup();
+  s.drag.begin(pointer('pointerdown', 0, 0), s.gesture, [{x: 40,y: 0}]);
+  assert.deepEqual(s.changes, [1,1]);
+  assert.equal(s.previews.at(-1), .5);
+  s.canvas.dispatchEvent(pointer('pointermove', 48, 0));
+  assert.deepEqual(s.changes, [1,1,1]);
+});

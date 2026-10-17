@@ -1,3 +1,5 @@
+interface Point { x: number; y: number }
+interface ActiveRotary { pointer: number; x: number; y: number; axis?: 'x' | 'y'; remainder: number; gesture: RotaryGesture }
 export interface RotaryGesture {
   /** Screen-space tangent of positive rotation, fixed for this gesture. */
   direction?: { x: number; y: number };
@@ -8,7 +10,7 @@ export interface RotaryGesture {
 
 /** A captured pointer belongs to its starting dial until release/cancel. */
 export class RotaryDrag {
-  private active?: { pointer: number; x: number; y: number; axis?: 'x' | 'y'; remainder: number; gesture: RotaryGesture };
+  private active?: ActiveRotary;
   private swallowed = new Set<number>();
   private enabled = true;
   readonly pixelsPerDetent = 16;
@@ -27,7 +29,7 @@ export class RotaryDrag {
   private consume(event: PointerEvent) { event.preventDefault(); event.stopImmediatePropagation(); }
 
   /** A picked dial captures the pointer before an orbit gesture begins. */
-  begin(event: PointerEvent, gesture?: RotaryGesture): boolean {
+  begin(event: PointerEvent, gesture?: RotaryGesture, pending: Point[] = []): boolean {
     if (this.active) {
       // A second finger cannot transfer a dial gesture into a pinch/orbit.
       this.swallowed.add(event.pointerId); this.consume(event);
@@ -37,7 +39,19 @@ export class RotaryDrag {
     this.consume(event); this.orbit(false);
     this.active = { pointer: event.pointerId, x: event.clientX, y: event.clientY, remainder: 0, gesture };
     if (this.enabled) gesture.preview(0);
-    this.canvas.setPointerCapture(event.pointerId); return true;
+    this.canvas.setPointerCapture(event.pointerId);
+    for (const point of pending) this.track(this.active, point.x, point.y);
+    return true;
+  }
+
+  /** Picking may finish after release. Consume the recorded path without recapturing a dead pointer. */
+  replay(event: PointerEvent, gesture: RotaryGesture, points: Point[]) {
+    if (this.active || !this.enabled) return;
+    const active: ActiveRotary = { pointer: event.pointerId, x: event.clientX, y: event.clientY, remainder: 0, gesture };
+    this.orbit(false);
+    gesture.preview(0);
+    try { for (const point of points) this.track(active, point.x, point.y); }
+    finally { gesture.finish(); this.orbit(true); }
   }
 
   private move(event: PointerEvent) {
@@ -45,7 +59,11 @@ export class RotaryDrag {
     const active = this.active;
     if (!active || active.pointer !== event.pointerId) return;
     this.consume(event);
-    const dx = event.clientX - active.x, dy = active.y - event.clientY;
+    this.track(active, event.clientX, event.clientY);
+  }
+
+  private track(active: ActiveRotary, x: number, y: number) {
+    const dx = x - active.x, dy = active.y - y;
     // Lock to the first deliberate direction; vertical and horizontal swipes
     // both work when a dial is small or viewed edge-on on a phone.
     if (!active.gesture.direction && !active.axis) {
@@ -56,7 +74,7 @@ export class RotaryDrag {
     active.remainder += direction
       ? dx * direction.x - dy * direction.y
       : active.axis === 'x' ? dx : dy;
-    active.x = event.clientX; active.y = event.clientY;
+    active.x = x; active.y = y;
     const steps = Math.trunc(active.remainder / this.pixelsPerDetent);
     active.remainder -= steps * this.pixelsPerDetent;
     if (this.enabled) {
