@@ -27,6 +27,8 @@ export interface PowerCombo {
   inputs: BootInput[];
 }
 export interface DevicePanel {
+  /** Shared control names for panel accessibility and model feedback. */
+  inputLabels?: Record<string, string>;
   layout: ControlNode[];
   combos: PowerCombo[];
 }

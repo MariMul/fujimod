@@ -144,30 +144,6 @@
       "down": "down"
     }
   },
-  "labels": {
-    "up": "↑ Up",
-    "down": "↓ Down",
-    "left": "← Left",
-    "right": "→ Right",
-    "shutter": "Shutter",
-    "power": "Power",
-    "auto": "Auto",
-    "movie": "Record",
-    "wifi": "Wi-Fi",
-    "q": "Q",
-    "disp": "Display / Back",
-    "menu_ok": "Menu / OK",
-    "fn7": "Ring options",
-    "command_left": "Command left",
-    "command_right": "Command right",
-    "command_push": "Command press",
-    "lcd_touch": "Screen",
-    "battery_cover": "Battery cover",
-    "focus_mode": "Focus mode",
-    "delete": "Delete",
-    "drive": "Drive",
-    "ae_af_lock": "AE / AF lock"
-  },
   "order": [
     "shutter_speed",
     "exposure_compensation",

@@ -23,7 +23,10 @@ owns pacing, request ordering and disposal; it wraps the existing Pyodide
 session worker. No register addresses or firmware bindings appear in rendering
 or panel code. The input artifact belongs to the emulator. Model nodes,
 3D part mappings live in `devices/x70/parts.json`; panel layout, labels, faces
-and power-on gestures live in `devices/x70/panel.json`.
+and power-on gestures live in `devices/x70/panel.json`. Its `inputLabels` map
+is the sole owner of control names used by panel accessibility and 3D tap feedback;
+`parts.json` contains no control names. Captions and button faces describe the
+printed panel presentation, rather than separate control names.
 The catalog selects the shared Pyodide engine and supplies its Python boot
 protocol. Device directories contain model, panel and initial-position data;
 adding a body does not add conditionals to the worker or viewer. `src/viewer/model.ts` ports LCD UV mapping,

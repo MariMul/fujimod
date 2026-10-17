@@ -59,7 +59,9 @@ export class InputPanel {
     this.clear();
     this.engine = engine;
     this.ready = true;
-    this.inputs = new Map(inputs.map((input) => [input.id, input]));
+    this.inputs = new Map(inputs.map((input) => [input.id, {
+      ...input, label: data.inputLabels?.[input.id] ?? input.label,
+    }]));
     for (const input of inputs)
       if (input.positions?.length)
         this.positions.set(
