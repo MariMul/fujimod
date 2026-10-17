@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from fujimod.walkthroughs.text import MenuEntry, plain
 from fujimod.walkthroughs import Guide, discover
 from fujimod.walkthroughs.media import Video
 
@@ -73,7 +74,7 @@ class WalkthroughTests(unittest.TestCase):
         self.assertLess(min(ImageStat.Stat(picture.crop((260,140,308,178))).mean), 240)
         self.assertGreater(min(ImageStat.Stat(picture.crop((0,0,100,100))).mean), 250)
         self.assertGreater(min(ImageStat.Stat(picture.crop((135,140,185,178))).mean), 250)
-        self.assertEqual(report['steps'][0]['title'], 'Example')
+        self.assertEqual(plain(report['steps'][0]['title']), 'Example')
         self.assertIn('video.mp4', report['artifacts'])
 
     def test_failed_assertion_never_produces_passing_report_or_step(self):
@@ -229,7 +230,7 @@ class WalkthroughTests(unittest.TestCase):
         visit=discover(source)[0].function
         def make_camera():
             camera=Camera()
-            camera.menu_path=lambda item:'MENU > ITEM'
+            camera.menu_reference=lambda item:MenuEntry('item','ITEM',ancestors=(MenuEntry('root','MENU'),))
             camera.select_menu_item=lambda item:setattr(camera,'png',png('blue'))
             def activate(item):
                 self.assertEqual(camera.png,png('blue'))
@@ -240,7 +241,7 @@ class WalkthroughTests(unittest.TestCase):
             return camera
         parent=Guide(make_camera(),self.root/'parent',identity={},title='Parent')
         report=parent.run(visit)
-        self.assertEqual([s['title'] for s in report['steps']],['Choose MENU > ITEM'])
+        self.assertEqual([plain(s['title']) for s in report['steps']],['Choose MENU > ITEM'])
         self.assertEqual((parent.output/report['steps'][0]['screenshot']).read_bytes(),png('blue'))
         self.assertEqual(parent.video.last_png,png('red'))
         self.assertGreater(report['presentation']['duration_seconds'],report['steps'][0]['video_end'])
@@ -264,7 +265,7 @@ class WalkthroughTests(unittest.TestCase):
                 with g.step('Child',hold=0):
                     c.press();c.value=2;c.png=png('red')
             report=guide.run(child,prerequisites=[('mod/file/parent',parent)])
-            self.assertEqual([s['title'] for s in report['steps']],['Child'])
+            self.assertEqual([plain(s['title']) for s in report['steps']],['Child'])
             self.assertEqual(len(report['interactions']),1)
             self.assertEqual(len(report['inputs']),2)
             self.assertEqual(report['inputs'][0]['seconds'],0)

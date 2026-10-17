@@ -1,18 +1,22 @@
 # Python walkthrough recording
 
-Install FujiMod with its `walkthroughs` extra and put `ffmpeg` on PATH.
+Walkthrough authoring requires Python 3.14. Install FujiMod with its
+`walkthroughs` extra and put `ffmpeg` on PATH. Other FujiMod APIs retain their
+existing Python requirement.
 The library has no camera, firmware or repository dependency.
 
 ```python
-from fujimod.walkthroughs import open_menu, walkthrough
+from fujimod.walkthroughs import open_menu, ref, walkthrough
 
-settings = open_menu('settings_item', title='Settings')
+page = ref(menu='settings_item')
+option = ref(menu='option_item')
+settings = open_menu(page, title='Settings')
 
 @walkthrough('Use a feature', start_from=settings)
 def example(camera, guide):
-    with guide.step('Choose ' + camera.menu_path('option_item')):
-        camera.select_menu_item('option_item')
-    camera.open_menu_item('option_item')
+    with guide.step(t'Choose {option.path(relative_to=page)}'):
+        camera.select_menu_item(option)
+    camera.open_menu_item(option)
     with guide.step('Example option'):
         assert camera.current_option() == 'example'
 ```
@@ -28,7 +32,7 @@ caching is not part of the authoring API.
 `open_menu(item, title=..., start_from=None)` creates an ordinary walkthrough
 with one illustrated instruction: `Choose Menu > Item > Submenu`. The screenshot
 shows the destination highlighted, then the guide activates it. Its adapter implements
-`menu_path(item)`, `select_menu_item(item)` and `open_menu_item(item)`. Factory
+`menu_reference(item)`, `select_menu_item(item)` and `open_menu_item(item)`. Factory
 identity comes from the module variable name; decorated functions use their
 function name. Filenames and containing directories provide the remaining
 identity and ownership. There are no explicit IDs or mod lists.
@@ -93,7 +97,7 @@ A zero hold adds no presentation time. The final frame is retained. Failed steps
 and fixtures fail the run even if author code catches their exception.
 `guide.fixture(description)` records setup interventions and suppresses coverage.
 
-`guide.json` schema 2 contains identity, title, prerequisite results, pass/fail,
+`guide.json` schema 3 contains identity, title, prerequisite results, pass/fail,
 numbered steps, screenshot hashes, local video timestamps, input edges,
 interactions, fixtures, presentation timing and artifact hashes. `poster.png`
 is the segment's actual starting frame, captured after prerequisite replay.
@@ -104,3 +108,32 @@ trailing inputs, and can extend beyond the last step's `video_end`.
 The host records `start_from` as the parent identity so consumers can link guides.
 Failed runs retain diagnostics and never qualify coverage. Video is sampled at
 15 fps; websites consume these artifacts without executing walkthrough source.
+
+Step titles and descriptions accept ordinary strings or standard Python
+template strings (`t"Choose {item}"`). Templates retain the interpolated menu
+reference; f-strings eagerly stringify it and are refused by reference objects.
+Normal Python interpolation and formatting still work for other values.
+
+`ref(menu=symbol_or_code, key=None, via=None)` identifies a menu entry. The
+adapter owns firmware-specific symbol/code lookup for **stock and mod menus**.
+Use `key=` to identify a particular row within a stock menu. Shared submenu
+descriptors can specify their opening row with `via=ref(menu=parent, key=...)`.
+Missing references, ambiguous openers, cycles and unrelated ancestors fail.
+
+`{item}` renders icon and English name; `{item.name}` and `{item.icon}` select
+either presentation while retaining the entry identity. `{item.path()}` renders
+the full menu path; `{item.path(relative_to=parent)}` omits that ancestor and
+everything above it. Paths contain ordered menu tokens and have one standard
+separator. Entries without artwork render their names.
+
+The adapter's `menu_reference(reference)` returns `MenuEntry(identity, name,
+icon=None, ancestors=())` from `fujimod.walkthroughs.text`. `icon` is PNG bytes;
+ancestors are resolved entries from root to immediate parent. Resolution must
+be observational and contributes no interaction or coverage.
+
+Each step's `title` and `text` are JSON token arrays: `text` tokens hold literal
+text, `menu` tokens hold identity, English name, display mode and optional icon,
+and `menu_path` tokens hold ordered menu entries. Icon descriptors contain a
+relative `icons/<sha256>.png` asset and its hash; assets are bundled with the
+report and verified like screenshots. Renderers use these resolved values,
+without firmware access or evaluation of Python expressions.

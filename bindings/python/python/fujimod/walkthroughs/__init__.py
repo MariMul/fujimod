@@ -12,6 +12,9 @@ import json
 import math
 from pathlib import Path
 import sys
+from .text import MenuReference, encode, plain, ref
+
+SCHEMA = 3
 
 
 def walkthrough(title, *, start_from=None):
@@ -29,11 +32,12 @@ def walkthrough(title, *, start_from=None):
 
 def open_menu(item, *, title, start_from=None):
     """Illustrate the highlighted menu destination before opening its page."""
-    if not isinstance(item, str) or not item:
-        raise ValueError('A menu starter needs an item name')
+    item = ref(menu=item) if isinstance(item, str) else item
+    if not isinstance(item, MenuReference):
+        raise ValueError('A menu starter needs a menu reference or item name')
     @walkthrough(title, start_from=start_from)
     def visit(camera, guide):
-        with guide.step('Choose ' + camera.menu_path(item)):
+        with guide.step(t'Choose {item.path()}'):
             camera.select_menu_item(item)
         camera.open_menu_item(item)
         guide.pause(1.5)
@@ -129,7 +133,7 @@ class Guide:
         self.camera, self.output = camera, Path(output)
         self.video = Video(self.output, fps=fps)
         self.output.mkdir(parents=True, exist_ok=False)
-        self.report = dict(schema=2, identity=identity, title=title, passed=False,
+        self.report = dict(schema=SCHEMA, identity=identity, title=title, passed=False,
                            steps=[], inputs=[], interactions=[], fixtures=[], prerequisites=[])
         self._inside_step = False
         self._recording = False
@@ -194,13 +198,16 @@ class Guide:
     def step(self, title, text='', *, hold=1.5):
         if self._inside_step:
             raise ValueError('Guide steps cannot nest')
-        if not isinstance(title, str) or not title.strip() or not isinstance(text, str):
-            raise ValueError('Step title/text must be strings; title cannot be empty')
+        resolve = lambda reference: self.camera.menu_reference(reference)
+        title = encode(title, resolve=resolve, output=self.output)
+        text = encode(text, resolve=resolve, output=self.output)
+        if not plain(title).strip():
+            raise ValueError('Step title cannot be empty')
         if isinstance(hold, bool) or not isinstance(hold, (int, float)) or not math.isfinite(hold) or hold < 0:
             raise ValueError('hold must be a finite nonnegative number of seconds')
         self._inside_step = True
         start = self.video.seconds
-        print(f'Guide step {len(self.report["steps"])+1}: {title}', flush=True)
+        print(f'Guide step {len(self.report["steps"])+1}: {plain(title)}', flush=True)
         try:
             yield
             png = self.camera.capture()

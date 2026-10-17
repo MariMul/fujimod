@@ -7,6 +7,7 @@ from unittest import TestCase
 from unittest.mock import Mock
 
 from fujimod.walkthroughs import Guide, open_menu
+from fujimod.walkthroughs.text import MenuEntry, encode, plain
 
 
 class ManeuverPacingTests(TestCase):
@@ -27,15 +28,16 @@ class ManeuverPacingTests(TestCase):
 
     def test_menu_starter_pauses_after_activation_before_following_navigation(self):
         events = []
+        entry = MenuEntry('item', 'ITEM', ancestors=(MenuEntry('root', 'MENU'),))
         @contextmanager
         def step(title):
-            events.append(('instruction', title))
+            tokens = encode(title, resolve=lambda item: entry, output=Path('.'))
+            events.append(('instruction', plain(tokens)))
             yield
             events.append(('screenshot', 'highlighted item'))
         camera = SimpleNamespace(
-            menu_path=lambda item: 'MENU > ITEM',
-            select_menu_item=lambda item: events.append(('select', item)),
-            open_menu_item=lambda item: events.append(('open', item)))
+            select_menu_item=lambda item: events.append(('select', item.menu)),
+            open_menu_item=lambda item: events.append(('open', item.menu)))
         guide = SimpleNamespace(step=step, pause=lambda seconds: events.append(('hold', seconds)))
         open_menu('item', title='Item settings')(camera, guide)
         self.assertEqual(events, [
