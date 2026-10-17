@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { simulatorIssueURL } from '../src/ui/simulator-feedback.ts';
+import { simulatorIssue } from '../src/ui/simulator-feedback.ts';
 
 const template = event => readFileSync(new URL(`../../../.github/ISSUE_TEMPLATE/simulator-${event}.yml`, import.meta.url), 'utf8');
 test('crashes require a ZIP upload; general feedback requires a ZIP upload', () => {
@@ -21,7 +21,10 @@ test('both pathways prefill separate fields and preserve Unicode and punctuation
     for (const event of ['feedback', 'crash']) {
       for (const description of ['', 'Dial freezes & resets? + idea 🦊']) {
         const modBuild = 'v42 / 2026-10-17T12:00:00Z';
-        const query = new URL(simulatorIssueURL(description, {event, camera, fault, modBuild, simulatorBuild:'abc123 / 2026-10-17'})).searchParams;
+        const submission = simulatorIssue(description, {event, camera, fault, modBuild, simulatorBuild:'abc123 / 2026-10-17'});
+        const query = new URL(submission.issue.url).searchParams;
+        assert.equal(submission.description, description);
+        assert.deepEqual(submission.issue.fields, Object.fromEntries(query));
         assert.equal(query.get('template'), `simulator-${event}.yml`);
         const labels = query.get('labels').split(',');
         assert(labels.includes(`Camera: ${model}`));
@@ -42,7 +45,7 @@ test('both pathways prefill separate fields and preserve Unicode and punctuation
   }
 });
 test('unknown camera and stock firmware remain explicit without asking users to supply metadata', () => {
-  const query = new URL(simulatorIssueURL('', {event:'feedback', modBuild:'Stock firmware (no mods)', simulatorBuild:'abc123'})).searchParams;
+  const query = new URL(simulatorIssue('', {event:'feedback', modBuild:'Stock firmware (no mods)', simulatorBuild:'abc123'}).issue.url).searchParams;
   assert(!query.has('camera'));
   assert.equal(query.get('firmware'), 'Not identified');
   assert.equal(query.get('mod-build'), 'Stock firmware (no mods)');

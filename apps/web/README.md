@@ -268,6 +268,10 @@ operations. A genuinely new codec would require an interpreter update.
 download page and original release date, patch hash/size, included mods and model-specific boot instructions. Patch filenames are simple
 local filenames. Pages serves index and patches from the same origin.
 
+`report.json` includes the user's comment and the complete issue URL and prefilled
+fields (including labels, firmware ID, version and simulator version). The ZIP
+and the GitHub link use the same submission object; GitHub indexes the capture.
+
 Report delivery saves the latest report ZIP and its issue URL in the browser's
 IndexedDB before starting the download and opening GitHub. “Download saved
 report” recovers those same bytes after navigation or a reload. If a popup is

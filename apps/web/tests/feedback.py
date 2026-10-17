@@ -8,6 +8,7 @@ import asyncio
 import json
 import hashlib
 import zipfile
+from urllib.parse import urlparse, parse_qsl
 from pathlib import Path
 from playwright.async_api import async_playwright
 
@@ -35,6 +36,7 @@ async def check(args):
             await page.wait_for_function("location.hostname === 'github.com'", timeout=60000)
             assert len(context.pages) == 1
             assert 'template=simulator-crash.yml' in page.url
+            issue_url = page.url
             print(f'{name}: one-click delivery attempted; same-tab navigation reached GitHub', flush=True)
             # A full reload must recover the saved bytes without regenerating them.
             await page.goto(args.url.split('?')[0])
@@ -60,6 +62,8 @@ async def check(args):
             with zipfile.ZipFile(restored) as archive:
                 report = json.loads(archive.read('report.json'))
                 assert report['description'] == 'Report delivery on iPhone'
+                assert report['issue']['url'] == issue_url
+                assert report['issue']['fields'] == dict(parse_qsl(urlparse(issue_url).query))
                 assert report['error']['details']['device'] == 'SensorCaptureDMA'
                 assert report['identity']['firmwareSha256']
                 if 'snapshot.zip' in archive.namelist():

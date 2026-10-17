@@ -1,5 +1,10 @@
 import { zipFiles } from '../archive.ts';
 
+export interface ReportSubmission {
+  description: string;
+  issue?: { url: string; fields: Record<string, string> };
+}
+
 /** Complete diagnostic metadata remains readable even if the worker has failed. */
 export function errorReportZip(report: Record<string, unknown>, checkpoint?: ArrayBuffer): Blob {
   const text = (value: string) => new TextEncoder().encode(value);

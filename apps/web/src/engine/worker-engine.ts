@@ -25,7 +25,7 @@ import type {
   ReplayStep,
 } from "./api";
 import { digest } from "./checkpoint-store.js";
-import { errorReportZip } from "./report.ts";
+import { errorReportZip, type ReportSubmission } from "./report.ts";
 
 type State = {
   connections?: Connection[];
@@ -517,7 +517,7 @@ export class WorkerEngine implements Engine {
       this.errorListeners.delete(listener);
     };
   }
-  async errorReport(description: Promise<string> = Promise.resolve("")): Promise<Blob> {
+  async errorReport(submission: Promise<ReportSubmission> = Promise.resolve({description: ""})): Promise<Blob> {
     let detail: Record<string, unknown> & { checkpoint?: ArrayBuffer } = {};
     if (this.started && !this.workerFailed && !this.disposed) {
       try {
@@ -552,7 +552,7 @@ export class WorkerEngine implements Engine {
           language: navigator.language,
         },
       };
-    return errorReportZip({ ...report, description: await description }, checkpoint);
+    return errorReportZip({ ...report, ...await submission }, checkpoint);
   }
   async rollback(seconds: number) {
     this.alive = false;

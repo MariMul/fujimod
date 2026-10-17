@@ -6,13 +6,13 @@ import { createEngine } from "./engine";
 import { EngineError, FAULT_UNDO_SECONDS, faultFrom, type EngineFault } from "./engine/fault";
 import { cachedFetch } from "./asset-cache";
 import type { Engine, CardFile, BootMedia } from "./engine/api";
-import { errorReportZip } from "./engine/report";
+import { errorReportZip, type ReportSubmission } from "./engine/report";
 import { ModelViewer, type ModelData } from "./viewer/model";
 import { InputPanel } from "./ui/controls";
 import { ConnectionsPanel } from "./ui/connections";
 import { CardBrowser, downloadBlob } from "./ui/card";
 import { readPendingReport, storePendingReport, deliverReport, type PendingReport } from "./ui/report-delivery";
-import { simulatorIssueURL, type SimulatorIssueContext } from "./ui/simulator-feedback";
+import { simulatorIssue, type SimulatorIssueContext } from "./ui/simulator-feedback";
 import { FaultPanel } from "./ui/fault";
 import { cameraCard, cameraTable, type CameraSupport } from "./ui/cameras";
 import { personalNote, noteCameraSupport } from "./ui/personal-note";
@@ -161,11 +161,11 @@ function openFeedback(event: "feedback" | "crash") {
   feedbackDescription.value = "";
   $<HTMLImageElement>("feedback-preview").src = viewer.captureView();
   feedbackDialog.returnValue = "cancel";
-  let describe!: (value: string) => void;
-  const description = new Promise<string>(resolve => { describe = resolve; });
+  let describe!: (value: ReportSubmission) => void;
+  const submission = new Promise<ReportSubmission>(resolve => { describe = resolve; });
   // Capture at the moment feedback is requested, before the user writes a comment.
-  const capture = engine ? engine.errorReport(description) : description.then(value => errorReportZip({
-    description: value,
+  const capture = engine ? engine.errorReport(submission) : submission.then(value => errorReportZip({
+    ...value,
     error: latestFault,
     browser: { userAgent: navigator.userAgent },
     identity: { firmwareSha256: firmwareHash },
@@ -180,6 +180,7 @@ function openFeedback(event: "feedback" | "crash") {
   prepare.textContent = "Download and report";
   issue.hidden = message.hidden = true;
   feedbackDescription.readOnly = false;
+  let submitted: ReturnType<typeof simulatorIssue> | undefined;
   let pending: PendingReport | undefined;
   let closed = false;
   feedbackDialog.querySelector("form")!.onsubmit = async event => {
@@ -189,7 +190,8 @@ function openFeedback(event: "feedback" | "crash") {
     preparingReport = true;
     prepare.disabled = true;
     feedbackDescription.readOnly = true;
-    describe(feedbackDescription.value);
+    submitted ??= simulatorIssue(feedbackDescription.value, feedbackContext);
+    describe(submitted);
     message.textContent = "Preparing report…";
     message.hidden = false;
     try {
@@ -198,7 +200,7 @@ function openFeedback(event: "feedback" | "crash") {
         if (closed) return;
         if ("error" in report) throw report.error;
         pending = {blob: report.blob, name: `fujimod-feedback-${Date.now()}.zip`,
-          issueURL: simulatorIssueURL(feedbackDescription.value, feedbackContext)};
+          issueURL: submitted.issue.url};
       }
       await storePendingReport(pending);
       if (closed) return;
@@ -218,7 +220,7 @@ function openFeedback(event: "feedback" | "crash") {
   };
   feedbackDialog.onclose = () => {
     closed = true;
-    describe(feedbackDescription.value);
+    describe(submitted ?? simulatorIssue(feedbackDescription.value, feedbackContext));
   };
   feedbackDialog.showModal();
   feedbackDescription.focus();

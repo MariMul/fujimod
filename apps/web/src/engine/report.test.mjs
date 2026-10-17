@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WorkerEngine } from './worker-engine.ts';
 import { faultFrom, stateFault } from './fault.ts';
+import { simulatorIssue } from '../ui/simulator-feedback.ts';
 import { crc32 } from '../archive.ts';
 
 async function entries(blob) {
@@ -34,13 +35,18 @@ test('fault report includes binary snapshot, raw details, identities and guest i
   await engine.boot(new ArrayBuffer(1),{bundle:'runtime/',inputs:'inputs.json',boot:{sceneInput:true}},()=>{});
   const fault=faultFrom({type:'UnsupportedDevice',error:'unmodeled source',device:'SDIO',operation:'write',address:'0xfff80000',size:4,value:'0x7'});
   worker.reply({type:'error',fault});
-  const pending=engine.errorReport(Promise.resolve("The dial froze; please add a reset control.")), request=sent.at(-1);
+  const submission = simulatorIssue("The dial froze; please add a reset control.", {
+    event:'crash', camera:{id:'x70-110',model:'X70'}, modBuild:'v42 / 2026-10-17', simulatorBuild:'abc123 / 2026-10-17', fault,
+  });
+  const pending=engine.errorReport(Promise.resolve(submission)), request=sent.at(-1);
   assert.equal(request.type,'error_report');
   worker.reply({type:'error_report_result',id:request.id,checkpoint:new Uint8Array([0,1,128,255]).buffer,
     snapshot:{ticks:110000000,ram_bytes:536870912},inputs:[{action:'press',guest_ticks:119000000,options:{id:'menu'}}]});
   const files=await entries(await pending), report=JSON.parse(new TextDecoder().decode(files['report.json']));
   assert.deepEqual(files['snapshot.zip'],new Uint8Array([0,1,128,255]));
   assert.equal(report.description,'The dial froze; please add a reset control.');
+  assert.deepEqual(report.issue, submission.issue);
+  assert.deepEqual(report.issue.fields, Object.fromEntries(new URL(report.issue.url).searchParams));
   assert.equal(report.error.details.device,'SDIO'); assert.equal(report.error.details.operation,'write');
   assert.equal(report.rawErrors[0].fault.details.error,'unmodeled source');
   assert.equal(report.identity.bundleVersion,'bundle-hash'); assert.equal(report.identity.firmwareSha256.length,64);
@@ -55,6 +61,11 @@ test('a dead worker still produces a diagnostic ZIP with explicit snapshot unava
   assert.equal(report.description,'');
   assert.equal(files['snapshot.zip'],undefined); assert.match(report.snapshot.unavailable,/unavailable/);
   assert.equal(report.identity.bundleVersion,'bundle-hash'); assert.match(JSON.stringify(report.rawErrors),/worker crashed/);
+  const submission = simulatorIssue('Worker vanished', {event:'crash', modBuild:'v42', simulatorBuild:'abc123'});
+  const annotated = await entries(await engine.errorReport(Promise.resolve(submission)));
+  const captured = JSON.parse(new TextDecoder().decode(annotated['report.json']));
+  assert.equal(captured.description, submission.description);
+  assert.deepEqual(captured.issue, submission.issue);
   engine.dispose();
 });
 test('unsupported hardware retains access fields from both native failure and Python exception',()=>{

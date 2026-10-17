@@ -1,3 +1,4 @@
+import type { ReportSubmission } from "./report";
 import type { CameraPerformance } from "./performance";
 import type { EngineFault } from "./fault";
 export type { EngineFault } from "./fault";
@@ -100,7 +101,7 @@ export interface Engine {
   profile(limit?: number): Promise<Record<string, unknown>>;
   errors(listener: (fault: EngineFault) => void): () => void;
   rollback(seconds: number): Promise<Record<string, string>>;
-  errorReport(description?: Promise<string>): Promise<Blob>;
+  errorReport(submission?: Promise<ReportSubmission>): Promise<Blob>;
   boot(
     dat: ArrayBuffer,
     config: EngineConfig,

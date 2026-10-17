@@ -9,7 +9,7 @@ export interface SimulatorIssueContext {
 }
 
 /** Both entry points use the same template, with context captured at report time. */
-export function simulatorIssueURL(description: string, context: SimulatorIssueContext): string {
+export function simulatorIssue(description: string, context: SimulatorIssueContext) {
   const url = new URL('https://github.com/justjake/fujimod/issues/new');
   const labels = ['Simulator'];
   if (context.event === 'crash') labels.push('bug');
@@ -30,5 +30,5 @@ export function simulatorIssueURL(description: string, context: SimulatorIssueCo
       .map(key => `${key}: ${String(fault.details[key]).slice(0, 160)}`);
     url.searchParams.set('crash', `${fault.kind}: ${fault.message}\n${details.join('\n')}`);
   }
-  return url.href;
+  return { description, issue: {url: url.href, fields: Object.fromEntries(url.searchParams)} };
 }
