@@ -12,10 +12,10 @@ from fujimod.walkthroughs import Guide, discover
 from fujimod.walkthroughs.media import Video
 
 
-def png():
+def png(color='white'):
     from PIL import Image
     buffer = BytesIO()
-    Image.new('RGB', (320, 240), 'white').save(buffer, format='PNG')
+    Image.new('RGB', (320, 240), color).save(buffer, format='PNG')
     return buffer.getvalue()
 
 
@@ -27,6 +27,8 @@ class Camera:
         guide.frame(self.png, 0)
     def stop_recording(self):
         pass
+    def begin_segment(self):
+        self.guide.frame(self.png, 0)
     def capture(self):
         return self.png
     def press(self):
@@ -68,8 +70,9 @@ class WalkthroughTests(unittest.TestCase):
                                          '-frames:v','1','-f','image2pipe','-vcodec','png','-'])
         from PIL import Image, ImageStat
         picture = Image.open(BytesIO(frame)).convert('RGB')
-        self.assertLess(min(ImageStat.Stat(picture.crop((135,140,185,178))).mean), 240)
+        self.assertLess(min(ImageStat.Stat(picture.crop((260,140,308,178))).mean), 240)
         self.assertGreater(min(ImageStat.Stat(picture.crop((0,0,100,100))).mean), 250)
+        self.assertGreater(min(ImageStat.Stat(picture.crop((135,140,185,178))).mean), 250)
         self.assertEqual(report['steps'][0]['title'], 'Example')
         self.assertIn('video.mp4', report['artifacts'])
 
@@ -115,6 +118,7 @@ class WalkthroughTests(unittest.TestCase):
     def test_timestamp_cadence_preserves_short_samples(self):
         camera, guide = self.guide()
         with patch.object(Video, '_write') as write:
+            guide.input('right', True, 0)
             for n in range(101):
                 guide.frame(camera.png, n/100)
             self.assertEqual(write.call_count, 15)
@@ -153,9 +157,9 @@ class WalkthroughTests(unittest.TestCase):
             guide.frame(camera.png,0)
             guide.input('right',True,.5)
             guide.frame(camera.png,1)
-        self.assertEqual(len(observed),15)
-        self.assertTrue(all(not labels for labels in observed[:7]))
-        self.assertTrue(all(labels=={'right'} for labels in observed[7:]))
+        self.assertEqual(len(observed),13)
+        self.assertTrue(all(not labels for labels in observed[:6]))
+        self.assertTrue(all(labels=={'right'} for labels in observed[6:]))
 
     def test_zero_hold_adds_no_frame(self):
         camera,guide=self.guide()
@@ -206,3 +210,66 @@ class WalkthroughTests(unittest.TestCase):
         stamp=helper.stat();helper.write_text('TITLE="Two"\n')
         os.utime(helper,ns=(stamp.st_atime_ns,stamp.st_mtime_ns))
         self.assertEqual(discover(source)[0].title,'Two')
+
+    def test_directory_discovery_preserves_cross_file_parent_and_factory_binding(self):
+        (self.root/'navigation.py').write_text('from fujimod.walkthroughs import open_menu\n'
+            'page = open_menu("item", title="Open page")\n')
+        (self.root/'features.py').write_text('from .navigation import page\n'
+            'from fujimod.walkthroughs import walkthrough\n'
+            '@walkthrough("Child", start_from=page)\ndef child(c,g): pass\n')
+        found={w.name:w for w in discover(self.root)}
+        self.assertEqual(set(found), {'page','child'})
+        self.assertIs(found['child'].start_from,found['page'].function)
+        self.assertEqual(found['page'].source.name,'navigation.py')
+
+    def test_branches_replay_parent_without_inheriting_steps_or_coverage(self):
+        for number in range(2):
+            camera=Camera();camera.value=0
+            guide=Guide(camera,self.root/str(number),identity={},title='Child')
+            def parent(c,g):
+                self.assertEqual(c.value,0)
+                with g.step('Parent'):
+                    c.press();c.value=1;c.png=png('blue')
+            def child(c,g):
+                self.assertEqual(c.value,1)
+                with g.step('Child',hold=0):
+                    c.press();c.value=2;c.png=png('red')
+            report=guide.run(child,prerequisites=[('mod/file/parent',parent)])
+            self.assertEqual([s['title'] for s in report['steps']],['Child'])
+            self.assertEqual(len(report['interactions']),1)
+            self.assertEqual(len(report['inputs']),2)
+            self.assertEqual(report['inputs'][0]['seconds'],0)
+            self.assertTrue(report['prerequisites'][0]['passed'])
+            self.assertEqual((guide.output/'poster.png').read_bytes(),png('blue'))
+            self.assertEqual((guide.output/'screenshots/001.png').read_bytes(),png('red'))
+
+    def test_failed_prerequisite_does_not_enter_child(self):
+        from unittest.mock import Mock
+        camera,guide=self.guide();child=Mock()
+        def parent(c,g):
+            with g.step('Parent'):raise AssertionError('parent failed')
+        with self.assertRaisesRegex(AssertionError,'parent failed'):
+            guide.run(child,prerequisites=[('parent',parent)])
+        child.assert_not_called()
+        self.assertFalse(guide.report['prerequisites'][0]['passed'])
+        self.assertFalse(guide.report['passed'])
+
+    def test_idle_compression_preserves_changed_frames_and_guest_timestamps(self):
+        camera,guide=self.guide();video=guide.video;seen=[]
+        def write(raw):seen.append(raw);video.frames+=1
+        with patch.object(video,'_write',side_effect=write):
+            video.frame(camera.png,0)
+            video.frame(camera.png,3)
+            video.frame(png('blue'),3.1)
+            video.frame(png('blue'),4.1)
+        self.assertAlmostEqual(video.skipped_seconds,3.3)
+        self.assertEqual(video.last_time,4.1)
+        self.assertIn(png('blue'),seen)
+        self.assertEqual(len(seen),12)
+
+    def test_explicit_holds_are_not_compressed(self):
+        camera,guide=self.guide();video=guide.video
+        def write(raw):video.frames+=1
+        with patch.object(video,'_write',side_effect=write):
+            video.still(camera.png,2)
+        self.assertEqual(video.frames,30)

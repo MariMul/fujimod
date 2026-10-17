@@ -35,6 +35,9 @@ class Video:
         self._decoded_png = None
         self._decoded_image = None
         self._font = None
+        self.idle_limit = .4
+        self.skipped_seconds = 0.0
+        self._idle_kept = 0.0
 
     @property
     def seconds(self):
@@ -47,7 +50,13 @@ class Video:
         if self.last_time is not None and seconds < self.last_time:
             raise ValueError('Frame and input timestamps must be monotonic')
         if self.last_time is not None and self.last_png:
-            self._fractional_frames += (seconds-self.last_time)*self.fps
+            elapsed = seconds-self.last_time
+            duration = elapsed
+            if not self.active and not self.released:
+                duration = min(duration, max(0, self.idle_limit-self._idle_kept))
+                self._idle_kept += duration
+            self.skipped_seconds += elapsed-duration
+            self._fractional_frames += duration*self.fps
             count = max(0, int(self._fractional_frames+1e-8))
             self._fractional_frames -= count
             for _ in range(count):
@@ -63,6 +72,7 @@ class Video:
         # Flush the PREVIOUS interval with its old input state. Sampling need
         # not coincide with edges; an event must never recolor earlier frames.
         self._advance(seconds)
+        self._idle_kept = 0
         if pressed:
             self.active.add(name)
             self.released.pop(name, None)
@@ -101,7 +111,7 @@ class Video:
                 del self.released[name]
             else:
                 labels.append((name, round(255*(1-age/fade_frames))))
-        self.process.stdin.write(draw_badges(picture, labels).convert('RGB').tobytes())
+        self.process.stdin.write(draw_badges(picture, labels, align='right').convert('RGB').tobytes())
         self.frames += 1
 
     def frame(self, png, seconds):
@@ -109,6 +119,7 @@ class Video:
         if png:
             if png != self.last_png:
                 self._latest_shown = False
+                self._idle_kept = 0
             self.last_png = png
 
     def still(self, png, seconds):
@@ -125,6 +136,7 @@ class Video:
             self._write(png)
         if count:
             self._latest_shown = True
+            self._idle_kept = self.idle_limit
 
     def finish(self):
         if self._finished:

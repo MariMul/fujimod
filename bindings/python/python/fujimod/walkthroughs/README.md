@@ -4,56 +4,74 @@ Install FujiMod with its `walkthroughs` extra and put `ffmpeg` on PATH.
 The library has no camera, firmware or repository dependency.
 
 ```python
-from fujimod.walkthroughs import walkthrough
+from fujimod.walkthroughs import open_menu, walkthrough
 
-@walkthrough('Use a feature')
+settings = open_menu('settings_item', title='Open Settings')
+
+@walkthrough('Use a feature', start_from=settings)
 def example(camera, guide):
-    with guide.step('Choose the option', 'Turn the dial.', hold=2):
+    with guide.step('Choose the option', 'Turn the dial.'):
         camera.press('right')
         assert camera.current_option() == 'example'
 ```
 
-`discover(path)` imports trusted local Python and returns decorated functions
-from that file. Several functions may share a file. Relative sibling-helper
-imports work, and discovery reloads source instead of accepting stale bytecode. The host derives identity
-and mod ownership from paths; authors provide only titles, prose and code.
+A normal walkthrough can also be a `start_from` prerequisite. Branches start
+independently from their parent's completed state. A host must reject cycles
+and unresolved prerequisites before execution. The current runner replays
+prerequisites in a fresh camera, runs their assertions and settling, then
+starts the child's recording. Replay contributes no child steps, input records
+or coverage. Failed prerequisites prevent the child from executing. Checkpoint
+caching is not part of the authoring API.
 
-Construct a fresh adapter per function, then call
-`Guide(camera, fresh_output, identity=identity, title=title).run(function)`.
-The host owns identity: include build and execution/source hashes suitable for
-its coverage gate. Python assertions must be enabled.
+`open_menu(item, title=..., start_from=None)` creates an ordinary walkthrough
+with two illustrated steps: select the item, then open it. Its adapter implements
+`menu_label(item)`, `select_menu_item(item)` and `open_menu_item(item)`. Factory
+identity comes from the module variable name; decorated functions use their
+function name. Filenames and containing directories provide the remaining
+identity and ownership. There are no explicit IDs or mod lists.
+
+`discover(path)` imports one file or all public Python files in a directory in
+one fresh package. Several walkthroughs may share a file; relative imports can
+reference prerequisites in other files. Discovery reloads local source instead
+of accepting stale bytecode, and imported guides keep their original ownership.
+
+Construct a fresh camera adapter per segment, then call
+`Guide(camera, fresh_output, identity=identity, title=title).run(function,
+prerequisites=[(parent_identity, parent_function), ...])` with prerequisites in
+root-to-parent order. The host owns build and execution/source identity. Python
+assertions must be enabled.
 
 A camera adapter implements:
 
-- `start_recording(guide)`: attach recording to existing input/execution paths.
+- `start_recording(guide)`: attach observation to existing execution/input paths.
+- `begin_segment()`: reset the local guest clock and supply the first frame after replay.
 - `capture()`: settle and return clean PNG bytes for the current screen.
 - `stop_recording()`: remove recording hooks, including on failure.
 
 It calls `guide.frame(png, seconds)` at monotonically increasing guest times,
 `guide.input(name, pressed, seconds)` for real input edges (returns an index),
 and `guide.interaction(surface, item, input_index=..., **evidence)` for observed
-interactions. Frame sampling must not drive device state. Input badges are
-rendered only into video, in the bottom-right, fading after release.
-Input edges flush the preceding interval before changing the badge.
-The adapter should sample immediately before an input edge for fresh pixels. It supplies evidence rather than accepting
-coverage declarations from walkthrough authors.
+interactions. Frame sampling never drives device state. Only non-fixture press
+inputs can anchor coverage. Input badges appear in the video's bottom-right,
+fading for 0.4 presentation seconds after release. Input edges flush the prior
+interval before changing the badge.
 
-`guide.step(title, text='', hold=2)` captures on successful block exit, then
-holds that observation for presentation seconds without advancing guest time.
-A zero hold adds no presentation time. The final frame is retained even when
-there is no later sample or hold.
-An assertion failure prevents capture and makes the whole report fail, even
-if walkthrough code catches the failed step's exception.
-`guide.fixture(description)` records setup interventions and suppresses their
-coverage. Fixtures are independent of guide steps.
+`guide.step(title, text='', hold=.75)` captures on successful block exit, then
+holds that observation without advancing guest time. `guide.pause(seconds=.35)`
+shows a settled action result without creating a documentation step. Explicit
+holds are never compressed. Unchanged frames without active/fading inputs keep
+at most 0.4 seconds of guest waiting; transitions and input intervals remain.
+Input records retain their actual guest times and presentation timestamps.
+Neither video pacing nor holds change emulator execution or CPU speed.
 
-`guide.json` schema 1 contains identity, title, pass/fail, numbered steps,
-clean screenshot paths/hashes, video segment timestamps, input edges,
-interactions, fixtures, and artifact hashes. Failed runs keep diagnostics and
-never become successful guides. Video is sampled at 15 fps, independent of
-host execution speed. Hosts can build websites from these outputs without
-running the walkthrough source during the website build itself.
+A zero hold adds no presentation time. The final frame is retained. Failed steps
+and fixtures fail the run even if author code catches their exception.
+`guide.fixture(description)` records setup interventions and suppresses coverage.
 
-Input records include a `fixture` boolean. Only non-fixture press records can
-anchor interaction coverage. Video timestamps are monotonic across both frames
-and input edges; cleanup closes the encoder after failures as well as success.
+`guide.json` schema 2 contains identity, title, prerequisite results, pass/fail,
+numbered steps, screenshot hashes, local video timestamps, input edges,
+interactions, fixtures, presentation timing and artifact hashes. `poster.png`
+is the segment's actual starting frame, captured after prerequisite replay.
+The host records `start_from` as the parent identity so consumers can link guides.
+Failed runs retain diagnostics and never qualify coverage. Video is sampled at
+15 fps; websites consume these artifacts without executing walkthrough source.

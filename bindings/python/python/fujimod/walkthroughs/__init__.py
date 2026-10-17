@@ -2,7 +2,7 @@
 from contextlib import contextmanager
 from dataclasses import dataclass
 import hashlib
-import importlib.util
+import importlib
 import importlib.abc
 import importlib.machinery
 import itertools
@@ -14,14 +14,34 @@ from pathlib import Path
 import sys
 
 
-def walkthrough(title):
+def walkthrough(title, *, start_from=None):
     """Mark a two-argument (camera, guide) function for discovery."""
     if not isinstance(title, str) or not title.strip():
         raise ValueError('A walkthrough needs a title')
+    if start_from is not None and not hasattr(start_from, 'walkthrough_title'):
+        raise ValueError('start_from must reference a walkthrough')
     def decorate(function):
         function.walkthrough_title = title
+        function.walkthrough_start_from = start_from
         return function
     return decorate
+
+
+def open_menu(item, *, title, start_from=None):
+    """Create a guide that selects a menu item visibly, then opens its page."""
+    if not isinstance(item, str) or not item:
+        raise ValueError('A menu starter needs an item name')
+    @walkthrough(title, start_from=start_from)
+    def visit(camera, guide):
+        with guide.step('Select ' + camera.menu_label(item)):
+            camera.select_menu_item(item)
+        with guide.step(title):
+            camera.open_menu_item(item)
+    # Factory guides take their identity from their binding in the calling
+    # module. Imported guides retain their original module ownership.
+    visit.walkthrough_module = sys._getframe(1).f_globals['__name__']
+    visit.walkthrough_factory = True
+    return visit
 
 
 @dataclass(frozen=True)
@@ -30,6 +50,10 @@ class Walkthrough:
     name: str
     title: str
     function: object
+
+    @property
+    def start_from(self):
+        return self.function.walkthrough_start_from
 
 
 class _FreshSourceLoader(importlib.machinery.SourceFileLoader):
@@ -52,29 +76,31 @@ _discoveries = itertools.count()
 
 
 def discover(path):
-    """Import trusted source afresh, with relative sibling-helper imports."""
+    """Import one file or a directory in one fresh package, preserving references."""
     path = Path(path).resolve()
-    package = '_walkthrough_' + hashlib.sha256(str(path.parent).encode()).hexdigest() + '_' + str(next(_discoveries))
+    directory = path if path.is_dir() else path.parent
+    sources = sorted(p for p in directory.glob('*.py') if not p.name.startswith('_')) if path.is_dir() else [path]
+    package = '_walkthrough_' + hashlib.sha256(str(directory).encode()).hexdigest() + '_' + str(next(_discoveries))
     parent = types.ModuleType(package)
-    parent.__path__ = [str(path.parent)]
+    parent.__path__ = [str(directory)]
     parent.__package__ = package
     sys.modules[package] = parent
-    name = package + '.' + path.stem
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
     try:
-        # Do not reuse a timestamp/size pyc for rapidly rewritten walkthroughs.
-        exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__)
+        modules = [(source, importlib.import_module(package + '.' + source.stem)) for source in sources]
     except BaseException:
         for key in list(sys.modules):
             if key == package or key.startswith(package + '.'):
                 sys.modules.pop(key, None)
         raise
     found = {}
-    for value in vars(module).values():
-        if callable(value) and hasattr(value, 'walkthrough_title') and value.__module__ == name:
-            found[value.__name__] = Walkthrough(path, value.__name__, value.walkthrough_title, value)
+    for source, module in modules:
+        for binding, value in vars(module).items():
+            if not callable(value) or not hasattr(value, 'walkthrough_title'):
+                continue
+            if getattr(value, 'walkthrough_module', value.__module__) != module.__name__:
+                continue
+            name = binding if getattr(value, 'walkthrough_factory', False) else value.__name__
+            found.setdefault(value, Walkthrough(source, name, value.walkthrough_title, value))
     return list(found.values())
 
 
@@ -100,12 +126,13 @@ class Guide:
         self.camera, self.output = camera, Path(output)
         self.video = Video(self.output, fps=fps)
         self.output.mkdir(parents=True, exist_ok=False)
-        self.report = dict(schema=1, identity=identity, title=title, passed=False,
-                           steps=[], inputs=[], interactions=[], fixtures=[])
+        self.report = dict(schema=2, identity=identity, title=title, passed=False,
+                           steps=[], inputs=[], interactions=[], fixtures=[], prerequisites=[])
         self._inside_step = False
         self._recording = False
         self._used = False
         self._failures = []
+        self._preparing = False
 
     def save(self):
         temporary = self.output / '.guide.json.tmp'
@@ -113,9 +140,16 @@ class Guide:
         os.replace(temporary, self.output / 'guide.json')
 
     def frame(self, png, seconds):
+        if self._preparing:
+            return
+        if png and 'poster' not in self.report:
+            (self.output/'poster.png').write_bytes(png)
+            self.report['poster'] = 'poster.png'
         self.video.frame(png, seconds)
 
     def input(self, name, pressed, seconds):
+        if self._preparing:
+            return None
         self.video.input(name, pressed, seconds)
         event = dict(name=name, pressed=pressed, seconds=seconds,
                      video_seconds=self.video.seconds, fixture=not self._recording)
@@ -154,7 +188,7 @@ class Guide:
             self._recording = previous
 
     @contextmanager
-    def step(self, title, text='', *, hold=2):
+    def step(self, title, text='', *, hold=.75):
         if self._inside_step:
             raise ValueError('Guide steps cannot nest')
         if not isinstance(title, str) or not title.strip() or not isinstance(text, str):
@@ -167,6 +201,8 @@ class Guide:
         try:
             yield
             png = self.camera.capture()
+            if self._preparing:
+                return
             number = len(self.report['steps']) + 1
             name = f'screenshots/{number:03d}.png'
             path = self.output / name
@@ -184,14 +220,35 @@ class Guide:
         finally:
             self._inside_step = False
 
-    def run(self, function):
+    def pause(self, seconds=.35):
+        """Show a settled action result without adding an illustrated step."""
+        from .media import seconds_value
+        seconds_value(seconds)
+        png = self.camera.capture()
+        if not self._preparing:
+            self.video.still(png, seconds)
+
+    def run(self, function, *, prerequisites=()):
         if self._used:
             raise RuntimeError('A Guide can run only once')
         self._used = True
         error = None
         try:
+            self._preparing = True
             self.camera.start_recording(self)
+            for name, prepare in prerequisites:
+                self.report['stage'] = 'prerequisite'
+                print('Replaying prerequisite: ' + name, flush=True)
+                entry = dict(walkthrough=name, passed=False)
+                self.report['prerequisites'].append(entry)
+                prepare(self.camera, self)
+                if self._failures:
+                    raise self._failures[0]
+                entry['passed'] = True
+            self._preparing = False
             self._recording = True
+            self.report['stage'] = 'execution'
+            self.camera.begin_segment()
             function(self.camera, self)
             if self._failures:
                 raise self._failures[0]
@@ -202,6 +259,7 @@ class Guide:
             self.report['error'] = f'{type(caught).__name__}: {caught}'
         finally:
             self._recording = False
+            self._preparing = False
             try:
                 self.camera.stop_recording()
             except BaseException as caught:
@@ -216,6 +274,8 @@ class Guide:
                     error = caught
                     self.report['error'] = f'{type(caught).__name__}: {caught}'
             self.report['passed'] = error is None
+            self.report['presentation'] = dict(fps=self.video.fps, idle_limit=self.video.idle_limit,
+                skipped_guest_seconds=self.video.skipped_seconds)
             artifacts = {str(p.relative_to(self.output)): _digest(p)
                          for p in self.output.rglob('*') if p.is_file() and p.name not in ('guide.json', '.guide.json.tmp')}
             self.report['artifacts'] = artifacts
