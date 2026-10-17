@@ -1,3 +1,0 @@
-[submodule "repos/json-schema-to-c"]
-	path = repos/json-schema-to-c
-	url = https://github.com/badicsalex/json_schema_to_c.git
