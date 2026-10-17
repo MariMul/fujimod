@@ -21,9 +21,12 @@ window.panel = new InputPanel(document.querySelector('#controls'), viewer,
 panel.render([
   {id:'aperture', label:'Aperture', kind:'ring', supported:true,
     positions:['2.8','4','5.6','8','11','16'].map(id => ({id, label:id})), initial:'5.6'},
+  {id:'shutter_speed', label:'Speed', kind:'dial', supported:true,
+    positions:['30','60','125','250','500','1000'].map(id => ({id, label:id})), initial:'125'},
   {id:'command', label:'Command', kind:'dial', supported:true, relative:true},
 ], {setPosition: async (id, value) => requests.push({id,value})}, {
   layout:[{kind:'control',id:'aperture',variant:'dial'},
+    {kind:'control',id:'shutter_speed',variant:'dial'},
     {kind:'control',id:'command',variant:'ticks'}], combos:[]
 });
 window.fixtureReady = true;
@@ -70,57 +73,73 @@ async def check(browser_type, url, output):
     await page.route('**/dial-test.html', lambda route: route.fulfill(body=FIXTURE, content_type='text/html'))
     await page.goto(url.rstrip('/') + '/dial-test.html')
     await page.wait_for_function('window.fixtureReady')
-    dial = page.locator('.dial[data-id="aperture"]')
-    await page.wait_for_timeout(80)
-    initial = await snapshot(dial)
-    box = await dial.bounding_box()
-    x, y = box['x'] + box['width']/2, box['y'] + box['height']/2
-    await page.mouse.move(x, y)
-    await page.mouse.down()
-    samples = []
-    for dx in [4, 8, 12, 16, 20]:
-        await page.mouse.move(x+dx, y)
+    results = {}
+    for identifier, initial_value, preceding in [('aperture','5.6','4'), ('shutter_speed','125','60')]:
+        dial = page.locator(f'.dial[data-id="{identifier}"]')
         await paint(page)
-        samples.append(await snapshot(dial))
-    assert all(a['x'] > b['x'] for a,b in zip([initial]+samples, samples)), samples
-    assert [s['selected'] for s in samples] == ['5.6','5.6','5.6','8','8'], samples
-    distances = [a['x']-b['x'] for a,b in zip([initial]+samples[:3],samples[:4])]
-    assert max(distances)-min(distances) < 1, distances
-    assert await page.evaluate('requests') == [dict(id='aperture',value='8')]
-    await page.screenshot(path=str(output/'held.png'))
-    await page.mouse.up()
-    await settled(dial)
-    released = await snapshot(dial)
-    assert abs(released['error']) < 1, released
-    assert released['x'] > samples[-1]['x'], (released, samples[-1])
-    # Reversal and cancellation restore the selected detent without extra input.
-    await page.mouse.move(x, y)
-    await page.mouse.down()
-    await page.mouse.move(x-8, y)
-    await paint(page)
-    reverse = await snapshot(dial)
-    assert reverse['x'] > released['x'], reverse
-    await dial.dispatch_event('pointercancel', dict(pointerId=1))
-    await page.mouse.up()
-    await settled(dial)
-    assert abs((await snapshot(dial))['error']) < 1
-    assert await page.evaluate('requests.length') == 1
-    # Keyboard remains discrete and snaps to its newly selected value.
-    await dial.press('ArrowRight')
-    await settled(dial)
-    assert (await snapshot(dial))['selected'] == '11'
-    assert abs((await snapshot(dial))['error']) < 1
-    # A native touch start with matching fractional moves exercises touch capture.
-    await dial.evaluate('''node => node.addEventListener('pointerdown', event => {
-      window.touch = {trusted:event.isTrusted, type:event.pointerType};
-      queueMicrotask(() => window.dispatchEvent(new PointerEvent('pointermove', {
-        pointerId:event.pointerId,clientX:event.clientX+8,clientY:event.clientY,buttons:1
-      })));
-    }, {once:true})''')
-    await dial.tap()
-    await settled(dial)
-    assert await page.evaluate('touch') == dict(trusted=True,type='touch')
-    assert (await snapshot(dial))['selected'] == '11'
+        initial = await snapshot(dial)
+        box = await dial.bounding_box()
+        x, y = box['x'] + box['width']/2, box['y'] + box['height']/2
+        before_requests = await page.evaluate('requests.length')
+        await page.mouse.move(x, y)
+        await page.mouse.down()
+        samples = []
+        for dx in [4, 8, 12, 16, 20]:
+            await page.mouse.move(x+dx, y)
+            await paint(page)
+            samples.append(await snapshot(dial))
+        assert all(a['x'] < b['x'] for a,b in zip([initial]+samples, samples)), samples
+        assert [s['selected'] for s in samples] == [initial_value]*3 + [preceding]*2, samples
+        distances = [b['x']-a['x'] for a,b in zip([initial]+samples[:3],samples[:4])]
+        assert max(distances)-min(distances) < 1, distances
+        assert await page.evaluate('(start) => requests.slice(start)', before_requests) == [dict(id=identifier,value=preceding)]
+        await page.screenshot(path=str(output/f'{identifier}-held.png'))
+        await page.mouse.up()
+        await settled(dial)
+        released = await snapshot(dial)
+        assert abs(released['error']) < 1, released
+        assert released['x'] < samples[-1]['x'], (released, samples[-1])
+        # Reversal and cancellation restore the selected detent without extra input.
+        await page.mouse.move(x, y)
+        await page.mouse.down()
+        await page.mouse.move(x-8, y)
+        await paint(page)
+        reverse = await snapshot(dial)
+        assert reverse['x'] < released['x'], reverse
+        await dial.dispatch_event('pointercancel', dict(pointerId=1))
+        await page.mouse.up()
+        await settled(dial)
+        assert abs((await snapshot(dial))['error']) < 1
+        assert await page.evaluate('requests.length') == before_requests+1
+        # Dragging left selects the following label and follows the pointer too.
+        await page.mouse.move(x, y)
+        await page.mouse.down()
+        await page.mouse.move(x-20, y)
+        await paint(page)
+        assert (await snapshot(dial))['selected'] == initial_value
+        assert (await snapshot(dial))['x'] < released['x']
+        await page.mouse.up()
+        await settled(dial)
+        assert abs((await snapshot(dial))['error']) < 1
+        # Keyboard remains discrete and retains its established direction.
+        await dial.press('ArrowLeft')
+        await settled(dial)
+        assert (await snapshot(dial))['selected'] == preceding
+        await dial.press('ArrowRight')
+        await settled(dial)
+        assert (await snapshot(dial))['selected'] == initial_value
+        # A native touch start with matching fractional moves exercises touch capture.
+        await dial.evaluate('''node => node.addEventListener('pointerdown', event => {
+          window.touch = {trusted:event.isTrusted, type:event.pointerType};
+          queueMicrotask(() => window.dispatchEvent(new PointerEvent('pointermove', {
+            pointerId:event.pointerId,clientX:event.clientX+8,clientY:event.clientY,buttons:1
+          })));
+        }, {once:true})''')
+        await dial.tap()
+        await settled(dial)
+        assert await page.evaluate('touch') == dict(trusted=True,type='touch')
+        assert (await snapshot(dial))['selected'] == initial_value
+        results[identifier] = dict(initial=initial, samples=samples, released=released)
     # Relative tick strips retain their position across gestures and snap too.
     ticks = page.locator('.dial[data-id="command"]')
     box = await ticks.bounding_box()
@@ -136,8 +155,7 @@ async def check(browser_type, url, output):
         assert abs((await snapshot(ticks))['ticks'] - end) < .01, await snapshot(ticks)
     await page.screenshot(path=str(output/'released.png'))
     assert not errors, errors
-    (output/'result.json').write_text(json.dumps(dict(initial=initial, samples=samples, released=released,
-        requests=await page.evaluate('requests')), indent=2)+'\n')
+    (output/'result.json').write_text(json.dumps(dict(dials=results, requests=await page.evaluate('requests')), indent=2)+'\n')
     await browser.close()
 
 
