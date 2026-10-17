@@ -16,3 +16,6 @@ thiserror = "2"
 futures-lite = "2"
 futures-timer = { version = "3", features = ["wasm-bindgen"] }
 pyo3 = { version = "=0.30.1", features = ["extension-module", "abi3-py310"] }
+
+js-sys = "0.3"
+wasm-bindgen-test = "0.3"

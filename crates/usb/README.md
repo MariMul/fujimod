@@ -73,11 +73,12 @@ composition. The debug memory packet limit does not constrain E0 data pieces.
 `Session::empty_response()` exposes E8's four raw acknowledgement bytes. It is
 not a readiness poll or a wait-for-execution API.
 
-The initial implementation is tested on native macOS with synthetic exchanges;
-no hardware access is part of the test suite. Browser builds are a subsequent
-capability. Native Python bindings live in `bindings/python/` at the workspace
-root. All public I/O is async and the internal test interface does not
-require `Send` futures. Browser execution is not yet validated.
+The core is tested on native macOS and as Wasm in a JavaScript runtime using
+synthetic exchanges. nusb's WebUSB backend compiles for `wasm32-unknown-unknown`;
+JavaScript bindings and physical browser/camera integration remain subsequent
+work. No hardware access is part of the test suite. Native Python bindings live
+in `bindings/python/` at the workspace root. All public I/O is async and the
+internal test interface does not require `Send` futures.
 
 Protocol references are `fftlib.py` and `ffjlib.py` from
 [tiredboffin/fffw](https://github.com/tiredboffin/fffw/tree/bedc091e0b54a1a34aaf6929dd08e1db36d13b08/ff80), and
@@ -141,3 +142,28 @@ Use `ff80::commands::research::{CommandCode, Request}` and
 capacity is checked before sending. The result validates the common header,
 preserves raw status/body bytes and performs no command-specific interpretation.
 It is distinct from App80's one-byte identifier and mailbox codec.
+
+## Wasm core checks
+
+The workspace's `.cargo/config.toml` enables the WebUSB APIs required by nusb.
+Install the Wasm standard library and a wasm-bindgen test runner matching the
+`wasm-bindgen` version in `Cargo.lock` (currently `0.2.129`):
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.129 --locked --root target/tooling
+PATH="$PWD/target/tooling/bin:$PATH" cargo test -p fujimod-usb \
+  --target wasm32-unknown-unknown --features testing --lib --test wasm_core
+```
+
+Run from the workspace root with Node on `PATH`, or use `mise run rust-wasm-test`
+after installing the runner. The version match is required by wasm-bindgen's
+binary format. These tests execute lifecycle, tracing, cancellation and timeout
+code as Wasm without device discovery. They do not claim browser permission or
+physical USB validation.
+
+Control and bulk transfers share a host deadline. This covers WebUSB, where
+nusb cannot apply a control-transfer timeout itself. On expiration the session
+is fenced; the camera may still be processing the transfer. Trace timestamps
+use the JavaScript wall clock on Wasm and preserve the same epoch/type as native
+builds, without calling the unsupported Wasm standard-library wall clock.

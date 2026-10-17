@@ -172,7 +172,7 @@ pub(crate) struct UsbIo {
 async fn deadline<T>(
     timeout: Duration,
     stage: TransferStage,
-    task: impl std::future::Future<Output = T>,
+    task: impl std::future::IntoFuture<Output = T>,
 ) -> Result<T> {
     futures_lite::future::race(async { Ok(task.await) }, async {
         futures_timer::Delay::new(timeout).await;
@@ -190,8 +190,13 @@ impl Io for UsbIo {
         })
     }
     async fn control(&mut self, kind: RequestKind, envelope: [u8; 12]) -> Result<()> {
-        self.interface
-            .control_out(
+        // nusb's WebUSB backend has no control-transfer timeout. Apply the
+        // same host deadline as bulk transfers; dropping this future cannot
+        // establish that the camera stopped processing the envelope.
+        deadline(
+            self.timeout,
+            TransferStage::Control(kind),
+            self.interface.control_out(
                 ControlOut {
                     control_type: ControlType::Vendor,
                     recipient: Recipient::Other,
@@ -201,14 +206,15 @@ impl Io for UsbIo {
                     data: &envelope,
                 },
                 self.timeout,
-            )
-            .await
-            .map_err(|source| Error::Transfer {
-                stage: TransferStage::Control(kind),
-                source,
-                transferred: None,
-                partial: vec![],
-            })
+            ),
+        )
+        .await?
+        .map_err(|source| Error::Transfer {
+            stage: TransferStage::Control(kind),
+            source,
+            transferred: None,
+            partial: vec![],
+        })
     }
     async fn write(&mut self, bytes: &[u8]) -> Result<()> {
         self.output.submit(bytes.to_vec().into());
@@ -325,5 +331,23 @@ mod tests {
             std::future::pending::<()>(),
         ));
         assert!(matches!(result, Err(Error::Timeout(TransferStage::BulkIn))));
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32"))]
+mod wasm_tests {
+    use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    async fn host_control_deadline_works_without_a_blocking_thread() {
+        let stage = TransferStage::Control(RequestKind::ReadCommand);
+        let result = deadline(
+            Duration::from_millis(1),
+            stage,
+            std::future::pending::<()>(),
+        )
+        .await;
+        assert!(matches!(result, Err(Error::Timeout(actual)) if actual == stage));
     }
 }

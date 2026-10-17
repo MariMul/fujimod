@@ -19,3 +19,6 @@ run = "cargo test --workspace --all-features"
 
 [tasks.rust-check]
 run = "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+
+[tasks.rust-wasm-test]
+run = 'PATH="$PWD/target/tooling/bin:$PATH" cargo test -p fujimod-usb --target wasm32-unknown-unknown --features testing --lib --test wasm_core'

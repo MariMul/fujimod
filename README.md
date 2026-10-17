@@ -29,6 +29,10 @@ cargo test --workspace --all-features
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
 
+The core also builds for WebUSB. See the USB crate's
+[Wasm checks](crates/usb/README.md#wasm-core-checks) for the JS-runtime tests;
+the browser binding package is still to be implemented.
+
 The [Python package](bindings/python/README.md) lives in `bindings/python/`.
 JavaScript/Wasm bindings will live in `bindings/javascript/`. Binding crates are
 members of this same workspace. Each directory owns its language package;

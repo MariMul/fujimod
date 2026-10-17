@@ -1,0 +1,4 @@
+[target.wasm32-unknown-unknown]
+# nusb's WebUSB backend uses web-sys's gated USB bindings.
+rustflags = ["--cfg=web_sys_unstable_apis"]
+runner = "wasm-bindgen-test-runner"

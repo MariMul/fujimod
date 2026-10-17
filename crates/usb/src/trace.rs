@@ -7,6 +7,17 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+// std's SystemTime::now is unavailable on wasm32-unknown-unknown. Keep the
+// public timestamp type and epoch while using the browser/JS wall clock there.
+#[cfg(target_arch = "wasm32")]
+fn timestamp() -> std::time::SystemTime {
+    std::time::UNIX_EPOCH + std::time::Duration::from_millis(js_sys::Date::now() as u64)
+}
+#[cfg(not(target_arch = "wasm32"))]
+fn timestamp() -> std::time::SystemTime {
+    std::time::SystemTime::now()
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Failure {
     Transfer(nusb::transfer::TransferError),
@@ -130,7 +141,7 @@ impl Trace {
         }
         state.events.push_back(Event {
             sequence,
-            timestamp: std::time::SystemTime::now(),
+            timestamp: timestamp(),
             transfer,
             stage,
             endpoint,
