@@ -11,6 +11,8 @@ description = "Asynchronous Fujifilm service and debug USB protocols"
 testing = []
 
 [dependencies]
+fujimod-usb-proxy = { path = "../usb-proxy" }
+base64 = "0.22"
 fujimod-defs.workspace = true
 thiserror.workspace = true
 futures-lite.workspace = true

@@ -13,6 +13,8 @@ pub enum TransferStage {
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
+    #[error(transparent)]
+    Proxy(#[from] fujimod_usb_proxy::Error),
     #[error("USB device access failed: {0}")]
     Usb(#[from] nusb::Error),
     #[error("USB transfer failed during {stage:?}: {source} ({transferred:?} bytes transferred)")]

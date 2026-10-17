@@ -16,18 +16,120 @@ pub enum DeviceFilter {
     Fujifilm,
     Diagnostic,
 }
-pub async fn discover(filter: DeviceFilter) -> Result<Vec<nusb::DeviceInfo>> {
+/// A caller-selected local device or a descriptor advertised by a proxy exporter.
+#[derive(Clone, Debug)]
+pub enum Device {
+    Local(nusb::DeviceInfo),
+    Proxy(fujimod_usb_proxy::RemoteDevice),
+}
+impl Device {
+    pub fn vendor_id(&self) -> u16 {
+        match self {
+            Self::Local(d) => d.vendor_id(),
+            Self::Proxy(d) => d.descriptor.vendor_id,
+        }
+    }
+    pub fn product_id(&self) -> u16 {
+        match self {
+            Self::Local(d) => d.product_id(),
+            Self::Proxy(d) => d.descriptor.product_id,
+        }
+    }
+    /// Proxy bus IDs are relay routes, not invented host topology.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn bus_id(&self) -> &str {
+        match self {
+            Self::Local(d) => d.bus_id(),
+            Self::Proxy(d) => &d.descriptor.id,
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn device_address(&self) -> u8 {
+        match self {
+            Self::Local(d) => d.device_address(),
+            Self::Proxy(_) => 0,
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn port_chain(&self) -> &[u8] {
+        match self {
+            Self::Local(d) => d.port_chain(),
+            Self::Proxy(_) => &[],
+        }
+    }
+    pub fn manufacturer_string(&self) -> Option<&str> {
+        match self {
+            Self::Local(d) => d.manufacturer_string(),
+            Self::Proxy(d) => d.descriptor.manufacturer.as_deref(),
+        }
+    }
+    pub fn product_string(&self) -> Option<&str> {
+        match self {
+            Self::Local(d) => d.product_string(),
+            Self::Proxy(d) => d.descriptor.product.as_deref(),
+        }
+    }
+    pub fn serial_number(&self) -> Option<&str> {
+        match self {
+            Self::Local(d) => d.serial_number(),
+            Self::Proxy(d) => d.descriptor.serial.as_deref(),
+        }
+    }
+}
+fn matches_filter(d: &Device, filter: DeviceFilter) -> bool {
+    d.vendor_id() == 0x04cb && (filter == DeviceFilter::Fujifilm || d.product_id() == 0xff80)
+}
+pub async fn discover(filter: DeviceFilter) -> Result<Vec<Device>> {
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Ok(url) = std::env::var("FUJIMOD_USB_PROXY_URL") {
+        let token = std::env::var("FUJIMOD_USB_PROXY_TOKEN")
+            .map_err(|_| fujimod_usb_proxy::Error("FUJIMOD_USB_PROXY_TOKEN is required".into()))?;
+        return discover_proxy(&url, &token, filter).await;
+    }
     Ok(nusb::list_devices()
         .await?
-        .filter(|d| {
-            d.vendor_id() == 0x04cb
-                && (filter == DeviceFilter::Fujifilm || d.product_id() == 0xff80)
-        })
+        .map(Device::Local)
+        .filter(|d| matches_filter(d, filter))
+        .collect())
+}
+/// Explicit remote discovery works in Rust, native Python and browser Wasm.
+/// Failure never falls back to a local camera.
+pub async fn discover_proxy(url: &str, token: &str, filter: DeviceFilter) -> Result<Vec<Device>> {
+    Ok(fujimod_usb_proxy::Client::discover(url, token)
+        .await?
+        .into_iter()
+        .map(Device::Proxy)
+        .filter(|d| matches_filter(d, filter))
         .collect())
 }
 
 /// Descriptor inspection only; does not claim or configure an interface.
-pub async fn interfaces(info: &nusb::DeviceInfo) -> Result<Vec<InterfaceSelection>> {
+pub async fn interfaces(info: &Device) -> Result<Vec<InterfaceSelection>> {
+    let Device::Local(info) = info else {
+        let Device::Proxy(remote) = info else {
+            unreachable!()
+        };
+        return Ok(remote
+            .descriptor
+            .interfaces
+            .iter()
+            .filter(|i| {
+                bulk_pair(
+                    &i.endpoints
+                        .iter()
+                        .filter(|e| e.kind == "bulk")
+                        .map(|e| e.address)
+                        .collect::<Vec<_>>(),
+                )
+                .is_ok()
+            })
+            .map(|i| InterfaceSelection {
+                configuration: i.configuration,
+                interface: i.interface,
+                alternate: i.alternate,
+            })
+            .collect());
+    };
     let device = info.open().await?;
     let mut selections = Vec::new();
     for config in device.configurations() {
@@ -65,14 +167,14 @@ pub struct TransferOptions {
 }
 
 pub struct Connection {
-    io: UsbIo,
+    io: Backend,
     max_reply_bytes: u32,
 }
 impl Connection {
     /// Opens the caller-selected device/configuration/interface. No ff80 commands
     /// or driver detach/reset requests are sent here.
     pub async fn open(
-        info: &nusb::DeviceInfo,
+        info: &Device,
         selection: InterfaceSelection,
         options: TransferOptions,
     ) -> Result<Self> {
@@ -80,6 +182,64 @@ impl Connection {
             return Err(Error::InvalidTimeout);
         }
         check_limit(8, options.max_reply_bytes.get())?;
+        let Device::Local(info) = info else {
+            let Device::Proxy(remote) = info else {
+                unreachable!()
+            };
+            let descriptor = remote
+                .descriptor
+                .interfaces
+                .iter()
+                .find(|i| {
+                    i.configuration == selection.configuration
+                        && i.interface == selection.interface
+                        && i.alternate == selection.alternate
+                })
+                .ok_or(Error::InvalidInterface)?;
+            let endpoints: Vec<_> = descriptor
+                .endpoints
+                .iter()
+                .filter(|e| e.kind == "bulk")
+                .collect();
+            let (input, output) =
+                bulk_pair(&endpoints.iter().map(|e| e.address).collect::<Vec<_>>())?;
+            let packet_size = usize::from(
+                endpoints
+                    .iter()
+                    .find(|e| e.address == input)
+                    .ok_or(Error::InvalidInterface)?
+                    .packet_size,
+            );
+            if packet_size == 0 {
+                return Err(Error::InvalidInterface);
+            }
+            let mut client = remote.connect().await?;
+            let completion = client
+                .request(
+                    &remote.descriptor.id,
+                    fujimod_usb_proxy::Operation::Open {
+                        configuration: selection.configuration,
+                        interface: selection.interface,
+                        alternate: selection.alternate,
+                    },
+                    options.timeout,
+                )
+                .await?;
+            if let Some(error) = completion.error {
+                return Err(fujimod_usb_proxy::Error(error).into());
+            }
+            return Ok(Self {
+                io: Backend::Proxy(crate::proxy::ProxyIo {
+                    client,
+                    device: remote.descriptor.id.clone(),
+                    input,
+                    output,
+                    packet_size,
+                    timeout: options.timeout,
+                }),
+                max_reply_bytes: options.max_reply_bytes.get(),
+            });
+        };
         let device = info.open().await?;
         let descriptor = device
             .configurations()
@@ -114,14 +274,14 @@ impl Connection {
         let input = interface.endpoint::<Bulk, In>(input)?;
         let output = interface.endpoint::<Bulk, Out>(output)?;
         Ok(Self {
-            io: UsbIo {
+            io: Backend::Usb(UsbIo {
                 interface,
                 input_address,
                 output_address,
                 input,
                 output,
                 timeout: options.timeout,
-            },
+            }),
             max_reply_bytes: options.max_reply_bytes.get(),
         })
     }
@@ -150,8 +310,12 @@ fn bulk_pair(addresses: &[u8]) -> Result<(u8, u8)> {
     }
 }
 
-// Only a private test seam. nusb supplies the platform transport abstraction.
+// Private transfer boundary shared by local nusb, remote USB and test peers.
 pub(crate) trait Io {
+    /// Release host resources after a successful camera protocol close.
+    async fn release(&mut self) -> Result<()> {
+        Ok(())
+    }
     fn trace(&self) -> Option<crate::trace::Trace> {
         None
     }
@@ -272,15 +436,23 @@ impl Io for UsbIo {
 // The replay variant exists only in builds explicitly enabling test support.
 pub(crate) enum Backend {
     Usb(UsbIo),
+    Proxy(crate::proxy::ProxyIo),
     #[cfg(feature = "testing")]
     Replay(crate::testing::Script),
     #[cfg(feature = "testing")]
     Model(crate::testing::Model),
 }
 impl Io for Backend {
+    async fn release(&mut self) -> Result<()> {
+        match self {
+            Self::Proxy(io) => io.release().await,
+            _ => Ok(()),
+        }
+    }
     fn endpoint(&self, stage: TransferStage) -> Option<u8> {
         match self {
             Self::Usb(io) => io.endpoint(stage),
+            Self::Proxy(io) => io.endpoint(stage),
             #[cfg(feature = "testing")]
             Self::Replay(io) => io.endpoint(stage),
             #[cfg(feature = "testing")]
@@ -290,6 +462,7 @@ impl Io for Backend {
     async fn control(&mut self, kind: RequestKind, envelope: [u8; 12]) -> Result<()> {
         match self {
             Self::Usb(io) => io.control(kind, envelope).await,
+            Self::Proxy(io) => io.control(kind, envelope).await,
             #[cfg(feature = "testing")]
             Self::Replay(io) => io.control(kind, envelope).await,
             #[cfg(feature = "testing")]
@@ -299,6 +472,7 @@ impl Io for Backend {
     async fn write(&mut self, bytes: &[u8]) -> Result<()> {
         match self {
             Self::Usb(io) => io.write(bytes).await,
+            Self::Proxy(io) => io.write(bytes).await,
             #[cfg(feature = "testing")]
             Self::Replay(io) => io.write(bytes).await,
             #[cfg(feature = "testing")]
@@ -308,6 +482,7 @@ impl Io for Backend {
     async fn read(&mut self, maximum: usize) -> Result<Vec<u8>> {
         match self {
             Self::Usb(io) => io.read(maximum).await,
+            Self::Proxy(io) => io.read(maximum).await,
             #[cfg(feature = "testing")]
             Self::Replay(io) => io.read(maximum).await,
             #[cfg(feature = "testing")]

@@ -77,6 +77,7 @@ export const usb = Object.freeze({
   isError: isUsbError,
   DeviceFilter: native.DeviceFilter,
   discover: native.discover,
+  discoverProxy: native.discoverProxy,
   requestDevice: native.requestDevice,
   FirmwareLimits: native.FirmwareLimits,
   InterfaceSelection: native.InterfaceSelection,

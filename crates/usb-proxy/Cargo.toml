@@ -1,0 +1,33 @@
+[package]
+name = "fujimod-usb-proxy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "Transport-level USB forwarding between native or Wasm controllers and WebUSB exporters"
+
+[features]
+relay = ["dep:axum", "dep:tokio"]
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+futures-lite.workspace = true
+futures-timer.workspace = true
+futures-util = { version = "0.3", features = ["sink"] }
+base64 = "0.22"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+async-tungstenite = { version = "0.34", features = ["smol-runtime", "smol-native-tls"] }
+axum = { version = "0.8", features = ["ws"], optional = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "time", "signal"], optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+gloo-net = { version = "0.6", features = ["websocket"], default-features = false }
+
+[[bin]]
+name = "fujimod-usb-relay"
+path = "src/bin/relay.rs"
+required-features = ["relay"]

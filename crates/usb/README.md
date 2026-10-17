@@ -18,7 +18,7 @@ use std::{num::NonZeroU32, time::Duration};
 use fujimod_usb::{Result, connection::{Connection, InterfaceSelection, TransferOptions},
     ff80::commands::info::InfoSelector};
 
-async fn identify(selected: &nusb::DeviceInfo, interface: InterfaceSelection) -> Result<String> {
+async fn identify(selected: &fujimod_usb::connection::Device, interface: InterfaceSelection) -> Result<String> {
     let connection = Connection::open(selected, interface, TransferOptions {
         timeout: Duration::from_secs(5),
         max_reply_bytes: NonZeroU32::new(1024).unwrap(),
@@ -485,3 +485,15 @@ its list before execution. The reply preserves 32 name bytes, with unused tail
 bytes initialized to zero. A full-length name makes the reviewed firmware write
 its terminator through the table's extra key (configuration key zero on the
 studied layout); the host does not add a compensating write.
+
+
+## Remote USB
+
+The [USB proxy crate](../usb-proxy/README.md) exports browser-permitted devices
+through a relay. `connection::discover_proxy(url, token, filter)` returns the
+same local-or-remote `connection::Device` used by `interfaces` and
+`Connection::open`. Both bindings expose this discovery API, including Pyodide.
+Native callers may instead set `FUJIMOD_USB_PROXY_URL` and
+`FUJIMOD_USB_PROXY_TOKEN` for existing discovery calls. Remote failure never
+falls back to a local device. ff80 commands, trace records and completion
+fencing execute in this core for either transport.

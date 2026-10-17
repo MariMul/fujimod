@@ -49,7 +49,8 @@ fn convert_error(py: Python<'_>, error: usb::Error) -> PyErr {
         usb::Error::CompletionUnknown => CompletionUnknownError::new_err(message),
         usb::Error::DeviceStatus { .. } => DeviceCommandError::new_err(message),
         usb::Error::Protocol(_) => ProtocolError::new_err(message),
-        usb::Error::Transfer { .. }
+        usb::Error::Proxy(_)
+        | usb::Error::Transfer { .. }
         | usb::Error::Timeout(_)
         | usb::Error::ShortTransfer { .. }
         | usb::Error::PartialRead { .. } => TransferError::new_err(message),
@@ -65,7 +66,8 @@ fn convert_error(py: Python<'_>, error: usb::Error) -> PyErr {
     // Transfers that fail before a data completion still expose the same fields.
     if matches!(
         &error,
-        usb::Error::Transfer { .. }
+        usb::Error::Proxy(_)
+            | usb::Error::Transfer { .. }
             | usb::Error::Timeout(_)
             | usb::Error::ShortTransfer { .. }
             | usb::Error::PartialRead { .. }
@@ -224,7 +226,7 @@ impl InterfaceSelection {
 #[pyclass(frozen, from_py_object, module = "fujimod.usb")]
 #[derive(Clone)]
 struct Device {
-    inner: nusb::DeviceInfo,
+    inner: usb::connection::Device,
 }
 #[pymethods]
 impl Device {
@@ -818,6 +820,18 @@ fn discover(py: Python<'_>, filter: DeviceFilter) -> PyResult<Vec<Device>> {
 }
 
 #[pyfunction]
+fn discover_proxy(
+    py: Python<'_>,
+    url: &str,
+    token: &str,
+    filter: DeviceFilter,
+) -> PyResult<Vec<Device>> {
+    py.detach(|| block_on(usb::connection::discover_proxy(url, token, filter.into())))
+        .map(|items| items.into_iter().map(|inner| Device { inner }).collect())
+        .map_err(|e| convert_error(py, e))
+}
+
+#[pyfunction]
 fn interfaces(py: Python<'_>, device: &Device) -> PyResult<Vec<InterfaceSelection>> {
     py.detach(|| block_on(usb::connection::interfaces(&device.inner)))
         .map(|items| {
@@ -883,6 +897,7 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     blocking.add_submodule(&memory)?;
     blocking.add_class::<Session>()?;
     blocking.add_function(wrap_pyfunction!(discover, &blocking)?)?;
+    blocking.add_function(wrap_pyfunction!(discover_proxy, &blocking)?)?;
     blocking.add_function(wrap_pyfunction!(interfaces, &blocking)?)?;
     usb.add_submodule(&blocking)?;
     m.add_submodule(&usb)?;

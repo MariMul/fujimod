@@ -155,6 +155,13 @@ async fn discover(filter: DeviceFilter) -> PyResult<Vec<Device>> {
         .map_err(error)
 }
 #[pyfunction]
+async fn discover_proxy(url: String, token: String, filter: DeviceFilter) -> PyResult<Vec<Device>> {
+    detached(usb::connection::discover_proxy(&url, &token, filter.into()))
+        .await
+        .map(|items| items.into_iter().map(|inner| Device { inner }).collect())
+        .map_err(error)
+}
+#[pyfunction]
 async fn interfaces(device: Device) -> PyResult<Vec<InterfaceSelection>> {
     detached(usb::connection::interfaces(&device.inner))
         .await
@@ -174,6 +181,7 @@ pub(super) fn register(
     module.add_class::<AsyncSession>()?;
     module.add_class::<reader::Reader>()?;
     module.add_function(wrap_pyfunction!(self::discover, module)?)?;
+    module.add_function(wrap_pyfunction!(self::discover_proxy, module)?)?;
     module.add_function(wrap_pyfunction!(self::interfaces, module)?)?;
     operations::register(py, module, app80)
 }

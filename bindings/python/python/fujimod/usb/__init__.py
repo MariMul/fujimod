@@ -246,6 +246,18 @@ async def discover(filter):
     ]
 
 
+async def discover_proxy(url, token, filter):
+    """Discover remote devices through a relay, including in Pyodide."""
+    if not isinstance(url, str) or not isinstance(token, str):
+        raise TypeError("relay URL and token must be strings")
+    return [
+        Device._wrap(v)
+        for v in await await_result(
+            call(jsusb.discoverProxy, url, token, enum_in(filter, DeviceFilter))
+        )
+    ]
+
+
 async def request_device(filter):
     """Browser picker: invoke directly from a user gesture."""
     value = await await_result(call(jsusb.requestDevice, enum_in(filter, DeviceFilter)))
@@ -266,6 +278,7 @@ __all__ = [
     "Session",
     "Reader",
     "discover",
+    "discover_proxy",
     "request_device",
     "interfaces",
     "memory",

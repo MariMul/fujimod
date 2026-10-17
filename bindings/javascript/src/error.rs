@@ -129,7 +129,8 @@ pub(crate) fn error(source: usb::Error) -> JsValue {
         usb::Error::CompletionUnknown => ErrorKind::CompletionUnknown,
         usb::Error::DeviceStatus { .. } => ErrorKind::DeviceStatus,
         usb::Error::Protocol(_) => ErrorKind::Protocol,
-        usb::Error::Transfer { .. }
+        usb::Error::Proxy(_)
+        | usb::Error::Transfer { .. }
         | usb::Error::Timeout(_)
         | usb::Error::ShortTransfer { .. }
         | usb::Error::PartialRead { .. } => ErrorKind::Transfer,

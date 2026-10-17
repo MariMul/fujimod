@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{
     Error, Result,
-    connection::{Backend, Io, UsbIo},
+    connection::{Backend, Io},
     error::{ProtocolError, check_limit},
 };
 use std::num::NonZeroU32;
@@ -37,16 +37,12 @@ pub struct Session {
 }
 impl Session {
     pub(crate) async fn open(
-        io: UsbIo,
+        io: Backend,
         max_reply_bytes: u32,
         trace: Option<crate::trace::Trace>,
     ) -> Result<Self> {
         Ok(Self {
-            core: Core::open(
-                crate::trace::Observed::new(Backend::Usb(io), trace),
-                max_reply_bytes,
-            )
-            .await?,
+            core: Core::open(crate::trace::Observed::new(io, trace), max_reply_bytes).await?,
         })
     }
     #[cfg(feature = "testing")]
@@ -108,7 +104,9 @@ impl Session {
     }
     /// Sends C4 once. This consumes the session even if the close fails.
     pub async fn close(mut self) -> Result<[u8; 2]> {
-        self.core.close().await
+        let reply = self.core.close().await?;
+        self.core.io.release().await?;
+        Ok(reply)
     }
 }
 

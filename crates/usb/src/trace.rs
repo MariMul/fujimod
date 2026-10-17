@@ -363,6 +363,9 @@ impl<I> Observed<I> {
     }
 }
 impl<I: Io> Io for Observed<I> {
+    async fn release(&mut self) -> Result<()> {
+        self.io.release().await
+    }
     fn trace(&self) -> Option<Trace> {
         self.trace.clone()
     }

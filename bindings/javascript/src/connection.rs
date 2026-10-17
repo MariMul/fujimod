@@ -4,7 +4,7 @@ use js_sys::Array;
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct Device {
-    pub(crate) inner: nusb::DeviceInfo,
+    pub(crate) inner: usb::connection::Device,
 }
 #[wasm_bindgen]
 impl Device {
@@ -76,8 +76,32 @@ pub fn request_device(
             Ok(nusb::request_device(&[selector])
                 .await
                 .map_err(|e| error(e.into()))?
-                .map(|inner| JsValue::from(Device { inner }))
+                .map(|inner| {
+                    JsValue::from(Device {
+                        inner: usb::connection::Device::Local(inner),
+                    })
+                })
                 .unwrap_or(JsValue::UNDEFINED))
         })
     })
+}
+
+/// Discover through a relay instead of this browser's USB bus.
+#[wasm_bindgen(js_name=discoverProxy, unchecked_return_type="Promise<Device[]>")]
+pub fn discover_proxy(
+    url: String,
+    token: String,
+    filter: JsValue,
+) -> Result<js_sys::Promise, JsValue> {
+    let filter = DeviceFilter::parse(filter)?;
+    Ok(wasm_bindgen_futures::future_to_promise(async move {
+        let items = usb::connection::discover_proxy(&url, &token, filter.into())
+            .await
+            .map_err(error)?;
+        let out = Array::new();
+        for inner in items {
+            out.push(&JsValue::from(Device { inner }));
+        }
+        Ok(out.into())
+    }))
 }
