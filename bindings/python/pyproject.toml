@@ -10,6 +10,11 @@ description = "FujiMod camera tools"
 readme = "README.md"
 license-files = ["NOTICE"]
 
+[project.optional-dependencies]
+walkthroughs = [
+    "pillow>=12.3.0",
+]
+
 [tool.maturin]
 module-name = "fujimod._native"
 python-source = "python"
