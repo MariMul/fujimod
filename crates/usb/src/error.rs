@@ -50,6 +50,8 @@ pub enum Error {
     LengthLimit { requested: u32, limit: u32 },
     #[error("memory range crosses the 32-bit address space")]
     AddressOverflow,
+    #[error("requested memory range is outside the selected data window")]
+    OutsideDataWindow,
     #[error("length must be nonzero and representable in the protocol")]
     InvalidLength,
     #[error("argument must be a bounded ASCII token")]

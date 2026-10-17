@@ -43,9 +43,9 @@ impl Session {
     pub async fn write_data(&mut self, bytes: &[u8]) -> Result<()> {
         self.core.write_data(bytes).await
     }
-    /// E8 response, returned as raw status without inferring camera readiness.
-    pub async fn data_status(&mut self) -> Result<u32> {
-        self.core.data_status().await
+    /// One E8 empty acknowledgement. The four raw bytes are not a readiness flag.
+    pub async fn empty_response(&mut self) -> Result<[u8; 4]> {
+        self.core.empty_response().await
     }
     pub async fn send_event(&mut self, event: DebugEvent, limit: NonZeroU32) -> Result<Vec<u8>> {
         self.core.send_event(event, limit).await
@@ -161,7 +161,15 @@ impl<I: Io> Core<I> {
                             available: remaining,
                             declared: chunk.len(),
                         }),
-                        Err(error) => error,
+                        Err(error) => {
+                            // Preserve bytes delivered with the failed USB completion too.
+                            if let Error::Transfer { partial, .. } = &error
+                                && partial.len() <= remaining
+                            {
+                                data.extend_from_slice(partial);
+                            }
+                            error
+                        }
                     };
                     return Err(Error::PartialRead {
                         data_len: data.len(),
@@ -190,17 +198,17 @@ impl<I: Io> Core<I> {
         self.state = SessionState::Ready;
         Ok(())
     }
-    pub(super) async fn data_status(&mut self) -> Result<u32> {
+    pub(super) async fn empty_response(&mut self) -> Result<[u8; 4]> {
         check_limit(32, self.max_reply_bytes)?;
         self.start()?;
         self.io
             .control(
-                RequestKind::Ready,
-                envelope(RequestKind::Ready, 32, self.info.id),
+                RequestKind::EmptyResponse,
+                envelope(RequestKind::EmptyResponse, 32, self.info.id),
             )
             .await?;
         let bytes: [u8; 4] = exact(self.io.read(32).await?)?;
         self.state = SessionState::Ready;
-        Ok(u32::from_le_bytes(bytes))
+        Ok(bytes)
     }
 }

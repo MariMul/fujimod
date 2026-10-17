@@ -1,0 +1,75 @@
+"""Composed data ranges use the production Rust core over synthetic USB."""
+import pytest
+from fujimod import usb
+from fujimod.usb import blocking
+from test_stream import E, control, opened
+
+
+def window(capacity=4):
+    return usb.DataWindow(0x2000, 0x1000, 64, capacity, usb.OffsetMode.Wrapping)
+
+
+def test_wrapping_range_exclusively_owns_session_and_includes_tail():
+    session, script = opened([
+        E.control(control(0xE1, 4, offset=0xFFFFF000)), E.read(4, b"abcd"),
+        E.control(control(0xE1, 2, offset=0xFFFFF004)), E.read(2, b"ef"),
+    ], packet_bytes=1)  # bulk command size is independent of debug packet size
+    with blocking.data.read_chunks(session, window(), 0x1000, 6) as reader:
+        assert session.state == usb.SessionState.ReadingRange
+        with pytest.raises(usb.SessionBusyError):
+            session.read_data(0, 1)
+        assert list(reader) == [b"abcd", b"ef"]
+        assert reader.bytes_completed == 6
+    assert session.state == usb.SessionState.Ready
+    assert script.remaining == 0
+
+
+def test_failed_command_preserves_all_usb_fragments_and_prevents_cleanup():
+    session, script = opened([
+        E.control(control(0xE1, 4, offset=0xFFFFF000)), E.read(4, b"abcd"),
+        E.control(control(0xE1, 4, offset=0xFFFFF004)), E.read(4, b"e"),
+        E.disconnected(3, b"f"),
+    ])
+    with blocking.data.read_chunks(session, window(), 0x1000, 8) as reader:
+        assert next(reader) == b"abcd"
+        with pytest.raises(usb.TransferError) as failure:
+            next(reader)
+        assert reader.bytes_completed == 4
+        assert failure.value.partial == b"ef"
+        assert failure.value.transfer_error.partial == b"f"
+    assert session.state == usb.SessionState.CompletionUnknown
+    with pytest.raises(usb.CompletionUnknownError):
+        session.empty_response()
+    assert script.remaining == 0
+
+
+def test_invalid_mapping_or_range_leaves_session_ownership_unchanged():
+    session, script = opened()
+    with pytest.raises(ValueError):
+        usb.DataWindow(0x2000, 0x1000, 64, 4, usb.OffsetMode.Checked)
+    with pytest.raises(TypeError):
+        usb.DataWindow(0x2000, 0x1000, 64, 4, "Wrapping")
+    for address, length in [(0xFFF, 1), (0x103F, 2), (0x1000, 0), (0xFFFFFFFF, 2)]:
+        with pytest.raises(ValueError):
+            blocking.data.read_chunks(session, window(), address, length)
+    assert session.state == usb.SessionState.Ready
+    assert script.remaining == 0
+
+
+def test_early_close_does_no_read_ahead_or_finalization():
+    session, script = opened([
+        E.control(control(0xE1, 4, offset=0xFFFFF000)), E.read(4, b"abcd"),
+    ])
+    with blocking.data.read_chunks(session, window(), 0x1000, 8) as reader:
+        assert next(reader) == b"abcd"
+    assert list(reader) == []
+    assert reader.bytes_completed == 4
+    assert session.state == usb.SessionState.Ready
+    assert script.remaining == 0
+
+
+def test_empty_response_retains_raw_bytes_without_readiness_interpretation():
+    session, script = opened([E.control(control(0xE8, 32)), E.read(32, b"\x2a\x00\x00\x00")])
+    assert session.empty_response() == b"\x2a\x00\x00\x00"
+    assert session.state == usb.SessionState.Ready
+    assert script.remaining == 0

@@ -328,10 +328,10 @@ fn data_upload_does_not_implicitly_prepare_or_finalize() {
     let (mut core, steps) = opened(vec![
         Step::Control(envelope(RequestKind::WriteData, 3, 0x1234)),
         Step::Write(vec![1, 2, 3]),
-        Step::Control(envelope(RequestKind::Ready, 32, 0x1234)),
+        Step::Control(envelope(RequestKind::EmptyResponse, 32, 0x1234)),
         Step::Read(32, Ok(vec![42, 0, 0, 0])),
     ]);
     block_on(core.write_data(&[1, 2, 3])).unwrap();
-    assert_eq!(block_on(core.data_status()).unwrap(), 42);
+    assert_eq!(block_on(core.empty_response()).unwrap(), [42, 0, 0, 0]);
     assert!(steps.borrow().is_empty());
 }

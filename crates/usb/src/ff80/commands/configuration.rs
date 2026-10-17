@@ -102,7 +102,8 @@ pub struct WriteConfiguration {
     data: Vec<u8>,
 }
 impl WriteConfiguration {
-    /// This is a configuration write request, not a save to persistent storage.
+    /// Sends one configuration write. Persistence depends on the selected view
+    /// and firmware; no separate save command is issued.
     pub fn new(location: ConfigurationLocation, data: Vec<u8>, limit: NonZeroU32) -> Result<Self> {
         let length = u32::try_from(data.len())
             .ok()

@@ -45,6 +45,7 @@ fn convert_error(py: Python<'_>, error: usb::Error) -> PyErr {
         }
         usb::Error::LengthLimit { .. }
         | usb::Error::AddressOverflow
+        | usb::Error::OutsideDataWindow
         | usb::Error::InvalidLength
         | usb::Error::InvalidToken
         | usb::Error::InvalidTimeout => PyValueError::new_err(message),
@@ -92,6 +93,7 @@ enum_binding!(KeyState,"KeyState",debug::KeyState,{On,Off});
 enum_binding!(CameraMode,"CameraMode",debug::CameraMode,{Record,Playback});
 enum_binding!(DataReadMode,"DataReadMode",diagnostic::DataReadMode,{Pattern,Echo});
 enum_binding!(DataWriteMode,"DataWriteMode",diagnostic::DataWriteMode,{Preserve,FillOnes,Echo});
+enum_binding!(OffsetMode,"OffsetMode",usb::operations::data::OffsetMode,{Checked,Wrapping});
 enum_binding!(DeviceFilter,"DeviceFilter",usb::connection::DeviceFilter,{Fujifilm,Diagnostic});
 
 #[pyclass(module = "fujimod.usb", eq, from_py_object)]
@@ -603,8 +605,9 @@ impl Session {
     fn write_data(&self, py: Python<'_>, data: Vec<u8>) -> PyResult<()> {
         self.with(py, |s| block_on(s.write_data(&data)))
     }
-    fn data_status(&self, py: Python<'_>) -> PyResult<u32> {
-        self.with(py, |s| block_on(s.data_status()))
+    fn empty_response<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        self.with(py, |s| block_on(s.empty_response()))
+            .map(|b| PyBytes::new(py, &b))
     }
     fn send_key<'py>(
         &self,
@@ -703,6 +706,11 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     usb.add("SessionBusyError", py.get_type::<SessionBusyError>())?;
     blocking.add("__path__", PyList::empty(py))?;
     let memory = memory::module(py)?;
+    let data = data::module(py)?;
+    usb.add_class::<OffsetMode>()?;
+    usb.add_class::<data::DataWindow>()?;
+    blocking.add_class::<range::Reader>()?;
+    blocking.add_submodule(&data)?;
     blocking.add_submodule(&memory)?;
     blocking.add_class::<Session>()?;
     blocking.add_function(wrap_pyfunction!(discover, &blocking)?)?;
@@ -715,6 +723,7 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     modules.set_item("fujimod.usb", &usb)?;
     modules.set_item("fujimod.usb.blocking", &blocking)?;
     modules.set_item("fujimod.usb.blocking.memory", &memory)?;
+    modules.set_item("fujimod.usb.blocking.data", &data)?;
     #[cfg(feature = "testing")]
     {
         let testing = testing::module(py)?;
@@ -724,7 +733,9 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     Ok(())
 }
 
+mod data;
 mod memory;
+mod range;
 
 #[cfg(feature = "testing")]
 mod testing;

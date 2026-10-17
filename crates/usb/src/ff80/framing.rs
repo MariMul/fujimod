@@ -10,7 +10,7 @@ pub enum RequestKind {
     ReadCommand = 0xd1,
     WriteData = 0xe0,
     ReadData = 0xe1,
-    Ready = 0xe8,
+    EmptyResponse = 0xe8,
 }
 
 pub(crate) fn envelope(kind: RequestKind, size: u32, session: u16) -> [u8; 12] {

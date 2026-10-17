@@ -4,7 +4,7 @@ Async Rust access to Fujifilm's reverse-engineered ff80 service/debug interface.
 This first implementation provides nusb discovery and explicit interface
 selection, C0/C2/C4 session lifecycle, D0/D1 command exchanges, information
 selectors, configuration commands, debug events and console polling, log reads,
-diagnostic queries, E0/E1/E8 data transfers and composed memory range operations.
+diagnostic queries, E0/E1/E8 data transfers and composed memory and diagnostic-data range operations.
 
 `ff80/commands/` encodes one firmware request at a time. `operations/` composes
 commands. nusb handles platform USB access; its adapter has a private test seam.
@@ -52,9 +52,22 @@ the negotiated packet limit and the host reply budget, and retains the number
 of successfully returned bytes. Previously returned buffers remain with the
 caller if a later chunk fails.
 
+Use `operations::data::DataReader` to download a CPU address range through E1.
+Supply a `DataWindow` with the diagnostic pointer, allowed address aperture,
+per-command capacity and `OffsetMode::Checked` or `OffsetMode::Wrapping` from
+the selected firmware's definition. Each pull issues one command bounded by
+capacity and host reply budget; the negotiated debug packet size does not limit
+bulk data commands. Querying and validating the diagnostic pointer remains a
+separate caller policy. No setup command, retry or E8 is sent implicitly.
+`PartialRead.data` includes valid fragments from the failed USB completion as
+well as earlier fragments in that command. `bytes_completed()` counts only
+chunks already returned successfully.
+
+`Session::empty_response()` exposes E8's four raw acknowledgement bytes. It is
+not a readiness poll or a wait-for-execution API.
+
 The initial implementation is tested on native macOS with synthetic exchanges;
-no hardware access is part of the test suite. App80, firmware-specific bulk strategies and browser builds are subsequent
-capabilities. Native Python bindings live in `bindings/python/` at the workspace
+no hardware access is part of the test suite. App80 and browser builds are subsequent capabilities. Native Python bindings live in `bindings/python/` at the workspace
 root. All public I/O is async and the internal test interface does not
 require `Send` futures. Browser execution is not yet validated.
 
