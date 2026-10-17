@@ -115,6 +115,10 @@ pub enum Codec {
     CopyConfiguration,
     FlushConfiguration,
     MemoryWord,
+    RegisterControl,
+    I2c,
+    Accumulator,
+    PeripheralReport,
 }
 impl Codec {
     pub fn argument_slots(self) -> usize {
@@ -124,6 +128,9 @@ impl Codec {
             Self::ReadPins | Self::ReadChannel | Self::WriteChannel | Self::ProfileByte => 3,
             Self::DownloadStatus | Self::CopyConfiguration | Self::FlushConfiguration => 1,
             Self::MemoryWord => 10,
+            Self::RegisterControl | Self::Accumulator => 7,
+            Self::I2c => 14,
+            Self::PeripheralReport => 8,
         }
     }
 }

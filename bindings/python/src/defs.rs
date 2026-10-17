@@ -102,6 +102,10 @@ pub(crate) enum Codec {
     CopyConfiguration,
     FlushConfiguration,
     MemoryWord,
+    RegisterControl,
+    I2c,
+    Accumulator,
+    PeripheralReport,
 }
 impl From<core::Codec> for Codec {
     fn from(value: core::Codec) -> Self {
@@ -116,6 +120,10 @@ impl From<core::Codec> for Codec {
             core::Codec::CopyConfiguration => Self::CopyConfiguration,
             core::Codec::FlushConfiguration => Self::FlushConfiguration,
             core::Codec::MemoryWord => Self::MemoryWord,
+            core::Codec::RegisterControl => Self::RegisterControl,
+            core::Codec::I2c => Self::I2c,
+            core::Codec::Accumulator => Self::Accumulator,
+            core::Codec::PeripheralReport => Self::PeripheralReport,
         }
     }
 }

@@ -233,6 +233,7 @@ async def run():
     await check_pending_reader()
     await check_commands()
     await check_service_catalogue()
+    assert check_peripheral_values()
     return True
 
 

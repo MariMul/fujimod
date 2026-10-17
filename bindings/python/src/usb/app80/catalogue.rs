@@ -2,6 +2,8 @@
 use super::*;
 use crate::defs::{Codec, Definition, ServiceModes};
 use usb::app80::catalogue as core;
+mod peripheral;
+use peripheral::{AccumulatorAction, I2cAction, RegisterAction};
 
 pyo3::create_exception!(fujimod.usb.app80, CommandError, PyValueError);
 
@@ -12,6 +14,7 @@ enum ArgumentKind {
     ProfileIndex,
     WordAlignment,
     WordAddress,
+    I2cLength,
 }
 impl From<core::ArgumentKind> for ArgumentKind {
     fn from(value: core::ArgumentKind) -> Self {
@@ -20,6 +23,7 @@ impl From<core::ArgumentKind> for ArgumentKind {
             core::ArgumentKind::ProfileIndex => Self::ProfileIndex,
             core::ArgumentKind::WordAlignment => Self::WordAlignment,
             core::ArgumentKind::WordAddress => Self::WordAddress,
+            core::ArgumentKind::I2cLength => Self::I2cLength,
         }
     }
 }
@@ -172,6 +176,16 @@ enum Command {
         address: WordAddress,
         value: u32,
     },
+    RegisterControl {
+        action: RegisterAction,
+    },
+    I2c {
+        action: I2cAction,
+    },
+    Accumulator {
+        action: AccumulatorAction,
+    },
+    PeripheralReport {},
 }
 impl From<Command> for core::Command {
     fn from(value: Command) -> Self {
@@ -199,6 +213,10 @@ impl From<Command> for core::Command {
                 address: address.inner,
                 value,
             },
+            Command::RegisterControl { action } => Self::RegisterControl(action.into()),
+            Command::I2c { action } => Self::I2c(action.into()),
+            Command::Accumulator { action } => Self::Accumulator(action.into()),
+            Command::PeripheralReport {} => Self::PeripheralReport,
         }
     }
 }
@@ -262,6 +280,9 @@ enum ReplyValue {
     ReadWord { result: WordReadResult },
     WriteWord { result: WordWriteResult },
     Research {},
+    I2cData { data: Vec<u8> },
+    Accumulated { values: (u16, u16, u16) },
+    PeripheralReport { data: Vec<u8> },
 }
 impl From<core::ReplyValue> for ReplyValue {
     fn from(value: core::ReplyValue) -> Self {
@@ -281,6 +302,13 @@ impl From<core::ReplyValue> for ReplyValue {
                 result: result.into(),
             },
             core::ReplyValue::Research => Self::Research {},
+            core::ReplyValue::I2cData(data) => Self::I2cData { data },
+            core::ReplyValue::Accumulated(values) => Self::Accumulated {
+                values: (values[0], values[1], values[2]),
+            },
+            core::ReplyValue::PeripheralReport(data) => Self::PeripheralReport {
+                data: data.to_vec(),
+            },
         }
     }
 }
@@ -373,6 +401,7 @@ pub(in crate::usb) fn check_limit(limits: &FirmwareLimits) -> PyResult<()> {
     Ok(())
 }
 pub(super) fn register(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
+    peripheral::register(module)?;
     module.add("CommandError", py.get_type::<CommandError>())?;
     module.add_class::<ArgumentKind>()?;
     module.add_class::<CommandFailure>()?;

@@ -3,6 +3,7 @@ use super::*;
 use defs::{ServiceCodec, ServiceDefinition, ServiceModes};
 use error::{integer, property, record};
 use usb::app80::catalogue as core;
+mod peripheral;
 
 #[wasm_bindgen]
 #[derive(Clone, Copy)]
@@ -20,6 +21,7 @@ pub enum ArgumentKind {
     ProfileIndex,
     WordAlignment,
     WordAddress,
+    I2cLength,
 }
 impl From<core::ArgumentKind> for ArgumentKind {
     fn from(value: core::ArgumentKind) -> Self {
@@ -28,6 +30,7 @@ impl From<core::ArgumentKind> for ArgumentKind {
             core::ArgumentKind::ProfileIndex => Self::ProfileIndex,
             core::ArgumentKind::WordAlignment => Self::WordAlignment,
             core::ArgumentKind::WordAddress => Self::WordAddress,
+            core::ArgumentKind::I2cLength => Self::I2cLength,
         }
     }
 }
@@ -161,6 +164,30 @@ pub struct App80Command {
 }
 #[wasm_bindgen]
 impl App80Command {
+    #[wasm_bindgen(js_name=registerControl)]
+    pub fn register_control(action: &peripheral::RegisterAction) -> Self {
+        Self {
+            inner: core::Command::RegisterControl(action.inner),
+        }
+    }
+    pub fn i2c(action: &peripheral::I2cAction) -> Self {
+        Self {
+            inner: core::Command::I2c(action.inner),
+        }
+    }
+    pub fn accumulator(
+        #[wasm_bindgen(unchecked_param_type = "AccumulatorAction")] action: JsValue,
+    ) -> Result<Self, JsValue> {
+        Ok(Self {
+            inner: core::Command::Accumulator(peripheral::AccumulatorAction::parse(action)?),
+        })
+    }
+    #[wasm_bindgen(js_name=peripheralReport)]
+    pub fn peripheral_report() -> Self {
+        Self {
+            inner: core::Command::PeripheralReport,
+        }
+    }
     #[wasm_bindgen(js_name=writePins)]
     pub fn write_pins(
         bank: &PinBank,
@@ -264,6 +291,9 @@ pub enum App80ReplyKind {
     ReadWord,
     WriteWord,
     Research,
+    I2cData,
+    Accumulated,
+    PeripheralReport,
 }
 #[wasm_bindgen]
 #[derive(Clone, Copy)]
@@ -347,6 +377,18 @@ impl App80CommandReply {
                 record(K::WriteWord as u32, &[("result", result)])
             }
             V::Research => record(K::Research as u32, &[]),
+            V::I2cData(data) => record(K::I2cData as u32, &[("data", error::bytes(data))]),
+            V::Accumulated(values) => {
+                let array: js_sys::Array =
+                    values.iter().map(|&value| JsValue::from(value)).collect();
+                record(
+                    K::Accumulated as u32,
+                    &[("values", js_sys::Object::freeze(&array).into())],
+                )
+            }
+            V::PeripheralReport(data) => {
+                record(K::PeripheralReport as u32, &[("data", error::bytes(data))])
+            }
         }
     }
 }
@@ -438,5 +480,7 @@ export type App80ReplyValue =
   | Readonly<{ kind: App80ReplyKind.DownloadStatus; rawStatus: number }>
   | Readonly<{ kind: App80ReplyKind.ConfigurationSaved; status: SaveStatus }>
   | Readonly<{ kind: App80ReplyKind.ReadWord; result: WordReadResult }>
-  | Readonly<{ kind: App80ReplyKind.WriteWord; result: WordWriteResult }>;
+  | Readonly<{ kind: App80ReplyKind.WriteWord; result: WordWriteResult }>
+  | Readonly<{ kind: App80ReplyKind.I2cData | App80ReplyKind.PeripheralReport; data: Uint8Array }>
+  | Readonly<{ kind: App80ReplyKind.Accumulated; values: readonly [number, number, number] }>;
 "#;

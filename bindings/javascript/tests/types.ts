@@ -64,3 +64,12 @@ new usb.app80.Command();
 // @ts-expect-error Profile choices require the right enum group.
 usb.app80.ProfileAction.read(usb.DataReadMode.Echo, new usb.app80.ProfileIndex(0));
 void serviceValues; void serviceErrors;
+
+const peripheral = usb.app80.Command.i2c(usb.app80.I2cAction.read(usb.app80.I2cPort.Port0, 0xa5, new usb.app80.I2cLength(3)));
+// @ts-expect-error The write-only single-byte route is not a read port.
+usb.app80.I2cPort.Port3;
+// @ts-expect-error The length is a checked value, not an unchecked number.
+usb.app80.I2cAction.read(usb.app80.I2cPort.Port0, 1, 3);
+// @ts-expect-error Port enum groups remain distinct from other choices.
+usb.app80.I2cAction.read(usb.app80.ProfileBank.First, 1, new usb.app80.I2cLength(1));
+void peripheral;

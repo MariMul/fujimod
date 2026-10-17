@@ -4,7 +4,7 @@ export type { Session, Device, InfoReply, ConfigurationGeometry, DiagnosticReply
 export type { FirmwareIdentity, ServiceModes, ServiceDefinition, ServiceEntry, ServiceMailbox,
   ModeAvailability, ModeTransition, DefinitionFailure, CommandFailure, App80Command,
   ProfileAction, App80Invocation, App80CommandReply, App80ReplyValue, SaveStatus,
-  WordReadResult, WordWriteResult } from '../pkg/fujimod.js';
+  WordReadResult, WordWriteResult, RegisterAction, I2cLength, I2cPayload, I2cAction } from '../pkg/fujimod.js';
 
 class ChunkIterator implements AsyncIterableIterator<Uint8Array> {
   constructor(private readonly reader: native.RangeReader) {}
@@ -124,9 +124,18 @@ export const usb = Object.freeze({
       profileByte: native.App80Command.profileByte, downloadStatus: native.App80Command.downloadStatus,
       copyConfiguration: native.App80Command.copyConfiguration, flushConfiguration: native.App80Command.flushConfiguration,
       readWord: native.App80Command.readWord, writeWord: native.App80Command.writeWord,
+      registerControl: native.App80Command.registerControl, i2c: native.App80Command.i2c,
+      accumulator: native.App80Command.accumulator, peripheralReport: native.App80Command.peripheralReport,
     }),
     ProfileAction: Object.freeze({ read: native.ProfileAction.read, write: native.ProfileAction.write, reset: native.ProfileAction.reset }),
     ProfileBank: native.ProfileBank,
+    RegisterAction: Object.freeze({ audioValue: native.RegisterAction.audioValue,
+      displayFirst: native.RegisterAction.displayFirst, displayStub: native.RegisterAction.displayStub,
+      displaySecond: native.RegisterAction.displaySecond, powerWrite: native.RegisterAction.powerWrite,
+      positionPair: native.RegisterAction.positionPair, noopFirst: native.RegisterAction.noopFirst, noopSecond: native.RegisterAction.noopSecond }),
+    I2cLength: native.I2cLength, I2cPayload: native.I2cPayload, I2cPort: native.I2cPort,
+    I2cAction: Object.freeze({ read: native.I2cAction.read, write: native.I2cAction.write, writeSingle: native.I2cAction.writeSingle }),
+    AccumulatorAction: native.AccumulatorAction,
     PinBank: native.PinBank, ProfileIndex: native.ProfileIndex, WordAddress: native.WordAddress,
     ReplyKind: native.App80ReplyKind, SaveStatusKind: native.SaveStatusKind,
     WordReadKind: native.WordReadKind, WordWriteKind: native.WordWriteKind,

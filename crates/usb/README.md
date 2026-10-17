@@ -199,7 +199,9 @@ Missing, ambiguous, disabled or unreviewed entries fail selection. Command
 identifiers, slot positions and mailbox locations come from data, with no
 fallback to another body. Typed inputs cover pin reads/writes, channel access,
 profile-byte bank reads/writes/reset, download status, configuration copy/save,
-and service word access. Remaining entries retain explicit research envelopes.
+and service word access. Peripheral codecs add register controls, I²C, accumulator
+start/stop and an opaque eight-byte report. Remaining entries retain explicit
+research envelopes.
 These are wire codecs; a firmware handler may ignore lower-level hardware
 errors, and `NoPayload` does not certify a physical effect.
 
@@ -225,3 +227,17 @@ blocking adapters. The [JavaScript package](../../bindings/javascript/README.md#
 exposes the same core through typed factories and discriminated reply unions.
 Pyodide exposes the same Python catalogue interface through that JavaScript
 module, retaining Rust's selection, request/reply codecs and session ownership.
+
+I²C uses checked `I2cLength`/`I2cPayload` values of 1–10 bytes and enum ports.
+The protocol's port 3 is represented only by `I2cAction::WriteSingle`; it cannot
+be selected for a read or a variable-length write. Read replies expose the
+requested bytes while retaining the full raw mailbox. Port names denote protocol
+routes, not USB buses or chip identities; some studied routes call stubs.
+`AccumulatorAction::StopAndRead` stops accumulation and returns the low 16 bits
+of three counters as big-endian halfwords. It is not an observational snapshot.
+
+Register controls expose the established write/forward/pair/no-op modes. The
+studied read modes call stubs that leave output uninitialized; they stay behind
+the explicit research API rather than returning invented register values.
+`PeripheralReport` preserves eight opaque bytes without assigning hardware
+meaning to flags derived from unreviewed or stubbed callees.

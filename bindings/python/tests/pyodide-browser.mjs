@@ -15,6 +15,7 @@ const assets=new Map([
  ['/pkg/fujimod_bg.wasm',['../../javascript/pkg/fujimod_bg.wasm','application/wasm']],
  ['/fixture.mjs',['../../javascript/tests/webusb-fixture.mjs','text/javascript']],
  ['/contract.py',['./webusb_contract.py','text/plain']],
+ ['/peripheral-contract.py',['./peripheral_contract.py','text/plain']],
  ['/fujimod.whl',['../../../target/web-wheels/'+manifest.wheel,'application/zip']],
 ]);
 for(const name of ['pyodide.mjs','pyodide.asm.mjs','pyodide.asm.wasm','python_stdlib.zip','pyodide-lock.json']){
@@ -47,7 +48,7 @@ try{
    py.FS.writeFile('/'+wheelName,wheel);
    await py.loadPackage('micropip');
    await py.runPythonAsync(`import micropip;await micropip.install(${JSON.stringify("emfs:/"+wheelName)})`);
-   const passed=await py.runPythonAsync((await(await fetch('/contract.py')).text())+'\nawait run()');
+   const passed=await py.runPythonAsync((await(await fetch('/peripheral-contract.py')).text())+'\n'+(await(await fetch('/contract.py')).text())+'\nawait run()');
    return {passed,secure:isSecureContext,realWindow:window instanceof Window};
   }finally{fixture.restore();}
  },manifest.wheel);

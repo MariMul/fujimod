@@ -22,6 +22,10 @@ class Codec(Enum):
     CopyConfiguration = auto()
     FlushConfiguration = auto()
     MemoryWord = auto()
+    RegisterControl = auto()
+    I2c = auto()
+    Accumulator = auto()
+    PeripheralReport = auto()
 
 
 class ServiceModes(Handle):

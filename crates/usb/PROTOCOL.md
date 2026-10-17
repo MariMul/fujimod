@@ -85,3 +85,13 @@ composition binds a prepared command to that same definition's mailbox.
 Callback-kind words remain metadata; transport completion still comes from
 awaiting ff80. Typed results retain all 33 raw bytes and explicit unknown values.
 No universal service table is bundled with this mechanism.
+
+Peripheral service codecs preserve their own operation enums separately from
+the firmware-selected App80 command byte:
+
+| Codec | Operations and replies |
+| --- | --- |
+| Register control | Audio value, display forwarding/stub, power-register write, packed position pair and two no-op modes. Completion has no payload. Studied read modes leave output uninitialized and remain research operations. |
+| I²C | Read or write 1–10 bytes through typed ports; a separate single-byte write variant represents the write-only route. Read data is bounded by the requested length; all mailbox bytes remain available. A route may call firmware stubs, so completion does not certify a physical bus transfer. |
+| Accumulator | Explicit start or stop-and-read. Stop returns the low 16 bits of three counters, not full-width totals. |
+| Peripheral report | Eight opaque result bytes. Callback and flag helpers can be stubbed or unreviewed; no hardware-state interpretation is supplied. |

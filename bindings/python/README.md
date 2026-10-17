@@ -240,3 +240,11 @@ Pyodide uses the same imports and variant constructors through the initialized
 JavaScript module. Frozen Python variants own Rust command handles or retain
 decoded result values; they do not implement encoding, selection or completion
 rules. Shared buffer, handle, error and async adapters live at the package root.
+
+Peripheral commands use `Command.RegisterControl(action=RegisterAction.PowerWrite(...))`,
+`Command.I2c(action=I2cAction.Read(port=I2cPort.Port0, command=..., length=I2cLength(...)))`,
+`Command.Accumulator(action=AccumulatorAction.StopAndRead)` and
+`Command.PeripheralReport()`. `I2cPayload(bytes)` owns a checked 1–10 byte copy.
+The write-only route has the distinct `I2cAction.WriteSingle(command=..., value=...)`
+variant. Replies are `ReplyValue.I2cData`, `Accumulated` or `PeripheralReport`.
+Accumulator values are three low halfwords; report bytes remain opaque.

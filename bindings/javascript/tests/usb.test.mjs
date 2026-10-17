@@ -284,3 +284,42 @@ test('typed foreign reply and interrupted publication fence session ownership',a
   await until(()=>script.remaining===0);session.cancelPending();await rejected;
   assert.equal(session.state,usb.SessionState.CompletionUnknown);assert.throws(()=>session.ping(),kind(usb.ErrorKind.CompletionUnknown));
 });
+
+test('peripheral commands preserve typed ports, checked payloads and low-halfword results',()=>{
+  const S=usb.app80,C=S.Command,R=S.RegisterAction;
+  const definition=serviceDefinition([[200,'register_control',[7,12,17,22,27,0,5],4],[201,'i2c',Array.from({length:14},(_,n)=>(n*5+7)%32),4],[202,'accumulator',[7,12,17,22,27,0,5],4],[203,'peripheral_report',Array.from({length:8},(_,n)=>(n*5+7)%32),4]]);
+  const service=new S.Service(definition),modes=serviceModes();
+  const slots=codec=>definition.entries.find(e=>e.codec===codec).slots;
+  const logical=(invocation,codec)=>[...slots(codec)].map(s=>invocation.raw[1+s]);
+  const decode=(invocation,codec,values)=>{const raw=invocation.raw;[...slots(codec)].forEach((slot,n)=>{raw[1+slot]=values[n];});const reply=invocation.decode(raw);assert.deepEqual(reply.raw,raw);return reply.value;};
+  const K=defs.service.Codec;
+  for(const [action,expected] of [[R.audioValue(0x56),[0,0,0,0,0x56,0,0]],
+    [R.displayFirst(7,0x1234),[1,0,7,0x12,0x34,0,0]],[R.displayStub(7,0x1234),[2,0,7,0x12,0x34,0,0]],
+    [R.displaySecond(7,0x1234),[3,0,7,0x12,0x34,0,0]],[R.powerWrite(0x1234,0x56),[4,0x12,0x34,0,0x56,0,0]],
+    [R.positionPair(0x1234,0x5678),[5,0x12,0x34,0x56,0x78,0,0]],[R.noopFirst(),[7,0,0,0,0,0,0]],[R.noopSecond(),[8,0,0,0,0,0,0]]]){
+    const invocation=service.prepare(modes,C.registerControl(action));assert.equal(invocation.raw[0],200);assert.deepEqual(logical(invocation,K.RegisterControl),expected);
+    assert.deepEqual(invocation.decode(invocation.raw).value,{kind:S.ReplyKind.NoPayload});
+  }
+  for(const n of [0,11]){
+    assert.throws(()=>new S.I2cLength(n),e=>S.isError(e)&&e.reason.argument===S.ArgumentKind.I2cLength);
+    assert.throws(()=>new S.I2cPayload(new Uint8Array(n)),e=>S.isError(e)&&e.reason.argument===S.ArgumentKind.I2cLength);
+  }
+  assert.equal(new S.I2cLength(10).value,10);assert.equal(new S.I2cPayload(new Uint8Array(10)).data.length,10);
+  assert.equal('Port3' in S.I2cPort,false);
+  for(const [port,selector] of [[S.I2cPort.Port0,0],[S.I2cPort.Port1,1],[S.I2cPort.Port2,2],[S.I2cPort.Port4,4],[S.I2cPort.Port5,5]]){
+    const read=service.prepare(modes,C.i2c(S.I2cAction.read(port,0xa5,new S.I2cLength(3))));
+    assert.equal(read.raw[0],201);assert.deepEqual(logical(read,K.I2c),[0,selector,3,0xa5,...Array(10).fill(0)]);
+    assert.deepEqual(decode(read,K.I2c,[0,selector,3,0xa5,1,2,3,...Array(7).fill(99)]),{kind:S.ReplyKind.I2cData,data:new Uint8Array([1,2,3])});
+    const original=new Uint8Array([4,5,6]),payload=new S.I2cPayload(original);original.fill(0);assert.deepEqual(payload.data,new Uint8Array([4,5,6]));
+    const write=service.prepare(modes,C.i2c(S.I2cAction.write(port,0x12,payload)));
+    assert.deepEqual(logical(write,K.I2c),[1,selector,3,0x12,4,5,6,...Array(7).fill(0)]);
+    assert.deepEqual(write.decode(write.raw).value,{kind:S.ReplyKind.NoPayload});
+  }
+  const single=service.prepare(modes,C.i2c(S.I2cAction.writeSingle(0xa5,0x7f)));
+  assert.deepEqual(logical(single,K.I2c),[1,3,1,0xa5,0x7f,...Array(9).fill(0)]);
+  const start=service.prepare(modes,C.accumulator(S.AccumulatorAction.Start));assert.equal(logical(start,K.Accumulator)[0],1);
+  const stop=service.prepare(modes,C.accumulator(S.AccumulatorAction.StopAndRead));assert.equal(logical(stop,K.Accumulator)[0],0);
+  const values=decode(stop,K.Accumulator,[0,0x12,0x34,0xab,0xcd,0xff,0xfe]);
+  assert.deepEqual(values,{kind:S.ReplyKind.Accumulated,values:[0x1234,0xabcd,0xfffe]});assert.ok(Object.isFrozen(values.values));
+  const report=service.prepare(modes,C.peripheralReport());assert.deepEqual(decode(report,K.PeripheralReport,[1,2,3,4,5,6,7,8]),{kind:S.ReplyKind.PeripheralReport,data:new Uint8Array([1,2,3,4,5,6,7,8])});
+});

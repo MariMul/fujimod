@@ -45,16 +45,22 @@ async def exchange(session, mailbox, request):
 
 # The catalogue uses CommandCode; finish the wire types before importing it.
 from ._catalogue import (  # noqa: E402
+    AccumulatorAction,
     ArgumentKind,
     Command,
     CommandError,
     CommandFailure,
     CommandReply,
+    I2cAction,
+    I2cLength,
+    I2cPayload,
+    I2cPort,
     Invocation,
     PinBank,
     ProfileAction,
     ProfileBank,
     ProfileIndex,
+    RegisterAction,
     ReplyValue,
     SaveStatus,
     Service,
@@ -65,6 +71,12 @@ from ._catalogue import (  # noqa: E402
 )
 
 __all__ = [
+    "RegisterAction",
+    "I2cLength",
+    "I2cPayload",
+    "I2cPort",
+    "I2cAction",
+    "AccumulatorAction",
     "CommandCode",
     "Request",
     "Mailbox",

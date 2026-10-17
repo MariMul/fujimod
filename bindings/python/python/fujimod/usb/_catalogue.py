@@ -21,6 +21,7 @@ class ArgumentKind(Enum):
     ProfileIndex = auto()
     WordAlignment = auto()
     WordAddress = auto()
+    I2cLength = auto()
 
 
 class CommandFailure(Sum):
@@ -117,6 +118,131 @@ variant(
 variant(ProfileAction, "Reset", create=lambda: call(_js.ProfileAction.reset))
 
 
+class RegisterAction(Sum, Handle):
+    pass
+
+
+variant(
+    RegisterAction,
+    "AudioValue",
+    [("value", int)],
+    create=lambda value: call(_js.RegisterAction.audioValue, uint(value, 8)),
+)
+variant(
+    RegisterAction,
+    "DisplayFirst",
+    [("selector", int), ("value", int)],
+    create=lambda selector, value: call(
+        _js.RegisterAction.displayFirst, uint(selector, 8), uint(value, 16)
+    ),
+)
+variant(
+    RegisterAction,
+    "DisplayStub",
+    [("selector", int), ("value", int)],
+    create=lambda selector, value: call(
+        _js.RegisterAction.displayStub, uint(selector, 8), uint(value, 16)
+    ),
+)
+variant(
+    RegisterAction,
+    "DisplaySecond",
+    [("selector", int), ("value", int)],
+    create=lambda selector, value: call(
+        _js.RegisterAction.displaySecond, uint(selector, 8), uint(value, 16)
+    ),
+)
+variant(
+    RegisterAction,
+    "PowerWrite",
+    [("register", int), ("value", int)],
+    create=lambda register, value: call(
+        _js.RegisterAction.powerWrite, uint(register, 16), uint(value, 8)
+    ),
+)
+variant(
+    RegisterAction,
+    "PositionPair",
+    [("first", int), ("second", int)],
+    create=lambda first, second: call(
+        _js.RegisterAction.positionPair, uint(first, 16), uint(second, 16)
+    ),
+)
+variant(RegisterAction, "NoopFirst", create=lambda: call(_js.RegisterAction.noopFirst))
+variant(
+    RegisterAction, "NoopSecond", create=lambda: call(_js.RegisterAction.noopSecond)
+)
+
+
+class I2cLength(Handle):
+    def __init__(self, value):
+        self._js = call(_js.I2cLength.new, uint(value, 8))
+
+    value = property(lambda self: self._js.value)
+
+
+class I2cPayload(Handle):
+    def __init__(self, data):
+        self._js = call(_js.I2cPayload.new, buffer_in(data))
+
+    data = property(lambda self: buffer_out(self._js.data))
+
+
+class I2cPort(Enum):
+    Port0 = auto()
+    Port1 = auto()
+    Port2 = auto()
+    Port4 = auto()
+    Port5 = auto()
+
+
+def _choice(value, cls, choices):
+    if type(value) is not cls:
+        raise TypeError(f"expected {cls.__name__}")
+    return getattr(choices, value.name)
+
+
+class I2cAction(Sum, Handle):
+    pass
+
+
+variant(
+    I2cAction,
+    "Read",
+    [("port", I2cPort), ("command", int), ("length", I2cLength)],
+    create=lambda port, command, length: call(
+        _js.I2cAction.read,
+        _choice(port, I2cPort, _js.I2cPort),
+        uint(command, 8),
+        unwrap(length, I2cLength),
+    ),
+)
+variant(
+    I2cAction,
+    "Write",
+    [("port", I2cPort), ("command", int), ("payload", I2cPayload)],
+    create=lambda port, command, payload: call(
+        _js.I2cAction.write,
+        _choice(port, I2cPort, _js.I2cPort),
+        uint(command, 8),
+        unwrap(payload, I2cPayload),
+    ),
+)
+variant(
+    I2cAction,
+    "WriteSingle",
+    [("command", int), ("value", int)],
+    create=lambda command, value: call(
+        _js.I2cAction.writeSingle, uint(command, 8), uint(value, 8)
+    ),
+)
+
+
+class AccumulatorAction(Enum):
+    Start = auto()
+    StopAndRead = auto()
+
+
 class Command(Sum, Handle):
     pass
 
@@ -184,6 +310,32 @@ variant(
 )
 
 
+variant(
+    Command,
+    "RegisterControl",
+    [("action", RegisterAction)],
+    create=lambda action: call(
+        _js.Command.registerControl, _owned(action, RegisterAction)
+    ),
+)
+variant(
+    Command,
+    "I2c",
+    [("action", I2cAction)],
+    create=lambda action: call(_js.Command.i2c, _owned(action, I2cAction)),
+)
+variant(
+    Command,
+    "Accumulator",
+    [("action", AccumulatorAction)],
+    create=lambda action: call(
+        _js.Command.accumulator,
+        _choice(action, AccumulatorAction, _js.AccumulatorAction),
+    ),
+)
+variant(Command, "PeripheralReport", create=lambda: call(_js.Command.peripheralReport))
+
+
 class SaveStatus(Sum):
     pass
 
@@ -224,6 +376,9 @@ variant(ReplyValue, "ConfigurationSaved", [("status", SaveStatus)])
 variant(ReplyValue, "ReadWord", [("result", WordReadResult)])
 variant(ReplyValue, "WriteWord", [("result", WordWriteResult)])
 variant(ReplyValue, "Research")
+variant(ReplyValue, "I2cData", [("data", bytes)])
+variant(ReplyValue, "Accumulated", [("values", tuple)])
+variant(ReplyValue, "PeripheralReport", [("data", bytes)])
 
 
 def _save(value):
@@ -267,6 +422,11 @@ def _value(value):
         kinds.ReadWord: lambda: ReplyValue.ReadWord(_word_read(value.result)),
         kinds.WriteWord: lambda: ReplyValue.WriteWord(_word_write(value.result)),
         kinds.Research: ReplyValue.Research,
+        kinds.I2cData: lambda: ReplyValue.I2cData(buffer_out(value.data)),
+        kinds.Accumulated: lambda: ReplyValue.Accumulated(tuple(value.values)),
+        kinds.PeripheralReport: lambda: ReplyValue.PeripheralReport(
+            buffer_out(value.data)
+        ),
     }[value.kind]()
 
 

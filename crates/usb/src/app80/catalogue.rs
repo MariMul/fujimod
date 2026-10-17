@@ -2,6 +2,10 @@
 use super::{CommandCode, Reply, Request};
 use crate::{Result as UsbResult, error::ProtocolError, ff80::commands::memory::Address};
 use fujimod_defs::service::{Codec, Definition, Entry, ServiceModes};
+mod peripheral;
+pub use peripheral::{
+    AccumulatorAction, I2cAction, I2cLength, I2cPayload, I2cPort, RegisterAction,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CommandError {
@@ -22,6 +26,7 @@ pub enum ArgumentKind {
     ProfileIndex,
     WordAlignment,
     WordAddress,
+    I2cLength,
 }
 impl std::fmt::Display for ArgumentKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -30,6 +35,7 @@ impl std::fmt::Display for ArgumentKind {
             Self::ProfileIndex => "profile index",
             Self::WordAlignment => "word alignment",
             Self::WordAddress => "service word address",
+            Self::I2cLength => "I2C payload length (1..=10 bytes)",
         })
     }
 }
@@ -116,6 +122,10 @@ pub enum Command {
         address: WordAddress,
         value: u32,
     },
+    RegisterControl(RegisterAction),
+    I2c(I2cAction),
+    Accumulator(AccumulatorAction),
+    PeripheralReport,
 }
 impl Command {
     pub fn codec(self) -> Codec {
@@ -129,6 +139,10 @@ impl Command {
             Self::CopyConfiguration { .. } => Codec::CopyConfiguration,
             Self::FlushConfiguration => Codec::FlushConfiguration,
             Self::ReadWord { .. } | Self::WriteWord { .. } => Codec::MemoryWord,
+            Self::RegisterControl(_) => Codec::RegisterControl,
+            Self::I2c(_) => Codec::I2c,
+            Self::Accumulator(_) => Codec::Accumulator,
+            Self::PeripheralReport => Codec::PeripheralReport,
         }
     }
 }
@@ -161,6 +175,9 @@ pub enum ReplyValue {
     ReadWord(WordReadResult),
     WriteWord(WordWriteResult),
     Research,
+    I2cData(Vec<u8>),
+    Accumulated([u16; 3]),
+    PeripheralReport([u8; 8]),
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommandReply {
@@ -231,6 +248,15 @@ impl PreparedCommand {
                 0 => WordWriteResult::Rejected,
                 n => WordWriteResult::Unknown(n),
             }),
+            Command::I2c(I2cAction::Read { length, .. }) => ReplyValue::I2cData(
+                (0..usize::from(length.value()))
+                    .map(|index| byte(4 + index))
+                    .collect(),
+            ),
+            Command::Accumulator(AccumulatorAction::StopAndRead) => {
+                ReplyValue::Accumulated([half(1, 2), half(3, 4), half(5, 6)])
+            }
+            Command::PeripheralReport => ReplyValue::PeripheralReport(std::array::from_fn(byte)),
             _ => ReplyValue::NoPayload,
         };
         Ok(CommandReply { value, raw: reply })
@@ -337,6 +363,10 @@ impl Catalogue {
             // an unchanged output can never be reported as a successful save.
             Command::FlushConfiguration => put(0, u8::MAX),
             Command::DownloadStatus => (),
+            Command::RegisterControl(action) => action.encode(&mut put),
+            Command::I2c(action) => action.encode(&mut put),
+            Command::Accumulator(action) => action.encode(&mut put),
+            Command::PeripheralReport => (),
             Command::ReadWord { address } | Command::WriteWord { address, .. } => {
                 let value = address.address().0;
                 if value > 0x1fff_ffff && value.wrapping_add(0xc000_0000) > 0x1fff_ffff {
@@ -363,5 +393,7 @@ impl Catalogue {
     }
 }
 
+#[cfg(test)]
+mod peripheral_tests;
 #[cfg(test)]
 mod tests;

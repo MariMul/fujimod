@@ -222,3 +222,10 @@ returned value, rejection, confirmation and unknown status. A malformed typed
 reply fences the session; an interrupted publication follows normal cancellation
 and ownership rules. There is no implicit poll, retry or close. The Node and
 Chromium production tests execute this path through nusb and fake WebUSB.
+
+Peripheral factories include `Command.registerControl(RegisterAction.powerWrite(...))`,
+`Command.i2c(I2cAction.read(I2cPort.Port0, command, new I2cLength(length)))`,
+`Command.accumulator(AccumulatorAction.StopAndRead)` and `Command.peripheralReport()`
+under `usb.app80`. `new I2cPayload(bytes)` owns a checked 1–10 byte copy; the
+write-only route uses `I2cAction.writeSingle(command, value)`. Result variants
+carry copied bytes or an immutable tuple of three low counter halfwords.
