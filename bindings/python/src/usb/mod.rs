@@ -448,7 +448,7 @@ impl Session {
         self.with(py, |s| block_on(s.ping()))
             .map(|b| PyBytes::new(py, &b))
     }
-    fn close(&self, py: Python<'_>) -> PyResult<()> {
+    fn close<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         let session = self
             .inner
             .lock()
@@ -456,7 +456,7 @@ impl Session {
             .take()
             .ok_or_else(|| ClosedSessionError::new_err("session is closed"))?;
         py.detach(|| block_on(session.close()))
-            .map(|_| ())
+            .map(|bytes| PyBytes::new(py, &bytes))
             .map_err(|e| convert_error(py, e))
     }
     fn device_info(&self, py: Python<'_>, selector: InfoSelector) -> PyResult<String> {
