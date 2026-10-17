@@ -29,12 +29,12 @@
       "text": "Auto"
     },
     "movie": {
-      "label": "Record",
-      "icon": "record"
+      "label": "Fn/Rec",
+      "text": "Fn/Rec"
     },
     "wifi": {
-      "label": "Wi-Fi",
-      "text": "Wi-Fi"
+      "label": "Fn/Wifi",
+      "text": "Fn/Wifi"
     },
     "q": {
       "label": "Q",
