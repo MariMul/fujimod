@@ -339,6 +339,7 @@ async function startSession(
       1000,
   );
   runtime.globals.set("clock_seconds_2000", clock);
+  runtime.globals.set("boot_step", protocol.step);
   if (restarting) recovery.bypassPersistence();
   const resumed = await recovery.restore(
     runtime,
@@ -382,7 +383,6 @@ async function startSession(
       Path(item['staged']).unlink()
   del card_files, card_seeds, retained_media
   `);
-    runtime.globals.set("boot_step", protocol.step);
     while (true) {
       const progress: { instructions: number; failure?: unknown } = JSON.parse(
         runtime.runPython("boot_module.advance(boot_step)"),
