@@ -7,6 +7,35 @@ Try camera firmware and build SD boot files in your browser. Firmware is
 identified by its complete SHA-256 and never uploaded. The web app is developed
 on review branches; the Pages workflow deploys approved main builds only.
 
+## Dev Tools
+
+`/dev-tools/` is a Solid 2 USB console using the public `fujimod` JavaScript/Wasm
+package and nusb's WebUSB backend. Connect opens the browser's FF80 device
+picker. A single bulk interface is selected automatically; multiple interfaces
+require a choice. WebUSB needs a supporting browser and HTTPS.
+
+Commands are printable ASCII with a selectable line ending. Responses and
+connection events share one log pane. Pending responses are polled for up to
+ten seconds, then wait for an explicit Read response. Unknown progress or a
+failed transfer blocks further commands. Disconnect releases host ownership
+without sending a camera close, reset or mode transition.
+
+Layer filters (Console, App80, FF80, USB) and severity filters affect display,
+including previously captured entries. Rust records protocol boundaries and raw
+USB transfers with shared sequence numbers. Expand a row for bytes and exchange
+IDs; Save exports the captured log. The Rust queue and browser log are bounded,
+and discarded entries are reported. Long rows scroll inside the log on mobile.
+
+```sh
+npm run build
+npm run test:dev-tools:browser
+# Or check an existing server:
+FUJIMOD_WEB_URL=https://your-host.ts.net/ npm run test:dev-tools:browser
+```
+
+This checks production Wasm against a simulated WebUSB device in desktop/mobile
+Chromium, plus the unsupported-browser state in WebKit. It never opens hardware.
+
 ## Camera viewer
 
 The TypeScript web app uses SolidJS 2 for new UI and three.js for the camera viewer.
@@ -76,9 +105,16 @@ Use the Node version in the repository's `mise.toml` (`mise install`),
 `git lfs install --local`, `git lfs pull`, then:
 
 ```sh
+rustup target add wasm32-unknown-unknown
+npm --prefix ../../bindings/javascript ci
+npm --prefix ../../bindings/javascript run setup:tooling
 npm ci
 npm run dev -- --port 5190
 ```
+
+The web commands build the local Rust USB bindings before starting. The tooling
+setup downloads the official wasm-bindgen CLI matching `Cargo.lock` and verifies
+its published SHA-256. `WASM_BINDGEN` can instead select an installed CLI.
 
 Vite binds to `127.0.0.1`. To use existing research artifacts locally, put
 absolute paths in ignored `.env.local`:

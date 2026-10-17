@@ -122,7 +122,7 @@ export const usb = Object.freeze({
     isError: isServiceCommandError, execute: native.executeApp80,
   }),
   research: Object.freeze({ CommandCode: native.ResearchCommandCode, Request: native.ResearchRequest, Reply: native.ResearchReply }),
-  tracing: Object.freeze({ Trace: native.Trace, Stage: native.TraceStage, Phase: native.TracePhase, RequestKind: native.TraceRequestKind, FailureKind: native.TraceFailureKind }),
+  tracing: Object.freeze({ Layer: native.TraceLayer, Trace: native.Trace, Stage: native.TraceStage, Phase: native.TracePhase, RequestKind: native.TraceRequestKind, FailureKind: native.TraceFailureKind }),
 });
 
 /** Make this initialized Rust module available to the FujiMod Python package. */

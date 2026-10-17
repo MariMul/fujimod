@@ -152,6 +152,9 @@ fn bulk_pair(addresses: &[u8]) -> Result<(u8, u8)> {
 
 // Only a private test seam. nusb supplies the platform transport abstraction.
 pub(crate) trait Io {
+    fn trace(&self) -> Option<crate::trace::Trace> {
+        None
+    }
     fn endpoint(&self, _stage: TransferStage) -> Option<u8> {
         None
     }

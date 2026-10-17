@@ -78,11 +78,82 @@ pub enum TraceFailureKind {
     Other,
 }
 #[wasm_bindgen]
+#[derive(Clone, Copy)]
+pub enum TraceLayer {
+    Ff80,
+    App80,
+}
+#[wasm_bindgen]
+pub struct ProtocolTraceEvent {
+    inner: trace::ProtocolEvent,
+}
+#[wasm_bindgen]
+impl ProtocolTraceEvent {
+    #[wasm_bindgen(getter)]
+    pub fn sequence(&self) -> u64 {
+        self.inner.sequence
+    }
+    #[wasm_bindgen(getter)]
+    pub fn exchange(&self) -> u64 {
+        self.inner.exchange
+    }
+    #[wasm_bindgen(getter, js_name=timestampMs)]
+    pub fn timestamp_ms(&self) -> f64 {
+        self.inner
+            .timestamp
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("JS wall clock epoch")
+            .as_secs_f64()
+            * 1000.0
+    }
+    #[wasm_bindgen(getter)]
+    pub fn layer(&self) -> TraceLayer {
+        match self.inner.layer {
+            trace::Layer::Ff80 => TraceLayer::Ff80,
+            trace::Layer::App80 => TraceLayer::App80,
+        }
+    }
+    #[wasm_bindgen(getter)]
+    pub fn command(&self) -> u32 {
+        self.inner.command
+    }
+    #[wasm_bindgen(getter)]
+    pub fn phase(&self) -> TracePhase {
+        match self.inner.action {
+            trace::Action::Submitted { .. } => TracePhase::Submitted,
+            trace::Action::Completed { .. } => TracePhase::Completed,
+            trace::Action::Failed { .. } => TracePhase::Failed,
+            trace::Action::Cancelled => TracePhase::Cancelled,
+        }
+    }
+    #[wasm_bindgen(getter, unchecked_return_type = "Uint8Array")]
+    pub fn data(&self) -> JsValue {
+        bytes(self.inner.action.data())
+    }
+    #[wasm_bindgen(getter,js_name=failureMessage)]
+    pub fn failure_message(&self) -> Option<String> {
+        match &self.inner.action {
+            trace::Action::Failed { failure, .. } => Some(format!("{failure:?}")),
+            _ => None,
+        }
+    }
+}
+
+#[wasm_bindgen]
 pub struct TraceBatch {
     inner: trace::Batch,
 }
 #[wasm_bindgen]
 impl TraceBatch {
+    #[wasm_bindgen(getter, js_name=protocolEvents, unchecked_return_type="ProtocolTraceEvent[]")]
+    pub fn protocol_events(&self) -> js_sys::Array {
+        self.inner
+            .protocol_events
+            .iter()
+            .cloned()
+            .map(|inner| JsValue::from(ProtocolTraceEvent { inner }))
+            .collect()
+    }
     #[wasm_bindgen(getter,js_name=droppedEvents)]
     pub fn dropped_events(&self) -> u64 {
         self.inner.dropped_events

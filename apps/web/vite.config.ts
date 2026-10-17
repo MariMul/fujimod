@@ -168,8 +168,14 @@ export default defineConfig(({ mode, command }) => ({
       },
     ],
   },
-  server: { host: '127.0.0.1', fs: { strict: true } },
+  server: { host: '127.0.0.1', fs: { strict: true, allow: [resolve('../..')] } },
   preview: { host: '127.0.0.1', allowedHosts: ['cozycat.tail2b5ca.ts.net'] },
-  build: { target: 'es2022', outDir: mode === 'local-preview' ? 'dist-local-preview' : 'dist' },
+  build: {
+    target: 'es2022',
+    outDir: mode === 'local-preview' ? 'dist-local-preview' : 'dist',
+    rolldownOptions: {
+      input: { main: resolve('index.html'), devTools: resolve('dev-tools/index.html') },
+    },
+  },
   worker: { format: 'es' },
 }));

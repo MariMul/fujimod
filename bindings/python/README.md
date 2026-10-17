@@ -320,3 +320,9 @@ opaque byte for byte/mode-byte/bitfield commands. `TransferOption` and the three
 selected-word kind enums replace numeric selectors. Halfword/option results are
 raw snapshots, and some stock transfer callbacks receive null data; see the
 [Rust command limits](../../crates/usb/README.md) before using those operations.
+
+Trace batches expose `events` for USB and `protocol_events` for FF80/App80.
+Both collections use one bounded queue and shared sequence numbers; merge by
+`sequence` to inspect nesting. Protocol records include layer, command, exchange,
+phase and exact payload bytes. Discard counters include all layers. The native
+and Pyodide adapters expose the same observations.

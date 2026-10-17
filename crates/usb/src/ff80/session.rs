@@ -77,6 +77,9 @@ impl Session {
             .await?,
         })
     }
+    pub(crate) fn trace(&self) -> Option<crate::trace::Trace> {
+        self.core.io.trace()
+    }
     pub fn info(&self) -> SessionInfo {
         self.core.info
     }
@@ -119,9 +122,7 @@ pub(crate) struct Core<I> {
 impl<I: Io> Core<I> {
     async fn open(mut io: I, max_reply_bytes: u32) -> Result<Self> {
         check_limit(8, max_reply_bytes)?;
-        io.control(RequestKind::Open, envelope(RequestKind::Open, 8, 0))
-            .await?;
-        let bytes: [u8; 8] = exact(io.read(8).await?)?;
+        let bytes: [u8; 8] = exact(Self::lifecycle_io(&mut io, RequestKind::Open, 8, 0).await?)?;
         let packet = NonZeroU32::new(u32::from_be_bytes(bytes[4..8].try_into().unwrap()))
             .ok_or(ProtocolError::ZeroPacketLimit)?;
         Ok(Self {
@@ -143,12 +144,33 @@ impl<I: Io> Core<I> {
         self.state = SessionState::CompletionUnknown;
         Ok(())
     }
+    async fn lifecycle_io(io: &mut I, kind: RequestKind, size: u32, id: u16) -> Result<Vec<u8>> {
+        let bytes = envelope(kind, size, id);
+        let span = io
+            .trace()
+            .map(|t| t.protocol(crate::trace::Layer::Ff80, bytes[0].into(), &bytes));
+        let mut reply = Vec::new();
+        let result = async {
+            io.control(kind, bytes).await?;
+            reply = io.read(size as usize).await?;
+            if reply.len() != size as usize {
+                return Err(ProtocolError::ReplyLength {
+                    expected: size as usize,
+                    actual: reply.len(),
+                }
+                .into());
+            }
+            Ok(())
+        }
+        .await;
+        if let Some(span) = span {
+            span.complete(&result, &reply);
+        }
+        result.map(|()| reply)
+    }
     async fn lifecycle(&mut self, kind: RequestKind) -> Result<[u8; 2]> {
         self.start()?;
-        self.io
-            .control(kind, envelope(kind, 2, self.info.id))
-            .await?;
-        let reply = exact(self.io.read(2).await?)?;
+        let reply = exact(Self::lifecycle_io(&mut self.io, kind, 2, self.info.id).await?)?;
         self.state = SessionState::Ready;
         Ok(reply)
     }
@@ -168,31 +190,47 @@ impl<I: Io> Core<I> {
         check_limit(reply_size, self.max_reply_bytes)?;
         let size = u32::try_from(bytes.len()).map_err(|_| Error::InvalidLength)?;
         self.start()?;
-        self.io
-            .control(
-                RequestKind::WriteCommand,
-                envelope(RequestKind::WriteCommand, size, self.info.id),
-            )
-            .await?;
-        self.io.write(&bytes).await?;
-        self.io
-            .control(
-                RequestKind::ReadCommand,
-                envelope(RequestKind::ReadCommand, reply_size, self.info.id),
-            )
-            .await?;
-        let response = self.io.read(reply_size as usize).await?;
-        if response.len() > reply_size as usize {
-            return Err(ProtocolError::ReplyLength {
-                expected: reply_size as usize,
-                actual: response.len(),
+        let code = u32::from_le_bytes(bytes[..4].try_into().expect("encoded command header"));
+        let span = self
+            .io
+            .trace()
+            .map(|t| t.protocol(crate::trace::Layer::Ff80, code, &bytes));
+        let mut raw = Vec::new();
+        let result = async {
+            self.io
+                .control(
+                    RequestKind::WriteCommand,
+                    envelope(RequestKind::WriteCommand, size, self.info.id),
+                )
+                .await?;
+            self.io.write(&bytes).await?;
+            self.io
+                .control(
+                    RequestKind::ReadCommand,
+                    envelope(RequestKind::ReadCommand, reply_size, self.info.id),
+                )
+                .await?;
+            let response = self.io.read(reply_size as usize).await?;
+            if span.is_some() {
+                raw = response.clone();
             }
-            .into());
+            if response.len() > reply_size as usize {
+                return Err(ProtocolError::ReplyLength {
+                    expected: reply_size as usize,
+                    actual: response.len(),
+                }
+                .into());
+            }
+            let result = decode(response);
+            // A framed device error is a completed reply, not an async disposition.
+            if result.is_ok() || matches!(result, Err(Error::DeviceStatus { .. })) {
+                self.state = SessionState::Ready;
+            }
+            result
         }
-        let result = decode(response);
-        // A framed device error is a completed reply, not an async disposition.
-        if result.is_ok() || matches!(result, Err(Error::DeviceStatus { .. })) {
-            self.state = SessionState::Ready;
+        .await;
+        if let Some(span) = span {
+            span.complete(&result, &raw);
         }
         result
     }

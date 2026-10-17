@@ -5,6 +5,11 @@ from enum import Enum, auto
 from .._bridge import Handle, jsusb, uint, call, snapshot, buffer_out, enum_out
 
 
+class Layer(Enum):
+    Ff80 = auto()
+    App80 = auto()
+
+
 class Stage(Enum):
     Control = auto()
     BulkIn = auto()
@@ -85,8 +90,30 @@ class Event:
 
 
 @dataclass(frozen=True)
+class ProtocolEvent:
+    sequence: int
+    timestamp: float
+    exchange: int
+    layer: Layer
+    command: int
+    phase: Phase
+    data: bytes
+    error: str | None
+
+    @classmethod
+    def _from_js(cls, value):
+        return snapshot(value, lambda v: cls(
+            int(v.sequence), v.timestampMs / 1000, int(v.exchange),
+            {getattr(jsusb.tracing.Layer, m.name): m for m in Layer}[v.layer],
+            v.command, {getattr(jsusb.tracing.Phase, m.name): m for m in Phase}[v.phase],
+            buffer_out(v.data), v.failureMessage,
+        ))
+
+
+@dataclass(frozen=True)
 class Batch:
     events: tuple
+    protocol_events: tuple
     dropped_events: int
     dropped_bytes: int
 
@@ -100,6 +127,7 @@ class Trace(Handle):
             call(self._js.drain),
             lambda v: Batch(
                 tuple(Event._from_js(e) for e in v.events),
+                tuple(ProtocolEvent._from_js(e) for e in v.protocolEvents),
                 int(v.droppedEvents),
                 int(v.droppedBytes),
             ),

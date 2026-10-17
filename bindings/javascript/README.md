@@ -13,12 +13,16 @@ Wasm standard library and the wasm-bindgen CLI matching `Cargo.lock`:
 
 ```sh
 rustup target add wasm32-unknown-unknown
-cargo install wasm-bindgen-cli --version 0.2.129 --locked --root target/tooling
 cd bindings/javascript
 npm ci
+npm run setup:tooling
 npm run build
 npm test
 ```
+
+`setup:tooling` installs the official prebuilt CLI matching `Cargo.lock`, checking
+the release checksum. Alternatively use `cargo install wasm-bindgen-cli` with
+that exact version and `--locked --root target/tooling` from the repository root.
 
 `WASM_BINDGEN` can select an explicitly installed CLI executable. By default,
 the build script uses `target/tooling/bin/wasm-bindgen` from the repository root.
@@ -295,3 +299,10 @@ quantity and selector types remain distinct. Halfword/option replies are raw
 snapshots; some stock transfer helpers leave output uninitialized or pass null
 callback data. The [Rust command limits](../../crates/usb/README.md) describe
 these constraints; the host does not manufacture completion or repair state.
+
+Protocol observations are in `trace.drain().protocolEvents`; USB observations
+remain in `events`. Both share sequence numbers and one event/byte budget.
+`usb.tracing.Layer` distinguishes FF80 and App80, and `phase` reports submission,
+completion, failure or cancellation. Protocol records carry the actual request
+and reply bytes, including rejected replies. Tracing never decides completion,
+retries work or invokes user callbacks during an exchange.

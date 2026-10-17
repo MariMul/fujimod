@@ -19,7 +19,10 @@ def test_lifecycle_trace_is_typed_and_survives_session_close():
     assert batch.dropped_events == batch.dropped_bytes == 0
     events=batch.events
     assert len(events) == 8
-    assert [e.sequence for e in events] == list(range(8))
+    assert sorted(e.sequence for e in [*events, *batch.protocol_events]) == list(range(12))
+    assert len(batch.protocol_events) == 4
+    assert batch.protocol_events[0].layer == tracing.Layer.Ff80
+    assert batch.protocol_events[0].command == 0xc0
     assert all(events[i].transfer==events[i+1].transfer for i in range(0,8,2))
     assert events[0].stage == tracing.Stage.Control
     assert events[0].phase == tracing.Phase.Submitted
@@ -62,8 +65,8 @@ def test_trace_overflow_reports_loss_without_changing_camera_exchange():
     trace=tracing.Trace(max_events=2,max_bytes=4)
     session,script=opened(trace=trace)
     batch=trace.drain()
-    assert batch.dropped_events == 2
-    assert batch.dropped_bytes == 20  # full 12-byte request and 8-byte response
+    assert batch.dropped_events == 4
+    assert batch.dropped_bytes == 40  # USB and FF80 retain complete requests and replies
     assert len(batch.events) == 2
     assert all(e.data==b'' for e in batch.events)
     assert session.state == usb.SessionState.Ready
@@ -95,8 +98,11 @@ def test_completed_usb_transfer_does_not_certify_a_valid_protocol_reply():
     trace=tracing.Trace(32,4096)
     session,script=opened([E.control(control(0xc2,2)),E.read(2,b'\x34')],trace=trace)
     with pytest.raises(usb.ProtocolError): session.ping()
-    event=trace.drain().events[-1]
+    batch=trace.drain()
+    event=batch.events[-1]
     assert event.phase == tracing.Phase.Completed
     assert event.data == b'\x34'
+    assert batch.protocol_events[-1].phase == tracing.Phase.Failed
+    assert batch.protocol_events[-1].data == b'\x34'
     assert session.state == usb.SessionState.CompletionUnknown
     assert script.remaining == 0

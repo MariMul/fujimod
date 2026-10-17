@@ -144,9 +144,70 @@ impl Event {
         }
     }
 }
+#[pyclass(frozen, eq, hash, from_py_object, module = "fujimod.usb.tracing")]
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+enum Layer {
+    Ff80,
+    App80,
+}
+#[pyclass(frozen, module = "fujimod.usb.tracing")]
+struct ProtocolEvent {
+    inner: usb::trace::ProtocolEvent,
+}
+#[pymethods]
+impl ProtocolEvent {
+    #[getter]
+    fn sequence(&self) -> u64 {
+        self.inner.sequence
+    }
+    #[getter]
+    fn timestamp(&self) -> f64 {
+        self.inner
+            .timestamp
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("trace epoch")
+            .as_secs_f64()
+    }
+    #[getter]
+    fn exchange(&self) -> u64 {
+        self.inner.exchange
+    }
+    #[getter]
+    fn layer(&self) -> Layer {
+        match self.inner.layer {
+            usb::trace::Layer::Ff80 => Layer::Ff80,
+            usb::trace::Layer::App80 => Layer::App80,
+        }
+    }
+    #[getter]
+    fn command(&self) -> u32 {
+        self.inner.command
+    }
+    #[getter]
+    fn phase(&self) -> Phase {
+        match self.inner.action {
+            Action::Submitted { .. } => Phase::Submitted,
+            Action::Completed { .. } => Phase::Completed,
+            Action::Failed { .. } => Phase::Failed,
+            Action::Cancelled => Phase::Cancelled,
+        }
+    }
+    #[getter]
+    fn data<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, self.inner.action.data())
+    }
+    #[getter]
+    fn error(&self) -> Option<String> {
+        match &self.inner.action {
+            Action::Failed { failure, .. } => Some(format!("{failure:?}")),
+            _ => None,
+        }
+    }
+}
 #[pyclass(frozen, module = "fujimod.usb.tracing")]
 struct Batch {
     events: Vec<Py<Event>>,
+    protocol_events: Vec<Py<ProtocolEvent>>,
     #[pyo3(get)]
     dropped_events: u64,
     #[pyo3(get)]
@@ -154,6 +215,13 @@ struct Batch {
 }
 #[pymethods]
 impl Batch {
+    #[getter]
+    fn protocol_events(&self, py: Python<'_>) -> Vec<Py<ProtocolEvent>> {
+        self.protocol_events
+            .iter()
+            .map(|e| e.clone_ref(py))
+            .collect()
+    }
     #[getter]
     fn events(&self, py: Python<'_>) -> Vec<Py<Event>> {
         self.events.iter().map(|e| e.clone_ref(py)).collect()
@@ -179,8 +247,14 @@ impl Trace {
             .into_iter()
             .map(|inner| Py::new(py, Event { inner }))
             .collect::<PyResult<Vec<_>>>()?;
+        let protocol_events = batch
+            .protocol_events
+            .into_iter()
+            .map(|inner| Py::new(py, ProtocolEvent { inner }))
+            .collect::<PyResult<Vec<_>>>()?;
         Ok(Batch {
             events,
+            protocol_events,
             dropped_events: batch.dropped_events,
             dropped_bytes: batch.dropped_bytes,
         })
@@ -189,6 +263,8 @@ impl Trace {
 pub(super) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     let module = PyModule::new(py, "fujimod.usb.tracing")?;
     module.add_class::<Trace>()?;
+    module.add_class::<Layer>()?;
+    module.add_class::<ProtocolEvent>()?;
     module.add_class::<Event>()?;
     module.add_class::<Batch>()?;
     module.add_class::<Stage>()?;

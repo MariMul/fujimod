@@ -66,8 +66,38 @@ pub struct Event {
 #[derive(Debug)]
 pub struct Batch {
     pub events: Vec<Event>,
+    pub protocol_events: Vec<ProtocolEvent>,
     pub dropped_events: u64,
     pub dropped_bytes: u64,
+}
+
+/// Protocol observations are captured where a command is executed, before
+/// and after its nested transfers. They share ordering and budgets with USB.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Layer {
+    Ff80,
+    App80,
+}
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProtocolEvent {
+    pub sequence: u64,
+    pub timestamp: std::time::SystemTime,
+    pub exchange: u64,
+    pub layer: Layer,
+    pub command: u32,
+    pub action: Action,
+}
+enum Record {
+    Transfer(Event),
+    Protocol(ProtocolEvent),
+}
+impl Record {
+    fn bytes(&self) -> usize {
+        match self {
+            Self::Transfer(e) => e.action.data().len(),
+            Self::Protocol(e) => e.action.data().len(),
+        }
+    }
 }
 
 /// Shared recorder. Clone before opening a session to retain handshake failures
@@ -80,7 +110,7 @@ pub struct Trace {
     inner: Arc<Mutex<State>>,
 }
 struct State {
-    events: VecDeque<Event>,
+    records: VecDeque<Record>,
     max_events: usize,
     max_bytes: usize,
     bytes: usize,
@@ -93,7 +123,7 @@ impl Trace {
     pub fn new(max_events: NonZeroU32, max_bytes: NonZeroU32) -> Self {
         Self {
             inner: Arc::new(Mutex::new(State {
-                events: VecDeque::new(),
+                records: VecDeque::new(),
                 max_events: max_events.get() as usize,
                 max_bytes: max_bytes.get() as usize,
                 bytes: 0,
@@ -106,8 +136,17 @@ impl Trace {
     }
     pub fn drain(&self) -> Batch {
         let mut state = self.inner.lock().expect("trace mutex");
+        let mut events = Vec::new();
+        let mut protocol_events = Vec::new();
+        for record in state.records.drain(..) {
+            match record {
+                Record::Transfer(e) => events.push(e),
+                Record::Protocol(e) => protocol_events.push(e),
+            }
+        }
         let batch = Batch {
-            events: state.events.drain(..).collect(),
+            events,
+            protocol_events,
             dropped_events: state.dropped_events,
             dropped_bytes: state.dropped_bytes,
         };
@@ -124,6 +163,18 @@ impl Trace {
         bytes: usize,
         action: impl FnOnce() -> Action,
     ) {
+        self.record_capture(bytes, |sequence| {
+            Record::Transfer(Event {
+                sequence,
+                timestamp: timestamp(),
+                transfer,
+                stage,
+                endpoint,
+                action: action(),
+            })
+        });
+    }
+    fn record_capture(&self, bytes: usize, make: impl FnOnce(u64) -> Record) {
         let mut state = self.inner.lock().expect("trace mutex");
         let sequence = state.next_sequence;
         state.next_sequence = state.next_sequence.wrapping_add(1);
@@ -132,22 +183,35 @@ impl Trace {
             state.dropped_bytes += bytes as u64;
             return;
         }
-        while state.events.len() >= state.max_events || bytes > state.max_bytes - state.bytes {
-            let old = state.events.pop_front().expect("nonempty bounded trace");
-            let removed = old.action.data().len();
+        while state.records.len() >= state.max_events || bytes > state.max_bytes - state.bytes {
+            let old = state.records.pop_front().expect("nonempty bounded trace");
+            let removed = old.bytes();
             state.bytes -= removed;
             state.dropped_events += 1;
             state.dropped_bytes += removed as u64;
         }
-        state.events.push_back(Event {
-            sequence,
-            timestamp: timestamp(),
-            transfer,
-            stage,
-            endpoint,
-            action: action(),
-        });
+        state.records.push_back(make(sequence));
         state.bytes += bytes;
+    }
+    pub(crate) fn protocol(&self, layer: Layer, command: u32, data: &[u8]) -> ProtocolSpan {
+        let exchange = {
+            let mut s = self.inner.lock().expect("trace mutex");
+            let id = s.next_transfer;
+            s.next_transfer = s.next_transfer.wrapping_add(1);
+            id
+        };
+        let span = ProtocolSpan {
+            trace: self.clone(),
+            exchange,
+            layer,
+            command,
+            finished: false,
+        };
+        span.record(data.len(), || Action::Submitted {
+            requested: data.len(),
+            data: data.to_vec(),
+        });
+        span
     }
     fn start(
         &self,
@@ -177,6 +241,49 @@ impl Trace {
         }
     }
 }
+pub(crate) struct ProtocolSpan {
+    trace: Trace,
+    exchange: u64,
+    layer: Layer,
+    command: u32,
+    finished: bool,
+}
+impl ProtocolSpan {
+    fn record(&self, bytes: usize, action: impl FnOnce() -> Action) {
+        self.trace.record_capture(bytes, |sequence| {
+            Record::Protocol(ProtocolEvent {
+                sequence,
+                timestamp: timestamp(),
+                exchange: self.exchange,
+                layer: self.layer,
+                command: self.command,
+                action: action(),
+            })
+        });
+    }
+    pub(crate) fn complete<T>(mut self, result: &Result<T>, data: &[u8]) {
+        self.finished = true;
+        self.record(data.len(), || match result {
+            Ok(_) => Action::Completed {
+                transferred: data.len(),
+                data: data.to_vec(),
+            },
+            Err(e) => Action::Failed {
+                transferred: (!data.is_empty()).then_some(data.len()),
+                data: data.to_vec(),
+                failure: Failure::Other(e.to_string()),
+            },
+        });
+    }
+}
+impl Drop for ProtocolSpan {
+    fn drop(&mut self) {
+        if !self.finished {
+            self.record(0, || Action::Cancelled);
+        }
+    }
+}
+
 struct Span {
     trace: Trace,
     transfer: u64,
@@ -256,6 +363,9 @@ impl<I> Observed<I> {
     }
 }
 impl<I: Io> Io for Observed<I> {
+    fn trace(&self) -> Option<Trace> {
+        self.trace.clone()
+    }
     fn endpoint(&self, stage: TransferStage) -> Option<u8> {
         self.io.endpoint(stage)
     }

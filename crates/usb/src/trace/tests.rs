@@ -147,3 +147,21 @@ mod replay {
         ));
     }
 }
+
+#[test]
+fn protocol_and_usb_share_one_budget_and_cancellation_is_observed() {
+    let trace = Trace::new(nz(2), nz(4));
+    let span = trace.protocol(Layer::App80, 42, &[1, 2]);
+    trace.record(9, TransferStage::BulkIn, None, 2, || Action::Completed {
+        transferred: 2,
+        data: vec![3, 4],
+    });
+    drop(span);
+    let batch = trace.drain();
+    assert_eq!(batch.dropped_events, 1);
+    assert_eq!(batch.dropped_bytes, 2);
+    assert_eq!(batch.events.len(), 1);
+    assert_eq!(batch.protocol_events.len(), 1);
+    assert!(matches!(batch.protocol_events[0].action, Action::Cancelled));
+    assert!(batch.events[0].sequence < batch.protocol_events[0].sequence);
+}

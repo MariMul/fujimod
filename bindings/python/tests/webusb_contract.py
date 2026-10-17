@@ -62,6 +62,10 @@ async def check():
     assert session.state == usb.SessionState.Closed
     batch = trace.drain()
     assert batch.dropped_events == 0 and batch.dropped_bytes == 0
+    assert batch.protocol_events
+    assert all(e.layer == tracing.Layer.Ff80 for e in batch.protocol_events)
+    assert any(e.command == 0x150000 and e.data for e in batch.protocol_events)
+    assert len({e.sequence for e in [*batch.events, *batch.protocol_events]}) == len(batch.events) + len(batch.protocol_events)
     assert any(
         e.stage == tracing.Stage.BulkIn and e.endpoint == 0x82 for e in batch.events
     )

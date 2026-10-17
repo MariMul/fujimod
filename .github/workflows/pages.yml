@@ -38,6 +38,13 @@ jobs:
           node-version: '26.12.0'
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
+      - name: Set up USB Wasm tools
+        working-directory: .
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-unknown
+          rustup default 1.99.1
+          npm --prefix bindings/javascript ci
+          npm --prefix bindings/javascript run setup:tooling
       - run: npm ci
       - run: npm run check
       - run: npm test

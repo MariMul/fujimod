@@ -54,9 +54,23 @@ impl Mailbox {
         let publish = WriteConfiguration::new(self.location, request.encode(), self.limit)?;
         let read =
             ReadConfiguration::new(self.location, NonZeroU32::new(length).unwrap(), self.limit)?;
-        session.write_configuration(stage).await?;
-        session.write_configuration(publish).await?;
-        Reply::decode_length(&session.read_configuration(read).await?, length as usize)
+        let span = session.trace().map(|t| {
+            t.protocol(
+                crate::trace::Layer::App80,
+                request.code().0.into(),
+                &request.encode(),
+            )
+        });
+        let result = async {
+            session.write_configuration(stage).await?;
+            session.write_configuration(publish).await?;
+            Reply::decode_length(&session.read_configuration(read).await?, length as usize)
+        }
+        .await;
+        if let Some(span) = span {
+            span.complete(&result, result.as_ref().map(|r| r.raw()).unwrap_or(&[]));
+        }
+        result
     }
 }
 

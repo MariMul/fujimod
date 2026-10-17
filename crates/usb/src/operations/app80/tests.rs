@@ -28,6 +28,13 @@ mod replay {
         b
     }
     fn opened(steps: Vec<E>, budget: u32) -> (Session, Script) {
+        opened_with_trace(steps, budget, None)
+    }
+    fn opened_with_trace(
+        steps: Vec<E>,
+        budget: u32,
+        trace: Option<crate::trace::Trace>,
+    ) -> (Session, Script) {
         let mut open = envelope(0xc0, 8);
         open[10..12].fill(0);
         let mut all = vec![
@@ -40,7 +47,7 @@ mod replay {
         all.extend(steps);
         let script = Script::new(all);
         (
-            block_on(script.begin_session(budget, None)).unwrap(),
+            block_on(script.begin_session(budget, trace)).unwrap(),
             script,
         )
     }
@@ -104,6 +111,45 @@ mod replay {
             &result
         );
         assert_eq!(session.state(), SessionState::Ready);
+        assert_eq!(script.remaining(), 0);
+    }
+    #[test]
+    fn trace_orders_app80_around_ff80_and_usb_with_exact_bytes() {
+        use crate::trace::{Action, Layer, Trace};
+        let request = Request::new(CommandCode(0x22), &[0xff]).unwrap();
+        let result = [7; 33];
+        let mut steps = write(0x81, request.arguments());
+        steps.extend(write(0x80, &request.encode()));
+        steps.extend(read(0x80, &result));
+        let trace = Trace::new(nz(128), nz(8192));
+        let (mut session, script) = opened_with_trace(steps, 128, Some(trace.clone()));
+        trace.drain();
+        block_on(
+            Mailbox::new(0, 0x80, nz(256))
+                .unwrap()
+                .exchange(&mut session, &request),
+        )
+        .unwrap();
+        let batch = trace.drain();
+        assert_eq!(batch.protocol_events.len(), 8); // App80 plus three FF80 pairs.
+        assert_eq!(batch.events.len(), 24);
+        let first = &batch.protocol_events[0];
+        let last = batch.protocol_events.last().unwrap();
+        assert_eq!(first.layer, Layer::App80);
+        assert_eq!(last.layer, Layer::App80);
+        assert_eq!(first.exchange, last.exchange);
+        assert_eq!(first.command, 0x22);
+        assert_eq!(first.action.data(), request.encode());
+        assert_eq!(last.action.data(), result);
+        assert!(matches!(last.action, Action::Completed { .. }));
+        assert!(first.sequence < batch.protocol_events[1].sequence);
+        assert!(batch.protocol_events[1].sequence < batch.events[0].sequence);
+        assert!(batch.events.last().unwrap().sequence < last.sequence);
+        assert!(
+            batch.protocol_events[1..7]
+                .iter()
+                .all(|e| e.layer == Layer::Ff80 && e.command == 0x1a0002)
+        );
         assert_eq!(script.remaining(), 0);
     }
     #[test]
