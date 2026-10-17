@@ -17,7 +17,7 @@ body:
   - type: input
     id: mod-build
     attributes:
-      label: Mod build
+      label: Build
     validations:
       required: true
   - type: upload
