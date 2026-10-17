@@ -56,7 +56,10 @@ failed transfers retain available partial bytes. Diagnostic replies expose a
 value is interpreted as an instruction to wait.
 
 An incomplete exchange leaves the session in `CompletionUnknown`, where further
-I/O is rejected. Releasing Python objects does not send a camera reset, mode
+I/O is rejected. `close()` consumes the session on both success and failure:
+`Closed` means its two-byte C4 reply was received; a failed or malformed close
+leaves `CompletionUnknown` and cannot be retried. The two reply bytes remain
+opaque and do not certify a camera power cycle. Releasing Python objects does not send a camera reset, mode
 transition or rollback. The consuming workflow owns firmware policy and cleanup
 when completion and ownership are known.
 

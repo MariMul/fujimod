@@ -394,11 +394,13 @@ enum SessionSlot {
     Open(ff80::Session),
     ReadingRange,
     Closed,
+    CompletionUnknown,
 }
 
 enum BindingError {
     Busy,
     Closed,
+    CompletionUnknown,
     Poisoned,
     Protocol(usb::Error),
 }
@@ -413,6 +415,7 @@ impl Session {
             let session = match &mut *guard {
                 SessionSlot::Open(session) => session,
                 SessionSlot::Closed => return Err(BindingError::Closed),
+                SessionSlot::CompletionUnknown => return Err(BindingError::CompletionUnknown),
                 SessionSlot::ReadingRange => return Err(BindingError::Busy),
             };
             operation(session).map_err(BindingError::Protocol)
@@ -422,6 +425,9 @@ impl Session {
                 SessionBusyError::new_err("session is owned by an active range reader")
             }
             BindingError::Closed => ClosedSessionError::new_err("session is closed"),
+            BindingError::CompletionUnknown => CompletionUnknownError::new_err(
+                "session close did not complete; further I/O is unavailable",
+            ),
             BindingError::Poisoned => {
                 CompletionUnknownError::new_err("session mutex was poisoned; completion unknown")
             }
@@ -474,6 +480,7 @@ impl Session {
             .map_err(|_| CompletionUnknownError::new_err("session mutex was poisoned"))?;
         Ok(match &*guard {
             SessionSlot::Closed => SessionState::Closed,
+            SessionSlot::CompletionUnknown => SessionState::CompletionUnknown,
             SessionSlot::ReadingRange => SessionState::ReadingRange,
             SessionSlot::Open(session) => match session.state() {
                 ff80::SessionState::Ready => SessionState::Ready,
@@ -503,6 +510,11 @@ impl Session {
                 SessionSlot::Closed => {
                     return Err(ClosedSessionError::new_err("session is closed"));
                 }
+                SessionSlot::CompletionUnknown => {
+                    return Err(CompletionUnknownError::new_err(
+                        "session close did not complete; further I/O is unavailable",
+                    ));
+                }
                 SessionSlot::ReadingRange => {
                     return Err(SessionBusyError::new_err(
                         "session is owned by an active range reader",
@@ -510,14 +522,22 @@ impl Session {
                 }
                 SessionSlot::Open(_) => (),
             }
-            match std::mem::replace(&mut *slot, SessionSlot::Closed) {
+            match std::mem::replace(&mut *slot, SessionSlot::CompletionUnknown) {
                 SessionSlot::Open(session) => session,
                 _ => unreachable!("validated slot under lock"),
             }
         };
-        py.detach(|| block_on(session.close()))
-            .map(|bytes| PyBytes::new(py, &bytes))
-            .map_err(|e| convert_error(py, e))
+        let reply = py
+            .detach(|| block_on(session.close()))
+            .map_err(|e| convert_error(py, e))?;
+        // Only a completed C4 exchange can establish Closed. Failed or unwound
+        // closes leave the terminal CompletionUnknown slot in place.
+        *self
+            .inner
+            .lock()
+            .map_err(|_| CompletionUnknownError::new_err("session mutex was poisoned"))? =
+            SessionSlot::Closed;
+        Ok(PyBytes::new(py, &reply))
     }
     fn device_info(&self, py: Python<'_>, selector: InfoSelector) -> PyResult<String> {
         self.with(py, |s| block_on(s.device_info(selector.into())))

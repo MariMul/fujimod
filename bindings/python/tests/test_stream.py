@@ -134,3 +134,43 @@ def test_camera_error_is_structured_and_does_not_wait_for_completion():
     assert (failure.value.command, failure.value.primary, failure.value.secondary) == (0x200001, 1, 0xFFFF)
     assert session.state == usb.SessionState.Ready
     assert script.remaining == 0
+
+
+@pytest.mark.parametrize('steps,error', [
+    ([E.control_disconnected(control(0xC4, 2))], usb.TransferError),
+    ([E.control(control(0xC4, 2)), E.disconnected(2, b'\x12')], usb.TransferError),
+    ([E.control(control(0xC4, 2)), E.read(2, b'\x12')], usb.ProtocolError),
+])
+def test_failed_close_is_unknown_and_cannot_be_retried_or_used(steps,error):
+    session, script = opened(steps)
+    with pytest.raises(error):
+        session.close()
+    assert session.state == usb.SessionState.CompletionUnknown
+    for operation in (session.close, session.ping,
+                      lambda: session.read_memory(0x1000, 4),
+                      lambda: blocking.memory.read_chunks(session, 0x1000, 4)):
+        with pytest.raises(usb.CompletionUnknownError):
+            operation()
+    assert session.state == usb.SessionState.CompletionUnknown
+    assert script.remaining == 0
+
+
+def test_close_after_incomplete_command_cannot_claim_closed_or_send_c4():
+    session, script = opened([E.control(control(0xC2, 2)), E.disconnected(2, b'')])
+    with pytest.raises(usb.TransferError):
+        session.ping()
+    with pytest.raises(usb.CompletionUnknownError):
+        session.close()
+    assert session.state == usb.SessionState.CompletionUnknown
+    assert script.remaining == 0
+
+
+def test_completed_close_preserves_opaque_reply_and_rejects_further_io():
+    session, script = opened([E.control(control(0xC4, 2)), E.read(2, b'\xfe\xff')])
+    assert session.close() == b'\xfe\xff'
+    assert session.state == usb.SessionState.Closed
+    for operation in (session.close, session.ping,
+                      lambda: blocking.memory.read_chunks(session, 0x1000, 4)):
+        with pytest.raises(usb.ClosedSessionError):
+            operation()
+    assert script.remaining == 0
