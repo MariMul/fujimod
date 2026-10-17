@@ -61,8 +61,9 @@ async def check(playwright, args, name):
 
     try:
         await page.goto(args.url)
-        await stopped(False)
-        await page.screenshot(path=str(out / 'insufficient-history.png'))
+        await page.wait_for_function("document.querySelector('#live-label').textContent === 'STOPPED'", timeout=180000)
+        await stopped(await page.evaluate('Boolean(window.cameraCache?.history?.snapshots.length)'))
+        await page.screenshot(path=str(out / 'early-fault.png'))
         await page.evaluate('window.failOnReady = false')
         await page.locator('#restart').click()
         await page.wait_for_function("document.querySelector('#live-label').textContent === 'LIVE'", timeout=180000)
@@ -74,15 +75,18 @@ async def check(playwright, args, name):
         await page.evaluate('clearInterval(window.cacheTimer); window.stopCamera()')
         await stopped(True)
         await page.screenshot(path=str(out / 'available-history.png'))
+        for _ in range(3):
+            await page.locator('#undo').click()
+            await page.wait_for_function("document.querySelector('#live-label').textContent === 'LIVE'", timeout=30000)
+            await page.evaluate('window.stopCamera()')
+            await stopped(True)
+        await page.screenshot(path=str(out / 'reusable-history.png'))
         await page.locator('#undo').click()
         await page.wait_for_function("document.querySelector('#live-label').textContent === 'LIVE'", timeout=30000)
-        await page.evaluate('window.stopCamera()')
-        await stopped(False)
-        await page.screenshot(path=str(out / 'consumed-history.png'))
         assert errors == [], errors
         result = dict(browser=name, faults=await page.evaluate('window.undoErrors'), page_errors=errors)
         (out / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
-        print(f'{name}: Undo hidden before enough history and after consumption; available Undo resumes', flush=True)
+        print(f'{name}: repeated faults retain usable Undo; every Undo resumes', flush=True)
     except BaseException:
         await page.screenshot(path=str(out / 'failure.png'))
         (out / 'failure.json').write_text(json.dumps(await page.evaluate('({errors:window.undoErrors,cache:window.cameraCache,status:document.querySelector("#status")?.textContent})'), indent=2))

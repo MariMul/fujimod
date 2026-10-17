@@ -59,6 +59,27 @@ test('fault normalization distinguishes guest faults, unsupported models and Was
   assert.equal(faultFrom({ error_type: 'UnsupportedDevice', error: 'write failed' }).kind, 'unsupported-device');
   assert.equal(faultFrom(new TypeError('broken callback')).kind, 'exception');
 });
+test('repeated faults can resume the same retained save point', async () => {
+  const { worker, engine, sent, errors, frames } = setup();
+  await engine.boot(new ArrayBuffer(1), { inputs: 'inputs.json', bundle: 'runtime/', boot: { sceneInput: true } }, () => {});
+  const saved = { virtual_ticks: 120000000, display: { width: 1, height: 1 } };
+  try {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      worker.reply({ type: 'error', fault: { ...faultFrom(Error('test fault')), undoSeconds: 10 } });
+      await assert.rejects(engine.press('menu'));
+      const restored = engine.rollback(10), request = sent.at(-1);
+      assert.equal(request.type, 'rollback');
+      worker.reply({ type: 'result', id: request.id, state: saved,
+        frame: new Uint8Array([4,5,6]).buffer });
+      await restored;
+      const press = engine.press('menu'); await Promise.resolve();
+      worker.reply({ type: 'result', id: sent.at(-1).id, state: saved });
+      await press;
+    }
+    assert.equal(errors.length, 3);
+    assert.equal(frames.length, 4);
+  } finally { engine.dispose(); }
+});
 test('rollback availability is read from live history and fails closed if inspection fails', () => {
   const recovery = new WorkerRecovery();
   assert.equal(recovery.canRollback(undefined, 10), false);
