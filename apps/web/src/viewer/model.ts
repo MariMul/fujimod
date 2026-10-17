@@ -61,7 +61,6 @@ export class ModelViewer {
   private feedbackUntil = 0;
   private feedbackPoint?: THREE.Vector3;
   private faulted = false;
-  private undoFault?: () => void;
   private orientation?: {
     start: number;
     from: THREE.Vector3;
@@ -141,20 +140,6 @@ export class ModelViewer {
     this.lcd.width = 720;
     this.lcd.height = 480;
     this.renderer.domElement.classList.add("model-canvas");
-    this.lcd.addEventListener("pointerdown", (event) => {
-      if (!this.faulted) return;
-      const r = this.lcd.getBoundingClientRect();
-      const scale = Math.min(
-        r.width / this.lcd.width,
-        r.height / this.lcd.height,
-      );
-      const width = this.lcd.width * scale,
-        height = this.lcd.height * scale;
-      this.faultClick(
-        (event.clientX - r.left - (r.width - width) / 2) / width,
-        (event.clientY - r.top - (r.height - height) / 2) / height,
-      );
-    });
     this.texture.colorSpace = THREE.SRGBColorSpace;
     this.texture.generateMipmaps = false;
     this.texture.minFilter = THREE.LinearFilter;
@@ -169,10 +154,7 @@ export class ModelViewer {
       "pointerdown",
       (event) => {
         const hit = this.pick(event);
-        if (this.faulted) {
-          if (hit?.point) this.faultClick(hit.point.x, hit.point.y);
-          return;
-        }
+        if (this.faulted) return;
         const rotary = hit && this.rotary.get(hit.id);
         const turn = rotary
           ? (direction: number) => {
@@ -745,35 +727,33 @@ export class ModelViewer {
     this.lcd.classList.toggle("flat", mode === "lcd");
     this.dirty = true;
   }
-  fault(active: boolean, undo?: () => void) {
+  fault(active: boolean) {
     this.faulted = active;
-    this.undoFault = undo;
     if (this.lcdImage)
       this.lcd.getContext("2d")!.putImageData(this.lcdImage, 0, 0);
     if (active) this.paintFault();
     this.texture.needsUpdate = true;
     this.dirty = true;
   }
-  private faultClick(x: number, y: number) {
-    if (x > 0.5 && x < 0.7 && y > 0.53 && y < 0.65) this.undoFault?.();
-  }
   private paintFault() {
     const c = this.lcd.getContext("2d")!,
       w = this.lcd.width,
       h = this.lcd.height,
-      scale = w / 720,
+      scale = (w * 0.8) / 278,
       x = (w - 270 * scale) / 2,
-      y = (h - 108 * scale) / 2;
+      y = (h - 80 * scale) / 2;
     c.save();
+    c.fillStyle = "rgba(0, 0, 0, 0.12)";
+    c.fillRect(0, 0, w, h);
     c.translate(x, y);
     c.scale(scale, scale);
     c.fillStyle = "#000";
-    c.fillRect(-4, -4, 278, 116);
+    c.fillRect(-4, -4, 278, 88);
     c.fillStyle = "#fff";
-    c.fillRect(-3, -3, 276, 114);
+    c.fillRect(-3, -3, 276, 86);
     c.strokeStyle = "#000";
     c.lineWidth = 1;
-    c.strokeRect(0.5, 0.5, 269, 107);
+    c.strokeRect(0.5, 0.5, 269, 79);
     c.fillStyle = "#000";
     c.beginPath();
     c.arc(32, 43, 17, 0, Math.PI * 2);
@@ -796,17 +776,6 @@ export class ModelViewer {
     c.font = "600 16px system-ui";
     c.fillText("Sorry, the emulator", 65, 31);
     c.fillText("stopped.", 65, 51);
-    if (this.undoFault) {
-      c.lineWidth = 2;
-      c.beginPath();
-      c.roundRect(180, 72, 70, 24, 7);
-      c.stroke();
-      c.beginPath();
-      c.roundRect(176, 68, 78, 32, 10);
-      c.stroke();
-      c.font = "600 15px system-ui";
-      c.fillText("Undo", 195, 89);
-    }
     c.restore();
   }
   private fit() {

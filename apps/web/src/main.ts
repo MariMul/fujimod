@@ -108,7 +108,7 @@ function showFault(fault: EngineFault) {
       ? window.cameraPerformance.guestTicks
       : undefined,
   });
-  viewer.fault(true, canUndo ? () => void undo() : undefined);
+  viewer.fault(true);
 }
 async function undo() {
   const button = $<HTMLButtonElement>("undo");

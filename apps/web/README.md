@@ -170,7 +170,7 @@ PLAYWRIGHT_BROWSERS_PATH=/path/to/browsers python tests/design.py \
 
 This captures idle, running and forced-fault states at 1300×900 and WebKit
 iPhone 390×844, saves side-by-side composites and checks CSS-pixel geometry.
-Faults pause the engine, paint a Mac-style Undo dialog into the LCD, and expose
+Faults pause the engine, paint a Mac-style crash dialog into the LCD, and expose
 raw diagnostics plus a report ZIP containing the preceding RAM snapshot.
 Undo prefers a snapshot at least ten guest seconds earlier. With less history it
 uses the oldest retained safe point, which remains reusable after rollback.
