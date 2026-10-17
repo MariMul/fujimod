@@ -59,3 +59,17 @@ modes, chunk sequencing, corruption, local download compression, explicit
 delivery, and the live-session handoff. Camera-side tests separately execute
 the ARM implementation and stock filesystem; these do not qualify physical USB
 hardware timing.
+
+## Browser integration test
+
+Pass the output directory from the successful camera walkthrough. This uses
+its actual QR URL and stock-written TAR, checks phone/desktop layout, opens the
+file locally, and compares the downloaded archive byte-for-byte. GitHub
+navigation is intercepted; the test submits no issue and permits no outgoing
+POST or PUT. Set `FUJIMOD_BROWSER=webkit` for the Safari engine.
+
+```sh
+FUJIMOD_WEB_URL=https://your-host.ts.net/ node src/bug/browser.mjs PATH_TO_GUIDE
+```
+
+Screenshots and results are written to ignored `apps/web/build/bug-report/`.

@@ -115,14 +115,21 @@ export function simulatorReports() {
     apply: 'serve',
     transformIndexHtml: {
       order: 'pre',
-      handler: () => [
-        {
-          tag: 'meta',
-          attrs: { name: 'fujimod-local-reports', content: endpoint },
-          injectTo: 'head-prepend',
-        },
-        { tag: 'script', attrs: { src: '/__simulator-reports.js' }, injectTo: 'head-prepend' },
-      ],
+      handler: (_html, context) =>
+        /^\/bug(?:\/|$)/.test(context?.path ?? '')
+          ? []
+          : [
+              {
+                tag: 'meta',
+                attrs: { name: 'fujimod-local-reports', content: endpoint },
+                injectTo: 'head-prepend',
+              },
+              {
+                tag: 'script',
+                attrs: { src: '/__simulator-reports.js' },
+                injectTo: 'head-prepend',
+              },
+            ],
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {

@@ -2,6 +2,7 @@ import { defineConfig } from 'vite-plus';
 import { loadEnv, type Plugin, type Connect } from 'vite';
 import solid from '@solidjs/vite-plugin';
 import { simulatorReports } from './scripts/local-reports.mjs';
+import { bugReportRoute } from './src/bug/route.mjs';
 import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync } from 'node:fs';
 import { createGzip } from 'node:zlib';
@@ -110,7 +111,7 @@ export default defineConfig(({ mode, command }) => ({
       existsSync('public/runtime/catalog.json') ? 'runtime/catalog.json' : 'catalog.json',
     ),
   },
-  plugins: [solid(), simulatorReports(), localArtifacts(loadEnv(mode, process.cwd(), 'FUJIMOD_'))],
+  plugins: [solid(), bugReportRoute(), simulatorReports(), localArtifacts(loadEnv(mode, process.cwd(), 'FUJIMOD_'))],
   lint: {
     jsPlugins: ['eslint-plugin-solid'],
     settings: { solid: { version: 2 } },
