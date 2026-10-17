@@ -16,6 +16,9 @@ def check_peripheral_values():
             ("i2c", 14),
             ("accumulator", 7),
             ("peripheral_report", 8),
+            ("battery_control", 2),
+            ("initialize_display", 1),
+            ("display_pattern", 5),
         ]
     ):
         slots[codec] = [(n * 5 + 7) % 32 for n in range(count)]
@@ -155,4 +158,46 @@ def check_peripheral_values():
     value = decode(report, "peripheral_report", [1, 2, 3, 4, 5, 6, 7, 8])
     assert isinstance(value, app80.ReplyValue.PeripheralReport)
     assert value.data == bytes([1, 2, 3, 4, 5, 6, 7, 8])
+    for action, selector in [
+        (app80.BatteryAction.ResetPending, 0),
+        (app80.BatteryAction.CallbackWait, 1),
+    ]:
+        invocation = prepare(app80.Command.BatteryControl(action=action))
+        assert logical(invocation, "battery_control") == [selector, 0]
+        assert isinstance(
+            decode(invocation, "battery_control", [255, 255]),
+            app80.ReplyValue.NoPayload,
+        )
+    invocation = prepare(app80.Command.InitializeDisplay())
+    assert logical(invocation, "initialize_display") == [0]
+    assert isinstance(
+        invocation.decode(invocation.raw).value, app80.ReplyValue.NoPayload
+    )
+    for action, expected in [
+        (app80.DisplayPatternAction.ResetPreset(), [0, 0, 0, 0, 0]),
+        (app80.DisplayPatternAction.Bars(), [1, 0, 0, 0, 0]),
+        (
+            app80.DisplayPatternAction.Solid(repeated=18, middle=52, low=86),
+            [2, 0, 18, 86, 52],
+        ),
+        (
+            app80.DisplayPatternAction.Solid(repeated=255, middle=0, low=255),
+            [2, 0, 255, 255, 0],
+        ),
+    ]:
+        invocation = prepare(app80.Command.DisplayPattern(action=action))
+        assert logical(invocation, "display_pattern") == expected
+        assert isinstance(
+            decode(invocation, "display_pattern", [255] * 5), app80.ReplyValue.NoPayload
+        )
+    for create in [
+        lambda: app80.Command.BatteryControl(action=1),
+        lambda: app80.Command.DisplayPattern(action=app80.BatteryAction.ResetPending),
+    ]:
+        try:
+            create()
+        except TypeError:
+            pass
+        else:
+            raise AssertionError("wrong battery/display action type accepted")
     return True

@@ -161,6 +161,9 @@ pub enum Codec {
     ConfigurationMode,
     ConfigurationPackOptions,
     ConfigurationReadOptions,
+    BatteryControl,
+    InitializeDisplay,
+    DisplayPattern,
 }
 impl Codec {
     pub fn argument_slots(self) -> usize {
@@ -202,6 +205,9 @@ impl Codec {
             Self::TransferOptionWord => 6,
             Self::TransferSelectedWord => 4,
             Self::TransferLoadTest => 1,
+            Self::BatteryControl => 2,
+            Self::InitializeDisplay => 1,
+            Self::DisplayPattern => 5,
             Self::ConfigurationFlags => 11,
             Self::ConfigurationMode => 2,
             Self::ConfigurationPackOptions | Self::ConfigurationReadOptions => 4,

@@ -392,3 +392,18 @@ upper/lower quantities, which firmware packs at bits 10 and 2 respectively.
 `raw_value`. Studied lower configuration helpers return zero without filling
 read buffers, so none of these snapshots certify valid settings. These remain
 single firmware commands; the host adds no setup, polling or persistence policy.
+
+`BatteryControl` selects `BatteryAction::ResetPending` or `CallbackWait`.
+Reset forwards canonical zero for a byte the reviewed lower helper ignores;
+the other action invokes the firmware's battery callback and waits internally.
+The handler discards the wait result and publishes no measurement or status.
+`InitializeDisplay` submits selector zero and lets firmware use its existing
+operation, timing and buffer state. It does not choose an output mode or prepare
+that state on the host.
+
+`DisplayPattern` takes `DisplayPatternAction::ResetPreset`, `Bars`, or
+`Solid { repeated, middle, low }`. Solid packs the repeated byte into both high
+bytes and retains the other two byte fields; the names make no RGB/YUV claim.
+Bars draws into firmware-selected buffers, applies the layout and waits for
+firmware events. These three codecs expose no result payload. A completed
+request does not verify a visible display, and no setup or polling is implicit.

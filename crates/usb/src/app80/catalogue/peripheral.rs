@@ -172,3 +172,49 @@ impl AccumulatorAction {
         );
     }
 }
+
+/// Direct service actions; neither returns a charge or battery measurement.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BatteryAction {
+    ResetPending,
+    CallbackWait,
+}
+impl BatteryAction {
+    pub(super) fn encode(self, put: &mut impl FnMut(usize, u8)) {
+        put(
+            0,
+            match self {
+                Self::ResetPending => 0,
+                Self::CallbackWait => 1,
+            },
+        );
+        // Firmware reads this byte on reset; the reviewed lower helper ignores it.
+        put(1, 0);
+    }
+}
+/// Solid inputs describe the packed fields, not inferred RGB/YUV channels.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DisplayPatternAction {
+    ResetPreset,
+    Bars,
+    Solid { repeated: u8, middle: u8, low: u8 },
+}
+impl DisplayPatternAction {
+    pub(super) fn encode(self, put: &mut impl FnMut(usize, u8)) {
+        match self {
+            Self::ResetPreset => put(0, 0),
+            Self::Bars => put(0, 1),
+            Self::Solid {
+                repeated,
+                middle,
+                low,
+            } => {
+                put(0, 2);
+                // Slot 1 is unused. Firmware packs repeated twice in the high half.
+                put(2, repeated);
+                put(3, low);
+                put(4, middle);
+            }
+        }
+    }
+}

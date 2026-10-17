@@ -145,3 +145,19 @@ Raw options decode four big-endian bytes. Output slots start at `ff`, but a
 studied lower stub can write uninitialized stack bytes over them: neither an
 unchanged sentinel nor a different byte establishes validity. Read-flags is
 mutating, and command completion does not establish persistence.
+
+Peripheral battery control uses two definition-selected slots. Selector 0 resets
+a pending flag; selector 1 invokes a callback and waits on the firmware event.
+The second input is canonical zero: the reviewed reset helper ignores it. The
+handler ignores the internal wait result, so no battery value or success-status
+payload is inferred. Some handlers use literal configuration keys instead of
+the passed parameter table; the caller's firmware definition supplies that slot
+mapping just as it supplies mappings for table-based handlers.
+
+Display initialization has one selector slot, canonically zero, and uses camera
+state for timing, format, output and buffers. Display pattern uses five slots:
+selector 0 resets the preset, 1 draws bars, and 2 takes `repeated` in slot 2,
+`low` in slot 3 and `middle` in slot 4. Slot 1 is unused. Solid packs
+`repeated<<24 | repeated<<16 | middle<<8 | low`. Firmware waits on its own events
+for reset/bars; the host uses the ordinary ff80 completion and does not poll.
+These commands have no payload result, and no host preparation is implied.

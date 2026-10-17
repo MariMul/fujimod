@@ -27,7 +27,8 @@ pub use transfer::{
 };
 mod peripheral;
 pub use peripheral::{
-    AccumulatorAction, I2cAction, I2cLength, I2cPayload, I2cPort, RegisterAction,
+    AccumulatorAction, BatteryAction, DisplayPatternAction, I2cAction, I2cLength, I2cPayload,
+    I2cPort, RegisterAction,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -186,6 +187,13 @@ pub enum Command {
         action: AccumulatorAction,
     },
     PeripheralReport,
+    BatteryControl {
+        action: BatteryAction,
+    },
+    InitializeDisplay,
+    DisplayPattern {
+        action: DisplayPatternAction,
+    },
     DisplayOption {
         action: DisplayOptionAction,
     },
@@ -337,6 +345,9 @@ impl Command {
             Self::I2c { action: _ } => Codec::I2c,
             Self::Accumulator { action: _ } => Codec::Accumulator,
             Self::PeripheralReport => Codec::PeripheralReport,
+            Self::BatteryControl { .. } => Codec::BatteryControl,
+            Self::InitializeDisplay => Codec::InitializeDisplay,
+            Self::DisplayPattern { .. } => Codec::DisplayPattern,
             Self::DisplayOption { action: _ } => Codec::DisplayOption,
             Self::DisplayMode { mode: _ } => Codec::DisplayMode,
             Self::Sound { action: _ } => Codec::Sound,
@@ -749,7 +760,10 @@ impl PreparedCommand {
             Command::ReadConfigurationOptions => ReplyValue::ConfigurationOptions {
                 raw_value: u32::from_be_bytes([byte(0), byte(1), byte(2), byte(3)]),
             },
-            Command::ApplyConfigurationFlags { .. }
+            Command::BatteryControl { .. }
+            | Command::InitializeDisplay
+            | Command::DisplayPattern { .. }
+            | Command::ApplyConfigurationFlags { .. }
             | Command::SelectConfigurationMode { .. }
             | Command::PackConfigurationOptions { .. }
             | Command::TransferBitfields { .. }
@@ -884,6 +898,9 @@ impl Catalogue {
                     put(i, v);
                 }
             }
+            Command::BatteryControl { action } => action.encode(&mut put),
+            Command::InitializeDisplay => put(0, 0),
+            Command::DisplayPattern { action } => action.encode(&mut put),
             Command::ReadPins { bank } => put(0, bank.value()),
             Command::ReadChannel { channel } => put(0, channel),
             Command::WriteChannel { channel, value } => {

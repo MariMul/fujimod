@@ -2,7 +2,7 @@ use super::*;
 use fujimod_defs::service::FirmwareIdentity;
 
 fn catalogue(reverse: bool) -> Catalogue {
-    let entries: Vec<_>=[("register_control",7),("i2c",14),("accumulator",7),("peripheral_report",8)]
+    let entries: Vec<_>=[("register_control",7),("i2c",14),("accumulator",7),("peripheral_report",8),("battery_control",2),("initialize_display",1),("display_pattern",5)]
         .into_iter().enumerate().map(|(index,(codec,count))| {
             let slots:Vec<_>=(0..count).map(|slot| if reverse {31-slot} else {slot}).collect();
             serde_json::json!({"code":150+index,"label":codec,"codec":codec,"slots":slots,"enabled_modes":4,
@@ -201,5 +201,72 @@ fn accumulator_stop_returns_low_halfwords_and_status_report_stays_opaque() {
                 data: [1, 2, 3, 4, 5, 6, 7, 8]
             }
         );
+    }
+}
+
+#[test]
+fn battery_actions_are_not_measurements_and_initialize_uses_canonical_selector() {
+    for reverse in [false, true] {
+        let c = catalogue(reverse);
+        for (action, selector) in [
+            (BatteryAction::ResetPending, 0),
+            (BatteryAction::CallbackWait, 1),
+        ] {
+            let p = prepare(&c, Command::BatteryControl { action });
+            assert_eq!(p.request.code(), CommandCode(154));
+            assert_eq!(logical(&p), [selector, 0]);
+            // No payload/status byte is defined; arbitrary returned bytes never
+            // become a host completion instruction or a measurement.
+            assert_eq!(
+                p.decode(response(&p, &[255, 255])).unwrap().value(),
+                &ReplyValue::NoPayload
+            );
+        }
+        let p = prepare(&c, Command::InitializeDisplay);
+        assert_eq!(p.request.code(), CommandCode(155));
+        assert_eq!(logical(&p), [0]);
+        assert_eq!(
+            p.decode(response(&p, &[255])).unwrap().value(),
+            &ReplyValue::NoPayload
+        );
+    }
+}
+#[test]
+fn display_pattern_preserves_unused_slot_and_packed_color_field_order() {
+    for reverse in [false, true] {
+        let c = catalogue(reverse);
+        for (action, expected) in [
+            (DisplayPatternAction::ResetPreset, [0, 0, 0, 0, 0]),
+            (DisplayPatternAction::Bars, [1, 0, 0, 0, 0]),
+            (
+                DisplayPatternAction::Solid {
+                    repeated: 0x12,
+                    middle: 0x34,
+                    low: 0x56,
+                },
+                [2, 0, 0x12, 0x56, 0x34],
+            ),
+        ] {
+            let p = prepare(&c, Command::DisplayPattern { action });
+            assert_eq!(p.request.code(), CommandCode(156));
+            assert_eq!(logical(&p), expected);
+            assert_eq!(
+                p.decode(response(&p, &[255; 5])).unwrap().value(),
+                &ReplyValue::NoPayload
+            );
+        }
+        for repeated in 0..=255 {
+            let p = prepare(
+                &c,
+                Command::DisplayPattern {
+                    action: DisplayPatternAction::Solid {
+                        repeated,
+                        middle: 255 - repeated,
+                        low: 0,
+                    },
+                },
+            );
+            assert_eq!(logical(&p), [2, 0, repeated, 0, 255 - repeated]);
+        }
     }
 }

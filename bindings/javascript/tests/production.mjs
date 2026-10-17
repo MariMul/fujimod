@@ -254,3 +254,32 @@ test('configuration commands preserve raw snapshots and execute one mailbox exch
   assert.throws(()=>a.Command.packConfigurationOptions(a.Toggle.Enabled,a.Toggle.Disabled,256,0));
  }finally{fixture.restore();}
 });
+
+test('battery and display controls use firmware slots without invented result semantics',async()=>{
+ const fixture=installWebUsb(),a=usb.app80;
+ try{
+  const [device]=await usb.discover(usb.DeviceFilter.Diagnostic),[iface]=await device.interfaces();
+  for(const [codec,count,command,input] of [
+   ['battery_control',2,a.Command.batteryControl(a.BatteryAction.ResetPending),[0,0]],
+   ['battery_control',2,a.Command.batteryControl(a.BatteryAction.CallbackWait),[1,0]],
+   ['initialize_display',1,a.Command.initializeDisplay(),[0]],
+   ['display_pattern',5,a.Command.displayPattern(a.DisplayPatternAction.resetPreset()),[0,0,0,0,0]],
+   ['display_pattern',5,a.Command.displayPattern(a.DisplayPatternAction.bars()),[1,0,0,0,0]],
+   ['display_pattern',5,a.Command.displayPattern(a.DisplayPatternAction.solid(18,52,86)),[2,0,18,86,52]],
+  ]){
+   const slots=Array.from({length:count},(_,i)=>(i*5+7)%32);
+   const definition=defs.service.Definition.fromJson(JSON.stringify({schema:1,firmware:{id:'peripheral-b',model:'Synthetic',version:'2',sha256:'ab'.repeat(32)},mailbox:{page:3,offset:576,configuration_limit:512},entries:[{code:153,label:codec,codec,slots,enabled_modes:4,next_mode:0,firmware_kind:1,handler:0,parameter_table:0}]}),new defs.FirmwareIdentity('peripheral-b','ab'.repeat(32)));
+   const invocation=new a.Service(definition).prepare(new defs.service.ServiceModes(4),command);
+   assert.deepEqual(slots.map(i=>invocation.raw[1+i]),input);
+   fixture.state.onConfigurationWrite=(page,address)=>{if(page===3&&address===576)for(const slot of slots)fixture.state.configuration.set(`3:${577+slot}`,255);};
+   const before=fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length;
+   const session=await usb.Session.open(device,iface,new usb.FirmwareLimits(256,256,256,256),new usb.TransferOptions(100,1024));
+   assert.deepEqual((await a.execute(session,invocation)).value,{kind:a.ReplyKind.NoPayload});
+   assert.equal(session.state,usb.SessionState.Ready);
+   assert.equal(fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length-before,3);
+   await session.close();
+  }
+  assert.throws(()=>a.Command.batteryControl(99));
+  assert.throws(()=>a.DisplayPatternAction.solid(256,0,0));
+ }finally{fixture.restore();}
+});
