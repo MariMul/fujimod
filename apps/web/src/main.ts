@@ -282,8 +282,8 @@ async function loadDevice(body: string) {
     const model = device.model;
     modelLoaded = body;
     modelData = model;
-    modelLoading = viewer.load(model).then(() => credit(model));
-    void modelLoading.catch(error => showFault(faultFrom(error)));
+    modelLoading = viewer.load(model).then(() => credit(model))
+      .catch(error => viewer.showRendererError(error));
   }
   return device;
 }

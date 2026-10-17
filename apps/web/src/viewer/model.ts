@@ -120,15 +120,28 @@ export class ModelViewer {
     this.rotaryDrag = new RotaryDrag(this.canvas, (enabled) => this.setOrbit(enabled));
     this.bindInput();
     this.ready = this.start();
-    void this.ready.catch((error) => {
-      host.dataset.rendererError = String(error);
-      this.inputFeedback.textContent = String(error);
-      this.inputFeedback.hidden = false;
-    });
+    void this.ready.catch((error) => this.showRendererError(error));
+  }
+  showRendererError(error: unknown) {
+    console.error(error);
+    this.host.dataset.rendererError = String(error);
+    this.host.dataset.rendererStage = 'failed';
+    this.inputFeedback.textContent = String(error);
+    this.inputFeedback.hidden = false;
+    this.modeButton.disabled = true;
   }
   private async start() {
+    this.host.dataset.rendererStage = 'adapter';
+    const gpu = (navigator as Navigator & {
+      gpu?: { requestAdapter(): Promise<unknown> };
+    }).gpu;
+    if (!gpu) throw Error('3D view requires WebGPU (Safari 26 or later).');
+    if (!(await gpu.requestAdapter())) throw Error('No WebGPU adapter is available for the 3D view.');
+    this.host.dataset.rendererStage = 'wasm';
     await init();
+    this.host.dataset.rendererStage = 'engine';
     simulation.start('#simulation-canvas', new URL('.', document.baseURI).href);
+    this.host.dataset.rendererStage = 'running';
     this.started = true;
     this.host.dataset.renderer = 'bevy';
     this.host.dataset.rendererVersion = '0.20.0';
@@ -150,7 +163,9 @@ export class ModelViewer {
   }
   private send(command: Record<string, unknown>) {
     if (this.started) simulation.command(JSON.stringify(command));
-    else void this.ready.then(() => simulation.command(JSON.stringify(command)));
+    else void this.ready.then(() => simulation.command(JSON.stringify(command))).catch(() => {
+      // Startup failure is already displayed by showRendererError.
+    });
   }
   async load(data: ModelData) {
     const generation = ++this.generation;
