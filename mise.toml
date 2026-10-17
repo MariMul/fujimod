@@ -2,15 +2,15 @@
 node = "26.12.0"
 rust = { version = "1.99.1", profile = "minimal", components = ["rustfmt", "clippy"] }
 
-[tasks.site-build]
+[tasks.web-build]
 dir = "{{config_root}}/apps/web"
 run = "npm run build"
 
-[tasks.site-test]
+[tasks.web-test]
 dir = "{{config_root}}/apps/web"
 run = "npm test"
 
-[tasks.site-preview]
+[tasks.web-preview]
 dir = "{{config_root}}/apps/web"
 run = "npm run preview -- --mode local-preview --port 5190 --strictPort"
 

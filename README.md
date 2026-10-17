@@ -13,7 +13,7 @@ npm test
 npm run dev
 ```
 
-The root `site-build`, `site-test` and `site-preview` mise tasks run from that
+The root `web-build`, `web-test` and `web-preview` mise tasks run from that
 application directory. The Pages workflow builds `apps/web` from approved
 main releases. Review branches do not deploy Pages.
 
