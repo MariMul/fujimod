@@ -755,7 +755,7 @@ export class ModelViewer {
   }
   private resize() {
     const rect = this.host.getBoundingClientRect();
-    const height = Math.max(1, rect.height - 52);
+    const height = Math.max(1, rect.height);
     this.renderer.setSize(rect.width, height, false);
     this.camera.aspect = rect.width / height;
     this.camera.updateProjectionMatrix();

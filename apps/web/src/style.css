@@ -1341,10 +1341,6 @@ progress::-webkit-progress-value {
 .stage:not(.idle) .ghost {
   display: none;
 }
-.viewer > canvas.model-canvas {
-  height: calc(100% - 52px);
-}
-
 .model-input-marker {
   position: absolute;
   z-index: 1;
