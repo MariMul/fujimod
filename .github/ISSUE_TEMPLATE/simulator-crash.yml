@@ -7,19 +7,31 @@ body:
     attributes:
       label: What happened?
     validations:
-      required: false
+      required: true
   - type: input
     id: firmware
     attributes:
-      label: Camera / firmware ID
+      label: Firmware ID
+    validations:
+      required: true
   - type: input
     id: mod-build
     attributes:
-      label: Mod build / build date
+      label: Mod build
+    validations:
+      required: true
   - type: textarea
     id: crash
     attributes:
       label: Crash details
+    validations:
+      required: true
+  - type: input
+    id: simulator-build
+    attributes:
+      label: Simulator build
+    validations:
+      required: true
   - type: upload
     id: simulator-report
     attributes:

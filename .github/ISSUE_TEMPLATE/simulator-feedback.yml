@@ -7,20 +7,30 @@ body:
     attributes:
       label: Feedback
     validations:
-      required: false
+      required: true
   - type: input
     id: firmware
     attributes:
-      label: Camera / firmware ID
+      label: Firmware ID
+    validations:
+      required: true
   - type: input
     id: mod-build
     attributes:
-      label: Mod build / build date
+      label: Mod build
+    validations:
+      required: true
+  - type: input
+    id: simulator-build
+    attributes:
+      label: Simulator build
+    validations:
+      required: true
   - type: upload
     id: simulator-report
     attributes:
       label: Simulator report
       description: Drag and drop the downloaded simulator report ZIP here to upload it before submitting this issue.
     validations:
-      required: false
+      required: true
       accept: ".zip"

@@ -5,6 +5,7 @@ export interface SimulatorIssueContext {
   camera?: { model: string; id: string };
   fault?: EngineFault;
   modBuild: string;
+  simulatorBuild: string;
 }
 
 /** Both entry points use the same template, with context captured at report time. */
@@ -20,6 +21,7 @@ export function simulatorIssueURL(description: string, context: SimulatorIssueCo
   url.searchParams.set('feedback', description.trim());
   url.searchParams.set('firmware', camera?.id ?? 'Not identified');
   url.searchParams.set('mod-build', context.modBuild);
+  url.searchParams.set('simulator-build', context.simulatorBuild);
   if (context.event === 'crash' && context.fault) {
     const fault = context.fault;
     // Keep the full diagnostic data in the ZIP; include only a brief summary in the URL.

@@ -1,0 +1,29 @@
+name: Device crash
+description: Report a crash on a physical camera
+labels: [bug]
+body:
+  - type: textarea
+    id: feedback
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware ID
+    validations:
+      required: true
+  - type: input
+    id: mod-build
+    attributes:
+      label: Mod build
+    validations:
+      required: true
+  - type: upload
+    id: device-report
+    attributes:
+      label: Crash report
+    validations:
+      required: true
+      accept: ".zip,.json,.log,.txt"

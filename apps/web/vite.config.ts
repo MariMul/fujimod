@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv, type Plugin, type Connect } from 'vite';
+import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync } from 'node:fs';
 import { createGzip } from 'node:zlib';
 import { stat } from 'node:fs/promises';
@@ -50,7 +51,7 @@ function localArtifacts(env: Record<string, string>): Plugin {
   return { name: 'local-artifacts', apply: 'serve', configureServer: server => configure(server.middlewares), configurePreviewServer: server => configure(server.middlewares) };
 }
 export default defineConfig(({ mode, command }) => ({
-  base: './', define: { __FUJIMOD_LOCAL_DAT__: (command === 'serve' || mode === 'local-preview') && Boolean(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_DAT), __FUJIMOD_CATALOG__: JSON.stringify(existsSync('public/runtime/catalog.json') ? 'runtime/catalog.json' : 'catalog.json') }, plugins: [localArtifacts(loadEnv(mode, process.cwd(), 'FUJIMOD_'))],
+  base: './', define: { __FUJIMOD_SIMULATOR_BUILD__: JSON.stringify(`${execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {encoding:'utf8'}).trim()} / ${new Date().toISOString()}`), __FUJIMOD_LOCAL_DAT__: (command === 'serve' || mode === 'local-preview') && Boolean(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_DAT), __FUJIMOD_CATALOG__: JSON.stringify(existsSync('public/runtime/catalog.json') ? 'runtime/catalog.json' : 'catalog.json') }, plugins: [localArtifacts(loadEnv(mode, process.cwd(), 'FUJIMOD_'))],
   server: { host: '127.0.0.1', fs: { strict: true } },
   preview: { host: '127.0.0.1', allowedHosts: ['cozycat.tail2b5ca.ts.net'] },
   build: { target: 'es2022', outDir: mode === 'local-preview' ? 'dist-local-preview' : 'dist' }, worker: { format: 'es' },

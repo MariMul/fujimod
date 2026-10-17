@@ -22,6 +22,7 @@ import generations from "../devices/generations.json";
 performance.mark("camera-module-ready");
 
 declare const __FUJIMOD_LOCAL_DAT__: boolean;
+declare const __FUJIMOD_SIMULATOR_BUILD__: string;
 declare const __FUJIMOD_CATALOG__: string;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -142,7 +143,7 @@ $("restart").onclick = async () => {
 };
 const feedbackDialog = $<HTMLDialogElement>("feedback-dialog");
 const feedbackDescription = $<HTMLTextAreaElement>("feedback-description");
-let feedbackContext: SimulatorIssueContext = { event: "feedback", modBuild: "Not identified" };
+let feedbackContext: SimulatorIssueContext = { event: "feedback", modBuild: "Not identified", simulatorBuild: __FUJIMOD_SIMULATOR_BUILD__ };
 // Open in the submit gesture so mobile browsers allow the new tab, even
 // when preparing the diagnostic download takes longer than user activation.
 feedbackDialog.querySelector("form")!.addEventListener("submit", event => {
@@ -154,6 +155,7 @@ function openFeedback(event: "feedback" | "crash") {
   if (preparingReport || feedbackDialog.open) return;
   feedbackContext = {
     event,
+    simulatorBuild: __FUJIMOD_SIMULATOR_BUILD__,
     modBuild: !selectedFirmware ? "Not identified"
       : release?.patches[selectedFirmware.sha256]
         ? `${release.release}${release.built_utc ? ` / ${release.built_utc}` : " / Build date unavailable"}`
