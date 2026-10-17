@@ -2,11 +2,14 @@ import { loadCameraRuntime, type Pyodide, type PyProxy } from '../engine/runtime
 import { EmulatedUsbDevice, emulatedUsb, type UsbSetup } from '../engine/webusb-device';
 import { WebUsbCamera, type CameraLink } from './camera';
 import { EmulatorCall, type EmulatorRequest, type EmulatorReply } from './emulator-protocol';
+import { exportUsbDevice, type SharedDevice } from './usb-sharing';
 import { Direction, Layer, Level } from './log';
 const worker = self as unknown as DedicatedWorkerGlobalScope;
 const camera = new WebUsbCamera();
 let py: Pyodide;
 let link: CameraLink | undefined;
+let usbDevice: EmulatedUsbDevice;
+let exported: SharedDevice | undefined;
 let transferTimeoutMs: number;
 let identity: Record<string, unknown> = {};
 let recentInputs: Record<string, unknown>[] = [];
@@ -178,7 +181,7 @@ usb_runtime.start(config['firmware'],config['scenario'])
     configurations: number[][];
     strings: Record<number, string>;
   };
-  const device = new EmulatedUsbDevice(
+  const device = (usbDevice = new EmulatedUsbDevice(
     {
       async controlIn(setup: UsbSetup, length: number) {
         return (await transfer('control-in', { setup, length })) as Uint8Array;
@@ -196,7 +199,7 @@ usb_runtime.start(config['firmware'],config['scenario'])
     Uint8Array.from(descriptor.device),
     descriptor.configurations.map((v) => Uint8Array.from(v)),
     descriptor.strings,
-  );
+  ));
   Object.defineProperty(navigator, 'usb', { configurable: true, value: emulatedUsb(device) });
   await camera.initialize();
   const choice = await camera.pick();
@@ -215,7 +218,7 @@ usb_runtime.start(config['firmware'],config['scenario'])
 async function handle(request: EmulatorRequest) {
   if (request.call !== EmulatorCall.Diagnostics) {
     trigger = {
-      call: EmulatorCall[request.call],
+      call: request.call,
       data: request.call === EmulatorCall.Submit ? Array.from(request.data) : undefined,
       guest_ticks:
         py &&
@@ -242,6 +245,20 @@ async function handle(request: EmulatorRequest) {
         if (!link) throw Error('USB session is not open.');
         result = await link.poll();
         break;
+      case EmulatorCall.ExportUsb:
+        if (!link?.usable()) throw Error('No connected simulator');
+        await link.close();
+        link = undefined;
+        exported = await exportUsbDevice(usbDevice);
+        result = exported.descriptor;
+        break;
+      case EmulatorCall.Usb:
+        if (!exported) throw Error('Simulator is not shared');
+        result = await exported.execute(request.operation, request.timeout);
+        break;
+      case EmulatorCall.CloseUsb:
+        await exported?.close();
+        break;
       case EmulatorCall.Diagnostics: {
         if (!py) throw Error('Firmware emulator has not initialized.');
         result = JSON.parse(py.runPython<string>('usb_runtime.capture_report()'));
@@ -260,6 +277,11 @@ async function handle(request: EmulatorRequest) {
         };
         break;
       }
+      case EmulatorCall.Close:
+        if (!link?.usable()) throw Error('USB session is not ready');
+        await link.close();
+        link = undefined;
+        break;
       case EmulatorCall.Abandon:
         link?.abandon();
         link = undefined;

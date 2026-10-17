@@ -102,6 +102,7 @@ export default defineConfig(({ mode, command }) => ({
     __FUJIMOD_SIMULATOR_BUILD__: JSON.stringify(
       `${execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], { encoding: 'utf8' }).trim()} / ${new Date().toISOString()}`,
     ),
+    __FUJIMOD_SIGNAL_URL__: JSON.stringify(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_SIGNAL_URL || ''),
     __FUJIMOD_LOCAL_DAT__:
       (command === 'serve' || mode === 'local-preview') &&
       Boolean(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_DAT),
@@ -169,8 +170,8 @@ export default defineConfig(({ mode, command }) => ({
       },
     ],
   },
-  server: { host: '127.0.0.1', fs: { strict: true, allow: [resolve('../..')] } },
-  preview: { host: '127.0.0.1', allowedHosts: ['cozycat.tail2b5ca.ts.net'] },
+  server: { proxy: { '/usb-proxy': { target: 'http://127.0.0.1:5202', ws: true } }, host: '127.0.0.1', fs: { strict: true, allow: [resolve('../..')] } },
+  preview: { proxy: { '/usb-proxy': { target: 'http://127.0.0.1:5202', ws: true } }, host: '127.0.0.1', allowedHosts: ['cozycat.tail2b5ca.ts.net'] },
   build: {
     target: 'es2022',
     outDir: mode === 'local-preview' ? 'dist-local-preview' : 'dist',

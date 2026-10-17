@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-const { Exporter } = await import('data:text/javascript;base64,' + Buffer.from(await readFile(new URL('./exporter.js', import.meta.url))).toString('base64'));
+const { Exporter } = await import('data:text/javascript;base64,' + Buffer.from(await readFile(new URL('./usb-exporter.js', import.meta.url))).toString('base64'));
 function fixture() {
   const calls = [];
   const alternate = { alternateSetting: 0, endpoints: [{ endpointNumber: 2, direction: 'in', type: 'bulk', packetSize: 64 }, { endpointNumber: 1, direction: 'out', type: 'bulk', packetSize: 64 }] };

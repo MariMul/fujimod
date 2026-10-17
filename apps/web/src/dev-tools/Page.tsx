@@ -2,6 +2,15 @@ import { For, Show, createEffect, createMemo, createSignal, onSettled, untrack }
 import { CameraTarget, type CameraBackend } from './camera';
 import { ConnectionState, ConsoleState, LineEnding, createDevTools } from './controller';
 import { Direction, Layer, Level, exportLog, hex, type LogEntry } from './log';
+import {
+  ShareHost,
+  newTicket,
+  shareUrl,
+  remoteControlUrl,
+  signalUrl,
+  useShareSheet,
+} from './sharing';
+import './sharing.css';
 import { scenarios } from './scenarios';
 import { LocalReports } from '../ui/local-reports';
 import { Feedback } from '../ui/Feedback';
@@ -18,6 +27,8 @@ const connectionNames: Record<ConnectionState, string> = {
   [ConnectionState.Selecting]: 'Choose an interface',
   [ConnectionState.Opening]: 'Opening session',
   [ConnectionState.Connected]: 'Connected',
+  [ConnectionState.Sharing]: 'Sharing',
+  [ConnectionState.Closing]: 'Disconnecting',
   [ConnectionState.Blocked]: 'Connection interrupted',
   [ConnectionState.Unsupported]: 'WebUSB unavailable',
 };
@@ -98,6 +109,68 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean }
       ? CameraTarget.Emulator
       : CameraTarget.Usb,
   );
+  const [sharedUrl, setSharedUrl] = createSignal('');
+  const [sharingBusy, setSharingBusy] = createSignal(false);
+  const [toast, setToast] = createSignal('');
+  const [copyFallback, setCopyFallback] = createSignal(false);
+  let shareDialog!: HTMLDialogElement;
+  let shareHost: ShareHost | undefined;
+  let toastTimer: ReturnType<typeof setTimeout> | undefined;
+  function notice(text: string) {
+    setToast(text);
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => setToast(''), 4500);
+  }
+  function stopSharing() {
+    shareHost?.stop();
+    shareHost = undefined;
+    setSharedUrl('');
+    tools.sharingEnded();
+  }
+  function shareCamera() {
+    if (sharingBusy()) return;
+    const ticket = newTicket(signalUrl(location.href));
+    const url = sharedUrl() || shareUrl(location.href, ticket);
+    const sheet = useShareSheet();
+    // Invoke the native sheet inside the camera button's activation, before I/O.
+    const delivery = sheet ? navigator.share({ title: 'FujiMod camera', url }) : undefined;
+    delivery?.catch((error: unknown) => {
+      if (!(error instanceof Error && error.name === 'AbortError')) notice(String(error));
+    });
+    setSharingBusy(true);
+    void (async () => {
+      try {
+        if (!sharedUrl()) {
+          const device = await tools.shareUsb();
+          const host = await ShareHost.create(ticket, device, {
+            connected: () => tools.connectionMessage('Remote controller connected'),
+            disconnected: () => tools.connectionMessage('Remote controller disconnected'),
+            error: (error) => tools.connectionMessage(error.message, Level.Error),
+          });
+          if (tools.connection() !== ConnectionState.Sharing) {
+            host.stop();
+            throw Error('Camera disconnected');
+          }
+          shareHost = host;
+          setSharedUrl(url);
+        }
+        if (!sheet) {
+          try {
+            await navigator.clipboard.writeText(url);
+            notice('Share link copied');
+            shareDialog.close();
+          } catch {
+            setCopyFallback(true);
+          }
+        } else shareDialog.close();
+      } catch (error) {
+        notice(error instanceof Error ? error.message : String(error));
+        tools.sharingEnded();
+      } finally {
+        setSharingBusy(false);
+      }
+    })();
+  }
   const [draft, setDraft] = createSignal('');
   const [ending, setEnding] = createSignal(LineEnding.Lf);
   const [follow, setFollow] = createSignal(true);
@@ -124,6 +197,19 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean }
   onSettled(() => {
     const unlisten = reports.listen();
     void tools.start().then(async () => {
+      try {
+        if (remoteControlUrl(location.href)) {
+          setTarget(CameraTarget.Remote);
+          await tools.connect(CameraTarget.Remote);
+          return;
+        }
+      } catch (error) {
+        tools.connectionMessage(
+          error instanceof Error ? error.message : String(error),
+          Level.Error,
+        );
+        return;
+      }
       if (
         import.meta.env.DEV &&
         new URLSearchParams(location.search).get('target') === CameraTarget.Emulator &&
@@ -140,6 +226,8 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean }
     });
     return () => {
       unlisten();
+      shareHost?.stop();
+      if (toastTimer) clearTimeout(toastTimer);
       tools.dispose();
     };
   });
@@ -217,6 +305,16 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean }
           <Feedback context={context} capture={tools.errorReport} local={reports} />
         </Show>
         <div class="dt-connection">
+          <button
+            class="pill"
+            disabled={
+              !tools.canShare() ||
+              ![ConnectionState.Connected, ConnectionState.Sharing].includes(tools.connection())
+            }
+            onClick={() => shareDialog.showModal()}
+          >
+            Share
+          </button>
           <select
             aria-label="Connection target"
             value={target()}
@@ -229,11 +327,14 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean }
           >
             <option value={CameraTarget.Usb}>Camera · USB</option>
             <option value={CameraTarget.Emulator}>Simulator</option>
+            <Show when={target() === CameraTarget.Remote}>
+              <option value={CameraTarget.Remote}>Shared camera</option>
+            </Show>
           </select>
           <span class="dt-status" role="status">
             <i class={tools.connection() === ConnectionState.Connected ? 'online' : ''} />
             {tools.connection() === ConnectionState.Unsupported &&
-            target() === CameraTarget.Emulator
+            target() !== CameraTarget.Usb
               ? 'Disconnected'
               : tools.connection() === ConnectionState.Choosing &&
                   target() === CameraTarget.Emulator
@@ -244,18 +345,25 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean }
             when={
               tools.connection() === ConnectionState.Disconnected ||
               (tools.connection() === ConnectionState.Unsupported &&
-                target() === CameraTarget.Emulator)
+                target() !== CameraTarget.Usb)
             }
             fallback={
               <Show
                 when={
                   tools.connection() === ConnectionState.Connected ||
                   tools.connection() === ConnectionState.Blocked ||
+                  tools.connection() === ConnectionState.Sharing ||
                   tools.connection() === ConnectionState.Choosing ||
                   tools.connection() === ConnectionState.Opening
                 }
               >
-                <button class="pill" onClick={tools.disconnect}>
+                <button
+                  class="pill"
+                  onClick={() => {
+                    stopSharing();
+                    tools.disconnect();
+                  }}
+                >
                   {tools.connection() === ConnectionState.Choosing ||
                   tools.connection() === ConnectionState.Opening
                     ? 'Cancel'
@@ -270,11 +378,71 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean }
                 void tools.connect(target());
               }}
             >
-              {target() === CameraTarget.Emulator ? 'Connect simulator' : 'Connect camera'}
+              {target() === CameraTarget.Remote
+                ? 'Reconnect shared camera'
+                : target() === CameraTarget.Emulator
+                  ? 'Connect simulator'
+                  : 'Connect camera'}
             </button>
           </Show>
         </div>
       </header>
+      <dialog
+        ref={(element) => {
+          shareDialog = element;
+        }}
+        class="dt-share-dialog"
+        aria-label="Share camera"
+      >
+        <div class="dt-share-heading">
+          <h2>Share camera</h2>
+          <button
+            class="dt-text-button"
+            aria-label="Close share dialog"
+            onClick={() => shareDialog.close()}
+          >
+            ✕
+          </button>
+        </div>
+        <strong class="dt-share-warning">
+          Anyone with a share link will be able to control your USB device.
+        </strong>
+        <button
+          class="dt-share-camera"
+          disabled={
+            sharingBusy() ||
+            (tools.connection() === ConnectionState.Connected &&
+              tools.consoleState() !== ConsoleState.Idle)
+          }
+          onClick={shareCamera}
+        >
+          {tools.camera()?.name ?? 'Camera'}
+        </button>
+        <Show when={copyFallback()}>
+          <input
+            aria-label="Share link"
+            value={sharedUrl()}
+            readonly
+            onFocus={(event) => event.currentTarget.select()}
+          />
+        </Show>
+        <Show when={sharedUrl()}>
+          <button
+            class="dt-text-button dt-share-stop"
+            onClick={() => {
+              stopSharing();
+              shareDialog.close();
+            }}
+          >
+            Stop sharing
+          </button>
+        </Show>
+      </dialog>
+      <Show when={toast()}>
+        <div class="dt-share-toast" role="status">
+          {toast()}
+        </div>
+      </Show>
       <main class="dt-workspace">
         <h1 class="dt-title">Dev Tools</h1>
         <Show when={tools.connection() === ConnectionState.Selecting}>
@@ -298,7 +466,7 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean }
             <button class="pill dt-primary" type="submit">
               Open session
             </button>
-            <button class="pill" type="button" onClick={tools.disconnect}>
+            <button class="pill" type="button" onClick={() => tools.disconnect()}>
               Cancel
             </button>
           </form>

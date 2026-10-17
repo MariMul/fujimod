@@ -7,6 +7,7 @@ import type {
   CameraDiagnostics,
 } from './camera';
 import { EmulatorCall, type EmulatorRequest, type EmulatorReply } from './emulator-protocol';
+import type { SharedDevice, Descriptor, Completion } from './usb-sharing';
 import type { NewEntry } from './log';
 declare const __FUJIMOD_CATALOG__: string;
 declare const __FUJIMOD_LOCAL_DAT__: boolean;
@@ -62,13 +63,22 @@ export class EmulatorCamera implements CameraBackend {
   }
   private request(
     request:
+      | Omit<Extract<EmulatorRequest, { call: EmulatorCall.Usb }>, 'id'>
       | Omit<Extract<EmulatorRequest, { call: EmulatorCall.Boot }>, 'id'>
       | Omit<Extract<EmulatorRequest, { call: EmulatorCall.Open }>, 'id'>
       | Omit<Extract<EmulatorRequest, { call: EmulatorCall.Submit }>, 'id'>
       | Omit<
           Extract<
             EmulatorRequest,
-            { call: EmulatorCall.Poll | EmulatorCall.Abandon | EmulatorCall.Diagnostics }
+            {
+              call:
+                | EmulatorCall.Poll
+                | EmulatorCall.Abandon
+                | EmulatorCall.Diagnostics
+                | EmulatorCall.ExportUsb
+                | EmulatorCall.CloseUsb
+                | EmulatorCall.Close;
+            }
           >,
           'id'
         >,
@@ -165,7 +175,21 @@ export class EmulatorCamera implements CameraBackend {
       },
       poll: async () => (await this.request({ call: EmulatorCall.Poll })) as ConsoleOutput,
       usable: () => this.ready,
+      close: async () => {
+        await this.request({ call: EmulatorCall.Close });
+      },
       abandon: () => this.stop(),
+    };
+  }
+  async exportUsb(): Promise<SharedDevice> {
+    const descriptor = (await this.request({ call: EmulatorCall.ExportUsb })) as Descriptor;
+    return {
+      descriptor,
+      execute: async (operation, timeout) =>
+        (await this.request({ call: EmulatorCall.Usb, operation, timeout })) as Completion,
+      close: async () => {
+        await this.request({ call: EmulatorCall.CloseUsb });
+      },
     };
   }
   drain(): NewEntry[] {

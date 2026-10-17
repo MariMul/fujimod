@@ -5,49 +5,60 @@ use futures_util::StreamExt;
 use std::time::Duration;
 
 #[cfg(not(target_arch = "wasm32"))]
-type Socket = async_tungstenite::WebSocketStream<async_tungstenite::smol::ConnectStream>;
+type WebSocket = async_tungstenite::WebSocketStream<async_tungstenite::smol::ConnectStream>;
 #[cfg(target_arch = "wasm32")]
-type Socket = gloo_net::websocket::futures::WebSocket;
+type WebSocket = gloo_net::websocket::futures::WebSocket;
 
 fn err(e: impl std::fmt::Display) -> Error {
     Error(e.to_string())
 }
+enum Socket {
+    Web(WebSocket),
+    Peer(crate::peer::PeerSocket),
+}
 async fn send(socket: &mut Socket, frame: &Frame) -> Result<()> {
-    let json = serde_json::to_string(frame).map_err(err)?;
-    let json_len = json.len();
-    #[cfg(not(target_arch = "wasm32"))]
-    let message = async_tungstenite::tungstenite::Message::Text(json.into());
-    #[cfg(target_arch = "wasm32")]
-    let message = gloo_net::websocket::Message::Text(json);
-    if json_len > MAX_MESSAGE {
+    let text = serde_json::to_string(frame).map_err(err)?;
+    if text.len() > MAX_MESSAGE {
         return Err(err("message exceeds limit"));
     }
-    socket.send(message).await.map_err(err)
+    match socket {
+        Socket::Peer(peer) => peer.send(&text).await,
+        Socket::Web(socket) => {
+            #[cfg(not(target_arch = "wasm32"))]
+            let message = async_tungstenite::tungstenite::Message::Text(text.into());
+            #[cfg(target_arch = "wasm32")]
+            let message = gloo_net::websocket::Message::Text(text);
+            socket.send(message).await.map_err(err)
+        }
+    }
 }
 async fn receive(socket: &mut Socket) -> Result<Frame> {
-    loop {
-        let message = socket
-            .next()
-            .await
-            .ok_or_else(|| err("disconnected; completion unknown"))?
-            .map_err(err)?;
-        #[cfg(not(target_arch = "wasm32"))]
-        let text = match message {
-            async_tungstenite::tungstenite::Message::Text(text) => text.to_string(),
-            async_tungstenite::tungstenite::Message::Ping(_)
-            | async_tungstenite::tungstenite::Message::Pong(_) => continue,
-            _ => return Err(err("expected text frame")),
-        };
-        #[cfg(target_arch = "wasm32")]
-        let text = match message {
-            gloo_net::websocket::Message::Text(text) => text,
-            _ => return Err(err("expected text frame")),
-        };
-        if text.len() > MAX_MESSAGE {
-            return Err(err("message exceeds limit"));
-        }
-        return serde_json::from_str(&text).map_err(err);
+    let text = match socket {
+        Socket::Peer(peer) => peer.receive().await?,
+        Socket::Web(socket) => loop {
+            let message = socket
+                .next()
+                .await
+                .ok_or_else(|| err("disconnected; completion unknown"))?
+                .map_err(err)?;
+            #[cfg(not(target_arch = "wasm32"))]
+            match message {
+                async_tungstenite::tungstenite::Message::Text(text) => break text.to_string(),
+                async_tungstenite::tungstenite::Message::Ping(_)
+                | async_tungstenite::tungstenite::Message::Pong(_) => continue,
+                _ => return Err(err("expected text frame")),
+            }
+            #[cfg(target_arch = "wasm32")]
+            match message {
+                gloo_net::websocket::Message::Text(text) => break text,
+                _ => return Err(err("expected text frame")),
+            }
+        },
+    };
+    if text.len() > MAX_MESSAGE {
+        return Err(err("message exceeds limit"));
     }
+    serde_json::from_str(&text).map_err(err)
 }
 async fn deadline<T>(
     duration: Duration,
@@ -69,34 +80,44 @@ pub struct Client {
 }
 impl Client {
     pub async fn connect(url: &str, token: &str) -> Result<Self> {
-        deadline(Duration::from_secs(10), async {
-            #[cfg(not(target_arch = "wasm32"))]
-            let mut socket = async_tungstenite::smol::connect_async(url)
-                .await
-                .map_err(err)?
-                .0;
-            #[cfg(target_arch = "wasm32")]
-            let mut socket = Socket::open(url).map_err(err)?;
-            send(
-                &mut socket,
-                &Frame::Hello {
-                    version: VERSION,
-                    role: "controller".into(),
-                    token: token.into(),
-                },
-            )
-            .await?;
-            match receive(&mut socket).await? {
-                Frame::Ready {
-                    version: VERSION, ..
-                } => Ok(Self {
-                    socket,
-                    next_id: 0,
-                    usable: true,
-                }),
-                _ => Err(err("relay rejected protocol handshake")),
-            }
-        })
+        let ticket = crate::share::Ticket::from_url(url)?;
+        let token = ticket.as_ref().map(|t| t.key.as_str()).unwrap_or(token);
+        deadline(
+            Duration::from_secs(if ticket.is_some() { 30 } else { 10 }),
+            async {
+                let mut socket = if ticket.is_some() {
+                    Socket::Peer(crate::peer::PeerSocket::connect(url).await?)
+                } else {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let socket = async_tungstenite::smol::connect_async(url)
+                        .await
+                        .map_err(err)?
+                        .0;
+                    #[cfg(target_arch = "wasm32")]
+                    let socket = WebSocket::open(url).map_err(err)?;
+                    Socket::Web(socket)
+                };
+                send(
+                    &mut socket,
+                    &Frame::Hello {
+                        version: VERSION,
+                        role: "controller".into(),
+                        token: token.into(),
+                    },
+                )
+                .await?;
+                match receive(&mut socket).await? {
+                    Frame::Ready {
+                        version: VERSION, ..
+                    } => Ok(Self {
+                        socket,
+                        next_id: 0,
+                        usable: true,
+                    }),
+                    _ => Err(err("relay rejected protocol handshake")),
+                }
+            },
+        )
         .await
     }
     pub async fn request(

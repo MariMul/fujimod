@@ -21,6 +21,9 @@ function fixture() {
     },
     poll: async () => output.shift()!,
     usable: () => !closed,
+    close: async () => {
+      closed = true;
+    },
     abandon: () => {
       closed = true;
     },
@@ -123,7 +126,7 @@ test('disconnect during an operation releases the host link without a camera clo
     await tools.start();
     await tools.connect();
     const sending = tools.send('help', LineEnding.CrLf);
-    tools.disconnect();
+    await tools.disconnect();
     finish();
     await sending;
     flush();
@@ -201,7 +204,7 @@ test('simulator can connect without physical WebUSB; physical USB remains unavai
     flush();
     expect(tools.connection()).toBe(ConnectionState.Connected);
     expect(await tools.send('help', LineEnding.Lf)).toBe(true);
-    tools.disconnect();
+    await tools.disconnect();
     flush();
     expect(tools.connection()).toBe(ConnectionState.Unsupported);
   } finally {
@@ -219,7 +222,7 @@ test('a cancelled boot failure cannot replace a newer connection', async () => {
   try {
     await tools.start();
     const old = tools.connect(CameraTarget.Emulator);
-    tools.disconnect();
+    await tools.disconnect();
     f.backend.pick = async () => ({ name: 'New camera', interfaces: [{ id: 7, label: 'USB' }] });
     const fresh = tools.connect(CameraTarget.Emulator);
     reject(Error('Old emulator was cancelled'));
@@ -227,6 +230,19 @@ test('a cancelled boot failure cannot replace a newer connection', async () => {
     flush();
     expect(tools.connection()).toBe(ConnectionState.Connected);
     expect(tools.entries().some((e) => e.message === 'Old emulator was cancelled')).toBe(false);
+  } finally {
+    tools.dispose();
+  }
+});
+
+test('a shared camera controller does not require local WebUSB support', async () => {
+  const f = fixture(),
+    tools = createDevTools(f.backend, false);
+  try {
+    await tools.start();
+    await tools.connect(CameraTarget.Remote);
+    flush();
+    expect(tools.connection()).toBe(ConnectionState.Connected);
   } finally {
     tools.dispose();
   }

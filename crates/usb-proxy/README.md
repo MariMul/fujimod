@@ -1,7 +1,9 @@
 # USB proxy
 
 `fujimod-usb-proxy` forwards USB operations from a Rust controller (native or
-`wasm32-unknown-unknown`) through a relay to a WebUSB browser. FujiMod's existing
+`wasm32-unknown-unknown`) to a WebUSB browser. [Share links](SHARING.md) use
+direct WebRTC with encrypted rendezvous. Explicit WebSocket connections use
+the relay transport described below. FujiMod's existing
 Rust USB sessions, native Python bindings and Pyodide bindings select this
 transport using remote discovery. The camera protocol still executes in
 `fujimod-usb`; this crate knows no Fujifilm commands, firmware or memory maps.

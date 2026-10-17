@@ -22,6 +22,7 @@ test('one pane shows console responses and independently filters layers and seve
         output: new TextEncoder().encode('camera response'),
       }),
       usable: () => true,
+      close: async () => {},
       abandon: () => {},
     }),
     drain: () => records.splice(0),

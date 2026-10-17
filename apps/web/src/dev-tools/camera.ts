@@ -1,8 +1,10 @@
 import { initialize, usb, type Device, type Session } from 'fujimod';
+import { exportUsbDevice, type SharedDevice, type BrowserUsbDevice } from './usb-sharing';
 import { Direction, Layer, Level, describeCommand, type NewEntry } from './log';
 export enum CameraTarget {
   Usb = 'usb',
   Emulator = 'simulator',
+  Remote = 'remote',
 }
 export enum Progress {
   Complete,
@@ -29,12 +31,15 @@ export interface CameraLink {
   poll(): Promise<ConsoleOutput>;
   usable(): boolean;
   abandon(): void;
+  close(): Promise<void>;
 }
 export interface CameraDiagnostics extends Record<string, unknown> {
   checkpoint?: ArrayBuffer;
   snapshot: Record<string, unknown>;
 }
 export interface CameraBackend {
+  exportUsb?(): Promise<SharedDevice>;
+  canShare?(): boolean;
   errors?(listener: (error: Error) => void): () => void;
   diagnostics?(): Promise<CameraDiagnostics>;
   initialize(): Promise<void>;
@@ -46,27 +51,14 @@ export interface CameraBackend {
   dispose(): void;
 }
 const CONSOLE_BYTES = 4096;
-export class WebUsbCamera implements CameraBackend {
-  private device?: Device;
-  private interfaces: Awaited<ReturnType<Device['interfaces']>> = [];
+abstract class SessionCamera implements CameraBackend {
+  abstract pick(): Promise<CameraChoice | undefined>;
+  protected device?: Device;
+  protected activeLink?: CameraLink;
+  protected interfaces: Awaited<ReturnType<Device['interfaces']>> = [];
   private trace?: InstanceType<typeof usb.tracing.Trace>;
   async initialize(): Promise<void> {
     await initialize();
-  }
-  async pick(): Promise<CameraChoice | undefined> {
-    this.releaseDevice();
-    this.device = await usb.requestDevice(usb.DeviceFilter.Diagnostic);
-    if (!this.device) return;
-    this.interfaces = await this.device.interfaces();
-    return {
-      name:
-        this.device.productName ||
-        `Fujifilm ${this.device.productId.toString(16).padStart(4, '0')}`,
-      interfaces: this.interfaces.map((selection, id) => ({
-        id,
-        label: `Configuration ${selection.configuration} · Interface ${selection.interface} · Alternate ${selection.alternate}`,
-      })),
-    };
   }
   async open(id: number): Promise<CameraLink> {
     if (!this.device || !this.interfaces[id]) throw Error('Choose a USB interface.');
@@ -85,7 +77,7 @@ export class WebUsbCamera implements CameraBackend {
       limits.free();
     }
     let live = true;
-    return {
+    const link: CameraLink = {
       async submit(data) {
         await session.submitConsole(data);
       },
@@ -108,6 +100,15 @@ export class WebUsbCamera implements CameraBackend {
         }
       },
       usable: () => live && session.state === usb.SessionState.Ready,
+      async close() {
+        if (!live) return;
+        live = false;
+        try {
+          await session.close();
+        } finally {
+          session.free();
+        }
+      },
       abandon() {
         if (live) {
           live = false;
@@ -116,6 +117,8 @@ export class WebUsbCamera implements CameraBackend {
         }
       },
     };
+    this.activeLink = link;
+    return link;
   }
   drain(): NewEntry[] {
     if (!this.trace) return [];
@@ -192,6 +195,53 @@ export class WebUsbCamera implements CameraBackend {
       batch.free();
     }
   }
+  onDisconnect(_callback: () => void): () => void {
+    return () => {};
+  }
+  protected releaseDevice(): void {
+    for (const selection of this.interfaces) selection.free();
+    this.interfaces = [];
+    this.device?.free();
+    this.device = undefined;
+  }
+  dispose(): void {
+    this.releaseDevice();
+    this.trace?.free();
+    this.trace = undefined;
+  }
+}
+
+export class WebUsbCamera extends SessionCamera {
+  async pick(): Promise<CameraChoice | undefined> {
+    this.releaseDevice();
+    this.device = await usb.requestDevice(usb.DeviceFilter.Diagnostic);
+    if (!this.device) return;
+    this.interfaces = await this.device.interfaces();
+    return {
+      name:
+        this.device.productName ||
+        `Fujifilm ${this.device.productId.toString(16).padStart(4, '0')}`,
+      interfaces: this.interfaces.map((selection, id) => ({
+        id,
+        label: `Configuration ${selection.configuration} · Interface ${selection.interface} · Alternate ${selection.alternate}`,
+      })),
+    };
+  }
+  async exportUsb(): Promise<SharedDevice> {
+    if (!this.device || !this.activeLink?.usable()) throw Error('No connected camera');
+    const usb = (navigator as Navigator & { usb?: { getDevices(): Promise<BrowserUsbDevice[]> } })
+      .usb;
+    const matches = ((await usb?.getDevices()) ?? []).filter(
+      (raw) =>
+        raw.vendorId === this.device!.vendorId &&
+        raw.productId === this.device!.productId &&
+        raw.serialNumber === this.device!.serialNumber,
+    );
+    if (matches.length !== 1) throw Error('Cannot uniquely select the connected USB device');
+    await this.activeLink.close();
+    this.activeLink = undefined;
+    return exportUsbDevice(matches[0]);
+  }
   onDisconnect(callback: () => void): () => void {
     const usbEvents = (navigator as Navigator & { usb?: EventTarget }).usb;
     const listener = (event: Event) => {
@@ -210,15 +260,25 @@ export class WebUsbCamera implements CameraBackend {
     usbEvents?.addEventListener('disconnect', listener);
     return () => usbEvents?.removeEventListener('disconnect', listener);
   }
-  private releaseDevice(): void {
-    for (const selection of this.interfaces) selection.free();
-    this.interfaces = [];
-    this.device?.free();
-    this.device = undefined;
-  }
-  dispose(): void {
+}
+
+export class RemoteUsbCamera extends SessionCamera {
+  async pick(): Promise<CameraChoice | undefined> {
+    await this.initialize();
     this.releaseDevice();
-    this.trace?.free();
-    this.trace = undefined;
+    const devices = await usb.discoverProxy(location.href, '', usb.DeviceFilter.Diagnostic);
+    if (devices.length !== 1) {
+      for (const device of devices) device.free();
+      throw Error('Shared camera unavailable');
+    }
+    this.device = devices[0];
+    this.interfaces = await this.device.interfaces();
+    return {
+      name: `Shared camera · ${this.device.productName || 'Fujifilm'}`,
+      interfaces: this.interfaces.map((selection, id) => ({
+        id,
+        label: `Configuration ${selection.configuration} · Interface ${selection.interface} · Alternate ${selection.alternate}`,
+      })),
+    };
   }
 }

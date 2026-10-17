@@ -15,6 +15,8 @@ export enum ConnectionState {
   Selecting,
   Opening,
   Connected,
+  Sharing,
+  Closing,
   Blocked,
   Unsupported,
 }
@@ -83,17 +85,34 @@ export function createDevTools(
     }
     onError(error);
   };
-  function disconnect() {
-    attempt++;
+  function disconnect(abandon = false) {
+    const closingAttempt = ++attempt;
     stop = true;
-    backend.cancelPending?.();
     const old = link;
     link = undefined;
-    old?.abandon();
-    drain();
+    const clean = !abandon && old?.usable() && commandState === ConsoleState.Idle;
     setConsoleState(ConsoleState.Idle);
-    setConnection(offlineState);
-    if (old) message('Disconnected');
+    const finish = () => {
+      if (disposed || closingAttempt !== attempt) return;
+      backend.cancelPending?.();
+      drain();
+      setConnection(offlineState);
+      if (old) message('Disconnected');
+    };
+    if (clean && old) {
+      setConnection(ConnectionState.Closing);
+      return old
+        .close()
+        .catch((error: unknown) => {
+          if (!disposed)
+            message(error instanceof Error ? error.message : String(error), Level.Error);
+        })
+        .finally(finish);
+    } else {
+      old?.abandon();
+      finish();
+      return Promise.resolve();
+    }
   }
   async function open(id: number) {
     if (currentConnection() !== ConnectionState.Selecting) return;
@@ -124,7 +143,7 @@ export function createDevTools(
     if (target === CameraTarget.Usb && !supported) return;
     if (
       currentConnection() !== ConnectionState.Disconnected &&
-      !(currentConnection() === ConnectionState.Unsupported && target === CameraTarget.Emulator)
+      !(currentConnection() === ConnectionState.Unsupported && target !== CameraTarget.Usb)
     )
       return;
     setConnection(ConnectionState.Choosing);
@@ -254,7 +273,7 @@ export function createDevTools(
       timer = setInterval(drain, 50);
       unlistenError = backend.errors?.(fail);
       unlisten = backend.onDisconnect(() => {
-        disconnect();
+        disconnect(true);
         message('USB device removed', Level.Warning);
       });
     } catch (error) {
@@ -277,6 +296,40 @@ export function createDevTools(
     connection,
     consoleState,
     camera,
+    canShare: () => Boolean(backend.exportUsb) && (backend.canShare?.() ?? true),
+    connectionMessage: message,
+    async shareUsb() {
+      if (
+        state !== ConnectionState.Connected ||
+        commandState !== ConsoleState.Idle ||
+        !backend.exportUsb
+      )
+        throw Error('Camera is not available for sharing');
+      setConnection(ConnectionState.Sharing);
+      const currentAttempt = attempt;
+      try {
+        const device = await backend.exportUsb();
+        if (disposed || currentAttempt !== attempt) {
+          await device.close();
+          throw Error('Camera disconnected');
+        }
+        drain();
+        message('Camera sharing started');
+        return device;
+      } catch (error) {
+        if (!disposed && currentAttempt === attempt) {
+          setConnection(ConnectionState.Blocked);
+          fail(error);
+        }
+        throw error;
+      }
+    },
+    sharingEnded() {
+      if (state === ConnectionState.Sharing) {
+        setConnection(ConnectionState.Blocked);
+        message('Camera sharing ended');
+      }
+    },
     entries,
     discarded,
     reportContext() {
@@ -287,15 +340,13 @@ export function createDevTools(
           .filter((entry) => entry.layer === Layer.Console && entry.direction === Direction.Out)
           .slice(-8)
           .map((entry) => entry.message),
-        logTail: buffer.entries
-          .slice(-64)
-          .map((entry) => ({
-            time: entry.time,
-            layer: entry.layer,
-            level: entry.level,
-            direction: entry.direction,
-            message: entry.message.slice(0, 2048),
-          })),
+        logTail: buffer.entries.slice(-64).map((entry) => ({
+          time: entry.time,
+          layer: entry.layer,
+          level: entry.level,
+          direction: entry.direction,
+          message: entry.message.slice(0, 2048),
+        })),
       };
     },
     async errorReport(
