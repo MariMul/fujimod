@@ -6,19 +6,16 @@ body:
     id: feedback
     attributes:
       label: Feedback
-      description: Share what happened or what you would like to see.
     validations:
       required: false
   - type: input
     id: firmware
     attributes:
       label: Camera / firmware ID
-      description: Filled automatically from the loaded firmware, for example x70-110 or xm1-150.
   - type: input
     id: mod-build
     attributes:
       label: Mod build / build date
-      description: Filled automatically by the simulator; stock firmware is marked as having no mods.
   - type: upload
     id: simulator-report
     attributes:
