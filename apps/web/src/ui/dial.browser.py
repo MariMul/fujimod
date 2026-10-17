@@ -80,18 +80,28 @@ async def check(browser_type, url, output):
         initial = await snapshot(dial)
         box = await dial.bounding_box()
         x, y = box['x'] + box['width']/2, box['y'] + box['height']/2
+        gap = await dial.evaluate('''node => {
+          const labels = [...node.querySelectorAll('.vals span')];
+          const index = Number(node.getAttribute('aria-valuenow'));
+          const center = label => label.offsetLeft + label.offsetWidth/2;
+          return center(labels[index]) - center(labels[index-1]);
+        }''')
         before_requests = await page.evaluate('requests.length')
         await page.mouse.move(x, y)
         await page.mouse.down()
         samples = []
-        for dx in [4, 8, 12, 16, 20]:
+        travel = round(gap+4)
+        movements = [round(gap*.1), round(gap*.25), round(gap*.4), round(gap*.75), travel]
+        for dx in movements:
             await page.mouse.move(x+dx, y)
             await paint(page)
             samples.append(await snapshot(dial))
         assert all(a['x'] < b['x'] for a,b in zip([initial]+samples, samples)), samples
         assert [s['selected'] for s in samples] == [initial_value]*3 + [preceding]*2, samples
-        distances = [b['x']-a['x'] for a,b in zip([initial]+samples[:3],samples[:4])]
-        assert max(distances)-min(distances) < 1, distances
+        # The label strip must travel exactly as far as the captured thumb,
+        # including when the selected value changes and label widths differ.
+        for dx, sample in zip(movements, samples):
+            assert abs(sample['x'] - initial['x'] - dx) < .1, (dx, initial, sample)
         assert await page.evaluate('(start) => requests.slice(start)', before_requests) == [dict(id=identifier,value=preceding)]
         await page.screenshot(path=str(output/f'{identifier}-held.png'))
         await page.mouse.up()
@@ -114,10 +124,10 @@ async def check(browser_type, url, output):
         # Dragging left selects the following label and follows the pointer too.
         await page.mouse.move(x, y)
         await page.mouse.down()
-        await page.mouse.move(x-20, y)
+        await page.mouse.move(x-travel, y)
         await paint(page)
         assert (await snapshot(dial))['selected'] == initial_value
-        assert (await snapshot(dial))['x'] < released['x']
+        assert abs((await snapshot(dial))['x'] - released['x'] + travel) < .1
         await page.mouse.up()
         await settled(dial)
         assert abs((await snapshot(dial))['error']) < 1
@@ -169,7 +179,7 @@ async def main():
             output = args.output/name
             output.mkdir(parents=True, exist_ok=False)
             await check(getattr(playwright,name), args.url, output)
-            print(f'{name}: smooth drag, release snap, reversal, cancellation, keyboard and touch passed')
+            print(f'{name}: pixel-for-pixel drag, release snap, reversal, cancellation, keyboard and touch passed')
 
 
 if __name__ == '__main__':

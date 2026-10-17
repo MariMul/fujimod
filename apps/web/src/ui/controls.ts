@@ -18,7 +18,7 @@ export class InputPanel {
   private powerID?: string;
   private stopShutter?: (release?: boolean) => void;
   private stopRotation?: () => void;
-  private rotation?: { dial: HTMLElement; fraction: number };
+  private rotation?: { dial: HTMLElement; fraction: number; center?: number };
   private pulseQueue: Promise<unknown> = Promise.resolve();
   private observers: ResizeObserver[] = [];
   constructor(
@@ -268,6 +268,10 @@ export class InputPanel {
               value.style.flexShrink = "0";
               value.classList.toggle("on", selected);
             }
+          }
+          if (this.rotation?.dial === dial && this.rotation.center !== undefined) {
+            values.style.transform = `translateX(${dial.clientWidth / 2 - this.rotation.center}px)`;
+            return;
           }
           const index = selectedIndex();
           const fraction = this.rotation?.dial === dial ? this.rotation.fraction : (this.modelFractions.get(id) ?? 0);
@@ -590,7 +594,18 @@ export class InputPanel {
     const values = dial.querySelector<HTMLElement>(".vals")!;
     const ticks = dial.classList.contains("ticks");
     const initialTicks = parseFloat(values.style.backgroundPositionX) || 0;
-    const rotation = { dial, fraction: 0 };
+    const centers = Array.from(values.children, value => {
+      const label = value as HTMLElement;
+      return label.offsetLeft + label.offsetWidth / 2;
+    });
+    const rotation: NonNullable<InputPanel["rotation"]> = { dial, fraction: 0 };
+    if (centers.length) {
+      // Start from the rendered position, even when a previous snap is in flight.
+      const transform = getComputedStyle(values).transform;
+      const x = new DOMMatrixReadOnly(transform).m41;
+      rotation.center = dial.clientWidth / 2 - x;
+      values.style.transform = `translateX(${x}px)`;
+    }
     this.rotation = rotation;
     values.style.transition = "none";
     let previous = event.clientX;
@@ -598,16 +613,31 @@ export class InputPanel {
     let tickPosition = initialTicks;
     const move = (next: PointerEvent) => {
       if (next.pointerId !== event.pointerId) return;
-      // Numbered strips follow the pointer; moving them right selects the
-      // preceding label under the fixed center marker.
-      remainder += (next.clientX - previous) * (ticks ? 1 : -1);
+      const delta = next.clientX - previous;
       previous = next.clientX;
-      const steps = Math.trunc(remainder / 16);
-      remainder -= steps * 16;
-      for (let n = 0; n < Math.abs(steps); n++) {
-        if (this.step(id, Math.sign(steps))) tickPosition += Math.sign(steps) * 16;
+      if (rotation.center !== undefined) {
+        // Measure travel in CSS pixels, using the actual, uneven label spacing.
+        const center = Math.max(centers[0], Math.min(centers.at(-1)!, rotation.center - delta));
+        rotation.center = center;
+        const nearest = centers.reduce((best, candidate, index) =>
+          Math.abs(candidate - center) < Math.abs(centers[best] - center) ? index : best, 0);
+        const current = Number(dial.getAttribute("aria-valuenow"));
+        const direction = Math.sign(nearest - current);
+        for (let n = 0; n < Math.abs(nearest - current); n++) this.step(id, direction);
+        const index = Number(dial.getAttribute("aria-valuenow"));
+        const distance = center - centers[index];
+        const neighbor = centers[index + Math.sign(distance)];
+        rotation.fraction = neighbor === undefined || distance === 0
+          ? 0 : distance / Math.abs(neighbor - centers[index]);
+      } else {
+        remainder += delta * (ticks ? 1 : -1);
+        const steps = Math.trunc(remainder / 16);
+        remainder -= steps * 16;
+        for (let n = 0; n < Math.abs(steps); n++) {
+          if (this.step(id, Math.sign(steps))) tickPosition += Math.sign(steps) * 16;
+        }
+        rotation.fraction = this.clampFraction(id, remainder / 16);
       }
-      rotation.fraction = this.clampFraction(id, remainder / 16);
       this.viewer.previewRotary(id, rotation.fraction, true);
       if (ticks) values.style.backgroundPositionX = `${tickPosition + remainder}px`;
       else this.renders.get(id)?.();
