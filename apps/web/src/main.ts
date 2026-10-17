@@ -11,6 +11,7 @@ import { ModelViewer, type ModelData } from "./viewer/model";
 import { InputPanel } from "./ui/controls";
 import { ConnectionsPanel } from "./ui/connections";
 import { CardBrowser, downloadBlob } from "./ui/card";
+import { simulatorIssueURL } from "./ui/simulator-feedback";
 import { FaultPanel } from "./ui/fault";
 import { cameraCard, cameraTable, type CameraSupport } from "./ui/cameras";
 import { personalNote, noteCameraSupport } from "./ui/personal-note";
@@ -139,6 +140,12 @@ $("restart").onclick = async () => {
 };
 const feedbackDialog = $<HTMLDialogElement>("feedback-dialog");
 const feedbackDescription = $<HTMLTextAreaElement>("feedback-description");
+// Open in the submit gesture so mobile browsers allow the new tab, even
+// when preparing the diagnostic download takes longer than user activation.
+feedbackDialog.querySelector("form")!.addEventListener("submit", event => {
+  if ((event.submitter as HTMLButtonElement | null)?.value === "download")
+    window.open(simulatorIssueURL(feedbackDescription.value), "_blank", "noopener,noreferrer");
+});
 let preparingReport = false;
 function openFeedback() {
   if (preparingReport || feedbackDialog.open) return;
@@ -160,7 +167,7 @@ function openFeedback() {
     describe(feedbackDescription.value);
     if (feedbackDialog.returnValue !== "download") return;
     preparingReport = true;
-    const buttons = [$("error-report"), $("bug-idea")] as HTMLButtonElement[];
+    const buttons = [$("error-report"), $("feedback-open")] as HTMLButtonElement[];
     buttons.forEach(button => { button.disabled = true; });
     try {
       const report = await result;
@@ -177,7 +184,7 @@ function openFeedback() {
   feedbackDescription.focus();
 }
 $("error-report").onclick = openFeedback;
-$("bug-idea").onclick = openFeedback;
+$("feedback-open").onclick = openFeedback;
 
 async function runCombo(combo: PowerCombo) {
   await restartOperation(() => engine!.powerCycle(combo.inputs, progress));

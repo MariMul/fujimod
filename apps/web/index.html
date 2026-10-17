@@ -67,7 +67,7 @@
                 ><button class="pill" id="face-lens">Lens</button>
               </div>
             </div>
-            <button class="pill feedback-button" id="bug-idea">Bug / idea</button>
+            <button class="pill feedback-button" id="feedback-open">Feedback</button>
             <label class="dropbox" id="firmware-prompt" for="firmware-file"
               ><strong>Drop FPUPDATE.DAT firmware file from Fujifilm</strong
               ><span>or click to choose it</span></label
@@ -144,22 +144,19 @@
     </div>
     <dialog id="feedback-dialog" aria-labelledby="feedback-title">
       <form method="dialog">
-        <h3 id="feedback-title">Bug / idea</h3>
+        <h3 id="feedback-title">Feedback</h3>
         <div class="feedback-content">
           <figure>
             <img id="feedback-preview" alt="Camera view when this report was opened" />
-            <figcaption>Current camera state</figcaption>
+            <figcaption>Report includes simulator state</figcaption>
           </figure>
           <div>
-        <label for="feedback-description">What happened, or what would you like to see? (optional)</label>
-        <textarea id="feedback-description" rows="5" placeholder="Share a bug, idea, or other feedback…"></textarea>
+            <textarea aria-label="Feedback (optional)" id="feedback-description" rows="5" placeholder="Share a bug, idea, or other feedback…"></textarea>
           </div>
         </div>
-        <p>This report includes the current emulator state and your description.
-          Download the ZIP to share it; nothing is sent automatically.</p>
         <div class="act">
           <button class="pill" value="cancel">Cancel</button>
-          <button class="pill primary" value="download">Download report</button>
+          <button class="pill primary" value="download">Download and report</button>
         </div>
       </form>
     </dialog>
