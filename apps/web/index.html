@@ -90,18 +90,6 @@
               hidden
               aria-label="Boot progress"
             ></progress>
-            <section class="err" id="engine-status" role="alert" hidden>
-              <h4 id="fault-heading">The emulator stopped</h4>
-              <p id="fault-message"></p>
-              <code id="fault-raw"></code>
-              <div class="act">
-                <button class="pill primary" id="undo" hidden disabled>Undo 10 s</button
-                ><button class="pill" id="restart">Restart</button
-                ><button class="pill" id="error-report">
-                  Download error report
-                </button>
-              </div>
-            </section>
             <span id="status" role="status" aria-live="polite"></span
             ><span id="live-label"></span>
           </div>
@@ -142,6 +130,18 @@
       </main>
       <footer id="model-credit"></footer>
     </div>
+    <section class="err" id="engine-status" role="alert" hidden>
+      <h4 id="fault-heading">The emulator stopped</h4>
+      <p id="fault-message"></p>
+      <code id="fault-raw"></code>
+      <div class="act">
+        <button class="pill primary" id="undo" hidden disabled>Undo 10 s</button
+        ><button class="pill" id="restart">Restart</button
+        ><button class="pill" id="error-report">
+          Download error report
+        </button>
+      </div>
+    </section>
     <dialog id="feedback-dialog" aria-labelledby="feedback-title">
       <form method="dialog">
         <h3 id="feedback-title">Feedback</h3>

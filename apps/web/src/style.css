@@ -274,11 +274,13 @@ header .meta a:first-child {
 }
 /* error panel: roomy, red, buttons at the bottom */
 .err {
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  bottom: 14px;
-  z-index: 5;
+  position: fixed;
+  left: 0;
+  right: 0;
+  width: min(640px, calc(100% - 20px));
+  margin-inline: auto;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  z-index: 20;
   border: 1px solid #7a2a1f;
   border-radius: 16px;
   background: #1d0f0c;
@@ -1004,8 +1006,10 @@ footer {
   }
   .stage {
     grid-template-columns: 1fr;
-    /* Clip rounded corners without creating a scroll container for sticky. */
-    overflow: clip;
+    margin-inline: -14px;
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
   }
   .panel {
     border-left: 0;
@@ -1025,12 +1029,6 @@ footer {
   }
   .gens {
     grid-template-columns: 1fr;
-  }
-  .err {
-    position: fixed;
-    left: 10px;
-    right: 10px;
-    bottom: 10px;
   }
 }
 
@@ -1319,7 +1317,7 @@ progress::-webkit-progress-value {
   display: none;
 }
 .err {
-  max-height: calc(100dvh - 20px);
+  max-height: calc(100dvh - 20px - env(safe-area-inset-bottom));
   overflow: auto;
 }
 .err .act button {
@@ -1346,8 +1344,16 @@ progress::-webkit-progress-value {
   .panel {
     min-width: 0;
   }
-  .err {
-    z-index: 20;
+  .viewer.lcd-mode {
+    height: auto;
+    padding-top: 64px;
+  }
+  #lcd-source.flat {
+    position: relative;
+    inset: auto;
+    display: block;
+    width: 100%;
+    height: auto;
   }
 }
 
