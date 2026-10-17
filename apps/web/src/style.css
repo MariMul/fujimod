@@ -1382,6 +1382,10 @@ progress::-webkit-progress-value {
   color: #fff;
   font: 700 12px/1 system-ui;
 }
+.model-input-marker svg {
+  width: 12px;
+  height: 12px;
+}
 .model-input-marker.pressed {
   background: #57bd7c;
   box-shadow: 0 0 0 5px #2b784866, 0 0 0 7px #0008;
@@ -1392,12 +1396,9 @@ progress::-webkit-progress-value {
   bottom: 64px;
   left: 50%;
   transform: translateX(-50%);
-  border: 1px solid #57bd7c;
-  border-radius: 8px;
-  padding: 7px 13px;
-  background: #153b25ed;
-  color: #e7f5df;
-  font: 600 14px system-ui;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   white-space: nowrap;
   pointer-events: none;
 }

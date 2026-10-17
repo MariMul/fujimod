@@ -68,7 +68,7 @@ class WalkthroughTests(unittest.TestCase):
                                          '-frames:v','1','-f','image2pipe','-vcodec','png','-'])
         from PIL import Image, ImageStat
         picture = Image.open(BytesIO(frame)).convert('RGB')
-        self.assertLess(min(ImageStat.Stat(picture.crop((200,192,308,228))).mean), 240)
+        self.assertLess(min(ImageStat.Stat(picture.crop((135,140,185,178))).mean), 240)
         self.assertGreater(min(ImageStat.Stat(picture.crop((0,0,100,100))).mean), 250)
         self.assertEqual(report['steps'][0]['title'], 'Example')
         self.assertIn('video.mp4', report['artifacts'])

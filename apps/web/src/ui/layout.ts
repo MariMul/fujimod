@@ -30,8 +30,6 @@ export interface PowerCombo {
 export interface DevicePanel {
   /** Acoustic character of each physical dial, shared by panel and model. */
   detentSounds?: Record<string, DetentSound>;
-  /** Shared control names for panel accessibility and model feedback. */
-  inputLabels?: Record<string, string>;
   layout: ControlNode[];
   combos: PowerCombo[];
 }

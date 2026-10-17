@@ -1,3 +1,4 @@
+import { inputName } from "../feedback/input";
 import type { Engine, Input } from "../engine/api";
 import type { ModelHit, ModelViewer } from "../viewer/model";
 import type { ControlNode, DevicePanel, PowerCombo } from "./layout";
@@ -63,7 +64,7 @@ export class InputPanel {
     this.detentSounds = data.detentSounds ?? {};
     this.ready = true;
     this.inputs = new Map(inputs.map((input) => [input.id, {
-      ...input, label: data.inputLabels?.[input.id] ?? input.label,
+      ...input, label: inputName(input.id),
     }]));
     for (const input of inputs)
       if (input.positions?.length)

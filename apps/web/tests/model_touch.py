@@ -35,7 +35,7 @@ SETUP = '''async () => {
   const controls = window.testPanel = new InputPanel(document.querySelector('#controls'), viewer,
     error => {throw error}, async () => {});
   controls.render(['up','down','left','right','menu_ok','q','disp','ae_af_lock']
-    .map(id => ({id, label:model.labels[id], kind:'button', supported:true})), engine, panel);
+    .map(id => ({id, label:id, kind:'button', supported:true})), engine, panel);
   // Locate the visible spokes independently of the viewer's picking helpers.
   window.controlPoint = (name, x=.5, y=.5) => {
     const node=viewer.root.getObjectByName(name), box=new THREE.Box3().setFromObject(node);
@@ -81,6 +81,10 @@ async def check(args):
             feedback = page.locator('.model-input-feedback')
             assert await feedback.is_visible()
             assert await feedback.get_attribute('data-input') == identifier
+            if identifier in ('up', 'down', 'left', 'right'):
+                assert await feedback.inner_text() == ''
+                assert await feedback.locator('svg').count() == 1
+                assert await feedback.get_attribute('aria-label') == identifier.title()
             await page.wait_for_function('id=>document.querySelector(".model-input-marker").dataset.input===id', arg=identifier)
             assert not await page.evaluate('wholePadGlows()')
             receipts.append(dict(id=identifier, point=point, events=events))

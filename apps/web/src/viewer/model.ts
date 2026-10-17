@@ -1,3 +1,4 @@
+import { badgeStyle, inputIcon, showInputBadge } from "../feedback/input";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
@@ -16,7 +17,6 @@ export interface ModelData {
   inputs: Record<string, string[] | { nodes: string[]; split?: string }>;
   regions: Record<string, Record<string, string>>;
   order: string[];
-  labels: Record<string, string>;
   credit: {
     title: string;
     author: string;
@@ -638,14 +638,11 @@ export class ModelViewer {
   pressFeedback(id: string, surfacePoint?: THREE.Vector3) {
     this.feedbackPoint = surfacePoint?.clone();
     this.feedbackId = id;
-    this.feedbackUntil = performance.now() + 1100;
-    this.inputFeedback.textContent = this.inputLabel(id);
+    this.feedbackUntil = performance.now() + badgeStyle.press_ms;
+    showInputBadge(this.inputFeedback, id);
     this.inputFeedback.dataset.input = id;
     this.inputFeedback.hidden = false;
     this.leadersDirty = true;
-  }
-  private inputLabel(id: string) {
-    return this.data?.labels[id] ?? id;
   }
   private projectInputMarker() {
     const id = this.feedbackId ?? this.highlightId?.split("|")[0], target = id && this.targets.get(id);
@@ -668,7 +665,8 @@ export class ModelViewer {
     this.inputMarker.style.left = `${point.x - rect.left}px`;
     this.inputMarker.style.top = `${point.y - rect.top}px`;
     this.inputMarker.dataset.input = id;
-    this.inputMarker.textContent = touch ? "" : this.inputLabel(id).match(/^[↑↓←→]/)?.[0] ?? "";
+    const arrow = !touch && ["up", "down", "left", "right"].includes(id) ? inputIcon(id) : undefined;
+    this.inputMarker.replaceChildren(...(arrow ? [arrow] : []));
     this.inputMarker.classList.toggle("touch-crosshair", touch);
     this.inputMarker.classList.toggle("pressed", Boolean(this.feedbackId));
   }

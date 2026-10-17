@@ -1,5 +1,6 @@
 """Sampled LCD video with timestamped input badges; PNGs stay unannotated."""
 from io import BytesIO
+from ..presentation import SPEC, control, draw_badges
 import math
 from pathlib import Path
 import shutil
@@ -58,6 +59,7 @@ class Video:
     def input(self, name, pressed, seconds):
         if not isinstance(name, str) or not name or type(pressed) is not bool:
             raise ValueError('Input needs a name and boolean pressed state')
+        control(name)  # Reject unconfigured IDs instead of displaying raw emulator names.
         # Flush the PREVIOUS interval with its old input state. Sampling need
         # not coincide with edges; an event must never recolor earlier frames.
         self._advance(seconds)
@@ -69,7 +71,7 @@ class Video:
             self.released[name] = self.frames
 
     def _write(self, png):
-        from PIL import Image, ImageDraw, ImageFont
+        from PIL import Image
         if png != self._decoded_png:
             self._decoded_image = Image.open(BytesIO(png)).convert('RGBA')
             self._decoded_png = png
@@ -92,30 +94,14 @@ class Video:
         if picture.size != self.size:
             raise ValueError('LCD dimensions changed during walkthrough')
         labels = [(name, 255) for name in sorted(self.active)]
-        fade_frames = max(1, round(self.fps*.4))
+        fade_frames = max(1, round(self.fps*SPEC['badge']['release_ms']/1000))
         for name, released in list(self.released.items()):
             age = self.frames-released
             if age >= fade_frames:
                 del self.released[name]
             else:
                 labels.append((name, round(255*(1-age/fade_frames))))
-        layer = Image.new('RGBA', picture.size)
-        draw = ImageDraw.Draw(layer)
-        if self._font is None:
-            self._font = ImageFont.load_default(size=20)
-        font = self._font
-        x, y = picture.width-12, picture.height-48
-        for name, alpha in reversed(labels):
-            label = name.upper().replace('_', ' ')
-            while label and draw.textlength(label, font=font)+20 > picture.width-24:
-                label = label[:-1]
-            width = math.ceil(draw.textlength(label, font=font))+20
-            if x-width < 12:
-                x, y = picture.width-12, y-42
-            draw.rounded_rectangle((x-width, y, x, y+36), radius=6, fill=(0,0,0,round(alpha*.8)))
-            draw.text((x-width+10, y+5), label, font=font, fill=(255,255,255,alpha))
-            x -= width+6
-        self.process.stdin.write(Image.alpha_composite(picture, layer).convert('RGB').tobytes())
+        self.process.stdin.write(draw_badges(picture, labels).convert('RGB').tobytes())
         self.frames += 1
 
     def frame(self, png, seconds):
