@@ -1,0 +1,235 @@
+//! nusb device discovery and explicit USB interface selection.
+use crate::{
+    Error, Result,
+    error::{TransferStage, check_limit},
+    ff80::{Session, framing::RequestKind},
+};
+use nusb::{
+    Endpoint, Interface,
+    transfer::{Buffer, Bulk, ControlOut, ControlType, In, Out, Recipient},
+};
+use std::{num::NonZeroU32, time::Duration};
+
+/// Fuji diagnostic USB identity, not an identification of model or boot mode.
+pub async fn discover() -> Result<Vec<nusb::DeviceInfo>> {
+    Ok(nusb::list_devices()
+        .await?
+        .filter(|d| d.vendor_id() == 0x04cb && d.product_id() == 0xff80)
+        .collect())
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InterfaceSelection {
+    pub configuration: u8,
+    pub interface: u8,
+    pub alternate: u8,
+}
+
+/// Host resource policy, independent of firmware command limits.
+#[derive(Clone, Copy, Debug)]
+pub struct TransferOptions {
+    /// Per USB transfer, not a deadline for an entire camera operation.
+    pub timeout: Duration,
+    pub max_reply_bytes: NonZeroU32,
+}
+
+pub struct Connection {
+    io: UsbIo,
+    max_reply_bytes: u32,
+}
+impl Connection {
+    /// Opens the caller-selected device/configuration/interface. No ff80 commands
+    /// or driver detach/reset requests are sent here.
+    pub async fn open(
+        info: &nusb::DeviceInfo,
+        selection: InterfaceSelection,
+        options: TransferOptions,
+    ) -> Result<Self> {
+        if options.timeout.is_zero() {
+            return Err(Error::InvalidTimeout);
+        }
+        check_limit(8, options.max_reply_bytes.get())?;
+        let device = info.open().await?;
+        let descriptor = device
+            .configurations()
+            .find(|c| c.configuration_value() == selection.configuration)
+            .and_then(|c| {
+                c.interface_alt_settings().find(|i| {
+                    i.interface_number() == selection.interface
+                        && i.alternate_setting() == selection.alternate
+                })
+            })
+            .ok_or(Error::InvalidInterface)?;
+        let addresses: Vec<_> = descriptor
+            .endpoints()
+            .filter(|e| e.transfer_type() == nusb::descriptors::TransferType::Bulk)
+            .map(|e| e.address())
+            .collect();
+        let (input, output) = bulk_pair(&addresses)?;
+        if device
+            .active_configuration()
+            .map(|c| c.configuration_value())
+            .ok()
+            != Some(selection.configuration)
+        {
+            device.set_configuration(selection.configuration).await?;
+        }
+        let interface = device.claim_interface(selection.interface).await?;
+        if interface.get_alt_setting() != selection.alternate {
+            interface.set_alt_setting(selection.alternate).await?;
+        }
+        let input = interface.endpoint::<Bulk, In>(input)?;
+        let output = interface.endpoint::<Bulk, Out>(output)?;
+        Ok(Self {
+            io: UsbIo {
+                interface,
+                input,
+                output,
+                timeout: options.timeout,
+            },
+            max_reply_bytes: options.max_reply_bytes.get(),
+        })
+    }
+
+    /// Begins the ff80 protocol session. Drop never sends a camera close command;
+    /// explicitly call `Session::close` when exchanges have completed normally.
+    pub async fn begin_session(self) -> Result<Session> {
+        Session::open(self.io, self.max_reply_bytes).await
+    }
+}
+
+fn bulk_pair(addresses: &[u8]) -> Result<(u8, u8)> {
+    let inputs: Vec<_> = addresses
+        .iter()
+        .copied()
+        .filter(|a| a & 0x80 != 0 && a & 0x0f != 0)
+        .collect();
+    let outputs: Vec<_> = addresses
+        .iter()
+        .copied()
+        .filter(|a| a & 0x80 == 0 && a & 0x0f != 0)
+        .collect();
+    match (inputs.as_slice(), outputs.as_slice()) {
+        ([input], [output]) => Ok((*input, *output)),
+        _ => Err(Error::AmbiguousEndpoints),
+    }
+}
+
+// Only a private test seam. nusb supplies the platform transport abstraction.
+pub(crate) trait Io {
+    async fn control(&mut self, kind: RequestKind, envelope: [u8; 12]) -> Result<()>;
+    async fn write(&mut self, bytes: &[u8]) -> Result<()>;
+    async fn read(&mut self, maximum: usize) -> Result<Vec<u8>>;
+}
+
+pub(crate) struct UsbIo {
+    interface: Interface,
+    input: Endpoint<Bulk, In>,
+    output: Endpoint<Bulk, Out>,
+    timeout: Duration,
+}
+
+async fn deadline<T>(
+    timeout: Duration,
+    stage: TransferStage,
+    task: impl std::future::Future<Output = T>,
+) -> Result<T> {
+    futures_lite::future::race(async { Ok(task.await) }, async {
+        futures_timer::Delay::new(timeout).await;
+        Err(Error::Timeout(stage))
+    })
+    .await
+}
+
+impl Io for UsbIo {
+    async fn control(&mut self, kind: RequestKind, envelope: [u8; 12]) -> Result<()> {
+        self.interface
+            .control_out(
+                ControlOut {
+                    control_type: ControlType::Vendor,
+                    recipient: Recipient::Other,
+                    request: 0,
+                    value: 0,
+                    index: 0,
+                    data: &envelope,
+                },
+                self.timeout,
+            )
+            .await
+            .map_err(|source| Error::Transfer {
+                stage: TransferStage::Control(kind),
+                source,
+                transferred: None,
+                partial: vec![],
+            })
+    }
+    async fn write(&mut self, bytes: &[u8]) -> Result<()> {
+        self.output.submit(bytes.to_vec().into());
+        let done = deadline(
+            self.timeout,
+            TransferStage::BulkOut,
+            self.output.next_complete(),
+        )
+        .await?;
+        done.status.map_err(|source| Error::Transfer {
+            stage: TransferStage::BulkOut,
+            source,
+            transferred: Some(done.actual_len),
+            partial: vec![],
+        })?;
+        if done.actual_len != bytes.len() {
+            return Err(Error::ShortTransfer {
+                stage: TransferStage::BulkOut,
+                expected: bytes.len(),
+                actual: done.actual_len,
+            });
+        }
+        Ok(())
+    }
+    async fn read(&mut self, maximum: usize) -> Result<Vec<u8>> {
+        // nusb requires IN buffer sizes to be multiples of USB wMaxPacketSize.
+        // The control envelope still requests the exact ff80 response size.
+        let packet = self.input.max_packet_size();
+        let rounded = maximum
+            .div_ceil(packet)
+            .checked_mul(packet)
+            .filter(|n| *n <= u32::MAX as usize)
+            .ok_or(Error::InvalidLength)?;
+        self.input.submit(Buffer::new(rounded));
+        let done = deadline(
+            self.timeout,
+            TransferStage::BulkIn,
+            self.input.next_complete(),
+        )
+        .await?;
+        let data = done.buffer.to_vec();
+        done.status.map_err(|source| Error::Transfer {
+            stage: TransferStage::BulkIn,
+            source,
+            transferred: Some(done.actual_len),
+            partial: data.clone(),
+        })?;
+        Ok(data)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn endpoint_selection_never_silently_chooses_first_pair() {
+        assert_eq!(bulk_pair(&[0x82, 0x03]).unwrap(), (0x82, 3));
+        assert!(bulk_pair(&[0x81, 0x82, 3]).is_err());
+        assert!(bulk_pair(&[0x81]).is_err());
+        assert!(bulk_pair(&[0x80, 0]).is_err());
+    }
+    #[test]
+    fn unfinished_transfer_has_a_deadline() {
+        let result = futures_lite::future::block_on(deadline(
+            Duration::from_millis(1),
+            TransferStage::BulkIn,
+            std::future::pending::<()>(),
+        ));
+        assert!(matches!(result, Err(Error::Timeout(TransferStage::BulkIn))));
+    }
+}

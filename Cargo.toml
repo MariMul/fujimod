@@ -1,0 +1,17 @@
+[workspace]
+members = ["crates/fujimod", "crates/usb"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+repository = "https://github.com/justjake/fujimod"
+publish = false
+
+[workspace.dependencies]
+fujimod-usb = { path = "crates/usb", version = "0.1.0" }
+nusb = "0.2.8"
+thiserror = "2"
+futures-lite = "2"
+futures-timer = { version = "3", features = ["wasm-bindgen"] }
