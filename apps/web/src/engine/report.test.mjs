@@ -41,9 +41,12 @@ test('fault report includes binary snapshot, raw details, identities and guest i
   const pending=engine.errorReport(Promise.resolve(submission)), request=sent.at(-1);
   assert.equal(request.type,'error_report');
   worker.reply({type:'error_report_result',id:request.id,checkpoint:new Uint8Array([0,1,128,255]).buffer,
-    snapshot:{ticks:110000000,ram_bytes:536870912},inputs:[{action:'press',guest_ticks:119000000,options:{id:'menu'}}]});
+    snapshot:{kind:'postmortem',resume_safe:false,ticks:110000000,ram_bytes:536870912},inputs:[{action:'press',guest_ticks:119000000,options:{id:'menu'}}]});
   const files=await entries(await pending), report=JSON.parse(new TextDecoder().decode(files['report.json']));
   assert.deepEqual(files['snapshot.zip'],new Uint8Array([0,1,128,255]));
+  assert.equal(report.snapshot.kind, 'postmortem');
+  assert.equal(report.snapshot.resume_safe, false);
+  assert.match(new TextDecoder().decode(files['README.txt']), /not safe resume points/);
   assert.equal(report.description,'The dial froze; please add a reset control.');
   assert.deepEqual(report.issue, submission.issue);
   assert.deepEqual(report.issue.fields, Object.fromEntries(new URL(report.issue.url).searchParams));

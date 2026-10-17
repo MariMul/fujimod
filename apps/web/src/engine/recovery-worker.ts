@@ -77,7 +77,7 @@ export class WorkerRecovery {
     let value: BytesProxy | undefined;
     try {
       py.runPython(`from native.web.recovery import error_snapshot
-browser_report_data, browser_report_meta = error_snapshot(browser_history, session) if globals().get('browser_history') is not None and globals().get('session') is not None else (None, {'unavailable': 'No pre-error snapshot was captured'})`);
+browser_report_data, browser_report_meta = error_snapshot(globals().get('browser_history'), session) if globals().get('session') is not None else (None, {'unavailable': 'No camera session was created'})`);
       const snapshot = JSON.parse(py.runPython<string>('json.dumps(browser_report_meta)'));
       if (!py.runPython<boolean>('browser_report_data is not None')) return { snapshot };
       value = py.runPython<BytesProxy>('memoryview(browser_report_data)');

@@ -94,6 +94,30 @@ test('rollback availability is read from live history and fails closed if inspec
   py.runPython = () => { throw Error('runtime trapped'); };
   assert.equal(recovery.canRollback(py, 10), false);
 });
+test('feedback transports a postmortem image even when history was never created', () => {
+  const recovery = new WorkerRecovery(), deleted = [];
+  let released = false, destroyed = false;
+  const snapshot = { kind: 'postmortem', resume_safe: false, ticks: 42 };
+  const py = {
+    globals: { delete(name) { deleted.push(name); } },
+    runPython(source) {
+      if (source.startsWith('from native.web.recovery import error_snapshot')) {
+        assert.match(source, /error_snapshot\(globals\(\).get\('browser_history'\), session\)/);
+        return;
+      }
+      if (source === 'json.dumps(browser_report_meta)') return JSON.stringify(snapshot);
+      if (source === 'browser_report_data is not None') return true;
+      assert.equal(source, 'memoryview(browser_report_data)');
+      return { getBuffer() { return { data: new Uint8Array([7, 8]), release() { released = true; } }; },
+        destroy() { destroyed = true; } };
+    },
+  };
+  const result = recovery.errorSnapshot(py);
+  assert.deepEqual(result.snapshot, snapshot);
+  assert.deepEqual(new Uint8Array(result.checkpoint), new Uint8Array([7, 8]));
+  assert.ok(released && destroyed);
+  assert.deepEqual(deleted, ['browser_report_data', 'browser_report_meta']);
+});
 test('fault events preserve the worker-confirmed undo availability', async () => {
   for (const undoSeconds of [undefined, 10]) {
     const { worker, engine } = setup();

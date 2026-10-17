@@ -15,6 +15,8 @@ export function errorReportZip(report: Record<string, unknown>, checkpoint?: Arr
       'Python: session = native.web.recovery.restore_session(snapshot_bytes)\n' +
       'snapshot_bytes is the snapshot.zip member, without rebasing the RTC.\n' +
       'The snapshot ticks and any unavailable/skipped points are recorded in report.json.\n' +
+      'snapshot.kind identifies a pre-error replay point or a postmortem inspection image.\n' +
+      'Postmortem images preserve the fault and are not safe resume points.\n' +
       'Recent inputs have guest timestamps; the failing request is recorded separately.\n')],
   ];
   if (checkpoint) files.push(['snapshot.zip', new Uint8Array(checkpoint)]);
