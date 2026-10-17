@@ -283,7 +283,7 @@ async function boot(
     recoverySources,
     recoveryNative,
     inputBytes,
-    { protocol, firmwareId: config.firmwareId, positions: config.initialPositions, sourceLoader: await digest(new TextEncoder().encode(sourceArchiveLoader)) },
+    { protocol, execution: config.execution, firmwareId: config.firmwareId, positions: config.initialPositions, sourceLoader: await digest(new TextEncoder().encode(sourceArchiveLoader)) },
     identities,
   );
   runtime.unpackArchive(inputBytes, "zip", { extractDir: "/repo" });
@@ -338,7 +338,8 @@ async function startSession(
       Date.UTC(2000, 0, 1)) /
       1000,
   );
-  runtime.globals.set("clock_seconds_2000", clock);
+  runtime.globals.set("clock_seconds_2000", config.execution?.clockSeconds2000 ?? clock);
+  if (config.execution?.mode === "replay") recovery.bypassPersistence();
   runtime.globals.set("boot_step", protocol.step);
   if (restarting) recovery.bypassPersistence();
   const resumed = await recovery.restore(

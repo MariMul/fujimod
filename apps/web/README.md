@@ -103,10 +103,26 @@ iPhone 13 emulation, checks live frames and a menu tap, saves page/model/LCD
 screenshots and verifies downloaded ZIP members against private builder output.
 WebKit emulation is a desktop browser check, not an iPhone hardware measurement.
 
-For a direct crash-overlay preview in the development server, open
-`?preview=crash`. This uses the bundled scene and the real LCD fault renderer
-without booting firmware or loading a DAT. The handler is excluded from production
-builds.
+To reproduce the Movie-button execution fault in development, open
+`?scenario=x70-movie`. This cold-boots the configured X70 1.10 DAT with a fixed
+RTC, uses the normal bundled scene and card seeds, queues a real Movie press and
+release, then advances by guest ticks without wall-clock pacing. No fault or UI
+state is synthesized; the stock firmware reaches the unsupported sensor capture
+DMA path, and the normal error handler stops the simulator. Diagnostics, Undo,
+Restart and report downloads remain available. Reloading reruns the sequence.
+The URL handler is excluded from production builds. A replay bypasses persistent
+boot checkpoints without deleting the user's cached session. Its generic replay
+adapter issues ordinary worker input/advance requests; camera-specific sequences
+live in `src/scenarios.ts`. Run the URL integration test twice from cold state:
+
+```sh
+python tests/scenario.py --url 'https://your-host.ts.net:port/?scenario=x70-movie' \
+  --output /fresh/ignored/scenario-proof
+```
+
+The test observes worker messages without modifying them and compares both runs'
+ready state, LCD pixels, real device fault, input transcript and final guest-time
+deadline.
 
 ### Local production preview
 

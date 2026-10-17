@@ -79,6 +79,10 @@ export interface BootProtocol {
   readyWhen: string[];
   sceneInput: boolean;
 }
+export type ReplayStep =
+  | { action: "press" | "release"; id: string; stage?: string }
+  | { action: "set_position"; id: string; position: string }
+  | { action: "advance"; ticks: number };
 export interface EngineConfig {
   firmwareId: string;
   bundle: string;
@@ -86,9 +90,12 @@ export interface EngineConfig {
   boot: BootProtocol;
   initialPositions?: Record<string, string>;
   restart?: boolean;
+  /** Cold, fixed-clock execution with no wall-clock pump; inputs use replay(). */
+  execution?: { mode: "replay"; clockSeconds2000: number };
 }
 export interface Engine {
   prepare(config: EngineConfig): void;
+  replay(steps: readonly ReplayStep[]): Promise<void>;
   metrics(listener: (metrics: CameraPerformance) => void): () => void;
   profile(limit?: number): Promise<Record<string, unknown>>;
   errors(listener: (fault: EngineFault) => void): () => void;

@@ -15,6 +15,7 @@ import { simulatorIssueURL, type SimulatorIssueContext } from "./ui/simulator-fe
 import { FaultPanel } from "./ui/fault";
 import { cameraCard, cameraTable, type CameraSupport } from "./ui/cameras";
 import { personalNote, noteCameraSupport } from "./ui/personal-note";
+import type { ReplayScenario } from "./scenarios";
 import type { DevicePanel, PowerCombo } from "./ui/layout";
 import generations from "../devices/generations.json";
 
@@ -79,6 +80,7 @@ let build = "Development",
 let patchWorker: Worker | undefined;
 let preparedEngine: { value: Engine; bundle: string; adapter: string } | undefined;
 let modelLoading: Promise<void> = Promise.resolve();
+let replayScenario: ReplayScenario | undefined;
 function status(message: string, error = false) {
   $("status").textContent = message;
   $("status").classList.toggle("error", error);
@@ -345,6 +347,8 @@ async function processFile(file?: File, restart = false, preparedBytes?: ArrayBu
     if (file.size !== entry.bytes)
       throw Error("Firmware size differs from the catalog.");
     selectedFile = reload ?? (() => Promise.resolve(file));
+    if (replayScenario && entry.id !== replayScenario.firmwareId)
+      throw Error("The replay scenario requires firmware " + replayScenario.firmwareId);
     selectedFirmware = entry;
     const device = entry.body
       ? await loadDevice(entry.body)
@@ -385,7 +389,8 @@ async function processFile(file?: File, restart = false, preparedBytes?: ArrayBu
     performance.mark("camera-engine-boot");
     const inputs = await active.boot(
       bytes,
-      { ...entry.emulate, firmwareId:entry.id, initialPositions: device.initialPositions, restart },
+      { ...entry.emulate, firmwareId:entry.id, initialPositions: device.initialPositions, restart,
+        execution: replayScenario ? { mode: "replay", clockSeconds2000: replayScenario.clockSeconds2000 } : undefined },
       progress,
       seeds,
     );
@@ -403,6 +408,14 @@ async function processFile(file?: File, restart = false, preparedBytes?: ArrayBu
       1000
     ).toFixed(3);
     status("Camera ready");
+    if (replayScenario) {
+      setView("lcd");
+      $("workspace").scrollIntoView({ block: "start", behavior: "instant" });
+      panel.disable();
+      await active.replay(replayScenario.steps);
+      $("live-label").textContent = "REPLAY COMPLETE";
+      status("The scenario completed without an execution fault.");
+    }
   } catch (error) {
     if (current === generation && !(error instanceof EngineError))
       showFault(faultFrom(error));
@@ -459,10 +472,12 @@ function setView(mode: "3d" | "lcd") {
 for (const mode of ["3d", "lcd"] as const)
   $(`view-${mode}`).onclick = () => setView(mode);
 window.addEventListener("beforeunload", () => engine?.dispose());
-if (import.meta.env.DEV && new URLSearchParams(location.search).get("preview") === "crash") {
-  const { showCrashPreview } = await import("./ui/crash-preview");
-  await showCrashPreview(viewer, showFault);
-} else try {
+try {
+  if (import.meta.env.DEV && new URLSearchParams(location.search).has("scenario")) {
+    const { scenarioFromUrl } = await import("./scenarios");
+    replayScenario = scenarioFromUrl(location.search);
+    if (!__FUJIMOD_LOCAL_DAT__) throw Error("Replay scenarios require a configured local firmware DAT.");
+  }
   const response = await fetch(new URL(__FUJIMOD_CATALOG__, document.baseURI));
   if (!response.ok) throw Error("Firmware catalog unavailable.");
   catalog = validateCatalog(await response.json());

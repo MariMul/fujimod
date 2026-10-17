@@ -22,6 +22,7 @@ import type {
   CardTree,
   CardReadOptions,
   BootInput,
+  ReplayStep,
 } from "./api";
 import { digest } from "./checkpoint-store.js";
 import { errorReportZip } from "./report.ts";
@@ -56,6 +57,7 @@ export class WorkerEngine implements Engine {
   private sequence = 0;
   private state: State = { virtual_ticks: 0 };
   private alive = false;
+  private replayMode = false;
   private disposed = false;
   private fault?: EngineFault;
   private errorListeners = new Set<(fault: EngineFault) => void>();
@@ -141,6 +143,7 @@ export class WorkerEngine implements Engine {
     media?: BootMedia,
     initialScene: Scene | null = this.scene,
   ) {
+    this.replayMode = config.execution?.mode === "replay";
     this.bootMedia = media;
     this.sceneInput = config.boot.sceneInput;
     this.scene = initialScene;
@@ -153,6 +156,7 @@ export class WorkerEngine implements Engine {
       nativeSha256: null,
       bundle: config.bundle,
       protocol: config.boot,
+      execution: config.execution,
     };
     performance.mark("camera-engine-dat-hashed");
     this.progressListener = progress;
@@ -254,7 +258,7 @@ export class WorkerEngine implements Engine {
           this.wall = performance.now();
           this.ticks = this.state.virtual_ticks;
           this.pace.reset(this.ticks);
-          this.schedule();
+          if (config.execution?.mode !== "replay") this.schedule();
           resolve();
         }
         if (data.type === "result" || data.type === "restarted") {
@@ -328,6 +332,32 @@ export class WorkerEngine implements Engine {
   ): Promise<Reply> {
     if (!this.alive) return Promise.reject(Error("Emulator is not ready."));
     return this.rpc<Reply>("request", { action, options });
+  }
+  /** Replay normal device inputs and guest-time slices without wall-clock pacing. */
+  async replay(steps: readonly ReplayStep[]) {
+    if (!this.replayMode) throw Error("Replay requires an engine booted in replay execution mode.");
+    this.reportIdentity.replay = steps;
+    for (const step of steps) {
+      if (step.action !== "advance") {
+        const { action, ...options } = step;
+        await this.input(action, options);
+        continue;
+      }
+      if (!Number.isSafeInteger(step.ticks) || step.ticks <= 0)
+        throw Error("Replay advances require positive integer guest ticks.");
+      const target = this.state.virtual_ticks + step.ticks;
+      let slices = 0;
+      while (this.state.virtual_ticks < target) {
+        if (++slices > 10000) throw Error("Replay exceeded its instruction budget.");
+        await this.request("advance", { limit: 200000, pause_at_tick: target });
+        if (slices % 10 === 0) {
+          const sample = await this.request("state", { pixels: true });
+          this.publish(sample.frame);
+        }
+      }
+    }
+    const sample = await this.request("state", { pixels: true });
+    this.publish(sample.frame);
   }
   private observeCard(card: CardState) {
     const previous = this.latestCard;
