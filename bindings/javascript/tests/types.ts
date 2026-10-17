@@ -124,3 +124,21 @@ async function networkValues():Promise<void>{
  if(value.kind===usb.app80.ReplyKind.SignalStrength){const raw:number=value.rawValue;void raw;}
 }
 void networkValues;
+
+// @ts-expect-error WPS requires an exact WPS peer, which excludes the broadcast sentinel.
+usb.app80.WpsTarget.peer(new usb.app80.PeerAddress(new Uint8Array(6)));
+// @ts-expect-error Station scan has its own selector enum.
+usb.app80.StationAction.scan(usb.app80.Toggle.Enabled);
+// @ts-expect-error WPS actions cannot be replaced by station actions.
+usb.app80.Command.wps(usb.app80.StationAction.stop());
+async function wpsValues():Promise<void>{
+ const value=(await typedReply).value;
+ if(value.kind===usb.app80.ReplyKind.WpsProgress){
+  if(value.snapshot.kind===usb.app80.WpsProgressKind.State){
+   const phase:import('../src/index.js').WpsPhase=value.snapshot.phase;
+   const connection:import('../src/index.js').ConnectionState=value.snapshot.connection;
+   void phase;void connection;
+  }
+ }
+}
+void wpsValues;

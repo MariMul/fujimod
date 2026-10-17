@@ -60,7 +60,8 @@ fn payload_graph_generates_nested_factories_and_structured_replies() {
         pub enum Choice { One, Two }
         pub enum NewAction { Select { choice: Choice, count: u16 }, Reset }
         pub enum Command { NewFeature { action: NewAction, value: u32 }, Query }
-        pub enum NewResult { Data { raw_status: u8, values: [u16; 3] }, Unknown(u8) }
+        pub enum Phase { Idle, Done }
+        pub enum NewResult { Data { raw_status: u8, values: [u16; 3], phase: Phase }, Unknown(u8) }
         pub enum ReplyValue { NewFeature { result: NewResult, data: Vec<u8> }, Empty }
     "#])
     .unwrap();
@@ -74,8 +75,15 @@ fn payload_graph_generates_nested_factories_and_structured_replies() {
         assert!(code.contains("core::ReplyValue::NewFeature"));
         assert!(code.contains("core::NewResult::Data"));
     }
+    assert!(
+        javascript.contains("export interface App80Command {readonly [__serviceType]:\"Command\"}")
+    );
+    assert!(
+        javascript.contains("export interface NewAction {readonly [__serviceType]:\"NewAction\"}")
+    );
     assert!(javascript.contains("integer(count,u16::MAX.into())?"));
     assert!(javascript.contains("Choice::parse(choice)?"));
+    assert!(!javascript.contains("impl Phase {pub(super) fn parse"));
     assert!(javascript.contains("readonly [number,number,number]"));
     assert!(javascript.contains("rawStatus:number"));
     assert!(

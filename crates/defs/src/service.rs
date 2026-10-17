@@ -138,6 +138,8 @@ pub enum Codec {
     RadioControl,
     SignalStrength,
     Iperf,
+    Wps,
+    Station,
 }
 impl Codec {
     pub fn argument_slots(self) -> usize {
@@ -164,6 +166,8 @@ impl Codec {
             Self::RadioControl => 4,
             Self::SignalStrength => 7,
             Self::Iperf => 1,
+            Self::Wps => 8,
+            Self::Station => 4,
         }
     }
 }

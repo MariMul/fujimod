@@ -298,7 +298,7 @@ impl Api {
     }
     fn javascript(&self) -> String {
         let mut out = String::from("// Generated from Rust declarations.\nuse super::*;\n");
-        let mut types = String::new();
+        let mut types = String::from("declare const __serviceType: unique symbol;\n");
         for c in &self.service.choices {
             let name = if c.result {
                 kind_name(&c.name)
@@ -350,7 +350,15 @@ impl Api {
                         .collect::<Vec<_>>()
                         .join(" | ")
                 );
-            } else if c.name != "ArgumentKind" {
+            } else if self
+                .service
+                .unions
+                .iter()
+                .filter(|u| u.input)
+                .flat_map(|u| &u.variants)
+                .flat_map(|v| &v.fields)
+                .any(|f| matches!(&f.ty,unions::ValueType::Named{name} if *name==c.name))
+            {
                 out += &format!(
                     "impl {name} {{pub(super) fn parse(value:JsValue)->Result<core::{name},JsValue>{{let value=integer(value,u32::MAX)?;"
                 );
@@ -362,9 +370,20 @@ impl Api {
             }
         }
         for q in &self.service.quantities {
+            types += &format!(
+                "export interface {} {{readonly [__serviceType]:\"{}\"}}\n",
+                q.name, q.name
+            );
             out += &javascript_quantity(q);
         }
         for union in &self.service.unions {
+            if union.input {
+                types += &format!(
+                    "export interface {} {{readonly [__serviceType]:\"{}\"}}\n",
+                    union.wasm_name(),
+                    union.name
+                );
+            }
             out += &union.javascript(&self.service);
         }
         out += &format!(

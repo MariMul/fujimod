@@ -13,6 +13,8 @@ def check_network_values():
         ("radio_control", 4),
         ("signal_strength", 7),
         ("iperf", 1),
+        ("wps", 8),
+        ("station", 4),
     ]
     slots = {name: [(i * 5 + 7) % 32 for i in range(count)] for name, count in layouts}
     entries = [
@@ -167,4 +169,91 @@ def check_network_values():
             pass
         else:
             raise AssertionError("untyped network selector accepted")
+    for data in [b"", b"12345", b"1234567", bytes(range(6))]:
+        invalid(lambda: a.WpsPeerAddress(data), a.ArgumentKind.WpsPeerAddress)
+    data = bytearray([2, 1, 2, 3, 4, 5])
+    peer = a.WpsPeerAddress(data)
+    data[:] = bytes(6)
+    assert peer.data == bytes([2, 1, 2, 3, 4, 5])
+    for target, expected in [
+        (a.WpsTarget.Broadcast(), [1, 0, 0, 0, 0, 0, 0, 255]),
+        (a.WpsTarget.Peer(address=peer), [1, 2, 1, 2, 3, 4, 5, 255]),
+    ]:
+        p = prepare(a.Command.Wps(action=a.WpsAction.Start(target=target)))
+        assert logical(p, "wps") == expected
+        for raw, variant in [
+            (0, a.WpsCallbackResult.Success),
+            (1, a.WpsCallbackResult.Timeout),
+            (2, a.WpsCallbackResult.Failed),
+            (3, a.WpsCallbackResult.Overlap),
+            (255, a.WpsCallbackResult.Unknown),
+        ]:
+            value = decode(p, "wps", 7, raw)
+            assert isinstance(value, a.ReplyValue.WpsCallback)
+            assert isinstance(value.snapshot, variant)
+            if variant is a.WpsCallbackResult.Unknown:
+                assert value.snapshot.raw_status == raw
+    for action, code in [(a.WpsAction.Stop(), 0), (a.WpsAction.Connect(), 2)]:
+        p = prepare(a.Command.Wps(action=action))
+        assert logical(p, "wps") == [code, 0, 0, 0, 0, 0, 0, 0]
+        assert isinstance(p.decode(p.raw).value, a.ReplyValue.NoPayload)
+    p = prepare(a.Command.Wps(action=a.WpsAction.PublishProgress()))
+    assert logical(p, "wps") == [3, 0, 0, 0, 0, 0, 0, 255]
+    phases = [
+        a.WpsPhase.Idle,
+        a.WpsPhase.PushButton,
+        a.WpsPhase.Pin,
+        a.WpsPhase.CredentialsReceived,
+        a.WpsPhase.Timeout,
+        a.WpsPhase.Failed,
+        a.WpsPhase.Overlap,
+        a.WpsPhase.Error,
+    ]
+    for raw in range(256):
+        value = decode(p, "wps", 7, raw)
+        assert isinstance(value, a.ReplyValue.WpsProgress)
+        if raw & 15 < 8 and raw >> 4 < 2:
+            assert isinstance(value.snapshot, a.WpsProgress.State)
+            assert value.snapshot.phase == phases[raw & 15]
+            assert value.snapshot.connection == (
+                a.ConnectionState.Connected
+                if raw >> 4
+                else a.ConnectionState.Disconnected
+            )
+        else:
+            assert isinstance(value.snapshot, a.WpsProgress.Unknown)
+            assert value.snapshot.raw_value == raw
+    p = prepare(a.Command.Station(action=a.StationAction.Stop()))
+    assert logical(p, "station") == [0, 0, 0, 0]
+    assert isinstance(p.decode(p.raw).value, a.ReplyValue.NoPayload)
+    p = prepare(a.Command.Station(action=a.StationAction.StartStored()))
+    assert logical(p, "station") == [0, 1, 255, 0]
+    for raw in [0, 1, 255]:
+        value = decode(p, "station", 2, raw)
+        assert (
+            isinstance(value, a.ReplyValue.StationConnection)
+            and value.raw_result == raw
+        )
+    for mode, wire in [(a.StationScanMode.Mode0, 0), (a.StationScanMode.Mode1, 1)]:
+        p = prepare(a.Command.Station(action=a.StationAction.Scan(mode=mode)))
+        assert logical(p, "station") == [1, wire, 255, 255]
+        for raw in [0, 1, 255]:
+            buf = bytearray(p.raw)
+            buf[1 + slots["station"][2]] = raw
+            buf[1 + slots["station"][3]] = 255 - raw
+            value = p.decode(buf).value
+            assert isinstance(value, a.ReplyValue.StationScan)
+            assert (value.raw_result, value.raw_count) == (raw, 255 - raw)
+    for create in [
+        lambda: a.WpsTarget.Peer(address=a.PeerAddress(b"123456")),
+        lambda: a.WpsAction.Start(target=1),
+        lambda: a.Command.Wps(action=a.StationAction.Stop()),
+        lambda: a.StationAction.Scan(mode=a.Toggle.Enabled),
+    ]:
+        try:
+            create()
+        except TypeError:
+            pass
+        else:
+            raise AssertionError("untyped WPS/station selector accepted")
     return True

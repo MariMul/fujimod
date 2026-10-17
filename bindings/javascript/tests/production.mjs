@@ -143,3 +143,27 @@ test('production radio and NAND results do not request host completion polling',
   }
  }finally{fixture.restore();}
 });
+
+test('production WPS and station snapshot bytes never trigger another host request',async()=>{
+ const fixture=installWebUsb(),a=usb.app80;
+ try{
+  const [device]=await usb.discover(usb.DeviceFilter.Diagnostic),[iface]=await device.interfaces();
+  for(const [codec,count,command,output,expected] of [
+   ['wps',8,a.Command.wps(a.WpsAction.start(a.WpsTarget.broadcast())),{7:1},{kind:a.ReplyKind.WpsCallback,snapshot:{kind:a.WpsCallbackResultKind.Timeout}}],
+   ['wps',8,a.Command.wps(a.WpsAction.publishProgress()),{7:19},{kind:a.ReplyKind.WpsProgress,snapshot:{kind:a.WpsProgressKind.State,phase:a.WpsPhase.CredentialsReceived,connection:a.ConnectionState.Connected}}],
+   ['wps',8,a.Command.wps(a.WpsAction.stop()),{},{kind:a.ReplyKind.NoPayload}],
+   ['wps',8,a.Command.wps(a.WpsAction.connect()),{},{kind:a.ReplyKind.NoPayload}],
+   ['station',4,a.Command.station(a.StationAction.startStored()),{2:255},{kind:a.ReplyKind.StationConnection,rawResult:255}],
+   ['station',4,a.Command.station(a.StationAction.scan(a.StationScanMode.Mode1)),{2:1,3:255},{kind:a.ReplyKind.StationScan,rawResult:1,rawCount:255}],
+   ['station',4,a.Command.station(a.StationAction.stop()),{},{kind:a.ReplyKind.NoPayload}],
+  ]){
+   const definition=defs.service.Definition.fromJson(JSON.stringify({schema:1,firmware:{id:'wps-b',model:'Synthetic',version:'2',sha256:'ab'.repeat(32)},mailbox:{page:3,offset:576,configuration_limit:512},entries:[{code:153,label:codec,codec,slots:Array.from({length:count},(_,n)=>n+7),enabled_modes:4,next_mode:0,firmware_kind:1,handler:0,parameter_table:0}]}),new defs.FirmwareIdentity('wps-b','ab'.repeat(32)));
+   const invocation=new a.Service(definition).prepare(new defs.service.ServiceModes(4),command);
+   fixture.state.onConfigurationWrite=(page,address,raw)=>{if(page===3&&address===576)for(const [index,byte] of Object.entries(output)){assert.equal(raw[8+Number(index)],255);fixture.state.configuration.set(`3:${584+Number(index)}`,byte);}};
+   const before=fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length;
+   const session=await usb.Session.open(device,iface,new usb.FirmwareLimits(256,256,256,256),new usb.TransferOptions(100,1024));
+   assert.deepEqual((await a.execute(session,invocation)).value,expected);assert.equal(session.state,usb.SessionState.Ready);
+   assert.equal(fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length-before,3);await session.close();
+  }
+ }finally{fixture.restore();}
+});

@@ -10,7 +10,11 @@ pub use media::{
     SoundOperation, SoundTrack, StorageErase, StorageEraseResult, StorageStatus, Toggle,
 };
 mod network;
-pub use network::{Option41State, PeerAddress, RadioAction, RadioChannel, RadioMode, RadioPower};
+pub use network::{
+    ConnectionState, Option41State, PeerAddress, RadioAction, RadioChannel, RadioMode, RadioPower,
+    StationAction, StationScanMode, WpsAction, WpsCallbackResult, WpsPeerAddress, WpsPhase,
+    WpsProgress, WpsTarget,
+};
 mod peripheral;
 pub use peripheral::{
     AccumulatorAction, I2cAction, I2cLength, I2cPayload, I2cPort, RegisterAction,
@@ -43,6 +47,7 @@ pub enum ArgumentKind {
     RadioChannel,
     RadioPower,
     PeerAddressLength,
+    WpsPeerAddress,
 }
 impl std::fmt::Display for ArgumentKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -59,6 +64,7 @@ impl std::fmt::Display for ArgumentKind {
             Self::RadioChannel => "radio channel field (0..=14)",
             Self::RadioPower => "encoded radio power field (0..=127)",
             Self::PeerAddressLength => "peer address length (6 bytes)",
+            Self::WpsPeerAddress => "exact WPS peer (6 bytes, first byte nonzero)",
         })
     }
 }
@@ -213,6 +219,12 @@ pub enum Command {
         address: PeerAddress,
     },
     Iperf,
+    Wps {
+        action: WpsAction,
+    },
+    Station {
+        action: StationAction,
+    },
 }
 impl Command {
     pub fn codec(self) -> Codec {
@@ -249,6 +261,8 @@ impl Command {
             Self::RadioControl { action: _ } => Codec::RadioControl,
             Self::SignalStrength { address: _ } => Codec::SignalStrength,
             Self::Iperf => Codec::Iperf,
+            Self::Wps { .. } => Codec::Wps,
+            Self::Station { .. } => Codec::Station,
         }
     }
 }
@@ -295,6 +309,10 @@ pub enum ReplyValue {
     Option41 { state: Option41State },
     SignalStrength { raw_value: u8 },
     Iperf { raw_result: u8 },
+    WpsCallback { snapshot: WpsCallbackResult },
+    WpsProgress { snapshot: WpsProgress },
+    StationConnection { raw_result: u8 },
+    StationScan { raw_result: u8, raw_count: u8 },
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommandReply {
@@ -425,7 +443,34 @@ impl PreparedCommand {
             Command::Iperf => ReplyValue::Iperf {
                 raw_result: byte(0),
             },
-            Command::WlanControl {
+            Command::Wps {
+                action: WpsAction::Start { .. },
+            } => ReplyValue::WpsCallback {
+                snapshot: WpsCallbackResult::decode(byte(7)),
+            },
+            Command::Wps {
+                action: WpsAction::PublishProgress,
+            } => ReplyValue::WpsProgress {
+                snapshot: WpsProgress::decode(byte(7)),
+            },
+            Command::Station {
+                action: StationAction::StartStored,
+            } => ReplyValue::StationConnection {
+                raw_result: byte(2),
+            },
+            Command::Station {
+                action: StationAction::Scan { .. },
+            } => ReplyValue::StationScan {
+                raw_result: byte(2),
+                raw_count: byte(3),
+            },
+            Command::Wps {
+                action: WpsAction::Stop | WpsAction::Connect,
+            }
+            | Command::Station {
+                action: StationAction::Stop,
+            }
+            | Command::WlanControl {
                 enabled: Toggle::Disabled | Toggle::Enabled,
             }
             | Command::RadioControl {
@@ -612,6 +657,8 @@ impl Catalogue {
             Command::Option41 | Command::Iperf => put(0, 255),
             Command::WlanControl { enabled } => put(0, enabled.wire()),
             Command::RadioControl { action } => action.encode(&mut put),
+            Command::Wps { action } => action.encode(&mut put),
+            Command::Station { action } => action.encode(&mut put),
             Command::SignalStrength { address } => {
                 for (i, &value) in address.data().iter().enumerate() {
                     put(i, value);

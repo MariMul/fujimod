@@ -14,6 +14,8 @@ modules, and the definition crate's `Codec` enum. It generates:
 - Unit result variants with an `Unknown(u8)` payload, including TypeScript unions.
 - Checked scalar and byte-buffer wrappers that call the original Rust constructor.
 - Native registrations, JavaScript namespace exports and Pyodide value metadata.
+- Distinct TypeScript handle types using a private declaration brand, so unrelated
+  Wasm classes cannot substitute for each other through structural typing.
 
 For these shapes, add the public Rust declaration and its usual Rust exports.
 There is no second list of enum variants, validation bounds or value exports in

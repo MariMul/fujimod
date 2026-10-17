@@ -420,3 +420,32 @@ test('radio and NAND service requests preserve field types and opaque snapshots'
  const iperf=prepare(C.iperf());assert.deepEqual(logical(iperf,'iperf'),[255]);
  for(const raw of [0,1,128,255]){assert.deepEqual(decode(signal,'signal_strength',6,raw),{kind:a.ReplyKind.SignalStrength,rawValue:raw});assert.deepEqual(decode(iperf,'iperf',0,raw),{kind:a.ReplyKind.Iperf,rawResult:raw});}
 });
+
+test('generated WPS and station values preserve snapshots and exact peer selection',()=>{
+ const a=usb.app80,C=a.Command,layouts=[['wps',8],['station',4]];
+ const slots=Object.fromEntries(layouts.map(([name,count])=>[name,Array.from({length:count},(_,n)=>(n*5+7)%32)]));
+ const service=new a.Service(serviceDefinition(layouts.map(([name],n)=>[180+n,name,slots[name],4]))),modes=serviceModes();
+ const prepare=c=>service.prepare(modes,c),logical=(p,name)=>slots[name].map(i=>p.raw[1+i]);
+ const decode=(p,name,index,value)=>{const raw=p.raw;raw[1+slots[name][index]]=value;return p.decode(raw).value;};
+ for(const bytes of [new Uint8Array(5),new Uint8Array(7),new Uint8Array([0,1,2,3,4,5])])assert.throws(()=>new a.WpsPeerAddress(bytes),e=>a.isError(e)&&e.reason.argument===a.ArgumentKind.WpsPeerAddress);
+ const bytes=new Uint8Array([2,1,2,3,4,5]),peer=new a.WpsPeerAddress(bytes);bytes.fill(0);assert.deepEqual(peer.data,new Uint8Array([2,1,2,3,4,5]));
+ for(const [target,expected] of [[a.WpsTarget.broadcast(),[1,0,0,0,0,0,0,255]],[a.WpsTarget.peer(peer),[1,2,1,2,3,4,5,255]]]){
+  const p=prepare(C.wps(a.WpsAction.start(target)));assert.deepEqual(logical(p,'wps'),expected);
+  for(const [raw,kind] of [[0,a.WpsCallbackResultKind.Success],[1,a.WpsCallbackResultKind.Timeout],[2,a.WpsCallbackResultKind.Failed],[3,a.WpsCallbackResultKind.Overlap],[255,a.WpsCallbackResultKind.Unknown]])assert.deepEqual(decode(p,'wps',7,raw),{kind:a.ReplyKind.WpsCallback,snapshot:kind===a.WpsCallbackResultKind.Unknown?{kind,rawStatus:raw}:{kind}});
+ }
+ const phases=[a.WpsPhase.Idle,a.WpsPhase.PushButton,a.WpsPhase.Pin,a.WpsPhase.CredentialsReceived,a.WpsPhase.Timeout,a.WpsPhase.Failed,a.WpsPhase.Overlap,a.WpsPhase.Error];
+ const p=prepare(C.wps(a.WpsAction.publishProgress()));assert.deepEqual(logical(p,'wps'),[3,0,0,0,0,0,0,255]);
+ for(let raw=0;raw<256;raw++){
+  const snapshot=(raw&15)<8&&(raw>>4)<2?{kind:a.WpsProgressKind.State,phase:phases[raw&15],connection:raw>>4?a.ConnectionState.Connected:a.ConnectionState.Disconnected}:{kind:a.WpsProgressKind.Unknown,rawValue:raw};
+  assert.deepEqual(decode(p,'wps',7,raw),{kind:a.ReplyKind.WpsProgress,snapshot});
+ }
+ for(const action of [a.WpsAction.stop(),a.WpsAction.connect()]){const p=prepare(C.wps(action));assert.deepEqual(p.decode(p.raw).value,{kind:a.ReplyKind.NoPayload});}
+ const stored=prepare(C.station(a.StationAction.startStored()));assert.deepEqual(logical(stored,'station'),[0,1,255,0]);
+ for(const raw of [0,1,255])assert.deepEqual(decode(stored,'station',2,raw),{kind:a.ReplyKind.StationConnection,rawResult:raw});
+ for(const [mode,wire] of [[a.StationScanMode.Mode0,0],[a.StationScanMode.Mode1,1]]){
+  const p=prepare(C.station(a.StationAction.scan(mode)));assert.deepEqual(logical(p,'station'),[1,wire,255,255]);
+  const raw=p.raw;raw[1+slots.station[2]]=1;raw[1+slots.station[3]]=255;
+  assert.deepEqual(p.decode(raw).value,{kind:a.ReplyKind.StationScan,rawResult:1,rawCount:255});
+ }
+ assert.throws(()=>a.StationAction.scan(99));assert.throws(()=>a.WpsTarget.peer(new a.PeerAddress(new Uint8Array(6))));
+});

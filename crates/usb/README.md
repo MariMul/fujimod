@@ -285,7 +285,7 @@ included. The command populates the firmware's selected RAM buffer; it does not
 download it. `NandReadResult` keeps success, the shared rejection/wait-error
 code, other errors and unknown bytes separate from host completion.
 
-`WlanControl(Toggle)` requests the WLAN control line action. The studied enable
+`WlanControl { enabled }` requests the WLAN control line action. The studied enable
 path also increments a firmware counter, so repeating it is not an idempotent
 state assignment. `RadioAction::Primary` separates `RadioMode`, checked
 `RadioChannel` (0–14), checked `RadioPower` (0–127) and an option flag. The option
@@ -296,7 +296,7 @@ or restart the driver internally, and ignores some lower-level return values;
 `NoPayload` does not certify that a radio setting took effect.
 
 `Option41` returns `Option41State` for the firmware getter's zero/nonzero result,
-not a drive-presence assertion. `SignalStrength(PeerAddress)` copies an exact
+not a drive-presence assertion. `SignalStrength { address }` copies an exact
 six-byte address and returns an opaque `raw_value`; firmware state selects the
 peer or connected-station path. Some failure paths leave output unchanged or
 copy an uninitialized firmware byte, so this is not a validated signal
@@ -304,3 +304,24 @@ measurement. `Iperf` uses the command text already stored in camera
 configuration. Its opaque `raw_result` may be observed before completion,
 because firmware signals the service result before running the test. Reading
 or waiting for a later result is an explicit higher-level operation.
+
+`Wps { action }` separates `Stop`, `Start { target }`, `Connect` and
+`PublishProgress`. `WpsTarget` is broadcast or a `WpsPeerAddress`: six bytes with
+a nonzero first byte. Firmware treats a zero first byte as broadcast and ignores
+the remaining bytes, so the exact-peer type rejects that ambiguous input.
+Start uses the camera's configured WPS mode/PIN and may later write credential
+configuration through its callback. WPS also installs a shared connection
+callback that uses the current station-key table; it does not initialize that
+table. The library adds no preceding station command or camera-state setup.
+`WpsCallbackResult` is a low-byte snapshot;
+unknown 255 may still be the initial sentinel. `WpsProgress` decodes the published
+phase/connection pair and preserves other bytes. Publishing also writes a
+firmware configuration key; it is an explicit mutating command, with no host
+poll or assertion that asynchronous camera work has finished.
+
+`Station { action }` exposes stop, start using stored credentials and scan with
+`StationScanMode::Mode0/Mode1`. Both scan selectors invoke the same firmware
+path. Connection and scan replies preserve opaque callback-result bytes; scan
+also preserves the low count byte. The command can wait within firmware for
+callbacks or network readiness. Host deadlines still fence uncertain USB work;
+there is no implicit retry, credential setup or scan-result download.

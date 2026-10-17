@@ -291,3 +291,14 @@ validated signal units or a host poll.
 Service enums, checked quantities, command/action factories, structured replies
 and public registrations come from the [shared Rust generator](../generator/README.md).
 Builds regenerate them automatically; validation remains in the core.
+
+
+WPS and station controls use `Command.Wps(action=...)` and
+`Command.Station(action=...)`. Their action enums are `WpsAction` and
+`StationAction`. WPS starts with `WpsTarget.Broadcast()` or
+`WpsTarget.Peer(address=WpsPeerAddress(data))`; exact peers reject a zero first
+byte because firmware treats it as broadcast. `PublishProgress()` writes camera
+configuration as well as returning a `WpsProgress` snapshot. Station
+`StartStored()` uses existing credentials; `Scan(mode=StationScanMode.Mode0)`
+and `Mode1` invoke the same studied path. Result snapshots never trigger an
+implicit poll. See the [Rust command semantics](../../crates/usb/README.md).

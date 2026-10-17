@@ -112,3 +112,171 @@ impl Option41State {
         }
     }
 }
+
+/// WPS interprets a zero first byte as broadcast and discards the other five.
+/// This type represents only exact peers; use `WpsTarget::Broadcast` otherwise.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct WpsPeerAddress([u8; 6]);
+impl WpsPeerAddress {
+    pub fn new(data: &[u8]) -> Result<Self, CommandError> {
+        let address: [u8; 6] = data
+            .try_into()
+            .map_err(|_| CommandError::Argument(ArgumentKind::WpsPeerAddress))?;
+        if address[0] == 0 {
+            return Err(CommandError::Argument(ArgumentKind::WpsPeerAddress));
+        }
+        Ok(Self(address))
+    }
+    pub fn data(&self) -> &[u8; 6] {
+        &self.0
+    }
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WpsTarget {
+    Broadcast,
+    Peer { address: WpsPeerAddress },
+}
+/// Single service requests. Starting consumes the camera's stored WPS mode/PIN
+/// and can update its credential configuration from a later callback.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WpsAction {
+    Stop,
+    Start {
+        target: WpsTarget,
+    },
+    Connect,
+    /// Publishes the progress snapshot to the reply and a firmware configuration
+    /// key. This is a write, not an observational getter.
+    PublishProgress,
+}
+impl WpsAction {
+    pub(super) fn encode(self, put: &mut impl FnMut(usize, u8)) {
+        match self {
+            Self::Stop => put(0, 0),
+            Self::Start { target } => {
+                put(0, 1);
+                if let WpsTarget::Peer { address } = target {
+                    for (i, &byte) in address.data().iter().enumerate() {
+                        put(i + 1, byte);
+                    }
+                }
+                put(7, 255);
+            }
+            Self::Connect => put(0, 2),
+            Self::PublishProgress => {
+                put(0, 3);
+                put(7, 255);
+            }
+        }
+    }
+}
+/// A snapshot of a low-byte callback result. `Unknown(255)` can be the initial
+/// sentinel; neither it nor a known result is an instruction to the host runtime.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WpsCallbackResult {
+    Success,
+    Timeout,
+    Failed,
+    Overlap,
+    Unknown(u8),
+}
+impl WpsCallbackResult {
+    pub(super) fn decode(raw: u8) -> Self {
+        match raw {
+            0 => Self::Success,
+            1 => Self::Timeout,
+            2 => Self::Failed,
+            3 => Self::Overlap,
+            n => Self::Unknown(n),
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WpsPhase {
+    Idle,
+    PushButton,
+    Pin,
+    CredentialsReceived,
+    Timeout,
+    Failed,
+    Overlap,
+    Error,
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ConnectionState {
+    Disconnected,
+    Connected,
+}
+/// Encoded `progress + 16 * connected`. Preserve other bytes without guessing
+/// a state or claiming that asynchronous camera work has finished.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WpsProgress {
+    State {
+        phase: WpsPhase,
+        connection: ConnectionState,
+    },
+    Unknown {
+        raw_value: u8,
+    },
+}
+impl WpsProgress {
+    pub(super) fn decode(raw: u8) -> Self {
+        let phase = match raw & 15 {
+            0 => WpsPhase::Idle,
+            1 => WpsPhase::PushButton,
+            2 => WpsPhase::Pin,
+            3 => WpsPhase::CredentialsReceived,
+            4 => WpsPhase::Timeout,
+            5 => WpsPhase::Failed,
+            6 => WpsPhase::Overlap,
+            7 => WpsPhase::Error,
+            _ => return Self::Unknown { raw_value: raw },
+        };
+        let connection = match raw >> 4 {
+            0 => ConnectionState::Disconnected,
+            1 => ConnectionState::Connected,
+            _ => return Self::Unknown { raw_value: raw },
+        };
+        Self::State { phase, connection }
+    }
+}
+/// Both accepted selectors invoke the same firmware scan path. No active/passive
+/// scanning semantics are inferred from their numeric encoding.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StationScanMode {
+    Mode0,
+    Mode1,
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StationAction {
+    Stop,
+    StartStored,
+    Scan { mode: StationScanMode },
+}
+impl StationAction {
+    pub(super) fn encode(self, put: &mut impl FnMut(usize, u8)) {
+        match self {
+            Self::Stop => {
+                put(0, 0);
+                put(1, 0);
+            }
+            Self::StartStored => {
+                put(0, 0);
+                put(1, 1);
+                put(2, 255);
+            }
+            Self::Scan { mode } => {
+                put(0, 1);
+                put(
+                    1,
+                    match mode {
+                        StationScanMode::Mode0 => 0,
+                        StationScanMode::Mode1 => 1,
+                    },
+                );
+                put(2, 255);
+                put(3, 255);
+            }
+        }
+    }
+}

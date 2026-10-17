@@ -8,6 +8,8 @@ fn catalogue(reverse: bool) -> Catalogue {
         ("radio_control", 4),
         ("signal_strength", 7),
         ("iperf", 1),
+        ("wps", 8),
+        ("station", 4),
     ];
     let entries:Vec<_>=layouts.into_iter().enumerate().map(|(n,(codec,count))|{
   let slots:Vec<_>=(0..count).map(|i|if reverse {31-i}else{i}).collect();
@@ -148,6 +150,135 @@ fn peer_address_is_owned_and_opaque_observations_preserve_every_byte() {
                 decode(&iperf, 0, raw).value(),
                 &ReplyValue::Iperf { raw_result: raw }
             );
+        }
+    }
+}
+
+#[test]
+fn wps_targets_are_exact_and_callback_snapshots_never_instruct_host_polling() {
+    for data in [vec![], vec![1; 5], vec![1; 7], vec![0, 1, 2, 3, 4, 5]] {
+        assert!(WpsPeerAddress::new(&data).is_err());
+    }
+    for reverse in [false, true] {
+        let c = catalogue(reverse);
+        let peer = WpsPeerAddress::new(&[2, 1, 2, 3, 4, 5]).unwrap();
+        for (target, expected) in [
+            (WpsTarget::Broadcast, [1, 0, 0, 0, 0, 0, 0, 255]),
+            (
+                WpsTarget::Peer { address: peer },
+                [1, 2, 1, 2, 3, 4, 5, 255],
+            ),
+        ] {
+            let p = prepare(
+                &c,
+                Command::Wps {
+                    action: WpsAction::Start { target },
+                },
+            );
+            assert_eq!(p.request.code(), CommandCode(206));
+            assert_eq!(logical(&p), expected);
+            for raw in 0..=255 {
+                let expected = match raw {
+                    0 => WpsCallbackResult::Success,
+                    1 => WpsCallbackResult::Timeout,
+                    2 => WpsCallbackResult::Failed,
+                    3 => WpsCallbackResult::Overlap,
+                    n => WpsCallbackResult::Unknown(n),
+                };
+                assert_eq!(
+                    decode(&p, 7, raw).value(),
+                    &ReplyValue::WpsCallback { snapshot: expected }
+                );
+            }
+        }
+        for (action, wire) in [(WpsAction::Stop, 0), (WpsAction::Connect, 2)] {
+            let p = prepare(&c, Command::Wps { action });
+            assert_eq!(logical(&p), [wire, 0, 0, 0, 0, 0, 0, 0]);
+            assert_eq!(decode(&p, 7, 1).value(), &ReplyValue::NoPayload);
+        }
+        let p = prepare(
+            &c,
+            Command::Wps {
+                action: WpsAction::PublishProgress,
+            },
+        );
+        assert_eq!(logical(&p), [3, 0, 0, 0, 0, 0, 0, 255]);
+        let phases = [
+            WpsPhase::Idle,
+            WpsPhase::PushButton,
+            WpsPhase::Pin,
+            WpsPhase::CredentialsReceived,
+            WpsPhase::Timeout,
+            WpsPhase::Failed,
+            WpsPhase::Overlap,
+            WpsPhase::Error,
+        ];
+        for raw in 0..=255 {
+            let expected = if raw & 15 < 8 && raw >> 4 < 2 {
+                WpsProgress::State {
+                    phase: phases[usize::from(raw & 15)],
+                    connection: if raw >> 4 == 0 {
+                        ConnectionState::Disconnected
+                    } else {
+                        ConnectionState::Connected
+                    },
+                }
+            } else {
+                WpsProgress::Unknown { raw_value: raw }
+            };
+            assert_eq!(
+                decode(&p, 7, raw).value(),
+                &ReplyValue::WpsProgress { snapshot: expected }
+            );
+        }
+    }
+}
+#[test]
+fn station_controls_preserve_opaque_callback_and_scan_count_snapshots() {
+    for reverse in [false, true] {
+        let c = catalogue(reverse);
+        let stop = prepare(
+            &c,
+            Command::Station {
+                action: StationAction::Stop,
+            },
+        );
+        assert_eq!(logical(&stop), [0, 0, 0, 0]);
+        assert_eq!(decode(&stop, 2, 255).value(), &ReplyValue::NoPayload);
+        let p = prepare(
+            &c,
+            Command::Station {
+                action: StationAction::StartStored,
+            },
+        );
+        assert_eq!(logical(&p), [0, 1, 255, 0]);
+        assert_eq!(p.request.code(), CommandCode(207));
+        for raw in 0..=255 {
+            assert_eq!(
+                decode(&p, 2, raw).value(),
+                &ReplyValue::StationConnection { raw_result: raw }
+            );
+        }
+        for (mode, wire) in [(StationScanMode::Mode0, 0), (StationScanMode::Mode1, 1)] {
+            let p = prepare(
+                &c,
+                Command::Station {
+                    action: StationAction::Scan { mode },
+                },
+            );
+            assert_eq!(logical(&p), [1, wire, 255, 255]);
+            for raw in 0..=255 {
+                let mut reply = p.request.encode();
+                reply[1 + usize::from(p.slots[2])] = raw;
+                reply[1 + usize::from(p.slots[3])] = 255 - raw;
+                assert_eq!(
+                    p.decode(Reply::decode(&reply).unwrap()).unwrap().value(),
+                    &ReplyValue::StationScan {
+                        raw_result: raw,
+                        raw_count: 255 - raw
+                    }
+                );
+            }
         }
     }
 }

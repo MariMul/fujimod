@@ -268,3 +268,13 @@ running the test. Neither result starts a host poll or certifies a measurement.
 Service enums, checked quantities, command/action factories, structured replies
 and public registrations come from the [shared Rust generator](../generator/README.md).
 Builds regenerate them automatically; validation remains in the core.
+
+
+WPS and station controls use `Command.wps(WpsAction.start(target))` and
+`Command.station(StationAction.startStored())`. WPS targets are
+`WpsTarget.broadcast()` or `WpsTarget.peer(new WpsPeerAddress(bytes))`; exact
+peers reject a zero first byte. `WpsAction.publishProgress()` also writes camera
+configuration. Station scans use `StationScanMode.Mode0/Mode1`, which invoke the
+same studied path. Replies preserve callback snapshots without a host poll.
+Generated handle types remain distinct in TypeScript, even when they expose the
+same properties. See the [Rust command semantics](../../crates/usb/README.md).
