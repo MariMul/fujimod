@@ -22,3 +22,6 @@ fujimod-defs.workspace = true
 futures-lite.workspace = true
 futures-channel.workspace = true
 nusb.workspace = true
+
+[build-dependencies]
+fujimod-bindgen = { path = "../generator" }

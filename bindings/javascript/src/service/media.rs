@@ -1,21 +1,6 @@
 //! Media choices and value factories. No protocol encoding in this binding.
 use super::*;
-macro_rules! choice {
- ($name:ident,{$($variant:ident),+})=>{
-  #[wasm_bindgen] #[derive(Clone,Copy)] pub enum $name {$($variant),+}
-  impl $name {pub(super) fn parse(value:JsValue)->Result<core::$name,JsValue>{
-   let value=integer(value,u32::MAX)?;
-   $(if value==Self::$variant as u32 {return Ok(core::$name::$variant);})+
-   Err(fail(ErrorKind::InvalidArgument,"unknown media enum choice"))
-  }}
- };
-}
-choice!(Toggle,{Disabled,Enabled});
-choice!(DisplayMode,{Option0,Option1});
-choice!(SoundFormat,{Format1,Format2,Format3});
-choice!(SoundTrack,{Track2,Track3,Track4});
-choice!(SoundOperation,{First,Second,Third});
-choice!(ChargeQuery,{Presence,State});
+
 #[wasm_bindgen]
 pub struct DisplayOptionAction {
     pub(super) inner: core::DisplayOptionAction,
@@ -41,25 +26,7 @@ impl DisplayOptionAction {
         })
     }
 }
-#[wasm_bindgen]
-pub struct SoundClip {
-    inner: core::SoundClip,
-}
-#[wasm_bindgen]
-impl SoundClip {
-    #[wasm_bindgen(constructor)]
-    pub fn new(
-        #[wasm_bindgen(unchecked_param_type = "number")] value: JsValue,
-    ) -> Result<Self, JsValue> {
-        core::SoundClip::new(integer(value, u8::MAX.into())? as u8)
-            .map(|inner| Self { inner })
-            .map_err(invalid)
-    }
-    #[wasm_bindgen(getter)]
-    pub fn value(&self) -> u8 {
-        self.inner.value()
-    }
-}
+
 #[wasm_bindgen]
 pub struct SoundAction {
     pub(super) inner: core::SoundAction,
@@ -96,44 +63,7 @@ impl SoundAction {
         }
     }
 }
-#[wasm_bindgen]
-pub struct HdmiValue {
-    inner: core::HdmiValue,
-}
-#[wasm_bindgen]
-impl HdmiValue {
-    #[wasm_bindgen(constructor)]
-    pub fn new(
-        #[wasm_bindgen(unchecked_param_type = "number")] value: JsValue,
-    ) -> Result<Self, JsValue> {
-        core::HdmiValue::new(integer(value, u16::MAX.into())? as u16)
-            .map(|inner| Self { inner })
-            .map_err(invalid)
-    }
-    #[wasm_bindgen(getter)]
-    pub fn value(&self) -> u16 {
-        self.inner.value()
-    }
-}
-#[wasm_bindgen]
-pub struct HdmiPacket {
-    inner: core::HdmiPacket,
-}
-#[wasm_bindgen]
-impl HdmiPacket {
-    #[wasm_bindgen(constructor)]
-    pub fn new(
-        #[wasm_bindgen(unchecked_param_type = "Uint8Array")] data: JsValue,
-    ) -> Result<Self, JsValue> {
-        core::HdmiPacket::new(&error::buffer(data)?)
-            .map(|inner| Self { inner })
-            .map_err(invalid)
-    }
-    #[wasm_bindgen(getter, unchecked_return_type = "Uint8Array")]
-    pub fn data(&self) -> JsValue {
-        error::bytes(self.inner.data())
-    }
-}
+
 #[wasm_bindgen]
 pub struct HdmiAction {
     pub(super) inner: core::HdmiAction,
@@ -181,43 +111,5 @@ impl ChargeAction {
         Ok(Self {
             inner: core::ChargeAction::EnableAndSetFlag(Toggle::parse(enabled)?),
         })
-    }
-}
-macro_rules! result {
- ($kind:ident,$core:ident,{$($variant:ident),+})=>{
-  #[wasm_bindgen] #[derive(Clone,Copy)] pub enum $kind {$($variant),+,Unknown}
-  impl $kind {pub(super) fn value(value:core::$core)->JsValue {match value {
-   $(core::$core::$variant=>record(Self::$variant as u32,&[])),+,
-   core::$core::Unknown(raw)=>record(Self::Unknown as u32,&[("rawStatus",raw.into())]),
-  }}}
- };
-}
-result!(ChargeResultKind,ChargeResult,{Success,Failed});
-result!(ChargePresenceKind,ChargePresence,{Failed,Absent,Present});
-result!(ReportedChargeStateKind,ReportedChargeState,{Failed,Value0,Values2To5,Value6,OtherValue});
-
-choice!(AudioRoute,{Request82,Request81});
-choice!(AudioPlayback,{AllLanes,ZeroSecondLane,ZeroFirstLane});
-choice!(StorageErase,{Kind1Regions,Kind0And2Regions,Kind0And1And2Regions,AuxiliaryRegion,ResetProfiles});
-result!(AudioResultKind,AudioResult,{Success,Failed});
-result!(StorageEraseResultKind,StorageEraseResult,{Success,Failed});
-result!(StorageStatusKind,StorageStatus,{Zero,Value4,Value8,Value16,Value32});
-#[wasm_bindgen]
-pub struct AudioCount {
-    pub(super) inner: core::AudioCount,
-}
-#[wasm_bindgen]
-impl AudioCount {
-    #[wasm_bindgen(constructor)]
-    pub fn new(
-        #[wasm_bindgen(unchecked_param_type = "number")] value: JsValue,
-    ) -> Result<Self, JsValue> {
-        core::AudioCount::new(integer(value, u8::MAX.into())? as u8)
-            .map(|inner| Self { inner })
-            .map_err(invalid)
-    }
-    #[wasm_bindgen(getter)]
-    pub fn value(&self) -> u8 {
-        self.inner.value()
     }
 }

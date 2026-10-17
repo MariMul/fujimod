@@ -42,3 +42,7 @@ The JavaScript/Wasm package lives in `bindings/javascript/`. Binding crates are
 members of this same workspace. Each directory owns its language package;
 implementation crates remain independent of PyO3 and wasm-bindgen. The browser
 application stays in `apps/web/` and consumes the JavaScript package as needed.
+
+The [shared binding generator](bindings/generator/README.md) derives service
+value enums, checked values and their registrations from Rust declarations.
+Command factories and structured replies are being migrated to that same model.

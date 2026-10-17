@@ -3,6 +3,10 @@ use super::*;
 use defs::{ServiceCodec, ServiceDefinition, ServiceModes};
 use error::{integer, property, record};
 use usb::app80::catalogue as core;
+mod values {
+    include!(concat!(env!("OUT_DIR"), "/service_values_javascript.rs"));
+}
+use values::*;
 mod media;
 mod network;
 mod peripheral;
@@ -16,40 +20,7 @@ pub enum CommandFailureKind {
     Argument,
     OversizeArguments,
 }
-#[wasm_bindgen]
-#[derive(Clone, Copy)]
-pub enum ArgumentKind {
-    PinBank,
-    ProfileIndex,
-    WordAlignment,
-    WordAddress,
-    I2cLength,
-    SoundClip,
-    HdmiValue,
-    HdmiPacketLength,
-    AudioCount,
-    RadioChannel,
-    RadioPower,
-    PeerAddressLength,
-}
-impl From<core::ArgumentKind> for ArgumentKind {
-    fn from(value: core::ArgumentKind) -> Self {
-        match value {
-            core::ArgumentKind::PinBank => Self::PinBank,
-            core::ArgumentKind::ProfileIndex => Self::ProfileIndex,
-            core::ArgumentKind::WordAlignment => Self::WordAlignment,
-            core::ArgumentKind::WordAddress => Self::WordAddress,
-            core::ArgumentKind::I2cLength => Self::I2cLength,
-            core::ArgumentKind::SoundClip => Self::SoundClip,
-            core::ArgumentKind::HdmiValue => Self::HdmiValue,
-            core::ArgumentKind::HdmiPacketLength => Self::HdmiPacketLength,
-            core::ArgumentKind::AudioCount => Self::AudioCount,
-            core::ArgumentKind::RadioChannel => Self::RadioChannel,
-            core::ArgumentKind::RadioPower => Self::RadioPower,
-            core::ArgumentKind::PeerAddressLength => Self::PeerAddressLength,
-        }
-    }
-}
+
 fn invalid(source: core::CommandError) -> JsValue {
     use CommandFailureKind as K;
     use core::CommandError as E;
@@ -73,71 +44,7 @@ fn invalid(source: core::CommandError) -> JsValue {
     property(&error, "reason", reason);
     error
 }
-macro_rules! quantity {
-    ($name:ident) => {
-        #[wasm_bindgen]
-        pub struct $name {
-            inner: core::$name,
-        }
-        #[wasm_bindgen]
-        impl $name {
-            #[wasm_bindgen(constructor)]
-            pub fn new(
-                #[wasm_bindgen(unchecked_param_type = "number")] value: JsValue,
-            ) -> Result<Self, JsValue> {
-                core::$name::new(integer(value, u8::MAX.into())? as u8)
-                    .map(|inner| Self { inner })
-                    .map_err(invalid)
-            }
-            #[wasm_bindgen(getter)]
-            pub fn value(&self) -> u8 {
-                self.inner.value()
-            }
-        }
-    };
-}
-quantity!(PinBank);
-quantity!(ProfileIndex);
-#[wasm_bindgen]
-pub struct WordAddress {
-    inner: core::WordAddress,
-}
-#[wasm_bindgen]
-impl WordAddress {
-    #[wasm_bindgen(constructor)]
-    pub fn new(
-        #[wasm_bindgen(unchecked_param_type = "number")] value: JsValue,
-    ) -> Result<Self, JsValue> {
-        core::WordAddress::new(usb::ff80::commands::memory::Address(integer(
-            value,
-            u32::MAX,
-        )?))
-        .map(|inner| Self { inner })
-        .map_err(invalid)
-    }
-    #[wasm_bindgen(getter)]
-    pub fn value(&self) -> u32 {
-        self.inner.address().0
-    }
-}
-#[wasm_bindgen]
-#[derive(Clone, Copy)]
-pub enum ProfileBank {
-    First,
-    Second,
-}
-impl ProfileBank {
-    fn parse(value: JsValue) -> Result<core::ProfileBank, JsValue> {
-        let value = integer(value, u32::MAX)?;
-        if value == Self::First as u32 {
-            Ok(core::ProfileBank::First)
-        } else if value == Self::Second as u32 {
-            Ok(core::ProfileBank::Second)
-        } else {
-            Err(fail(ErrorKind::InvalidArgument, "unknown profile bank"))
-        }
-    }
-}
+
 #[wasm_bindgen]
 pub struct ProfileAction {
     inner: core::ProfileAction,
@@ -187,7 +94,7 @@ impl App80Command {
     ) -> Result<Self, JsValue> {
         Ok(Self {
             inner: core::Command::NandReadBlocks {
-                spare: network::NandSpare::parse(spare)?,
+                spare: values::NandSpare::parse(spare)?,
                 block_group: integer(block_group, u8::MAX.into())? as u8,
             },
         })
@@ -203,7 +110,7 @@ impl App80Command {
         #[wasm_bindgen(unchecked_param_type = "Toggle")] enabled: JsValue,
     ) -> Result<Self, JsValue> {
         Ok(Self {
-            inner: core::Command::WlanControl(media::Toggle::parse(enabled)?),
+            inner: core::Command::WlanControl(values::Toggle::parse(enabled)?),
         })
     }
     #[wasm_bindgen(js_name=radioControl)]
@@ -213,7 +120,7 @@ impl App80Command {
         }
     }
     #[wasm_bindgen(js_name=signalStrength)]
-    pub fn signal_strength(address: &network::PeerAddress) -> Self {
+    pub fn signal_strength(address: &values::PeerAddress) -> Self {
         Self {
             inner: core::Command::SignalStrength(address.inner),
         }
@@ -226,13 +133,13 @@ impl App80Command {
 
     #[wasm_bindgen(js_name=audioCapture)]
     pub fn audio_capture(
-        count: &media::AudioCount,
+        count: &values::AudioCount,
         #[wasm_bindgen(unchecked_param_type = "AudioRoute")] route: JsValue,
     ) -> Result<Self, JsValue> {
         Ok(Self {
             inner: core::Command::AudioCapture {
                 count: count.inner,
-                route: media::AudioRoute::parse(route)?,
+                route: values::AudioRoute::parse(route)?,
             },
         })
     }
@@ -241,7 +148,7 @@ impl App80Command {
         #[wasm_bindgen(unchecked_param_type = "AudioPlayback")] mode: JsValue,
     ) -> Result<Self, JsValue> {
         Ok(Self {
-            inner: core::Command::AudioPlayback(media::AudioPlayback::parse(mode)?),
+            inner: core::Command::AudioPlayback(values::AudioPlayback::parse(mode)?),
         })
     }
     #[wasm_bindgen(js_name=eraseStorage)]
@@ -249,7 +156,7 @@ impl App80Command {
         #[wasm_bindgen(unchecked_param_type = "StorageErase")] action: JsValue,
     ) -> Result<Self, JsValue> {
         Ok(Self {
-            inner: core::Command::EraseStorage(media::StorageErase::parse(action)?),
+            inner: core::Command::EraseStorage(values::StorageErase::parse(action)?),
         })
     }
     #[wasm_bindgen(js_name=storageStatus)]
@@ -281,7 +188,7 @@ impl App80Command {
         #[wasm_bindgen(unchecked_param_type = "DisplayMode")] mode: JsValue,
     ) -> Result<Self, JsValue> {
         Ok(Self {
-            inner: core::Command::DisplayMode(media::DisplayMode::parse(mode)?),
+            inner: core::Command::DisplayMode(values::DisplayMode::parse(mode)?),
         })
     }
     pub fn sound(action: &media::SoundAction) -> Self {
@@ -299,7 +206,7 @@ impl App80Command {
         #[wasm_bindgen(unchecked_param_type = "Toggle")] enabled: JsValue,
     ) -> Result<Self, JsValue> {
         Ok(Self {
-            inner: core::Command::ParameterService(media::Toggle::parse(enabled)?),
+            inner: core::Command::ParameterService(values::Toggle::parse(enabled)?),
         })
     }
     #[wasm_bindgen(js_name=chargeControl)]
@@ -313,7 +220,7 @@ impl App80Command {
         #[wasm_bindgen(unchecked_param_type = "ChargeQuery")] query: JsValue,
     ) -> Result<Self, JsValue> {
         Ok(Self {
-            inner: core::Command::ChargeStatus(media::ChargeQuery::parse(query)?),
+            inner: core::Command::ChargeStatus(values::ChargeQuery::parse(query)?),
         })
     }
     #[wasm_bindgen(js_name=registerControl)]
@@ -331,7 +238,7 @@ impl App80Command {
         #[wasm_bindgen(unchecked_param_type = "AccumulatorAction")] action: JsValue,
     ) -> Result<Self, JsValue> {
         Ok(Self {
-            inner: core::Command::Accumulator(peripheral::AccumulatorAction::parse(action)?),
+            inner: core::Command::Accumulator(values::AccumulatorAction::parse(action)?),
         })
     }
     #[wasm_bindgen(js_name=peripheralReport)]
@@ -458,13 +365,7 @@ pub enum App80ReplyKind {
     Accumulated,
     PeripheralReport,
 }
-#[wasm_bindgen]
-#[derive(Clone, Copy)]
-pub enum SaveStatusKind {
-    Success,
-    Failed,
-    Unknown,
-}
+
 #[wasm_bindgen]
 #[derive(Clone, Copy)]
 pub enum WordReadKind {
@@ -472,13 +373,7 @@ pub enum WordReadKind {
     Rejected,
     Unknown,
 }
-#[wasm_bindgen]
-#[derive(Clone, Copy)]
-pub enum WordWriteKind {
-    Confirmed,
-    Rejected,
-    Unknown,
-}
+
 #[wasm_bindgen]
 pub struct App80CommandReply {
     pub(crate) inner: core::CommandReply,
@@ -496,11 +391,11 @@ impl App80CommandReply {
         match self.inner.value() {
             V::NandRead(status) => record(
                 K::NandRead as u32,
-                &[("status", network::NandReadResultKind::value(*status))],
+                &[("status", values::NandReadResultKind::value(*status))],
             ),
             V::Option41(state) => record(
                 K::Option41 as u32,
-                &[("state", network::Option41StateKind::value(*state))],
+                &[("state", values::Option41StateKind::value(*state))],
             ),
             V::SignalStrength { raw_value } => record(
                 K::SignalStrength as u32,
@@ -511,31 +406,31 @@ impl App80CommandReply {
             }
             V::AudioCaptured(status) => record(
                 K::AudioCaptured as u32,
-                &[("status", media::AudioResultKind::value(*status))],
+                &[("status", values::AudioResultKind::value(*status))],
             ),
             V::AudioPlayed(status) => record(
                 K::AudioPlayed as u32,
-                &[("status", media::AudioResultKind::value(*status))],
+                &[("status", values::AudioResultKind::value(*status))],
             ),
             V::StorageErased(status) => record(
                 K::StorageErased as u32,
-                &[("status", media::StorageEraseResultKind::value(*status))],
+                &[("status", values::StorageEraseResultKind::value(*status))],
             ),
             V::StorageStatus(status) => record(
                 K::StorageStatus as u32,
-                &[("status", media::StorageStatusKind::value(*status))],
+                &[("status", values::StorageStatusKind::value(*status))],
             ),
             V::ChargeApplied(status) => record(
                 K::ChargeApplied as u32,
-                &[("status", media::ChargeResultKind::value(*status))],
+                &[("status", values::ChargeResultKind::value(*status))],
             ),
             V::ChargePresence(status) => record(
                 K::ChargePresence as u32,
-                &[("status", media::ChargePresenceKind::value(*status))],
+                &[("status", values::ChargePresenceKind::value(*status))],
             ),
             V::ChargeState(status) => record(
                 K::ChargeState as u32,
-                &[("status", media::ReportedChargeStateKind::value(*status))],
+                &[("status", values::ReportedChargeStateKind::value(*status))],
             ),
             V::NoPayload => record(K::NoPayload as u32, &[]),
             V::Pins(levels) => record(K::Pins as u32, &[("levels", (*levels).into())]),
@@ -545,17 +440,10 @@ impl App80CommandReply {
                 K::DownloadStatus as u32,
                 &[("rawStatus", (*raw_status).into())],
             ),
-            V::ConfigurationSaved(status) => {
-                let status = match status {
-                    core::SaveStatus::Success => record(SaveStatusKind::Success as u32, &[]),
-                    core::SaveStatus::Failed => record(SaveStatusKind::Failed as u32, &[]),
-                    core::SaveStatus::Unknown(raw) => record(
-                        SaveStatusKind::Unknown as u32,
-                        &[("rawStatus", (*raw).into())],
-                    ),
-                };
-                record(K::ConfigurationSaved as u32, &[("status", status)])
-            }
+            V::ConfigurationSaved(status) => record(
+                K::ConfigurationSaved as u32,
+                &[("status", SaveStatusKind::value(*status))],
+            ),
             V::ReadWord(result) => {
                 let result = match result {
                     core::WordReadResult::Value(value) => {
@@ -569,19 +457,10 @@ impl App80CommandReply {
                 };
                 record(K::ReadWord as u32, &[("result", result)])
             }
-            V::WriteWord(result) => {
-                let result = match result {
-                    core::WordWriteResult::Confirmed => {
-                        record(WordWriteKind::Confirmed as u32, &[])
-                    }
-                    core::WordWriteResult::Rejected => record(WordWriteKind::Rejected as u32, &[]),
-                    core::WordWriteResult::Unknown(raw) => record(
-                        WordWriteKind::Unknown as u32,
-                        &[("rawStatus", (*raw).into())],
-                    ),
-                };
-                record(K::WriteWord as u32, &[("result", result)])
-            }
+            V::WriteWord(result) => record(
+                K::WriteWord as u32,
+                &[("result", WordWriteKind::value(*result))],
+            ),
             V::Research => record(K::Research as u32, &[]),
             V::I2cData(data) => record(K::I2cData as u32, &[("data", error::bytes(data))]),
             V::Accumulated(values) => {
@@ -669,40 +548,10 @@ export type CommandFailure =
   | Readonly<{ kind: CommandFailureKind.Unavailable; code: number }>
   | Readonly<{ kind: CommandFailureKind.Argument; argument: ArgumentKind }>
   | Readonly<{ kind: CommandFailureKind.OversizeArguments }>;
-export type SaveStatus =
-  | Readonly<{ kind: SaveStatusKind.Success | SaveStatusKind.Failed }>
-  | Readonly<{ kind: SaveStatusKind.Unknown; rawStatus: number }>;
 export type WordReadResult =
   | Readonly<{ kind: WordReadKind.Value; value: number }>
   | Readonly<{ kind: WordReadKind.Rejected }>
   | Readonly<{ kind: WordReadKind.Unknown; rawStatus: number }>;
-export type WordWriteResult =
-  | Readonly<{ kind: WordWriteKind.Confirmed | WordWriteKind.Rejected }>
-  | Readonly<{ kind: WordWriteKind.Unknown; rawStatus: number }>;
-export type ChargeResult =
- | Readonly<{kind: ChargeResultKind.Success | ChargeResultKind.Failed}>
- | Readonly<{kind: ChargeResultKind.Unknown; rawStatus: number}>;
-export type ChargePresence =
- | Readonly<{kind: ChargePresenceKind.Failed | ChargePresenceKind.Absent | ChargePresenceKind.Present}>
- | Readonly<{kind: ChargePresenceKind.Unknown; rawStatus: number}>;
-export type ReportedChargeState =
- | Readonly<{kind: ReportedChargeStateKind.Failed | ReportedChargeStateKind.Value0 | ReportedChargeStateKind.Values2To5 | ReportedChargeStateKind.Value6 | ReportedChargeStateKind.OtherValue}>
- | Readonly<{kind: ReportedChargeStateKind.Unknown; rawStatus: number}>;
-export type AudioResult =
- | Readonly<{kind: AudioResultKind.Success | AudioResultKind.Failed}>
- | Readonly<{kind: AudioResultKind.Unknown; rawStatus: number}>;
-export type StorageEraseResult =
- | Readonly<{kind: StorageEraseResultKind.Success | StorageEraseResultKind.Failed}>
- | Readonly<{kind: StorageEraseResultKind.Unknown; rawStatus: number}>;
-export type StorageStatus =
- | Readonly<{kind: StorageStatusKind.Zero | StorageStatusKind.Value4 | StorageStatusKind.Value8 | StorageStatusKind.Value16 | StorageStatusKind.Value32}>
- | Readonly<{kind: StorageStatusKind.Unknown; rawStatus: number}>;
-export type NandReadResult =
- | Readonly<{kind:NandReadResultKind.Success | NandReadResultKind.RejectedOrWaitError | NandReadResultKind.OtherError}>
- | Readonly<{kind:NandReadResultKind.Unknown; rawStatus:number}>;
-export type Option41State =
- | Readonly<{kind:Option41StateKind.Zero | Option41StateKind.NonZero}>
- | Readonly<{kind:Option41StateKind.Unknown; rawStatus:number}>;
 export type App80ReplyValue =
  | Readonly<{kind:App80ReplyKind.NandRead;status:NandReadResult}>
  | Readonly<{kind:App80ReplyKind.Option41;state:Option41State}>

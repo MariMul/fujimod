@@ -12,6 +12,7 @@ const micropip=lock.packages.micropip.file_name;
 const assets=new Map([
  ['/dist/index.js',['../../javascript/dist/index.js','text/javascript']],
  ['/pkg/fujimod.js',['../../javascript/pkg/fujimod.js','text/javascript']],
+ ['/pkg/service-values.js',['../../javascript/pkg/service-values.js','text/javascript']],
  ['/pkg/fujimod_bg.wasm',['../../javascript/pkg/fujimod_bg.wasm','application/wasm']],
  ['/fixture.mjs',['../../javascript/tests/webusb-fixture.mjs','text/javascript']],
  ['/contract.py',['./webusb_contract.py','text/plain']],

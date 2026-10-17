@@ -33,62 +33,7 @@ impl From<RegisterAction> for core::RegisterAction {
         }
     }
 }
-#[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
-#[derive(Clone)]
-pub(super) struct I2cLength {
-    inner: core::I2cLength,
-}
-#[pymethods]
-impl I2cLength {
-    #[new]
-    fn new(py: Python<'_>, value: u8) -> PyResult<Self> {
-        core::I2cLength::new(value)
-            .map(|inner| Self { inner })
-            .map_err(|e| command_error(py, e))
-    }
-    #[getter]
-    fn value(&self) -> u8 {
-        self.inner.value()
-    }
-}
-#[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
-#[derive(Clone)]
-pub(super) struct I2cPayload {
-    inner: core::I2cPayload,
-}
-#[pymethods]
-impl I2cPayload {
-    #[new]
-    fn new(py: Python<'_>, data: Vec<u8>) -> PyResult<Self> {
-        core::I2cPayload::new(&data)
-            .map(|inner| Self { inner })
-            .map_err(|e| command_error(py, e))
-    }
-    #[getter]
-    fn data<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, self.inner.data())
-    }
-}
-#[pyclass(eq, from_py_object, module = "fujimod.usb.app80")]
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) enum I2cPort {
-    Port0,
-    Port1,
-    Port2,
-    Port4,
-    Port5,
-}
-impl From<I2cPort> for core::I2cPort {
-    fn from(value: I2cPort) -> Self {
-        match value {
-            I2cPort::Port0 => Self::Port0,
-            I2cPort::Port1 => Self::Port1,
-            I2cPort::Port2 => Self::Port2,
-            I2cPort::Port4 => Self::Port4,
-            I2cPort::Port5 => Self::Port5,
-        }
-    }
-}
+
 #[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
 #[derive(Clone)]
 pub(super) enum I2cAction {
@@ -132,26 +77,11 @@ impl From<I2cAction> for core::I2cAction {
         }
     }
 }
-#[pyclass(eq, from_py_object, module = "fujimod.usb.app80")]
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) enum AccumulatorAction {
-    Start,
-    StopAndRead,
-}
-impl From<AccumulatorAction> for core::AccumulatorAction {
-    fn from(value: AccumulatorAction) -> Self {
-        match value {
-            AccumulatorAction::Start => Self::Start,
-            AccumulatorAction::StopAndRead => Self::StopAndRead,
-        }
-    }
-}
+
 pub(super) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<RegisterAction>()?;
-    module.add_class::<I2cLength>()?;
-    module.add_class::<I2cPayload>()?;
-    module.add_class::<I2cPort>()?;
+
     module.add_class::<I2cAction>()?;
-    module.add_class::<AccumulatorAction>()?;
+
     Ok(())
 }

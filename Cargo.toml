@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/defs", "crates/fujimod", "crates/usb", "bindings/python", "bindings/javascript"]
+members = ["crates/defs", "crates/fujimod", "crates/usb", "bindings/python", "bindings/javascript", "bindings/generator"]
 resolver = "3"
 
 [workspace.package]
@@ -25,3 +25,7 @@ wasm-bindgen-test = "0.3"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 futures-channel = "0.3"
+
+# Build executables stay unstripped; distribution profiles apply to libraries.
+[profile.release.build-override]
+strip = "none"

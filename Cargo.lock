@@ -172,6 +172,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-bindgen"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "syn",
+]
+
+[[package]]
 name = "fujimod-defs"
 version = "0.1.0"
 dependencies = [
@@ -184,6 +193,7 @@ dependencies = [
 name = "fujimod-javascript"
 version = "0.1.0"
 dependencies = [
+ "fujimod-bindgen",
  "fujimod-defs",
  "fujimod-usb",
  "futures-channel",
@@ -198,6 +208,7 @@ dependencies = [
 name = "fujimod-python"
 version = "0.1.0"
 dependencies = [
+ "fujimod-bindgen",
  "fujimod-defs",
  "fujimod-usb",
  "futures-channel",

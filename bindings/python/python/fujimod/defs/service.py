@@ -1,8 +1,9 @@
 """Language views of the shared Rust service definition, without USB commands."""
 
-from enum import Enum, auto
-
 from _fujimod_js import defs as _jsdefs
+from _fujimod_js import valueSchemas as _schemas
+
+from .._binding_values import bind_values as _bind_values
 
 from .._bridge import Handle, buffer_out, call, uint, unwrap
 from .._variants import Sum, enum_out, variant
@@ -11,40 +12,7 @@ from . import FirmwareIdentity
 _js = _jsdefs.service
 
 
-class Codec(Enum):
-    Research = auto()
-    WritePins = auto()
-    ReadPins = auto()
-    ReadChannel = auto()
-    WriteChannel = auto()
-    ProfileByte = auto()
-    DownloadStatus = auto()
-    CopyConfiguration = auto()
-    FlushConfiguration = auto()
-    MemoryWord = auto()
-    RegisterControl = auto()
-    I2c = auto()
-    Accumulator = auto()
-    PeripheralReport = auto()
-    DisplayOption = auto()
-    DisplayMode = auto()
-    Sound = auto()
-    Hdmi = auto()
-    ParameterService = auto()
-    ChargeControl = auto()
-    ChargeStatus = auto()
-    AudioCapture = auto()
-    AudioPlayback = auto()
-    EraseStorage = auto()
-    StorageStatus = auto()
-    FormatStorage = auto()
-    DisplaySetup = auto()
-    NandReadBlocks = auto()
-    Option41 = auto()
-    WlanControl = auto()
-    RadioControl = auto()
-    SignalStrength = auto()
-    Iperf = auto()
+Codec = _bind_values(_schemas.definitions, _js, "fujimod.defs.service")[0]["Codec"]
 
 
 class ServiceModes(Handle):

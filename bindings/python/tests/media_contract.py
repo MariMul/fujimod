@@ -108,6 +108,13 @@ def check_media_values():
         )
     invalid(lambda: a.SoundClip(23), a.ArgumentKind.SoundClip)
     assert a.SoundClip(22).value == 22
+    assert a.SoundClip(value=22).value == 22
+    try:
+        a.SoundClip(22, constructor=None)
+    except TypeError:
+        pass
+    else:
+        raise AssertionError("generated constructor exposed a backend override")
     for format, wire in [
         (a.SoundFormat.Format1, 0),
         (a.SoundFormat.Format2, 1),

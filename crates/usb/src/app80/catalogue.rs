@@ -62,26 +62,33 @@ impl std::fmt::Display for ArgumentKind {
         })
     }
 }
-macro_rules! nibble_type {
-    ($name:ident,$kind:ident) => {
-        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-        pub struct $name(u8);
-        impl $name {
-            pub fn new(value: u8) -> Result<Self, CommandError> {
-                if value < 16 {
-                    Ok(Self(value))
-                } else {
-                    Err(CommandError::Argument(ArgumentKind::$kind))
-                }
-            }
-            pub fn value(self) -> u8 {
-                self.0
-            }
-        }
-    };
+fn checked_nibble(value: u8, kind: ArgumentKind) -> Result<u8, CommandError> {
+    if value < 16 {
+        Ok(value)
+    } else {
+        Err(CommandError::Argument(kind))
+    }
 }
-nibble_type!(PinBank, PinBank);
-nibble_type!(ProfileIndex, ProfileIndex);
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PinBank(u8);
+impl PinBank {
+    pub fn new(value: u8) -> Result<Self, CommandError> {
+        checked_nibble(value, ArgumentKind::PinBank).map(Self)
+    }
+    pub fn value(self) -> u8 {
+        self.0
+    }
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ProfileIndex(u8);
+impl ProfileIndex {
+    pub fn new(value: u8) -> Result<Self, CommandError> {
+        checked_nibble(value, ArgumentKind::ProfileIndex).map(Self)
+    }
+    pub fn value(self) -> u8 {
+        self.0
+    }
+}
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProfileBank {
     First,

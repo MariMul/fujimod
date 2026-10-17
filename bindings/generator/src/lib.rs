@@ -1,0 +1,521 @@
+//! Build-time language views of Rust value declarations. No USB implementation
+//! or copied validation bounds belong here.
+use serde::Serialize;
+use std::{collections::BTreeMap, fs, path::Path};
+use syn::{Fields, FnArg, ImplItem, Item, ReturnType, Type, Visibility};
+
+#[derive(Clone, Debug, Serialize)]
+pub struct Choice {
+    pub name: String,
+    pub variants: Vec<String>,
+    pub result: bool,
+    pub kind_name: Option<String>,
+}
+#[derive(Clone, Debug, Serialize)]
+pub struct Quantity {
+    pub name: String,
+    pub input: String,
+    pub getter: String,
+}
+#[derive(Clone, Debug, Serialize)]
+pub struct Values {
+    pub choices: Vec<Choice>,
+    pub quantities: Vec<Quantity>,
+}
+#[derive(Clone, Debug)]
+pub struct Api {
+    pub service: Values,
+    pub codec: Choice,
+}
+fn named(ty: &Type) -> Option<String> {
+    match ty {
+        Type::Path(path) if path.qself.is_none() => path.path.get_ident().map(ToString::to_string),
+        _ => None,
+    }
+}
+fn input(ty: &Type) -> Option<String> {
+    if let Some(name) = named(ty) {
+        return match name.as_str() {
+            "u8" | "u16" | "u32" | "Address" => Some(name),
+            _ => None,
+        };
+    }
+    if let Type::Reference(reference) = ty
+        && let Type::Slice(slice) = reference.elem.as_ref()
+        && named(&slice.elem).as_deref() == Some("u8")
+    {
+        return Some("bytes".into());
+    }
+    None
+}
+fn choice(item: &syn::ItemEnum) -> Option<Choice> {
+    let mut variants = Vec::new();
+    let mut result = false;
+    for variant in &item.variants {
+        match &variant.fields {
+            Fields::Unit => variants.push(variant.ident.to_string()),
+            Fields::Unnamed(fields)
+                if variant.ident == "Unknown"
+                    && fields.unnamed.len() == 1
+                    && named(&fields.unnamed[0].ty).as_deref() == Some("u8") =>
+            {
+                result = true;
+            }
+            _ => return None,
+        }
+    }
+    Some(Choice {
+        name: item.ident.to_string(),
+        variants,
+        result,
+        kind_name: result.then(|| kind_name(&item.ident.to_string())),
+    })
+}
+impl Api {
+    pub fn read(root: &Path) -> Result<Self, String> {
+        let mut sources = Vec::new();
+        let file = root.join("crates/usb/src/app80/catalogue.rs");
+        sources.push((
+            file.clone(),
+            fs::read_to_string(&file).map_err(|e| e.to_string())?,
+        ));
+        let directory = file.with_extension("");
+        let mut paths: Vec<_> = fs::read_dir(directory)
+            .map_err(|e| e.to_string())?
+            .map(|entry| entry.map(|e| e.path()))
+            .collect::<Result<_, _>>()
+            .map_err(|e| e.to_string())?;
+        paths.sort();
+        for path in paths {
+            if path.extension().is_some_and(|e| e == "rs")
+                && !path.file_stem().unwrap().to_string_lossy().contains("test")
+            {
+                sources.push((
+                    path.clone(),
+                    fs::read_to_string(path).map_err(|e| e.to_string())?,
+                ));
+            }
+        }
+        let mut api = Self::from_sources(sources.iter().map(|(_, text)| text.as_str()))?;
+        let defs = fs::read_to_string(root.join("crates/defs/src/service.rs"))
+            .map_err(|e| e.to_string())?;
+        api.codec = syn::parse_file(&defs)
+            .map_err(|e| e.to_string())?
+            .items
+            .iter()
+            .find_map(|item| {
+                if let Item::Enum(item) = item
+                    && item.ident == "Codec"
+                {
+                    return choice(item);
+                }
+                None
+            })
+            .ok_or("missing plain Codec enum")?;
+        Ok(api)
+    }
+    pub fn from_sources<'a>(sources: impl IntoIterator<Item = &'a str>) -> Result<Self, String> {
+        let mut choices = BTreeMap::new();
+        let mut quantities = BTreeMap::new();
+        let mut structs = std::collections::BTreeSet::new();
+        let mut impls = Vec::new();
+        for source in sources {
+            for item in syn::parse_file(source).map_err(|e| e.to_string())?.items {
+                match item {
+                    Item::Enum(item) if matches!(item.vis, Visibility::Public(_)) => {
+                        if let Some(value) = choice(&item) {
+                            choices.insert(value.name.clone(), value);
+                        }
+                    }
+                    Item::Struct(item) if matches!(item.vis, Visibility::Public(_)) => {
+                        structs.insert(item.ident.to_string());
+                    }
+                    Item::Impl(item) if item.trait_.is_none() => impls.push(item),
+                    _ => (),
+                }
+            }
+        }
+        for item in impls {
+            let Some(name) = named(&item.self_ty) else {
+                continue;
+            };
+            if !structs.contains(&name) {
+                continue;
+            }
+            let methods: Vec<_> = item
+                .items
+                .iter()
+                .filter_map(|item| {
+                    if let ImplItem::Fn(method) = item {
+                        Some(method)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            let Some(new) = methods
+                .iter()
+                .find(|m| m.sig.ident == "new" && matches!(m.vis, Visibility::Public(_)))
+            else {
+                continue;
+            };
+            if new.sig.inputs.len() != 1 {
+                continue;
+            }
+            let Some(FnArg::Typed(arg)) = new.sig.inputs.first() else {
+                continue;
+            };
+            let Some(input) = input(&arg.ty) else {
+                continue;
+            };
+            let getter = if input == "bytes" {
+                "data"
+            } else if input == "Address" {
+                "address"
+            } else {
+                "value"
+            };
+            let method = methods
+                .iter()
+                .find(|m| m.sig.ident == getter && matches!(m.vis, Visibility::Public(_)))
+                .ok_or_else(|| format!("{name}: checked value needs public {getter} getter"))?;
+            if !matches!(method.sig.output, ReturnType::Type(..)) {
+                return Err(format!("{name}: getter has no result"));
+            }
+            quantities.insert(
+                name.clone(),
+                Quantity {
+                    name,
+                    input,
+                    getter: getter.into(),
+                },
+            );
+        }
+        Ok(Self {
+            service: Values {
+                choices: choices.into_values().collect(),
+                quantities: quantities.into_values().collect(),
+            },
+            codec: Choice {
+                name: "Codec".into(),
+                variants: vec![],
+                result: false,
+                kind_name: None,
+            },
+        })
+    }
+    pub fn write(&self, out: &Path) -> Result<(), String> {
+        fs::create_dir_all(out).map_err(|e| e.to_string())?;
+        fs::write(
+            out.join("service_schema.json"),
+            serde_json::to_string_pretty(&self.service).unwrap(),
+        )
+        .map_err(|e| e.to_string())?;
+        let files = [
+            ("service_values_python.rs", self.python()),
+            ("service_values_javascript.rs", self.javascript()),
+            (
+                "definition_codec_python.rs",
+                python_choice(&self.codec, "fujimod.defs.service", "pub(crate)"),
+            ),
+            (
+                "definition_codec_javascript.rs",
+                javascript_codec(&self.codec),
+            ),
+            ("service-values.js", self.js_exports(false)),
+            ("service-values.d.ts", self.js_exports(true)),
+        ];
+        for (name, contents) in files {
+            fs::write(out.join(name), contents).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+    pub fn write_web(&self, out: &Path) -> Result<(), String> {
+        fs::create_dir_all(out).map_err(|e| e.to_string())?;
+        for (name, declaration) in [("service-values.js", false), ("service-values.d.ts", true)] {
+            fs::write(out.join(name), self.js_exports(declaration)).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+    pub fn build(root: &Path, out: &Path) {
+        println!(
+            "cargo:rerun-if-changed={}",
+            root.join("crates/usb/src/app80").display()
+        );
+        println!(
+            "cargo:rerun-if-changed={}",
+            root.join("crates/defs/src/service.rs").display()
+        );
+        Self::read(root)
+            .and_then(|api| api.write(out))
+            .unwrap_or_else(|e| panic!("binding generation failed: {e}"));
+    }
+    fn python(&self) -> String {
+        let mut out = String::from("// Generated from Rust declarations.\nuse super::*;\n");
+        for c in &self.service.choices {
+            out += &python_choice(c, "fujimod.usb.app80", "pub(super)");
+        }
+        for q in &self.service.quantities {
+            out += &python_quantity(q);
+        }
+        out += "pub(super) fn register(module:&Bound<'_,PyModule>)->PyResult<()>{\n";
+        for name in self
+            .service
+            .choices
+            .iter()
+            .map(|c| &c.name)
+            .chain(self.service.quantities.iter().map(|q| &q.name))
+        {
+            out += &format!("module.add_class::<{name}>()?;\n");
+        }
+        out += "Ok(())}\n";
+        out
+    }
+    fn javascript(&self) -> String {
+        let mut out = String::from("// Generated from Rust declarations.\nuse super::*;\n");
+        let mut types = String::new();
+        for c in &self.service.choices {
+            let name = if c.result {
+                kind_name(&c.name)
+            } else {
+                c.name.clone()
+            };
+            out += &format!(
+                "#[wasm_bindgen] #[derive(Clone,Copy)] pub enum {name} {{ {} {} }}\n",
+                c.variants.join(","),
+                if c.result { ",Unknown" } else { "" }
+            );
+            out += &format!(
+                "impl From<core::{}> for {name} {{fn from(value:core::{})->Self {{match value {{",
+                c.name, c.name
+            );
+            for v in &c.variants {
+                out += &format!("core::{}::{v}=>Self::{v},", c.name);
+            }
+            if c.result {
+                out += &format!("core::{}::Unknown(_)=>Self::Unknown,", c.name);
+            }
+            out += "}}}\n";
+            if c.result {
+                out += &format!(
+                    "impl {name} {{pub(super) fn value(value:core::{})->JsValue {{match value {{",
+                    c.name
+                );
+                for v in &c.variants {
+                    out += &format!("core::{}::{v}=>record(Self::{v} as u32,&[]),", c.name);
+                }
+                out += &format!(
+                    "core::{}::Unknown(raw)=>record(Self::Unknown as u32,&[(\"rawStatus\",raw.into())]),",
+                    c.name
+                );
+                out += "}}}\n";
+                types += &format!(
+                    "export type {} = Readonly<{{kind:{}}}> | Readonly<{{kind:{name}.Unknown;rawStatus:number}}>;\n",
+                    c.name,
+                    c.variants
+                        .iter()
+                        .map(|v| format!("{name}.{v}"))
+                        .collect::<Vec<_>>()
+                        .join(" | ")
+                );
+            } else if c.name != "ArgumentKind" {
+                out += &format!(
+                    "impl {name} {{pub(super) fn parse(value:JsValue)->Result<core::{name},JsValue>{{let value=integer(value,u32::MAX)?;"
+                );
+                for v in &c.variants {
+                    out +=
+                        &format!("if value==Self::{v} as u32 {{return Ok(core::{name}::{v});}}\n");
+                }
+                out += "Err(fail(ErrorKind::InvalidArgument,\"unknown enum choice\"))}}\n";
+            }
+        }
+        for q in &self.service.quantities {
+            out += &javascript_quantity(q);
+        }
+        out += &format!(
+            "#[wasm_bindgen(typescript_custom_section)] const GENERATED_VALUE_TYPES:&str=r#\"{types}\"#;\n"
+        );
+        out
+    }
+    fn js_exports(&self, declaration: bool) -> String {
+        let mut out = String::from(
+            "// Generated from Rust declarations.\nimport * as native from './fujimod.js';\n",
+        );
+        let names: Vec<_> = self
+            .service
+            .choices
+            .iter()
+            .map(|c| {
+                if c.result {
+                    kind_name(&c.name)
+                } else {
+                    c.name.clone()
+                }
+            })
+            .chain(self.service.quantities.iter().map(|q| q.name.clone()))
+            .collect();
+        if declaration {
+            out += "export declare const serviceValues:Readonly<{\n";
+            for n in &names {
+                out += &format!("{n}:typeof native.{n};\n");
+            }
+            out += "}>;\nexport declare const definitionValues:Readonly<{Codec:typeof native.ServiceCodec}>;\nexport declare const valueSchemas:Readonly<{service:string;definitions:string}>;\n";
+            for c in &self.service.choices {
+                out += &format!("export type {}=native.{};\n", c.name, c.name);
+            }
+            for q in &self.service.quantities {
+                out += &format!("export type {}=native.{};\n", q.name, q.name);
+            }
+        } else {
+            out += "export const serviceValues=Object.freeze({\n";
+            for n in &names {
+                out += &format!("{n}:native.{n},\n");
+            }
+            out +=
+                "});\nexport const definitionValues=Object.freeze({Codec:native.ServiceCodec});\n";
+            let service = serde_json::to_string(&self.service).unwrap();
+            let defs = serde_json::to_string(&Values {
+                choices: vec![self.codec.clone()],
+                quantities: vec![],
+            })
+            .unwrap();
+            out += &format!(
+                "export const valueSchemas=Object.freeze({{service:{},definitions:{}}});\n",
+                serde_json::to_string(&service).unwrap(),
+                serde_json::to_string(&defs).unwrap()
+            );
+        }
+        out
+    }
+}
+fn kind_name(name: &str) -> String {
+    if name == "WordWriteResult" {
+        "WordWriteKind".into()
+    } else {
+        format!("{name}Kind")
+    }
+}
+fn python_choice(c: &Choice, module: &str, visibility: &str) -> String {
+    let n = &c.name;
+    let mut out = if c.result {
+        format!(
+            "#[pyclass(frozen,from_py_object,module=\"{module}\")] #[derive(Clone)] {visibility} enum {n} {{"
+        )
+    } else {
+        format!(
+            "#[pyclass(eq,from_py_object,module=\"{module}\")] #[derive(Clone,Copy,Debug,PartialEq)] {visibility} enum {n} {{"
+        )
+    };
+    for v in &c.variants {
+        out += &format!("{v}{},", if c.result { "{}" } else { "" });
+    }
+    if c.result {
+        out += "Unknown{raw_status:u8},";
+    }
+    out += "}\n";
+    out +=
+        &format!("impl From<core::{n}> for {n} {{fn from(value:core::{n})->Self {{match value {{");
+    for v in &c.variants {
+        out += &format!(
+            "core::{n}::{v}=>Self::{v}{},",
+            if c.result { "{}" } else { "" }
+        );
+    }
+    if c.result {
+        out += &format!("core::{n}::Unknown(raw_status)=>Self::Unknown{{raw_status}},");
+    }
+    out += "}}}\n";
+    if !c.result {
+        out += &format!("impl From<{n}> for core::{n} {{fn from(value:{n})->Self {{match value {{");
+        for v in &c.variants {
+            out += &format!("{n}::{v}=>Self::{v},");
+        }
+        out += "}}}\n";
+    }
+    out
+}
+fn python_quantity(q: &Quantity) -> String {
+    let n = &q.name;
+    let (arg, call, getter): (String, String, String) = if q.input == "bytes" {
+        ("Vec<u8>".into(),"&data".into(),"#[getter] fn data<'py>(&self,py:Python<'py>)->Bound<'py,PyBytes>{PyBytes::new(py,self.inner.data())}".into())
+    } else {
+        let ty = if q.input == "Address" {
+            "u32"
+        } else {
+            &q.input
+        };
+        let call = if q.input == "Address" {
+            "usb::ff80::commands::memory::Address(data)"
+        } else {
+            "data"
+        };
+        let get = if q.input == "Address" {
+            "self.inner.address().0".into()
+        } else {
+            format!("self.inner.{}()", q.getter)
+        };
+        (
+            ty.into(),
+            call.into(),
+            format!("#[getter] fn value(&self)->{ty}{{{get}}}"),
+        )
+    };
+    let param = if q.input == "bytes" { "data" } else { "value" };
+    let call = if param == "value" {
+        call.replace("data", "value")
+    } else {
+        call
+    };
+    format!(
+        "#[pyclass(frozen,from_py_object,module=\"fujimod.usb.app80\")] #[derive(Clone)] pub(super) struct {n} {{pub(super) inner:core::{n}}}\n#[pymethods] impl {n} {{#[new] fn new(py:Python<'_>,{param}:{arg})->PyResult<Self>{{core::{n}::new({call}).map(|inner|Self{{inner}}).map_err(|e|command_error(py,e))}} {getter} }}\n"
+    )
+}
+fn javascript_quantity(q: &Quantity) -> String {
+    let n = &q.name;
+    let (arg, call, getter) = if q.input == "bytes" {
+        ("Uint8Array","&error::buffer(data)?".into(),"#[wasm_bindgen(getter,unchecked_return_type=\"Uint8Array\")] pub fn data(&self)->JsValue{error::bytes(self.inner.data())}".into())
+    } else {
+        let ty = if q.input == "Address" {
+            "u32"
+        } else {
+            &q.input
+        };
+        let checked = if ty == "u32" {
+            "integer(data,u32::MAX)?".into()
+        } else {
+            format!("integer(data,{ty}::MAX.into())? as {ty}")
+        };
+        let call = if q.input == "Address" {
+            format!("usb::ff80::commands::memory::Address({checked})")
+        } else {
+            checked
+        };
+        let get = if q.input == "Address" {
+            "self.inner.address().0".into()
+        } else {
+            format!("self.inner.{}()", q.getter)
+        };
+        (
+            "number",
+            call,
+            format!("#[wasm_bindgen(getter)] pub fn value(&self)->{ty}{{{get}}}"),
+        )
+    };
+    format!(
+        "#[wasm_bindgen] pub struct {n}{{pub(super) inner:core::{n}}}\n#[wasm_bindgen] impl {n}{{#[wasm_bindgen(constructor)] pub fn new(#[wasm_bindgen(unchecked_param_type=\"{arg}\")] data:JsValue)->Result<Self,JsValue>{{core::{n}::new({call}).map(|inner|Self{{inner}}).map_err(invalid)}} {getter} }}\n"
+    )
+}
+fn javascript_codec(c: &Choice) -> String {
+    let mut out = format!(
+        "#[wasm_bindgen] #[derive(Clone,Copy)] pub enum ServiceCodec{{{}}}\nimpl From<core::Codec> for ServiceCodec{{fn from(value:core::Codec)->Self{{match value{{",
+        c.variants.join(",")
+    );
+    for v in &c.variants {
+        out += &format!("core::Codec::{v}=>Self::{v},");
+    }
+    out += "}}}\n";
+    out
+}
+
+#[cfg(test)]
+mod tests;

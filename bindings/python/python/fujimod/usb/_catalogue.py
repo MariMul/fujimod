@@ -1,7 +1,9 @@
 """Pyodide conversion for Rust-owned service commands and typed replies."""
 
 from dataclasses import dataclass
-from enum import Enum, auto
+from types import SimpleNamespace
+from _fujimod_js import valueSchemas as _schemas
+from .._binding_values import bind_values as _bind_values
 
 from .._bridge import Handle, buffer_in, buffer_out, call, jsusb, snapshot, uint, unwrap
 from .._variants import Sum, enum_out, variant
@@ -10,25 +12,14 @@ from . import Session
 from .app80 import CommandCode
 
 _js = jsusb.app80
+_value_types, _result_decoders = _bind_values(
+    _schemas.service, _js, "fujimod.usb.app80"
+)
+_v = SimpleNamespace(**_value_types)
 
 
 class CommandError(ValueError):
     pass
-
-
-class ArgumentKind(Enum):
-    PinBank = auto()
-    ProfileIndex = auto()
-    WordAlignment = auto()
-    WordAddress = auto()
-    I2cLength = auto()
-    SoundClip = auto()
-    HdmiValue = auto()
-    HdmiPacketLength = auto()
-    AudioCount = auto()
-    RadioChannel = auto()
-    RadioPower = auto()
-    PeerAddressLength = auto()
 
 
 class CommandFailure(Sum):
@@ -38,7 +29,7 @@ class CommandFailure(Sum):
 variant(CommandFailure, "Unsupported", [("codec", definitions.Codec)])
 variant(CommandFailure, "Ambiguous", [("codec", definitions.Codec)])
 variant(CommandFailure, "Unavailable", [("code", int)])
-variant(CommandFailure, "Argument", [("kind", ArgumentKind)])
+variant(CommandFailure, "Argument", [("kind", _v.ArgumentKind)])
 variant(CommandFailure, "OversizeArguments")
 
 
@@ -55,40 +46,14 @@ def _command_failure(value):
         ),
         kinds.Unavailable: lambda: CommandFailure.Unavailable(value.code),
         kinds.Argument: lambda: CommandFailure.Argument(
-            enum_out(value.argument, ArgumentKind, _js.ArgumentKind)
+            enum_out(value.argument, _v.ArgumentKind, _js.ArgumentKind)
         ),
         kinds.OversizeArguments: CommandFailure.OversizeArguments,
     }[value.kind]()
 
 
-class PinBank(Handle):
-    def __init__(self, value):
-        self._js = call(_js.PinBank.new, uint(value, 8))
-
-    value = property(lambda self: self._js.value)
-
-
-class ProfileIndex(Handle):
-    def __init__(self, value):
-        self._js = call(_js.ProfileIndex.new, uint(value, 8))
-
-    value = property(lambda self: self._js.value)
-
-
-class WordAddress(Handle):
-    def __init__(self, value):
-        self._js = call(_js.WordAddress.new, uint(value))
-
-    value = property(lambda self: self._js.value)
-
-
-class ProfileBank(Enum):
-    First = auto()
-    Second = auto()
-
-
 def _bank(value):
-    if type(value) is not ProfileBank:
+    if type(value) is not _v.ProfileBank:
         raise TypeError("expected ProfileBank")
     return getattr(_js.ProfileBank, value.name)
 
@@ -106,19 +71,19 @@ class ProfileAction(Sum, Handle):
 variant(
     ProfileAction,
     "Read",
-    [("bank", ProfileBank), ("index", ProfileIndex)],
+    [("bank", _v.ProfileBank), ("index", _v.ProfileIndex)],
     create=lambda bank, index: call(
-        _js.ProfileAction.read, _bank(bank), unwrap(index, ProfileIndex)
+        _js.ProfileAction.read, _bank(bank), unwrap(index, _v.ProfileIndex)
     ),
 )
 variant(
     ProfileAction,
     "Write",
-    [("bank", ProfileBank), ("index", ProfileIndex), ("value", int)],
+    [("bank", _v.ProfileBank), ("index", _v.ProfileIndex), ("value", int)],
     create=lambda bank, index, value: call(
         _js.ProfileAction.write,
         _bank(bank),
-        unwrap(index, ProfileIndex),
+        unwrap(index, _v.ProfileIndex),
         uint(value, 8),
     ),
 )
@@ -181,28 +146,6 @@ variant(
 )
 
 
-class I2cLength(Handle):
-    def __init__(self, value):
-        self._js = call(_js.I2cLength.new, uint(value, 8))
-
-    value = property(lambda self: self._js.value)
-
-
-class I2cPayload(Handle):
-    def __init__(self, data):
-        self._js = call(_js.I2cPayload.new, buffer_in(data))
-
-    data = property(lambda self: buffer_out(self._js.data))
-
-
-class I2cPort(Enum):
-    Port0 = auto()
-    Port1 = auto()
-    Port2 = auto()
-    Port4 = auto()
-    Port5 = auto()
-
-
 def _choice(value, cls, choices):
     if type(value) is not cls:
         raise TypeError(f"expected {cls.__name__}")
@@ -216,23 +159,23 @@ class I2cAction(Sum, Handle):
 variant(
     I2cAction,
     "Read",
-    [("port", I2cPort), ("command", int), ("length", I2cLength)],
+    [("port", _v.I2cPort), ("command", int), ("length", _v.I2cLength)],
     create=lambda port, command, length: call(
         _js.I2cAction.read,
-        _choice(port, I2cPort, _js.I2cPort),
+        _choice(port, _v.I2cPort, _js.I2cPort),
         uint(command, 8),
-        unwrap(length, I2cLength),
+        unwrap(length, _v.I2cLength),
     ),
 )
 variant(
     I2cAction,
     "Write",
-    [("port", I2cPort), ("command", int), ("payload", I2cPayload)],
+    [("port", _v.I2cPort), ("command", int), ("payload", _v.I2cPayload)],
     create=lambda port, command, payload: call(
         _js.I2cAction.write,
-        _choice(port, I2cPort, _js.I2cPort),
+        _choice(port, _v.I2cPort, _js.I2cPort),
         uint(command, 8),
-        unwrap(payload, I2cPayload),
+        unwrap(payload, _v.I2cPayload),
     ),
 )
 variant(
@@ -243,21 +186,6 @@ variant(
         _js.I2cAction.writeSingle, uint(command, 8), uint(value, 8)
     ),
 )
-
-
-class AccumulatorAction(Enum):
-    Start = auto()
-    StopAndRead = auto()
-
-
-class Toggle(Enum):
-    Disabled = auto()
-    Enabled = auto()
-
-
-class DisplayMode(Enum):
-    Option0 = auto()
-    Option1 = auto()
 
 
 class DisplayOptionAction(Sum, Handle):
@@ -279,31 +207,6 @@ variant(
 )
 
 
-class SoundClip(Handle):
-    def __init__(self, value):
-        self._js = call(_js.SoundClip.new, uint(value, 8))
-
-    value = property(lambda self: self._js.value)
-
-
-class SoundFormat(Enum):
-    Format1 = auto()
-    Format2 = auto()
-    Format3 = auto()
-
-
-class SoundTrack(Enum):
-    Track2 = auto()
-    Track3 = auto()
-    Track4 = auto()
-
-
-class SoundOperation(Enum):
-    First = auto()
-    Second = auto()
-    Third = auto()
-
-
 class SoundAction(Sum, Handle):
     pass
 
@@ -311,39 +214,29 @@ class SoundAction(Sum, Handle):
 variant(
     SoundAction,
     "Clip",
-    [("clip", SoundClip), ("format", SoundFormat)],
+    [("clip", _v.SoundClip), ("format", _v.SoundFormat)],
     create=lambda clip, format: call(
         _js.SoundAction.clip,
-        unwrap(clip, SoundClip),
-        _choice(format, SoundFormat, _js.SoundFormat),
+        unwrap(clip, _v.SoundClip),
+        _choice(format, _v.SoundFormat, _js.SoundFormat),
     ),
 )
 variant(
     SoundAction,
     "Track",
-    [("track", SoundTrack), ("operation", SoundOperation), ("format", SoundFormat)],
+    [
+        ("track", _v.SoundTrack),
+        ("operation", _v.SoundOperation),
+        ("format", _v.SoundFormat),
+    ],
     create=lambda track, operation, format: call(
         _js.SoundAction.track,
-        _choice(track, SoundTrack, _js.SoundTrack),
-        _choice(operation, SoundOperation, _js.SoundOperation),
-        _choice(format, SoundFormat, _js.SoundFormat),
+        _choice(track, _v.SoundTrack, _js.SoundTrack),
+        _choice(operation, _v.SoundOperation, _js.SoundOperation),
+        _choice(format, _v.SoundFormat, _js.SoundFormat),
     ),
 )
 variant(SoundAction, "Noop", create=lambda: call(_js.SoundAction.noop))
-
-
-class HdmiValue(Handle):
-    def __init__(self, value):
-        self._js = call(_js.HdmiValue.new, uint(value, 16))
-
-    value = property(lambda self: self._js.value)
-
-
-class HdmiPacket(Handle):
-    def __init__(self, data):
-        self._js = call(_js.HdmiPacket.new, buffer_in(data))
-
-    data = property(lambda self: buffer_out(self._js.data))
 
 
 class HdmiAction(Sum, Handle):
@@ -354,18 +247,18 @@ variant(HdmiAction, "ResetStub", create=lambda: call(_js.HdmiAction.resetStub))
 variant(
     HdmiAction,
     "Packet",
-    [("packet", HdmiPacket)],
-    create=lambda packet: call(_js.HdmiAction.packet, unwrap(packet, HdmiPacket)),
+    [("packet", _v.HdmiPacket)],
+    create=lambda packet: call(_js.HdmiAction.packet, unwrap(packet, _v.HdmiPacket)),
 )
 variant(
     HdmiAction,
     "Triplet",
-    [("first", HdmiValue), ("second", HdmiValue), ("third", HdmiValue)],
+    [("first", _v.HdmiValue), ("second", _v.HdmiValue), ("third", _v.HdmiValue)],
     create=lambda first, second, third: call(
         _js.HdmiAction.triplet,
-        unwrap(first, HdmiValue),
-        unwrap(second, HdmiValue),
-        unwrap(third, HdmiValue),
+        unwrap(first, _v.HdmiValue),
+        unwrap(second, _v.HdmiValue),
+        unwrap(third, _v.HdmiValue),
     ),
 )
 
@@ -377,81 +270,19 @@ class ChargeAction(Sum, Handle):
 variant(
     ChargeAction,
     "Control",
-    [("enabled", Toggle)],
+    [("enabled", _v.Toggle)],
     create=lambda enabled: call(
-        _js.ChargeAction.control, _choice(enabled, Toggle, _js.Toggle)
+        _js.ChargeAction.control, _choice(enabled, _v.Toggle, _js.Toggle)
     ),
 )
 variant(
     ChargeAction,
     "EnableAndSetFlag",
-    [("enabled", Toggle)],
+    [("enabled", _v.Toggle)],
     create=lambda enabled: call(
-        _js.ChargeAction.enableAndSetFlag, _choice(enabled, Toggle, _js.Toggle)
+        _js.ChargeAction.enableAndSetFlag, _choice(enabled, _v.Toggle, _js.Toggle)
     ),
 )
-
-
-class ChargeQuery(Enum):
-    Presence = auto()
-    State = auto()
-
-
-class AudioCount(Handle):
-    def __init__(self, value):
-        self._js = call(_js.AudioCount.new, uint(value, 8))
-
-    value = property(lambda self: self._js.value)
-
-
-class AudioRoute(Enum):
-    Request82 = auto()
-    Request81 = auto()
-
-
-class AudioPlayback(Enum):
-    AllLanes = auto()
-    ZeroSecondLane = auto()
-    ZeroFirstLane = auto()
-
-
-class StorageErase(Enum):
-    Kind1Regions = auto()
-    Kind0And2Regions = auto()
-    Kind0And1And2Regions = auto()
-    AuxiliaryRegion = auto()
-    ResetProfiles = auto()
-
-
-class NandSpare(Enum):
-    Omit = auto()
-    Include = auto()
-
-
-class RadioMode(Enum):
-    Mode0 = auto()
-    Mode1 = auto()
-
-
-class RadioChannel(Handle):
-    def __init__(self, value):
-        self._js = call(_js.RadioChannel.new, uint(value, 8))
-
-    value = property(lambda self: self._js.value)
-
-
-class RadioPower(Handle):
-    def __init__(self, value):
-        self._js = call(_js.RadioPower.new, uint(value, 8))
-
-    value = property(lambda self: self._js.value)
-
-
-class PeerAddress(Handle):
-    def __init__(self, data):
-        self._js = call(_js.PeerAddress.new, buffer_in(data))
-
-    data = property(lambda self: buffer_out(self._js.data))
 
 
 class RadioAction(Sum, Handle):
@@ -462,27 +293,27 @@ variant(
     RadioAction,
     "Primary",
     [
-        ("mode", RadioMode),
-        ("channel", RadioChannel),
-        ("power", RadioPower),
-        ("option", Toggle),
+        ("mode", _v.RadioMode),
+        ("channel", _v.RadioChannel),
+        ("power", _v.RadioPower),
+        ("option", _v.Toggle),
     ],
     create=lambda mode, channel, power, option: call(
         _js.RadioAction.primary,
-        _choice(mode, RadioMode, _js.RadioMode),
-        unwrap(channel, RadioChannel),
-        unwrap(power, RadioPower),
-        _choice(option, Toggle, _js.Toggle),
+        _choice(mode, _v.RadioMode, _js.RadioMode),
+        unwrap(channel, _v.RadioChannel),
+        unwrap(power, _v.RadioPower),
+        _choice(option, _v.Toggle, _js.Toggle),
     ),
 )
 variant(
     RadioAction,
     "Secondary",
-    [("mode", RadioMode), ("channel", RadioChannel)],
+    [("mode", _v.RadioMode), ("channel", _v.RadioChannel)],
     create=lambda mode, channel: call(
         _js.RadioAction.secondary,
-        _choice(mode, RadioMode, _js.RadioMode),
-        unwrap(channel, RadioChannel),
+        _choice(mode, _v.RadioMode, _js.RadioMode),
+        unwrap(channel, _v.RadioChannel),
     ),
 )
 
@@ -494,10 +325,10 @@ class Command(Sum, Handle):
 variant(
     Command,
     "WritePins",
-    [("bank", PinBank), ("levels", int), ("exclude", int)],
+    [("bank", _v.PinBank), ("levels", int), ("exclude", int)],
     create=lambda bank, levels, exclude: call(
         _js.Command.writePins,
-        unwrap(bank, PinBank),
+        unwrap(bank, _v.PinBank),
         uint(levels, 16),
         uint(exclude, 16),
     ),
@@ -505,8 +336,8 @@ variant(
 variant(
     Command,
     "ReadPins",
-    [("bank", PinBank)],
-    create=lambda bank: call(_js.Command.readPins, unwrap(bank, PinBank)),
+    [("bank", _v.PinBank)],
+    create=lambda bank: call(_js.Command.readPins, unwrap(bank, _v.PinBank)),
 )
 variant(
     Command,
@@ -541,18 +372,17 @@ variant(
 variant(
     Command,
     "ReadWord",
-    [("address", WordAddress)],
-    create=lambda address: call(_js.Command.readWord, unwrap(address, WordAddress)),
+    [("address", _v.WordAddress)],
+    create=lambda address: call(_js.Command.readWord, unwrap(address, _v.WordAddress)),
 )
 variant(
     Command,
     "WriteWord",
-    [("address", WordAddress), ("value", int)],
+    [("address", _v.WordAddress), ("value", int)],
     create=lambda address, value: call(
-        _js.Command.writeWord, unwrap(address, WordAddress), uint(value)
+        _js.Command.writeWord, unwrap(address, _v.WordAddress), uint(value)
     ),
 )
-
 
 variant(
     Command,
@@ -571,14 +401,13 @@ variant(
 variant(
     Command,
     "Accumulator",
-    [("action", AccumulatorAction)],
+    [("action", _v.AccumulatorAction)],
     create=lambda action: call(
         _js.Command.accumulator,
-        _choice(action, AccumulatorAction, _js.AccumulatorAction),
+        _choice(action, _v.AccumulatorAction, _js.AccumulatorAction),
     ),
 )
 variant(Command, "PeripheralReport", create=lambda: call(_js.Command.peripheralReport))
-
 
 variant(
     Command,
@@ -591,9 +420,9 @@ variant(
 variant(
     Command,
     "DisplayMode",
-    [("mode", DisplayMode)],
+    [("mode", _v.DisplayMode)],
     create=lambda mode: call(
-        _js.Command.displayMode, _choice(mode, DisplayMode, _js.DisplayMode)
+        _js.Command.displayMode, _choice(mode, _v.DisplayMode, _js.DisplayMode)
     ),
 )
 variant(
@@ -611,9 +440,9 @@ variant(
 variant(
     Command,
     "ParameterService",
-    [("enabled", Toggle)],
+    [("enabled", _v.Toggle)],
     create=lambda enabled: call(
-        _js.Command.parameterService, _choice(enabled, Toggle, _js.Toggle)
+        _js.Command.parameterService, _choice(enabled, _v.Toggle, _js.Toggle)
     ),
 )
 variant(
@@ -625,51 +454,49 @@ variant(
 variant(
     Command,
     "ChargeStatus",
-    [("query", ChargeQuery)],
+    [("query", _v.ChargeQuery)],
     create=lambda query: call(
-        _js.Command.chargeStatus, _choice(query, ChargeQuery, _js.ChargeQuery)
+        _js.Command.chargeStatus, _choice(query, _v.ChargeQuery, _js.ChargeQuery)
     ),
 )
-
 
 variant(
     Command,
     "AudioCapture",
-    [("count", AudioCount), ("route", AudioRoute)],
+    [("count", _v.AudioCount), ("route", _v.AudioRoute)],
     create=lambda count, route: call(
         _js.Command.audioCapture,
-        unwrap(count, AudioCount),
-        _choice(route, AudioRoute, _js.AudioRoute),
+        unwrap(count, _v.AudioCount),
+        _choice(route, _v.AudioRoute, _js.AudioRoute),
     ),
 )
 variant(
     Command,
     "AudioPlayback",
-    [("mode", AudioPlayback)],
+    [("mode", _v.AudioPlayback)],
     create=lambda mode: call(
-        _js.Command.audioPlayback, _choice(mode, AudioPlayback, _js.AudioPlayback)
+        _js.Command.audioPlayback, _choice(mode, _v.AudioPlayback, _js.AudioPlayback)
     ),
 )
 variant(
     Command,
     "EraseStorage",
-    [("action", StorageErase)],
+    [("action", _v.StorageErase)],
     create=lambda action: call(
-        _js.Command.eraseStorage, _choice(action, StorageErase, _js.StorageErase)
+        _js.Command.eraseStorage, _choice(action, _v.StorageErase, _js.StorageErase)
     ),
 )
 variant(Command, "StorageStatus", create=lambda: call(_js.Command.storageStatus))
 variant(Command, "FormatStorage", create=lambda: call(_js.Command.formatStorage))
 variant(Command, "DisplaySetup", create=lambda: call(_js.Command.displaySetup))
 
-
 variant(
     Command,
     "NandReadBlocks",
-    [("spare", NandSpare), ("block_group", int)],
+    [("spare", _v.NandSpare), ("block_group", int)],
     create=lambda spare, block_group: call(
         _js.Command.nandReadBlocks,
-        _choice(spare, NandSpare, _js.NandSpare),
+        _choice(spare, _v.NandSpare, _js.NandSpare),
         uint(block_group, 8),
     ),
 )
@@ -677,9 +504,9 @@ variant(Command, "Option41", create=lambda: call(_js.Command.option41))
 variant(
     Command,
     "WlanControl",
-    [("enabled", Toggle)],
+    [("enabled", _v.Toggle)],
     create=lambda enabled: call(
-        _js.Command.wlanControl, _choice(enabled, Toggle, _js.Toggle)
+        _js.Command.wlanControl, _choice(enabled, _v.Toggle, _js.Toggle)
     ),
 )
 variant(
@@ -691,101 +518,12 @@ variant(
 variant(
     Command,
     "SignalStrength",
-    [("address", PeerAddress)],
+    [("address", _v.PeerAddress)],
     create=lambda address: call(
-        _js.Command.signalStrength, unwrap(address, PeerAddress)
+        _js.Command.signalStrength, unwrap(address, _v.PeerAddress)
     ),
 )
 variant(Command, "Iperf", create=lambda: call(_js.Command.iperf))
-
-
-class NandReadResult(Sum):
-    pass
-
-
-variant(NandReadResult, "Success")
-variant(NandReadResult, "RejectedOrWaitError")
-variant(NandReadResult, "OtherError")
-variant(NandReadResult, "Unknown", [("raw_status", int)])
-
-
-class Option41State(Sum):
-    pass
-
-
-variant(Option41State, "Zero")
-variant(Option41State, "NonZero")
-variant(Option41State, "Unknown", [("raw_status", int)])
-
-
-class AudioResult(Sum):
-    pass
-
-
-variant(AudioResult, "Success")
-variant(AudioResult, "Failed")
-variant(AudioResult, "Unknown", [("raw_status", int)])
-
-
-class StorageEraseResult(Sum):
-    pass
-
-
-variant(StorageEraseResult, "Success")
-variant(StorageEraseResult, "Failed")
-variant(StorageEraseResult, "Unknown", [("raw_status", int)])
-
-
-class StorageStatus(Sum):
-    pass
-
-
-variant(StorageStatus, "Zero")
-variant(StorageStatus, "Value4")
-variant(StorageStatus, "Value8")
-variant(StorageStatus, "Value16")
-variant(StorageStatus, "Value32")
-variant(StorageStatus, "Unknown", [("raw_status", int)])
-
-
-class ChargeResult(Sum):
-    pass
-
-
-variant(ChargeResult, "Success")
-variant(ChargeResult, "Failed")
-variant(ChargeResult, "Unknown", [("raw_status", int)])
-
-
-class ChargePresence(Sum):
-    pass
-
-
-variant(ChargePresence, "Failed")
-variant(ChargePresence, "Absent")
-variant(ChargePresence, "Present")
-variant(ChargePresence, "Unknown", [("raw_status", int)])
-
-
-class ReportedChargeState(Sum):
-    pass
-
-
-variant(ReportedChargeState, "Failed")
-variant(ReportedChargeState, "Value0")
-variant(ReportedChargeState, "Values2To5")
-variant(ReportedChargeState, "Value6")
-variant(ReportedChargeState, "OtherValue")
-variant(ReportedChargeState, "Unknown", [("raw_status", int)])
-
-
-class SaveStatus(Sum):
-    pass
-
-
-variant(SaveStatus, "Success")
-variant(SaveStatus, "Failed")
-variant(SaveStatus, "Unknown", [("raw_status", int)])
 
 
 class WordReadResult(Sum):
@@ -797,15 +535,6 @@ variant(WordReadResult, "Rejected")
 variant(WordReadResult, "Unknown", [("raw_status", int)])
 
 
-class WordWriteResult(Sum):
-    pass
-
-
-variant(WordWriteResult, "Confirmed")
-variant(WordWriteResult, "Rejected")
-variant(WordWriteResult, "Unknown", [("raw_status", int)])
-
-
 class ReplyValue(Sum):
     pass
 
@@ -815,33 +544,24 @@ variant(ReplyValue, "Pins", [("levels", int)])
 variant(ReplyValue, "Channel", [("value", int)])
 variant(ReplyValue, "ProfileByte", [("value", int)])
 variant(ReplyValue, "DownloadStatus", [("raw_status", int)])
-variant(ReplyValue, "ConfigurationSaved", [("status", SaveStatus)])
+variant(ReplyValue, "ConfigurationSaved", [("status", _v.SaveStatus)])
 variant(ReplyValue, "ReadWord", [("result", WordReadResult)])
-variant(ReplyValue, "WriteWord", [("result", WordWriteResult)])
+variant(ReplyValue, "WriteWord", [("result", _v.WordWriteResult)])
 variant(ReplyValue, "Research")
-variant(ReplyValue, "NandRead", [("status", NandReadResult)])
-variant(ReplyValue, "Option41", [("state", Option41State)])
+variant(ReplyValue, "NandRead", [("status", _v.NandReadResult)])
+variant(ReplyValue, "Option41", [("state", _v.Option41State)])
 variant(ReplyValue, "SignalStrength", [("raw_value", int)])
 variant(ReplyValue, "Iperf", [("raw_result", int)])
-variant(ReplyValue, "AudioCaptured", [("status", AudioResult)])
-variant(ReplyValue, "AudioPlayed", [("status", AudioResult)])
-variant(ReplyValue, "StorageErased", [("status", StorageEraseResult)])
-variant(ReplyValue, "StorageStatus", [("status", StorageStatus)])
-variant(ReplyValue, "ChargeApplied", [("status", ChargeResult)])
-variant(ReplyValue, "ChargePresence", [("status", ChargePresence)])
-variant(ReplyValue, "ChargeState", [("status", ReportedChargeState)])
+variant(ReplyValue, "AudioCaptured", [("status", _v.AudioResult)])
+variant(ReplyValue, "AudioPlayed", [("status", _v.AudioResult)])
+variant(ReplyValue, "StorageErased", [("status", _v.StorageEraseResult)])
+variant(ReplyValue, "StorageStatus", [("status", _v.StorageStatus)])
+variant(ReplyValue, "ChargeApplied", [("status", _v.ChargeResult)])
+variant(ReplyValue, "ChargePresence", [("status", _v.ChargePresence)])
+variant(ReplyValue, "ChargeState", [("status", _v.ReportedChargeState)])
 variant(ReplyValue, "I2cData", [("data", bytes)])
 variant(ReplyValue, "Accumulated", [("values", tuple)])
 variant(ReplyValue, "PeripheralReport", [("data", bytes)])
-
-
-def _save(value):
-    kinds = _js.SaveStatusKind
-    return {
-        kinds.Success: SaveStatus.Success,
-        kinds.Failed: SaveStatus.Failed,
-        kinds.Unknown: lambda: SaveStatus.Unknown(value.rawStatus),
-    }[value.kind]()
 
 
 def _word_read(value):
@@ -853,129 +573,50 @@ def _word_read(value):
     }[value.kind]()
 
 
-def _word_write(value):
-    kinds = _js.WordWriteKind
-    return {
-        kinds.Confirmed: WordWriteResult.Confirmed,
-        kinds.Rejected: WordWriteResult.Rejected,
-        kinds.Unknown: lambda: WordWriteResult.Unknown(value.rawStatus),
-    }[value.kind]()
-
-
-def _charge_result(value):
-    kinds = _js.ChargeResultKind
-    return {
-        kinds.Success: ChargeResult.Success,
-        kinds.Failed: ChargeResult.Failed,
-        kinds.Unknown: lambda: ChargeResult.Unknown(value.rawStatus),
-    }[value.kind]()
-
-
-def _charge_presence(value):
-    kinds = _js.ChargePresenceKind
-    return {
-        kinds.Failed: ChargePresence.Failed,
-        kinds.Absent: ChargePresence.Absent,
-        kinds.Present: ChargePresence.Present,
-        kinds.Unknown: lambda: ChargePresence.Unknown(value.rawStatus),
-    }[value.kind]()
-
-
-def _charge_state(value):
-    kinds = _js.ReportedChargeStateKind
-    return {
-        kinds.Failed: ReportedChargeState.Failed,
-        kinds.Value0: ReportedChargeState.Value0,
-        kinds.Values2To5: ReportedChargeState.Values2To5,
-        kinds.Value6: ReportedChargeState.Value6,
-        kinds.OtherValue: ReportedChargeState.OtherValue,
-        kinds.Unknown: lambda: ReportedChargeState.Unknown(value.rawStatus),
-    }[value.kind]()
-
-
-def _audio_result(value):
-    kinds = _js.AudioResultKind
-    return {
-        kinds.Success: AudioResult.Success,
-        kinds.Failed: AudioResult.Failed,
-        kinds.Unknown: lambda: AudioResult.Unknown(value.rawStatus),
-    }[value.kind]()
-
-
-def _storage_erase_result(value):
-    kinds = _js.StorageEraseResultKind
-    return {
-        kinds.Success: StorageEraseResult.Success,
-        kinds.Failed: StorageEraseResult.Failed,
-        kinds.Unknown: lambda: StorageEraseResult.Unknown(value.rawStatus),
-    }[value.kind]()
-
-
-def _storage_status(value):
-    kinds = _js.StorageStatusKind
-    return {
-        kinds.Zero: StorageStatus.Zero,
-        kinds.Value4: StorageStatus.Value4,
-        kinds.Value8: StorageStatus.Value8,
-        kinds.Value16: StorageStatus.Value16,
-        kinds.Value32: StorageStatus.Value32,
-        kinds.Unknown: lambda: StorageStatus.Unknown(value.rawStatus),
-    }[value.kind]()
-
-
-def _nand_read(value):
-    kinds = _js.NandReadResultKind
-    return {
-        kinds.Success: NandReadResult.Success,
-        kinds.RejectedOrWaitError: NandReadResult.RejectedOrWaitError,
-        kinds.OtherError: NandReadResult.OtherError,
-        kinds.Unknown: lambda: NandReadResult.Unknown(value.rawStatus),
-    }[value.kind]()
-
-
-def _option_41(value):
-    kinds = _js.Option41StateKind
-    return {
-        kinds.Zero: Option41State.Zero,
-        kinds.NonZero: Option41State.NonZero,
-        kinds.Unknown: lambda: Option41State.Unknown(value.rawStatus),
-    }[value.kind]()
-
-
 def _value(value):
     kinds = _js.ReplyKind
     return {
-        kinds.NandRead: lambda: ReplyValue.NandRead(_nand_read(value.status)),
-        kinds.Option41: lambda: ReplyValue.Option41(_option_41(value.state)),
+        kinds.NandRead: lambda: ReplyValue.NandRead(
+            _result_decoders[_v.NandReadResult](value.status)
+        ),
+        kinds.Option41: lambda: ReplyValue.Option41(
+            _result_decoders[_v.Option41State](value.state)
+        ),
         kinds.SignalStrength: lambda: ReplyValue.SignalStrength(value.rawValue),
         kinds.Iperf: lambda: ReplyValue.Iperf(value.rawResult),
         kinds.AudioCaptured: lambda: ReplyValue.AudioCaptured(
-            _audio_result(value.status)
+            _result_decoders[_v.AudioResult](value.status)
         ),
-        kinds.AudioPlayed: lambda: ReplyValue.AudioPlayed(_audio_result(value.status)),
+        kinds.AudioPlayed: lambda: ReplyValue.AudioPlayed(
+            _result_decoders[_v.AudioResult](value.status)
+        ),
         kinds.StorageErased: lambda: ReplyValue.StorageErased(
-            _storage_erase_result(value.status)
+            _result_decoders[_v.StorageEraseResult](value.status)
         ),
         kinds.StorageStatus: lambda: ReplyValue.StorageStatus(
-            _storage_status(value.status)
+            _result_decoders[_v.StorageStatus](value.status)
         ),
         kinds.ChargeApplied: lambda: ReplyValue.ChargeApplied(
-            _charge_result(value.status)
+            _result_decoders[_v.ChargeResult](value.status)
         ),
         kinds.ChargePresence: lambda: ReplyValue.ChargePresence(
-            _charge_presence(value.status)
+            _result_decoders[_v.ChargePresence](value.status)
         ),
-        kinds.ChargeState: lambda: ReplyValue.ChargeState(_charge_state(value.status)),
+        kinds.ChargeState: lambda: ReplyValue.ChargeState(
+            _result_decoders[_v.ReportedChargeState](value.status)
+        ),
         kinds.NoPayload: ReplyValue.NoPayload,
         kinds.Pins: lambda: ReplyValue.Pins(value.levels),
         kinds.Channel: lambda: ReplyValue.Channel(value.value),
         kinds.ProfileByte: lambda: ReplyValue.ProfileByte(value.value),
         kinds.DownloadStatus: lambda: ReplyValue.DownloadStatus(value.rawStatus),
         kinds.ConfigurationSaved: lambda: ReplyValue.ConfigurationSaved(
-            _save(value.status)
+            _result_decoders[_v.SaveStatus](value.status)
         ),
         kinds.ReadWord: lambda: ReplyValue.ReadWord(_word_read(value.result)),
-        kinds.WriteWord: lambda: ReplyValue.WriteWord(_word_write(value.result)),
+        kinds.WriteWord: lambda: ReplyValue.WriteWord(
+            _result_decoders[_v.WordWriteResult](value.result)
+        ),
         kinds.Research: ReplyValue.Research,
         kinds.I2cData: lambda: ReplyValue.I2cData(buffer_out(value.data)),
         kinds.Accumulated: lambda: ReplyValue.Accumulated(tuple(value.values)),

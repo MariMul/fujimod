@@ -2,47 +2,17 @@
 use super::*;
 use crate::defs::{Codec, Definition, ServiceModes};
 use usb::app80::catalogue as core;
+mod values {
+    include!(concat!(env!("OUT_DIR"), "/service_values_python.rs"));
+}
+use values::*;
 mod media;
 mod network;
 mod peripheral;
-use peripheral::{AccumulatorAction, I2cAction, RegisterAction};
+use peripheral::{I2cAction, RegisterAction};
 
 pyo3::create_exception!(fujimod.usb.app80, CommandError, PyValueError);
 
-#[pyclass(eq, from_py_object, module = "fujimod.usb.app80")]
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum ArgumentKind {
-    PinBank,
-    ProfileIndex,
-    WordAlignment,
-    WordAddress,
-    I2cLength,
-    SoundClip,
-    HdmiValue,
-    HdmiPacketLength,
-    AudioCount,
-    RadioChannel,
-    RadioPower,
-    PeerAddressLength,
-}
-impl From<core::ArgumentKind> for ArgumentKind {
-    fn from(value: core::ArgumentKind) -> Self {
-        match value {
-            core::ArgumentKind::PinBank => Self::PinBank,
-            core::ArgumentKind::ProfileIndex => Self::ProfileIndex,
-            core::ArgumentKind::WordAlignment => Self::WordAlignment,
-            core::ArgumentKind::WordAddress => Self::WordAddress,
-            core::ArgumentKind::I2cLength => Self::I2cLength,
-            core::ArgumentKind::SoundClip => Self::SoundClip,
-            core::ArgumentKind::HdmiValue => Self::HdmiValue,
-            core::ArgumentKind::HdmiPacketLength => Self::HdmiPacketLength,
-            core::ArgumentKind::AudioCount => Self::AudioCount,
-            core::ArgumentKind::RadioChannel => Self::RadioChannel,
-            core::ArgumentKind::RadioPower => Self::RadioPower,
-            core::ArgumentKind::PeerAddressLength => Self::PeerAddressLength,
-        }
-    }
-}
 #[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
 #[derive(Clone)]
 enum CommandFailure {
@@ -71,64 +41,6 @@ fn command_error(py: Python<'_>, error: core::CommandError) -> PyErr {
     }
 }
 
-macro_rules! quantity {
-    ($name:ident,$input:ty) => {
-        #[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
-        #[derive(Clone)]
-        struct $name {
-            inner: core::$name,
-        }
-        #[pymethods]
-        impl $name {
-            #[new]
-            fn new(py: Python<'_>, value: $input) -> PyResult<Self> {
-                core::$name::new(value)
-                    .map(|inner| Self { inner })
-                    .map_err(|e| command_error(py, e))
-            }
-            #[getter]
-            fn value(&self) -> u8 {
-                self.inner.value()
-            }
-        }
-    };
-}
-quantity!(PinBank, u8);
-quantity!(ProfileIndex, u8);
-
-#[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
-#[derive(Clone)]
-struct WordAddress {
-    inner: core::WordAddress,
-}
-#[pymethods]
-impl WordAddress {
-    #[new]
-    fn new(py: Python<'_>, value: u32) -> PyResult<Self> {
-        core::WordAddress::new(Address(value))
-            .map(|inner| Self { inner })
-            .map_err(|e| command_error(py, e))
-    }
-    #[getter]
-    fn value(&self) -> u32 {
-        self.inner.address().0
-    }
-}
-
-#[pyclass(eq, from_py_object, module = "fujimod.usb.app80")]
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum ProfileBank {
-    First,
-    Second,
-}
-impl From<ProfileBank> for core::ProfileBank {
-    fn from(value: ProfileBank) -> Self {
-        match value {
-            ProfileBank::First => Self::First,
-            ProfileBank::Second => Self::Second,
-        }
-    }
-}
 #[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
 #[derive(Clone)]
 enum ProfileAction {
@@ -163,29 +75,29 @@ impl From<ProfileAction> for core::ProfileAction {
 #[derive(Clone)]
 enum Command {
     NandReadBlocks {
-        spare: network::NandSpare,
+        spare: values::NandSpare,
         block_group: u8,
     },
     Option41 {},
     WlanControl {
-        enabled: media::Toggle,
+        enabled: values::Toggle,
     },
     RadioControl {
         action: network::RadioAction,
     },
     SignalStrength {
-        address: network::PeerAddress,
+        address: values::PeerAddress,
     },
     Iperf {},
     AudioCapture {
-        count: media::AudioCount,
-        route: media::AudioRoute,
+        count: values::AudioCount,
+        route: values::AudioRoute,
     },
     AudioPlayback {
-        mode: media::AudioPlayback,
+        mode: values::AudioPlayback,
     },
     EraseStorage {
-        action: media::StorageErase,
+        action: values::StorageErase,
     },
     StorageStatus {},
     FormatStorage {},
@@ -194,7 +106,7 @@ enum Command {
         action: media::DisplayOptionAction,
     },
     DisplayMode {
-        mode: media::DisplayMode,
+        mode: values::DisplayMode,
     },
     Sound {
         action: media::SoundAction,
@@ -203,13 +115,13 @@ enum Command {
         action: media::HdmiAction,
     },
     ParameterService {
-        enabled: media::Toggle,
+        enabled: values::Toggle,
     },
     ChargeControl {
         action: media::ChargeAction,
     },
     ChargeStatus {
-        query: media::ChargeQuery,
+        query: values::ChargeQuery,
     },
     WritePins {
         bank: PinBank,
@@ -310,22 +222,7 @@ impl From<Command> for core::Command {
         }
     }
 }
-#[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
-#[derive(Clone)]
-enum SaveStatus {
-    Success {},
-    Failed {},
-    Unknown { raw_status: u8 },
-}
-impl From<core::SaveStatus> for SaveStatus {
-    fn from(value: core::SaveStatus) -> Self {
-        match value {
-            core::SaveStatus::Success => Self::Success {},
-            core::SaveStatus::Failed => Self::Failed {},
-            core::SaveStatus::Unknown(raw_status) => Self::Unknown { raw_status },
-        }
-    }
-}
+
 #[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
 #[derive(Clone)]
 enum WordReadResult {
@@ -342,36 +239,21 @@ impl From<core::WordReadResult> for WordReadResult {
         }
     }
 }
-#[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
-#[derive(Clone)]
-enum WordWriteResult {
-    Confirmed {},
-    Rejected {},
-    Unknown { raw_status: u8 },
-}
-impl From<core::WordWriteResult> for WordWriteResult {
-    fn from(value: core::WordWriteResult) -> Self {
-        match value {
-            core::WordWriteResult::Confirmed => Self::Confirmed {},
-            core::WordWriteResult::Rejected => Self::Rejected {},
-            core::WordWriteResult::Unknown(raw_status) => Self::Unknown { raw_status },
-        }
-    }
-}
+
 #[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
 #[derive(Clone)]
 enum ReplyValue {
-    NandRead { status: network::NandReadResult },
-    Option41 { state: network::Option41State },
+    NandRead { status: values::NandReadResult },
+    Option41 { state: values::Option41State },
     SignalStrength { raw_value: u8 },
     Iperf { raw_result: u8 },
-    AudioCaptured { status: media::AudioResult },
-    AudioPlayed { status: media::AudioResult },
-    StorageErased { status: media::StorageEraseResult },
-    StorageStatus { status: media::StorageStatus },
-    ChargeApplied { status: media::ChargeResult },
-    ChargePresence { status: media::ChargePresence },
-    ChargeState { status: media::ReportedChargeState },
+    AudioCaptured { status: values::AudioResult },
+    AudioPlayed { status: values::AudioResult },
+    StorageErased { status: values::StorageEraseResult },
+    StorageStatus { status: values::StorageStatus },
+    ChargeApplied { status: values::ChargeResult },
+    ChargePresence { status: values::ChargePresence },
+    ChargeState { status: values::ReportedChargeState },
     NoPayload {},
     Pins { levels: u16 },
     Channel { value: u16 },
@@ -531,21 +413,19 @@ pub(in crate::usb) fn check_limit(limits: &FirmwareLimits) -> PyResult<()> {
     Ok(())
 }
 pub(super) fn register(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
+    values::register(module)?;
     peripheral::register(module)?;
     media::register(module)?;
     network::register(module)?;
     module.add("CommandError", py.get_type::<CommandError>())?;
-    module.add_class::<ArgumentKind>()?;
+
     module.add_class::<CommandFailure>()?;
-    module.add_class::<PinBank>()?;
-    module.add_class::<ProfileIndex>()?;
-    module.add_class::<WordAddress>()?;
-    module.add_class::<ProfileBank>()?;
+
     module.add_class::<ProfileAction>()?;
     module.add_class::<Command>()?;
-    module.add_class::<SaveStatus>()?;
+
     module.add_class::<WordReadResult>()?;
-    module.add_class::<WordWriteResult>()?;
+
     module.add_class::<ReplyValue>()?;
     module.add_class::<CommandReply>()?;
     module.add_class::<Invocation>()?;

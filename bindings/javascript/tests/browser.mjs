@@ -6,6 +6,7 @@ import { chromium } from 'playwright';
 const files=new Map([
   ['/dist/index.js',['../dist/index.js','text/javascript']],
   ['/pkg/fujimod.js',['../pkg/fujimod.js','text/javascript']],
+  ['/pkg/service-values.js',['../pkg/service-values.js','text/javascript']],
   ['/pkg/fujimod_bg.wasm',['../pkg/fujimod_bg.wasm','application/wasm']],
   ['/tests/webusb-fixture.mjs',['./webusb-fixture.mjs','text/javascript']],
 ]);

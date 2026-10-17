@@ -287,3 +287,7 @@ can reflect unchanged or uninitialized firmware output. `Command.Iperf()` uses
 stored command text and returns an opaque `raw_result` snapshot; the service
 can acknowledge before the test runs. Neither observation implies completion,
 validated signal units or a host poll.
+
+Service value enums, checked quantities, result tags and their public
+registrations come from the [shared Rust generator](../generator/README.md).
+Builds regenerate them automatically; validation remains in the core.

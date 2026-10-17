@@ -3,6 +3,7 @@ use super::*;
 use error::{integer, property, record};
 use fujimod_defs::service as core;
 
+include!(concat!(env!("OUT_DIR"), "/definition_codec_javascript.rs"));
 #[wasm_bindgen]
 #[derive(Clone, Copy)]
 pub enum DefinitionFailureKind {
@@ -17,82 +18,7 @@ pub enum DefinitionFailureKind {
     SourceCount,
     EmptyLabel,
 }
-#[wasm_bindgen]
-#[derive(Clone, Copy)]
-pub enum ServiceCodec {
-    Research,
-    WritePins,
-    ReadPins,
-    ReadChannel,
-    WriteChannel,
-    ProfileByte,
-    DownloadStatus,
-    CopyConfiguration,
-    FlushConfiguration,
-    MemoryWord,
-    RegisterControl,
-    I2c,
-    Accumulator,
-    PeripheralReport,
-    DisplayOption,
-    DisplayMode,
-    Sound,
-    Hdmi,
-    ParameterService,
-    ChargeControl,
-    ChargeStatus,
-    AudioCapture,
-    AudioPlayback,
-    EraseStorage,
-    StorageStatus,
-    FormatStorage,
-    DisplaySetup,
-    NandReadBlocks,
-    Option41,
-    WlanControl,
-    RadioControl,
-    SignalStrength,
-    Iperf,
-}
-impl From<core::Codec> for ServiceCodec {
-    fn from(value: core::Codec) -> Self {
-        match value {
-            core::Codec::Research => Self::Research,
-            core::Codec::WritePins => Self::WritePins,
-            core::Codec::ReadPins => Self::ReadPins,
-            core::Codec::ReadChannel => Self::ReadChannel,
-            core::Codec::WriteChannel => Self::WriteChannel,
-            core::Codec::ProfileByte => Self::ProfileByte,
-            core::Codec::DownloadStatus => Self::DownloadStatus,
-            core::Codec::CopyConfiguration => Self::CopyConfiguration,
-            core::Codec::FlushConfiguration => Self::FlushConfiguration,
-            core::Codec::MemoryWord => Self::MemoryWord,
-            core::Codec::RegisterControl => Self::RegisterControl,
-            core::Codec::I2c => Self::I2c,
-            core::Codec::Accumulator => Self::Accumulator,
-            core::Codec::PeripheralReport => Self::PeripheralReport,
-            core::Codec::DisplayOption => Self::DisplayOption,
-            core::Codec::DisplayMode => Self::DisplayMode,
-            core::Codec::Sound => Self::Sound,
-            core::Codec::Hdmi => Self::Hdmi,
-            core::Codec::ParameterService => Self::ParameterService,
-            core::Codec::ChargeControl => Self::ChargeControl,
-            core::Codec::ChargeStatus => Self::ChargeStatus,
-            core::Codec::AudioCapture => Self::AudioCapture,
-            core::Codec::AudioPlayback => Self::AudioPlayback,
-            core::Codec::EraseStorage => Self::EraseStorage,
-            core::Codec::StorageStatus => Self::StorageStatus,
-            core::Codec::FormatStorage => Self::FormatStorage,
-            core::Codec::DisplaySetup => Self::DisplaySetup,
-            core::Codec::NandReadBlocks => Self::NandReadBlocks,
-            core::Codec::Option41 => Self::Option41,
-            core::Codec::WlanControl => Self::WlanControl,
-            core::Codec::RadioControl => Self::RadioControl,
-            core::Codec::SignalStrength => Self::SignalStrength,
-            core::Codec::Iperf => Self::Iperf,
-        }
-    }
-}
+
 pub(crate) fn invalid(source: core::DefinitionError) -> JsValue {
     use DefinitionFailureKind as K;
     use core::DefinitionError as E;

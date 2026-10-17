@@ -264,3 +264,7 @@ six bytes and returns opaque `rawValue`, which can include unchanged or
 uninitialized firmware output. `Command.iperf()` uses stored configuration text
 and returns opaque `rawResult`; firmware service acknowledgement can precede
 running the test. Neither result starts a host poll or certifies a measurement.
+
+Service value enums, checked quantities, result tags and their public
+registrations come from the [shared Rust generator](../generator/README.md).
+Builds regenerate them automatically; validation remains in the core.

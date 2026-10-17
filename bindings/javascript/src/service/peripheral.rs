@@ -90,70 +90,7 @@ impl RegisterAction {
         }
     }
 }
-#[wasm_bindgen]
-pub struct I2cLength {
-    inner: core::I2cLength,
-}
-#[wasm_bindgen]
-impl I2cLength {
-    #[wasm_bindgen(constructor)]
-    pub fn new(
-        #[wasm_bindgen(unchecked_param_type = "number")] value: JsValue,
-    ) -> Result<Self, JsValue> {
-        core::I2cLength::new(integer(value, u8::MAX.into())? as u8)
-            .map(|inner| Self { inner })
-            .map_err(invalid)
-    }
-    #[wasm_bindgen(getter)]
-    pub fn value(&self) -> u8 {
-        self.inner.value()
-    }
-}
-#[wasm_bindgen]
-pub struct I2cPayload {
-    inner: core::I2cPayload,
-}
-#[wasm_bindgen]
-impl I2cPayload {
-    #[wasm_bindgen(constructor)]
-    pub fn new(
-        #[wasm_bindgen(unchecked_param_type = "Uint8Array")] data: JsValue,
-    ) -> Result<Self, JsValue> {
-        core::I2cPayload::new(&error::buffer(data)?)
-            .map(|inner| Self { inner })
-            .map_err(invalid)
-    }
-    #[wasm_bindgen(getter, unchecked_return_type = "Uint8Array")]
-    pub fn data(&self) -> JsValue {
-        error::bytes(self.inner.data())
-    }
-}
-#[wasm_bindgen]
-#[derive(Clone, Copy)]
-pub enum I2cPort {
-    Port0,
-    Port1,
-    Port2,
-    Port4,
-    Port5,
-}
-impl I2cPort {
-    fn parse(value: JsValue) -> Result<core::I2cPort, JsValue> {
-        let value = integer(value, u32::MAX)?;
-        for (choice, core) in [
-            (Self::Port0, core::I2cPort::Port0),
-            (Self::Port1, core::I2cPort::Port1),
-            (Self::Port2, core::I2cPort::Port2),
-            (Self::Port4, core::I2cPort::Port4),
-            (Self::Port5, core::I2cPort::Port5),
-        ] {
-            if value == choice as u32 {
-                return Ok(core);
-            }
-        }
-        Err(fail(ErrorKind::InvalidArgument, "unknown I2C port"))
-    }
-}
+
 #[wasm_bindgen]
 pub struct I2cAction {
     pub(super) inner: core::I2cAction,
@@ -197,26 +134,5 @@ impl I2cAction {
                 value: integer(value, u8::MAX.into())? as u8,
             },
         })
-    }
-}
-#[wasm_bindgen]
-#[derive(Clone, Copy)]
-pub enum AccumulatorAction {
-    Start,
-    StopAndRead,
-}
-impl AccumulatorAction {
-    pub(super) fn parse(value: JsValue) -> Result<core::AccumulatorAction, JsValue> {
-        let value = integer(value, u32::MAX)?;
-        if value == Self::Start as u32 {
-            Ok(core::AccumulatorAction::Start)
-        } else if value == Self::StopAndRead as u32 {
-            Ok(core::AccumulatorAction::StopAndRead)
-        } else {
-            Err(fail(
-                ErrorKind::InvalidArgument,
-                "unknown accumulator action",
-            ))
-        }
     }
 }
