@@ -81,3 +81,14 @@ with the caller. The session then rejects further requests.
 
 `session.empty_response()` sends one E8 and returns its four raw bytes; those
 bytes do not indicate camera readiness or execution completion.
+
+App80 wire types live in `fujimod.usb.app80`. `CommandCode(value)` is a distinct
+immutable identifier from a selected firmware's service table. Construct
+`Request(code, arguments)` with at most 32 argument bytes; input is zero padded
+and never truncated. `Mailbox(page=..., offset=..., configuration_limit=...)`
+requires explicit firmware values. Call
+`blocking.app80.exchange(session, mailbox, request)` to stage, publish and read
+one result through Rust; it returns the exact 33 mailbox bytes. It holds session
+ownership for the complete operation, checks both mailbox and session limits
+before sending, and does no polling or retries. The publish write awaits its
+ff80 completion; mailbox bytes are not interpreted as a host wait instruction.

@@ -335,3 +335,39 @@ fn data_upload_does_not_implicitly_prepare_or_finalize() {
     assert_eq!(block_on(core.empty_response()).unwrap(), [42, 0, 0, 0]);
     assert!(steps.borrow().is_empty());
 }
+
+#[test]
+fn geometry_error_must_belong_to_requested_function_and_have_valid_header() {
+    use crate::ff80::commands::configuration::ConfigurationView;
+    for (reserved, function, ready) in [(0u32, 1u32, true), (1, 1, false), (0, 2, false)] {
+        let request = ConfigurationView::Ram.encode_geometry();
+        let mut reply = request[..20].to_vec();
+        reply[4..8].copy_from_slice(&1u32.to_le_bytes());
+        reply[8..12].copy_from_slice(&0xffffu32.to_le_bytes());
+        reply[12..16].copy_from_slice(&reserved.to_le_bytes());
+        reply[16..20].copy_from_slice(&function.to_le_bytes());
+        let (mut core, steps) = opened(command_steps(request, 48, Ok(reply)));
+        let result = block_on(core.configuration_geometry(ConfigurationView::Ram));
+        if ready {
+            assert!(matches!(
+                result,
+                Err(Error::DeviceStatus {
+                    primary: 1,
+                    secondary: 0xffff,
+                    ..
+                })
+            ));
+        } else {
+            assert!(matches!(result, Err(Error::Protocol(_))));
+        }
+        assert_eq!(
+            core.state,
+            if ready {
+                SessionState::Ready
+            } else {
+                SessionState::CompletionUnknown
+            }
+        );
+        assert!(steps.borrow().is_empty());
+    }
+}

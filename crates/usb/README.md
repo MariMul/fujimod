@@ -67,7 +67,8 @@ chunks already returned successfully.
 not a readiness poll or a wait-for-execution API.
 
 The initial implementation is tested on native macOS with synthetic exchanges;
-no hardware access is part of the test suite. App80 and browser builds are subsequent capabilities. Native Python bindings live in `bindings/python/` at the workspace
+no hardware access is part of the test suite. Browser builds are a subsequent
+capability. Native Python bindings live in `bindings/python/` at the workspace
 root. All public I/O is async and the internal test interface does not
 require `Send` futures. Browser execution is not yet validated.
 
@@ -83,3 +84,17 @@ The opt-in `testing` feature supplies strict synthetic exchange scripts through
 the same session implementation. It does not enumerate or open USB devices.
 Python's test build uses it to verify streaming and ownership across the language
 boundary; regular builds contain only the nusb backend.
+
+App80 has a separate [`app80`](src/app80.rs) wire codec: `CommandCode`, bounded
+`Request` and exact `Reply`. Identifiers and argument meanings come from the
+selected firmware's service table; the codec does not equate command bytes,
+ff80 status words or firmware callback dispositions.
+
+`operations::app80::Mailbox` composes the ff80 carrier. Supply the selected
+firmware's page, command-byte offset and configuration limit. `exchange()`
+stages 32 argument bytes, publishes the 33-byte request, awaits that write's
+ff80 reply, then reads the mailbox once. The complete operation's host budget
+is checked before the first write. Firmware asynchronous completion is handled
+by the ff80 exchange; there is no invented mailbox busy bit, automatic poll,
+retry, reset or cleanup. A failed or cancelled USB exchange fences the session.
+Command-specific result decoding and named body APIs belong above this carrier.

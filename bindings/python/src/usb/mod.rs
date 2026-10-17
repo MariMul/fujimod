@@ -723,6 +723,10 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     usb.add("ClosedSessionError", py.get_type::<ClosedSessionError>())?;
     usb.add("SessionBusyError", py.get_type::<SessionBusyError>())?;
     blocking.add("__path__", PyList::empty(py))?;
+    let app80 = app80::types_module(py)?;
+    let app80_blocking = app80::blocking_module(py)?;
+    usb.add_submodule(&app80)?;
+    blocking.add_submodule(&app80_blocking)?;
     let memory = memory::module(py)?;
     let data = data::module(py)?;
     usb.add_class::<OffsetMode>()?;
@@ -739,6 +743,8 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
         .getattr("modules")?
         .cast_into::<PyDict>()?;
     modules.set_item("fujimod.usb", &usb)?;
+    modules.set_item("fujimod.usb.app80", &app80)?;
+    modules.set_item("fujimod.usb.blocking.app80", &app80_blocking)?;
     modules.set_item("fujimod.usb.blocking", &blocking)?;
     modules.set_item("fujimod.usb.blocking.memory", &memory)?;
     modules.set_item("fujimod.usb.blocking.data", &data)?;
@@ -751,6 +757,7 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     Ok(())
 }
 
+mod app80;
 mod data;
 mod memory;
 mod range;

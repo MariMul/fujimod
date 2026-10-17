@@ -50,11 +50,25 @@ impl ConfigurationView {
         memory_request(0x1a0002, 1, &params, &[])
     }
     pub(crate) fn decode_geometry(self, response: Vec<u8>) -> Result<ConfigurationGeometry> {
-        status(&response, 0x1a0002, 36)?;
+        if response.len() < 20 {
+            return Err(ProtocolError::ReplyLength {
+                expected: 20,
+                actual: response.len(),
+            }
+            .into());
+        }
         if word(&response, 16) != 1 {
             return Err(ProtocolError::FunctionEcho {
                 expected: 1,
                 actual: word(&response, 16),
+            }
+            .into());
+        }
+        status(&response, 0x1a0002, 20)?;
+        if response.len() < 36 {
+            return Err(ProtocolError::ReplyLength {
+                expected: 36,
+                actual: response.len(),
             }
             .into());
         }

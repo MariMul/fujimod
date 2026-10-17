@@ -48,6 +48,9 @@ pub(crate) fn status(response: &[u8], command: u32, header: usize) -> Result<()>
         }
         .into());
     }
+    if word(response, 12) != 0 {
+        return Err(ProtocolError::ReservedField(word(response, 12)).into());
+    }
     let (primary, secondary) = (word(response, 4), word(response, 8));
     if primary != 0 || secondary != 0 {
         return Err(Error::DeviceStatus {
@@ -55,9 +58,6 @@ pub(crate) fn status(response: &[u8], command: u32, header: usize) -> Result<()>
             primary,
             secondary,
         });
-    }
-    if word(response, 12) != 0 {
-        return Err(ProtocolError::ReservedField(word(response, 12)).into());
     }
     Ok(())
 }

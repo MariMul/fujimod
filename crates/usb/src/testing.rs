@@ -23,6 +23,10 @@ pub enum Exchange {
         maximum: usize,
         data: Vec<u8>,
     },
+    /// A synthetic peer that has accepted a read but has not completed it.
+    PendingRead {
+        maximum: usize,
+    },
     ReadFailure {
         maximum: usize,
         error: nusb::transfer::TransferError,
@@ -102,6 +106,9 @@ impl Io for Script {
                 maximum: expected,
                 data,
             }) if expected == maximum => Ok(data),
+            Some(Exchange::PendingRead { maximum: expected }) if expected == maximum => {
+                std::future::pending().await
+            }
             Some(Exchange::ReadFailure {
                 maximum: expected,
                 error,

@@ -1,0 +1,86 @@
+//! App80 wire types and the blocking adapter for its ff80 mailbox operation.
+use super::*;
+
+#[pyclass(frozen, eq, hash, from_py_object, module = "fujimod.usb.app80")]
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+struct CommandCode {
+    inner: usb::app80::CommandCode,
+}
+#[pymethods]
+impl CommandCode {
+    #[new]
+    fn new(value: u8) -> Self {
+        Self {
+            inner: usb::app80::CommandCode(value),
+        }
+    }
+    #[getter]
+    fn value(&self) -> u8 {
+        self.inner.0
+    }
+}
+
+#[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
+#[derive(Clone)]
+struct Request {
+    inner: usb::app80::Request,
+}
+#[pymethods]
+impl Request {
+    #[new]
+    fn new(py: Python<'_>, code: &CommandCode, arguments: Vec<u8>) -> PyResult<Self> {
+        usb::app80::Request::new(code.inner, &arguments)
+            .map(|inner| Self { inner })
+            .map_err(|e| convert_error(py, e))
+    }
+    #[getter]
+    fn raw<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.inner.encode())
+    }
+}
+
+#[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
+#[derive(Clone)]
+struct Mailbox {
+    inner: usb::operations::app80::Mailbox,
+}
+#[pymethods]
+impl Mailbox {
+    #[new]
+    #[pyo3(signature=(*,page,offset,configuration_limit))]
+    fn new(py: Python<'_>, page: u32, offset: u32, configuration_limit: u32) -> PyResult<Self> {
+        usb::operations::app80::Mailbox::new(page, offset, nz(configuration_limit)?)
+            .map(|inner| Self { inner })
+            .map_err(|e| convert_error(py, e))
+    }
+}
+
+#[pyfunction]
+fn exchange<'py>(
+    py: Python<'py>,
+    session: &Session,
+    mailbox: &Mailbox,
+    request: &Request,
+) -> PyResult<Bound<'py, PyBytes>> {
+    if session.limits.configuration.get() < 33 {
+        return Err(PyValueError::new_err(
+            "App80 mailbox requires a 33-byte configuration command",
+        ));
+    }
+    session
+        .with(py, |s| block_on(mailbox.inner.exchange(s, &request.inner)))
+        .map(|reply| PyBytes::new(py, reply.raw()))
+}
+
+pub(super) fn types_module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
+    let module = PyModule::new(py, "fujimod.usb.app80")?;
+    module.add_class::<CommandCode>()?;
+    module.add_class::<Request>()?;
+    module.add_class::<Mailbox>()?;
+    Ok(module)
+}
+pub(super) fn blocking_module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
+    let module = PyModule::new(py, "fujimod.usb.blocking.app80")?;
+    module.add_function(wrap_pyfunction!(exchange, &module)?)?;
+    Ok(module)
+}
