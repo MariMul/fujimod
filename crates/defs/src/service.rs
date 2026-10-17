@@ -140,6 +140,12 @@ pub enum Codec {
     Iperf,
     Wps,
     Station,
+    NetworkReconfigure,
+    TransferPrepare,
+    TransferSelectOperation,
+    TransferReady,
+    TransferSelectChannel,
+    TransferStart,
 }
 impl Codec {
     pub fn argument_slots(self) -> usize {
@@ -168,6 +174,9 @@ impl Codec {
             Self::Iperf => 1,
             Self::Wps => 8,
             Self::Station => 4,
+            Self::NetworkReconfigure => 14,
+            Self::TransferPrepare | Self::TransferReady | Self::TransferStart => 1,
+            Self::TransferSelectOperation | Self::TransferSelectChannel => 2,
         }
     }
 }

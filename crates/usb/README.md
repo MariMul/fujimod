@@ -325,3 +325,28 @@ path. Connection and scan replies preserve opaque callback-result bytes; scan
 also preserves the low count byte. The command can wait within firmware for
 callbacks or network readiness. Host deadlines still fence uncertain USB work;
 there is no implicit retry, credential setup or scan-result download.
+
+`NetworkReconfigure { action }` stops the server, reads the six-byte network
+configuration snapshot, or applies the firmware's AP request. `Apply` takes a
+byte-sized number (formatted by firmware into its three-byte SSID), checked
+`RadioChannel` 0–14, `AccessPointRadioMode::Mode2/Mode3`,
+`AccessPointSecurity::Option0/Option2/Option3` and an exact two-byte `CountryBytes`.
+The radio choices encode 0/1 and select lower mode 2/3. Other security fields
+require legacy-key data that this command cannot provide. Key material, beacon
+interval and other options come from firmware state; the library does not build
+credentials or a connection workflow. Apply can acknowledge before completing
+its work, so its six output bytes remain a snapshot. Unchanged output retains
+the initial `ff` bytes.
+
+The service transfer controls are `TransferPrepare`,
+`TransferSelectOperation { operation }`, `TransferReady`,
+`TransferSelectChannel { channel }` and `TransferStart`. They invoke firmware
+control requests; they do not compose USB payload transfer or a setup sequence.
+`TransferOperation` names lower operations 0/1/2/3/6, with canonical selectors
+0/1/2/3/255. `TransferChannel` names operations 1/3/4 with selectors 0/1/2.
+Preparation output distinguishes success 0, preparation error 2 and source status
+7 (encoded 3). The other results distinguish 0/1 and preserve unknown bytes.
+An operation-selection callback error can leave output unchanged; unknown 255
+is data rather than a host completion instruction. Studied transfer callees can
+be stubs, so an encoded success does not establish a physical transfer or device
+readiness. The host adds no retry, poll or release operation.

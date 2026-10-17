@@ -10,6 +10,7 @@ fn catalogue(reverse: bool) -> Catalogue {
         ("iperf", 1),
         ("wps", 8),
         ("station", 4),
+        ("network_reconfigure", 14),
     ];
     let entries:Vec<_>=layouts.into_iter().enumerate().map(|(n,(codec,count))|{
   let slots:Vec<_>=(0..count).map(|i|if reverse {31-i}else{i}).collect();
@@ -280,5 +281,82 @@ fn station_controls_preserve_opaque_callback_and_scan_count_snapshots() {
                 );
             }
         }
+    }
+}
+
+#[test]
+fn access_point_requests_keep_country_bytes_channel_and_security_separate() {
+    for data in [vec![], vec![1], vec![1, 2, 3]] {
+        assert!(CountryBytes::new(&data).is_err());
+    }
+    let country = CountryBytes::new(b"US").unwrap();
+    for reverse in [false, true] {
+        let c = catalogue(reverse);
+        let stop = prepare(
+            &c,
+            Command::NetworkReconfigure {
+                action: NetworkReconfigureAction::StopServer,
+            },
+        );
+        assert_eq!(logical(&stop), [0; 14]);
+        assert_eq!(decode(&stop, 8, 255).value(), &ReplyValue::NoPayload);
+        let read = prepare(
+            &c,
+            Command::NetworkReconfigure {
+                action: NetworkReconfigureAction::ReadConfiguration,
+            },
+        );
+        assert_eq!(
+            logical(&read),
+            [1, 0, 255, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255]
+        );
+        for (radio, wire) in [
+            (AccessPointRadioMode::Mode2, 0),
+            (AccessPointRadioMode::Mode3, 1),
+        ] {
+            for (security, sec) in [
+                (AccessPointSecurity::Option0, 0),
+                (AccessPointSecurity::Option2, 2),
+                (AccessPointSecurity::Option3, 3),
+            ] {
+                for channel in [0, 14] {
+                    let p = prepare(
+                        &c,
+                        Command::NetworkReconfigure {
+                            action: NetworkReconfigureAction::Apply {
+                                number: 255,
+                                channel: RadioChannel::new(channel).unwrap(),
+                                radio,
+                                security,
+                                country,
+                            },
+                        },
+                    );
+                    assert_eq!(p.request.code(), CommandCode(208));
+                    assert_eq!(
+                        logical(&p),
+                        [
+                            1, 255, channel, 0, wire, sec, b'U', b'S', 255, 255, 255, 255, 255, 255
+                        ]
+                    );
+                    let mut raw = p.request.encode();
+                    for (i, byte) in [0, 1, 128, 254, 255, 42].into_iter().enumerate() {
+                        raw[1 + usize::from(p.slots[i + 8])] = byte;
+                    }
+                    assert_eq!(
+                        p.decode(Reply::decode(&raw).unwrap()).unwrap().value(),
+                        &ReplyValue::NetworkConfiguration {
+                            data: [0, 1, 128, 254, 255, 42]
+                        }
+                    );
+                }
+            }
+        }
+        assert_eq!(
+            read.decode(Reply::decode(&read.request.encode()).unwrap())
+                .unwrap()
+                .value(),
+            &ReplyValue::NetworkConfiguration { data: [255; 6] }
+        );
     }
 }

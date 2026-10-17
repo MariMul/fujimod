@@ -278,3 +278,12 @@ configuration. Station scans use `StationScanMode.Mode0/Mode1`, which invoke the
 same studied path. Replies preserve callback snapshots without a host poll.
 Generated handle types remain distinct in TypeScript, even when they expose the
 same properties. See the [Rust command semantics](../../crates/usb/README.md).
+
+`Command.networkReconfigure(NetworkReconfigureAction.readConfiguration())`
+returns an opaque six-byte snapshot. AP application uses the action's `apply`
+factory with number, checked channel, `AccessPointRadioMode`,
+`AccessPointSecurity` and exact two-byte `CountryBytes`. The separate
+`Command.transferPrepare`, `transferSelectOperation`, `transferReady`,
+`transferSelectChannel` and `transferStart` factories use `TransferOperation` and
+`TransferChannel` enums and return typed results with preserved unknown bytes.
+They add no host poll or USB payload transfer workflow.

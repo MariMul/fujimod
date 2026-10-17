@@ -302,3 +302,12 @@ configuration as well as returning a `WpsProgress` snapshot. Station
 `StartStored()` uses existing credentials; `Scan(mode=StationScanMode.Mode0)`
 and `Mode1` invoke the same studied path. Result snapshots never trigger an
 implicit poll. See the [Rust command semantics](../../crates/usb/README.md).
+
+`Command.NetworkReconfigure(action=...)` accepts
+`NetworkReconfigureAction.StopServer()`, `ReadConfiguration()`, or
+`Apply(number=..., channel=RadioChannel(...), radio=AccessPointRadioMode.Mode2,
+security=AccessPointSecurity.Option0, country=CountryBytes(b"US"))`.
+Its configuration data is an opaque six-byte snapshot. Transfer preparation,
+operation/channel selection, readiness and start are separate `Command` variants;
+selectors are `TransferOperation` and `TransferChannel` enums. `TransferResult`
+and `TransferPrepareResult` preserve unknown bytes without requesting a poll.

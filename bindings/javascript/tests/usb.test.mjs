@@ -449,3 +449,32 @@ test('generated WPS and station values preserve snapshots and exact peer selecti
  }
  assert.throws(()=>a.StationAction.scan(99));assert.throws(()=>a.WpsTarget.peer(new a.PeerAddress(new Uint8Array(6))));
 });
+
+test('AP reconfiguration and transfer controls preserve typed results and parameter layouts',()=>{
+ const a=usb.app80,C=a.Command,layouts=[['network_reconfigure',14],['transfer_prepare',1],['transfer_select_operation',2],['transfer_ready',1],['transfer_select_channel',2],['transfer_start',1]];
+ const slots=Object.fromEntries(layouts.map(([name,count])=>[name,Array.from({length:count},(_,n)=>(n*5+7)%32)]));
+ const service=new a.Service(serviceDefinition(layouts.map(([name],n)=>[180+n,name,slots[name],4]))),modes=serviceModes();
+ const prepare=c=>service.prepare(modes,c),logical=(p,name)=>slots[name].map(i=>p.raw[1+i]);
+ const decode=(p,name,index,value)=>{const raw=p.raw;raw[1+slots[name][index]]=value;return p.decode(raw).value;};
+ assert.throws(()=>new a.CountryBytes(new Uint8Array(3)),e=>a.isError(e)&&e.reason.argument===a.ArgumentKind.CountryLength);
+ const data=new Uint8Array([85,83]),country=new a.CountryBytes(data);data.fill(0);assert.deepEqual(country.data,new Uint8Array([85,83]));
+ const read=prepare(C.networkReconfigure(a.NetworkReconfigureAction.readConfiguration()));assert.deepEqual(logical(read,'network_reconfigure'),[1,0,255,0,0,0,0,0,255,255,255,255,255,255]);assert.deepEqual(read.decode(read.raw).value,{kind:a.ReplyKind.NetworkConfiguration,data:new Uint8Array(6).fill(255)});
+ for(const [radio,r] of [[a.AccessPointRadioMode.Mode2,0],[a.AccessPointRadioMode.Mode3,1]])for(const [security,s] of [[a.AccessPointSecurity.Option0,0],[a.AccessPointSecurity.Option2,2],[a.AccessPointSecurity.Option3,3]]){
+  const p=prepare(C.networkReconfigure(a.NetworkReconfigureAction.apply(255,new a.RadioChannel(14),radio,security,country)));
+  assert.deepEqual(logical(p,'network_reconfigure'),[1,255,14,0,r,s,85,83,255,255,255,255,255,255]);
+ }
+ for(const [command,codec,expected,index,kind] of [
+  [C.transferPrepare(),'transfer_prepare',[255],0,a.ReplyKind.TransferPrepared],
+  [C.transferReady(),'transfer_ready',[255],0,a.ReplyKind.TransferReadiness],
+  [C.transferStart(),'transfer_start',[255],0,a.ReplyKind.TransferStarted],
+  ...[[a.TransferOperation.Operation0,0],[a.TransferOperation.Operation1,1],[a.TransferOperation.Operation2,2],[a.TransferOperation.Operation3,3],[a.TransferOperation.Operation6,255]].map(([operation,wire])=>[C.transferSelectOperation(operation),'transfer_select_operation',[wire,255],1,a.ReplyKind.TransferOperationSelected]),
+  ...[[a.TransferChannel.Operation1,0],[a.TransferChannel.Operation3,1],[a.TransferChannel.Operation4,2]].map(([channel,wire])=>[C.transferSelectChannel(channel),'transfer_select_channel',[wire,255],1,a.ReplyKind.TransferChannelSelected]),
+ ]){
+  const p=prepare(command);assert.deepEqual(logical(p,codec),expected);
+  for(const raw of [0,1,2,3,255]){
+   const group=codec==='transfer_prepare'?a.TransferPrepareResultKind:a.TransferResultKind;
+   const k=codec==='transfer_prepare'?({0:group.Success,2:group.PreparationError,3:group.Status7}[raw]??group.Unknown):({0:group.Success,1:group.Failed}[raw]??group.Unknown);
+   assert.deepEqual(decode(p,codec,index,raw),{kind,result:k===group.Unknown?{kind:k,rawStatus:raw}:{kind:k}});
+  }
+ }
+});

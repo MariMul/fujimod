@@ -167,3 +167,28 @@ test('production WPS and station snapshot bytes never trigger another host reque
   }
  }finally{fixture.restore();}
 });
+
+test('production AP and transfer controls complete once and retain unknown result sentinels',async()=>{
+ const fixture=installWebUsb(),a=usb.app80;
+ try{
+  const [device]=await usb.discover(usb.DeviceFilter.Diagnostic),[iface]=await device.interfaces();
+  for(const [codec,count,command,outputs,expected] of [
+   ['network_reconfigure',14,a.Command.networkReconfigure(a.NetworkReconfigureAction.readConfiguration()),{8:0,9:1,10:128,11:254,12:255,13:42},{kind:a.ReplyKind.NetworkConfiguration,data:new Uint8Array([0,1,128,254,255,42])}],
+   ['network_reconfigure',14,a.Command.networkReconfigure(a.NetworkReconfigureAction.apply(255,new a.RadioChannel(0),a.AccessPointRadioMode.Mode2,a.AccessPointSecurity.Option0,new a.CountryBytes(new Uint8Array([85,83])))),{},{kind:a.ReplyKind.NetworkConfiguration,data:new Uint8Array(6).fill(255)}],
+   ['network_reconfigure',14,a.Command.networkReconfigure(a.NetworkReconfigureAction.stopServer()),{},{kind:a.ReplyKind.NoPayload}],
+   ['transfer_prepare',1,a.Command.transferPrepare(),{0:3},{kind:a.ReplyKind.TransferPrepared,result:{kind:a.TransferPrepareResultKind.Status7}}],
+   ['transfer_select_operation',2,a.Command.transferSelectOperation(a.TransferOperation.Operation6),{1:255},{kind:a.ReplyKind.TransferOperationSelected,result:{kind:a.TransferResultKind.Unknown,rawStatus:255}}],
+   ['transfer_ready',1,a.Command.transferReady(),{0:1},{kind:a.ReplyKind.TransferReadiness,result:{kind:a.TransferResultKind.Failed}}],
+   ['transfer_select_channel',2,a.Command.transferSelectChannel(a.TransferChannel.Operation4),{1:1},{kind:a.ReplyKind.TransferChannelSelected,result:{kind:a.TransferResultKind.Failed}}],
+   ['transfer_start',1,a.Command.transferStart(),{0:0},{kind:a.ReplyKind.TransferStarted,result:{kind:a.TransferResultKind.Success}}],
+  ]){
+   const definition=defs.service.Definition.fromJson(JSON.stringify({schema:1,firmware:{id:'ap-transfer-b',model:'Synthetic',version:'2',sha256:'ab'.repeat(32)},mailbox:{page:3,offset:576,configuration_limit:512},entries:[{code:153,label:codec,codec,slots:Array.from({length:count},(_,n)=>n+7),enabled_modes:4,next_mode:0,firmware_kind:1,handler:0,parameter_table:0}]}),new defs.FirmwareIdentity('ap-transfer-b','ab'.repeat(32)));
+   const invocation=new a.Service(definition).prepare(new defs.service.ServiceModes(4),command);
+   fixture.state.onConfigurationWrite=(page,address,raw)=>{if(page===3&&address===576)for(const [index,byte] of Object.entries(outputs)){assert.equal(raw[8+Number(index)],255);fixture.state.configuration.set(`3:${584+Number(index)}`,byte);}};
+   const before=fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length;
+   const session=await usb.Session.open(device,iface,new usb.FirmwareLimits(256,256,256,256),new usb.TransferOptions(100,1024));
+   assert.deepEqual((await a.execute(session,invocation)).value,expected);assert.equal(session.state,usb.SessionState.Ready);
+   assert.equal(fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length-before,3);await session.close();
+  }
+ }finally{fixture.restore();}
+});

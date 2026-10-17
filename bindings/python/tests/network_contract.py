@@ -1,4 +1,4 @@
-"""Shared native/Pyodide radio and NAND command value contract."""
+"""Shared native/Pyodide network and NAND command value contract."""
 
 
 def check_network_values():
@@ -15,6 +15,7 @@ def check_network_values():
         ("iperf", 1),
         ("wps", 8),
         ("station", 4),
+        ("network_reconfigure", 14),
     ]
     slots = {name: [(i * 5 + 7) % 32 for i in range(count)] for name, count in layouts}
     entries = [
@@ -256,4 +257,90 @@ def check_network_values():
             pass
         else:
             raise AssertionError("untyped WPS/station selector accepted")
+    invalid(lambda: a.CountryBytes(b"USA"), a.ArgumentKind.CountryLength)
+    data = bytearray(b"US")
+    country = a.CountryBytes(data)
+    data[:] = b"??"
+    assert country.data == b"US"
+    p = prepare(
+        a.Command.NetworkReconfigure(
+            action=a.NetworkReconfigureAction.ReadConfiguration()
+        )
+    )
+    assert logical(p, "network_reconfigure") == [
+        1,
+        0,
+        255,
+        0,
+        0,
+        0,
+        0,
+        0,
+        255,
+        255,
+        255,
+        255,
+        255,
+        255,
+    ]
+    assert bytes(p.decode(p.raw).value.data) == bytes([255] * 6)
+    for radio, radio_wire in [
+        (a.AccessPointRadioMode.Mode2, 0),
+        (a.AccessPointRadioMode.Mode3, 1),
+    ]:
+        for security, security_wire in [
+            (a.AccessPointSecurity.Option0, 0),
+            (a.AccessPointSecurity.Option2, 2),
+            (a.AccessPointSecurity.Option3, 3),
+        ]:
+            p = prepare(
+                a.Command.NetworkReconfigure(
+                    action=a.NetworkReconfigureAction.Apply(
+                        number=255,
+                        channel=a.RadioChannel(14),
+                        radio=radio,
+                        security=security,
+                        country=country,
+                    )
+                )
+            )
+            assert logical(p, "network_reconfigure") == [
+                1,
+                255,
+                14,
+                0,
+                radio_wire,
+                security_wire,
+                85,
+                83,
+                255,
+                255,
+                255,
+                255,
+                255,
+                255,
+            ]
+            buf = bytearray(p.raw)
+            for i, byte in enumerate([0, 1, 128, 254, 255, 42]):
+                buf[1 + slots["network_reconfigure"][8 + i]] = byte
+            value = p.decode(buf).value
+            assert isinstance(value, a.ReplyValue.NetworkConfiguration) and bytes(
+                value.data
+            ) == bytes([0, 1, 128, 254, 255, 42])
+    p = prepare(
+        a.Command.NetworkReconfigure(action=a.NetworkReconfigureAction.StopServer())
+    )
+    assert isinstance(p.decode(p.raw).value, a.ReplyValue.NoPayload)
+    try:
+        a.NetworkReconfigureAction.Apply(
+            number=1,
+            channel=a.RadioChannel(1),
+            radio=a.RadioMode.Mode0,
+            security=a.AccessPointSecurity.Option0,
+            country=country,
+        )
+    except TypeError:
+        pass
+    else:
+        raise AssertionError("wrong AP selector type accepted")
     return True

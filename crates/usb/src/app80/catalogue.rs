@@ -11,10 +11,13 @@ pub use media::{
 };
 mod network;
 pub use network::{
-    ConnectionState, Option41State, PeerAddress, RadioAction, RadioChannel, RadioMode, RadioPower,
-    StationAction, StationScanMode, WpsAction, WpsCallbackResult, WpsPeerAddress, WpsPhase,
-    WpsProgress, WpsTarget,
+    AccessPointRadioMode, AccessPointSecurity, ConnectionState, CountryBytes,
+    NetworkReconfigureAction, Option41State, PeerAddress, RadioAction, RadioChannel, RadioMode,
+    RadioPower, StationAction, StationScanMode, WpsAction, WpsCallbackResult, WpsPeerAddress,
+    WpsPhase, WpsProgress, WpsTarget,
 };
+mod transfer;
+pub use transfer::{TransferChannel, TransferOperation, TransferPrepareResult, TransferResult};
 mod peripheral;
 pub use peripheral::{
     AccumulatorAction, I2cAction, I2cLength, I2cPayload, I2cPort, RegisterAction,
@@ -48,6 +51,7 @@ pub enum ArgumentKind {
     RadioPower,
     PeerAddressLength,
     WpsPeerAddress,
+    CountryLength,
 }
 impl std::fmt::Display for ArgumentKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -65,6 +69,7 @@ impl std::fmt::Display for ArgumentKind {
             Self::RadioPower => "encoded radio power field (0..=127)",
             Self::PeerAddressLength => "peer address length (6 bytes)",
             Self::WpsPeerAddress => "exact WPS peer (6 bytes, first byte nonzero)",
+            Self::CountryLength => "country field length (2 bytes)",
         })
     }
 }
@@ -225,6 +230,18 @@ pub enum Command {
     Station {
         action: StationAction,
     },
+    NetworkReconfigure {
+        action: NetworkReconfigureAction,
+    },
+    TransferPrepare,
+    TransferSelectOperation {
+        operation: TransferOperation,
+    },
+    TransferReady,
+    TransferSelectChannel {
+        channel: TransferChannel,
+    },
+    TransferStart,
 }
 impl Command {
     pub fn codec(self) -> Codec {
@@ -263,6 +280,12 @@ impl Command {
             Self::Iperf => Codec::Iperf,
             Self::Wps { .. } => Codec::Wps,
             Self::Station { .. } => Codec::Station,
+            Self::NetworkReconfigure { .. } => Codec::NetworkReconfigure,
+            Self::TransferPrepare => Codec::TransferPrepare,
+            Self::TransferSelectOperation { .. } => Codec::TransferSelectOperation,
+            Self::TransferReady => Codec::TransferReady,
+            Self::TransferSelectChannel { .. } => Codec::TransferSelectChannel,
+            Self::TransferStart => Codec::TransferStart,
         }
     }
 }
@@ -313,6 +336,12 @@ pub enum ReplyValue {
     WpsProgress { snapshot: WpsProgress },
     StationConnection { raw_result: u8 },
     StationScan { raw_result: u8, raw_count: u8 },
+    NetworkConfiguration { data: [u8; 6] },
+    TransferPrepared { result: TransferPrepareResult },
+    TransferOperationSelected { result: TransferResult },
+    TransferReadiness { result: TransferResult },
+    TransferChannelSelected { result: TransferResult },
+    TransferStarted { result: TransferResult },
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommandReply {
@@ -464,7 +493,31 @@ impl PreparedCommand {
                 raw_result: byte(2),
                 raw_count: byte(3),
             },
-            Command::Wps {
+            Command::NetworkReconfigure {
+                action:
+                    NetworkReconfigureAction::ReadConfiguration | NetworkReconfigureAction::Apply { .. },
+            } => ReplyValue::NetworkConfiguration {
+                data: std::array::from_fn(|i| byte(i + 8)),
+            },
+            Command::TransferPrepare => ReplyValue::TransferPrepared {
+                result: TransferPrepareResult::decode(byte(0)),
+            },
+            Command::TransferSelectOperation { .. } => ReplyValue::TransferOperationSelected {
+                result: TransferResult::decode(byte(1)),
+            },
+            Command::TransferReady => ReplyValue::TransferReadiness {
+                result: TransferResult::decode(byte(0)),
+            },
+            Command::TransferSelectChannel { .. } => ReplyValue::TransferChannelSelected {
+                result: TransferResult::decode(byte(1)),
+            },
+            Command::TransferStart => ReplyValue::TransferStarted {
+                result: TransferResult::decode(byte(0)),
+            },
+            Command::NetworkReconfigure {
+                action: NetworkReconfigureAction::StopServer,
+            }
+            | Command::Wps {
                 action: WpsAction::Stop | WpsAction::Connect,
             }
             | Command::Station {
@@ -659,6 +712,18 @@ impl Catalogue {
             Command::RadioControl { action } => action.encode(&mut put),
             Command::Wps { action } => action.encode(&mut put),
             Command::Station { action } => action.encode(&mut put),
+            Command::NetworkReconfigure { action } => action.encode(&mut put),
+            Command::TransferPrepare | Command::TransferReady | Command::TransferStart => {
+                put(0, 255)
+            }
+            Command::TransferSelectOperation { operation } => {
+                put(0, operation.wire());
+                put(1, 255);
+            }
+            Command::TransferSelectChannel { channel } => {
+                put(0, channel.wire());
+                put(1, 255);
+            }
             Command::SignalStrength { address } => {
                 for (i, &value) in address.data().iter().enumerate() {
                     put(i, value);
@@ -702,3 +767,6 @@ mod media_tests;
 
 #[cfg(test)]
 mod network_tests;
+
+#[cfg(test)]
+mod transfer_tests;

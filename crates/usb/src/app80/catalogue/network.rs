@@ -280,3 +280,86 @@ impl StationAction {
         }
     }
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AccessPointRadioMode {
+    Mode2,
+    Mode3,
+}
+/// Reviewed AP security fields that do not require the legacy-key buffer this
+/// service command cannot supply. No passphrase or credential setup is implied.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AccessPointSecurity {
+    Option0,
+    Option2,
+    Option3,
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CountryBytes([u8; 2]);
+impl CountryBytes {
+    pub fn new(data: &[u8]) -> Result<Self, CommandError> {
+        data.try_into()
+            .map(Self)
+            .map_err(|_| CommandError::Argument(ArgumentKind::CountryLength))
+    }
+    pub fn data(&self) -> &[u8; 2] {
+        &self.0
+    }
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NetworkReconfigureAction {
+    StopServer,
+    ReadConfiguration,
+    Apply {
+        number: u8,
+        channel: RadioChannel,
+        radio: AccessPointRadioMode,
+        security: AccessPointSecurity,
+        country: CountryBytes,
+    },
+}
+impl NetworkReconfigureAction {
+    pub(super) fn encode(self, put: &mut impl FnMut(usize, u8)) {
+        match self {
+            Self::StopServer => put(0, 0),
+            Self::ReadConfiguration => {
+                put(0, 1);
+                put(2, 255);
+                for i in 8..14 {
+                    put(i, 255);
+                }
+            }
+            Self::Apply {
+                number,
+                channel,
+                radio,
+                security,
+                country,
+            } => {
+                put(0, 1);
+                put(1, number);
+                put(2, channel.value());
+                put(
+                    4,
+                    match radio {
+                        AccessPointRadioMode::Mode2 => 0,
+                        AccessPointRadioMode::Mode3 => 1,
+                    },
+                );
+                put(
+                    5,
+                    match security {
+                        AccessPointSecurity::Option0 => 0,
+                        AccessPointSecurity::Option2 => 2,
+                        AccessPointSecurity::Option3 => 3,
+                    },
+                );
+                put(6, country.0[0]);
+                put(7, country.0[1]);
+                for i in 8..14 {
+                    put(i, 255);
+                }
+            }
+        }
+    }
+}

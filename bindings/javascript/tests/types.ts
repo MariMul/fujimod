@@ -142,3 +142,10 @@ async function wpsValues():Promise<void>{
  }
 }
 void wpsValues;
+
+// @ts-expect-error Transfer operation selectors are not integer quantities.
+usb.app80.Command.transferSelectOperation(123);
+// @ts-expect-error Channel and operation are distinct selector groups.
+usb.app80.Command.transferSelectChannel(usb.app80.TransferOperation.Operation1);
+// @ts-expect-error AP radio mode is distinct from the direct-radio selector.
+usb.app80.NetworkReconfigureAction.apply(0,new usb.app80.RadioChannel(1),usb.app80.RadioMode.Mode0,usb.app80.AccessPointSecurity.Option0,new usb.app80.CountryBytes(new Uint8Array(2)));
