@@ -1,0 +1,27 @@
+[package]
+name = "fujimod-python"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "_native"
+crate-type = ["cdylib"]
+test = false
+doctest = false
+
+[features]
+testing = ["fujimod-usb/testing"]
+
+[dependencies]
+pyo3 = { workspace = true, features = ["experimental-async"] }
+fujimod-usb.workspace = true
+fujimod-defs.workspace = true
+futures-lite.workspace = true
+futures-channel.workspace = true
+nusb.workspace = true
+
+[build-dependencies]
+fujimod-bindgen = { path = "../generator" }

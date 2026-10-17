@@ -1,2 +1,10 @@
 .DS_Store
+/target/
+/bindings/javascript/pkg/
+/bindings/javascript/dist/
+/bindings/javascript/node_modules/
+
 __pycache__/
+.pytest_cache/
+/bindings/python/python/fujimod/_native*.so
+/bindings/python/python/fujimod/_native*.pyd

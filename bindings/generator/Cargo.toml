@@ -1,0 +1,11 @@
+[package]
+name = "fujimod-bindgen"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+syn = { version = "3", features = ["full"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
