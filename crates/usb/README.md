@@ -350,3 +350,31 @@ An operation-selection callback error can leave output unchanged; unknown 255
 is data rather than a host completion instruction. Studied transfer callees can
 be stubs, so an encoded success does not establish a physical transfer or device
 readiness. The host adds no retry, poll or release operation.
+
+Transfer data commands use their own types. `TransferWordAddress` checks
+four-byte alignment within the transfer engine's 64 KiB word space; it cannot
+substitute for CPU-memory `WordAddress`. Read/write words use big-endian address
+and value fields, and expose payload only for result byte 0. `TransferPairFirst`
+checks the first pair field's nine-bit range; the second input is 16 bits, while
+successful output contains only two bytes. Pair replies retain callback error,
+rejection, wait error and unknown status as separate variants.
+
+`TransferHalfwordAddress` forwards the full 32-bit address without inventing an
+alignment rule. `TransferPayloadByte` forwards one opaque byte to the byte,
+mode-byte and bitfield commands. Their constructors are infallible in Rust;
+language bindings still check integer widths. Bitfields take two 16-bit masks,
+which firmware expands into separate bit arrays. Byte commands return two raw
+bytes. Halfword and option-word replies are explicitly `raw_value` snapshots:
+studied lower helpers return success without populating their output buffer.
+Other studied transfer helpers pass null callback data, which can cause invalid
+firmware memory accesses. These codecs describe the requests and returned bytes;
+they do not establish that the current camera state or lower implementation can
+perform the operation.
+
+`TransferOption` selects the eight mode/bank combinations. Selected-word commands
+use distinct enums for lower request kinds 9–14, 7/8 and 16/17; their values are
+16-bit quantities. The stock kind-16/17 command can omit result signaling on its
+success path. `TransferLoadMode` selects the firmware's setup sequence, run
+sequence or kind-3 request with one/zero. These are single service commands;
+firmware performs their internal sequences. The host awaits normal ff80
+completion and adds no polling, inferred success, retries or setup/repair.

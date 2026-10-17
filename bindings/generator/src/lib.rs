@@ -19,6 +19,7 @@ pub struct Quantity {
     pub name: String,
     pub input: String,
     pub getter: String,
+    pub fallible: bool,
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct Values {
@@ -200,12 +201,37 @@ impl Api {
             if !matches!(method.sig.output, ReturnType::Type(..)) {
                 return Err(format!("{name}: getter has no result"));
             }
+            let fallible = match &new.sig.output {
+                ReturnType::Type(_, ty) => match ty.as_ref() {
+                    Type::Path(path)
+                        if path
+                            .path
+                            .segments
+                            .last()
+                            .is_some_and(|s| s.ident == "Result") =>
+                    {
+                        true
+                    }
+                    ty if named(ty).is_some_and(|n| n == "Self" || n == name) => false,
+                    _ => {
+                        return Err(format!(
+                            "{name}: constructor must return Self or Result<Self, CommandError>"
+                        ));
+                    }
+                },
+                _ => {
+                    return Err(format!(
+                        "{name}: constructor must return Self or Result<Self, CommandError>"
+                    ));
+                }
+            };
             quantities.insert(
                 name.clone(),
                 Quantity {
                     name,
                     input,
                     getter: getter.into(),
+                    fallible,
                 },
             );
         }
@@ -549,8 +575,15 @@ fn python_quantity(q: &Quantity) -> String {
     } else {
         call
     };
+    let constructor = if q.fallible {
+        format!(
+            "#[new] fn new(py:Python<'_>,{param}:{arg})->PyResult<Self>{{core::{n}::new({call}).map(|inner|Self{{inner}}).map_err(|e|command_error(py,e))}}"
+        )
+    } else {
+        format!("#[new] fn new({param}:{arg})->Self{{Self{{inner:core::{n}::new({call})}}}}")
+    };
     format!(
-        "#[pyclass(frozen,from_py_object,module=\"fujimod.usb.app80\")] #[derive(Clone)] pub(super) struct {n} {{pub(super) inner:core::{n}}}\nimpl From<core::{n}> for {n}{{fn from(inner:core::{n})->Self{{Self{{inner}}}}}}\n#[pymethods] impl {n} {{#[new] fn new(py:Python<'_>,{param}:{arg})->PyResult<Self>{{core::{n}::new({call}).map(|inner|Self{{inner}}).map_err(|e|command_error(py,e))}} {getter} }}\n"
+        "#[pyclass(frozen,from_py_object,module=\"fujimod.usb.app80\")] #[derive(Clone)] pub(super) struct {n} {{pub(super) inner:core::{n}}}\nimpl From<core::{n}> for {n}{{fn from(inner:core::{n})->Self{{Self{{inner}}}}}}\n#[pymethods] impl {n} {{{constructor} {getter} }}\n"
     )
 }
 fn javascript_quantity(q: &Quantity) -> String {
@@ -584,8 +617,13 @@ fn javascript_quantity(q: &Quantity) -> String {
             format!("#[wasm_bindgen(getter)] pub fn value(&self)->{ty}{{{get}}}"),
         )
     };
+    let body = if q.fallible {
+        format!("core::{n}::new({call}).map(|inner|Self{{inner}}).map_err(invalid)")
+    } else {
+        format!("Ok(Self{{inner:core::{n}::new({call})}})")
+    };
     format!(
-        "#[wasm_bindgen] pub struct {n}{{pub(super) inner:core::{n}}}\n#[wasm_bindgen] impl {n}{{#[wasm_bindgen(constructor)] pub fn new(#[wasm_bindgen(unchecked_param_type=\"{arg}\")] data:JsValue)->Result<Self,JsValue>{{core::{n}::new({call}).map(|inner|Self{{inner}}).map_err(invalid)}} {getter} }}\n"
+        "#[wasm_bindgen] pub struct {n}{{pub(super) inner:core::{n}}}\n#[wasm_bindgen] impl {n}{{#[wasm_bindgen(constructor)] pub fn new(#[wasm_bindgen(unchecked_param_type=\"{arg}\")] data:JsValue)->Result<Self,JsValue>{{{body}}} {getter} }}\n"
     )
 }
 fn javascript_codec(c: &Choice) -> String {

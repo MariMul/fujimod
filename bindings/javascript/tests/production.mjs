@@ -192,3 +192,35 @@ test('production AP and transfer controls complete once and retain unknown resul
   }
  }finally{fixture.restore();}
 });
+
+test('production transfer payload commands use one exchange for raw, rejected and unknown data',async()=>{
+ const fixture=installWebUsb(),a=usb.app80;
+ try{
+  const [device]=await usb.discover(usb.DeviceFilter.Diagnostic),[iface]=await device.interfaces();
+  const word=new a.TransferWordAddress(4),half=new a.TransferHalfwordAddress(0xffffffff),payload=new a.TransferPayloadByte(255);
+  for(const [codec,count,command,outputs,expected] of [
+   ['transfer_word',10,a.Command.transferReadWord(word),{5:137,6:171,7:205,8:239,9:0},{kind:a.ReplyKind.TransferWordRead,result:{kind:a.TransferWordReadResultKind.Value,rawValue:0x89abcdef}}],
+   ['transfer_word',10,a.Command.transferReadWord(word),{9:1},{kind:a.ReplyKind.TransferWordRead,result:{kind:a.TransferWordReadResultKind.Rejected}}],
+   ['transfer_word',10,a.Command.transferWriteWord(word,0),{9:255},{kind:a.ReplyKind.TransferWordWritten,result:{kind:a.TransferResultKind.Unknown,rawStatus:255}}],
+   ['transfer_pair',7,a.Command.transferPair(new a.TransferPairFirst(511),65535),{6:3},{kind:a.ReplyKind.TransferPair,result:{kind:a.TransferPairResultKind.CallbackError}}],
+   ['transfer_halfword',7,a.Command.transferReadHalfword(half),{5:137,6:171},{kind:a.ReplyKind.TransferHalfword,rawValue:0x89ab}],
+   ['transfer_halfword',7,a.Command.transferWriteHalfword(half,0),{},{kind:a.ReplyKind.NoPayload}],
+   ['transfer_option_word',6,a.Command.transferReadOptionWord(a.TransferOption.Option7),{2:137,3:171,4:205,5:239},{kind:a.ReplyKind.TransferOptionWord,rawValue:0x89abcdef}],
+   ['transfer_byte',3,a.Command.transferByte(payload),{1:0,2:255},{kind:a.ReplyKind.TransferBytes,data:new Uint8Array([0,255])}],
+   ['transfer_mode_byte',3,a.Command.transferModeByte(payload),{1:255,2:0},{kind:a.ReplyKind.TransferBytes,data:new Uint8Array([255,0])}],
+   ['transfer_bitfields',5,a.Command.transferBitfields(payload,65535,0),{},{kind:a.ReplyKind.NoPayload}],
+   ['transfer_selected_word',4,a.Command.transferSetSelectedWord(a.TransferSelectedWordKind.Kind9,65535),{},{kind:a.ReplyKind.NoPayload}],
+   ['transfer_word7',3,a.Command.transferSetWord7(a.TransferWord7Kind.Kind7,65535),{},{kind:a.ReplyKind.NoPayload}],
+   ['transfer_word16',3,a.Command.transferSetWord16(a.TransferWord16Kind.Kind16,65535),{},{kind:a.ReplyKind.NoPayload}],
+   ['transfer_load_test',1,a.Command.transferLoadTest(a.TransferLoadMode.Run),{},{kind:a.ReplyKind.NoPayload}],
+  ]){
+   const definition=defs.service.Definition.fromJson(JSON.stringify({schema:1,firmware:{id:'transfer-data-b',model:'Synthetic',version:'2',sha256:'ab'.repeat(32)},mailbox:{page:3,offset:576,configuration_limit:512},entries:[{code:153,label:codec,codec,slots:Array.from({length:count},(_,n)=>n+7),enabled_modes:4,next_mode:0,firmware_kind:1,handler:0,parameter_table:0}]}),new defs.FirmwareIdentity('transfer-data-b','ab'.repeat(32)));
+   const invocation=new a.Service(definition).prepare(new defs.service.ServiceModes(4),command);
+   fixture.state.onConfigurationWrite=(page,address)=>{if(page===3&&address===576)for(const [index,byte] of Object.entries(outputs))fixture.state.configuration.set(`3:${584+Number(index)}`,byte);};
+   const before=fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length;
+   const session=await usb.Session.open(device,iface,new usb.FirmwareLimits(256,256,256,256),new usb.TransferOptions(100,1024));
+   assert.deepEqual((await a.execute(session,invocation)).value,expected);assert.equal(session.state,usb.SessionState.Ready);
+   assert.equal(fixture.log.filter(e=>e[0]==='control'&&e[1]===0xd0).length-before,3);await session.close();
+  }
+ }finally{fixture.restore();}
+});

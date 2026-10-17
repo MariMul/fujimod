@@ -287,3 +287,11 @@ factory with number, checked channel, `AccessPointRadioMode`,
 `transferSelectChannel` and `transferStart` factories use `TransferOperation` and
 `TransferChannel` enums and return typed results with preserved unknown bytes.
 They add no host poll or USB payload transfer workflow.
+
+Transfer payload factories include `transferReadWord`, `transferWriteWord`,
+`transferPair`, `transferBitfields`, byte/mode-byte operations, halfword
+operations, option reads, selected-word writes and load tests. Their address,
+quantity and selector types remain distinct. Halfword/option replies are raw
+snapshots; some stock transfer helpers leave output uninitialized or pass null
+callback data. The [Rust command limits](../../crates/usb/README.md) describe
+these constraints; the host does not manufacture completion or repair state.

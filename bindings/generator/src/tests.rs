@@ -163,3 +163,16 @@ fn split_impls_opaque_results_and_unit_roots_generate_valid_views() {
             .contains("duplicate public type")
     );
 }
+
+#[test]
+fn infallible_value_constructors_preserve_core_signatures() {
+    let api=Api::from_sources(["pub struct FullWord(u32);impl FullWord {pub const fn new(value:u32)->Self{Self(value)} pub fn value(self)->u32{self.0}}"] ).unwrap();
+    assert!(!api.service.quantities[0].fallible);
+    assert!(api.python().contains("fn new(value:u32)->Self"));
+    assert!(
+        api.javascript()
+            .contains("Ok(Self{inner:core::FullWord::new(integer(data,u32::MAX)?)})")
+    );
+    syn::parse_file(&api.python()).unwrap();
+    syn::parse_file(&api.javascript()).unwrap();
+}

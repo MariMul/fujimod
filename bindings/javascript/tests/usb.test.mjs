@@ -478,3 +478,23 @@ test('AP reconfiguration and transfer controls preserve typed results and parame
   }
  }
 });
+
+test('transfer payload types keep address spaces, raw snapshots and failed words distinct',()=>{
+ const a=usb.app80,C=a.Command,layouts=[['transfer_word',10],['transfer_pair',7],['transfer_halfword',7],['transfer_option_word',6],['transfer_bitfields',5],['transfer_byte',3],['transfer_mode_byte',3],['transfer_selected_word',4],['transfer_word7',3],['transfer_word16',3],['transfer_load_test',1]];
+ const slots=Object.fromEntries(layouts.map(([name,count])=>[name,Array.from({length:count},(_,n)=>(n*5+7)%32)]));
+ const service=new a.Service(serviceDefinition(layouts.map(([name],n)=>[180+n,name,slots[name],4]))),modes=serviceModes();
+ const prepare=c=>service.prepare(modes,c),logical=(p,name)=>slots[name].map(i=>p.raw[1+i]);
+ const decode=(p,name,updates)=>{const raw=p.raw;for(const [index,value] of updates)raw[1+slots[name][index]]=value;return p.decode(raw).value;};
+ assert.throws(()=>new a.TransferWordAddress(65536));assert.throws(()=>new a.TransferWordAddress(1));assert.throws(()=>new a.TransferPairFirst(512));assert.throws(()=>new a.TransferPayloadByte(256));
+ const address=new a.TransferWordAddress(65532),read=prepare(C.transferReadWord(address)),write=prepare(C.transferWriteWord(address,0x89abcdef));
+ assert.deepEqual(logical(read,'transfer_word'),[0,0,0,255,252,255,255,255,255,255]);assert.deepEqual(logical(write,'transfer_word'),[1,0,0,255,252,137,171,205,239,255]);
+ assert.deepEqual(decode(read,'transfer_word',[[5,137],[6,171],[7,205],[8,239],[9,0]]),{kind:a.ReplyKind.TransferWordRead,result:{kind:a.TransferWordReadResultKind.Value,rawValue:0x89abcdef}});
+ assert.deepEqual(decode(read,'transfer_word',[[9,1]]),{kind:a.ReplyKind.TransferWordRead,result:{kind:a.TransferWordReadResultKind.Rejected}});
+ assert.deepEqual(decode(write,'transfer_word',[[9,255]]),{kind:a.ReplyKind.TransferWordWritten,result:{kind:a.TransferResultKind.Unknown,rawStatus:255}});
+ const pair=prepare(C.transferPair(new a.TransferPairFirst(511),65535));assert.deepEqual(logical(pair,'transfer_pair'),[1,255,255,255,255,255,255]);
+ for(const [raw,kind] of [[3,a.TransferPairResultKind.CallbackError],[4,a.TransferPairResultKind.Rejected],[6,a.TransferPairResultKind.WaitError]])assert.deepEqual(decode(pair,'transfer_pair',[[6,raw]]),{kind:a.ReplyKind.TransferPair,result:{kind}});
+ const full=new a.TransferHalfwordAddress(0xffffffff);assert.equal(full.value,0xffffffff);const p=prepare(C.transferReadHalfword(full));assert.deepEqual(logical(p,'transfer_halfword'),[0,255,255,255,255,255,255]);assert.equal(p.decode(p.raw).value.rawValue,65535);
+ for(let n=0;n<8;n++){const p=prepare(C.transferReadOptionWord(a.TransferOption[`Option${n}`]));assert.deepEqual(logical(p,'transfer_option_word'),[n%4,Math.floor(n/4),255,255,255,255]);assert.equal(p.decode(p.raw).value.rawValue,0xffffffff);}
+ for(const [kind,selection,mode] of [[a.TransferSelectedWordKind.Kind9,2,1],[a.TransferSelectedWordKind.Kind10,2,0],[a.TransferSelectedWordKind.Kind11,1,1],[a.TransferSelectedWordKind.Kind12,1,0],[a.TransferSelectedWordKind.Kind13,0,1],[a.TransferSelectedWordKind.Kind14,0,0]]){const p=prepare(C.transferSetSelectedWord(kind,0x89ab));assert.deepEqual(logical(p,'transfer_selected_word'),[selection,mode,137,171]);}
+ assert.throws(()=>C.transferReadWord(new a.WordAddress(4)));assert.throws(()=>C.transferReadHalfword(address));
+});

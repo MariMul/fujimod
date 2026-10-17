@@ -146,6 +146,17 @@ pub enum Codec {
     TransferReady,
     TransferSelectChannel,
     TransferStart,
+    TransferWord,
+    TransferPair,
+    TransferBitfields,
+    TransferByte,
+    TransferModeByte,
+    TransferHalfword,
+    TransferOptionWord,
+    TransferSelectedWord,
+    TransferWord7,
+    TransferWord16,
+    TransferLoadTest,
 }
 impl Codec {
     pub fn argument_slots(self) -> usize {
@@ -177,6 +188,16 @@ impl Codec {
             Self::NetworkReconfigure => 14,
             Self::TransferPrepare | Self::TransferReady | Self::TransferStart => 1,
             Self::TransferSelectOperation | Self::TransferSelectChannel => 2,
+            Self::TransferWord => 10,
+            Self::TransferPair | Self::TransferHalfword => 7,
+            Self::TransferBitfields => 5,
+            Self::TransferByte
+            | Self::TransferModeByte
+            | Self::TransferWord7
+            | Self::TransferWord16 => 3,
+            Self::TransferOptionWord => 6,
+            Self::TransferSelectedWord => 4,
+            Self::TransferLoadTest => 1,
         }
     }
 }

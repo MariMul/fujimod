@@ -20,7 +20,9 @@ modules, and the definition crate's `Codec` enum. It generates:
 For these shapes, add the public Rust declaration and its usual Rust exports.
 There is no second list of enum variants, validation bounds or value exports in
 the targets. Checked values use `new(value: u8/u16/u32)` or `new(data: &[u8])`
-returning `Result<Self, CommandError>`, with a public `value()` or `data()` getter.
+returning `Self` or `Result<Self, CommandError>`, with a public `value()` or
+`data()` getter. Infallible Rust constructors remain infallible; target adapters
+still validate language integer widths and buffers.
 Payload enum variants use named Rust fields; unit variants need no fields.
 The generator follows the types reachable from `Command` and `ReplyValue` to
 distinguish factory inputs from reply outputs. Field names define Python

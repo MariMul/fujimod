@@ -311,3 +311,12 @@ Its configuration data is an opaque six-byte snapshot. Transfer preparation,
 operation/channel selection, readiness and start are separate `Command` variants;
 selectors are `TransferOperation` and `TransferChannel` enums. `TransferResult`
 and `TransferPrepareResult` preserve unknown bytes without requesting a poll.
+
+Transfer word and halfword requests use distinct `TransferWordAddress` and
+`TransferHalfwordAddress` handles. `TransferReadWord`/`TransferWriteWord` retain
+word-result variants; failed reads do not expose a value. Pair requests use
+`TransferPairFirst`, with separate result variants. `TransferPayloadByte` owns an
+opaque byte for byte/mode-byte/bitfield commands. `TransferOption` and the three
+selected-word kind enums replace numeric selectors. Halfword/option results are
+raw snapshots, and some stock transfer callbacks receive null data; see the
+[Rust command limits](../../crates/usb/README.md) before using those operations.

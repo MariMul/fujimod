@@ -149,3 +149,12 @@ usb.app80.Command.transferSelectOperation(123);
 usb.app80.Command.transferSelectChannel(usb.app80.TransferOperation.Operation1);
 // @ts-expect-error AP radio mode is distinct from the direct-radio selector.
 usb.app80.NetworkReconfigureAction.apply(0,new usb.app80.RadioChannel(1),usb.app80.RadioMode.Mode0,usb.app80.AccessPointSecurity.Option0,new usb.app80.CountryBytes(new Uint8Array(2)));
+
+// @ts-expect-error CPU memory word addresses do not belong to the transfer word space.
+usb.app80.Command.transferReadWord(new usb.app80.WordAddress(4));
+// @ts-expect-error The full-width halfword space is distinct from the bounded word space.
+usb.app80.Command.transferReadHalfword(new usb.app80.TransferWordAddress(4));
+// @ts-expect-error Option selectors are enum choices, not arbitrary bytes.
+usb.app80.Command.transferReadOptionWord(99);
+// @ts-expect-error Different selected-word command groups remain distinct.
+usb.app80.Command.transferSetWord7(usb.app80.TransferWord16Kind.Kind16,0);

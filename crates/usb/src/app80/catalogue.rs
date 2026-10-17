@@ -17,7 +17,12 @@ pub use network::{
     WpsPhase, WpsProgress, WpsTarget,
 };
 mod transfer;
-pub use transfer::{TransferChannel, TransferOperation, TransferPrepareResult, TransferResult};
+pub use transfer::{
+    TransferChannel, TransferHalfwordAddress, TransferLoadMode, TransferOperation, TransferOption,
+    TransferPairFirst, TransferPairResult, TransferPayloadByte, TransferPrepareResult,
+    TransferResult, TransferSelectedWordKind, TransferWord7Kind, TransferWord16Kind,
+    TransferWordAddress, TransferWordReadResult,
+};
 mod peripheral;
 pub use peripheral::{
     AccumulatorAction, I2cAction, I2cLength, I2cPayload, I2cPort, RegisterAction,
@@ -52,6 +57,8 @@ pub enum ArgumentKind {
     PeerAddressLength,
     WpsPeerAddress,
     CountryLength,
+    TransferWordAddress,
+    TransferPairFirst,
 }
 impl std::fmt::Display for ArgumentKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -70,6 +77,8 @@ impl std::fmt::Display for ArgumentKind {
             Self::PeerAddressLength => "peer address length (6 bytes)",
             Self::WpsPeerAddress => "exact WPS peer (6 bytes, first byte nonzero)",
             Self::CountryLength => "country field length (2 bytes)",
+            Self::TransferWordAddress => "transfer word address (aligned, below 64 KiB)",
+            Self::TransferPairFirst => "first transfer pair field (0..=511)",
         })
     }
 }
@@ -242,6 +251,53 @@ pub enum Command {
         channel: TransferChannel,
     },
     TransferStart,
+    TransferReadWord {
+        address: TransferWordAddress,
+    },
+    TransferWriteWord {
+        address: TransferWordAddress,
+        value: u32,
+    },
+    TransferPair {
+        first: TransferPairFirst,
+        second: u16,
+    },
+    TransferBitfields {
+        mode: TransferPayloadByte,
+        first: u16,
+        second: u16,
+    },
+    TransferByte {
+        data: TransferPayloadByte,
+    },
+    TransferModeByte {
+        data: TransferPayloadByte,
+    },
+    TransferReadHalfword {
+        address: TransferHalfwordAddress,
+    },
+    TransferWriteHalfword {
+        address: TransferHalfwordAddress,
+        value: u16,
+    },
+    TransferReadOptionWord {
+        option: TransferOption,
+    },
+    TransferSetSelectedWord {
+        kind: TransferSelectedWordKind,
+        value: u16,
+    },
+    TransferSetWord7 {
+        kind: TransferWord7Kind,
+        value: u16,
+    },
+    TransferSetWord16 {
+        kind: TransferWord16Kind,
+        value: u16,
+    },
+    TransferLoadTest {
+        mode: TransferLoadMode,
+    },
 }
 impl Command {
     pub fn codec(self) -> Codec {
@@ -286,6 +342,19 @@ impl Command {
             Self::TransferReady => Codec::TransferReady,
             Self::TransferSelectChannel { .. } => Codec::TransferSelectChannel,
             Self::TransferStart => Codec::TransferStart,
+            Self::TransferReadWord { .. } | Self::TransferWriteWord { .. } => Codec::TransferWord,
+            Self::TransferPair { .. } => Codec::TransferPair,
+            Self::TransferBitfields { .. } => Codec::TransferBitfields,
+            Self::TransferByte { .. } => Codec::TransferByte,
+            Self::TransferModeByte { .. } => Codec::TransferModeByte,
+            Self::TransferReadHalfword { .. } | Self::TransferWriteHalfword { .. } => {
+                Codec::TransferHalfword
+            }
+            Self::TransferReadOptionWord { .. } => Codec::TransferOptionWord,
+            Self::TransferSetSelectedWord { .. } => Codec::TransferSelectedWord,
+            Self::TransferSetWord7 { .. } => Codec::TransferWord7,
+            Self::TransferSetWord16 { .. } => Codec::TransferWord16,
+            Self::TransferLoadTest { .. } => Codec::TransferLoadTest,
         }
     }
 }
@@ -342,6 +411,12 @@ pub enum ReplyValue {
     TransferReadiness { result: TransferResult },
     TransferChannelSelected { result: TransferResult },
     TransferStarted { result: TransferResult },
+    TransferWordRead { result: TransferWordReadResult },
+    TransferWordWritten { result: TransferResult },
+    TransferPair { result: TransferPairResult },
+    TransferBytes { data: [u8; 2] },
+    TransferHalfword { raw_value: u16 },
+    TransferOptionWord { raw_value: u32 },
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommandReply {
@@ -514,7 +589,48 @@ impl PreparedCommand {
             Command::TransferStart => ReplyValue::TransferStarted {
                 result: TransferResult::decode(byte(0)),
             },
-            Command::NetworkReconfigure {
+            Command::TransferReadWord { .. } => ReplyValue::TransferWordRead {
+                result: match byte(9) {
+                    0 => TransferWordReadResult::Value {
+                        raw_value: u32::from_be_bytes([byte(5), byte(6), byte(7), byte(8)]),
+                    },
+                    1 => TransferWordReadResult::Rejected,
+                    n => TransferWordReadResult::Unknown { raw_status: n },
+                },
+            },
+            Command::TransferWriteWord { .. } => ReplyValue::TransferWordWritten {
+                result: TransferResult::decode(byte(9)),
+            },
+            Command::TransferPair { .. } => ReplyValue::TransferPair {
+                result: match byte(6) {
+                    0 => TransferPairResult::Values {
+                        first: byte(4),
+                        second: byte(5),
+                    },
+                    3 => TransferPairResult::CallbackError,
+                    4 => TransferPairResult::Rejected,
+                    6 => TransferPairResult::WaitError,
+                    n => TransferPairResult::Unknown { raw_status: n },
+                },
+            },
+            Command::TransferByte { .. } | Command::TransferModeByte { .. } => {
+                ReplyValue::TransferBytes {
+                    data: [byte(1), byte(2)],
+                }
+            }
+            Command::TransferReadHalfword { .. } => ReplyValue::TransferHalfword {
+                raw_value: half(5, 6),
+            },
+            Command::TransferReadOptionWord { .. } => ReplyValue::TransferOptionWord {
+                raw_value: u32::from_be_bytes([byte(2), byte(3), byte(4), byte(5)]),
+            },
+            Command::TransferBitfields { .. }
+            | Command::TransferWriteHalfword { .. }
+            | Command::TransferSetSelectedWord { .. }
+            | Command::TransferSetWord7 { .. }
+            | Command::TransferSetWord16 { .. }
+            | Command::TransferLoadTest { .. }
+            | Command::NetworkReconfigure {
                 action: NetworkReconfigureAction::StopServer,
             }
             | Command::Wps {
@@ -724,6 +840,105 @@ impl Catalogue {
                 put(0, channel.wire());
                 put(1, 255);
             }
+            Command::TransferReadWord { address } | Command::TransferWriteWord { address, .. } => {
+                put(
+                    0,
+                    u8::from(matches!(command, Command::TransferWriteWord { .. })),
+                );
+                for (i, b) in address.value().to_be_bytes().into_iter().enumerate() {
+                    put(i + 1, b);
+                }
+                if let Command::TransferWriteWord { value, .. } = command {
+                    for (i, b) in value.to_be_bytes().into_iter().enumerate() {
+                        put(i + 5, b);
+                    }
+                } else {
+                    for i in 5..9 {
+                        put(i, 255);
+                    }
+                }
+                put(9, 255);
+            }
+            Command::TransferPair { first, second } => {
+                for (i, b) in first
+                    .value()
+                    .to_be_bytes()
+                    .into_iter()
+                    .chain(second.to_be_bytes())
+                    .enumerate()
+                {
+                    put(i, b);
+                }
+                for i in 4..7 {
+                    put(i, 255);
+                }
+            }
+            Command::TransferBitfields {
+                mode,
+                first,
+                second,
+            } => {
+                put(0, mode.value());
+                for (i, b) in first
+                    .to_be_bytes()
+                    .into_iter()
+                    .chain(second.to_be_bytes())
+                    .enumerate()
+                {
+                    put(i + 1, b);
+                }
+            }
+            Command::TransferByte { data } | Command::TransferModeByte { data } => {
+                put(0, data.value());
+                put(1, 255);
+                put(2, 255);
+            }
+            Command::TransferReadHalfword { address }
+            | Command::TransferWriteHalfword { address, .. } => {
+                put(
+                    0,
+                    u8::from(matches!(command, Command::TransferWriteHalfword { .. })),
+                );
+                for (i, b) in address.value().to_be_bytes().into_iter().enumerate() {
+                    put(i + 1, b);
+                }
+                let [hi, lo] = if let Command::TransferWriteHalfword { value, .. } = command {
+                    value.to_be_bytes()
+                } else {
+                    [255, 255]
+                };
+                put(5, hi);
+                put(6, lo);
+            }
+            Command::TransferReadOptionWord { option } => {
+                let (mode, bank) = option.wire();
+                put(0, mode);
+                put(1, bank);
+                for i in 2..6 {
+                    put(i, 255);
+                }
+            }
+            Command::TransferSetSelectedWord { kind, value } => {
+                let (selection, mode) = kind.wire();
+                put(0, selection);
+                put(1, mode);
+                let [hi, lo] = value.to_be_bytes();
+                put(2, hi);
+                put(3, lo);
+            }
+            Command::TransferSetWord7 { kind, value } => {
+                put(0, kind.wire());
+                let [hi, lo] = value.to_be_bytes();
+                put(1, hi);
+                put(2, lo);
+            }
+            Command::TransferSetWord16 { kind, value } => {
+                put(0, kind.wire());
+                let [hi, lo] = value.to_be_bytes();
+                put(1, hi);
+                put(2, lo);
+            }
+            Command::TransferLoadTest { mode } => put(0, mode.wire()),
             Command::SignalStrength { address } => {
                 for (i, &value) in address.data().iter().enumerate() {
                     put(i, value);

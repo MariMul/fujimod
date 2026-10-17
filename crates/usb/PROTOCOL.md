@@ -128,3 +128,7 @@ the firmware-selected App80 command byte:
 | Transfer prepare | Firmware preparation/release sequence in one service command. Output 0/2/3 distinguishes success, preparation error, and source status 7; other bytes remain unknown. |
 | Transfer select operation/channel | Typed lower-operation choices encode canonical selectors. Operation callback failure can leave the output unchanged. Output 0/1/unknown remains separate from host completion. |
 | Transfer readiness/start | Separate firmware commands with 0/1/unknown results. No USB data transfer is composed, and stub success does not certify physical readiness. |
+| Transfer word/pair | Bounded aligned transfer-word addresses and checked nine-bit pair inputs. Word payload is exposed only for status 0; pair results distinguish 0/3/4/6 and unknown bytes. Some lower callbacks receive null data. These are separate from debug memory commands. |
+| Transfer byte/bitfields | One opaque byte or two 16-bit masks plus the byte. Byte replies preserve two raw bytes; firmware expands the masks internally. No host workflow or inferred bit meanings. |
+| Transfer halfword/options | Full-width halfword address or typed option 0–7. Replies preserve raw values because studied stubs may leave the firmware output buffer uninitialized. |
+| Transfer selected words/load | Separate kind enums for 9–14, 7/8, 16/17 and load selectors 0/1/3/4. No payload result. Stock kind-16/17 success may omit signaling; host completion rules and deadlines still apply. |

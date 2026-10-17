@@ -12,6 +12,17 @@ def check_transfer_values():
         ("transfer_ready", 1),
         ("transfer_select_channel", 2),
         ("transfer_start", 1),
+        ("transfer_word", 10),
+        ("transfer_pair", 7),
+        ("transfer_bitfields", 5),
+        ("transfer_byte", 3),
+        ("transfer_mode_byte", 3),
+        ("transfer_halfword", 7),
+        ("transfer_option_word", 6),
+        ("transfer_selected_word", 4),
+        ("transfer_word7", 3),
+        ("transfer_word16", 3),
+        ("transfer_load_test", 1),
     ]
     slots = {name: [(i * 5 + 7) % 32 for i in range(count)] for name, count in layouts}
     entries = [
@@ -138,4 +149,162 @@ def check_transfer_values():
             pass
         else:
             raise AssertionError("wrong transfer selector type accepted")
+    for value in [1, 3, 65536]:
+        try:
+            a.TransferWordAddress(value)
+        except a.CommandError as error:
+            assert error.reason.kind == a.ArgumentKind.TransferWordAddress
+        else:
+            raise AssertionError("invalid transfer word address")
+    try:
+        a.TransferPairFirst(512)
+    except a.CommandError as error:
+        assert error.reason.kind == a.ArgumentKind.TransferPairFirst
+    else:
+        raise AssertionError("invalid transfer pair field")
+    address = a.TransferWordAddress(65532)
+    read = prepare(a.Command.TransferReadWord(address=address))
+    assert logical(read, "transfer_word") == [
+        0,
+        0,
+        0,
+        255,
+        252,
+        255,
+        255,
+        255,
+        255,
+        255,
+    ]
+    write = prepare(a.Command.TransferWriteWord(address=address, value=0x89ABCDEF))
+    assert logical(write, "transfer_word") == [
+        1,
+        0,
+        0,
+        255,
+        252,
+        137,
+        171,
+        205,
+        239,
+        255,
+    ]
+    for raw, cls in [
+        (0, a.TransferWordReadResult.Value),
+        (1, a.TransferWordReadResult.Rejected),
+        (255, a.TransferWordReadResult.Unknown),
+    ]:
+        buf = bytearray(read.raw)
+        for index, byte in [(5, 137), (6, 171), (7, 205), (8, 239), (9, raw)]:
+            buf[1 + slots["transfer_word"][index]] = byte
+        value = read.decode(buf).value
+        assert isinstance(value, a.ReplyValue.TransferWordRead) and isinstance(
+            value.result, cls
+        )
+        if raw == 0:
+            assert value.result.raw_value == 0x89ABCDEF
+        if raw == 255:
+            assert value.result.raw_status == 255
+    assert isinstance(
+        decode(write, "transfer_word", 9, 1).result, a.TransferResult.Failed
+    )
+    p = prepare(a.Command.TransferPair(first=a.TransferPairFirst(511), second=65535))
+    assert logical(p, "transfer_pair") == [1, 255, 255, 255, 255, 255, 255]
+    for raw, cls in [
+        (0, a.TransferPairResult.Values),
+        (3, a.TransferPairResult.CallbackError),
+        (4, a.TransferPairResult.Rejected),
+        (6, a.TransferPairResult.WaitError),
+        (255, a.TransferPairResult.Unknown),
+    ]:
+        value = decode(p, "transfer_pair", 6, raw)
+        assert isinstance(value.result, cls)
+        if raw == 0:
+            assert (value.result.first, value.result.second) == (255, 255)
+        if raw == 255:
+            assert value.result.raw_status == 255
+    payload = a.TransferPayloadByte(255)
+    assert payload.value == 255
+    p = prepare(a.Command.TransferBitfields(mode=payload, first=0x1234, second=0xABCD))
+    assert logical(p, "transfer_bitfields") == [255, 18, 52, 171, 205]
+    assert isinstance(p.decode(p.raw).value, a.ReplyValue.NoPayload)
+    for command, codec in [
+        (a.Command.TransferByte(data=payload), "transfer_byte"),
+        (a.Command.TransferModeByte(data=payload), "transfer_mode_byte"),
+    ]:
+        p = prepare(command)
+        assert logical(p, codec) == [255, 255, 255]
+        assert bytes(decode(p, codec, 1, 0).data) == bytes([0, 255])
+    address = a.TransferHalfwordAddress(0xFFFFFFFF)
+    assert address.value == 0xFFFFFFFF
+    p = prepare(a.Command.TransferReadHalfword(address=address))
+    assert logical(p, "transfer_halfword") == [0, 255, 255, 255, 255, 255, 255]
+    assert p.decode(p.raw).value.raw_value == 65535
+    p = prepare(a.Command.TransferWriteHalfword(address=address, value=0x89AB))
+    assert logical(p, "transfer_halfword") == [1, 255, 255, 255, 255, 137, 171]
+    assert isinstance(p.decode(p.raw).value, a.ReplyValue.NoPayload)
+    for n in range(8):
+        p = prepare(
+            a.Command.TransferReadOptionWord(
+                option=getattr(a.TransferOption, f"Option{n}")
+            )
+        )
+        assert logical(p, "transfer_option_word") == [n % 4, n // 4, 255, 255, 255, 255]
+        assert p.decode(p.raw).value.raw_value == 0xFFFFFFFF
+    for kind, selection, mode in [
+        (a.TransferSelectedWordKind.Kind9, 2, 1),
+        (a.TransferSelectedWordKind.Kind10, 2, 0),
+        (a.TransferSelectedWordKind.Kind11, 1, 1),
+        (a.TransferSelectedWordKind.Kind12, 1, 0),
+        (a.TransferSelectedWordKind.Kind13, 0, 1),
+        (a.TransferSelectedWordKind.Kind14, 0, 0),
+    ]:
+        p = prepare(a.Command.TransferSetSelectedWord(kind=kind, value=0x89AB))
+        assert logical(p, "transfer_selected_word") == [selection, mode, 137, 171]
+        assert isinstance(p.decode(p.raw).value, a.ReplyValue.NoPayload)
+    for command, codec, wire in [
+        (
+            a.Command.TransferSetWord7(kind=a.TransferWord7Kind.Kind7, value=0x89AB),
+            "transfer_word7",
+            1,
+        ),
+        (
+            a.Command.TransferSetWord7(kind=a.TransferWord7Kind.Kind8, value=0x89AB),
+            "transfer_word7",
+            0,
+        ),
+        (
+            a.Command.TransferSetWord16(kind=a.TransferWord16Kind.Kind16, value=0x89AB),
+            "transfer_word16",
+            1,
+        ),
+        (
+            a.Command.TransferSetWord16(kind=a.TransferWord16Kind.Kind17, value=0x89AB),
+            "transfer_word16",
+            0,
+        ),
+    ]:
+        p = prepare(command)
+        assert logical(p, codec) == [wire, 137, 171]
+        assert isinstance(p.decode(p.raw).value, a.ReplyValue.NoPayload)
+    for mode, wire in [
+        (a.TransferLoadMode.Setup, 0),
+        (a.TransferLoadMode.Run, 1),
+        (a.TransferLoadMode.Request3One, 3),
+        (a.TransferLoadMode.Request3Zero, 4),
+    ]:
+        p = prepare(a.Command.TransferLoadTest(mode=mode))
+        assert logical(p, "transfer_load_test") == [wire]
+    for create in [
+        lambda: a.Command.TransferReadWord(address=a.WordAddress(4)),
+        lambda: a.Command.TransferReadHalfword(address=a.TransferWordAddress(4)),
+        lambda: a.Command.TransferReadOptionWord(option=1),
+        lambda: a.Command.TransferSetWord7(kind=a.TransferWord16Kind.Kind16, value=1),
+    ]:
+        try:
+            create()
+        except TypeError:
+            pass
+        else:
+            raise AssertionError("wrong transfer address/selector type accepted")
     return True
