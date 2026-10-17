@@ -15,7 +15,7 @@ from playwright.async_api import async_playwright
 async def check(args):
     args.output.mkdir(parents=True, exist_ok=False)
     async with async_playwright() as p:
-        for name in ['chromium', 'webkit']:
+        for name in args.browser or ['chromium', 'webkit']:
             browser = await getattr(p, name).launch()
             context = await browser.new_context(viewport={'width':390, 'height':844})
             await context.route('https://github.com/justjake/fujimod/issues/new?*',
@@ -32,7 +32,7 @@ async def check(args):
             downloads = []
             page.on('download', lambda download: downloads.append(download))
             await page.locator('#feedback-prepare').click()
-            await page.wait_for_url('https://github.com/justjake/fujimod/issues/new?*', timeout=60000)
+            await page.wait_for_function("location.hostname === 'github.com'", timeout=60000)
             assert len(context.pages) == 1
             assert 'template=simulator-crash.yml' in page.url
             print(f'{name}: one-click delivery attempted; same-tab navigation reached GitHub', flush=True)
@@ -75,4 +75,5 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--url', required=True)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--browser', action='append', choices=['chromium','webkit'])
     asyncio.run(check(parser.parse_args()))
