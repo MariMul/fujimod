@@ -60,7 +60,10 @@ mod replay {
         ];
         script.extend(steps);
         let script = Script::new(script);
-        (block_on(script.begin_session(budget)).unwrap(), script)
+        (
+            block_on(script.begin_session(budget, None)).unwrap(),
+            script,
+        )
     }
     fn read(offset: u32, bytes: &[u8]) -> Vec<E> {
         vec![

@@ -53,8 +53,12 @@ impl Script {
     pub fn remaining(&self) -> usize {
         self.state.lock().expect("replay lock").steps.len()
     }
-    pub async fn begin_session(&self, max_reply_bytes: u32) -> Result<Session> {
-        Session::replay(self.clone(), max_reply_bytes).await
+    pub async fn begin_session(
+        &self,
+        max_reply_bytes: u32,
+        trace: Option<crate::trace::Trace>,
+    ) -> Result<Session> {
+        Session::replay(self.clone(), max_reply_bytes, trace).await
     }
     fn take(&self) -> (usize, Option<Exchange>) {
         let mut state = self.state.lock().expect("replay lock");

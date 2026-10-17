@@ -67,16 +67,18 @@ impl Script {
     }
 }
 #[pyfunction]
-#[pyo3(signature=(exchanges,limits,*,max_reply_bytes=8388608))]
+#[pyo3(signature=(exchanges,limits,*,max_reply_bytes=8388608,trace=None))]
 fn session(
     py: Python<'_>,
     exchanges: Vec<Exchange>,
     limits: FirmwareLimits,
     max_reply_bytes: u32,
+    trace: Option<&tracing::Trace>,
 ) -> PyResult<(Session, Script)> {
     let script = usb::testing::Script::new(exchanges.into_iter().map(|e| e.inner));
+    let trace = trace.map(|t| t.inner.clone());
     let native = py
-        .detach(|| block_on(script.begin_session(max_reply_bytes)))
+        .detach(|| block_on(script.begin_session(max_reply_bytes, trace)))
         .map_err(|e| convert_error(py, e))?;
     Ok((
         Session {

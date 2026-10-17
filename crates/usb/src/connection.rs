@@ -109,11 +109,15 @@ impl Connection {
         if interface.get_alt_setting() != selection.alternate {
             interface.set_alt_setting(selection.alternate).await?;
         }
+        let input_address = input;
+        let output_address = output;
         let input = interface.endpoint::<Bulk, In>(input)?;
         let output = interface.endpoint::<Bulk, Out>(output)?;
         Ok(Self {
             io: UsbIo {
                 interface,
+                input_address,
+                output_address,
                 input,
                 output,
                 timeout: options.timeout,
@@ -124,8 +128,8 @@ impl Connection {
 
     /// Begins the ff80 protocol session. Drop never sends a camera close command;
     /// explicitly call `Session::close` when exchanges have completed normally.
-    pub async fn begin_session(self) -> Result<Session> {
-        Session::open(self.io, self.max_reply_bytes).await
+    pub async fn begin_session(self, trace: Option<crate::trace::Trace>) -> Result<Session> {
+        Session::open(self.io, self.max_reply_bytes, trace).await
     }
 }
 
@@ -148,6 +152,9 @@ fn bulk_pair(addresses: &[u8]) -> Result<(u8, u8)> {
 
 // Only a private test seam. nusb supplies the platform transport abstraction.
 pub(crate) trait Io {
+    fn endpoint(&self, _stage: TransferStage) -> Option<u8> {
+        None
+    }
     async fn control(&mut self, kind: RequestKind, envelope: [u8; 12]) -> Result<()>;
     async fn write(&mut self, bytes: &[u8]) -> Result<()>;
     async fn read(&mut self, maximum: usize) -> Result<Vec<u8>>;
@@ -155,6 +162,8 @@ pub(crate) trait Io {
 
 pub(crate) struct UsbIo {
     interface: Interface,
+    input_address: u8,
+    output_address: u8,
     input: Endpoint<Bulk, In>,
     output: Endpoint<Bulk, Out>,
     timeout: Duration,
@@ -173,6 +182,13 @@ async fn deadline<T>(
 }
 
 impl Io for UsbIo {
+    fn endpoint(&self, stage: TransferStage) -> Option<u8> {
+        Some(match stage {
+            TransferStage::Control(_) => 0,
+            TransferStage::BulkIn => self.input_address,
+            TransferStage::BulkOut => self.output_address,
+        })
+    }
     async fn control(&mut self, kind: RequestKind, envelope: [u8; 12]) -> Result<()> {
         self.interface
             .control_out(
@@ -251,6 +267,13 @@ pub(crate) enum Backend {
     Replay(crate::testing::Script),
 }
 impl Io for Backend {
+    fn endpoint(&self, stage: TransferStage) -> Option<u8> {
+        match self {
+            Self::Usb(io) => io.endpoint(stage),
+            #[cfg(feature = "testing")]
+            Self::Replay(io) => io.endpoint(stage),
+        }
+    }
     async fn control(&mut self, kind: RequestKind, envelope: [u8; 12]) -> Result<()> {
         match self {
             Self::Usb(io) => io.control(kind, envelope).await,

@@ -92,3 +92,13 @@ one result through Rust; it returns the exact 33 mailbox bytes. It holds session
 ownership for the complete operation, checks both mailbox and session limits
 before sending, and does no polling or retries. The publish write awaits its
 ff80 completion; mailbox bytes are not interpreted as a host wait instruction.
+
+For raw transfer logging, create `tracing.Trace(max_events=..., max_bytes=...)`
+from `fujimod.usb.tracing` and pass it as `trace=` when opening a blocking
+session. `trace.drain()` returns a batch of immutable events plus
+`dropped_events`/`dropped_bytes`. Events expose typed `stage`, `phase`,
+`request_kind` and `failure_kind`, raw `data`, correlation IDs, endpoint and
+transfer counts, and a Unix timestamp. Drain after each operation for complete
+logs, including after an exception or failed session open. The recorder remains
+usable while a range reader owns the session. USB work never invokes Python
+callbacks. Callers choose whether trace loss stops their capture.

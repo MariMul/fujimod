@@ -432,7 +432,7 @@ impl Session {
 #[pymethods]
 impl Session {
     #[staticmethod]
-    #[pyo3(signature=(device,interface,limits,*,timeout_ms=5000,max_reply_bytes=8388608))]
+    #[pyo3(signature=(device,interface,limits,*,timeout_ms=5000,max_reply_bytes=8388608,trace=None))]
     fn open(
         py: Python<'_>,
         device: &Device,
@@ -440,8 +440,10 @@ impl Session {
         limits: FirmwareLimits,
         timeout_ms: u64,
         max_reply_bytes: u32,
+        trace: Option<&tracing::Trace>,
     ) -> PyResult<Self> {
         let max_reply_bytes = nz(max_reply_bytes)?;
+        let trace = trace.map(|t| t.inner.clone());
         let session = py
             .detach(|| {
                 block_on(async {
@@ -454,7 +456,7 @@ impl Session {
                         },
                     )
                     .await?
-                    .begin_session()
+                    .begin_session(trace)
                     .await
                 })
             })
@@ -723,6 +725,8 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     usb.add("ClosedSessionError", py.get_type::<ClosedSessionError>())?;
     usb.add("SessionBusyError", py.get_type::<SessionBusyError>())?;
     blocking.add("__path__", PyList::empty(py))?;
+    let tracing = tracing::module(py)?;
+    usb.add_submodule(&tracing)?;
     let app80 = app80::types_module(py)?;
     let app80_blocking = app80::blocking_module(py)?;
     usb.add_submodule(&app80)?;
@@ -743,6 +747,7 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
         .getattr("modules")?
         .cast_into::<PyDict>()?;
     modules.set_item("fujimod.usb", &usb)?;
+    modules.set_item("fujimod.usb.tracing", &tracing)?;
     modules.set_item("fujimod.usb.app80", &app80)?;
     modules.set_item("fujimod.usb.blocking.app80", &app80_blocking)?;
     modules.set_item("fujimod.usb.blocking", &blocking)?;
@@ -761,6 +766,7 @@ mod app80;
 mod data;
 mod memory;
 mod range;
+mod tracing;
 
 #[cfg(feature = "testing")]
 mod testing;

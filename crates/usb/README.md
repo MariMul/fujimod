@@ -23,7 +23,7 @@ async fn identify(selected: &nusb::DeviceInfo, interface: InterfaceSelection) ->
         timeout: Duration::from_secs(5),
         max_reply_bytes: NonZeroU32::new(1024).unwrap(),
     }).await?;
-    let mut session = connection.begin_session().await?;
+    let mut session = connection.begin_session(None).await?;
     let product = session.device_info(InfoSelector::Product).await?;
     session.close().await?;
     Ok(product.text)
@@ -98,3 +98,17 @@ is checked before the first write. Firmware asynchronous completion is handled
 by the ff80 exchange; there is no invented mailbox busy bit, automatic poll,
 retry, reset or cleanup. A failed or cancelled USB exchange fences the session.
 Command-specific result decoding and named body APIs belong above this carrier.
+
+`trace::Trace` optionally records the ff80 USB transfers beginning with session
+open. Pass a clone to `Connection::begin_session(Some(trace.clone()))` and drain
+batches independently of the session. Records retain timestamps, correlation
+IDs, endpoint addresses, submitted control/OUT bytes, received IN bytes and
+partial failure data. Host future cancellation is recorded without implying
+that the camera stopped executing. A USB completion does not certify a valid
+firmware reply; protocol decoding still determines session state.
+
+The queue bounds both event count and retained payload bytes. It discards old
+records (or an oversized record whole) and reports exact loss counts with each
+batch; it never truncates payloads silently or changes USB outcomes. Recording
+calls no user code. File writing, trace-loss policy and GUI presentation belong
+to callers. With tracing disabled, transfer payloads are not copied for logging.

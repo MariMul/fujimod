@@ -10,6 +10,7 @@ pub mod connection;
 pub mod error;
 pub mod ff80;
 pub mod operations;
+pub mod trace;
 
 pub use error::{Error, Result};
 

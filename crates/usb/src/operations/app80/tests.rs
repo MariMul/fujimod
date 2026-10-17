@@ -39,7 +39,10 @@ mod replay {
         ];
         all.extend(steps);
         let script = Script::new(all);
-        (block_on(script.begin_session(budget)).unwrap(), script)
+        (
+            block_on(script.begin_session(budget, None)).unwrap(),
+            script,
+        )
     }
     fn write(offset: u32, bytes: &[u8]) -> Vec<E> {
         let command = WriteConfiguration::new(

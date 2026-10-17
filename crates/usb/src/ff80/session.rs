@@ -33,21 +33,34 @@ pub struct SessionInfo {
 /// this session unusable; dropping it releases host resources without requesting
 /// a camera reset, firmware cleanup or service-mode transition.
 pub struct Session {
-    core: Core<Backend>,
+    core: Core<crate::trace::Observed<Backend>>,
 }
 impl Session {
-    pub(crate) async fn open(io: UsbIo, max_reply_bytes: u32) -> Result<Self> {
+    pub(crate) async fn open(
+        io: UsbIo,
+        max_reply_bytes: u32,
+        trace: Option<crate::trace::Trace>,
+    ) -> Result<Self> {
         Ok(Self {
-            core: Core::open(Backend::Usb(io), max_reply_bytes).await?,
+            core: Core::open(
+                crate::trace::Observed::new(Backend::Usb(io), trace),
+                max_reply_bytes,
+            )
+            .await?,
         })
     }
     #[cfg(feature = "testing")]
     pub(crate) async fn replay(
         script: crate::testing::Script,
         max_reply_bytes: u32,
+        trace: Option<crate::trace::Trace>,
     ) -> Result<Self> {
         Ok(Self {
-            core: Core::open(Backend::Replay(script), max_reply_bytes).await?,
+            core: Core::open(
+                crate::trace::Observed::new(Backend::Replay(script), trace),
+                max_reply_bytes,
+            )
+            .await?,
         })
     }
     pub fn info(&self) -> SessionInfo {
