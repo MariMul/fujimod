@@ -11,3 +11,6 @@ pub mod ff80;
 pub mod operations;
 
 pub use error::{Error, Result};
+
+#[cfg(feature = "testing")]
+pub mod testing;

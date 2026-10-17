@@ -244,6 +244,36 @@ impl Io for UsbIo {
     }
 }
 
+// The replay variant exists only in builds explicitly enabling test support.
+pub(crate) enum Backend {
+    Usb(UsbIo),
+    #[cfg(feature = "testing")]
+    Replay(crate::testing::Script),
+}
+impl Io for Backend {
+    async fn control(&mut self, kind: RequestKind, envelope: [u8; 12]) -> Result<()> {
+        match self {
+            Self::Usb(io) => io.control(kind, envelope).await,
+            #[cfg(feature = "testing")]
+            Self::Replay(io) => io.control(kind, envelope).await,
+        }
+    }
+    async fn write(&mut self, bytes: &[u8]) -> Result<()> {
+        match self {
+            Self::Usb(io) => io.write(bytes).await,
+            #[cfg(feature = "testing")]
+            Self::Replay(io) => io.write(bytes).await,
+        }
+    }
+    async fn read(&mut self, maximum: usize) -> Result<Vec<u8>> {
+        match self {
+            Self::Usb(io) => io.read(maximum).await,
+            #[cfg(feature = "testing")]
+            Self::Replay(io) => io.read(maximum).await,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

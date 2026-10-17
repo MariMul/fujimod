@@ -17,7 +17,11 @@ use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict, PyList, PyModule},
 };
-use std::{num::NonZeroU32, sync::Mutex, time::Duration};
+use std::{
+    num::NonZeroU32,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 pyo3::create_exception!(fujimod.usb, UsbError, PyRuntimeError);
 pyo3::create_exception!(fujimod.usb, TransferError, UsbError);
@@ -25,6 +29,7 @@ pyo3::create_exception!(fujimod.usb, ProtocolError, UsbError);
 pyo3::create_exception!(fujimod.usb, CompletionUnknownError, UsbError);
 pyo3::create_exception!(fujimod.usb, DeviceCommandError, UsbError);
 pyo3::create_exception!(fujimod.usb, ClosedSessionError, UsbError);
+pyo3::create_exception!(fujimod.usb, SessionBusyError, UsbError);
 
 fn nz(n: u32) -> PyResult<NonZeroU32> {
     NonZeroU32::new(n).ok_or_else(|| PyValueError::new_err("length/limit must be nonzero"))
@@ -95,6 +100,7 @@ enum SessionState {
     Ready,
     CompletionUnknown,
     Closed,
+    ReadingRange,
 }
 #[pyclass(module = "fujimod.usb", eq, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -361,10 +367,17 @@ impl ConfigurationGeometry {
 
 #[pyclass(module = "fujimod.usb.blocking")]
 struct Session {
-    inner: Mutex<Option<ff80::Session>>,
+    inner: Arc<Mutex<SessionSlot>>,
     limits: FirmwareLimits,
 }
+enum SessionSlot {
+    Open(ff80::Session),
+    ReadingRange,
+    Closed,
+}
+
 enum BindingError {
+    Busy,
     Closed,
     Poisoned,
     Protocol(usb::Error),
@@ -377,10 +390,17 @@ impl Session {
     ) -> PyResult<T> {
         let result = py.detach(|| {
             let mut guard = self.inner.lock().map_err(|_| BindingError::Poisoned)?;
-            let session = guard.as_mut().ok_or(BindingError::Closed)?;
+            let session = match &mut *guard {
+                SessionSlot::Open(session) => session,
+                SessionSlot::Closed => return Err(BindingError::Closed),
+                SessionSlot::ReadingRange => return Err(BindingError::Busy),
+            };
             operation(session).map_err(BindingError::Protocol)
         });
         result.map_err(|error| match error {
+            BindingError::Busy => {
+                SessionBusyError::new_err("session is owned by an active range reader")
+            }
             BindingError::Closed => ClosedSessionError::new_err("session is closed"),
             BindingError::Poisoned => {
                 CompletionUnknownError::new_err("session mutex was poisoned; completion unknown")
@@ -420,7 +440,7 @@ impl Session {
             })
             .map_err(|error| convert_error(py, error))?;
         Ok(Self {
-            inner: Mutex::new(Some(session)),
+            inner: Arc::new(Mutex::new(SessionSlot::Open(session))),
             limits,
         })
     }
@@ -430,10 +450,13 @@ impl Session {
             .inner
             .lock()
             .map_err(|_| CompletionUnknownError::new_err("session mutex was poisoned"))?;
-        Ok(match guard.as_ref().map(|s| s.state()) {
-            None => SessionState::Closed,
-            Some(ff80::SessionState::Ready) => SessionState::Ready,
-            Some(ff80::SessionState::CompletionUnknown) => SessionState::CompletionUnknown,
+        Ok(match &*guard {
+            SessionSlot::Closed => SessionState::Closed,
+            SessionSlot::ReadingRange => SessionState::ReadingRange,
+            SessionSlot::Open(session) => match session.state() {
+                ff80::SessionState::Ready => SessionState::Ready,
+                ff80::SessionState::CompletionUnknown => SessionState::CompletionUnknown,
+            },
         })
     }
     #[getter]
@@ -449,12 +472,27 @@ impl Session {
             .map(|b| PyBytes::new(py, &b))
     }
     fn close<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        let session = self
-            .inner
-            .lock()
-            .map_err(|_| CompletionUnknownError::new_err("session mutex was poisoned"))?
-            .take()
-            .ok_or_else(|| ClosedSessionError::new_err("session is closed"))?;
+        let session = {
+            let mut slot = self
+                .inner
+                .lock()
+                .map_err(|_| CompletionUnknownError::new_err("session mutex was poisoned"))?;
+            match &*slot {
+                SessionSlot::Closed => {
+                    return Err(ClosedSessionError::new_err("session is closed"));
+                }
+                SessionSlot::ReadingRange => {
+                    return Err(SessionBusyError::new_err(
+                        "session is owned by an active range reader",
+                    ));
+                }
+                SessionSlot::Open(_) => (),
+            }
+            match std::mem::replace(&mut *slot, SessionSlot::Closed) {
+                SessionSlot::Open(session) => session,
+                _ => unreachable!("validated slot under lock"),
+            }
+        };
         py.detach(|| block_on(session.close()))
             .map(|bytes| PyBytes::new(py, &bytes))
             .map_err(|e| convert_error(py, e))
@@ -662,6 +700,7 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     )?;
     usb.add("DeviceCommandError", py.get_type::<DeviceCommandError>())?;
     usb.add("ClosedSessionError", py.get_type::<ClosedSessionError>())?;
+    usb.add("SessionBusyError", py.get_type::<SessionBusyError>())?;
     blocking.add("__path__", PyList::empty(py))?;
     let memory = memory::module(py)?;
     blocking.add_submodule(&memory)?;
@@ -676,7 +715,16 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     modules.set_item("fujimod.usb", &usb)?;
     modules.set_item("fujimod.usb.blocking", &blocking)?;
     modules.set_item("fujimod.usb.blocking.memory", &memory)?;
+    #[cfg(feature = "testing")]
+    {
+        let testing = testing::module(py)?;
+        usb.add_submodule(&testing)?;
+        modules.set_item("fujimod.usb.testing", &testing)?;
+    }
     Ok(())
 }
 
 mod memory;
+
+#[cfg(feature = "testing")]
+mod testing;

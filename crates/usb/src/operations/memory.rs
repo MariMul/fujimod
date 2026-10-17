@@ -5,26 +5,29 @@ use crate::{
         commands::memory::{Address, DebugMemoryLimits, MemoryRange, ReadMemory},
     },
 };
-use std::num::NonZeroU32;
+use std::{borrow::BorrowMut, num::NonZeroU32};
 
 /// Pull-based range download, one bounded command per `next_chunk().await`.
 ///
 /// Retains progress without accumulating the full range. If a chunk fails,
 /// previously returned chunks remain valid and no retry is issued automatically.
-pub struct MemoryReader<'a> {
-    session: &'a mut Session,
+pub struct MemoryReader<S> {
+    session: S,
     range: MemoryRange,
     limits: DebugMemoryLimits,
     offset: u32,
 }
-impl<'a> MemoryReader<'a> {
-    pub fn new(session: &'a mut Session, range: MemoryRange, limits: DebugMemoryLimits) -> Self {
+impl<S: BorrowMut<Session>> MemoryReader<S> {
+    pub fn new(session: S, range: MemoryRange, limits: DebugMemoryLimits) -> Self {
         Self {
             session,
             range,
             limits,
             offset: 0,
         }
+    }
+    pub fn into_inner(self) -> S {
+        self.session
     }
     pub fn bytes_completed(&self) -> u32 {
         self.offset
@@ -33,12 +36,13 @@ impl<'a> MemoryReader<'a> {
         if self.offset == self.range.length().get() {
             return Ok(None);
         }
-        let budget = self.session.max_reply_bytes().get();
+        let session = self.session.borrow_mut();
+        let budget = session.max_reply_bytes().get();
         let maximum = self
             .limits
             .read
             .get()
-            .min(self.session.info().advertised_packet_bytes.get())
+            .min(session.info().advertised_packet_bytes.get())
             .min(budget.saturating_sub(36));
         if maximum == 0 {
             return Err(Error::LengthLimit {
@@ -49,8 +53,7 @@ impl<'a> MemoryReader<'a> {
         let Some(range) = chunk(self.range, self.offset, maximum) else {
             return Ok(None);
         };
-        let data = self
-            .session
+        let data = session
             .read_memory(ReadMemory::new(range, self.limits)?)
             .await?;
         self.offset += range.length().get();

@@ -40,7 +40,10 @@ queries require `usb.DiagnosticTag.research(value)` explicitly.
 
 `Session.read_memory` and `Session.write_memory` issue one camera request each.
 `blocking.memory.read_range` and `blocking.memory.write_range` use the library's
-composed operations. Configuration writes
+composed operations. `blocking.memory.read_chunks` returns a context-managed
+iterator that exclusively owns the session until iteration finishes or closes.
+Each yielded buffer can be saved immediately; failures retain the prior chunks.
+Configuration writes
 are distinct from persistent saves. `diagnostic_query`, `prepare_data_read`,
 `prepare_data_write`, `read_data`, `write_data` and `data_status` expose separate
 stages without implicit preparation, firmware retries or cleanup.
@@ -57,7 +60,10 @@ I/O is rejected. Releasing Python objects does not send a camera reset, mode
 transition or rollback. The consuming workflow owns firmware policy and cleanup
 when completion and ownership are known.
 
-Run `pytest bindings/python/tests` with the built wheel installed. These tests
-exercise imports, enum conversion, argument limits and exception hierarchy;
-protocol and cancellation cases are covered by the Rust tests. No test opens a
-camera. Python async and browser integration are subsequent targets.
+For Python protocol/ownership tests, build an instrumented wheel with
+`maturin build --manifest-path bindings/python/Cargo.toml --features testing`.
+Install it in the test environment, then run `pytest bindings/python/tests`.
+These tests replay synthetic USB exchanges through the production Rust session,
+including streaming, ownership, protocol errors and disconnects. The `testing`
+module is excluded from ordinary builds. No test opens a camera. Python async
+and browser integration are subsequent targets.

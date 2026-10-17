@@ -65,3 +65,8 @@ X70 View's existing ff80 callers. The upstream MIT notice is retained in
 included.
 
 Run `cargo test --workspace --all-features` from the repository root.
+
+The opt-in `testing` feature supplies strict synthetic exchange scripts through
+the same session implementation. It does not enumerate or open USB devices.
+Python's test build uses it to verify streaming and ownership across the language
+boundary; regular builds contain only the nusb backend.

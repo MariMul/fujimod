@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{
     Error, Result,
-    connection::{Io, UsbIo},
+    connection::{Backend, Io, UsbIo},
     error::{ProtocolError, check_limit},
 };
 use std::num::NonZeroU32;
@@ -33,12 +33,21 @@ pub struct SessionInfo {
 /// this session unusable; dropping it releases host resources without requesting
 /// a camera reset, firmware cleanup or service-mode transition.
 pub struct Session {
-    core: Core<UsbIo>,
+    core: Core<Backend>,
 }
 impl Session {
     pub(crate) async fn open(io: UsbIo, max_reply_bytes: u32) -> Result<Self> {
         Ok(Self {
-            core: Core::open(io, max_reply_bytes).await?,
+            core: Core::open(Backend::Usb(io), max_reply_bytes).await?,
+        })
+    }
+    #[cfg(feature = "testing")]
+    pub(crate) async fn replay(
+        script: crate::testing::Script,
+        max_reply_bytes: u32,
+    ) -> Result<Self> {
+        Ok(Self {
+            core: Core::open(Backend::Replay(script), max_reply_bytes).await?,
         })
     }
     pub fn info(&self) -> SessionInfo {

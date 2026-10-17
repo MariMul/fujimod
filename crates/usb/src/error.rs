@@ -54,6 +54,13 @@ pub enum Error {
     InvalidLength,
     #[error("argument must be a bounded ASCII token")]
     InvalidToken,
+    #[cfg(feature = "testing")]
+    #[error("USB replay differs at exchange {position}")]
+    ReplayMismatch {
+        position: usize,
+        expected: Option<Box<crate::testing::Exchange>>,
+        actual: Box<crate::testing::Exchange>,
+    },
     #[error("bulk read failed after {data_len} bytes: {source}")]
     PartialRead {
         data_len: usize,

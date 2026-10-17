@@ -12,6 +12,9 @@ crate-type = ["cdylib"]
 test = false
 doctest = false
 
+[features]
+testing = ["fujimod-usb/testing"]
+
 [dependencies]
 pyo3.workspace = true
 fujimod-usb.workspace = true
