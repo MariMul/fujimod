@@ -3,6 +3,9 @@ import { zipFiles } from "../archive";
 import { icon } from "./icons";
 
 export function downloadBlob(blob: Blob, name: string) {
+  if (import.meta.env.DEV) window.dispatchEvent(new CustomEvent('simulator-download', {
+    detail: { name, bytes: blob.size },
+  }));
   const url = URL.createObjectURL(blob),
     a = document.createElement("a");
   a.href = url;

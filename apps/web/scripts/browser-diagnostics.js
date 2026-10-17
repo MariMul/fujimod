@@ -87,6 +87,9 @@
     report('unhandledrejection', describe(event.reason)),
   );
   document.addEventListener('visibilitychange', () => report('visibility', ''));
+  window.addEventListener('simulator-download', event => {
+    report('download', `${event.detail.name} (${event.detail.bytes} bytes)`);
+  });
   window.addEventListener('camera-boot-memory', event => {
     bootMemory = event.detail;
     report('emulator-memory', event.detail.stage);

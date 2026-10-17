@@ -156,18 +156,39 @@ test('an outstanding browser write prevents overlapping archive exports', async 
     return { write: async () => {}, close: async () => {} }; } }) };
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { storage: { getDirectory: async () => ({ getDirectoryHandle: async () => dir }) } } });
-  let exports = 0, destroyed = 0;
+  let exports = 0, reads = 0, staged = false;
   const py = { runPython(source) {
     if (source === 'browser_history.capture(session)') return true;
     exports++;
-    return { getBuffer: () => ({ data: new Uint8Array([1,2,3]), release() {} }), destroy() { destroyed++; } };
+    assert.match(source, /destination=/);
+    staged = true;
+  }, FS: {
+    readFile() { assert.equal(staged, true); reads++; return new Uint8Array([1,2,3]); },
+    unlink() { if (!staged) throw Error('absent'); staged = false; },
   } };
   try {
     const recovery = new WorkerRecovery(), saved = recovery.capture(py);
     await entered;
     await recovery.capture(py); await recovery.capture(py);
-    assert.equal(exports, 1); assert.equal(destroyed, 1);
+    assert.equal(exports, 1); assert.equal(reads, 1); assert.equal(staged, false);
     finish(); assert.equal(await saved, true);
     await recovery.capture(py); assert.equal(exports, 1);
   } finally { finish(); if (previous) Object.defineProperty(globalThis, 'navigator', previous); else delete globalThis.navigator; }
+});
+
+
+test('a failed streaming export removes its partial file and disables repeated cache writes', async () => {
+  let removed = 0, exports = 0;
+  const py = { runPython(source) {
+    if (source === 'browser_history.capture(session)') return true;
+    exports++; throw Error('archive write failed');
+  }, FS: {
+    readFile() { throw Error('must not read a partial archive'); },
+    unlink() { removed++; },
+  } };
+  const recovery = new WorkerRecovery();
+  await recovery.capture(py);
+  await recovery.capture(py);
+  assert.equal(exports, 1);
+  assert.equal(removed, 1);
 });

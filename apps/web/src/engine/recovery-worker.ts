@@ -1,6 +1,7 @@
 import { cacheKey, CheckpointStore, digest } from './checkpoint-store.js';
 
 export interface RecoveryRuntime {
+  FS: { readFile(path: string): Uint8Array<ArrayBuffer>; unlink(path: string): void };
   globals: { set(name: string, value: unknown): void; delete(name: string): void };
   runPython<T = string>(source: string): T;
   toPy(value: Uint8Array): { destroy(): void };
@@ -43,24 +44,32 @@ export class WorkerRecovery {
   start(py: RecoveryRuntime) {
     py.runPython('from native.web.recovery import History, export_snapshot\nbrowser_history = History()');
   }
-  async capture(py: RecoveryRuntime) {
+  async capture(py: RecoveryRuntime, observe?: (stage: string) => void) {
     // History checks the two-second deadline and refuses unsafe boundaries without execution.
-    let value: BytesProxy | undefined;
     let ownsSave = false;
+    const path = '/tmp/browser-boot-checkpoint.zip';
     try {
+      observe?.('checkpoint-snapshot-start');
       const captured = py.runPython<boolean>('browser_history.capture(session)');
+      observe?.('checkpoint-snapshot-complete');
       if (!captured || this.saved || this.saving || this.persistenceDisabled) return;
       this.saving = ownsSave = true;
-      value = py.runPython<BytesProxy>('memoryview(export_snapshot(browser_history.points[-1]))');
-      const buffer = value.getBuffer('u8');
-      let bytes: Uint8Array<ArrayBuffer>;
-      try { bytes = Uint8Array.from(buffer.data); } finally { buffer.release(); }
-      value.destroy(); value = undefined;
+      observe?.('checkpoint-archive-start');
+      py.runPython("export_snapshot(browser_history.points[-1], destination='/tmp/browser-boot-checkpoint.zip')");
+      const bytes = py.FS.readFile(path);
+      py.FS.unlink(path);
+      observe?.('checkpoint-archive-complete');
       this.saved = await this.store.write(this.key, bytes);
+      observe?.('checkpoint-store-complete');
       if (!this.saved) this.persistenceDisabled = true;
       return this.saved;
     } catch (error) { this.cacheFailure = String(error); this.persistenceDisabled = true; return true; }
-    finally { value?.destroy(); if (ownsSave) this.saving = false; }
+    finally {
+      if (ownsSave) {
+        try { py.FS.unlink(path); } catch { /* Also remove a partially written archive on failure. */ }
+        this.saving = false;
+      }
+    }
   }
   rollback(py: RecoveryRuntime, seconds: number) {
     py.globals.set('browser_undo_seconds', seconds);

@@ -24,6 +24,8 @@ interface Pyodide {
     options: { extractDir: string },
   ): void;
   FS: {
+    readFile(path: string): Uint8Array<ArrayBuffer>;
+    unlink(path: string): void;
     mkdirTree(path: string): void;
     writeFile(
       path: string,
@@ -435,7 +437,7 @@ async function startSession(
   configurePreview();
   recovery.start(runtime);
   bootStage("shooting-frame-ready");
-  if (!resumed) await recovery.capture(runtime);
+  if (!resumed) await recovery.capture(runtime, bootStage);
   const frame = currentFrame();
   send("cache", recovery.status(runtime));
   stopped = false;

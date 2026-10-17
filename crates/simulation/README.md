@@ -179,3 +179,13 @@ reserves 941,621,248 bytes, including guest RAM; these asset changes do not halv
 the combined tab. Development diagnostics now record emulator memory at each
 boot stage, including before a camera becomes ready. Phone stability still
 requires verification on the actual device.
+
+Startup checkpoint export now writes compressed blobs in 64 KiB input chunks
+to a MEMFS file; the worker reads that file directly. It no longer retains the
+whole ZIP as Python bytes before copying it into JavaScript. A desktop Safari
+cold boot measured 818,151,424 bytes before checkpoint export and 880,345,088
+after it, compared with the prior 941,621,248-byte completion measurement.
+These remain linear-memory measurements and do not establish an iPhone memory
+limit or confirm a memory kill. Boot diagnostics distinguish snapshot capture,
+archive export and persistence. Download diagnostics record the filename;
+automatic crash reports continue to upload in the background.

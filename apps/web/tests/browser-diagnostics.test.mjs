@@ -55,6 +55,9 @@ test('development diagnostics capture async failures, console panics and rendere
   assert.equal(sent[5].emulatorBootStage, 'board-created');
   assert.equal(sent[5].emulatorMemoryBytes, 600000000);
   assert.equal(sent[5].emulatorPeakMemoryBytes, 700000000);
+  events['simulator-download']({ detail: { name: 'simulator-report.zip', bytes: 1234 } });
+  assert.equal(sent[6].kind, 'download');
+  assert.equal(sent[6].detail, 'simulator-report.zip (1234 bytes)');
 });
 
 test('diagnostic endpoint saves valid reports and rejects oversized, malformed and cross-origin requests', async () => {
