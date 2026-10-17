@@ -169,6 +169,10 @@ This captures idle, running and forced-fault states at 1300×900 and WebKit
 iPhone 390×844, saves side-by-side composites and checks CSS-pixel geometry.
 Faults pause the engine, paint a Mac-style Undo dialog into the LCD, and expose
 raw diagnostics plus a report ZIP containing the preceding RAM snapshot.
+The page and LCD offer Undo only when a snapshot from at least ten guest seconds
+earlier can be restored. Restart and error reports remain available otherwise.
+Check early faults, available Undo and consumed history against a Vite development
+server with `python tests/undo.py --url http://127.0.0.1:5191/ --output /fresh/ignored/undo-proof`.
 
 ### Release artifacts and deployment
 

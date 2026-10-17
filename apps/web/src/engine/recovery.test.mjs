@@ -59,6 +59,30 @@ test('fault normalization distinguishes guest faults, unsupported models and Was
   assert.equal(faultFrom({ error_type: 'UnsupportedDevice', error: 'write failed' }).kind, 'unsupported-device');
   assert.equal(faultFrom(new TypeError('broken callback')).kind, 'exception');
 });
+test('rollback availability is read from live history and fails closed if inspection fails', () => {
+  const recovery = new WorkerRecovery();
+  assert.equal(recovery.canRollback(undefined, 10), false);
+  let available = false;
+  const py = {
+    globals: { set(name, value) { assert.equal(name, 'browser_undo_seconds'); assert.equal(value, 10); } },
+    runPython() { return available; },
+  };
+  assert.equal(recovery.canRollback(py, 10), false);
+  available = true;
+  assert.equal(recovery.canRollback(py, 10), true);
+  py.runPython = () => { throw Error('runtime trapped'); };
+  assert.equal(recovery.canRollback(py, 10), false);
+});
+test('fault events preserve the worker-confirmed undo availability', async () => {
+  for (const undoSeconds of [undefined, 10]) {
+    const { worker, engine } = setup();
+    const faults = []; engine.errors(fault => faults.push(fault));
+    await engine.boot(new ArrayBuffer(1), { inputs: 'inputs.json', bundle: 'runtime/', boot: { sceneInput: true } }, () => {});
+    worker.reply({ type: 'error', fault: { ...faultFrom(Error('stopped')), undoSeconds } });
+    assert.equal(faults[0].undoSeconds, undoSeconds);
+    engine.dispose();
+  }
+});
 test('new guest images are presented immediately while unchanged status polls omit pixels', async () => {
   const { engine, worker, sent, frames } = setup();
   await engine.boot(new ArrayBuffer(1), { inputs: 'inputs.json', bundle: 'runtime/', boot: { sceneInput: true } }, () => {});

@@ -4,7 +4,7 @@ import { boundedMemoryModule, type RuntimeSettings } from "./wasm-growth";
 import { RequestTimings } from "./performance";
 import { WorkerRecovery } from "./recovery-worker";
 import { digest } from "./checkpoint-store.js";
-import { EngineError, faultFrom, stateFault } from "./fault.ts";
+import { EngineError, FAULT_UNDO_SECONDS, faultFrom, stateFault } from "./fault.ts";
 import type { EngineConfig, CardState } from "./api";
 
 interface PyBuffer {
@@ -667,7 +667,11 @@ worker.onmessage = async ({ data }: MessageEvent<Message>) => {
           : { ...data };
     send("error", {
       id: "id" in data ? data.id : null,
-      fault: faultFrom(error),
+      fault: {
+        ...faultFrom(error),
+        undoSeconds: recovery.canRollback(py, FAULT_UNDO_SECONDS)
+          ? FAULT_UNDO_SECONDS : undefined,
+      },
       identity: recovery.identity,
     });
   }

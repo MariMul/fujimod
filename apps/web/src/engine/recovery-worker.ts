@@ -66,6 +66,13 @@ export class WorkerRecovery {
     py.globals.set('browser_undo_seconds', seconds);
     py.runPython('browser_history.rollback(session, browser_undo_seconds)');
   }
+  canRollback(py: RecoveryRuntime | undefined, seconds: number): boolean {
+    if (!py) return false;
+    try {
+      py.globals.set('browser_undo_seconds', seconds);
+      return py.runPython<boolean>("browser_history.can_rollback(session, browser_undo_seconds) if globals().get('browser_history') is not None and globals().get('session') is not None else False");
+    } catch { return false; }
+  }
   errorSnapshot(py: RecoveryRuntime): { checkpoint?: ArrayBuffer; snapshot: Record<string, unknown> } {
     let value: BytesProxy | undefined;
     try {

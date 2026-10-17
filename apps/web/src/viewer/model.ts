@@ -720,15 +720,17 @@ export class ModelViewer {
     c.font = "600 16px system-ui";
     c.fillText("Sorry, the emulator", 65, 31);
     c.fillText("stopped.", 65, 51);
-    c.lineWidth = 2;
-    c.beginPath();
-    c.roundRect(180, 72, 70, 24, 7);
-    c.stroke();
-    c.beginPath();
-    c.roundRect(176, 68, 78, 32, 10);
-    c.stroke();
-    c.font = "600 15px system-ui";
-    c.fillText("Undo", 195, 89);
+    if (this.undoFault) {
+      c.lineWidth = 2;
+      c.beginPath();
+      c.roundRect(180, 72, 70, 24, 7);
+      c.stroke();
+      c.beginPath();
+      c.roundRect(176, 68, 78, 32, 10);
+      c.stroke();
+      c.font = "600 15px system-ui";
+      c.fillText("Undo", 195, 89);
+    }
     c.restore();
   }
   private fit() {

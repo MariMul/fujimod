@@ -1,7 +1,9 @@
+export const FAULT_UNDO_SECONDS = 10;
 export interface EngineFault {
   kind: 'unsupported-device' | 'guest-fault' | 'wasm-trap' | 'exception';
   message: string;
   details: Record<string, unknown>;
+  undoSeconds?: number;
 }
 export class EngineError extends Error {
   readonly fault: EngineFault;

@@ -3,7 +3,7 @@ import { validateCatalog, type Catalog, type Firmware } from "./catalog";
 import { validateIndex, verifyPatch } from "./patch/catalog";
 import { sha256 } from "./patch/patcher";
 import { createEngine } from "./engine";
-import { EngineError, faultFrom, type EngineFault } from "./engine/fault";
+import { EngineError, FAULT_UNDO_SECONDS, faultFrom, type EngineFault } from "./engine/fault";
 import { cachedFetch } from "./asset-cache";
 import type { Engine, CardFile, BootMedia } from "./engine/api";
 import { errorReportZip } from "./engine/report";
@@ -97,7 +97,9 @@ function showFault(fault: EngineFault) {
   $("live-label").textContent = "STOPPED";
   $("boot-progress").hidden = true;
   status(fault.message, true);
-  $<HTMLButtonElement>("undo").disabled = !engine;
+  const canUndo = !!engine && fault.undoSeconds === FAULT_UNDO_SECONDS;
+  $<HTMLButtonElement>("undo").hidden = !canUndo;
+  $<HTMLButtonElement>("undo").disabled = !canUndo;
   $<HTMLButtonElement>("restart").disabled = !selectedFile;
   faultPanel.show(fault, {
     firmware: selectedFirmware?.id,
@@ -106,13 +108,15 @@ function showFault(fault: EngineFault) {
       ? window.cameraPerformance.guestTicks
       : undefined,
   });
-  viewer.fault(true, () => void undo());
+  viewer.fault(true, canUndo ? () => void undo() : undefined);
 }
 async function undo() {
   const button = $<HTMLButtonElement>("undo");
+  if (!engine || button.disabled || latestFault?.undoSeconds !== FAULT_UNDO_SECONDS) return;
   button.disabled = true;
+  viewer.fault(true);
   try {
-    const positions = await engine!.rollback(10);
+    const positions = await engine.rollback(FAULT_UNDO_SECONDS);
     viewer.fault(false);
     faultPanel.hide();
     panel.resume();
@@ -121,8 +125,6 @@ async function undo() {
     status("Camera resumed");
   } catch (error) {
     showFault(faultFrom(error));
-  } finally {
-    button.disabled = false;
   }
 }
 $("undo").onclick = () => void undo();
