@@ -4,7 +4,7 @@ use super::*;
 #[pyclass(module = "fujimod.usb", frozen)]
 #[derive(Clone)]
 pub(super) struct DataWindow {
-    inner: usb::operations::data::DataWindow,
+    pub(super) inner: usb::operations::data::DataWindow,
 }
 #[pymethods]
 impl DataWindow {
@@ -51,9 +51,9 @@ fn read_chunks(
     range::Reader::new(session, range::Operation::Data(window.inner, range))
 }
 
-#[pyclass(frozen, module = "fujimod.usb.blocking.data")]
-struct UploadReply {
-    inner: usb::operations::data::UploadReply,
+#[pyclass(frozen, module = "fujimod.usb.data")]
+pub(super) struct UploadReply {
+    pub(super) inner: usb::operations::data::UploadReply,
 }
 #[pymethods]
 impl UploadReply {

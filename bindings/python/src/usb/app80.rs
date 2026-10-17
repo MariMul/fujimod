@@ -22,8 +22,8 @@ impl CommandCode {
 
 #[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
 #[derive(Clone)]
-struct Request {
-    inner: usb::app80::Request,
+pub(super) struct Request {
+    pub(super) inner: usb::app80::Request,
 }
 #[pymethods]
 impl Request {
@@ -41,8 +41,8 @@ impl Request {
 
 #[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
 #[derive(Clone)]
-struct Mailbox {
-    inner: usb::operations::app80::Mailbox,
+pub(super) struct Mailbox {
+    pub(super) inner: usb::operations::app80::Mailbox,
 }
 #[pymethods]
 impl Mailbox {

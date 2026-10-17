@@ -78,7 +78,8 @@ synthetic exchanges. nusb's WebUSB backend compiles for `wasm32-unknown-unknown`
 The [JavaScript bindings](../../bindings/javascript/README.md) expose that
 backend; physical browser/camera integration remains unvalidated. No hardware
 access is part of the test suite. Native Python bindings live
-in `bindings/python/` at the workspace root. All public I/O is async and the
+in `bindings/python/` at the workspace root, with an awaitable API and an explicit
+blocking adapter. All Rust public I/O is async and the
 internal test interface does not require `Send` futures.
 
 Protocol references are `fftlib.py` and `ffjlib.py` from

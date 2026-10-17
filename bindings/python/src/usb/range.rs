@@ -5,24 +5,24 @@ pub(super) enum Operation {
     Memory(MemoryRange),
     Data(usb::operations::data::DataWindow, MemoryRange),
 }
-enum NativeReader {
+pub(super) enum NativeReader {
     Memory(usb::operations::memory::MemoryReader<ff80::Session>),
     Data(usb::operations::data::DataReader<ff80::Session>),
 }
 impl NativeReader {
-    fn bytes_completed(&self) -> u32 {
+    pub(super) fn bytes_completed(&self) -> u32 {
         match self {
             Self::Memory(r) => r.bytes_completed(),
             Self::Data(r) => r.bytes_completed(),
         }
     }
-    fn into_inner(self) -> ff80::Session {
+    pub(super) fn into_inner(self) -> ff80::Session {
         match self {
             Self::Memory(r) => r.into_inner(),
             Self::Data(r) => r.into_inner(),
         }
     }
-    async fn next_chunk(&mut self) -> usb::Result<Option<Vec<u8>>> {
+    pub(super) async fn next_chunk(&mut self) -> usb::Result<Option<Vec<u8>>> {
         match self {
             Self::Memory(r) => r.next_chunk().await,
             Self::Data(r) => r.next_chunk().await,

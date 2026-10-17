@@ -27,6 +27,12 @@ pub enum Exchange {
     PendingRead {
         maximum: usize,
     },
+    /// Complete after an actual timer wakeup, for executor integration tests.
+    DelayedRead {
+        maximum: usize,
+        data: Vec<u8>,
+        delay: std::time::Duration,
+    },
     ReadFailure {
         maximum: usize,
         error: nusb::transfer::TransferError,
@@ -112,6 +118,14 @@ impl Io for Script {
             }) if expected == maximum => Ok(data),
             Some(Exchange::PendingRead { maximum: expected }) if expected == maximum => {
                 std::future::pending().await
+            }
+            Some(Exchange::DelayedRead {
+                maximum: expected,
+                data,
+                delay,
+            }) if expected == maximum => {
+                futures_timer::Delay::new(delay).await;
+                Ok(data)
             }
             Some(Exchange::ReadFailure {
                 maximum: expected,

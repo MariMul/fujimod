@@ -45,6 +45,24 @@ impl Exchange {
         }
     }
     #[staticmethod]
+    fn pending_read(maximum: u32) -> Self {
+        Self {
+            inner: usb::testing::Exchange::PendingRead {
+                maximum: maximum as usize,
+            },
+        }
+    }
+    #[staticmethod]
+    fn delayed_read(maximum: u32, data: Vec<u8>, delay_ms: u64) -> Self {
+        Self {
+            inner: usb::testing::Exchange::DelayedRead {
+                maximum: maximum as usize,
+                data,
+                delay: Duration::from_millis(delay_ms),
+            },
+        }
+    }
+    #[staticmethod]
     fn disconnected(maximum: u32, partial: Vec<u8>) -> Self {
         Self {
             inner: usb::testing::Exchange::ReadFailure {
@@ -85,6 +103,24 @@ fn session(
             inner: Arc::new(Mutex::new(SessionSlot::Open(native))),
             limits,
         },
+        Script { inner: script },
+    ))
+}
+#[pyfunction]
+#[pyo3(signature=(exchanges,limits,*,max_reply_bytes=8388608,trace=None))]
+async fn async_session(
+    exchanges: Vec<Exchange>,
+    limits: FirmwareLimits,
+    max_reply_bytes: u32,
+    trace: Option<tracing::Trace>,
+) -> PyResult<(asynchronous::AsyncSession, Script)> {
+    let script = usb::testing::Script::new(exchanges.into_iter().map(|e| e.inner));
+    let native =
+        asynchronous::detached(script.begin_session(max_reply_bytes, trace.map(|t| t.inner)))
+            .await
+            .map_err(asynchronous::error)?;
+    Ok((
+        asynchronous::AsyncSession::new(native, limits),
         Script { inner: script },
     ))
 }
@@ -189,6 +225,7 @@ pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     module.add_class::<Exchange>()?;
     module.add_class::<Script>()?;
     module.add_function(wrap_pyfunction!(session, &module)?)?;
+    module.add_function(wrap_pyfunction!(async_session, &module)?)?;
     module.add_function(wrap_pyfunction!(peer_session, &module)?)?;
     Ok(module)
 }

@@ -11,6 +11,11 @@ def test_one_package_supports_direct_submodule_imports():
     assert importlib.import_module("fujimod.usb.blocking") is blocking
     assert blocking.Session.__module__ == "fujimod.usb.blocking"
     assert importlib.import_module("fujimod.usb.blocking.memory") is blocking.memory
+    assert importlib.import_module("fujimod.usb.memory") is usb.memory
+    assert importlib.import_module("fujimod.usb.data") is usb.data
+    assert usb.Session.__module__ == "fujimod.usb"
+    assert not hasattr(usb.Device, "interfaces")
+    assert callable(blocking.interfaces) and callable(usb.interfaces)
     assert not hasattr(blocking.Session, "read_range")
     assert callable(blocking.memory.read_range)
 

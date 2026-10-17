@@ -188,6 +188,7 @@ name = "fujimod-python"
 version = "0.1.0"
 dependencies = [
  "fujimod-usb",
+ "futures-channel",
  "futures-lite",
  "nusb",
  "pyo3",

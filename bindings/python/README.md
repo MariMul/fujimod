@@ -13,6 +13,49 @@ maturin build --manifest-path bindings/python/Cargo.toml --out target/wheels
 Install the wheel in the consuming project's uv environment. Source consumers
 can use `uv add /path/to/fujimod/bindings/python` and rebuild after Rust changes.
 
+The default USB API is awaitable and runs directly on `asyncio`:
+
+```python
+from fujimod import usb
+
+async def identify(device, interface, firmware_limits):
+    session = await usb.Session.open(device, interface, firmware_limits)
+    try:
+        return await session.device_info(usb.InfoSelector.Product)
+    finally:
+        if session.state == usb.SessionState.Ready:
+            await session.close()
+
+async def download(session, address, length, consume):
+    async with usb.memory.read_chunks(session, address, length) as reader:
+        async for chunk in reader:
+            await consume(chunk)
+```
+
+`await usb.discover(filter)` inventories devices; `await usb.interfaces(device)`
+inspects bulk interface selections. Direct session commands, `usb.memory` range
+operations, `usb.data.upload` and `usb.app80.exchange` are awaitable. Chunk
+factories acquire ownership synchronously and return async iterators. Use
+`async with` or `await reader.aclose()` when ending iteration early.
+
+Python cancellation drops the actual Rust operation. An interrupted exchange
+restores a session fenced as `CompletionUnknown`; it sends no cleanup or retry.
+A pending operation reports `InFlight`, and another operation fails with
+`SessionBusyError`. A pending chunk cancellation closes its reader and restores
+the fenced session. `aclose()` can cancel a pending chunk and awaits release of
+ownership; `session.abandon()` cancels pending host work and leaves `Abandoned`.
+Neither operation can stop camera execution. Creating an unawaited coroutine
+sends nothing; discarding or cancelling it before dispatch leaves the session
+available.
+
+The native binding uses PyO3's `experimental-async` coroutine support and nusb's
+wakeups directly, without a background Python worker or an added Rust runtime.
+I/O polling releases the GIL. These native coroutines work with `await`,
+`asyncio.create_task`, cancellation and separate event loops. Pyodide packaging
+remains a separate integration target.
+
+Synchronous callers use the explicit `blocking` API:
+
 ```python
 from fujimod import usb
 from fujimod.usb import blocking
@@ -28,8 +71,8 @@ def identify(device, interface, firmware_limits):
 ```
 
 `blocking.discover(usb.DeviceFilter.Diagnostic)` returns device descriptors;
-`device.interfaces()` inspects available bulk interface selections. The caller
-selects the device and interface explicitly. `DeviceFilter.Fujifilm` includes
+`blocking.interfaces(device)` inspects available bulk interface selections.
+The caller selects the device and interface explicitly. `DeviceFilter.Fujifilm` includes
 other Fujifilm USB modes for inventory, without opening a protocol session.
 
 All wire exchanges run through the async Rust implementation. This native
@@ -65,15 +108,16 @@ when completion and ownership are known. When a completed command started
 application work whose completion or ownership is uncertain, `session.abandon()`
 releases host resources without issuing C4 or cleanup. Its terminal state is
 `Abandoned`, and all further I/O is rejected. Abandoning cannot stop firmware
-execution. Close a range reader first if it still owns the session.
+execution. The blocking adapter requires closing its range reader before
+abandoning the session.
 
 For Python protocol/ownership tests, build an instrumented wheel with
 `maturin build --manifest-path bindings/python/Cargo.toml --features testing`.
 Install it in the test environment, then run `pytest bindings/python/tests`.
 These tests replay synthetic USB exchanges through the production Rust session,
 including streaming, ownership, protocol errors and disconnects. The `testing`
-module is excluded from ordinary builds. No test opens a camera. Python async
-and browser integration are subsequent targets.
+module is excluded from ordinary builds. No test opens a camera. Tests also cover
+asyncio wakeups, cancellation during I/O, concurrent calls and async iterators.
 
 Use `blocking.data.read_chunks(session, window, address, length)` for a streamed
 E1 memory range. Construct `usb.DataWindow(base, aperture_address,
@@ -101,7 +145,7 @@ before sending, and does no polling or retries. The publish write awaits its
 ff80 completion; mailbox bytes are not interpreted as a host wait instruction.
 
 For raw transfer logging, create `tracing.Trace(max_events=..., max_bytes=...)`
-from `fujimod.usb.tracing` and pass it as `trace=` when opening a blocking
+from `fujimod.usb.tracing` and pass it as `trace=` when opening either kind of
 session. `trace.drain()` returns a batch of immutable events plus
 `dropped_events`/`dropped_bytes`. Events expose typed `stage`, `phase`,
 `request_kind` and `failure_kind`, raw `data`, correlation IDs, endpoint and

@@ -16,7 +16,8 @@ doctest = false
 testing = ["fujimod-usb/testing"]
 
 [dependencies]
-pyo3.workspace = true
+pyo3 = { workspace = true, features = ["experimental-async"] }
 fujimod-usb.workspace = true
 futures-lite.workspace = true
+futures-channel.workspace = true
 nusb.workspace = true

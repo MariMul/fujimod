@@ -127,6 +127,7 @@ enum_binding!(DeviceFilter,"DeviceFilter",usb::connection::DeviceFilter,{Fujifil
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum SessionState {
     Ready,
+    InFlight,
     CompletionUnknown,
     Closed,
     Abandoned,
@@ -189,7 +190,7 @@ impl FirmwareLimits {
         self.console.get()
     }
 }
-#[pyclass(frozen, module = "fujimod.usb")]
+#[pyclass(frozen, from_py_object, module = "fujimod.usb")]
 #[derive(Clone)]
 struct InterfaceSelection {
     inner: usb::connection::InterfaceSelection,
@@ -220,7 +221,8 @@ impl InterfaceSelection {
         self.inner.alternate
     }
 }
-#[pyclass(frozen, module = "fujimod.usb")]
+#[pyclass(frozen, from_py_object, module = "fujimod.usb")]
+#[derive(Clone)]
 struct Device {
     inner: nusb::DeviceInfo,
 }
@@ -258,19 +260,10 @@ impl Device {
     fn serial(&self) -> Option<&str> {
         self.inner.serial_number()
     }
-    fn interfaces(&self, py: Python<'_>) -> PyResult<Vec<InterfaceSelection>> {
-        py.detach(|| block_on(usb::connection::interfaces(&self.inner)))
-            .map(|items| {
-                items
-                    .into_iter()
-                    .map(|inner| InterfaceSelection { inner })
-                    .collect()
-            })
-            .map_err(|e| convert_error(py, e))
-    }
 }
 
-#[pyclass(frozen, module = "fujimod.usb")]
+#[pyclass(frozen, from_py_object, module = "fujimod.usb")]
+#[derive(Clone)]
 struct DiagnosticTag {
     inner: diagnostic::DiagnosticTag,
 }
@@ -499,14 +492,14 @@ impl BindingError {
     fn into_python(self, py: Python<'_>) -> PyErr {
         match self {
             BindingError::Busy => {
-                SessionBusyError::new_err("session is owned by an active range reader")
+                SessionBusyError::new_err("session is owned by another operation or range reader")
             }
             BindingError::Closed => ClosedSessionError::new_err("session is closed"),
             BindingError::Abandoned => ClosedSessionError::new_err(
                 "session was abandoned without closing the camera session",
             ),
             BindingError::CompletionUnknown => CompletionUnknownError::new_err(
-                "session close did not complete; further I/O is unavailable",
+                "session completion is unknown; further I/O is unavailable",
             ),
             BindingError::Poisoned => {
                 CompletionUnknownError::new_err("session mutex was poisoned; completion unknown")
@@ -824,6 +817,18 @@ fn discover(py: Python<'_>, filter: DeviceFilter) -> PyResult<Vec<Device>> {
         .map_err(|e| convert_error(py, e))
 }
 
+#[pyfunction]
+fn interfaces(py: Python<'_>, device: &Device) -> PyResult<Vec<InterfaceSelection>> {
+    py.detach(|| block_on(usb::connection::interfaces(&device.inner)))
+        .map(|items| {
+            items
+                .into_iter()
+                .map(|inner| InterfaceSelection { inner })
+                .collect()
+        })
+        .map_err(|e| convert_error(py, e))
+}
+
 pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     let usb = PyModule::new(py, "fujimod.usb")?;
     let blocking = PyModule::new(py, "fujimod.usb.blocking")?;
@@ -866,6 +871,7 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     let tracing = tracing::module(py)?;
     usb.add_submodule(&tracing)?;
     let app80 = app80::types_module(py)?;
+    asynchronous::register(py, &usb, &app80)?;
     let app80_blocking = app80::blocking_module(py)?;
     usb.add_submodule(&app80)?;
     blocking.add_submodule(&app80_blocking)?;
@@ -878,6 +884,7 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     blocking.add_submodule(&memory)?;
     blocking.add_class::<Session>()?;
     blocking.add_function(wrap_pyfunction!(discover, &blocking)?)?;
+    blocking.add_function(wrap_pyfunction!(interfaces, &blocking)?)?;
     usb.add_submodule(&blocking)?;
     m.add_submodule(&usb)?;
     let modules = py
@@ -902,6 +909,7 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
 }
 
 mod app80;
+mod asynchronous;
 mod data;
 mod memory;
 mod range;
