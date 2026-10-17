@@ -1,6 +1,11 @@
 //! Thin browser entry points. JS sends input commands, never scene graphs.
 use crate::rendering::{Bridge, Command, Presentation, SimulationPlugin};
-use bevy::{asset::AssetMetaCheck, prelude::*, window::PresentMode, winit::WinitSettings};
+use bevy::{
+    asset::AssetMetaCheck,
+    prelude::*,
+    window::{PresentMode, WindowResolution},
+    winit::WinitSettings,
+};
 use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 thread_local! {static HOST:RefCell<Option<Bridge>>=const{RefCell::new(None)};}
@@ -17,7 +22,16 @@ pub fn start(canvas_selector: String, asset_root: String) -> Result<(), JsValue>
         return Err(JsValue::from_str("Simulator already started"));
     }
     std::panic::set_hook(Box::new(|info| {
-        web_sys::console::error_1(&JsValue::from_str(&info.to_string()))
+        let message = JsValue::from_str(&info.to_string());
+        web_sys::console::error_1(&message);
+        let init = web_sys::CustomEventInit::new();
+        init.set_detail(&message);
+        if let (Some(window), Ok(event)) = (
+            web_sys::window(),
+            web_sys::CustomEvent::new_with_event_init_dict("simulationerror", &init),
+        ) {
+            let _ = window.dispatch_event(&event);
+        }
     }));
     let bridge = Bridge::default();
     HOST.with(|h| *h.borrow_mut() = Some(bridge.clone()));
@@ -28,6 +42,9 @@ pub fn start(canvas_selector: String, asset_root: String) -> Result<(), JsValue>
                     primary_window: Some(Window {
                         canvas: Some(canvas_selector),
                         fit_canvas_to_parent: true,
+                        // One render pixel per CSS pixel on every browser. Device DPR
+                        // otherwise multiplies every color/depth/MSAA attachment.
+                        resolution: WindowResolution::new(640, 480).with_scale_factor_override(1.),
                         prevent_default_event_handling: false,
                         present_mode: PresentMode::AutoVsync,
                         ..default()

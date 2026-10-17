@@ -1535,3 +1535,11 @@ header > a {
   .stage:not(.idle) .viewer { min-height: 0; }
   .stage:not(.idle) .panel { min-height: 0; overflow-y: auto; }
 }
+
+.model-input-feedback.renderer-error {
+  left: 16px;
+  right: 16px;
+  transform: none;
+  white-space: normal;
+  text-align: center;
+}

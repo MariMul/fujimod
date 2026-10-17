@@ -65,6 +65,8 @@ export class ModelViewer {
     return this.pendingMode ?? this.state.mode ?? 'inspect';
   }
   private started = false;
+  private rendererFailed = false;
+  private wasmMemory?: WebAssembly.Memory;
   private ready: Promise<void>;
   private requestID = 0;
   private requests = new Map<number, (hit: ModelHit | null) => void>();
@@ -119,31 +121,39 @@ export class ModelViewer {
     host.append(this.inputMarker, this.inputFeedback, this.modeButton);
     this.rotaryDrag = new RotaryDrag(this.canvas, (enabled) => this.setOrbit(enabled));
     this.bindInput();
+    this.canvas.addEventListener('webglcontextlost', () => {
+      this.showRendererError('3D graphics context was lost. LCD mode is still available.');
+    });
+    this.canvas.addEventListener('webglcontextcreationerror', (event) => {
+      this.showRendererError((event as WebGLContextEvent).statusMessage || 'Unable to create the 3D graphics context.');
+    });
+    window.addEventListener('simulationerror', (event) => {
+      this.showRendererError((event as CustomEvent<string>).detail);
+    });
     this.ready = this.start();
     void this.ready.catch((error) => this.showRendererError(error));
   }
   showRendererError(error: unknown) {
+    this.rendererFailed = true;
     console.error(error);
     this.host.dataset.rendererError = String(error);
     this.host.dataset.rendererStage = 'failed';
     this.inputFeedback.textContent = String(error);
+    this.inputFeedback.classList.add('renderer-error');
     this.inputFeedback.hidden = false;
     this.modeButton.disabled = true;
   }
   private async start() {
     this.host.dataset.rendererStage = 'adapter';
-    const gpu = (navigator as Navigator & {
-      gpu?: { requestAdapter(): Promise<unknown> };
-    }).gpu;
-    if (!gpu) throw Error('3D view requires WebGPU (Safari 26 or later).');
-    if (!(await gpu.requestAdapter())) throw Error('No WebGPU adapter is available for the 3D view.');
+    if (!window.WebGL2RenderingContext) throw Error('3D view requires WebGL 2.');
     this.host.dataset.rendererStage = 'wasm';
-    await init();
+    this.wasmMemory = (await init()).memory;
     this.host.dataset.rendererStage = 'engine';
     simulation.start('#simulation-canvas', new URL('.', document.baseURI).href);
     this.host.dataset.rendererStage = 'running';
     this.started = true;
     this.host.dataset.renderer = 'bevy';
+    this.host.dataset.rendererBackend = 'webgl2';
     this.host.dataset.rendererVersion = '0.20.0';
     requestAnimationFrame(() => this.poll());
     const environment = new URLSearchParams(location.search).get('environment');
@@ -162,6 +172,7 @@ export class ModelViewer {
     }
   }
   private send(command: Record<string, unknown>) {
+    if (this.rendererFailed) return;
     if (this.started) simulation.command(JSON.stringify(command));
     else void this.ready.then(() => simulation.command(JSON.stringify(command))).catch(() => {
       // Startup failure is already displayed by showRendererError.
@@ -201,6 +212,15 @@ export class ModelViewer {
     });
   }
   private poll() {
+    if (this.rendererFailed) return;
+    try {
+      this.pollFrame();
+    } catch (error) {
+      this.showRendererError(error);
+    }
+  }
+  private pollFrame() {
+    this.host.dataset.wasmMemoryBytes = String(this.wasmMemory?.buffer.byteLength ?? 0);
     const json = simulation.snapshot();
     this.state = JSON.parse(json) ?? {};
     if (this.state.mode === this.pendingMode) this.pendingMode = undefined;
@@ -563,13 +583,13 @@ export class ModelViewer {
       this.lines.append(path);
     }
   }
-  private uploadLCD() {
-    if (!this.started) return;
+  private uploadLCD(image?: ImageData) {
+    if (!this.started || this.rendererFailed || this.host.classList.contains('lcd-mode')) return;
     simulation.lcd(
       this.lcd.width,
       this.lcd.height,
       new Uint8Array(
-        this.lcd.getContext('2d')!.getImageData(0, 0, this.lcd.width, this.lcd.height).data.buffer,
+        (image ?? this.lcd.getContext('2d')!.getImageData(0, 0, this.lcd.width, this.lcd.height)).data.buffer,
       ),
     );
   }
@@ -577,6 +597,8 @@ export class ModelViewer {
     this.host.classList.toggle('lcd-mode', mode === 'lcd');
     this.lcd.hidden = mode !== 'lcd';
     this.lcd.classList.toggle('flat', mode === 'lcd');
+    this.send({ type: 'observe', enabled: mode === '3d' });
+    if (mode === '3d') this.uploadLCD();
     if (mode === 'lcd') document.exitPointerLock();
   }
   captureView(): string {
@@ -629,7 +651,7 @@ export class ModelViewer {
       image.data[t + 3] = 255;
     }
     context.putImageData(image, 0, 0);
-    this.uploadLCD();
+    this.uploadLCD(image);
 
     if (this.bootPercent !== undefined) this.bootProgress(this.bootPercent);
     if (this.faulted) this.paintFault();

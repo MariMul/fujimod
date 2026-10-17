@@ -1,6 +1,8 @@
 //! One Bevy world renders both the sensor and the observer. Camera-body entities
 //! occupy a separate render layer and can never appear in the sensor image.
 use crate::{InteractionMode, Simulation, world::Optics};
+#[cfg(not(target_arch = "wasm32"))]
+use bevy::post_process::dof::DepthOfField;
 use bevy::{
     anti_alias::fxaa::Fxaa,
     asset::RenderAssetUsages,
@@ -10,7 +12,6 @@ use bevy::{
     image::{ImageSampler, ImageSamplerDescriptor},
     mesh::VertexAttributeValues,
     picking::mesh_picking::ray_cast::{MeshRayCast, MeshRayCastSettings, RayCastVisibility},
-    post_process::dof::DepthOfField,
     prelude::*,
     render::{
         gpu_readback::{ReadbackComplete, ReadbackOnce},
@@ -105,6 +106,9 @@ pub enum Command {
         radius: f32,
     },
     Sensor {
+        enabled: bool,
+    },
+    Observe {
         enabled: bool,
     },
     Optics {
@@ -229,6 +233,8 @@ pub struct SimulationPlugin {
 }
 impl Plugin for SimulationPlugin {
     fn build(&self, app: &mut App) {
+        #[cfg(not(target_arch = "wasm32"))]
+        app.add_systems(Update, update_focus.after(update_poses));
         app.insert_resource(PresentationSettings(self.presentation))
             .insert_resource(Host(self.bridge.clone()))
             .init_resource::<Simulation>()
@@ -311,7 +317,7 @@ fn setup(
     commands.spawn((
         Camera3d::default(),
         Observer,
-        Msaa::Sample4,
+        Msaa::Off,
         Fxaa::default(),
         Camera {
             clear_color: Color::srgb(0.035, 0.04, 0.05).into(),
@@ -329,38 +335,45 @@ fn setup(
         RenderLayers::layer(0).with(1),
         Transform::default(),
     ));
-    commands.spawn((
-        Camera3d::default(),
-        Sensor,
-        Camera {
-            order: -1,
-            is_active: false,
-            clear_color: Color::srgb(0.55, 0.65, 0.75).into(),
-            ..default()
-        },
-        RenderTarget::Image(sensor.clone().into()),
-        Projection::Perspective(PerspectiveProjection {
-            fov: 2.
-                * (simulation.optics.sensor_height / (2. * simulation.optics.focal_length)).atan(),
-            aspect_ratio: 1.5,
-            near: 0.01,
-            far: 2000.,
-            ..default()
-        }),
-        DepthOfField {
-            focal_distance: simulation.optics.focus_distance,
-            aperture_f_stops: simulation.optics.aperture,
-            sensor_height: simulation.optics.sensor_height,
-            ..default()
-        },
-        Tonemapping::None,
-        DebandDither::Disabled,
-        Transform::default(),
-    ));
+    let sensor_camera = commands
+        .spawn((
+            Camera3d::default(),
+            Sensor,
+            Msaa::Off,
+            Camera {
+                order: -1,
+                is_active: false,
+                clear_color: Color::srgb(0.55, 0.65, 0.75).into(),
+                ..default()
+            },
+            RenderTarget::Image(sensor.clone().into()),
+            Projection::Perspective(PerspectiveProjection {
+                fov: 2.
+                    * (simulation.optics.sensor_height / (2. * simulation.optics.focal_length))
+                        .atan(),
+                aspect_ratio: 1.5,
+                near: 0.01,
+                far: 2000.,
+                ..default()
+            }),
+            Tonemapping::None,
+            DebandDither::Disabled,
+            Transform::default(),
+        ))
+        .id();
+    #[cfg(not(target_arch = "wasm32"))]
+    commands.entity(sensor_camera).insert(DepthOfField {
+        focal_distance: simulation.optics.focus_distance,
+        aperture_f_stops: simulation.optics.aperture,
+        sensor_height: simulation.optics.sensor_height,
+        ..default()
+    });
+    #[cfg(target_arch = "wasm32")]
+    let _ = sensor_camera;
     commands.spawn((
         DirectionalLight {
             illuminance: 2600.,
-            shadow_maps_enabled: true,
+            shadow_maps_enabled: false,
             ..default()
         },
         Transform::from_xyz(3., 6., 4.).looking_at(Vec3::ZERO, Vec3::Y),
@@ -514,6 +527,14 @@ fn process_commands(world: &mut World) {
                 state.sensor_enabled = enabled;
                 state.last_sensor_key.clear()
             }
+            Command::Observe { enabled } => {
+                for mut camera in world
+                    .query_filtered::<&mut Camera, With<Observer>>()
+                    .iter_mut(world)
+                {
+                    camera.is_active = enabled;
+                }
+            }
             Command::Optics { data } => {
                 if data.is_valid() {
                     world.resource_mut::<Simulation>().optics = data;
@@ -536,15 +557,7 @@ fn update_poses(
     mut transforms: ParamSet<(
         Query<&mut Transform, With<CameraBody>>,
         Query<(&mut Transform, &Projection), With<Observer>>,
-        Query<
-            (
-                &mut Transform,
-                &mut Camera,
-                &mut Projection,
-                &mut DepthOfField,
-            ),
-            With<Sensor>,
-        >,
+        Query<(&mut Transform, &mut Camera, &mut Projection), With<Sensor>>,
     )>,
 ) {
     for mut t in &mut transforms.p0() {
@@ -560,13 +573,18 @@ fn update_poses(
         }
         *t = observer.observer_pose();
     }
-    for (mut t, mut camera, mut projection, mut dof) in &mut transforms.p2() {
+    for (mut t, mut camera, mut projection) in &mut transforms.p2() {
         *t = s.camera_pose();
         camera.is_active =
             state.sensor_enabled && state.environment_ready && state.readback_pending;
         if let Projection::Perspective(p) = &mut *projection {
             p.fov = 2. * (s.optics.sensor_height / (2. * s.optics.focal_length)).atan();
         }
+    }
+}
+#[cfg(not(target_arch = "wasm32"))]
+fn update_focus(s: Res<Simulation>, mut cameras: Query<&mut DepthOfField, With<Sensor>>) {
+    for mut dof in &mut cameras {
         dof.focal_distance = s.optics.focus_distance;
         dof.aperture_f_stops = s.optics.aperture;
         dof.sensor_height = s.optics.sensor_height;
@@ -590,11 +608,13 @@ fn update_lcd(host: Res<Host>, textures: Res<Textures>, mut images: ResMut<Asset
     let Some(mut image) = images.get_mut(&textures.lcd) else {
         return;
     };
-    image.resize(bevy::render::render_resource::Extent3d {
-        width,
-        height,
-        depth_or_array_layers: 1,
-    });
+    if image.width() != width || image.height() != height {
+        image.resize(bevy::render::render_resource::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        });
+    }
     image.data = Some(rgba);
 }
 fn request_sensor(
@@ -1138,6 +1158,14 @@ fn publish(world: &mut World) {
     }
     let pose = world.resource::<Simulation>().camera_pose();
     key.extend(pose.to_matrix().to_cols_array());
+    // Model normalization happens after propagation on the scene-ready frame.
+    // Reproject once its world transform catches up, even with a stationary eye.
+    for transform in world
+        .query_filtered::<&GlobalTransform, With<ModelRoot>>()
+        .iter(world)
+    {
+        key.extend(transform.to_matrix().to_cols_array());
+    }
     for part in world.query::<&Rotary>().iter(world) {
         key.push(part.angle);
     }

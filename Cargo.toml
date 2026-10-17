@@ -34,6 +34,7 @@ strip = "none"
 
 [profile.simulation-web]
 inherits = "release"
-opt-level = 2
-codegen-units = 16
+opt-level = "s"
+codegen-units = 1
+lto = "thin"
 strip = "debuginfo"

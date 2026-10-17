@@ -27,7 +27,8 @@ request's world time, sequence and physical camera pose.
 
 The observer sees world layer 0 and camera-body layer 1. The sensor sees only
 layer 0. It renders a 768×512 image using physical focal length/sensor size and
-Bevy's depth-of-field effect. Focus/aperture are explicit scenario inputs through
+Bevy's depth-of-field effect on native renderers. The shared browser build uses
+WebGL 2 without the depth-of-field post-process. Focus/aperture are explicit scenario inputs through
 `Command::Optics`. Physical body width and initial optics come from the selected
 body definition. The generic headless default is a declared 50 mm / 24 mm sensor-height
 profile; it is not a camera calibration. These are declared approximations, not recovered
@@ -80,8 +81,15 @@ python3 crates/simulation/environments/crouch-end-station/test_prepare.py
 The browser app's build/check/test pre-scripts build the Wasm module. Generated
 bindings and Wasm live under `bindings/javascript/pkg/simulation/`, never in
 source control; the app imports the maintained `fujimod/simulation` package entry.
-Use `build-web.mjs --optimize` for Binaryen size optimization when preparing a
-release. This step is intentionally omitted from ordinary development checks.
+Every browser build uses size optimization, thin LTO, and Binaryen. The script
+caches generated bindings and optimization until the compiled Wasm changes.
+Only the rendering features in use are enabled; text, animation, gizmos and
+post-processing bundles are excluded from the browser build. Only the command
+and scenario structs enable serialization. The optimized Wasm has a 64 MiB
+build budget to catch accidental feature/bundle growth. All browsers use
+one render pixel per CSS pixel, FXAA without MSAA, and no shadow maps. The LCD
+upload reuses its dimensions and reads the existing frame buffer directly.
+LCD-only mode disables the observer camera and its texture uploads.
 
 After installing an environment, render a native scenario without a window:
 
