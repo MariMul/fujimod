@@ -44,5 +44,6 @@ implementation crates remain independent of PyO3 and wasm-bindgen. The browser
 application stays in `apps/web/` and consumes the JavaScript package as needed.
 
 The [shared binding generator](bindings/generator/README.md) derives service
-value enums, checked values and their registrations from Rust declarations.
-Command factories and structured replies are being migrated to that same model.
+value wrappers, command/action factories, structured replies and language exports
+from Rust declarations. Routine service features need only Rust code; shared
+adapters handle execution and language boundaries.

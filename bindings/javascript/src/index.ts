@@ -3,7 +3,7 @@ export type * from '../pkg/service-values.js';
 import * as native from '../pkg/fujimod.js';
 export { default as initialize } from '../pkg/fujimod.js';
 export type { Session, Device, InfoReply, ConfigurationGeometry, DiagnosticReply, ConsoleReply, LogReply, CapabilitiesReply, FirmwareDownloadReply, DataWindow, UploadReply, ResearchRequest, ResearchReply, App80Request, Mailbox } from '../pkg/fujimod.js';
-export type { FirmwareIdentity, ServiceModes, ServiceDefinition, ServiceEntry, ServiceMailbox, ModeAvailability, ModeTransition, DefinitionFailure, CommandFailure, App80Command, ProfileAction, App80Invocation, App80CommandReply, App80ReplyValue, WordReadResult, RegisterAction, I2cAction, DisplayOptionAction, SoundAction, HdmiAction, ChargeAction, RadioAction } from '../pkg/fujimod.js';
+export type { FirmwareIdentity, ServiceModes, ServiceDefinition, ServiceEntry, ServiceMailbox, ModeAvailability, ModeTransition, DefinitionFailure, CommandFailure, App80Invocation, App80CommandReply } from '../pkg/fujimod.js';
 
 class ChunkIterator implements AsyncIterableIterator<Uint8Array> {
   constructor(private readonly reader: native.RangeReader) {}
@@ -118,44 +118,6 @@ export const usb = Object.freeze({
     CommandCode: native.App80CommandCode, Request: native.App80Request,
     Mailbox: native.Mailbox, exchange: native.exchangeApp80,
     Service: native.App80Service,
-    Command: Object.freeze({
-      writePins: native.App80Command.writePins, readPins: native.App80Command.readPins,
-      readChannel: native.App80Command.readChannel, writeChannel: native.App80Command.writeChannel,
-      profileByte: native.App80Command.profileByte, downloadStatus: native.App80Command.downloadStatus,
-      copyConfiguration: native.App80Command.copyConfiguration, flushConfiguration: native.App80Command.flushConfiguration,
-      readWord: native.App80Command.readWord, writeWord: native.App80Command.writeWord,
-      registerControl: native.App80Command.registerControl, i2c: native.App80Command.i2c,
-      accumulator: native.App80Command.accumulator, peripheralReport: native.App80Command.peripheralReport,
-      displayOption: native.App80Command.displayOption, displayMode: native.App80Command.displayMode,
-      sound: native.App80Command.sound, hdmi: native.App80Command.hdmi, parameterService: native.App80Command.parameterService,
-      chargeControl: native.App80Command.chargeControl, chargeStatus: native.App80Command.chargeStatus,
-      nandReadBlocks: native.App80Command.nandReadBlocks, option41: native.App80Command.option41,
-      wlanControl: native.App80Command.wlanControl, radioControl: native.App80Command.radioControl,
-      signalStrength: native.App80Command.signalStrength, iperf: native.App80Command.iperf,
-      audioCapture: native.App80Command.audioCapture, audioPlayback: native.App80Command.audioPlayback,
-      eraseStorage: native.App80Command.eraseStorage, storageStatus: native.App80Command.storageStatus,
-      formatStorage: native.App80Command.formatStorage, displaySetup: native.App80Command.displaySetup,
-    }),
-    ProfileAction: Object.freeze({ read: native.ProfileAction.read, write: native.ProfileAction.write, reset: native.ProfileAction.reset }),
-
-    RegisterAction: Object.freeze({ audioValue: native.RegisterAction.audioValue,
-      displayFirst: native.RegisterAction.displayFirst, displayStub: native.RegisterAction.displayStub,
-      displaySecond: native.RegisterAction.displaySecond, powerWrite: native.RegisterAction.powerWrite,
-      positionPair: native.RegisterAction.positionPair, noopFirst: native.RegisterAction.noopFirst, noopSecond: native.RegisterAction.noopSecond }),
-
-    I2cAction: Object.freeze({ read: native.I2cAction.read, write: native.I2cAction.write, writeSingle: native.I2cAction.writeSingle }),
-
-    DisplayOptionAction: Object.freeze({idlePins: native.DisplayOptionAction.idlePins, forwardPair: native.DisplayOptionAction.forwardPair}),
-
-    SoundAction: Object.freeze({clip: native.SoundAction.clip, track: native.SoundAction.track, noop: native.SoundAction.noop}),
-
-    HdmiAction: Object.freeze({resetStub: native.HdmiAction.resetStub, packet: native.HdmiAction.packet, triplet: native.HdmiAction.triplet}),
-    ChargeAction: Object.freeze({control: native.ChargeAction.control, enableAndSetFlag: native.ChargeAction.enableAndSetFlag}),
-
-    RadioAction: Object.freeze({primary:native.RadioAction.primary,secondary:native.RadioAction.secondary}),
-
-    ReplyKind: native.App80ReplyKind,
-    WordReadKind: native.WordReadKind,
     CommandFailureKind: native.CommandFailureKind,
     isError: isServiceCommandError, execute: native.executeApp80,
   }),

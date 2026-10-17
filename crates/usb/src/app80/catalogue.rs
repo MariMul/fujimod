@@ -139,7 +139,9 @@ pub enum Command {
         channel: u8,
         value: u16,
     },
-    ProfileByte(ProfileAction),
+    ProfileByte {
+        action: ProfileAction,
+    },
     DownloadStatus,
     CopyConfiguration {
         page: u8,
@@ -152,23 +154,47 @@ pub enum Command {
         address: WordAddress,
         value: u32,
     },
-    RegisterControl(RegisterAction),
-    I2c(I2cAction),
-    Accumulator(AccumulatorAction),
+    RegisterControl {
+        action: RegisterAction,
+    },
+    I2c {
+        action: I2cAction,
+    },
+    Accumulator {
+        action: AccumulatorAction,
+    },
     PeripheralReport,
-    DisplayOption(DisplayOptionAction),
-    DisplayMode(DisplayMode),
-    Sound(SoundAction),
-    Hdmi(HdmiAction),
-    ParameterService(Toggle),
-    ChargeControl(ChargeAction),
-    ChargeStatus(ChargeQuery),
+    DisplayOption {
+        action: DisplayOptionAction,
+    },
+    DisplayMode {
+        mode: DisplayMode,
+    },
+    Sound {
+        action: SoundAction,
+    },
+    Hdmi {
+        action: HdmiAction,
+    },
+    ParameterService {
+        enabled: Toggle,
+    },
+    ChargeControl {
+        action: ChargeAction,
+    },
+    ChargeStatus {
+        query: ChargeQuery,
+    },
     AudioCapture {
         count: AudioCount,
         route: AudioRoute,
     },
-    AudioPlayback(AudioPlayback),
-    EraseStorage(StorageErase),
+    AudioPlayback {
+        mode: AudioPlayback,
+    },
+    EraseStorage {
+        action: StorageErase,
+    },
     StorageStatus,
     FormatStorage,
     DisplaySetup,
@@ -177,9 +203,15 @@ pub enum Command {
         block_group: u8,
     },
     Option41,
-    WlanControl(Toggle),
-    RadioControl(RadioAction),
-    SignalStrength(PeerAddress),
+    WlanControl {
+        enabled: Toggle,
+    },
+    RadioControl {
+        action: RadioAction,
+    },
+    SignalStrength {
+        address: PeerAddress,
+    },
     Iperf,
 }
 impl Command {
@@ -189,33 +221,33 @@ impl Command {
             Self::ReadPins { .. } => Codec::ReadPins,
             Self::ReadChannel { .. } => Codec::ReadChannel,
             Self::WriteChannel { .. } => Codec::WriteChannel,
-            Self::ProfileByte(_) => Codec::ProfileByte,
+            Self::ProfileByte { action: _ } => Codec::ProfileByte,
             Self::DownloadStatus => Codec::DownloadStatus,
             Self::CopyConfiguration { .. } => Codec::CopyConfiguration,
             Self::FlushConfiguration => Codec::FlushConfiguration,
             Self::ReadWord { .. } | Self::WriteWord { .. } => Codec::MemoryWord,
-            Self::RegisterControl(_) => Codec::RegisterControl,
-            Self::I2c(_) => Codec::I2c,
-            Self::Accumulator(_) => Codec::Accumulator,
+            Self::RegisterControl { action: _ } => Codec::RegisterControl,
+            Self::I2c { action: _ } => Codec::I2c,
+            Self::Accumulator { action: _ } => Codec::Accumulator,
             Self::PeripheralReport => Codec::PeripheralReport,
-            Self::DisplayOption(_) => Codec::DisplayOption,
-            Self::DisplayMode(_) => Codec::DisplayMode,
-            Self::Sound(_) => Codec::Sound,
-            Self::Hdmi(_) => Codec::Hdmi,
-            Self::ParameterService(_) => Codec::ParameterService,
-            Self::ChargeControl(_) => Codec::ChargeControl,
-            Self::ChargeStatus(_) => Codec::ChargeStatus,
+            Self::DisplayOption { action: _ } => Codec::DisplayOption,
+            Self::DisplayMode { mode: _ } => Codec::DisplayMode,
+            Self::Sound { action: _ } => Codec::Sound,
+            Self::Hdmi { action: _ } => Codec::Hdmi,
+            Self::ParameterService { enabled: _ } => Codec::ParameterService,
+            Self::ChargeControl { action: _ } => Codec::ChargeControl,
+            Self::ChargeStatus { query: _ } => Codec::ChargeStatus,
             Self::AudioCapture { .. } => Codec::AudioCapture,
-            Self::AudioPlayback(_) => Codec::AudioPlayback,
-            Self::EraseStorage(_) => Codec::EraseStorage,
+            Self::AudioPlayback { mode: _ } => Codec::AudioPlayback,
+            Self::EraseStorage { action: _ } => Codec::EraseStorage,
             Self::StorageStatus => Codec::StorageStatus,
             Self::FormatStorage => Codec::FormatStorage,
             Self::DisplaySetup => Codec::DisplaySetup,
             Self::NandReadBlocks { .. } => Codec::NandReadBlocks,
             Self::Option41 => Codec::Option41,
-            Self::WlanControl(_) => Codec::WlanControl,
-            Self::RadioControl(_) => Codec::RadioControl,
-            Self::SignalStrength(_) => Codec::SignalStrength,
+            Self::WlanControl { enabled: _ } => Codec::WlanControl,
+            Self::RadioControl { action: _ } => Codec::RadioControl,
+            Self::SignalStrength { address: _ } => Codec::SignalStrength,
             Self::Iperf => Codec::Iperf,
         }
     }
@@ -228,7 +260,7 @@ pub enum SaveStatus {
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WordReadResult {
-    Value(u32),
+    Value { value: u32 },
     Rejected,
     Unknown(u8),
 }
@@ -241,26 +273,26 @@ pub enum WordWriteResult {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplyValue {
     NoPayload,
-    Pins(u16),
-    Channel(u16),
-    ProfileByte(u8),
+    Pins { levels: u16 },
+    Channel { value: u16 },
+    ProfileByte { value: u8 },
     DownloadStatus { raw_status: u8 },
-    ConfigurationSaved(SaveStatus),
-    ReadWord(WordReadResult),
-    WriteWord(WordWriteResult),
+    ConfigurationSaved { status: SaveStatus },
+    ReadWord { result: WordReadResult },
+    WriteWord { result: WordWriteResult },
     Research,
-    I2cData(Vec<u8>),
-    Accumulated([u16; 3]),
-    PeripheralReport([u8; 8]),
-    ChargeApplied(ChargeResult),
-    ChargePresence(ChargePresence),
-    ChargeState(ReportedChargeState),
-    AudioCaptured(AudioResult),
-    AudioPlayed(AudioResult),
-    StorageErased(StorageEraseResult),
-    StorageStatus(StorageStatus),
-    NandRead(NandReadResult),
-    Option41(Option41State),
+    I2cData { data: Vec<u8> },
+    Accumulated { values: [u16; 3] },
+    PeripheralReport { data: [u8; 8] },
+    ChargeApplied { status: ChargeResult },
+    ChargePresence { status: ChargePresence },
+    ChargeState { status: ReportedChargeState },
+    AudioCaptured { status: AudioResult },
+    AudioPlayed { status: AudioResult },
+    StorageErased { status: StorageEraseResult },
+    StorageStatus { status: StorageStatus },
+    NandRead { status: NandReadResult },
+    Option41 { state: Option41State },
     SignalStrength { raw_value: u8 },
     Iperf { raw_result: u8 },
 }
@@ -312,88 +344,136 @@ impl PreparedCommand {
         let half = |a, b| u16::from_be_bytes([byte(a), byte(b)]);
         let word = || u32::from_be_bytes([byte(6), byte(7), byte(8), byte(9)]);
         let value = match command {
-            Command::ReadPins { .. } => ReplyValue::Pins(half(1, 2)),
-            Command::ReadChannel { .. } => ReplyValue::Channel(half(1, 2)),
-            Command::ProfileByte(ProfileAction::Read { .. }) => ReplyValue::ProfileByte(byte(2)),
+            Command::ReadPins { .. } => ReplyValue::Pins { levels: half(1, 2) },
+            Command::ReadChannel { .. } => ReplyValue::Channel { value: half(1, 2) },
+            Command::ProfileByte {
+                action: ProfileAction::Read { .. },
+            } => ReplyValue::ProfileByte { value: byte(2) },
             Command::DownloadStatus => ReplyValue::DownloadStatus {
                 raw_status: byte(0),
             },
-            Command::FlushConfiguration => ReplyValue::ConfigurationSaved(match byte(0) {
-                0 => SaveStatus::Success,
-                1 => SaveStatus::Failed,
-                n => SaveStatus::Unknown(n),
-            }),
-            Command::ReadWord { .. } => ReplyValue::ReadWord(match byte(1) {
-                1 => WordReadResult::Value(word()),
-                0 => WordReadResult::Rejected,
-                n => WordReadResult::Unknown(n),
-            }),
-            Command::WriteWord { .. } => ReplyValue::WriteWord(match byte(1) {
-                1 => WordWriteResult::Confirmed,
-                0 => WordWriteResult::Rejected,
-                n => WordWriteResult::Unknown(n),
-            }),
-            Command::I2c(I2cAction::Read { length, .. }) => ReplyValue::I2cData(
-                (0..usize::from(length.value()))
+            Command::FlushConfiguration => ReplyValue::ConfigurationSaved {
+                status: match byte(0) {
+                    0 => SaveStatus::Success,
+                    1 => SaveStatus::Failed,
+                    n => SaveStatus::Unknown(n),
+                },
+            },
+            Command::ReadWord { .. } => ReplyValue::ReadWord {
+                result: match byte(1) {
+                    1 => WordReadResult::Value { value: word() },
+                    0 => WordReadResult::Rejected,
+                    n => WordReadResult::Unknown(n),
+                },
+            },
+            Command::WriteWord { .. } => ReplyValue::WriteWord {
+                result: match byte(1) {
+                    1 => WordWriteResult::Confirmed,
+                    0 => WordWriteResult::Rejected,
+                    n => WordWriteResult::Unknown(n),
+                },
+            },
+            Command::I2c {
+                action: I2cAction::Read { length, .. },
+            } => ReplyValue::I2cData {
+                data: (0..usize::from(length.value()))
                     .map(|index| byte(4 + index))
                     .collect(),
-            ),
-            Command::Accumulator(AccumulatorAction::StopAndRead) => {
-                ReplyValue::Accumulated([half(1, 2), half(3, 4), half(5, 6)])
+            },
+            Command::Accumulator {
+                action: AccumulatorAction::StopAndRead,
+            } => ReplyValue::Accumulated {
+                values: [half(1, 2), half(3, 4), half(5, 6)],
+            },
+            Command::PeripheralReport => ReplyValue::PeripheralReport {
+                data: std::array::from_fn(byte),
+            },
+            Command::ChargeControl { action: _ } => ReplyValue::ChargeApplied {
+                status: ChargeResult::decode(byte(2)),
+            },
+            Command::ChargeStatus {
+                query: ChargeQuery::Presence,
+            } => ReplyValue::ChargePresence {
+                status: ChargePresence::decode(byte(1)),
+            },
+            Command::ChargeStatus {
+                query: ChargeQuery::State,
+            } => ReplyValue::ChargeState {
+                status: ReportedChargeState::decode(byte(1)),
+            },
+            Command::AudioCapture { .. } => ReplyValue::AudioCaptured {
+                status: AudioResult::decode(byte(2)),
+            },
+            Command::AudioPlayback { mode: _ } => ReplyValue::AudioPlayed {
+                status: AudioResult::decode(byte(1)),
+            },
+            Command::EraseStorage { action: _ } => ReplyValue::StorageErased {
+                status: StorageEraseResult::decode(byte(1)),
+            },
+            Command::StorageStatus => ReplyValue::StorageStatus {
+                status: StorageStatus::decode(byte(0)),
+            },
+            Command::NandReadBlocks { .. } => ReplyValue::NandRead {
+                status: NandReadResult::decode(byte(2)),
+            },
+            Command::Option41 => ReplyValue::Option41 {
+                state: Option41State::decode(byte(0)),
+            },
+            Command::SignalStrength { address: _ } => {
+                ReplyValue::SignalStrength { raw_value: byte(6) }
             }
-            Command::PeripheralReport => ReplyValue::PeripheralReport(std::array::from_fn(byte)),
-            Command::ChargeControl(_) => ReplyValue::ChargeApplied(ChargeResult::decode(byte(2))),
-            Command::ChargeStatus(ChargeQuery::Presence) => {
-                ReplyValue::ChargePresence(ChargePresence::decode(byte(1)))
-            }
-            Command::ChargeStatus(ChargeQuery::State) => {
-                ReplyValue::ChargeState(ReportedChargeState::decode(byte(1)))
-            }
-            Command::AudioCapture { .. } => ReplyValue::AudioCaptured(AudioResult::decode(byte(2))),
-            Command::AudioPlayback(_) => ReplyValue::AudioPlayed(AudioResult::decode(byte(1))),
-            Command::EraseStorage(_) => {
-                ReplyValue::StorageErased(StorageEraseResult::decode(byte(1)))
-            }
-            Command::StorageStatus => ReplyValue::StorageStatus(StorageStatus::decode(byte(0))),
-            Command::NandReadBlocks { .. } => ReplyValue::NandRead(NandReadResult::decode(byte(2))),
-            Command::Option41 => ReplyValue::Option41(Option41State::decode(byte(0))),
-            Command::SignalStrength(_) => ReplyValue::SignalStrength { raw_value: byte(6) },
             Command::Iperf => ReplyValue::Iperf {
                 raw_result: byte(0),
             },
-            Command::WlanControl(Toggle::Disabled | Toggle::Enabled)
-            | Command::RadioControl(RadioAction::Primary { .. } | RadioAction::Secondary { .. })
+            Command::WlanControl {
+                enabled: Toggle::Disabled | Toggle::Enabled,
+            }
+            | Command::RadioControl {
+                action: RadioAction::Primary { .. } | RadioAction::Secondary { .. },
+            }
             | Command::FormatStorage
             | Command::DisplaySetup => ReplyValue::NoPayload,
             Command::WritePins { .. }
             | Command::WriteChannel { .. }
-            | Command::ProfileByte(ProfileAction::Write { .. } | ProfileAction::Reset)
-            | Command::CopyConfiguration { .. }
-            | Command::RegisterControl(
-                RegisterAction::AudioValue { .. }
-                | RegisterAction::DisplayFirst { .. }
-                | RegisterAction::DisplayStub { .. }
-                | RegisterAction::DisplaySecond { .. }
-                | RegisterAction::PowerWrite { .. }
-                | RegisterAction::PositionPair { .. }
-                | RegisterAction::NoopFirst
-                | RegisterAction::NoopSecond,
-            )
-            | Command::I2c(I2cAction::Write { .. } | I2cAction::WriteSingle { .. })
-            | Command::Accumulator(AccumulatorAction::Start)
-            | Command::DisplayOption(
-                DisplayOptionAction::IdlePins | DisplayOptionAction::ForwardPair { .. },
-            )
-            | Command::DisplayMode(DisplayMode::Option0 | DisplayMode::Option1)
-            | Command::Sound(
-                SoundAction::Clip { .. } | SoundAction::Track { .. } | SoundAction::Noop,
-            )
-            | Command::Hdmi(
-                HdmiAction::ResetStub | HdmiAction::Packet(_) | HdmiAction::Triplet { .. },
-            )
-            | Command::ParameterService(Toggle::Disabled | Toggle::Enabled) => {
-                ReplyValue::NoPayload
+            | Command::ProfileByte {
+                action: ProfileAction::Write { .. } | ProfileAction::Reset,
             }
+            | Command::CopyConfiguration { .. }
+            | Command::RegisterControl {
+                action:
+                    RegisterAction::AudioValue { .. }
+                    | RegisterAction::DisplayFirst { .. }
+                    | RegisterAction::DisplayStub { .. }
+                    | RegisterAction::DisplaySecond { .. }
+                    | RegisterAction::PowerWrite { .. }
+                    | RegisterAction::PositionPair { .. }
+                    | RegisterAction::NoopFirst
+                    | RegisterAction::NoopSecond,
+            }
+            | Command::I2c {
+                action: I2cAction::Write { .. } | I2cAction::WriteSingle { .. },
+            }
+            | Command::Accumulator {
+                action: AccumulatorAction::Start,
+            }
+            | Command::DisplayOption {
+                action: DisplayOptionAction::IdlePins | DisplayOptionAction::ForwardPair { .. },
+            }
+            | Command::DisplayMode {
+                mode: DisplayMode::Option0 | DisplayMode::Option1,
+            }
+            | Command::Sound {
+                action: SoundAction::Clip { .. } | SoundAction::Track { .. } | SoundAction::Noop,
+            }
+            | Command::Hdmi {
+                action:
+                    HdmiAction::ResetStub
+                    | HdmiAction::Packet { packet: _ }
+                    | HdmiAction::Triplet { .. },
+            }
+            | Command::ParameterService {
+                enabled: Toggle::Disabled | Toggle::Enabled,
+            } => ReplyValue::NoPayload,
         };
         Ok(CommandReply { value, raw: reply })
     }
@@ -470,7 +550,7 @@ impl Catalogue {
                     put(i, v);
                 }
             }
-            Command::ProfileByte(action) => match action {
+            Command::ProfileByte { action } => match action {
                 ProfileAction::Read { bank, index } => {
                     put(
                         0,
@@ -499,27 +579,27 @@ impl Catalogue {
             // an unchanged output can never be reported as a successful save.
             Command::FlushConfiguration => put(0, u8::MAX),
             Command::DownloadStatus => (),
-            Command::RegisterControl(action) => action.encode(&mut put),
-            Command::I2c(action) => action.encode(&mut put),
-            Command::Accumulator(action) => action.encode(&mut put),
+            Command::RegisterControl { action } => action.encode(&mut put),
+            Command::I2c { action } => action.encode(&mut put),
+            Command::Accumulator { action } => action.encode(&mut put),
             Command::PeripheralReport => (),
-            Command::DisplayOption(action) => action.encode(&mut put),
-            Command::DisplayMode(mode) => put(0, mode.wire()),
-            Command::Sound(action) => action.encode(&mut put),
-            Command::Hdmi(action) => action.encode(&mut put),
-            Command::ParameterService(value) => put(0, value.wire()),
-            Command::ChargeControl(action) => action.encode(&mut put),
-            Command::ChargeStatus(query) => query.encode(&mut put),
+            Command::DisplayOption { action } => action.encode(&mut put),
+            Command::DisplayMode { mode } => put(0, mode.wire()),
+            Command::Sound { action } => action.encode(&mut put),
+            Command::Hdmi { action } => action.encode(&mut put),
+            Command::ParameterService { enabled: value } => put(0, value.wire()),
+            Command::ChargeControl { action } => action.encode(&mut put),
+            Command::ChargeStatus { query } => query.encode(&mut put),
             Command::AudioCapture { count, route } => {
                 put(0, count.value());
                 put(1, route.wire());
                 put(2, 255);
             }
-            Command::AudioPlayback(mode) => {
+            Command::AudioPlayback { mode } => {
                 put(0, mode.wire());
                 put(1, 255);
             }
-            Command::EraseStorage(action) => {
+            Command::EraseStorage { action } => {
                 put(0, action.wire());
                 put(1, 255);
             }
@@ -530,9 +610,9 @@ impl Catalogue {
                 put(2, 255);
             }
             Command::Option41 | Command::Iperf => put(0, 255),
-            Command::WlanControl(enabled) => put(0, enabled.wire()),
-            Command::RadioControl(action) => action.encode(&mut put),
-            Command::SignalStrength(address) => {
+            Command::WlanControl { enabled } => put(0, enabled.wire()),
+            Command::RadioControl { action } => action.encode(&mut put),
+            Command::SignalStrength { address } => {
                 for (i, &value) in address.data().iter().enumerate() {
                     put(i, value);
                 }

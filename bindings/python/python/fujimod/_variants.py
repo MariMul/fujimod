@@ -40,3 +40,9 @@ def variant(base, name, fields=(), *, create=None):
 
 def enum_out(value, enum, choices):
     return {getattr(choices, member.name): member for member in enum}[value]
+
+
+def unwrap_variant(value, cls):
+    if not isinstance(value, cls):
+        raise TypeError(f"expected {cls.__name__} variant")
+    return value._js

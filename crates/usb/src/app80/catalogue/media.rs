@@ -160,7 +160,9 @@ impl HdmiPacket {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HdmiAction {
     ResetStub,
-    Packet(HdmiPacket),
+    Packet {
+        packet: HdmiPacket,
+    },
     Triplet {
         first: HdmiValue,
         second: HdmiValue,
@@ -175,7 +177,7 @@ impl HdmiAction {
                 put(1, 0);
                 put(2, 0);
             }
-            Self::Packet(packet) => {
+            Self::Packet { packet } => {
                 put(0, 0);
                 put(1, 1);
                 put(2, 0);
@@ -202,14 +204,14 @@ impl HdmiAction {
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ChargeAction {
-    Control(Toggle),
-    EnableAndSetFlag(Toggle),
+    Control { enabled: Toggle },
+    EnableAndSetFlag { enabled: Toggle },
 }
 impl ChargeAction {
     pub(super) fn encode(self, put: &mut impl FnMut(usize, u8)) {
         let (operation, value) = match self {
-            Self::Control(value) => (0, value),
-            Self::EnableAndSetFlag(value) => (1, value),
+            Self::Control { enabled: value } => (0, value),
+            Self::EnableAndSetFlag { enabled: value } => (1, value),
         };
         put(0, operation);
         put(1, value.wire());

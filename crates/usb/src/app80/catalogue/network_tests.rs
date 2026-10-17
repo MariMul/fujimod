@@ -48,12 +48,14 @@ fn radio_fields_remain_distinct_checked_and_firmware_selected() {
                     for (option, bit) in [(Toggle::Disabled, 0), (Toggle::Enabled, 128)] {
                         let p = prepare(
                             &c,
-                            Command::RadioControl(RadioAction::Primary {
-                                mode,
-                                channel: RadioChannel::new(channel).unwrap(),
-                                power: RadioPower::new(power).unwrap(),
-                                option,
-                            }),
+                            Command::RadioControl {
+                                action: RadioAction::Primary {
+                                    mode,
+                                    channel: RadioChannel::new(channel).unwrap(),
+                                    power: RadioPower::new(power).unwrap(),
+                                    option,
+                                },
+                            },
                         );
                         assert_eq!(logical(&p), [m, channel, power | bit, 0]);
                         assert_eq!(p.request.code(), CommandCode(203));
@@ -68,15 +70,20 @@ fn radio_fields_remain_distinct_checked_and_firmware_selected() {
             }
             let p = prepare(
                 &c,
-                Command::RadioControl(RadioAction::Secondary {
-                    mode,
-                    channel: RadioChannel::new(14).unwrap(),
-                }),
+                Command::RadioControl {
+                    action: RadioAction::Secondary {
+                        mode,
+                        channel: RadioChannel::new(14).unwrap(),
+                    },
+                },
             );
             assert_eq!(logical(&p), [m, 14, 0, 1]);
         }
         for (enabled, wire) in [(Toggle::Disabled, 0), (Toggle::Enabled, 1)] {
-            assert_eq!(logical(&prepare(&c, Command::WlanControl(enabled))), [wire]);
+            assert_eq!(
+                logical(&prepare(&c, Command::WlanControl { enabled })),
+                [wire]
+            );
         }
     }
 }
@@ -95,7 +102,10 @@ fn nand_and_option_results_are_data_not_callback_dispositions() {
                         2 => NandReadResult::OtherError,
                         n => NandReadResult::Unknown(n),
                     };
-                    assert_eq!(decode(&p, 2, raw).value(), &ReplyValue::NandRead(expected));
+                    assert_eq!(
+                        decode(&p, 2, raw).value(),
+                        &ReplyValue::NandRead { status: expected }
+                    );
                 }
             }
         }
@@ -107,7 +117,10 @@ fn nand_and_option_results_are_data_not_callback_dispositions() {
                 0 => Option41State::NonZero,
                 n => Option41State::Unknown(n),
             };
-            assert_eq!(decode(&p, 0, raw).value(), &ReplyValue::Option41(expected));
+            assert_eq!(
+                decode(&p, 0, raw).value(),
+                &ReplyValue::Option41 { state: expected }
+            );
         }
     }
 }
@@ -122,7 +135,7 @@ fn peer_address_is_owned_and_opaque_observations_preserve_every_byte() {
     assert_eq!(peer.data(), &[1, 2, 3, 4, 5, 6]);
     for reverse in [false, true] {
         let c = catalogue(reverse);
-        let p = prepare(&c, Command::SignalStrength(peer));
+        let p = prepare(&c, Command::SignalStrength { address: peer });
         assert_eq!(logical(&p), [1, 2, 3, 4, 5, 6, 255]);
         let iperf = prepare(&c, Command::Iperf);
         assert_eq!(logical(&iperf), [255]);

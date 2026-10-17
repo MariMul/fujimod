@@ -34,20 +34,44 @@ fn display_forwarding_modes_and_parameter_boolean_have_distinct_typed_choices() 
         let c = catalogue(reverse);
         for (command, expected) in [
             (
-                Command::DisplayOption(DisplayOptionAction::IdlePins),
+                Command::DisplayOption {
+                    action: DisplayOptionAction::IdlePins,
+                },
                 vec![0, 0, 0, 0],
             ),
             (
-                Command::DisplayOption(DisplayOptionAction::ForwardPair {
-                    first: 7,
-                    second: 8,
-                }),
+                Command::DisplayOption {
+                    action: DisplayOptionAction::ForwardPair {
+                        first: 7,
+                        second: 8,
+                    },
+                },
                 vec![0, 1, 7, 8],
             ),
-            (Command::DisplayMode(DisplayMode::Option0), vec![0]),
-            (Command::DisplayMode(DisplayMode::Option1), vec![1]),
-            (Command::ParameterService(Toggle::Disabled), vec![0]),
-            (Command::ParameterService(Toggle::Enabled), vec![1]),
+            (
+                Command::DisplayMode {
+                    mode: DisplayMode::Option0,
+                },
+                vec![0],
+            ),
+            (
+                Command::DisplayMode {
+                    mode: DisplayMode::Option1,
+                },
+                vec![1],
+            ),
+            (
+                Command::ParameterService {
+                    enabled: Toggle::Disabled,
+                },
+                vec![0],
+            ),
+            (
+                Command::ParameterService {
+                    enabled: Toggle::Enabled,
+                },
+                vec![1],
+            ),
         ] {
             let p = prepare(&c, command);
             assert_eq!(logical(&p), expected);
@@ -73,10 +97,12 @@ fn sound_clip_and_track_variants_choose_canonical_codes_and_formats() {
             for clip in [0, 22] {
                 let p = prepare(
                     &c,
-                    Command::Sound(SoundAction::Clip {
-                        clip: SoundClip::new(clip).unwrap(),
-                        format,
-                    }),
+                    Command::Sound {
+                        action: SoundAction::Clip {
+                            clip: SoundClip::new(clip).unwrap(),
+                            format,
+                        },
+                    },
                 );
                 assert_eq!(logical(&p), [1, clip, wire]);
             }
@@ -92,11 +118,13 @@ fn sound_clip_and_track_variants_choose_canonical_codes_and_formats() {
                 ] {
                     let p = prepare(
                         &c,
-                        Command::Sound(SoundAction::Track {
-                            track,
-                            operation,
-                            format,
-                        }),
+                        Command::Sound {
+                            action: SoundAction::Track {
+                                track,
+                                operation,
+                                format,
+                            },
+                        },
                     );
                     assert_eq!(p.request.code(), CommandCode(212));
                     assert_eq!(logical(&p), [1, base + offset, wire]);
@@ -104,7 +132,12 @@ fn sound_clip_and_track_variants_choose_canonical_codes_and_formats() {
             }
         }
         assert_eq!(
-            logical(&prepare(&c, Command::Sound(SoundAction::Noop))),
+            logical(&prepare(
+                &c,
+                Command::Sound {
+                    action: SoundAction::Noop
+                }
+            )),
             [0, 0, 0]
         );
     }
@@ -122,23 +155,35 @@ fn hdmi_packet_is_owned_reversed_and_exactly_sixteen_bytes_with_checked_triplets
     assert_eq!(packet.data()[0], 0);
     for reverse in [false, true] {
         let c = catalogue(reverse);
-        let p = prepare(&c, Command::Hdmi(HdmiAction::Packet(packet)));
+        let p = prepare(
+            &c,
+            Command::Hdmi {
+                action: HdmiAction::Packet { packet },
+            },
+        );
         let mut expected = vec![0, 1, 0];
         expected.extend((0..16).rev());
         assert_eq!(logical(&p), expected);
         let p = prepare(
             &c,
-            Command::Hdmi(HdmiAction::Triplet {
-                first: HdmiValue::new(0x123).unwrap(),
-                second: HdmiValue::new(0x456).unwrap(),
-                third: HdmiValue::new(4095).unwrap(),
-            }),
+            Command::Hdmi {
+                action: HdmiAction::Triplet {
+                    first: HdmiValue::new(0x123).unwrap(),
+                    second: HdmiValue::new(0x456).unwrap(),
+                    third: HdmiValue::new(4095).unwrap(),
+                },
+            },
         );
         assert_eq!(&logical(&p)[..9], &[1, 0, 0, 1, 0x23, 4, 0x56, 15, 255]);
         assert!(
-            logical(&prepare(&c, Command::Hdmi(HdmiAction::ResetStub)))
-                .iter()
-                .all(|&value| value == 0)
+            logical(&prepare(
+                &c,
+                Command::Hdmi {
+                    action: HdmiAction::ResetStub
+                }
+            ))
+            .iter()
+            .all(|&value| value == 0)
         );
     }
 }
@@ -147,15 +192,32 @@ fn charge_results_are_application_enums_and_absent_output_stays_unknown() {
     for reverse in [false, true] {
         let c = catalogue(reverse);
         for (action, expected) in [
-            (ChargeAction::Control(Toggle::Disabled), [0, 0, 255]),
-            (ChargeAction::Control(Toggle::Enabled), [0, 1, 255]),
             (
-                ChargeAction::EnableAndSetFlag(Toggle::Disabled),
+                ChargeAction::Control {
+                    enabled: Toggle::Disabled,
+                },
+                [0, 0, 255],
+            ),
+            (
+                ChargeAction::Control {
+                    enabled: Toggle::Enabled,
+                },
+                [0, 1, 255],
+            ),
+            (
+                ChargeAction::EnableAndSetFlag {
+                    enabled: Toggle::Disabled,
+                },
                 [1, 0, 255],
             ),
-            (ChargeAction::EnableAndSetFlag(Toggle::Enabled), [1, 1, 255]),
+            (
+                ChargeAction::EnableAndSetFlag {
+                    enabled: Toggle::Enabled,
+                },
+                [1, 1, 255],
+            ),
         ] {
-            let p = prepare(&c, Command::ChargeControl(action));
+            let p = prepare(&c, Command::ChargeControl { action });
             assert_eq!(logical(&p), expected);
             for (raw, status) in [
                 (0, ChargeResult::Success),
@@ -165,11 +227,16 @@ fn charge_results_are_application_enums_and_absent_output_stays_unknown() {
             ] {
                 assert_eq!(
                     p.decode(response(&p, 2, raw)).unwrap().value(),
-                    &ReplyValue::ChargeApplied(status)
+                    &ReplyValue::ChargeApplied { status }
                 );
             }
         }
-        let p = prepare(&c, Command::ChargeStatus(ChargeQuery::Presence));
+        let p = prepare(
+            &c,
+            Command::ChargeStatus {
+                query: ChargeQuery::Presence,
+            },
+        );
         assert_eq!(logical(&p), [0, 255]);
         for (raw, value) in [
             (0, ChargePresence::Failed),
@@ -179,10 +246,15 @@ fn charge_results_are_application_enums_and_absent_output_stays_unknown() {
         ] {
             assert_eq!(
                 p.decode(response(&p, 1, raw)).unwrap().value(),
-                &ReplyValue::ChargePresence(value)
+                &ReplyValue::ChargePresence { status: value }
             );
         }
-        let p = prepare(&c, Command::ChargeStatus(ChargeQuery::State));
+        let p = prepare(
+            &c,
+            Command::ChargeStatus {
+                query: ChargeQuery::State,
+            },
+        );
         assert_eq!(logical(&p), [1, 255]);
         for (raw, value) in [
             (0, ReportedChargeState::Failed),
@@ -196,7 +268,7 @@ fn charge_results_are_application_enums_and_absent_output_stays_unknown() {
         ] {
             assert_eq!(
                 p.decode(response(&p, 1, raw)).unwrap().value(),
-                &ReplyValue::ChargeState(value)
+                &ReplyValue::ChargeState { status: value }
             );
         }
     }
@@ -226,7 +298,7 @@ fn audio_storage_requests_and_results_use_remapped_slots_without_completion_inst
                     };
                     assert_eq!(
                         p.decode(response(&p, 2, raw)).unwrap().value(),
-                        &ReplyValue::AudioCaptured(expected)
+                        &ReplyValue::AudioCaptured { status: expected }
                     );
                 }
             }
@@ -236,7 +308,7 @@ fn audio_storage_requests_and_results_use_remapped_slots_without_completion_inst
             (AudioPlayback::ZeroSecondLane, 1),
             (AudioPlayback::ZeroFirstLane, 2),
         ] {
-            let p = prepare(&c, Command::AudioPlayback(mode));
+            let p = prepare(&c, Command::AudioPlayback { mode });
             assert_eq!(logical(&p), [wire, 255]);
             for raw in 0..=255 {
                 let expected = match raw {
@@ -246,7 +318,7 @@ fn audio_storage_requests_and_results_use_remapped_slots_without_completion_inst
                 };
                 assert_eq!(
                     p.decode(response(&p, 1, raw)).unwrap().value(),
-                    &ReplyValue::AudioPlayed(expected)
+                    &ReplyValue::AudioPlayed { status: expected }
                 );
             }
         }
@@ -257,7 +329,7 @@ fn audio_storage_requests_and_results_use_remapped_slots_without_completion_inst
             (StorageErase::AuxiliaryRegion, 4),
             (StorageErase::ResetProfiles, 5),
         ] {
-            let p = prepare(&c, Command::EraseStorage(action));
+            let p = prepare(&c, Command::EraseStorage { action });
             assert_eq!(logical(&p), [wire, 255]);
             for raw in 0..=255 {
                 let expected = match raw {
@@ -267,7 +339,7 @@ fn audio_storage_requests_and_results_use_remapped_slots_without_completion_inst
                 };
                 assert_eq!(
                     p.decode(response(&p, 1, raw)).unwrap().value(),
-                    &ReplyValue::StorageErased(expected)
+                    &ReplyValue::StorageErased { status: expected }
                 );
             }
         }
@@ -284,7 +356,7 @@ fn audio_storage_requests_and_results_use_remapped_slots_without_completion_inst
             };
             assert_eq!(
                 p.decode(response(&p, 0, raw)).unwrap().value(),
-                &ReplyValue::StorageStatus(expected)
+                &ReplyValue::StorageStatus { status: expected }
             );
         }
         for command in [Command::FormatStorage, Command::DisplaySetup] {

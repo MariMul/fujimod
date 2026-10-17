@@ -82,7 +82,7 @@ fn register_variants_encode_scattered_fields_without_claiming_stub_read_values()
             (RegisterAction::NoopSecond, [8, 0, 0, 0, 0, 0, 0]),
         ];
         for (action, expected) in cases {
-            let p = prepare(&c, Command::RegisterControl(action));
+            let p = prepare(&c, Command::RegisterControl { action });
             assert_eq!(p.request.code(), CommandCode(150));
             assert_eq!(logical(&p), expected);
             assert_eq!(
@@ -111,17 +111,21 @@ fn i2c_requires_bounded_owned_data_and_has_a_distinct_single_write_contract() {
         ] {
             let p = prepare(
                 &c,
-                Command::I2c(I2cAction::Read {
-                    port,
-                    command: 0xa5,
-                    length: I2cLength::new(3).unwrap(),
-                }),
+                Command::I2c {
+                    action: I2cAction::Read {
+                        port,
+                        command: 0xa5,
+                        length: I2cLength::new(3).unwrap(),
+                    },
+                },
             );
             assert_eq!(&logical(&p)[..4], &[0, selector, 3, 0xa5]);
             let values = [0, selector, 3, 0xa5, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0];
             assert_eq!(
                 p.decode(response(&p, &values)).unwrap().value(),
-                &ReplyValue::I2cData(vec![1, 2, 3])
+                &ReplyValue::I2cData {
+                    data: vec![1, 2, 3]
+                }
             );
             let mut input = [4, 5, 6];
             let payload = I2cPayload::new(&input).unwrap();
@@ -129,11 +133,13 @@ fn i2c_requires_bounded_owned_data_and_has_a_distinct_single_write_contract() {
             assert_eq!(payload.data(), &[4, 5, 6]);
             let p = prepare(
                 &c,
-                Command::I2c(I2cAction::Write {
-                    port,
-                    command: 0x12,
-                    payload,
-                }),
+                Command::I2c {
+                    action: I2cAction::Write {
+                        port,
+                        command: 0x12,
+                        payload,
+                    },
+                },
             );
             assert_eq!(
                 logical(&p),
@@ -142,10 +148,12 @@ fn i2c_requires_bounded_owned_data_and_has_a_distinct_single_write_contract() {
         }
         let p = prepare(
             &c,
-            Command::I2c(I2cAction::WriteSingle {
-                command: 0xa5,
-                value: 0x7f,
-            }),
+            Command::I2c {
+                action: I2cAction::WriteSingle {
+                    command: 0xa5,
+                    value: 0x7f,
+                },
+            },
         );
         assert_eq!(
             logical(&p),
@@ -161,15 +169,27 @@ fn i2c_requires_bounded_owned_data_and_has_a_distinct_single_write_contract() {
 fn accumulator_stop_returns_low_halfwords_and_status_report_stays_opaque() {
     for reverse in [false, true] {
         let c = catalogue(reverse);
-        let start = prepare(&c, Command::Accumulator(AccumulatorAction::Start));
+        let start = prepare(
+            &c,
+            Command::Accumulator {
+                action: AccumulatorAction::Start,
+            },
+        );
         assert_eq!(logical(&start)[0], 1);
-        let stop = prepare(&c, Command::Accumulator(AccumulatorAction::StopAndRead));
+        let stop = prepare(
+            &c,
+            Command::Accumulator {
+                action: AccumulatorAction::StopAndRead,
+            },
+        );
         assert_eq!(logical(&stop)[0], 0);
         assert_eq!(
             stop.decode(response(&stop, &[0, 0x12, 0x34, 0xab, 0xcd, 0xff, 0xfe]))
                 .unwrap()
                 .value(),
-            &ReplyValue::Accumulated([0x1234, 0xabcd, 0xfffe])
+            &ReplyValue::Accumulated {
+                values: [0x1234, 0xabcd, 0xfffe]
+            }
         );
         let report = prepare(&c, Command::PeripheralReport);
         assert_eq!(
@@ -177,7 +197,9 @@ fn accumulator_stop_returns_low_halfwords_and_status_report_stays_opaque() {
                 .decode(response(&report, &[1, 2, 3, 4, 5, 6, 7, 8]))
                 .unwrap()
                 .value(),
-            &ReplyValue::PeripheralReport([1, 2, 3, 4, 5, 6, 7, 8])
+            &ReplyValue::PeripheralReport {
+                data: [1, 2, 3, 4, 5, 6, 7, 8]
+            }
         );
     }
 }

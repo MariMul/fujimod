@@ -255,7 +255,9 @@ mod replay {
         let result = block_on(invocation.execute(&mut session)).unwrap();
         assert_eq!(
             result.value(),
-            &ReplyValue::ConfigurationSaved(SaveStatus::Failed)
+            &ReplyValue::ConfigurationSaved {
+                status: SaveStatus::Failed
+            }
         );
         assert_eq!(result.raw().raw(), &response);
         assert_eq!(session.state(), SessionState::Ready);

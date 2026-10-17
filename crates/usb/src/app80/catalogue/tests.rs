@@ -81,7 +81,7 @@ fn separate_firmwares_select_their_own_codes_and_argument_positions() {
             p.decode(response(&p, &[(1, 0xfe), (2, 0xdc)]))
                 .unwrap()
                 .value(),
-            &ReplyValue::Pins(0xfedc)
+            &ReplyValue::Pins { levels: 0xfedc }
         );
         let p = c
             .prepare(modes(), Command::ReadChannel { channel: 42 })
@@ -90,7 +90,7 @@ fn separate_firmwares_select_their_own_codes_and_argument_positions() {
             p.decode(response(&p, &[(1, 0x12), (2, 0x34)]))
                 .unwrap()
                 .value(),
-            &ReplyValue::Channel(0x1234)
+            &ReplyValue::Channel { value: 0x1234 }
         );
     }
 }
@@ -101,31 +101,40 @@ fn profile_actions_are_variants_and_read_results_are_not_host_dispositions() {
         let p = c
             .prepare(
                 modes(),
-                Command::ProfileByte(ProfileAction::Read {
-                    bank,
-                    index: ProfileIndex::new(15).unwrap(),
-                }),
+                Command::ProfileByte {
+                    action: ProfileAction::Read {
+                        bank,
+                        index: ProfileIndex::new(15).unwrap(),
+                    },
+                },
             )
             .unwrap();
         assert_eq!(&p.request().arguments()[..2], &[opcode, 15]);
         assert_eq!(
             p.decode(response(&p, &[(2, 1)])).unwrap().value(),
-            &ReplyValue::ProfileByte(1)
+            &ReplyValue::ProfileByte { value: 1 }
         );
         let p = c
             .prepare(
                 modes(),
-                Command::ProfileByte(ProfileAction::Write {
-                    bank,
-                    index: ProfileIndex::new(3).unwrap(),
-                    value: 0x80,
-                }),
+                Command::ProfileByte {
+                    action: ProfileAction::Write {
+                        bank,
+                        index: ProfileIndex::new(3).unwrap(),
+                        value: 0x80,
+                    },
+                },
             )
             .unwrap();
         assert_eq!(&p.request().arguments()[..3], &[opcode + 2, 3, 0x80]);
     }
     let p = c
-        .prepare(modes(), Command::ProfileByte(ProfileAction::Reset))
+        .prepare(
+            modes(),
+            Command::ProfileByte {
+                action: ProfileAction::Reset,
+            },
+        )
         .unwrap();
     assert_eq!(p.request().arguments()[0], 5);
     assert!(PinBank::new(16).is_err());
@@ -142,7 +151,10 @@ fn unknown_save_and_download_results_are_retained_as_data() {
     ] {
         let raw = response(&p, &[(0, byte)]);
         let r = p.decode(raw.clone()).unwrap();
-        assert_eq!(r.value(), &ReplyValue::ConfigurationSaved(result));
+        assert_eq!(
+            r.value(),
+            &ReplyValue::ConfigurationSaved { status: result }
+        );
         assert_eq!(r.raw(), &raw);
     }
     let p = c.prepare(modes(), Command::DownloadStatus).unwrap();
@@ -170,7 +182,9 @@ fn service_word_bytes_are_big_endian_and_addresses_are_checked_before_use() {
     );
     assert_eq!(
         p.decode(response(&p, &[(1, 1)])).unwrap().value(),
-        &ReplyValue::WriteWord(WordWriteResult::Confirmed)
+        &ReplyValue::WriteWord {
+            result: WordWriteResult::Confirmed
+        }
     );
     let p = c.prepare(modes(), Command::ReadWord { address }).unwrap();
     assert_eq!(
@@ -180,11 +194,15 @@ fn service_word_bytes_are_big_endian_and_addresses_are_checked_before_use() {
         ))
         .unwrap()
         .value(),
-        &ReplyValue::ReadWord(WordReadResult::Value(0x89abcdef))
+        &ReplyValue::ReadWord {
+            result: WordReadResult::Value { value: 0x89abcdef }
+        }
     );
     assert_eq!(
         p.decode(response(&p, &[(1, 42)])).unwrap().value(),
-        &ReplyValue::ReadWord(WordReadResult::Unknown(42))
+        &ReplyValue::ReadWord {
+            result: WordReadResult::Unknown(42)
+        }
     );
     assert!(WordAddress::new(Address(1)).is_err());
     assert!(

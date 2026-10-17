@@ -2,6 +2,9 @@
 //! or copied validation bounds belong here.
 use serde::Serialize;
 use std::{collections::BTreeMap, fs, path::Path};
+mod unions;
+use unions::Union;
+
 use syn::{Fields, FnArg, ImplItem, Item, ReturnType, Type, Visibility};
 
 #[derive(Clone, Debug, Serialize)]
@@ -19,6 +22,7 @@ pub struct Quantity {
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct Values {
+    pub unions: Vec<Union>,
     pub choices: Vec<Choice>,
     pub quantities: Vec<Quantity>,
 }
@@ -116,18 +120,32 @@ impl Api {
     }
     pub fn from_sources<'a>(sources: impl IntoIterator<Item = &'a str>) -> Result<Self, String> {
         let mut choices = BTreeMap::new();
+        let mut payloads = BTreeMap::new();
         let mut quantities = BTreeMap::new();
         let mut structs = std::collections::BTreeSet::new();
         let mut impls = Vec::new();
+        let mut public_names = std::collections::BTreeSet::new();
         for source in sources {
             for item in syn::parse_file(source).map_err(|e| e.to_string())?.items {
                 match item {
                     Item::Enum(item) if matches!(item.vis, Visibility::Public(_)) => {
-                        if let Some(value) = choice(&item) {
+                        if !public_names.insert(item.ident.to_string()) {
+                            return Err(format!("duplicate public type {}", item.ident));
+                        }
+                        if let Some(value) = choice(&item)
+                            && item.ident != "Command"
+                            && item.ident != "ReplyValue"
+                        {
                             choices.insert(value.name.clone(), value);
+                        } else if item.ident != "CommandError" {
+                            let union = Union::parse(&item)?;
+                            payloads.insert(union.name.clone(), union);
                         }
                     }
                     Item::Struct(item) if matches!(item.vis, Visibility::Public(_)) => {
+                        if !public_names.insert(item.ident.to_string()) {
+                            return Err(format!("duplicate public type {}", item.ident));
+                        }
                         structs.insert(item.ident.to_string());
                     }
                     Item::Impl(item) if item.trait_.is_none() => impls.push(item),
@@ -135,6 +153,7 @@ impl Api {
                 }
             }
         }
+        let mut methods_by_type = BTreeMap::<String, Vec<syn::ImplItemFn>>::new();
         for item in impls {
             let Some(name) = named(&item.self_ty) else {
                 continue;
@@ -142,17 +161,16 @@ impl Api {
             if !structs.contains(&name) {
                 continue;
             }
-            let methods: Vec<_> = item
-                .items
-                .iter()
-                .filter_map(|item| {
-                    if let ImplItem::Fn(method) = item {
-                        Some(method)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+            for method in item.items {
+                if let ImplItem::Fn(method) = method {
+                    methods_by_type
+                        .entry(name.clone())
+                        .or_default()
+                        .push(method);
+                }
+            }
+        }
+        for (name, methods) in methods_by_type {
             let Some(new) = methods
                 .iter()
                 .find(|m| m.sig.ident == "new" && matches!(m.vis, Visibility::Public(_)))
@@ -191,11 +209,14 @@ impl Api {
                 },
             );
         }
+        let mut service = Values {
+            unions: payloads.into_values().collect(),
+            choices: choices.into_values().collect(),
+            quantities: quantities.into_values().collect(),
+        };
+        unions::classify(&mut service)?;
         Ok(Self {
-            service: Values {
-                choices: choices.into_values().collect(),
-                quantities: quantities.into_values().collect(),
-            },
+            service,
             codec: Choice {
                 name: "Codec".into(),
                 variants: vec![],
@@ -258,6 +279,9 @@ impl Api {
         for q in &self.service.quantities {
             out += &python_quantity(q);
         }
+        for union in &self.service.unions {
+            out += &union.python(&self.service);
+        }
         out += "pub(super) fn register(module:&Bound<'_,PyModule>)->PyResult<()>{\n";
         for name in self
             .service
@@ -265,6 +289,7 @@ impl Api {
             .iter()
             .map(|c| &c.name)
             .chain(self.service.quantities.iter().map(|q| &q.name))
+            .chain(self.service.unions.iter().map(|u| &u.name))
         {
             out += &format!("module.add_class::<{name}>()?;\n");
         }
@@ -280,11 +305,15 @@ impl Api {
             } else {
                 c.name.clone()
             };
-            out += &format!(
-                "#[wasm_bindgen] #[derive(Clone,Copy)] pub enum {name} {{ {} {} }}\n",
-                c.variants.join(","),
-                if c.result { ",Unknown" } else { "" }
-            );
+            let variants = c
+                .variants
+                .iter()
+                .map(String::as_str)
+                .chain(c.result.then_some("Unknown"))
+                .collect::<Vec<_>>()
+                .join(",");
+            out +=
+                &format!("#[wasm_bindgen] #[derive(Clone,Copy)] pub enum {name} {{{variants}}}\n");
             out += &format!(
                 "impl From<core::{}> for {name} {{fn from(value:core::{})->Self {{match value {{",
                 c.name, c.name
@@ -310,11 +339,14 @@ impl Api {
                 );
                 out += "}}}\n";
                 types += &format!(
-                    "export type {} = Readonly<{{kind:{}}}> | Readonly<{{kind:{name}.Unknown;rawStatus:number}}>;\n",
+                    "export type {} = {};\n",
                     c.name,
                     c.variants
                         .iter()
-                        .map(|v| format!("{name}.{v}"))
+                        .map(|v| format!("Readonly<{{kind:{name}.{v}}}>"))
+                        .chain(std::iter::once(format!(
+                            "Readonly<{{kind:{name}.Unknown;rawStatus:number}}>"
+                        )))
                         .collect::<Vec<_>>()
                         .join(" | ")
                 );
@@ -331,6 +363,9 @@ impl Api {
         }
         for q in &self.service.quantities {
             out += &javascript_quantity(q);
+        }
+        for union in &self.service.unions {
+            out += &union.javascript(&self.service);
         }
         out += &format!(
             "#[wasm_bindgen(typescript_custom_section)] const GENERATED_VALUE_TYPES:&str=r#\"{types}\"#;\n"
@@ -359,6 +394,19 @@ impl Api {
             for n in &names {
                 out += &format!("{n}:typeof native.{n};\n");
             }
+            for u in &self.service.unions {
+                let native = u.wasm_name();
+                if u.input {
+                    out += &format!("{}:Readonly<{{", u.name);
+                    for v in &u.variants {
+                        out += &format!("{}:typeof native.{native}.{};", v.factory, v.factory);
+                    }
+                    out += "}>;\n";
+                } else {
+                    let name = &u.kind_export;
+                    out += &format!("{name}:typeof native.{};\n", u.kind_name);
+                }
+            }
             out += "}>;\nexport declare const definitionValues:Readonly<{Codec:typeof native.ServiceCodec}>;\nexport declare const valueSchemas:Readonly<{service:string;definitions:string}>;\n";
             for c in &self.service.choices {
                 out += &format!("export type {}=native.{};\n", c.name, c.name);
@@ -366,15 +414,31 @@ impl Api {
             for q in &self.service.quantities {
                 out += &format!("export type {}=native.{};\n", q.name, q.name);
             }
+            for u in &self.service.unions {
+                out += &format!("export type {}=native.{};\n", u.wasm_name(), u.wasm_name());
+            }
         } else {
             out += "export const serviceValues=Object.freeze({\n";
             for n in &names {
                 out += &format!("{n}:native.{n},\n");
             }
+            for u in &self.service.unions {
+                if u.input {
+                    out += &format!("{}:Object.freeze({{", u.name);
+                    for v in &u.variants {
+                        out += &format!("{}:native.{}.{},", v.factory, u.wasm_name(), v.factory);
+                    }
+                    out += "}),\n";
+                } else {
+                    let name = &u.kind_export;
+                    out += &format!("{name}:native.{},\n", u.kind_name);
+                }
+            }
             out +=
                 "});\nexport const definitionValues=Object.freeze({Codec:native.ServiceCodec});\n";
             let service = serde_json::to_string(&self.service).unwrap();
             let defs = serde_json::to_string(&Values {
+                unions: vec![],
                 choices: vec![self.codec.clone()],
                 quantities: vec![],
             })
@@ -467,7 +531,7 @@ fn python_quantity(q: &Quantity) -> String {
         call
     };
     format!(
-        "#[pyclass(frozen,from_py_object,module=\"fujimod.usb.app80\")] #[derive(Clone)] pub(super) struct {n} {{pub(super) inner:core::{n}}}\n#[pymethods] impl {n} {{#[new] fn new(py:Python<'_>,{param}:{arg})->PyResult<Self>{{core::{n}::new({call}).map(|inner|Self{{inner}}).map_err(|e|command_error(py,e))}} {getter} }}\n"
+        "#[pyclass(frozen,from_py_object,module=\"fujimod.usb.app80\")] #[derive(Clone)] pub(super) struct {n} {{pub(super) inner:core::{n}}}\nimpl From<core::{n}> for {n}{{fn from(inner:core::{n})->Self{{Self{{inner}}}}}}\n#[pymethods] impl {n} {{#[new] fn new(py:Python<'_>,{param}:{arg})->PyResult<Self>{{core::{n}::new({call}).map(|inner|Self{{inner}}).map_err(|e|command_error(py,e))}} {getter} }}\n"
     )
 }
 fn javascript_quantity(q: &Quantity) -> String {

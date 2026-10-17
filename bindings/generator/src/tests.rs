@@ -53,3 +53,105 @@ fn checked_values_require_a_public_observer_and_byte_input_is_distinct() {
     assert!(api.python().contains("PyBytes::new"));
     assert!(api.javascript().contains("error::buffer"));
 }
+
+#[test]
+fn payload_graph_generates_nested_factories_and_structured_replies() {
+    let api = Api::from_sources([r#"
+        pub enum Choice { One, Two }
+        pub enum NewAction { Select { choice: Choice, count: u16 }, Reset }
+        pub enum Command { NewFeature { action: NewAction, value: u32 }, Query }
+        pub enum NewResult { Data { raw_status: u8, values: [u16; 3] }, Unknown(u8) }
+        pub enum ReplyValue { NewFeature { result: NewResult, data: Vec<u8> }, Empty }
+    "#])
+    .unwrap();
+    let python = api.python();
+    let javascript = api.javascript();
+    syn::parse_file(&python).unwrap();
+    syn::parse_file(&javascript).unwrap();
+    for code in [&python, &javascript] {
+        assert!(code.contains("core::Command::NewFeature"));
+        assert!(code.contains("core::NewAction::Select"));
+        assert!(code.contains("core::ReplyValue::NewFeature"));
+        assert!(code.contains("core::NewResult::Data"));
+    }
+    assert!(javascript.contains("integer(count,u16::MAX.into())?"));
+    assert!(javascript.contains("Choice::parse(choice)?"));
+    assert!(javascript.contains("readonly [number,number,number]"));
+    assert!(javascript.contains("rawStatus:number"));
+    assert!(
+        api.js_exports(false)
+            .contains("newFeature:native.App80Command.newFeature")
+    );
+    assert!(
+        api.js_exports(true)
+            .contains("newFeature:typeof native.App80Command.newFeature")
+    );
+    let schema = serde_json::to_value(&api.service).unwrap();
+    let action = schema["unions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|u| u["name"] == "NewAction")
+        .unwrap();
+    assert_eq!(action["input"], true);
+    assert_eq!(action["variants"][0]["fields"][1]["ty"]["bits"], 16);
+    assert!(
+        api.service
+            .unions
+            .iter()
+            .find(|u| u.name == "NewResult")
+            .is_some_and(|u| !u.input)
+    );
+}
+
+#[test]
+fn payload_graph_rejects_unclassified_unknown_and_unnamed_fields() {
+    for (source, reason) in [
+        ("pub enum Lost { Value { byte: u8 } }", "reachable"),
+        (
+            "pub enum Command { New { unknown: Missing } }",
+            "unknown field type",
+        ),
+        ("pub enum Command { New(u8) }", "named Rust fields"),
+        (
+            "pub enum Command { New { bytes: Vec<u8> } }",
+            "checked Rust value",
+        ),
+        (
+            "pub enum Both { New { value: u8 } } pub enum Command { New { value: Both } } pub enum ReplyValue { New { value: Both } }",
+            "exactly one",
+        ),
+    ] {
+        let error = Api::from_sources([source]).unwrap_err();
+        assert!(error.contains(reason), "{error}");
+    }
+}
+
+#[test]
+fn split_impls_opaque_results_and_unit_roots_generate_valid_views() {
+    let api = Api::from_sources([r#"
+        pub struct Level(u8);
+        impl Level { pub fn new(value:u8)->Result<Self,Error>{todo!()} }
+        impl Level { pub fn value(self)->u8 {self.0} }
+        pub enum Status { Unknown(u8) }
+        pub enum Command { Query }
+        pub enum ReplyValue { Data { level:Level, status:Status, empty:[u16;0] } }
+    "#])
+    .unwrap();
+    for code in [api.python(), api.javascript()] {
+        syn::parse_file(&code).unwrap();
+    }
+    assert!(api.javascript().contains("Level{inner:*level}.into()"));
+    assert!(api.python().contains("impl From<core::Level> for Level"));
+    assert!(
+        api.service
+            .unions
+            .iter()
+            .any(|u| u.name == "Command" && u.input)
+    );
+    assert!(
+        Api::from_sources(["pub enum Repeated { A }", "pub enum Repeated { B }"])
+            .unwrap_err()
+            .contains("duplicate public type")
+    );
+}

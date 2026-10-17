@@ -68,7 +68,9 @@ fn selected_catalogue_and_typed_replies_execute_in_wasm() {
         .unwrap();
     assert_eq!(
         reply.value(),
-        &ReplyValue::ConfigurationSaved(SaveStatus::Failed)
+        &ReplyValue::ConfigurationSaved {
+            status: SaveStatus::Failed
+        }
     );
     assert!(
         service
