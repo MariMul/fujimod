@@ -1,5 +1,5 @@
 //! Optional relay service. It routes opaque transfers and owns device leases.
-use crate::{Error, Result, protocol::*};
+use crate::{Error, Result, latency::Latency, protocol::*};
 use axum::{
     Router,
     extract::{
@@ -25,6 +25,7 @@ type Work = (String, Operation, u64, oneshot::Sender<Completion>);
 struct Exporter {
     devices: Vec<Device>,
     sender: mpsc::Sender<Work>,
+    latency: Latency,
 }
 struct Inner {
     exporters: HashMap<String, Exporter>,
@@ -163,6 +164,7 @@ async fn exporter(relay: Relay, socket: WebSocket, id: String) {
         Exporter {
             devices: vec![],
             sender: tx,
+            latency: Latency::default(),
         },
     );
     let (mut output, mut input) = socket.split();
@@ -210,29 +212,38 @@ async fn forward(relay: &Relay, device: &str, operation: Operation, timeout_ms: 
     let Some((exporter, local)) = device.split_once('/') else {
         return failure("invalid device route");
     };
-    let sender = relay
+    let peer = relay
         .inner
         .lock()
         .await
         .exporters
         .get(exporter)
-        .map(|p| p.sender.clone());
-    let Some(sender) = sender else {
+        .map(|p| (p.sender.clone(), p.latency.allowance()));
+    let Some((sender, allowance)) = peer else {
         return failure("exporter disconnected; completion unknown");
     };
     let (tx, rx) = oneshot::channel();
-    match tokio::time::timeout(Duration::from_millis(timeout_ms), async {
+    let probe = matches!(operation, Operation::Probe);
+    let started = std::time::Instant::now();
+    let result = tokio::time::timeout(Duration::from_millis(timeout_ms) + allowance, async {
         sender
             .send((local.into(), operation, timeout_ms, tx))
             .await
             .map_err(|_| ())?;
         rx.await.map_err(|_| ())
     })
-    .await
-    {
+    .await;
+    let result = match result {
         Ok(Ok(result)) => result,
         _ => failure("exporter disconnected or deadline expired; completion unknown"),
+    };
+    if probe
+        && result.error.is_none()
+        && let Some(peer) = relay.inner.lock().await.exporters.get_mut(exporter)
+    {
+        peer.latency.record(started.elapsed());
     }
+    result
 }
 async fn controller(relay: Relay, mut socket: WebSocket, owner: String) {
     while let Some(Frame::Request {
@@ -259,6 +270,9 @@ async fn controller(relay: Relay, mut socket: WebSocket, owner: String) {
                     .collect(),
                 ..Completion::default()
             }
+        } else if matches!(operation, Operation::Probe) {
+            // Echo through the exporter, without requiring a USB lease.
+            forward(&relay, &device, operation, timeout_ms).await
         } else {
             let allowed = {
                 let mut inner = relay.inner.lock().await;
@@ -338,6 +352,16 @@ mod tests {
         tokio::task::JoinHandle<()>,
         mpsc::Receiver<Operation>,
     ) {
+        fixture_with_latency(url, Duration::ZERO).await
+    }
+    async fn fixture_with_latency(
+        url: &str,
+        rtt: Duration,
+    ) -> (
+        String,
+        tokio::task::JoinHandle<()>,
+        mpsc::Receiver<Operation>,
+    ) {
         let (mut socket, _) = connect_async(url).await.unwrap();
         socket
             .send(Wire::Text(
@@ -377,12 +401,24 @@ mod tests {
         let (tx, rx) = mpsc::channel(16);
         let task = tokio::spawn(async move {
             while let Some(Ok(frame)) = socket.next().await {
-                let Ok(Frame::Request { id, operation, .. }) =
-                    serde_json::from_str(frame.to_text().unwrap_or(""))
+                let Ok(Frame::Request {
+                    id,
+                    operation,
+                    timeout_ms,
+                    ..
+                }) = serde_json::from_str(frame.to_text().unwrap_or(""))
                 else {
                     continue;
                 };
-                tx.send(operation.clone()).await.unwrap();
+                tokio::time::sleep(rtt / 2).await;
+                if matches!(operation, Operation::TransferIn { length: 10, .. }) {
+                    // The USB budget must not be inflated with network time.
+                    assert_eq!(timeout_ms, 10);
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
+                if !matches!(operation, Operation::Probe) {
+                    tx.send(operation.clone()).await.unwrap();
+                }
                 let completion = match operation {
                     Operation::TransferIn { length: 7, .. } => Completion {
                         data: "AQID".into(),
@@ -396,6 +432,7 @@ mod tests {
                     }
                     _ => Completion::default(),
                 };
+                tokio::time::sleep(rtt / 2).await;
                 if socket
                     .send(Wire::Text(
                         serde_json::to_string(&Frame::Reply { id, completion })
@@ -497,6 +534,65 @@ mod tests {
             Some(Operation::TransferIn { .. })
         ));
         assert!(matches!(events.recv().await, Some(Operation::Close)));
+        exporter.abort();
+        server.abort();
+    }
+    #[tokio::test]
+    async fn ten_ms_usb_budget_survives_150_ms_exporter_round_trip() {
+        let (url, server) = server().await;
+        let (route, exporter, mut events) =
+            fixture_with_latency(&url, Duration::from_millis(150)).await;
+        let mut client = available(&url).await;
+        client
+            .request(&route, open(), Duration::from_millis(10))
+            .await
+            .unwrap();
+        assert!(matches!(events.recv().await, Some(Operation::Open { .. })));
+        let completion = client
+            .request(
+                &route,
+                Operation::TransferIn {
+                    endpoint: 0x82,
+                    length: 10,
+                },
+                Duration::from_millis(10),
+            )
+            .await
+            .unwrap();
+        assert!(completion.error.is_none(), "{:?}", completion.error);
+        assert!(matches!(
+            events.recv().await,
+            Some(Operation::TransferIn { length: 10, .. })
+        ));
+        client
+            .request(&route, Operation::Close, Duration::from_millis(10))
+            .await
+            .unwrap();
+        assert!(matches!(events.recv().await, Some(Operation::Close)));
+        assert!(events.try_recv().is_err());
+        exporter.abort();
+        server.abort();
+    }
+    #[tokio::test]
+    async fn cancelled_latency_probe_fences_before_usb_open() {
+        let (url, server) = server().await;
+        let (route, exporter, mut events) =
+            fixture_with_latency(&url, Duration::from_millis(150)).await;
+        let mut client = available(&url).await;
+        assert!(
+            tokio::time::timeout(
+                Duration::from_millis(20),
+                client.request(&route, open(), Duration::from_millis(10))
+            )
+            .await
+            .is_err()
+        );
+        let error = client
+            .request(&route, open(), Duration::from_secs(1))
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("fenced"));
+        assert!(events.try_recv().is_err());
         exporter.abort();
         server.abort();
     }

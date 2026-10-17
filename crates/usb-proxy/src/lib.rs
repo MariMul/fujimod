@@ -1,6 +1,7 @@
 //! Camera-independent USB forwarding. No Fujifilm framing, firmware or policy.
 #![forbid(unsafe_code)]
 mod client;
+mod latency;
 pub mod protocol;
 pub use client::{Client, RemoteDevice};
 pub use protocol::{Completion, Device, Endpoint, Interface, Operation, Setup};

@@ -58,6 +58,26 @@ try {
     },
     { repo, base },
   );
+  // Probe the real peer transport without claiming or accessing USB.
+  const echo = await page.evaluate(async (repo) => {
+    const { connectPeer, parseShare } = await import('/@fs/' + repo + 'crates/usb-proxy/web/peer.js');
+    const before = JSON.stringify(peerTest.fixture.log);
+    const peer = await connectPeer(peerTest.link);
+    try {
+      await peer.send(JSON.stringify({ type: 'hello', version: 1, role: 'controller',
+        token: parseShare(peerTest.link).key }));
+      const ready = JSON.parse(await peer.receive());
+      if (ready.type !== 'ready') throw Error('Peer handshake failed');
+      await peer.send(JSON.stringify({ type: 'request', id: 1, device: '',
+        operation: { op: 'probe' }, timeout_ms: 10 }));
+      const reply = JSON.parse(await peer.receive());
+      return { reply, untouched: before === JSON.stringify(peerTest.fixture.log) };
+    } finally { peer.close(); }
+  }, repo);
+  assert.equal(echo.untouched, true);
+  assert.deepEqual(echo.reply, { type: 'reply', id: 1,
+    completion: { devices: [], data: '', transferred: 0, error: null } });
+  console.log('PASS USB-free latency echo over real WebRTC');
   const python = new URL('../../../../.venv/bin/python', import.meta.url).pathname;
   async function native(script) {
     const env = { ...process.env, FUJIMOD_USB_PROXY_URL: link };

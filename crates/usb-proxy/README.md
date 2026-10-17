@@ -113,7 +113,20 @@ lease remains unavailable until the exporter disconnects. Reload/reconnect is
 explicit and does not assert that the camera stopped executing. FujiMod's own
 session additionally retains its `CompletionUnknown` behavior and USB tracing.
 
-Transfers are bounded to 8 MiB and requests to 120 seconds. WebUSB cannot cancel
+Remote waits add a measured network allowance to the caller's USB budget.
+Before the first device operation, three USB-free `Probe` echoes measure the full
+controller-to-exporter route. Active connections refresh with one probe after
+five seconds; changing device routes starts a fresh average. The last eight
+samples determine the mean RTT plus a jitter margin (four mean absolute
+deviations, at least 100 ms). Until sampled, the allowance is two seconds.
+The relay measures its exporter leg from the same probes and adds that allowance
+to its forwarding deadline. The controller reserves both network allowances and
+two seconds of scheduling slack. USB execution time is excluded from RTT samples;
+the original transfer timeout is passed unchanged to the USB host. Probes never
+claim or access USB. Failed or cancelled probes fence the connection like other
+requests, and no USB operation is retried.
+
+Transfers are bounded to 8 MiB and USB budgets to 120 seconds. WebUSB cannot cancel
 an in-flight transfer: a host deadline is not evidence of device completion.
 This version favors simple serialized exchanges over pipelined USB throughput.
 There is no automatic reconnect, recovery, persistence or hardware validation.

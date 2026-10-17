@@ -158,6 +158,14 @@ export class Exporter {
     };
   }
   request(frame) {
+    // Network echoes bypass USB queues, including outstanding physical work.
+    if (frame.operation.op === 'probe') {
+      this.onreply?.({
+        type: 'reply', id: frame.id,
+        completion: { devices: [], data: '', transferred: 0, error: null },
+      });
+      return Promise.resolve();
+    }
     // Serialize per device, including late completions after a timed-out request.
     const previous = this.queues.get(frame.device) || Promise.resolve();
     const task = previous.then(async () => {

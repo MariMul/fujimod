@@ -40,6 +40,8 @@ pub struct Setup {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Operation {
+    /// Echo at the exporter without accessing or claiming USB.
+    Probe,
     List,
     Open {
         configuration: u8,

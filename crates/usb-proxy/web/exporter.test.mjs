@@ -38,11 +38,14 @@ test('timed out USB promise cannot be overtaken by close', async () => {
   const pending = exporter.request({ id: 1, device: id, timeout_ms: 10, operation: { op: 'transfer_in', endpoint: 0x82, length: 64 } });
   await timedOut;
   assert.match(replies[0].completion.error, /completion unknown/);
+  await exporter.request({ id: 3, device: id, timeout_ms: 10, operation: { op: 'probe' } });
+  assert.equal(replies.at(-1).id, 3);
+  assert.equal(replies.at(-1).completion.error, null);
   const closing = exporter.request({ id: 2, device: id, timeout_ms: 1000, operation: { op: 'close' } });
   assert.equal(calls.at(-1), 'in');
   finish({ status: 'ok', data: new DataView(new ArrayBuffer(0)) });
   await pending; await closing;
-  assert.equal(calls.at(-1), 'close'); assert.equal(replies.length, 2);
+  assert.equal(calls.at(-1), 'close'); assert.equal(replies.length, 3);
   await assert.rejects(exporter.execute(id, open), /fenced/);
 });
 test('invalid endpoints never reach USB', async () => {
@@ -52,4 +55,15 @@ test('invalid endpoints never reach USB', async () => {
     await assert.rejects(exporter.execute(id, { op: 'transfer_in', endpoint, length: 64 }), /endpoint|Endpoint/);
   }
   assert.deepEqual(calls, ['open', 'claim']);
+});
+
+test('latency probe requires no USB inventory or claim', async () => {
+  const { exporter, calls } = fixture();
+  const replies = [];
+  exporter.onreply = (reply) => replies.push(reply);
+  await exporter.request({ id: 1, device: '', timeout_ms: 10, operation: { op: 'probe' } });
+  assert.deepEqual(replies[0].completion, { devices: [], data: '', transferred: 0, error: null });
+  assert.deepEqual(calls, []);
+  assert.equal(exporter.claims.size, 0);
+  assert.equal(exporter.fenced.size, 0);
 });

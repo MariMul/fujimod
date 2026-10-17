@@ -1,4 +1,8 @@
-use crate::{Error, Result, protocol::*};
+use crate::{
+    Error, Result,
+    latency::{Clock, Latency},
+    protocol::*,
+};
 #[cfg(target_arch = "wasm32")]
 use futures_util::SinkExt;
 use futures_util::StreamExt;
@@ -77,6 +81,9 @@ pub struct Client {
     socket: Socket,
     next_id: u64,
     usable: bool,
+    latency: Latency,
+    probed_device: String,
+    last_probe: Option<Clock>,
 }
 impl Client {
     pub async fn connect(url: &str, token: &str) -> Result<Self> {
@@ -113,6 +120,9 @@ impl Client {
                         socket,
                         next_id: 0,
                         usable: true,
+                        latency: Latency::default(),
+                        probed_device: String::new(),
+                        last_probe: None,
                     }),
                     _ => Err(err("relay rejected protocol handshake")),
                 }
@@ -133,29 +143,68 @@ impl Client {
         if timeout.is_zero() || timeout > Duration::from_secs(120) {
             return Err(err("timeout must be 1–120000 ms"));
         }
+        // Probe the full route before USB, then refresh while the connection is
+        // active. A new route gets its own samples; no camera command is sent.
+        if !matches!(operation, Operation::List | Operation::Probe)
+            && (self.probed_device != device
+                || self
+                    .last_probe
+                    .as_ref()
+                    .is_none_or(|clock| clock.elapsed() >= Duration::from_secs(5)))
+        {
+            let initial = self.probed_device != device;
+            if initial {
+                self.latency = Latency::default();
+            }
+            for _ in 0..if initial { 3 } else { 1 } {
+                let started = Clock::new();
+                let completion = self
+                    .exchange(device, Operation::Probe, Duration::from_secs(5))
+                    .await?;
+                if let Some(error) = completion.error {
+                    return Err(err(error));
+                }
+                self.latency.record(started.elapsed());
+            }
+            self.probed_device = device.into();
+            self.last_probe = Some(Clock::new());
+        }
+        self.exchange(device, operation, timeout).await
+    }
+    async fn exchange(
+        &mut self,
+        device: &str,
+        operation: Operation,
+        timeout: Duration,
+    ) -> Result<Completion> {
         // Set before the first await: cancellation never enables another transfer.
         self.usable = false;
         self.next_id += 1;
         let id = self.next_id;
-        let reply = deadline(timeout + Duration::from_secs(2), async {
-            send(
-                &mut self.socket,
-                &Frame::Request {
-                    id,
-                    device: device.into(),
-                    operation,
-                    timeout_ms: timeout.as_millis().max(1) as u64,
-                },
-            )
-            .await?;
-            match receive(&mut self.socket).await? {
-                Frame::Reply {
-                    id: received,
-                    completion,
-                } if received == id => Ok(completion),
-                _ => Err(err("mismatched reply")),
-            }
-        })
+        // The relay has its own exporter wait. Reserve both that allowance
+        // and the full controller-to-exporter RTT outside the USB budget.
+        let reply = deadline(
+            timeout + self.latency.allowance() * 2 + Duration::from_secs(2),
+            async {
+                send(
+                    &mut self.socket,
+                    &Frame::Request {
+                        id,
+                        device: device.into(),
+                        operation,
+                        timeout_ms: timeout.as_millis().max(1) as u64,
+                    },
+                )
+                .await?;
+                match receive(&mut self.socket).await? {
+                    Frame::Reply {
+                        id: received,
+                        completion,
+                    } if received == id => Ok(completion),
+                    _ => Err(err("mismatched reply")),
+                }
+            },
+        )
         .await?;
         self.usable = reply.error.is_none();
         Ok(reply)

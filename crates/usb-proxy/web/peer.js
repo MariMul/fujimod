@@ -363,7 +363,8 @@ export class ShareHost {
             throw Error('Invalid USB request');
           let completion = { devices: [], data: '', transferred: 0, error: null };
           try {
-            if (request.operation.op === 'list') completion.devices = [this.device.descriptor];
+            if (request.operation.op === 'probe') { /* Network echo; never touches USB. */ }
+            else if (request.operation.op === 'list') completion.devices = [this.device.descriptor];
             else {
               if (request.device !== this.device.descriptor.id)
                 throw Error('Unknown shared device');
