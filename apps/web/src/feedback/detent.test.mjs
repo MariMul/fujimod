@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import ts from 'typescript';
-const source = ts.transpileModule(readFileSync(new URL('./detent.ts', import.meta.url), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+import { stripTypeScriptTypes } from 'node:module';
+const source = stripTypeScriptTypes(readFileSync(new URL('./detent.ts', import.meta.url), 'utf8'), { mode: 'transform' });
 const { DetentFeedback } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 
 test('audio is gesture-only, uses transient session and bounded click envelopes', () => {

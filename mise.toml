@@ -1,0 +1,14 @@
+[tools]
+node = "26.12.0"
+
+[tasks.site-build]
+dir = "{{config_root}}/apps/web"
+run = "npm run build"
+
+[tasks.site-test]
+dir = "{{config_root}}/apps/web"
+run = "npm test"
+
+[tasks.site-preview]
+dir = "{{config_root}}/apps/web"
+run = "npm run preview -- --mode local-preview --port 5190 --strictPort"

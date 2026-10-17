@@ -1,6 +1,1 @@
-node_modules/
-dist/
-_site/
-public/artifacts/
-public/runtime/
-.env.local
+.DS_Store

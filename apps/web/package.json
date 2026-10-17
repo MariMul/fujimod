@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build && node scripts/verify-models.mjs dist",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node --test tests/*.test.mjs src/engine/*.test.mjs",
+    "test": "node --test tests/*.test.mjs src/engine/*.test.mjs src/viewer/*.test.mjs src/feedback/*.test.mjs",
     "prepare:release": "node scripts/prepare-pages.mjs",
     "build:local-preview": "tsc --noEmit && vite build --mode local-preview && node scripts/verify-models.mjs dist"
   },
