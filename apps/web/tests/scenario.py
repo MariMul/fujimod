@@ -20,7 +20,23 @@ async def check(args):
             for run in range(2):
                 context = await browser.new_context(viewport=dict(width=1300, height=900))
                 await context.add_init_script('''
-                  window.scenarioTrace = {sent:[], received:[]};
+                  window.scenarioTrace = {sent:[], received:[], animation:[]};
+                  // Observe the real renderer from fault entry through its settled frame.
+                  new MutationObserver(() => {
+                    const viewer = document.querySelector('#viewer');
+                    if (viewer?.dataset.faultAnimation !== 'entering' || scenarioTrace.animation.length) return;
+                    const sample = () => {
+                      const canvas = document.querySelector('#lcd-source');
+                      const c = canvas.getContext('2d');
+                      scenarioTrace.animation.push({
+                        phase: viewer.dataset.faultAnimation,
+                        background: Array.from(c.getImageData(10,10,1,1).data),
+                        alert: Array.from(c.getImageData(600,240,1,1).data),
+                      });
+                      if (viewer.dataset.faultAnimation === 'entering') requestAnimationFrame(sample);
+                    };
+                    sample();
+                  }).observe(document, {subtree:true, attributes:true, attributeFilter:['data-fault-animation']});
                   const W = window.Worker;
                   window.Worker = class extends W {
                     constructor(...args) {
@@ -44,7 +60,17 @@ async def check(args):
                 page.on('pageerror', lambda error: errors.append(str(error)))
                 await page.goto(args.url)
                 await page.wait_for_function("document.querySelector('#live-label').textContent === 'STOPPED'", timeout=240000)
+                await page.wait_for_function("document.querySelector('#viewer').dataset.faultAnimation === 'settled'")
                 trace = await page.evaluate('scenarioTrace')
+                animation = trace['animation']
+                assert len(animation) >= 3 and animation[0]['phase'] == 'entering', animation
+                before, after = animation[0], animation[-1]
+                assert after['phase'] == 'settled', animation
+                assert before['alert'] != after['alert'], animation
+                assert len({tuple(frame['background']) for frame in animation}) >= 3, animation
+                for initial, final in zip(before['background'][:3], after['background'][:3]):
+                    assert abs(final - initial * .68) <= 2, animation
+                (args.output / f'animation-{run}.json').write_text(json.dumps(animation, indent=2)+'\n')
                 faults = [row['fault'] for row in trace['received'] if row['type'] == 'error']
                 assert len(faults) == 1, trace
                 fault = faults[0]

@@ -61,6 +61,8 @@ export class ModelViewer {
   private feedbackUntil = 0;
   private feedbackPoint?: THREE.Vector3;
   private faulted = false;
+  private faultStart?: number;
+  private faultImage?: ImageData;
   private orientation?: {
     start: number;
     from: THREE.Vector3;
@@ -207,6 +209,7 @@ export class ModelViewer {
       this.onHover?.(null),
     );
     this.renderer.setAnimationLoop((now) => {
+      if (this.faulted && this.faultStart !== undefined) this.paintFault(now);
       if (this.feedbackId && now >= this.feedbackUntil) {
         this.feedbackId = undefined;
         this.inputFeedback.hidden = true;
@@ -733,23 +736,44 @@ export class ModelViewer {
     this.dirty = true;
   }
   fault(active: boolean) {
+    if (active === this.faulted) return;
+    const context = this.lcd.getContext("2d")!;
     this.faulted = active;
-    if (this.lcdImage)
-      this.lcd.getContext("2d")!.putImageData(this.lcdImage, 0, 0);
-    if (active) this.paintFault();
+    if (active) {
+      this.faultImage = this.lcdImage ?? context.getImageData(0, 0, this.lcd.width, this.lcd.height);
+      this.faultStart = matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? undefined : performance.now();
+      this.paintFault();
+    } else {
+      const image = this.lcdImage ?? this.faultImage;
+      if (image) context.putImageData(image, 0, 0);
+      this.faultImage = undefined;
+      this.faultStart = undefined;
+      this.host.dataset.faultAnimation = "none";
+    }
     this.texture.needsUpdate = true;
     this.dirty = true;
   }
-  private paintFault() {
+  private paintFault(now = performance.now()) {
     const c = this.lcd.getContext("2d")!,
       w = this.lcd.width,
       h = this.lcd.height,
       scale = (w * 0.8) / 278,
       x = (w - 270 * scale) / 2,
       y = (h - 80 * scale) / 2;
+    const progress = this.faultStart === undefined ? 1 : Math.min(1, Math.max(0, (now - this.faultStart) / 260)),
+      ease = 1 - (1 - progress) ** 3,
+      dialogScale = 0.96 + 0.04 * ease,
+      image = this.lcdImage ?? this.faultImage;
+    // Recompose from the guest frame each time; alpha must never accumulate.
+    if (image) c.putImageData(image, 0, 0);
     c.save();
-    c.fillStyle = "rgba(0, 0, 0, 0.12)";
+    c.fillStyle = `rgba(0, 0, 0, ${0.32 * ease})`;
     c.fillRect(0, 0, w, h);
+    c.globalAlpha = ease;
+    c.translate(w / 2, h / 2 + (8 * w / 720) * (1 - ease));
+    c.scale(dialogScale, dialogScale);
+    c.translate(-w / 2, -h / 2);
     c.translate(x, y);
     c.scale(scale, scale);
     c.fillStyle = "#000";
@@ -782,6 +806,10 @@ export class ModelViewer {
     c.fillText("Sorry, the emulator", 65, 31);
     c.fillText("stopped.", 65, 51);
     c.restore();
+    this.host.dataset.faultAnimation = progress < 1 ? "entering" : "settled";
+    if (progress === 1) this.faultStart = undefined;
+    this.texture.needsUpdate = true;
+    this.dirty = true;
   }
   private fit() {
     this.dirty = this.leadersDirty = true;
