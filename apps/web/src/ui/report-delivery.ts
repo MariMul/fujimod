@@ -15,11 +15,12 @@ async function database(): Promise<IDBDatabase> {
 
 /** Commit the latest ZIP before allowing navigation away from the simulator. */
 export async function storePendingReport(report: PendingReport): Promise<void> {
+  const stored = { bytes: await report.blob.arrayBuffer(), name: report.name, issueURL: report.issueURL };
   const db = await database();
   try {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction('reports', 'readwrite');
-      tx.objectStore('reports').put(report, 'latest');
+      tx.objectStore('reports').put(stored, 'latest');
       tx.oncomplete = () => resolve();
       tx.onerror = tx.onabort = () => reject(tx.error);
     });
@@ -33,7 +34,9 @@ export async function readPendingReport(): Promise<PendingReport | undefined> {
       return await new Promise((resolve, reject) => {
         const tx = db.transaction('reports', 'readonly');
         const request = tx.objectStore('reports').get('latest');
-        tx.oncomplete = () => resolve(request.result);
+        tx.oncomplete = () => resolve(request.result && request.result.bytes instanceof ArrayBuffer
+          ? {blob: new Blob([request.result.bytes], {type: 'application/zip'}), name: request.result.name, issueURL: request.result.issueURL}
+          : undefined);
         tx.onerror = tx.onabort = () => reject(tx.error);
       });
     } finally { db.close(); }

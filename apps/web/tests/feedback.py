@@ -49,7 +49,7 @@ async def check(args):
                 request.onsuccess=()=>resolve(request.result);
               });
               db.close();
-              const hash=await crypto.subtle.digest('SHA-256', await report.blob.arrayBuffer());
+              const hash=await crypto.subtle.digest('SHA-256', report.bytes);
               return Array.from(new Uint8Array(hash), b=>b.toString(16).padStart(2,'0')).join('');
             }''')
             async with page.expect_download(timeout=60000) as retry:
