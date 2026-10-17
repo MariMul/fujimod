@@ -373,10 +373,10 @@ python tests/feedback.py --url 'https://your-host.ts.net:port/?scenario=x70-movi
   --output build/fresh-feedback-proof
 ```
 
-## Local simulator reports
+## Browser bug reports during development
 
 The development server saves feedback and detected simulator, worker and JavaScript
-faults from Emulator and Dev Tools under `reports/<report-id>/`. `metadata.json`
+faults from Emulator and Dev Tools under `browser-bug-reports/<report-id>/`. `metadata.json`
 is written first; `report.zip` adds guest state, runtime identity, recent inputs
 and logs. The ZIP’s `report.json` is saved alongside it for direct inspection.
 Dev Tools includes binary USB traces. Unavailable snapshots are recorded

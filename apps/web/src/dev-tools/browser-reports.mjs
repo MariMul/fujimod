@@ -48,7 +48,7 @@ try {
   const deadline = Date.now() + 90000;
   while (!saved.length && Date.now() < deadline) await page.waitForTimeout(250);
   assert.ok(saved.length, await page.locator('.dt-workspace').innerText());
-  const folder = new URL(`../../reports/${saved[0]}/`, import.meta.url);
+  const folder = new URL(`../../browser-bug-reports/${saved[0]}/`, import.meta.url);
   const manifest = JSON.parse(await readFile(new URL('metadata.json', folder), 'utf8'));
   assert.equal(manifest.source, 'dev-tools');
   assert.equal(manifest.event, 'crash');

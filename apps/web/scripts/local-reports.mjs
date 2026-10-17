@@ -134,7 +134,7 @@ export function simulatorReports() {
           .catch(next);
       });
       server.middlewares.use(
-        localReports(resolve(server.config.root, 'reports'), server.config.logger),
+        localReports(resolve(server.config.root, 'browser-bug-reports'), server.config.logger),
       );
     },
   };
