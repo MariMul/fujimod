@@ -59,9 +59,13 @@ An incomplete exchange leaves the session in `CompletionUnknown`, where further
 I/O is rejected. `close()` consumes the session on both success and failure:
 `Closed` means its two-byte C4 reply was received; a failed or malformed close
 leaves `CompletionUnknown` and cannot be retried. The two reply bytes remain
-opaque and do not certify a camera power cycle. Releasing Python objects does not send a camera reset, mode
-transition or rollback. The consuming workflow owns firmware policy and cleanup
-when completion and ownership are known.
+opaque and do not certify a camera power cycle. Releasing Python objects does
+not send a camera reset, mode transition or rollback. The consuming workflow owns firmware policy and cleanup
+when completion and ownership are known. When a completed command started
+application work whose completion or ownership is uncertain, `session.abandon()`
+releases host resources without issuing C4 or cleanup. Its terminal state is
+`Abandoned`, and all further I/O is rejected. Abandoning cannot stop firmware
+execution. Close a range reader first if it still owns the session.
 
 For Python protocol/ownership tests, build an instrumented wheel with
 `maturin build --manifest-path bindings/python/Cargo.toml --features testing`.

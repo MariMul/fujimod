@@ -174,3 +174,28 @@ def test_completed_close_preserves_opaque_reply_and_rejects_further_io():
         with pytest.raises(usb.ClosedSessionError):
             operation()
     assert script.remaining == 0
+
+
+@pytest.mark.parametrize('failed',[False,True])
+def test_abandon_releases_host_session_without_close_or_cleanup(failed):
+    steps=[E.control(control(0xC2, 2)), E.disconnected(2, b'')] if failed else []
+    session, script = opened(steps)
+    if failed:
+        with pytest.raises(usb.TransferError): session.ping()
+    session.abandon()
+    assert session.state == usb.SessionState.Abandoned
+    for operation in (session.close, session.ping, session.abandon,
+                      lambda: blocking.memory.read_chunks(session,0x1000,4)):
+        with pytest.raises(usb.ClosedSessionError): operation()
+    assert script.remaining == 0
+
+
+def test_abandon_does_not_revoke_a_range_readers_ownership():
+    session, script = opened()
+    reader=blocking.memory.read_chunks(session,0x1000,4)
+    with pytest.raises(usb.SessionBusyError): session.abandon()
+    assert session.state == usb.SessionState.ReadingRange
+    reader.close()
+    session.abandon()
+    assert session.state == usb.SessionState.Abandoned
+    assert script.remaining == 0

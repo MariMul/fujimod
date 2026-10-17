@@ -120,6 +120,7 @@ enum SessionState {
     Ready,
     CompletionUnknown,
     Closed,
+    Abandoned,
     ReadingRange,
 }
 #[pyclass(module = "fujimod.usb", eq, from_py_object)]
@@ -395,11 +396,13 @@ enum SessionSlot {
     ReadingRange,
     Closed,
     CompletionUnknown,
+    Abandoned,
 }
 
 enum BindingError {
     Busy,
     Closed,
+    Abandoned,
     CompletionUnknown,
     Poisoned,
     Protocol(usb::Error),
@@ -415,16 +418,25 @@ impl Session {
             let session = match &mut *guard {
                 SessionSlot::Open(session) => session,
                 SessionSlot::Closed => return Err(BindingError::Closed),
+                SessionSlot::Abandoned => return Err(BindingError::Abandoned),
                 SessionSlot::CompletionUnknown => return Err(BindingError::CompletionUnknown),
                 SessionSlot::ReadingRange => return Err(BindingError::Busy),
             };
             operation(session).map_err(BindingError::Protocol)
         });
-        result.map_err(|error| match error {
+        result.map_err(|error| error.into_python(py))
+    }
+}
+impl BindingError {
+    fn into_python(self, py: Python<'_>) -> PyErr {
+        match self {
             BindingError::Busy => {
                 SessionBusyError::new_err("session is owned by an active range reader")
             }
             BindingError::Closed => ClosedSessionError::new_err("session is closed"),
+            BindingError::Abandoned => ClosedSessionError::new_err(
+                "session was abandoned without closing the camera session",
+            ),
             BindingError::CompletionUnknown => CompletionUnknownError::new_err(
                 "session close did not complete; further I/O is unavailable",
             ),
@@ -432,7 +444,7 @@ impl Session {
                 CompletionUnknownError::new_err("session mutex was poisoned; completion unknown")
             }
             BindingError::Protocol(error) => convert_error(py, error),
-        })
+        }
     }
 }
 #[pymethods]
@@ -480,6 +492,7 @@ impl Session {
             .map_err(|_| CompletionUnknownError::new_err("session mutex was poisoned"))?;
         Ok(match &*guard {
             SessionSlot::Closed => SessionState::Closed,
+            SessionSlot::Abandoned => SessionState::Abandoned,
             SessionSlot::CompletionUnknown => SessionState::CompletionUnknown,
             SessionSlot::ReadingRange => SessionState::ReadingRange,
             SessionSlot::Open(session) => match session.state() {
@@ -501,43 +514,55 @@ impl Session {
             .map(|b| PyBytes::new(py, &b))
     }
     fn close<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        let session = {
+        let result = py.detach(|| {
+            let mut slot = self.inner.lock().map_err(|_| BindingError::Poisoned)?;
+            match &*slot {
+                SessionSlot::Closed => return Err(BindingError::Closed),
+                SessionSlot::Abandoned => return Err(BindingError::Abandoned),
+                SessionSlot::CompletionUnknown => return Err(BindingError::CompletionUnknown),
+                SessionSlot::ReadingRange => return Err(BindingError::Busy),
+                SessionSlot::Open(_) => (),
+            }
+            let SessionSlot::Open(session) =
+                std::mem::replace(&mut *slot, SessionSlot::CompletionUnknown)
+            else {
+                unreachable!("validated slot under lock")
+            };
+            let reply = block_on(session.close()).map_err(BindingError::Protocol)?;
+            // Only a completed C4 exchange can establish Closed. Keep the lock
+            // across close so another host operation cannot race its result.
+            *slot = SessionSlot::Closed;
+            Ok(reply)
+        });
+        result
+            .map(|reply| PyBytes::new(py, &reply))
+            .map_err(|error| error.into_python(py))
+    }
+    /// Release host resources without a C4 exchange or any camera cleanup.
+    /// Use when application-level execution/ownership is uncertain even if the
+    /// last USB exchange completed. This cannot stop execution on the camera.
+    fn abandon(&self, py: Python<'_>) -> PyResult<()> {
+        py.detach(|| {
             let mut slot = self
                 .inner
                 .lock()
                 .map_err(|_| CompletionUnknownError::new_err("session mutex was poisoned"))?;
             match &*slot {
-                SessionSlot::Closed => {
-                    return Err(ClosedSessionError::new_err("session is closed"));
-                }
-                SessionSlot::CompletionUnknown => {
-                    return Err(CompletionUnknownError::new_err(
-                        "session close did not complete; further I/O is unavailable",
-                    ));
-                }
                 SessionSlot::ReadingRange => {
                     return Err(SessionBusyError::new_err(
                         "session is owned by an active range reader",
                     ));
                 }
-                SessionSlot::Open(_) => (),
+                SessionSlot::Closed | SessionSlot::Abandoned => {
+                    return Err(ClosedSessionError::new_err(
+                        "session is no longer available",
+                    ));
+                }
+                SessionSlot::Open(_) | SessionSlot::CompletionUnknown => (),
             }
-            match std::mem::replace(&mut *slot, SessionSlot::CompletionUnknown) {
-                SessionSlot::Open(session) => session,
-                _ => unreachable!("validated slot under lock"),
-            }
-        };
-        let reply = py
-            .detach(|| block_on(session.close()))
-            .map_err(|e| convert_error(py, e))?;
-        // Only a completed C4 exchange can establish Closed. Failed or unwound
-        // closes leave the terminal CompletionUnknown slot in place.
-        *self
-            .inner
-            .lock()
-            .map_err(|_| CompletionUnknownError::new_err("session mutex was poisoned"))? =
-            SessionSlot::Closed;
-        Ok(PyBytes::new(py, &reply))
+            *slot = SessionSlot::Abandoned;
+            Ok(())
+        })
     }
     fn device_info(&self, py: Python<'_>, selector: InfoSelector) -> PyResult<String> {
         self.with(py, |s| block_on(s.device_info(selector.into())))

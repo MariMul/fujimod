@@ -44,7 +44,11 @@ impl Reader {
             .lock()
             .map_err(|_| CompletionUnknownError::new_err("session mutex was poisoned"))?;
         match &*slot {
-            SessionSlot::Closed => return Err(ClosedSessionError::new_err("session is closed")),
+            SessionSlot::Closed | SessionSlot::Abandoned => {
+                return Err(ClosedSessionError::new_err(
+                    "session is no longer available",
+                ));
+            }
             SessionSlot::CompletionUnknown => {
                 return Err(CompletionUnknownError::new_err(
                     "session close did not complete; further I/O is unavailable",
