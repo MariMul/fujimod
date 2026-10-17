@@ -50,6 +50,11 @@ test('development diagnostics capture async failures, console panics and rendere
   assert.equal(sent[2].detail, 'GPU failure https://example.com/file');
   assert.equal(sent[4].simulation, '{"ready":false}');
   assert.equal(sent[4].webgpu, true);
+  events['camera-boot-memory']({ detail: { stage: 'board-created', wasmMemoryBytes: 600000000, peakWasmMemoryBytes: 700000000 } });
+  assert.equal(sent[5].kind, 'emulator-memory');
+  assert.equal(sent[5].emulatorBootStage, 'board-created');
+  assert.equal(sent[5].emulatorMemoryBytes, 600000000);
+  assert.equal(sent[5].emulatorPeakMemoryBytes, 700000000);
 });
 
 test('diagnostic endpoint saves valid reports and rejects oversized, malformed and cross-origin requests', async () => {

@@ -8,7 +8,7 @@ test('the installed station has matching provenance and bounded geometry and tex
   const manifest = JSON.parse(await readFile(new URL('environment.json', root), 'utf8'));
   const bytes = await readFile(new URL('assets/scene.glb', root));
   assert.equal(bytes.readUInt32LE(0), 0x46546c67, 'Pull the curated GLB through Git LFS');
-  assert.ok(bytes.length < 32 * 1024 * 1024);
+  assert.ok(bytes.length < 20 * 1024 * 1024);
   assert.equal(createHash('sha256').update(bytes).digest('hex'), manifest.sha256);
   const jsonSize = bytes.readUInt32LE(12);
   const gltf = JSON.parse(bytes.subarray(20, 20 + jsonSize).toString());
@@ -31,6 +31,18 @@ test('the installed station has matching provenance and bounded geometry and tex
       offset += 2 + jpeg.readUInt16BE(offset + 2);
     }
     assert.ok(dimensions, 'JPEG must declare its dimensions');
-    assert.ok(dimensions.every(d => d <= 4096));
+    assert.ok(dimensions.every(d => d <= 2048));
   }
+});
+
+test('the camera fits its geometry budget and retains every authored control and dial face', async () => {
+  const bytes = await readFile(new URL('../public/devices/x70/x70.glb', import.meta.url));
+  assert.ok(bytes.length < 5 * 1024 * 1024);
+  const gltf = JSON.parse(bytes.subarray(20, 20 + bytes.readUInt32LE(12)).toString());
+  const parts = JSON.parse(await readFile(new URL('../devices/x70/parts.json', import.meta.url), 'utf8'));
+  const names = new Set(gltf.nodes.map(node => node.name));
+  const required = [parts.screen, ...Object.values(parts.inputs).flatMap(input => Array.isArray(input) ? input : input.nodes), ...Object.values(parts.rotaries).flat()];
+  for (const name of required) assert.ok(names.has(name), `Missing camera node: ${name}`);
+  const vertices = gltf.meshes.flatMap(mesh => mesh.primitives).reduce((count, primitive) => count + gltf.accessors[primitive.attributes.POSITION].count, 0);
+  assert.ok(vertices < 130000);
 });

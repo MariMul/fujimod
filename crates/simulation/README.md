@@ -48,7 +48,7 @@ completed frame; display rendering is independent.
 
 Crouch End Station is installed and loads by default in the browser. The same
 GLB is used on every device and by native scenarios. It contains 347,393 faces,
-512,089 vertices and a 4096 px photographic atlas (23,673,656 bytes). The scan has
+512,089 vertices and a 2048 px photographic atlas (20,055,032 bytes). The scan has
 incomplete geometry outside its captured coverage; walking stops at floor gaps.
 Source units are treated as metres, with explicit placement and a reviewed
 street spawn. This is not a surveyed physical calibration.
@@ -156,3 +156,21 @@ Bevy tutorials or custom equivalents:
 - [Depth of field](https://github.com/bevyengine/bevy/blob/v0.20.0/examples/3d/depth_of_field.rs)
 - [glTF texture/mipmap preparation](https://github.com/bevyengine/bevy/blob/v0.20.0/examples/large_scenes/mipmap_generator/README.md)
 - [Sketchfab Download API](https://sketchfab.com/developers/download-api/downloading-models)
+
+The browser uploads the camera before starting the environment load, so both
+GLBs and their decoded textures do not peak together in an unshrinkable Wasm heap.
+The X70 body uses a separately simplified GLB (4,631,148 bytes, 118,704 vertices);
+all authored control nodes, materials, dial labels and pivots are retained.
+`tools/prepare-camera.mjs SOURCE.glb FRESH_RUNTIME.glb` reproduces that reduction
+from the original asset (SHA-256 `1e6c2c6a30c47a9b30540682db5457c4fb51a7a7d9ffcc3a09d8c2f15c72306e`,
+the version tracked before this optimization). Both tools use the same pinned
+`tools/package-lock.json`.
+
+On the development preview (2026-10-17, desktop Chromium, WebGL2, station plus
+X70), the renderer's linear-memory high-water mark fell from 329,711,616 to
+165,281,792 bytes (about 50%). This measures the unshrinkable Wasm heap, not
+Safari process RSS or GPU allocations. The separate Pyodide emulator still
+reserves 941,621,248 bytes, including guest RAM; these asset changes do not halve
+the combined tab. Development diagnostics now record emulator memory at each
+boot stage, including before a camera becomes ready. Phone stability still
+requires verification on the actual device.

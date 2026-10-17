@@ -77,6 +77,7 @@ export class ModelViewer {
   private worldProgress = { seconds: -1, at: performance.now() };
   private wasmMemory?: WebAssembly.Memory;
   private ready: Promise<void>;
+  private environment?: Record<string, unknown>;
   private requestID = 0;
   private requests = new Map<number, (hit: ModelHit | null) => void>();
   private held = new Set<number>();
@@ -201,7 +202,7 @@ export class ModelViewer {
       );
       if (!result.ok) throw Error(`Environment unavailable: ${environment}`);
       const data = await result.json();
-      this.send({ type: 'environment', data });
+      this.environment = data;
       const credit = document.createElement('a');
       credit.className = 'environment-credit';
       credit.href = data.source;
@@ -248,6 +249,12 @@ export class ModelViewer {
       this.state.ready = false;
       requestAnimationFrame(check);
     });
+    // Decode/upload one GLB at a time. Wasm heaps cannot shrink after a
+    // simultaneous camera + scan + photographic texture decode peak.
+    if (generation === this.generation && this.environment) {
+      this.send({ type: 'environment', data: this.environment });
+      this.environment = undefined;
+    }
   }
   private poll() {
     if (this.rendererFailed) return;

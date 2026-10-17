@@ -27,7 +27,7 @@ for (const mesh of document.getRoot().listMeshes()) {
   }
 }
 await document.transform(
-  textureCompress({ encoder: sharp, targetFormat: 'jpeg', resize: [4096, 4096], quality: 85 }),
+  textureCompress({ encoder: sharp, targetFormat: 'jpeg', resize: [2048, 2048], quality: 85 }),
   unlit(), prune({ keepAttributes: true }),
 );
 await io.write(destination, document);

@@ -2,6 +2,7 @@
 (() => {
   const session = crypto.randomUUID();
   let reports = 0;
+  let bootMemory;
   const clean = (value) =>
     String(value)
       .replace(/(https?:\/\/[^\s?#]+)[?#][^\s]*/g, '$1')
@@ -27,8 +28,9 @@
       renderer: state?.renderer,
       backend: state?.rendererBackend,
       wasmMemoryBytes: state?.wasmMemoryBytes,
-      emulatorMemoryBytes: window.cameraPerformance?.runtime?.wasmMemoryBytes,
-      emulatorPeakMemoryBytes: window.cameraPerformance?.runtime?.peakWasmMemoryBytes,
+      emulatorMemoryBytes: window.cameraPerformance?.runtime?.wasmMemoryBytes ?? bootMemory?.wasmMemoryBytes,
+      emulatorPeakMemoryBytes: window.cameraPerformance?.runtime?.peakWasmMemoryBytes ?? bootMemory?.peakWasmMemoryBytes,
+      emulatorBootStage: bootMemory?.stage,
       rendererError: state?.rendererError,
       stage: state?.rendererStage,
       simulation: state?.simulation,
@@ -85,6 +87,10 @@
     report('unhandledrejection', describe(event.reason)),
   );
   document.addEventListener('visibilitychange', () => report('visibility', ''));
+  window.addEventListener('camera-boot-memory', event => {
+    bootMemory = event.detail;
+    report('emulator-memory', event.detail.stage);
+  });
   report('startup', '');
   for (const seconds of [5, 15, 30, 60]) setTimeout(() => report('checkpoint', ''), seconds * 1000);
 })();

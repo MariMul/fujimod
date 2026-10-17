@@ -192,6 +192,11 @@ export class WorkerEngine implements Engine {
     await new Promise<void>((resolve, reject) => {
       this.bootReject = reject;
       this.worker.onmessage = ({ data }) => {
+        if (data.type === "boot_memory") {
+          window.dispatchEvent(new CustomEvent("camera-boot-memory", {
+            detail: { stage: data.stage, ...data.runtime },
+          }));
+        }
         if (data.runtime) {
           this.latestRuntime = data.runtime;
           if (data.runtime.identity)

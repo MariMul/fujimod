@@ -131,6 +131,7 @@ function recordInput(action: string, options: Record<string, unknown> = {}) {
 }
 function bootStage(name: string) {
   bootStages.push({ name, seconds: (performance.now() - bootStarted) / 1000 });
+  send("boot_memory", { stage: name, runtime: runtimeMetrics() });
 }
 function configurePreview() {
   previewPolicy = JSON.parse(runtime().runPython("transport.preview(session)"));
