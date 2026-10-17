@@ -7,6 +7,7 @@ import { RotaryDrag } from './rotary-drag';
 
 export interface ModelData {
   url: string;
+  rotaries?: Record<string, string[]>;
   yaw: number;
   physical_width: number;
   optics: { focus_distance: number; aperture: number; focal_length: number; sensor_height: number };
@@ -18,6 +19,7 @@ export interface ModelData {
   credit: { title: string; author: string; url: string; authorUrl: string; license: string };
 }
 export interface ModelHit {
+  direction?: {x: number; y: number};
   id: string;
   point?: { x: number; y: number };
   surfacePoint?: [number, number, number];
@@ -71,6 +73,7 @@ export class ModelViewer {
   private simulation!: SimulationModule;
   private started = false;
   private rendererFailed = false;
+  private worldProgress = { seconds: -1, at: performance.now() };
   private wasmMemory?: WebAssembly.Memory;
   private ready: Promise<void>;
   private requestID = 0;
@@ -178,10 +181,16 @@ export class ModelViewer {
     this.simulation.start('#simulation-canvas', new URL('.', document.baseURI).href);
     this.host.dataset.rendererStage = 'running';
     this.started = true;
+    const resize = () => {
+      const rect = this.canvas.getBoundingClientRect();
+      this.send({ type: 'viewport', width: Math.round(rect.width), height: Math.round(rect.height) });
+    };
+    new ResizeObserver(resize).observe(this.canvas);
+    resize();
     this.host.dataset.renderer = 'bevy';
     this.host.dataset.rendererVersion = '0.20.0';
     requestAnimationFrame(() => this.poll());
-    const environment = new URLSearchParams(location.search).get('environment');
+    const environment = new URLSearchParams(location.search).get('environment') ?? 'crouch-end-station';
     if (environment && /^[a-z0-9-]+$/.test(environment)) {
       const result = await fetch(
         new URL(`environments/${environment}/environment.json`, document.baseURI),
@@ -248,6 +257,12 @@ export class ModelViewer {
     this.host.dataset.wasmMemoryBytes = String(this.wasmMemory?.buffer.byteLength ?? 0);
     const json = this.simulation.snapshot();
     this.state = JSON.parse(json) ?? {};
+    const now = performance.now();
+    if (document.hidden || !this.state.ready || this.state.worldSeconds !== this.worldProgress.seconds) {
+      this.worldProgress = { seconds: this.state.worldSeconds ?? -1, at: now };
+    } else if (now - this.worldProgress.at > 15000) {
+      throw Error('3D renderer stopped responding. Select WebGL2 or LCD.');
+    }
     if (this.state.mode === this.pendingMode) this.pendingMode = undefined;
     this.host.dataset.simulation = json;
     this.host.dataset.mode = this.state.mode ?? 'inspect';
@@ -308,6 +323,7 @@ export class ModelViewer {
           const part = this.rotary.get(hit.id);
           if (part && this.held.has(event.pointerId)) {
             const gesture = {
+              direction: hit.direction,
               step: (direction: number) => {
                 const id = direction < 0 ? part.negative : part.positive;
                 if (
@@ -437,15 +453,17 @@ export class ModelViewer {
     this.rotaryDrag.cancel();
     this.orbitPointer = undefined;
     this.send({ type: 'toggle_inspect' });
-    if (wasWalking) document.exitPointerLock();
+    if (wasWalking) document.exitPointerLock?.();
     else if (matchMedia('(pointer:fine)').matches) this.captureMouse();
   }
-  private captureMouse() {
-    void this.canvas.requestPointerLock().catch(() => {
-      // Drag-to-look remains available if the browser declines capture.
+  private async captureMouse() {
+    try {
+      await this.canvas.requestPointerLock();
+    } catch {
       this.canvas.dataset.pointerLock = 'unavailable';
-    });
+    }
   }
+
   private touchControls() {
     const stick = document.createElement('div');
     stick.className = 'simulation-stick';
@@ -487,7 +505,7 @@ export class ModelViewer {
       request: id,
       x: event.clientX - rect.left,
       y: event.clientY - rect.top,
-      radius: event.pointerType === 'touch' ? 12 : 4,
+      radius: event.pointerType === 'touch' ? 28 : 8,
     });
     return new Promise((resolve) => this.requests.set(id, resolve));
   }
@@ -502,6 +520,7 @@ export class ModelViewer {
     const supported = new Map(
       inputs.filter((input) => input.supported).map((input) => [input.id, input]),
     );
+    this.send({ type: 'buttons', ids: inputs.filter(input => input.supported && input.kind !== 'dial' && input.kind !== 'ring').map(input => input.id) });
     const add = (id: string, negative: string, positive: string) => {
       if (this.rotary.has(id)) return;
       const part = { id, negative, positive, position: 0 };
@@ -554,11 +573,11 @@ export class ModelViewer {
   }
   faceScreen() {
     this.send({ type: 'face', lens: false });
-    document.exitPointerLock();
+    document.exitPointerLock?.();
   }
   faceLens() {
     this.send({ type: 'face', lens: true });
-    document.exitPointerLock();
+    document.exitPointerLock?.();
   }
   highlight(value: string | string[] | null) {
     this.highlightIDs = typeof value === 'string' ? [value] : (value ?? []);
@@ -624,7 +643,7 @@ export class ModelViewer {
     this.lcd.classList.toggle('flat', mode === 'lcd');
     this.send({ type: 'observe', enabled: mode === '3d' });
     if (mode === '3d') this.uploadLCD();
-    if (mode === 'lcd') document.exitPointerLock();
+    if (mode === 'lcd') document.exitPointerLock?.();
   }
   captureView(): string {
     return (this.host.classList.contains('lcd-mode') ? this.lcd : this.canvas).toDataURL(

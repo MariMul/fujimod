@@ -1,6 +1,6 @@
 //! One Bevy world renders both the sensor and the observer. Camera-body entities
 //! occupy a separate render layer and can never appear in the sensor image.
-use crate::{InteractionMode, Simulation, world::Optics};
+use crate::{InteractionMode, Simulation, navigation::Navigation, world::Optics};
 #[cfg(not(target_arch = "wasm32"))]
 use bevy::post_process::dof::DepthOfField;
 use bevy::{
@@ -40,12 +40,16 @@ pub struct ModelDefinition {
     pub screen: String,
     pub inputs: BTreeMap<String, Value>,
     #[serde(default)]
+    pub rotaries: BTreeMap<String, Vec<String>>,
+    #[serde(default)]
     pub order: Vec<String>,
     #[serde(default)]
     pub regions: BTreeMap<String, BTreeMap<String, String>>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct EnvironmentDefinition {
+    #[serde(default = "sky_background")]
+    pub background: [f32; 3],
     pub id: String,
     pub scene: String,
     #[serde(default)]
@@ -58,6 +62,9 @@ pub struct EnvironmentDefinition {
     pub yaw: f32,
     #[serde(default)]
     pub unlit: bool,
+}
+fn sky_background() -> [f32; 3] {
+    [0.55, 0.65, 0.75]
 }
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -90,6 +97,9 @@ pub enum Command {
     Highlight {
         ids: Vec<String>,
     },
+    Buttons {
+        ids: Vec<String>,
+    },
     DefineRotary {
         id: String,
         aliases: Vec<String>,
@@ -107,6 +117,10 @@ pub enum Command {
     },
     Sensor {
         enabled: bool,
+    },
+    Viewport {
+        width: u32,
+        height: u32,
     },
     Observe {
         enabled: bool,
@@ -170,15 +184,20 @@ struct ViewerState {
     prepared: bool,
     environment: Option<Entity>,
     environment_ready: bool,
+    navigation_pending: Option<Entity>,
     targets: BTreeMap<String, Entity>,
     rotaries: BTreeMap<String, Entity>,
+    rotary_definitions: BTreeMap<String, Vec<String>>,
     highlighted: Vec<String>,
     projection_key: Vec<f32>,
     projected: BTreeMap<String, Value>,
     sensor_enabled: bool,
+    viewport: Option<Vec2>,
+    button_ids: Vec<String>,
     readback_pending: bool,
     readback_elapsed: f32,
     sensor_dirty: bool,
+    grounded: bool,
     last_sensor_key: Vec<f32>,
     sequence: u64,
     error: Option<String>,
@@ -190,6 +209,8 @@ struct Textures {
 }
 #[derive(Component)]
 struct Observer;
+#[derive(Resource)]
+struct StudioLight(EnvironmentMapLight);
 #[derive(Component)]
 struct Sensor;
 #[derive(Component)]
@@ -238,12 +259,14 @@ impl Plugin for SimulationPlugin {
         app.insert_resource(PresentationSettings(self.presentation))
             .insert_resource(Host(self.bridge.clone()))
             .init_resource::<Simulation>()
+            .init_resource::<Navigation>()
             .init_resource::<ViewerState>()
             .add_systems(Startup, setup)
             .add_observer(scene_ready)
             .add_systems(
                 Update,
                 (
+                    apply_studio_light,
                     process_commands,
                     advance,
                     update_rotaries,
@@ -314,27 +337,39 @@ fn setup(
     );
     sensor.texture_descriptor.usage |= TextureUsages::COPY_SRC;
     let sensor = images.add(sensor);
-    commands.spawn((
-        Camera3d::default(),
-        Observer,
-        Msaa::Off,
-        Fxaa::default(),
-        Camera {
-            clear_color: Color::srgb(0.035, 0.04, 0.05).into(),
-            is_active: matches!(presentation.0, Presentation::Observer),
-            ..default()
-        },
-        Projection::Perspective(PerspectiveProjection {
-            fov: 45_f32.to_radians(),
-            near: 0.005,
-            far: 2000.,
-            ..default()
-        }),
-        Tonemapping::None,
-        DebandDither::Disabled,
-        RenderLayers::layer(0).with(1),
-        Transform::default(),
-    ));
+    let observer = commands
+        .spawn((
+            Camera3d::default(),
+            Observer,
+            bevy::camera::Hdr,
+            Msaa::Off,
+            Fxaa::default(),
+            Camera {
+                clear_color: Color::srgb(0.035, 0.04, 0.05).into(),
+                is_active: matches!(presentation.0, Presentation::Observer),
+                ..default()
+            },
+            Projection::Perspective(PerspectiveProjection {
+                fov: 45_f32.to_radians(),
+                near: 0.005,
+                far: 2000.,
+                ..default()
+            }),
+            Tonemapping::ReinhardLuminance,
+            DebandDither::Disabled,
+            RenderLayers::layer(0).with(1),
+            Transform::default(),
+        ))
+        .id();
+    // Bound initial allocations before the web layout has a visible canvas.
+    #[cfg(target_arch = "wasm32")]
+    commands
+        .entity(observer)
+        .insert(bevy::camera::MainPassResolutionOverride(UVec2::new(
+            640, 480,
+        )));
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = observer;
     let sensor_camera = commands
         .spawn((
             Camera3d::default(),
@@ -379,12 +414,43 @@ fn setup(
         Transform::from_xyz(3., 6., 4.).looking_at(Vec3::ZERO, Vec3::Y),
         RenderLayers::layer(0).with(1),
     ));
+    let environment = crate::lighting::studio_light(&mut images);
+    // Broad reflected sky/ground lights metal as well as diffuse surfaces.
+    commands.spawn((
+        DirectionalLight {
+            illuminance: 1600.,
+            color: Color::srgb(0.65, 0.75, 1.),
+            shadow_maps_enabled: false,
+            ..default()
+        },
+        Transform::from_xyz(-3., 2., -4.).looking_at(Vec3::ZERO, Vec3::Y),
+        RenderLayers::layer(1),
+    ));
+    commands.spawn((
+        DirectionalLight {
+            illuminance: 1000.,
+            shadow_maps_enabled: false,
+            ..default()
+        },
+        Transform::from_xyz(-2., 3., 5.).looking_at(Vec3::ZERO, Vec3::Y),
+        RenderLayers::layer(1),
+    ));
+    commands.insert_resource(StudioLight(environment));
     commands.insert_resource(GlobalAmbientLight {
         color: Color::WHITE,
-        brightness: 180.,
+        brightness: 25.,
         ..default()
     });
     commands.insert_resource(Textures { lcd, sensor });
+}
+fn apply_studio_light(
+    mut commands: Commands,
+    light: Res<StudioLight>,
+    cameras: Query<Entity, (With<Observer>, Without<EnvironmentMapLight>)>,
+) {
+    for camera in &cameras {
+        commands.entity(camera).insert(light.0.clone());
+    }
 }
 fn load_scene(world: &mut World, path: String) -> Handle<bevy::world_serialization::WorldAsset> {
     world
@@ -394,6 +460,9 @@ fn load_scene(world: &mut World, path: String) -> Handle<bevy::world_serializati
             settings.load_cameras = false;
             settings.load_lights = false;
             settings.load_animations = false;
+            // Imported textures are immutable. Retain mesh CPU data for picking
+            // and navigation, but release texture pixels after GPU upload.
+            settings.load_materials = RenderAssetUsages::RENDER_WORLD;
             settings.convert_coordinates = Some(GltfConvertCoordinates::default());
         })
         .load(GltfAssetLabel::Scene(0).from_asset(path))
@@ -439,6 +508,14 @@ fn process_commands(world: &mut World) {
                 state.error = None;
             }
             Command::Environment { data } => {
+                for mut camera in world
+                    .query_filtered::<&mut Camera, Or<(With<Observer>, With<Sensor>)>>()
+                    .iter_mut(world)
+                {
+                    camera.clear_color =
+                        Color::srgb(data.background[0], data.background[1], data.background[2])
+                            .into();
+                }
                 let old = world.resource_mut::<ViewerState>().environment.take();
                 if let Some(old) = old {
                     world.despawn(old);
@@ -466,6 +543,8 @@ fn process_commands(world: &mut World) {
                 let mut state = world.resource_mut::<ViewerState>();
                 state.environment = Some(e);
                 state.environment_ready = false;
+                state.navigation_pending = None;
+                state.grounded = false;
                 state.sensor_dirty = true;
                 state.last_sensor_key.clear();
             }
@@ -498,7 +577,31 @@ fn process_commands(world: &mut World) {
                 s.orbit = Vec2::new(if lens { std::f32::consts::PI } else { 0. }, 0.08);
             }
             Command::Highlight { ids } => highlight(world, ids),
-            Command::DefineRotary { id, aliases } => define_rotary(world, id, aliases),
+            Command::Buttons { ids } => world.resource_mut::<ViewerState>().button_ids = ids,
+            Command::Viewport { width, height } => {
+                if width > 0 && height > 0 && width <= 8192 && height <= 8192 {
+                    world.resource_mut::<ViewerState>().viewport =
+                        Some(Vec2::new(width as f32, height as f32));
+                    let observers: Vec<_> = world
+                        .query_filtered::<Entity, With<Observer>>()
+                        .iter(world)
+                        .collect();
+                    for e in observers {
+                        world
+                            .entity_mut(e)
+                            .insert(bevy::camera::MainPassResolutionOverride(UVec2::new(
+                                width, height,
+                            )));
+                    }
+                }
+            }
+            Command::DefineRotary { id, aliases } => {
+                world
+                    .resource_mut::<ViewerState>()
+                    .rotary_definitions
+                    .insert(id.clone(), aliases.clone());
+                define_rotary(world, id, aliases);
+            }
             Command::Rotary {
                 id,
                 position,
@@ -548,9 +651,61 @@ fn scene_ready(event: On<WorldInstanceReady>, mut commands: Commands) {
     // Defer until the spawned hierarchy has propagated transforms.
     commands.entity(event.entity).insert(Prepared);
 }
-fn advance(time: Res<Time<Real>>, mut simulation: ResMut<Simulation>) {
-    simulation.advance(time.delta_secs());
+fn advance(world: &mut World) {
+    let seconds = world.resource::<Time<Real>>().delta_secs();
+    let simulation = world.resource::<Simulation>();
+    let moving = simulation.mode == InteractionMode::Walk && simulation.movement != Vec2::ZERO;
+    // Integrate all host time. Short collision steps prevent tunnelling without
+    // making walking speed depend on the display or the firmware's guest speed.
+    let steps = if moving {
+        (seconds / 0.1).ceil().clamp(1., 100.) as u32
+    } else {
+        1
+    };
+    for _ in 0..steps {
+        advance_step(world, seconds / steps as f32);
+    }
 }
+fn advance_step(world: &mut World, seconds: f32) {
+    let previous = world.resource::<Simulation>().position;
+    world.resource_mut::<Simulation>().advance(seconds);
+    let state = world.resource::<ViewerState>();
+    if !state.environment_ready {
+        return;
+    }
+    let initial = !state.grounded;
+    let position = world.resource::<Simulation>().position;
+    if !initial && position == previous {
+        return;
+    }
+    let navigation = world.resource::<Navigation>();
+    let movement = position - previous;
+    let mut blocked = false;
+    if let Ok(direction) = Dir3::new(movement) {
+        for height in [0.35, 1.3] {
+            blocked |= navigation
+                .raycast(
+                    previous + Vec3::Y * height,
+                    *direction,
+                    movement.length() + 0.2,
+                    false,
+                )
+                .is_some();
+        }
+    }
+    let origin = position + Vec3::Y * if initial { 2. } else { 0.4 };
+    let ground = navigation.raycast(origin, Vec3::NEG_Y, if initial { 4. } else { 0.8 }, true);
+    let mut simulation = world.resource_mut::<Simulation>();
+    match ground {
+        Some(ground) if !blocked && (initial || (ground.y - previous.y).abs() <= 0.4) => {
+            simulation.position.y = ground.y
+        }
+        _ if !initial => simulation.position = previous,
+        _ => {}
+    }
+    world.resource_mut::<ViewerState>().grounded |= ground.is_some();
+}
+
 fn update_poses(
     s: Res<Simulation>,
     state: Res<ViewerState>,
@@ -869,6 +1024,40 @@ fn prepare_model(world: &mut World, root: Entity) {
     world.entity_mut(root).remove::<Prepared>();
     world.resource_mut::<ViewerState>().prepared = true;
 }
+fn build_navigation(world: &World, root: Entity) -> Navigation {
+    let mut navigation = Navigation::default();
+    for e in descendants(world, root) {
+        let (Some(mesh), Some(transform)) =
+            (world.get::<Mesh3d>(e), world.get::<GlobalTransform>(e))
+        else {
+            continue;
+        };
+        let Some(mesh) = world.resource::<Assets<Mesh>>().get(&mesh.0) else {
+            continue;
+        };
+        if let Ok(triangles) = mesh.triangles() {
+            for triangle in triangles {
+                navigation.insert(Triangle3d {
+                    vertices: triangle.vertices.map(|p| transform.transform_point(p)),
+                });
+            }
+        } else if mesh.indices().is_none() {
+            // glTF meshes without normals may be expanded for flat shading.
+            if let Some(VertexAttributeValues::Float32x3(positions)) =
+                mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+            {
+                for triangle in positions.chunks_exact(3) {
+                    navigation.insert(Triangle3d::new(
+                        transform.transform_point(Vec3::from_array(triangle[0])),
+                        transform.transform_point(Vec3::from_array(triangle[1])),
+                        transform.transform_point(Vec3::from_array(triangle[2])),
+                    ));
+                }
+            }
+        }
+    }
+    navigation
+}
 fn prepare_environment(world: &mut World, root: Entity) {
     let unlit = world.get::<EnvironmentRoot>(root).unwrap().unlit;
     for e in descendants(world, root) {
@@ -882,7 +1071,7 @@ fn prepare_environment(world: &mut World, root: Entity) {
         }
     }
     world.entity_mut(root).remove::<Prepared>();
-    world.resource_mut::<ViewerState>().environment_ready = true;
+    world.resource_mut::<ViewerState>().navigation_pending = Some(root);
 }
 fn define_rotary(world: &mut World, id: String, aliases: Vec<String>) {
     if world.resource::<ViewerState>().rotaries.contains_key(&id) {
@@ -924,6 +1113,39 @@ fn define_rotary(world: &mut World, id: String, aliases: Vec<String>) {
     let mut shifted = old;
     shifted.translation -= center;
     world.entity_mut(node).insert((ChildOf(pivot), shifted));
+    let members = world
+        .resource::<ViewerState>()
+        .model
+        .as_ref()
+        .and_then(|d| d.rotaries.get(&id))
+        .cloned()
+        .unwrap_or_default();
+    let siblings: Vec<_> = world
+        .query::<(Entity, &Name, &ChildOf)>()
+        .iter(world)
+        .filter(|(_, name, p)| p.parent() == parent && members.iter().any(|m| m == name.as_str()))
+        .map(|(e, _, _)| e)
+        .collect();
+    for sibling in siblings {
+        let mut transform = *world.get::<Transform>(sibling).unwrap();
+        transform.translation -= center;
+        world
+            .entity_mut(sibling)
+            .insert((ChildOf(pivot), transform));
+        for mesh in descendants(world, sibling) {
+            if world.get::<Mesh3d>(mesh).is_some() {
+                let name = world
+                    .get::<Name>(node)
+                    .map(|n| n.to_string())
+                    .unwrap_or_default();
+                world.entity_mut(mesh).insert(ControlMesh {
+                    node,
+                    name,
+                    ids: vec![id.clone()],
+                });
+            }
+        }
+    }
     let mut state = world.resource_mut::<ViewerState>();
     state.rotaries.insert(id, pivot);
     for alias in aliases {
@@ -996,7 +1218,10 @@ fn pick(world: &mut World, x: f32, y: f32, radius: f32) -> Value {
     let Some((camera, transform)) = camera else {
         return Value::Null;
     };
-    let Ok(ray) = camera.viewport_to_world(&transform, Vec2::new(x, y)) else {
+    let logical = camera.logical_viewport_size().unwrap_or(Vec2::ONE);
+    let viewport = world.resource::<ViewerState>().viewport.unwrap_or(logical);
+    let scale = logical / viewport;
+    let Ok(ray) = camera.viewport_to_world(&transform, Vec2::new(x, y) * scale) else {
         return Value::Null;
     };
     let hits = ray_hits(world, ray);
@@ -1006,6 +1231,15 @@ fn pick(world: &mut World, x: f32, y: f32, radius: f32) -> Value {
     if let Some((e, h)) = hit {
         if let Some(c) = world.get::<ControlMesh>(*e).cloned() {
             let mut id = c.ids[0].clone();
+            if !world.resource::<ViewerState>().button_ids.contains(&id)
+                && !c.ids.iter().any(|id| id == "lcd_touch")
+            {
+                let nearby =
+                    nearby_button(world, &camera, &transform, Vec2::new(x, y), radius, scale);
+                if !nearby.is_null() {
+                    return nearby;
+                }
+            }
             let mut point = h.uv.map(|uv| json!({"x":uv.x,"y":uv.y}));
             if let Some((min, max)) = local_bounds(world, c.node) {
                 let p = world
@@ -1037,21 +1271,53 @@ fn pick(world: &mut World, x: f32, y: f32, radius: f32) -> Value {
                     }
                 }
             }
-            return json!({"id":id,"point":point,"surfacePoint":h.point.to_array()});
+            let direction = world
+                .resource::<ViewerState>()
+                .rotaries
+                .get(&id)
+                .and_then(|e| {
+                    let t = world.get::<GlobalTransform>(*e)?;
+                    let axis = t
+                        .affine()
+                        .transform_vector3(world.get::<Rotary>(*e)?.axis)
+                        .normalize();
+                    let tangent = axis.cross(h.point - t.translation());
+                    let start = camera.world_to_viewport(&transform, h.point).ok()? / scale;
+                    let end = camera
+                        .world_to_viewport(&transform, h.point + tangent)
+                        .ok()?
+                        / scale;
+                    let d = (end - start).try_normalize().unwrap_or(Vec2::X);
+                    Some(json!({"x":d.x,"y":d.y}))
+                });
+            return json!({"id":id,"point":point,"surfacePoint":h.point.to_array(),"direction":direction});
         }
     }
-    // Close touch misses may reach visible control centers, never through the body.
+    nearby_button(world, &camera, &transform, Vec2::new(x, y), radius, scale)
+}
+fn nearby_button(
+    world: &mut World,
+    camera: &Camera,
+    transform: &GlobalTransform,
+    point: Vec2,
+    radius: f32,
+    scale: Vec2,
+) -> Value {
+    let (x, y) = (point.x, point.y);
     if radius > 0. {
         let targets = world.resource::<ViewerState>().targets.clone();
         let mut nearest = None;
         for (id, e) in targets {
+            if !world.resource::<ViewerState>().button_ids.contains(&id) {
+                continue;
+            }
             let Some(p) = target_point(world, e, &id) else {
                 continue;
             };
             let Ok(screen) = camera.world_to_viewport(&transform, p) else {
                 continue;
             };
-            let distance = screen.distance(Vec2::new(x, y));
+            let distance = (screen / scale).distance(Vec2::new(x, y));
             if distance > radius
                 || nearest
                     .as_ref()
@@ -1063,7 +1329,44 @@ fn pick(world: &mut World, x: f32, y: f32, radius: f32) -> Value {
                 nearest = Some((id, distance));
             }
         }
-        if let Some((id, _)) = nearest {
+        if let Some((mut id, _)) = nearest {
+            let node = world.resource::<ViewerState>().targets[&id];
+            let name = world.get::<Name>(node).map(Name::as_str).unwrap_or("");
+            if let Some(regions) = world
+                .resource::<ViewerState>()
+                .model
+                .as_ref()
+                .and_then(|m| m.regions.get(name))
+            {
+                let project = |id: &str| {
+                    target_point(world, node, id)
+                        .and_then(|p| camera.world_to_viewport(transform, p).ok())
+                        .map(|p| p / scale)
+                };
+                if let (Some(center), Some(right), Some(up)) = (
+                    project(&regions["center"]),
+                    project(&regions["right"]),
+                    project(&regions["up"]),
+                ) {
+                    let r = right - center;
+                    let u = up - center;
+                    let d = point - center;
+                    let determinant = r.perp_dot(u);
+                    if determinant.abs() > 0.01 {
+                        let local = Vec2::new(d.perp_dot(u), r.perp_dot(d)) / determinant;
+                        let region = if local.abs().max_element() <= 0.7 {
+                            "center"
+                        } else if local.x.abs() > local.y.abs() {
+                            if local.x < 0. { "left" } else { "right" }
+                        } else if local.y < 0. {
+                            "down"
+                        } else {
+                            "up"
+                        };
+                        id = regions[region].clone();
+                    }
+                }
+            }
             return json!({"id":id});
         }
     }
@@ -1130,6 +1433,16 @@ fn publish(world: &mut World) {
         world.resource_mut::<ViewerState>().error = Some(error);
     }
 
+    // WorldInstanceReady may arrive after transform propagation. Wait for the
+    // following frame before indexing triangles in world space.
+    if let Some(root) = world
+        .resource_mut::<ViewerState>()
+        .navigation_pending
+        .take()
+    {
+        world.insert_resource(build_navigation(world, root));
+        world.resource_mut::<ViewerState>().environment_ready = true;
+    }
     let pending: Vec<_> = world
         .query_filtered::<Entity, With<Prepared>>()
         .iter(world)
@@ -1141,12 +1454,23 @@ fn publish(world: &mut World) {
             prepare_environment(world, e);
         }
     }
+    if world.resource::<ViewerState>().prepared {
+        let definitions = world.resource::<ViewerState>().rotary_definitions.clone();
+        for (id, aliases) in definitions {
+            define_rotary(world, id, aliases);
+        }
+    }
     let camera = world
         .query_filtered::<(&Camera, &GlobalTransform), With<Observer>>()
         .iter(world)
         .next()
         .map(|(c, t)| (c.clone(), *t));
-    let mut key = Vec::new();
+    let mut key = world
+        .resource::<ViewerState>()
+        .viewport
+        .unwrap_or_default()
+        .to_array()
+        .to_vec();
     if let Some((ref camera, transform)) = camera {
         key.extend(transform.to_matrix().to_cols_array());
         key.extend(
@@ -1178,6 +1502,10 @@ fn publish(world: &mut World) {
                     if let Some(p) = target_point(world, node, &id) {
                         if let Ok(screen) = camera.world_to_viewport(&transform, p) {
                             let visible = target_visible(world, node, p, transform.translation());
+                            let logical = camera.logical_viewport_size().unwrap_or(Vec2::ONE);
+                            let viewport =
+                                world.resource::<ViewerState>().viewport.unwrap_or(logical);
+                            let screen = screen * viewport / logical;
                             points.insert(id, json!({"x":screen.x,"y":screen.y,"visible":visible}));
                         }
                     }
@@ -1193,7 +1521,7 @@ fn publish(world: &mut World) {
     let pose = sim.camera_pose();
     let snapshot = json!({"renderer":"bevy","version":"0.20.0","ready":state.prepared,"environmentReady":state.environment_ready,
         "mode":sim.mode,"worldSeconds":sim.elapsed,"cameraPosition":pose.translation.to_array(),"cameraRotation":pose.rotation.to_array(),
-        "observerPosition":sim.observer_pose().translation.to_array(),"sensorSequence":state.sequence,"targets":state.projected,"error":state.error});
+        "observerPosition":sim.observer_pose().translation.to_array(),"sensorSequence":state.sequence,"grounded":state.grounded,"renderSize":state.viewport.map(|v| v.to_array()),"targets":state.projected,"error":state.error});
     world.resource::<Host>().0.0.lock().unwrap().snapshot = snapshot;
 }
 
@@ -1229,12 +1557,35 @@ mod tests {
             .resource_mut::<ViewerState>()
             .targets
             .insert("dial".into(), node);
+        world.resource_mut::<ViewerState>().model = Some(
+            serde_json::from_value(json!({
+                "url":"camera.glb", "yaw":0., "physical_width":0.113, "optics": Optics::default(),
+                "hidden":[], "screen":"lcd", "inputs":{}, "rotaries":{"dial":["face"]}
+            }))
+            .unwrap(),
+        );
+        let face = world
+            .spawn((
+                Name::new("face"),
+                Transform::from_xyz(13., 6.1, 8.),
+                ChildOf(parent),
+            ))
+            .id();
         define_rotary(
             &mut world,
             "dial".into(),
             vec!["left".into(), "right".into()],
         );
         let pivot = world.resource::<ViewerState>().rotaries["dial"];
+        assert_eq!(world.get::<ChildOf>(face).unwrap().parent(), pivot);
+        assert!(
+            world
+                .get::<Transform>(face)
+                .unwrap()
+                .translation
+                .distance(Vec3::new(0., 0.1, 0.))
+                < 0.00001
+        );
         assert_eq!(
             world.get::<Transform>(pivot).unwrap().translation,
             Vec3::new(13., 6., 8.)
@@ -1252,6 +1603,68 @@ mod tests {
             assert!(center.distance(initial_center) < 0.00001);
         }
         assert_eq!(world.resource::<ViewerState>().rotaries["left"], pivot);
+    }
+    #[test]
+    fn walking_uses_scene_geometry_even_when_no_camera_has_rendered_it() {
+        let mut world = World::new();
+        world.init_resource::<Assets<Mesh>>();
+        world.init_resource::<ViewerState>();
+        world.init_resource::<Time<Real>>();
+        world.insert_resource(Simulation {
+            mode: InteractionMode::Walk,
+            movement: Vec2::Y,
+            ..default()
+        });
+        let root = world.spawn_empty().id();
+        let add_box = |world: &mut World, size: Vec3, position: Vec3| {
+            let mut geometry = Mesh::from(Cuboid::from_size(size));
+            if size.y < 0.2 {
+                geometry.duplicate_vertices();
+            }
+            let mesh = world.resource_mut::<Assets<Mesh>>().add(geometry);
+            world.spawn((
+                Mesh3d(mesh),
+                Aabb::from_min_max(-size * 0.5, size * 0.5),
+                Transform::from_translation(position),
+                GlobalTransform::from_translation(position),
+                InheritedVisibility::VISIBLE,
+                ViewVisibility::default(),
+                ChildOf(root),
+            ));
+        };
+        add_box(
+            &mut world,
+            Vec3::new(10., 0.1, 10.),
+            Vec3::new(0., -0.05, 0.),
+        );
+        add_box(
+            &mut world,
+            Vec3::new(10., 3., 0.1),
+            Vec3::new(0., 1.5, -0.6),
+        );
+        world.insert_resource(build_navigation(&world, root));
+        world.resource_mut::<ViewerState>().environment = Some(root);
+        world.resource_mut::<ViewerState>().environment_ready = true;
+        for _ in 0..20 {
+            world
+                .resource_mut::<Time<Real>>()
+                .advance_by(std::time::Duration::from_secs_f32(0.1));
+            advance(&mut world);
+        }
+        let position = world.resource::<Simulation>().position;
+        assert!(
+            position.z < -0.1 && position.z > -0.5,
+            "wall blocks walking: {position:?}"
+        );
+        assert!(position.y.abs() < 0.00001);
+        world.resource_mut::<Simulation>().movement = Vec2::NEG_X;
+        for _ in 0..100 {
+            advance(&mut world);
+        }
+        assert!(
+            world.resource::<Simulation>().position.x > -5.,
+            "cannot walk past the scanned floor"
+        );
     }
     #[test]
     fn invalid_lcd_sizes_never_enter_the_render_queue() {

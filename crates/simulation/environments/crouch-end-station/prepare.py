@@ -1,6 +1,6 @@
 """Pack an authorized Sketchfab glTF download into one portable environment.
 
-No network access, mesh simplification, image resizing, or third-party packages.
+No network access. Optionally install a reviewed, optimized runtime GLB.
 The source archive is kept outside Git. Prepared runtime GLBs are LFS assets.
 """
 from __future__ import annotations
@@ -83,7 +83,7 @@ def pack(source: Path) -> bytes:
             + struct.pack('<II', len(data), 0x004E4942) + data)
 
 
-def prepare(archive: Path, destination: Path, *, scale: float, spawn: list[float], translation: list[float], rotation: list[float]) -> dict:
+def prepare(archive: Path, destination: Path, *, scale: float, spawn: list[float], translation: list[float], rotation: list[float], runtime_scene: Path | None = None) -> dict:
     if not math.isfinite(scale) or scale <= 0 or not all(math.isfinite(v) for v in spawn + translation + rotation):
         raise ValueError("Expected finite positions and a positive scale")
     if destination.exists():
@@ -99,7 +99,9 @@ def prepare(archive: Path, destination: Path, *, scale: float, spawn: list[float
         sources = sorted(root.rglob('*.gltf'))
         if len(sources) != 1:
             raise ValueError('Expected one glTF scene in the Sketchfab archive')
-        packed = pack(sources[0])
+        packed = runtime_scene.read_bytes() if runtime_scene else pack(sources[0])
+        if packed[:4] != b"glTF":
+            raise ValueError("Runtime scene must be a GLB")
     manifest = dict(id='crouch-end-station', title='Crouch End Station', author='artfletch',
         source='https://sketchfab.com/3d-models/crouch-end-station-d2651a5550f34d80b0dba6e971f3a1ae',
         license='https://creativecommons.org/licenses/by/4.0/',
@@ -117,10 +119,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('archive', type=Path)
     parser.add_argument('--output', type=Path, required=True, help='Fresh environment directory; review before installing here')
+    parser.add_argument('--runtime-scene', type=Path, help='Reviewed output of tools/prepare-photogrammetry.mjs')
     parser.add_argument('--scale', type=float, required=True, help='Meters per source unit; verify from geometry')
     parser.add_argument('--spawn', type=float, nargs=3, required=True)
     parser.add_argument('--translation', type=float, nargs=3, default=[0., 0., 0.])
     parser.add_argument('--rotation', type=float, nargs=3, default=[0., 0., 0.], help='XYZ radians')
     args = parser.parse_args()
     print(json.dumps(prepare(args.archive, args.output, scale=args.scale, spawn=args.spawn,
-        translation=args.translation, rotation=args.rotation), indent=2))
+        translation=args.translation, rotation=args.rotation, runtime_scene=args.runtime_scene), indent=2))

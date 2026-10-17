@@ -30,6 +30,25 @@ async function assets(includeBuild = false) {
   await visit(root);
   return files;
 }
+async function streamAsset(req, res, path, contentType) {
+  const info = await stat(path);
+  const gzip = /\.(wasm|glb)$/.test(path) && /\bgzip\b/.test(req.headers['accept-encoding'] || '');
+  const etag = `"${info.size}-${info.mtimeMs}${gzip ? '-gzip' : ''}"`;
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Vary', 'Accept-Encoding');
+  res.setHeader('ETag', etag);
+  if (req.headers['if-none-match'] === etag) {
+    res.statusCode = 304;
+    res.end();
+    return;
+  }
+  if (gzip) res.setHeader('Content-Encoding', 'gzip');
+  else res.setHeader('Content-Length', info.size);
+  if (req.method === 'HEAD') { res.end(); return; }
+  const stream = createReadStream(path);
+  (gzip ? stream.pipe(createGzip({ level: 1 })) : stream).pipe(res);
+}
 /** Serve and package the crate's environment assets without a second source tree. */
 export function simulationAssets() {
   const serve = (server) => {
@@ -39,26 +58,7 @@ export function simulationAssets() {
         pathname === `/@fs${resolve(wasmRoot, backend, 'fujimod_simulation_bg.wasm')}`);
       if (backend) {
         const wasmPath = resolve(wasmRoot, backend, 'fujimod_simulation_bg.wasm');
-        const info = await stat(wasmPath);
-        const gzip = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
-        const etag = `"${info.size}-${info.mtimeMs}${gzip ? '-gzip' : ''}"`;
-        res.setHeader('Content-Type', 'application/wasm');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Vary', 'Accept-Encoding');
-        res.setHeader('ETag', etag);
-        if (req.headers['if-none-match'] === etag) {
-          res.statusCode = 304;
-          res.end();
-          return;
-        }
-        if (gzip) res.setHeader('Content-Encoding', 'gzip');
-        else res.setHeader('Content-Length', info.size);
-        if (req.method === 'HEAD') {
-          res.end();
-          return;
-        }
-        const stream = createReadStream(wasmPath);
-        (gzip ? stream.pipe(createGzip({ level: 1 })) : stream).pipe(res);
+        await streamAsset(req, res, wasmPath, 'application/wasm');
         return;
       }
       if (!pathname.startsWith('/environments/')) return next();
@@ -75,21 +75,8 @@ export function simulationAssets() {
         res.end();
         return;
       }
-      const info = await stat(path);
-      res.setHeader(
-        'Content-Type',
-        path.endsWith('.json')
-          ? 'application/json'
-          : path.endsWith('.glb')
-            ? 'model/gltf-binary'
-            : 'application/octet-stream',
-      );
-      res.setHeader('Content-Length', info.size);
-      if (req.method === 'HEAD') {
-        res.end();
-        return;
-      }
-      createReadStream(path).pipe(res);
+      await streamAsset(req, res, path, path.endsWith('.json') ? 'application/json'
+        : path.endsWith('.glb') ? 'model/gltf-binary' : 'application/octet-stream');
     });
   };
   return {

@@ -187,5 +187,16 @@
     "aperture": 2.8,
     "focal_length": 0.0185,
     "sensor_height": 0.01573
+  },
+  "rotaries": {
+    "shutter_speed": [
+      "LBL_shutter_speed_4"
+    ],
+    "exposure_compensation": [
+      "LBL_xposure_1"
+    ],
+    "aperture": [
+      "LBL_aperture_12"
+    ]
   }
 }

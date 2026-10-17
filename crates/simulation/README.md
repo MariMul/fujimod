@@ -14,7 +14,7 @@ and camera. Right click enters Inspect, releases the mouse and moves the
 observer close to the camera's rear glass. Dragging orbits the observer; the
 physical camera pose and sensor image stay fixed. Right click returns to Walk.
 The on-screen Walk/Inspect toggle and touch stick/drag issue the same commands.
-Focus loss clears movement. The controller is in Rust; browser event capture
+Focus loss clears movement. A spatial index of the static scan supplies ground following, wall checks and floor-gap boundaries, independently of rendering visibility. The controller is in Rust; browser event capture
 and DOM controls stay in the web app.
 
 Interactive movement uses real elapsed time, independently of guest execution
@@ -27,8 +27,7 @@ request's world time, sequence and physical camera pose.
 
 The observer sees world layer 0 and camera-body layer 1. The sensor sees only
 layer 0. It renders a 768×512 image using physical focal length/sensor size and
-Bevy's depth-of-field effect on native renderers. The shared browser build uses
-WebGL 2 without the depth-of-field post-process. Focus/aperture are explicit scenario inputs through
+Bevy's depth-of-field effect on native renderers. Both browser backends omit the depth-of-field post-process. Focus/aperture are explicit scenario inputs through
 `Command::Optics`. Physical body width and initial optics come from the selected
 body definition. The generic headless default is a declared 50 mm / 24 mm sensor-height
 profile; it is not a camera calibration. These are declared approximations, not recovered
@@ -46,6 +45,30 @@ GPU completion. Submission is bounded to one pending readback and one latest
 completed frame; display rendering is independent.
 
 ## Assets
+
+Crouch End Station is installed and loads by default in the browser. The same
+GLB is used on every device and by native scenarios. It contains 347,393 faces,
+512,089 vertices and a 4096 px photographic atlas (23,673,656 bytes). The scan has
+incomplete geometry outside its captured coverage; walking stops at floor gaps.
+Source units are treated as metres, with explicit placement and a reviewed
+street spawn. This is not a surveyed physical calibration.
+
+To prepare a fresh authorized Sketchfab download, extract its glTF archive and
+run the pinned offline asset tool:
+
+```sh
+npm ci --prefix crates/simulation/tools
+node crates/simulation/tools/prepare-photogrammetry.mjs SOURCE/scene.gltf FRESH_RUNTIME.glb
+python3 crates/simulation/environments/crouch-end-station/prepare.py DOWNLOAD.zip \
+  --runtime-scene FRESH_RUNTIME.glb --output FRESH_ENVIRONMENT \
+  --scale 1 --spawn -5 0 0 --translation 0 -6.27 0
+```
+
+The tool preserves texture coordinates during geometry reduction, resizes the
+photographic atlas once for all targets, and retains baked lighting through
+unlit materials. Normals stay in the asset to prevent loader-side vertex expansion. Review orientation/yaw and place the camera inside the scan
+before installing the result. The checked manifest records hashes and geometry
+budgets; attribution records the modifications.
 
 Download Crouch End Station's glTF archive through the authorized Sketchfab
 Download flow. Download requires a signed-in account; the simulator never
@@ -93,17 +116,23 @@ caches generated bindings and optimization until the compiled Wasm changes.
 Only the rendering features in use are enabled; text, animation, gizmos and
 post-processing bundles are excluded from the browser build. Only the command
 and scenario structs enable serialization. The optimized Wasm has a 64 MiB
-build budget to catch accidental feature/bundle growth. All browsers use
-one render pixel per CSS pixel, FXAA without MSAA, and no shadow maps. The LCD
+build budget to catch accidental feature/bundle growth. The observer uses a small prefiltered studio reflection map, directional fill
+and rim lights, HDR tone mapping, FXAA without MSAA, and no shadow maps. Bevy's
+`MainPassResolutionOverride` limits the costly main passes to one pixel per CSS
+pixel even when Safari/Winit allocates a larger backing canvas. Picking and DOM
+projections explicitly map between the camera viewport and CSS coordinates.
+Buttons retain a 28 px touch snapping radius (8 px mouse) with occlusion checks.
+Dial decals are authored as part members and rotate around the same pivot;
+drag direction follows the projected rotational tangent at the grab point. The LCD
 upload reuses its dimensions and reads the existing frame buffer directly.
-LCD-only mode disables the observer camera and its texture uploads.
+LCD-only mode disables the observer camera and its texture uploads. Imported texture pixels are released after GPU upload; meshes retain CPU data for picking and navigation.
 
 After installing an environment, render a native scenario without a window:
 
 ```sh
 cargo run -p fujimod-simulation --example render_scenario -- \
   crates/simulation/environments/crouch-end-station/environment.json \
-  target/simulation-runs/a-fresh-run
+  target/simulation-runs/a-fresh-run apps/web/devices/x70/parts.json
 ```
 
 `apps/web/tests/simulation_browser.py` exercises the real firmware web app:

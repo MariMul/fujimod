@@ -17,8 +17,10 @@ use std::{
 };
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
-    if args.len() != 2 {
-        return Err("Expected ENVIRONMENT_JSON and a fresh output directory".into());
+    if !(2..=3).contains(&args.len()) {
+        return Err(
+            "Expected ENVIRONMENT_JSON, a fresh output directory, and optional CAMERA_JSON".into(),
+        );
     }
     let environment: EnvironmentDefinition = serde_json::from_slice(&std::fs::read(&args[0])?)?;
     let output = PathBuf::from(&args[1]);
@@ -53,6 +55,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     app.finish();
     app.cleanup();
     bridge.send(Command::Environment { data: environment });
+    if let Some(path) = args.get(2) {
+        let camera: serde_json::Value = serde_json::from_slice(&std::fs::read(path)?)?;
+        bridge.send(Command::Optics {
+            data: serde_json::from_value(camera["optics"].clone())?,
+        });
+    }
     bridge.send(Command::Sensor { enabled: true });
     let start = Instant::now();
     while bridge.snapshot()["environmentReady"] != true {
@@ -92,7 +100,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         bytes.extend_from_slice(&frame.rgb);
         std::fs::write(output.join(&name), bytes)?;
         records.push(serde_json::json!({"file":name,"world_seconds":frame.world_seconds,
-            "position":frame.camera_pose.translation.to_array(),"rotation":frame.camera_pose.rotation.to_array()}));
+            "position":frame.camera_pose.translation.to_array(),"grounded":bridge.snapshot()["grounded"],"rotation":frame.camera_pose.rotation.to_array()}));
     }
     if records.is_empty() {
         return Err("Renderer produced no sensor frames".into());
