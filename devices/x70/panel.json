@@ -1,0 +1,235 @@
+{
+  "layout": [
+    {
+      "kind": "grid",
+      "className": "g2",
+      "children": [
+        {
+          "kind": "control",
+          "id": "aperture",
+          "variant": "dial",
+          "caption": "APERTURE"
+        },
+        {
+          "kind": "control",
+          "id": "control_ring",
+          "variant": "ticks",
+          "caption": "LENS"
+        },
+        {
+          "kind": "control",
+          "id": "shutter_speed",
+          "variant": "dial",
+          "caption": "SPEED"
+        },
+        {
+          "kind": "control",
+          "id": "exposure_compensation",
+          "variant": "dial",
+          "caption": "EV",
+          "labels": {
+            "-9": "−3",
+            "-8": "−2⅔",
+            "-7": "−2⅓",
+            "-6": "−2",
+            "-5": "−1⅔",
+            "-4": "−1⅓",
+            "-3": "−1",
+            "-2": "−⅔",
+            "-1": "−⅓",
+            "0": "±0",
+            "1": "+⅓",
+            "2": "+⅔",
+            "3": "+1",
+            "4": "+1⅓",
+            "5": "+1⅔",
+            "6": "+2",
+            "7": "+2⅓",
+            "8": "+2⅔",
+            "9": "+3"
+          }
+        }
+      ]
+    },
+    { "kind": "space" },
+    {
+      "kind": "grid",
+      "className": "g2",
+      "children": [
+        {
+          "kind": "control",
+          "id": "shutter",
+          "variant": "shutter",
+          "caption": "SHUTTER"
+        },
+        {
+          "kind": "control",
+          "id": "power",
+          "variant": "segment",
+          "operation": "power",
+          "caption": "POWER"
+        },
+        {
+          "kind": "row",
+          "className": "pairrow",
+          "children": [
+            { "kind": "control", "id": "movie", "variant": "record" },
+            {
+              "kind": "control",
+              "id": "auto",
+              "variant": "segment",
+              "caption": "AUTO",
+              "className": "grow",
+              "labels": { "off": "OFF", "on": "ON" }
+            }
+          ]
+        },
+        {
+          "kind": "row",
+          "className": "pairrow",
+          "children": [
+            {
+              "kind": "control",
+              "id": "focus_mode",
+              "variant": "segment",
+              "caption": "FOCUS",
+              "className": "grow",
+              "labels": { "S": "S", "C": "C", "M": "M" }
+            },
+            {
+              "kind": "control",
+              "id": "fn7",
+              "variant": "key",
+              "caption": "SIDE",
+              "className": "side-key",
+              "face": ["Fn"]
+            }
+          ]
+        }
+      ]
+    },
+    { "kind": "divider" },
+    {
+      "kind": "grid",
+      "className": "back",
+      "children": [
+        {
+          "kind": "column",
+          "className": "c1",
+          "children": [
+            {
+              "kind": "control",
+              "id": "play",
+              "variant": "key",
+              "icon": "play"
+            },
+            {
+              "kind": "control",
+              "id": "delete",
+              "variant": "key",
+              "icon": "trash"
+            },
+            {
+              "kind": "control",
+              "id": "drive",
+              "variant": "key",
+              "className": "sm",
+              "face": ["DRIVE"]
+            },
+            {
+              "kind": "control",
+              "id": "lcd_tilt",
+              "variant": "segment",
+              "caption": "SCREEN",
+              "labels": { "normal": "NORMAL", "selfie": "SELFIE" }
+            }
+          ]
+        },
+        {
+          "kind": "column",
+          "className": "c2",
+          "children": [
+            {
+              "kind": "command",
+              "caption": "CMD",
+              "bindings": {
+                "left": "command_left",
+                "center": "command_push",
+                "right": "command_right"
+              }
+            },
+            {
+              "kind": "row",
+              "className": "pair",
+              "children": [
+                {
+                  "kind": "control",
+                  "id": "ae_af_lock",
+                  "variant": "key",
+                  "face": ["AE-L", "AF-L"]
+                },
+                {
+                  "kind": "control",
+                  "id": "q",
+                  "variant": "key",
+                  "face": ["Q"]
+                }
+              ]
+            },
+            {
+              "kind": "dpad",
+              "face": ["MENU", "OK"],
+              "bindings": {
+                "up": "up",
+                "down": "down",
+                "left": "left",
+                "right": "right",
+                "center": "menu_ok"
+              }
+            },
+            {
+              "kind": "row",
+              "className": "pair",
+              "children": [
+                {
+                  "kind": "control",
+                  "id": "disp",
+                  "variant": "key",
+                  "face": ["DISP", "BACK"]
+                },
+                {
+                  "kind": "control",
+                  "id": "wifi",
+                  "variant": "key",
+                  "face": ["Fn"],
+                  "hint": "Wi-Fi"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "combos": [
+    {
+      "label": "SD card boot",
+      "keys": [{ "face": "CMD ●" }, { "record": true }],
+      "inputs": [{ "id": "command_push" }, { "id": "movie" }]
+    },
+    {
+      "label": "Firmware update",
+      "keys": [{ "face": "DISP BACK" }],
+      "inputs": [{ "id": "disp" }]
+    },
+    {
+      "label": "Service mode",
+      "keys": [{ "face": "USB" }, { "face": "▲" }, { "face": "SHUTTER" }],
+      "inputs": [
+        { "id": "usb", "position": "on" },
+        { "id": "up" },
+        { "id": "shutter", "stage": "full" }
+      ]
+    }
+  ]
+}

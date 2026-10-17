@@ -31,8 +31,9 @@ test('a structured fault pauses inputs and retains the LCD; rollback republishes
   await assert.rejects(engine.press('menu')); assert.equal(sent.at(-1).action, 'press');
   const restored = engine.rollback(10), request = sent.at(-1);
   assert.equal(request.type, 'rollback'); assert.equal(request.seconds, 10);
-  worker.reply({ type: 'result', id: request.id, state: { virtual_ticks: 0, display: { width: 1, height: 1 } }, frame: new Uint8Array([4,5,6]).buffer });
-  await restored; assert.equal(frames.length, 2);
+  worker.reply({ type: 'result', id: request.id, state: { virtual_ticks: 0, display: { width: 1, height: 1 }, input_positions: { shutter_speed: '1/125', power: 'on' } }, frame: new Uint8Array([4,5,6]).buffer });
+  assert.deepEqual(await restored, { shutter_speed: '1/125', power: 'on' });
+  assert.equal(frames.length, 2);
   const press = engine.press('menu'); await Promise.resolve();
   worker.reply({ type: 'result', id: sent.at(-1).id, state: { virtual_ticks: 1 } });
   await press; engine.dispose();

@@ -8,10 +8,13 @@ import asyncio
 import base64
 import hashlib
 import json
+import io
 from pathlib import Path
 import time
 
 from playwright.async_api import async_playwright
+from PIL import Image
+from interactions import set_dial, segment, touch_dial
 
 MENU_HEADER = 'e598e0535f6d69203cbd325edcedde2cd530f706f54e00442701481ce48610b8'
 
@@ -76,8 +79,7 @@ async def check(args):
             await wait('document.querySelector("#live-label").textContent==="LIVE"')
             report['boot_seconds']=time.monotonic()-started
             await wait('Number(document.querySelector("#viewer").dataset.frames)>3')
-            assert await page.locator('.control-row[data-id="battery_cover"] button').is_disabled()
-            assert await page.locator('.control-row[data-id="battery_cover"] button').inner_text() == 'Not modelled'
+            assert await page.locator('#controls [data-id="battery_cover"]').count()==0
             report['checks']['battery_cover_has_no_host_power_interlock']=True
             await tap(page.locator('#face-screen'))
             await save('shooting')
@@ -95,14 +97,14 @@ async def check(args):
             assert report['preview']['presented_guest_fps']>=9.5,report['preview']
             print('PREVIEW',report['preview'],flush=True)
 
-            await tap(page.get_by_role('button',name='Menu / OK',exact=True))
+            await tap(page.locator('button[data-id="menu_ok"]'))
             deadline=time.monotonic()+60
             while await page.evaluate(header)!=MENU_HEADER:
                 if time.monotonic()>deadline: raise AssertionError('Exact English MENU header did not arrive')
                 await wait('!window.__faults.length',timeout=1)
                 await asyncio.sleep(.2)
             await save('menu'); report['checks']['english_menu_header_sha256']=MENU_HEADER
-            await tap(page.get_by_role('button',name='Display / Back',exact=True))
+            await tap(page.locator('button[data-id="disp"]'))
             await wait('window.__state.navigation.physical_input_queue.completed>=4 && !window.__state.navigation.physical_inputs.held.length')
             deadline=time.monotonic()+60
             while await page.evaluate(header)==MENU_HEADER:
@@ -110,18 +112,18 @@ async def check(args):
                 await asyncio.sleep(.2)
             print('MENU / BACK',flush=True)
 
-            dial=page.locator('.control-row[data-id="shutter_speed"] select')
-            await dial.select_option('1/125')
-            old=await dial.input_value()
-            await tap(page.locator('.control-row[data-id="shutter_speed"] > span'))
-            assert await dial.input_value()!=old,'Touching the dial label did not take a detent'
+            dial=page.locator('.dial[data-id="shutter_speed"]')
+            await set_dial(page,'shutter_speed','1/125')
+            old=await dial.get_attribute('aria-valuetext')
+            await touch_dial(page,'shutter_speed')
+            assert await dial.get_attribute('aria-valuetext')!=old,'Touching the dial did not take a detent'
             await wait('window.__requests.some(r=>r.action==="set_position"&&r.options.id==="shutter_speed")')
             report['checks']['panel_dial_trusted_touch']=True
-            await page.locator('.control-row[data-id="focus_mode"] select').select_option('M')
-            await dial.select_option('1/125')
+            await segment(page,'focus_mode','M')
+            await set_dial(page,'shutter_speed','1/125')
             await page.evaluate('window.__settleTick=__state.virtual_ticks+24000000')
             await wait('window.__state.virtual_ticks>=window.__settleTick')
-            await tap(page.get_by_role('button',name='Shutter full',exact=True))
+            await tap(page.locator('.slide[data-id="shutter"]'))
             print('FULL SHUTTER',flush=True)
             await wait('window.__state.capture?.completed===1',timeout=360)
             await save('capture')
@@ -132,6 +134,9 @@ async def check(args):
             await file.save_as(args.output/'photo.jpg')
             photo=(args.output/'photo.jpg').read_bytes()
             assert photo.startswith(b'\xff\xd8') and photo.endswith(b'\xff\xd9')
+            with Image.open(io.BytesIO(photo)) as image:
+                image.load()
+                assert image.size==(4896,3264),image.size
             digest=hashlib.sha256(photo).hexdigest()
             report['photo']=dict(name=file.suggested_filename,bytes=len(photo),sha256=digest)
             await page.evaluate('(hash)=>window.__photoHash=hash',digest)

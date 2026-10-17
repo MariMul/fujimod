@@ -28,7 +28,7 @@ async def check(playwright, args, engine):
       const WorkerClass = window.Worker;
       window.__messages = []; window.__sensorAcks = 0;
       window.Worker = class extends WorkerClass {
-        constructor(...args) { super(...args); this.addEventListener('message', ({data}) => {
+        constructor(...args) { super(...args); if(String(args[0]).includes('pyodide-worker'))window.__engineWorker=this; this.addEventListener('message', ({data}) => {
           if(data.state?.display) window.__state = data.state;
           if(data.type === 'sensor_ready') window.__sensorAcks++;
           if(data.type === 'error') window.__messages.push(data);
@@ -44,7 +44,7 @@ async def check(playwright, args, engine):
             await page.screenshot(path=str(out/'empty.png'),full_page=True)
             # An unsupported upload leaves the neutral viewer usable.
             await page.locator('#firmware-file').set_input_files(dict(name='unknown.dat',mimeType='application/octet-stream',buffer=b'unsupported firmware fixture'))
-            await page.wait_for_function("document.querySelector('#status').textContent.startsWith('Unsupported firmware')")
+            await page.wait_for_function("document.querySelector('#fault-raw').textContent.includes('Unsupported firmware')")
             assert await page.locator('#panel').is_hidden()
             # Fill a browser File with local bytes, then send it through the
             # viewer's actual drop handler (without firing a second picker boot).
@@ -65,7 +65,7 @@ async def check(playwright, args, engine):
         (out / 'lcd.png').write_bytes(raw)
         assert len(raw) > 10000, 'LCD is blank'
         # A fast panel tap must change the firmware LCD, and renders keep advancing.
-        await (page.get_by_role('button', name='Menu / OK', exact=True).tap() if engine == 'webkit' else page.get_by_role('button', name='Menu / OK', exact=True).click())
+        await (page.locator('button[data-id=menu_ok]').tap() if engine == 'webkit' else page.locator('button[data-id=menu_ok]').click())
         await page.wait_for_timeout(6000)
         (out/'input-state.json').write_text(json.dumps(await page.evaluate('({state:window.__state,messages:window.__messages})'),indent=2))
         after = await page.locator('#lcd-source').evaluate("c => c.toDataURL('image/png').split(',')[1]")
@@ -79,28 +79,30 @@ async def check(playwright, args, engine):
         assert int(final['frames']) > int(initial['frames'])
         assert int(final['renderFrames']) > int(initial['renderFrames'])
         await page.screenshot(path=str(out / 'menu.png'), full_page=True)
-        await page.get_by_role('button', name='Display / Back', exact=True).click()
+        await page.locator('button[data-id=disp]').click()
         await page.wait_for_timeout(1500)
         if args.scene:
-            # Reset the default scene without opening any host webcam.
-            await page.locator('#webcam').dispatch_event('change')
-            await page.wait_for_function('window.__sensorAcks >= 1', timeout=30000)
-            await page.locator('#image-file').set_input_files(str(args.scene))
-            await page.wait_for_function('window.__sensorAcks >= 2', timeout=30000)
-            # Off restores the chosen image without requesting any webcam.
-            assert not await page.locator('#webcam').is_checked()
-            await page.locator('#webcam').dispatch_event('change')
-            await page.wait_for_function('window.__sensorAcks >= 3', timeout=30000)
-            assert not await page.locator('#status').evaluate("e => e.classList.contains('error')")
+            encoded=base64.b64encode(args.scene.read_bytes()).decode()
+            await page.evaluate('''async(data)=>{
+              const binary=Uint8Array.from(atob(data),c=>c.charCodeAt(0));
+              const image=await createImageBitmap(new Blob([binary]));
+              const canvas=new OffscreenCanvas(image.width,image.height),context=canvas.getContext('2d');context.drawImage(image,0,0);
+              const rgba=context.getImageData(0,0,image.width,image.height).data,rgb=new Uint8Array(image.width*image.height*3);
+              for(let s=0,t=0;s<rgba.length;s+=4,t+=3){rgb[t]=rgba[s];rgb[t+1]=rgba[s+1];rgb[t+2]=rgba[s+2];}
+              __engineWorker.postMessage({type:'sensor',id:-77,width:image.width,height:image.height,rgb:rgb.buffer},[rgb.buffer]);
+            }''',encoded)
+            await page.wait_for_function('window.__sensorAcks >= 1',timeout=30000)
+            await page.evaluate("__engineWorker.postMessage({type:'sensor_reset',id:-78})")
+            await page.wait_for_function('window.__sensorAcks >= 2',timeout=30000)
         # Exercise download from the real patch worker, save and check the ZIP members.
         async with page.expect_download(timeout=60000) as pending:
-            await page.get_by_role('button', name='Build SD files').click()
+            await page.locator('#card-download').click()
         download = await pending.value
         archive = out / download.suggested_filename
         await download.save_as(archive)
         with zipfile.ZipFile(archive) as package:
-            assert set(package.namelist()) == {'ffboot.bin', 'ffsys.bin'}
-            hashes = {name: hashlib.sha256(package.read(name)).hexdigest() for name in package.namelist()}
+            assert {name.lower() for name in package.namelist()} == {'ffboot.bin', 'ffsys.bin'}
+            hashes = {name.lower(): hashlib.sha256(package.read(name)).hexdigest() for name in package.namelist()}
             if args.expected:
                 for name, digest in hashes.items():
                     assert hashlib.sha256((args.expected / name).read_bytes()).hexdigest() == digest, name
@@ -123,7 +125,7 @@ async def main():
     parser.add_argument('--url', default='http://127.0.0.1:5190/')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--expected', type=Path)
-    parser.add_argument('--scene', type=Path, help='Also check image input and reset to the analytic scene')
+    parser.add_argument('--scene', type=Path, help='Also check RGB scene transport and reset to the analytic scene')
     parser.add_argument('--dat', type=Path, help='Choose a local DAT instead of automatic dev boot')
     parser.add_argument('--engine', choices=['chromium','webkit','both'], default='both')
     args = parser.parse_args()

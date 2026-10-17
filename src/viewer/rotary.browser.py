@@ -15,16 +15,14 @@ import asyncio
 import base64
 import json
 from html import escape
-import struct
-import zlib
 from pathlib import Path
 from playwright.async_api import async_playwright
 
 HELPERS = r"""() => {
   const v = window.__viewer, canvas = v.renderer.domElement;
   window.__pose = () => ({ position: v.camera.position.toArray(), quaternion: v.camera.quaternion.toArray() });
-  window.__view = (front, rise = 2, side = 0) => {
-    v.faceScreen(); const d = v.home.z - v.homeTarget.z;
+  window.__view = async (front, rise = 2, side = 0) => {
+    v.faceScreen(); await new Promise(resolve=>setTimeout(resolve,400)); const d = v.home.z - v.homeTarget.z;
     v.camera.position.set(v.home.x + side, v.home.y + rise, v.homeTarget.z + (front ? -d : d));
     v.orbit.update(); v.camera.updateMatrixWorld(); v.root.updateMatrixWorld(true);
     v.dirty = v.leadersDirty = true;
@@ -80,8 +78,9 @@ HELPERS = r"""() => {
     };
   };
   window.__select = (id, value) => {
-    const select = document.querySelector(`[data-id="${id}"] select`);
-    select.value = value; select.dispatchEvent(new Event('change'));
+    const dial=document.querySelector(`.dial[data-id="${id}"]`);
+    if(dial){const values=[...dial.querySelectorAll('.vals span')].map(n=>n.dataset.value),target=values.indexOf(value),current=Number(dial.getAttribute('aria-valuenow'));if(target<0)throw Error('Unknown dial value');for(let i=0;i<Math.abs(target-current);i++)dial.dispatchEvent(new KeyboardEvent('keydown',{key:target>current?'ArrowRight':'ArrowLeft',bubbles:true}));}
+    else document.querySelector(`.control-node[data-id="${id}"] button[data-value="${value}"]`).click();
   };
   window.__lcdHash = async (region = 'values') => {
     // Shooting values and focus scale; excludes the clock at the top.
@@ -95,13 +94,6 @@ HELPERS = r"""() => {
 async def lcd(page, path):
     encoded = await page.locator('#lcd-source').evaluate("c=>c.toDataURL('image/png').split(',')[1]")
     path.write_bytes(base64.b64decode(encoded))
-
-
-def static_scene(path):
-    def chunk(kind, data):
-        return struct.pack('>I',len(data))+kind+data+struct.pack('>I',zlib.crc32(kind+data))
-    path.write_bytes(b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',160,120,8,2,0,0,0))+
-                     chunk(b'IDAT',zlib.compress((b'\0'+b'\x80\x80\x80'*160)*120))+chunk(b'IEND',b''))
 
 
 async def settle(page):
@@ -157,14 +149,13 @@ async def run(args):
         try:
             await page.goto(args.url)
             if args.dat:
-                await page.wait_for_function("document.querySelector('#firmwares').children.length > 0")
+                await page.wait_for_function("document.querySelector('#camera-table').children.length > 0")
                 await page.locator('#firmware-file').set_input_files(str(args.dat))
             await page.wait_for_function("document.querySelector('#live-label').textContent==='LIVE'", timeout=180000)
             await page.wait_for_function("Number(document.querySelector('#viewer').dataset.frames)>3", timeout=60000)
             await page.evaluate(HELPERS)
-            scene=args.output/'scene.png'; static_scene(scene)
-            await page.locator('#image-file').set_input_files(str(scene))
-            await page.get_by_role('button', name='Display / Back', exact=True).tap()
+            await page.evaluate('()=>__engine.setScene({width:160,height:120,rgb:new Uint8Array(160*120*3).fill(128)})')
+            await page.locator('button[data-id=disp]').tap()
             await page.evaluate('window.scrollTo(0,0)')
             await settle(page)
             print('Booted real firmware in WebKit', flush=True)

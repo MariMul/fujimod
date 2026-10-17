@@ -19,11 +19,18 @@ press/release, setPosition, setScene and power. The shared Pyodide WorkerEngine 
 owns pacing, request ordering and disposal; it wraps the existing Pyodide
 session worker. No register addresses or firmware bindings appear in rendering
 or panel code. The input artifact belongs to the emulator. Model nodes,
-physical panel order and plain display labels live in `devices/x70/parts.json`.
+3D part mappings live in `devices/x70/parts.json`; panel layout, labels, faces
+and power-on gestures live in `devices/x70/panel.json`.
 The catalog selects the shared Pyodide engine and supplies its Python boot
-protocol. Device directories contain model/part/initial-position data only;
+protocol. Device directories contain model, panel and initial-position data;
 adding a body does not add conditionals to the worker or viewer. `src/viewer/model.ts` ports LCD UV mapping,
-picking, orbiting, visible leader lines and sizing from the research viewer.
+picking, orbiting and LCD projection from the research viewer. The panel is
+rendered from body data by shared dial, key, shutter and segmented controls.
+The SD tree shows actual FAT files, offers downloads and format, and retains
+media through power cycles. Generated patch files seed the initial card.
+Power-on combinations apply external input levels through the checked body
+graph; they do not patch guest RAM or guarantee that every ROM boot mode is
+modeled.
 
 The model is **CAMERA ( Fujifilm X70 )** by
 [McCLOUD2101](https://sketchfab.com/McCLOUD2101),
@@ -93,6 +100,18 @@ This WebKit iPhone gate checks exact English MENU pixels, touch dial input,
 source/LCD frame cadence, a Full shutter tap, a JPEG download through the card
 UI, and the same saved file decoded by stock Playback. It saves viewport and
 LCD screenshots without modifying served source or installing firmware patches.
+
+Compare the built page with an approved HTML design reference:
+
+```sh
+PLAYWRIGHT_BROWSERS_PATH=/path/to/browsers python tests/design.py \
+  --reference /path/to/mockup.html --output /fresh/ignored/design-proof
+```
+
+This captures idle, running and forced-fault states at 1300×900 and WebKit
+iPhone 390×844, saves side-by-side composites and checks CSS-pixel geometry.
+Faults pause the engine, paint a Mac-style Undo dialog into the LCD, and expose
+raw diagnostics plus a report ZIP containing the preceding RAM snapshot.
 
 ### Release artifacts and deployment
 

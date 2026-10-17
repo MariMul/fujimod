@@ -114,3 +114,28 @@ test('card restart transfers copied files, rejects inputs while paused, and resu
   assert.deepEqual(errors, []);
   engine.dispose();
 });
+
+test('card insertion stays external; format replaces media; combo restarts retain media and carry held inputs', async () => {
+  const { engine, worker, messages } = setup();
+  await engine.boot(new ArrayBuffer(3), config, () => {});
+  const insert = engine.insertCard(false);
+  const detached = messages.at(-1);
+  assert.equal(detached.action, 'present'); assert.equal(detached.present, false);
+  worker.reply({ type: 'card_result', id: detached.id, card: { ...state(5), present: false } });
+  await insert;
+  const format = engine.formatCard(() => {});
+  await new Promise(resolve => setImmediate(resolve));
+  const formatted = messages.at(-1);
+  assert.equal(formatted.type, 'restart'); assert.equal(formatted.replaceCard, true);
+  assert.deepEqual(formatted.cardFiles, []);
+  worker.reply({ type: 'restarted', id: formatted.id, state: { virtual_ticks: 0 }, card: state(6) });
+  await format;
+  const held = [{ id: 'menu_ok' }];
+  const cycle = engine.powerCycle(held, () => {});
+  await new Promise(resolve => setImmediate(resolve));
+  const boot = messages.at(-1);
+  assert.equal(boot.type, 'restart'); assert.equal(boot.replaceCard, false);
+  assert.deepEqual(boot.cardFiles, []); assert.deepEqual(boot.bootInputs, held);
+  worker.reply({ type: 'restarted', id: boot.id, state: { virtual_ticks: 0 }, card: state(6) });
+  await cycle; engine.dispose();
+});
