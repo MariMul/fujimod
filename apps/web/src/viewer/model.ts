@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { Frame, Input } from "../engine/api";
+import type { DetentSound } from "../feedback/detent-sound";
 import { DetentFeedback } from "../feedback/detent";
 import { RotaryDrag } from "./rotary-drag";
 import { RotaryPart } from "./rotary-part";
@@ -75,6 +76,7 @@ export class ModelViewer {
   private rotaryStep?: (id: string, direction: number) => boolean;
   private rotaryDrag: RotaryDrag;
   private detent = new DetentFeedback();
+  private detentSounds: Record<string, DetentSound> = {};
   private dirty = true;
   private leadersDirty = true;
   onPointerDown?: (hit: ModelHit, event: PointerEvent) => void;
@@ -183,7 +185,7 @@ export class ModelViewer {
               )
                 return;
               if (rotary.negative !== rotary.positive) rotary.part.turn(direction);
-              this.detent.step();
+              this.detent.step(this.detentSounds[id]);
               this.dirty = this.leadersDirty = true;
               this.highlight(id);
               this.onHover?.(id);
@@ -361,9 +363,11 @@ export class ModelViewer {
   configureRotary(
     inputs: Input[],
     onStep: (id: string, direction: number) => boolean,
+    sounds: Record<string, DetentSound>,
   ) {
     this.rotaryDrag.cancel();
     this.rotaryStep = onStep;
+    this.detentSounds = sounds;
     const supported = new Map(
       inputs
         .filter((input) => input.supported)

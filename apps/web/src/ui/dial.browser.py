@@ -14,18 +14,25 @@ FIXTURE = '''<!doctype html><link rel="stylesheet" href="/src/style.css">
 <div id="controls" style="width:240px;padding:20px"></div>
 <script type="module">
 import { InputPanel } from '/src/ui/controls.ts';
+import panelData from '/devices/x70/panel.json';
 window.requests = [];
-window.clicks = 0; window.vibrations = []; window.haptics = false;
+window.clicks = 0; window.clickTimbres = []; window.vibrations = []; window.haptics = false;
 Object.defineProperty(navigator, 'vibrate', {configurable:true, value: duration => {
   window.vibrations.push(duration); return window.haptics;
 }});
-const createOscillator = AudioContext.prototype.createOscillator;
-AudioContext.prototype.createOscillator = function (...args) {
-  const oscillator = createOscillator.apply(this, args), start = oscillator.start.bind(oscillator);
-  oscillator.start = (...args) => { window.clicks++; start(...args); };
-  return oscillator;
+const createBufferSource = AudioContext.prototype.createBufferSource;
+const buffers = new Map();
+AudioContext.prototype.createBufferSource = function (...args) {
+  const source = createBufferSource.apply(this, args), start = source.start.bind(source);
+  source.start = (...args) => {
+    if (!buffers.has(source.buffer)) buffers.set(source.buffer, buffers.size);
+    window.clicks++; window.clickTimbres.push(buffers.get(source.buffer)); start(...args);
+  };
+  return source;
 };
-const viewer = new Proxy({}, {get: () => () => {}});
+const viewer = new Proxy({
+  configureRotary(_inputs, _step, sounds) { window.modelSounds = sounds; },
+}, {get: (target, key) => target[key] ?? (() => {})});
 window.panel = new InputPanel(document.querySelector('#controls'), viewer,
   error => { throw error; }, async () => {});
 panel.render([
@@ -35,6 +42,7 @@ panel.render([
     positions:['30','60','125','250','500','1000'].map(id => ({id, label:id})), initial:'125'},
   {id:'command', label:'Command', kind:'dial', supported:true, relative:true},
 ], {setPosition: async (id, value) => requests.push({id,value})}, {
+  detentSounds:panelData.detentSounds,
   layout:[{kind:'control',id:'aperture',variant:'dial'},
     {kind:'control',id:'shutter_speed',variant:'dial'},
     {kind:'control',id:'command',variant:'ticks'}], combos:[]
@@ -114,6 +122,8 @@ async def check(browser_type, url, output):
         for dx, sample in zip(movements, samples):
             assert abs(sample['x'] - initial['x'] - dx) < .1, (dx, initial, sample)
         assert await page.evaluate('(start) => requests.slice(start)', before_requests) == [dict(id=identifier,value=preceding)]
+        timbres = await page.evaluate('(start) => clickTimbres.slice(start)', before_requests)
+        assert len(set(timbres)) == 1, timbres
         await page.screenshot(path=str(output/f'{identifier}-held.png'))
         await page.mouse.up()
         await settled(dial)
@@ -160,7 +170,9 @@ async def check(browser_type, url, output):
         await settled(dial)
         assert await page.evaluate('touch') == dict(trusted=True,type='touch')
         assert (await snapshot(dial))['selected'] == initial_value
-        results[identifier] = dict(initial=initial, samples=samples, released=released)
+        results[identifier] = dict(initial=initial, samples=samples, released=released, timbre=timbres[0])
+    assert results['aperture']['timbre'] != results['shutter_speed']['timbre']
+    assert await page.evaluate('modelSounds.aperture !== modelSounds.shutter_speed')
     # Relative tick strips retain their position across gestures and snap too.
     ticks = page.locator('.dial[data-id="command"]')
     box = await ticks.bounding_box()
@@ -175,7 +187,7 @@ async def check(browser_type, url, output):
         await settled(ticks)
         assert abs((await snapshot(ticks))['ticks'] - end) < .01, await snapshot(ticks)
     assert await page.evaluate('clicks === requests.length'), 'Snap or cancellation produced an extra click'
-    assert await page.evaluate('clicks > 0'), 'No audio clicks were generated'
+    assert await page.evaluate('new Set(clickTimbres).size === 3'), 'Dial timbres were not distinct'
     # Touch selects vibration when available; sub-detent movement and hard stops
     # must not produce an extra pulse. These mocks verify requests, not hardware.
     aperture = page.locator('.dial[data-id="aperture"]')
@@ -211,7 +223,7 @@ async def check(browser_type, url, output):
     await page.screenshot(path=str(output/'released.png'))
     assert not errors, errors
     (output/'result.json').write_text(json.dumps(dict(dials=results, requests=await page.evaluate('requests'),
-        feedback=await page.evaluate('({clicks,vibrations})')), indent=2)+'\n')
+        feedback=await page.evaluate('({clicks,vibrations,clickTimbres})')), indent=2)+'\n')
     await browser.close()
 
 

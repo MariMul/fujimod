@@ -57,14 +57,14 @@ HELPERS = r"""() => {
   window.addEventListener('pointerdown', event => {window.__down={x:event.clientX,y:event.clientY,hit:v.pick(event)};}, true);
   window.__feedback = 0; window.__soundClicks = 0;
   const step = v.detent.step.bind(v.detent);
-  v.detent.step = () => {
+  v.detent.step = (...args) => {
     const context = v.detent.context;
     if (context && !context.__observed) {
-      const create = context.createOscillator.bind(context);
-      context.createOscillator = () => {const node=create(), start=node.start.bind(node);node.start=(...args)=>{window.__soundClicks++;start(...args);};return node;};
+      const create = context.createBufferSource.bind(context);
+      context.createBufferSource = () => {const node=create(), start=node.start.bind(node);node.start=(...args)=>{window.__soundClicks++;start(...args);};return node;};
       context.__observed = true;
     }
-    window.__feedback++; step();
+    window.__feedback++; step(...args);
   };
   window.__swipe = (dx, dy = 0, cancel = false) => {
     window.__afterDown = event => {

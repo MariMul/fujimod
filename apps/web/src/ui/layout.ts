@@ -1,3 +1,4 @@
+import type { DetentSound } from "../feedback/detent-sound";
 import type { BootInput } from "../engine/api";
 export interface ControlNode {
   kind:
@@ -27,6 +28,8 @@ export interface PowerCombo {
   inputs: BootInput[];
 }
 export interface DevicePanel {
+  /** Acoustic character of each physical dial, shared by panel and model. */
+  detentSounds?: Record<string, DetentSound>;
   /** Shared control names for panel accessibility and model feedback. */
   inputLabels?: Record<string, string>;
   layout: ControlNode[];

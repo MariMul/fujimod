@@ -2,11 +2,13 @@ import type { Engine, Input } from "../engine/api";
 import type { ModelHit, ModelViewer } from "../viewer/model";
 import type { ControlNode, DevicePanel, PowerCombo } from "./layout";
 import { icon } from "./icons";
+import type { DetentSound } from "../feedback/detent-sound";
 import { DetentFeedback } from "../feedback/detent";
 
 /** Body data chooses the controls; shared components own gesture laws. */
 export class InputPanel {
   private detent = new DetentFeedback();
+  private detentSounds: Record<string, DetentSound> = {};
   private inputs = new Map<string, Input>();
   private relativeSteps = new Map<string, number>();
   private modelFractions = new Map<string, number>();
@@ -58,6 +60,7 @@ export class InputPanel {
   ) {
     this.clear();
     this.engine = engine;
+    this.detentSounds = data.detentSounds ?? {};
     this.ready = true;
     this.inputs = new Map(inputs.map((input) => [input.id, {
       ...input, label: data.inputLabels?.[input.id] ?? input.label,
@@ -117,8 +120,8 @@ export class InputPanel {
       combos.append(row);
     }
     if (data.combos.length) this.host.append(caption, combos);
-    this.viewer.configureRotary(inputs, (id, direction) =>
-      this.step(id, direction),
+    this.viewer.configureRotary(
+      inputs, (id, direction) => this.step(id, direction), this.detentSounds,
     );
     for (const id of this.positions.keys()) this.syncRotary(id);
     this.viewer.setRotaryEnabled(true);
@@ -306,7 +309,7 @@ export class InputPanel {
           if (this.step(
             id,
             ["ArrowLeft", "ArrowDown"].includes(event.key) ? -1 : 1,
-          )) this.detent.step();
+          )) this.detent.step(this.detentSounds[id]);
         }
       };
       this.track(id, dial);
@@ -630,7 +633,7 @@ export class InputPanel {
         const current = Number(dial.getAttribute("aria-valuenow"));
         const direction = Math.sign(nearest - current);
         for (let n = 0; n < Math.abs(nearest - current); n++) {
-          if (this.step(id, direction)) this.detent.step();
+          if (this.step(id, direction)) this.detent.step(this.detentSounds[id]);
         }
         const index = Number(dial.getAttribute("aria-valuenow"));
         const distance = center - centers[index];
@@ -644,7 +647,7 @@ export class InputPanel {
         for (let n = 0; n < Math.abs(steps); n++) {
           if (this.step(id, Math.sign(steps))) {
             tickPosition += Math.sign(steps) * 16;
-            this.detent.step();
+            this.detent.step(this.detentSounds[id]);
           }
         }
         rotation.fraction = this.clampFraction(id, remainder / 16);
@@ -751,6 +754,7 @@ export class InputPanel {
     this.observers = [];
     this.host.replaceChildren();
     this.inputs.clear();
+    this.detentSounds = {};
     this.positions.clear();
     this.modelFractions.clear();
     this.relativeSteps.clear();

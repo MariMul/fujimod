@@ -1,4 +1,13 @@
 {
+  "detentSounds": {
+    "aperture": "soft",
+    "shutter_speed": "firm",
+    "exposure_compensation": "crisp",
+    "control_ring": "fine",
+    "command_left": "compact",
+    "command_right": "compact",
+    "command_push": "compact"
+  },
   "inputLabels": {
     "up": "↑ Up",
     "down": "↓ Down",

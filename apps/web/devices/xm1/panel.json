@@ -1,4 +1,7 @@
 {
+  "detentSounds": {
+    "subcommand": "compact"
+  },
   "layout": [
     {
       "kind": "control",
