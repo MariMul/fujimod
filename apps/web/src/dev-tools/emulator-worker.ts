@@ -7,6 +7,8 @@ const worker = self as unknown as DedicatedWorkerGlobalScope;
 const camera = new WebUsbCamera();
 let py: Pyodide;
 let link: CameraLink | undefined;
+let transferTimeoutMs: number;
+type TransferStep = { state: 'pending' } | { state: 'read' } | { state: 'written'; bytes: number };
 function send(reply: EmulatorReply) {
   worker.postMessage(reply);
 }
@@ -33,7 +35,7 @@ function readBytes(expression: string) {
     proxy.destroy();
   }
 }
-function transfer(
+async function transfer(
   kind: 'control-in' | 'control-out' | 'bulk-in' | 'bulk-out',
   options: object,
   data: Uint8Array = new Uint8Array(),
@@ -43,16 +45,51 @@ function transfer(
   const buffer = py.toPy(data);
   py.globals.set('usb_data', buffer);
   try {
-    if (kind === 'control-in' || kind === 'bulk-in')
-      return readBytes('usb_runtime.transfer(usb_kind,json.loads(usb_options))');
-    return py.runPython<number>(
-      'usb_runtime.transfer(usb_kind,json.loads(usb_options),bytes(usb_data))',
-    );
+    py.runPython('usb_runtime.begin_transfer(usb_kind,json.loads(usb_options),bytes(usb_data))');
   } finally {
     py.globals.delete('usb_data');
     buffer.destroy();
   }
+  const deadline = performance.now() + transferTimeoutMs;
+  try {
+    for (;;) {
+      const step = JSON.parse(
+        py.runPython<string>('usb_runtime.advance_transfer()'),
+      ) as TransferStep;
+      switch (step.state) {
+        case 'read':
+          return readBytes('usb_runtime.transfer_result');
+        case 'written':
+          return step.bytes;
+        case 'pending':
+          if (performance.now() >= deadline)
+            throw new DOMException('Emulated USB transfer timed out', 'TimeoutError');
+          // Keep timers and cancellation live while stock firmware waits for I/O.
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          break;
+        default:
+          throw Error('Unknown emulated USB completion state');
+      }
+    }
+  } catch (error) {
+    // nusb maps WebUSB rejections to USB status; retain the simulator cause.
+    send({
+      type: 'trace',
+      entries: [
+        {
+          layer: Layer.Usb,
+          level: Level.Error,
+          direction: Direction.Host,
+          message: `Simulator USB: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
+    });
+    throw error;
+  } finally {
+    py.runPython('usb_runtime.end_transfer()');
+  }
 }
+
 async function boot(request: Extract<EmulatorRequest, { call: EmulatorCall.Boot }>) {
   const firmware = request.firmware,
     config = firmware.emulate,
@@ -92,6 +129,7 @@ getattr(importlib.import_module(prepare['module']),prepare['function'])(**prepar
 usb_runtime=importlib.import_module(config['module'])
 usb_runtime.start(config['firmware'],config['scenario'])
 `);
+  transferTimeoutMs = py.runPython<number>('usb_runtime.recipe["transfer_timeout_ms"]');
   let ready = false;
   for (let spent = 0; spent < config.boot.limit; spent += config.boot.step) {
     const state = JSON.parse(py.runPython<string>(`usb_runtime.advance(${config.boot.step})`)) as {
@@ -115,16 +153,16 @@ usb_runtime.start(config['firmware'],config['scenario'])
   const device = new EmulatedUsbDevice(
     {
       async controlIn(setup: UsbSetup, length: number) {
-        return transfer('control-in', { setup, length }) as Uint8Array;
+        return (await transfer('control-in', { setup, length })) as Uint8Array;
       },
       async controlOut(setup: UsbSetup, data: Uint8Array) {
-        return transfer('control-out', { setup }, data) as number;
+        return (await transfer('control-out', { setup }, data)) as number;
       },
       async bulkIn(endpoint: number, length: number) {
-        return transfer('bulk-in', { endpoint, length }) as Uint8Array;
+        return (await transfer('bulk-in', { endpoint, length })) as Uint8Array;
       },
       async bulkOut(endpoint: number, data: Uint8Array) {
-        return transfer('bulk-out', { endpoint }, data) as number;
+        return (await transfer('bulk-out', { endpoint }, data)) as number;
       },
     },
     Uint8Array.from(descriptor.device),

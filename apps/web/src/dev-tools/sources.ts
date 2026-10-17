@@ -7,7 +7,9 @@ export class CameraSources implements CameraBackend {
   private selected: CameraBackend = this.physical;
   private removeDisconnect: () => void = () => {};
   async initialize() {
-    await this.physical.initialize();
+    // Safari has no physical WebUSB backend. Its simulator initializes USB
+    // in the worker; avoid creating an unused Wasm instance in this page.
+    if ('usb' in navigator) await this.physical.initialize();
   }
   async pick(target = CameraTarget.Usb) {
     this.selected = target === CameraTarget.Emulator ? this.emulator : this.physical;
