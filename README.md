@@ -16,3 +16,21 @@ npm run dev
 The root `site-build`, `site-test` and `site-preview` mise tasks run from that
 application directory. The Pages workflow builds `apps/web` from approved
 main releases. Review branches do not deploy Pages.
+
+## Rust libraries
+
+The root Cargo workspace contains reusable implementation crates under `crates/`.
+The `fujimod` facade exposes components through optional features; enable `usb`
+for `fujimod::usb`. The [USB crate](crates/usb/README.md) provides the initial
+asynchronous service/debug protocol implementation.
+
+```sh
+cargo test --workspace --all-features
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+```
+
+The [Python package](bindings/python/README.md) lives in `bindings/python/`.
+JavaScript/Wasm bindings will live in `bindings/javascript/`. Binding crates are
+members of this same workspace. Each directory owns its language package;
+implementation crates remain independent of PyO3 and wasm-bindgen. The browser
+application stays in `apps/web/` and consumes the JavaScript package as needed.

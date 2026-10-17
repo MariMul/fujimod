@@ -1,0 +1,22 @@
+[package]
+name = "fujimod-python"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "fujimod"
+crate-type = ["cdylib"]
+test = false
+doctest = false
+
+[features]
+testing = ["fujimod-usb/testing"]
+
+[dependencies]
+pyo3.workspace = true
+fujimod-usb.workspace = true
+futures-lite.workspace = true
+nusb.workspace = true
