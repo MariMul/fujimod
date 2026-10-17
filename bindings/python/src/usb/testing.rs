@@ -18,6 +18,18 @@ impl Exchange {
         })
     }
     #[staticmethod]
+    fn control_disconnected(bytes: Vec<u8>) -> PyResult<Self> {
+        let bytes = bytes
+            .try_into()
+            .map_err(|_| PyValueError::new_err("control envelope must have 12 bytes"))?;
+        Ok(Self {
+            inner: usb::testing::Exchange::ControlFailure {
+                bytes,
+                error: nusb::transfer::TransferError::Disconnected,
+            },
+        })
+    }
+    #[staticmethod]
     fn write(bytes: Vec<u8>) -> Self {
         Self {
             inner: usb::testing::Exchange::Write(bytes),

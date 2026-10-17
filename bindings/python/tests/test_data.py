@@ -73,3 +73,14 @@ def test_empty_response_retains_raw_bytes_without_readiness_interpretation():
     assert session.empty_response() == b"\x2a\x00\x00\x00"
     assert session.state == usb.SessionState.Ready
     assert script.remaining == 0
+
+
+def test_control_disconnect_exposes_empty_partial_and_fences_session():
+    session, script = opened([E.control_disconnected(control(0xE1, 4, offset=0xFFFFF000))])
+    with blocking.data.read_chunks(session, window(), 0x1000, 4) as reader:
+        with pytest.raises(usb.TransferError) as failure:
+            next(reader)
+        assert failure.value.partial == b""
+        assert failure.value.transferred == 0
+    assert session.state == usb.SessionState.CompletionUnknown
+    assert script.remaining == 0

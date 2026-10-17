@@ -14,6 +14,10 @@ use std::{
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Exchange {
     Control([u8; 12]),
+    ControlFailure {
+        bytes: [u8; 12],
+        error: nusb::transfer::TransferError,
+    },
     Write(Vec<u8>),
     Read {
         maximum: usize,
@@ -68,8 +72,25 @@ impl Script {
     }
 }
 impl Io for Script {
-    async fn control(&mut self, _kind: RequestKind, bytes: [u8; 12]) -> Result<()> {
-        self.expect(Exchange::Control(bytes))
+    async fn control(&mut self, kind: RequestKind, bytes: [u8; 12]) -> Result<()> {
+        let (position, expected) = self.take();
+        match expected {
+            Some(Exchange::Control(actual)) if actual == bytes => Ok(()),
+            Some(Exchange::ControlFailure {
+                bytes: actual,
+                error,
+            }) if actual == bytes => Err(Error::Transfer {
+                stage: TransferStage::Control(kind),
+                source: error,
+                transferred: Some(0),
+                partial: vec![],
+            }),
+            expected => Err(Error::ReplayMismatch {
+                position,
+                expected: expected.map(Box::new),
+                actual: Box::new(Exchange::Control(bytes)),
+            }),
+        }
     }
     async fn write(&mut self, bytes: &[u8]) -> Result<()> {
         self.expect(Exchange::Write(bytes.to_vec()))

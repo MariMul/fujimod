@@ -40,9 +40,10 @@ fn convert_error(py: Python<'_>, error: usb::Error) -> PyErr {
         usb::Error::CompletionUnknown => CompletionUnknownError::new_err(message),
         usb::Error::DeviceStatus { .. } => DeviceCommandError::new_err(message),
         usb::Error::Protocol(_) => ProtocolError::new_err(message),
-        usb::Error::Transfer { .. } | usb::Error::Timeout(_) | usb::Error::PartialRead { .. } => {
-            TransferError::new_err(message)
-        }
+        usb::Error::Transfer { .. }
+        | usb::Error::Timeout(_)
+        | usb::Error::ShortTransfer { .. }
+        | usb::Error::PartialRead { .. } => TransferError::new_err(message),
         usb::Error::LengthLimit { .. }
         | usb::Error::AddressOverflow
         | usb::Error::OutsideDataWindow
@@ -52,6 +53,17 @@ fn convert_error(py: Python<'_>, error: usb::Error) -> PyErr {
         _ => UsbError::new_err(message),
     };
     let object = exception.value(py);
+    // Transfers that fail before a data completion still expose the same fields.
+    if matches!(
+        &error,
+        usb::Error::Transfer { .. }
+            | usb::Error::Timeout(_)
+            | usb::Error::ShortTransfer { .. }
+            | usb::Error::PartialRead { .. }
+    ) {
+        let _ = object.setattr("partial", PyBytes::new(py, &[]));
+        let _ = object.setattr("transferred", py.None());
+    }
     match error {
         usb::Error::DeviceStatus {
             command,
@@ -69,6 +81,12 @@ fn convert_error(py: Python<'_>, error: usb::Error) -> PyErr {
         } => {
             let _ = object.setattr("transferred", transferred);
             let _ = object.setattr("partial", PyBytes::new(py, &partial));
+        }
+        usb::Error::ShortTransfer {
+            expected, actual, ..
+        } => {
+            let _ = object.setattr("expected", expected);
+            let _ = object.setattr("transferred", actual);
         }
         usb::Error::PartialRead { data, source, .. } => {
             let _ = object.setattr("partial", PyBytes::new(py, &data));
