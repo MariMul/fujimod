@@ -1180,6 +1180,12 @@ a:focus-visible,
   font-family: inherit;
   cursor: pointer;
 }
+.combo,
+.combo * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
 .combo:hover,
 .combo:focus-visible {
   box-shadow:
