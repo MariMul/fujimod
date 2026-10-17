@@ -26,6 +26,7 @@ export interface ModelData {
 export interface ModelHit {
   id: string;
   point?: { x: number; y: number };
+  surfacePoint?: THREE.Vector3;
 }
 
 /** Rendering, picking and LCD texture placement; no firmware knowledge. */
@@ -56,6 +57,7 @@ export class ModelViewer {
   private inputFeedback = document.createElement("div");
   private feedbackId?: string;
   private feedbackUntil = 0;
+  private feedbackPoint?: THREE.Vector3;
   private faulted = false;
   private undoFault?: () => void;
   private orientation?: {
@@ -530,6 +532,7 @@ export class ModelViewer {
     return {
       id: node.userData.inputIds[0],
       point: hit.uv ? { x: hit.uv.x, y: 1 - hit.uv.y } : undefined,
+      surfacePoint: this.root.worldToLocal(hit.point.clone()),
     };
   }
   private regionPoint(target: THREE.Object3D, id?: string) {
@@ -595,7 +598,8 @@ export class ModelViewer {
     return { id: regions[direction] };
   }
   /** Immediate acknowledgment, retained after release so a finger cannot hide it. */
-  pressFeedback(id: string) {
+  pressFeedback(id: string, surfacePoint?: THREE.Vector3) {
+    this.feedbackPoint = surfacePoint?.clone();
     this.feedbackId = id;
     this.feedbackUntil = performance.now() + 1100;
     this.inputFeedback.textContent = this.inputLabel(id);
@@ -610,7 +614,15 @@ export class ModelViewer {
     const id = this.feedbackId ?? this.highlightId?.split("|")[0], target = id && this.targets.get(id);
     this.inputMarker.hidden = !target || this.host.classList.contains("lcd-mode");
     if (!target || !id) return;
-    const world = this.regionPoint(target, id), point = this.projectPoint(world);
+    const touch = Boolean(this.feedbackId && this.feedbackPoint);
+    if (target.name === this.data?.screen && !touch) {
+      this.inputMarker.hidden = true;
+      return;
+    }
+    const world = touch
+      ? this.root.localToWorld(this.feedbackPoint!.clone())
+      : this.regionPoint(target, id);
+    const point = this.projectPoint(world);
     if (point.z < -1 || point.z > 1 || !this.targetVisible(target, world)) {
       this.inputMarker.hidden = true;
       return;
@@ -619,7 +631,8 @@ export class ModelViewer {
     this.inputMarker.style.left = `${point.x - rect.left}px`;
     this.inputMarker.style.top = `${point.y - rect.top}px`;
     this.inputMarker.dataset.input = id;
-    this.inputMarker.textContent = this.inputLabel(id).match(/^[↑↓←→]/)?.[0] ?? "";
+    this.inputMarker.textContent = touch ? "" : this.inputLabel(id).match(/^[↑↓←→]/)?.[0] ?? "";
+    this.inputMarker.classList.toggle("touch-crosshair", touch);
     this.inputMarker.classList.toggle("pressed", Boolean(this.feedbackId));
   }
   private visible(node: THREE.Object3D) {

@@ -1401,3 +1401,21 @@ header > a {
 .tree {
   min-height: 180px;
 }
+
+.model-input-marker.touch-crosshair {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  filter: drop-shadow(0 1px 1px #000) drop-shadow(0 -1px 1px #000);
+}
+.model-input-marker.touch-crosshair::before,
+.model-input-marker.touch-crosshair::after {
+  content: "";
+  position: absolute;
+  background: #a1ffb9;
+}
+.model-input-marker.touch-crosshair::before { width: 26px; height: 2px; }
+.model-input-marker.touch-crosshair::after { width: 2px; height: 26px; }

@@ -509,6 +509,7 @@ export class InputPanel {
     pointer: number | string,
     stage?: string,
     point?: { x: number; y: number },
+    surfacePoint?: ModelHit["surfacePoint"],
   ) {
     if (
       !this.ready ||
@@ -519,7 +520,7 @@ export class InputPanel {
       return;
     this.holds.set(pointer, id);
     this.feedback([id]);
-    this.viewer.pressFeedback(id);
+    this.viewer.pressFeedback(id, this.inputs.get(id)?.kind === "touch" ? surfacePoint : undefined);
     void this.engine!.press(id, stage, point).catch(this.error);
   }
   private release(pointer: number | string) {
@@ -568,7 +569,9 @@ export class InputPanel {
     let tickPosition = initialTicks;
     const move = (next: PointerEvent) => {
       if (next.pointerId !== event.pointerId) return;
-      remainder += next.clientX - previous;
+      // Numbered strips follow the pointer; moving them right selects the
+      // preceding label under the fixed center marker.
+      remainder += (next.clientX - previous) * (ticks ? 1 : -1);
       previous = next.clientX;
       const steps = Math.trunc(remainder / 16);
       remainder -= steps * 16;
@@ -623,6 +626,7 @@ export class InputPanel {
         event.pointerId,
         input.stages ? "full" : undefined,
         hit.point,
+        hit.surfacePoint,
       );
   }
   private availability() {
