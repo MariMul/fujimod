@@ -81,13 +81,15 @@ export function browserEnvironment(): SessionEnvironment {
       ).wakeLock;
       return lock?.request('screen').catch(() => undefined);
     },
-    visible: () => document.visibilityState === 'visible',
+    visible: () => typeof document !== 'undefined' && document.visibilityState === 'visible',
     onVisible(listener) {
+      if (typeof document === 'undefined') return () => {};
       const changed = () => document.visibilityState === 'visible' && listener();
       document.addEventListener('visibilitychange', changed);
       return () => document.removeEventListener('visibilitychange', changed);
     },
     onLeave(listener) {
+      if (typeof window === 'undefined') return () => {};
       window.addEventListener('pagehide', listener);
       document.addEventListener('freeze', listener);
       return () => {
