@@ -35,19 +35,14 @@
       "maxLength": 8,
       "default": ""
     },
-    "mailbox": {
-      "type": "string",
-      "maxLength": 8,
-      "default": ""
-    },
-    "nonce": {
-      "type": "string",
-      "maxLength": 8,
-      "default": ""
-    },
     "archive": {
       "type": "string",
       "maxLength": 2048,
+      "default": ""
+    },
+    "files": {
+      "type": "string",
+      "maxLength": 8,
       "default": ""
     }
   },

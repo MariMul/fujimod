@@ -27,53 +27,33 @@ archive receipt and report ID.
 it the selected device and live session. Its opt-in `connectOnMount` starts
 that adapter; it does not open another device chooser or USB session.
 
-## X70 1.10 export channel, version 1
+## Shared session-file access
 
-The URL identifies a 32-byte-aligned channel inside the checked mod region
-`0x40390000..0x40600000`. The browser verifies the complete fixed header, ABI
-magic and build tag before writing. It never sends console commands to download
-reports, calls stock functions by address, changes modes or modifies settings.
-The camera validates filenames and constructs the path in `FUJIMOD/REPORTS`.
-The channel is initialized at boot, so a QR can retrieve a saved report after a
-restart of the same build. JIG/service mode is refused. The camera temporarily
-enables diagnostic USB in RAM while its report screen is open. Reconnect a
-cable that was already attached. The prior flag is restored after dismissal
-and disconnect, keeping an established Dev Tools session available. After a
-camera restart, reopen the report screen or enable USB DEBUGGING before connecting.
+The QR `files` address identifies `x70_file_api` from the session-io library,
+the same file operations used by the RAW/photo-session tools. The previous
+report-specific channel, commands and nonce are removed. `DeviceFiles` is the
+reusable browser reader; `bug/transfer.ts` supplies X70 1.10 address bounds and
+uncached RAM mapping, then validates the complete report TAR. Its memory reads
+and writes use the established diagnostic USB SDK.
 
-| Offset | Little-endian 32-bit field                                               |
-| ------ | ------------------------------------------------------------------------ |
-| 0      | Magic `0x31425246`                                                       |
-| 4      | Version, 1                                                               |
-| 8      | Selected capture nonce                                                   |
-| 12     | TAR byte length                                                          |
-| 16     | Complete TAR CRC32                                                       |
-| 20     | Host command (worker consumes it to zero)                                |
-| 24     | Status: 1 busy, 0 complete, negative or other positive value is an error |
-| 28     | Current returned chunk offset                                            |
-| 32     | Returned chunk byte length                                               |
-| 36     | Current stock UI mode; 12 is refused                                     |
-| 40     | First eight hexadecimal digits of the build commit                       |
-| 44     | Capabilities: bit 0 permits deletion of a verified selected report |
-| 48–60  | Reserved                                                                 |
-| 64     | 16 KiB data buffer                                                       |
+The 64-byte discovery record advertises a build tag, capacity and pointers to
+the shared request/state/status/path/buffer fields. Open/read/close operations
+are 1/2/3, failed-stream close is 4, existing-file rewrite/write are 5/6, and
+remove is 7. The private source `decomp/mods/lib/session-io/README.md` specifies
+every offset. The browser validates all pointers and detects another operation
+intervening. A timeout never frees or reuses a pending camera buffer.
 
-Select (command 4) takes a 32-byte request in the data buffer: NUL-terminated
-`Rxxxxxxx.TAR` in bytes 0–15, expected length at 16, CRC32 at 20, nonzero nonce
-at 24, reserved word at 28. Command 1 reads the next chunk; 2 resets the stream;
-3 closes it. Command 5 deletes the selected report only after a complete,
-CRC-verified read and close, then clears its nonce. New selection, capture or
-errors clear verification. Older builds have no delete capability. Only the command word and selection payload are host-writable.
-The existing scanner wakes the sleeping report worker, which owns all stock
-file-service operations and persistent request packets. No new periodic timer
-or background USB poll is installed on the camera. Client polling exists only
-while a requested transfer is in progress.
+The scanner wakes the existing report worker only for pending file requests.
+That adapter services the common entry independently of the UI task and refuses
+service/JIG mode. No stock callback-table redirection, console command or camera
+mode change is needed. The QR screen's temporary USB flag and Dev Tools handoff
+are unchanged. After restart of the same build, reopen the report screen or
+enable USB DEBUGGING to retrieve an earlier saved report.
 
-Tests cover inline and USB acquisition, malformed hashes, wrong builds and
-modes, chunk sequencing, corruption, local download compression, explicit
-delivery, and the live-session handoff. Camera-side tests separately execute
-the ARM implementation and stock filesystem; these do not qualify physical USB
-hardware timing.
+Deletion consent and read/CRC verification live in the report client. The general
+file service handles ordinary paths and is also used by the other session tools.
+Tests cover the actual stock-written TAR with UI task 1 suspended, plus existing
+RAW rewrite/read callers; physical USB timing is not qualified by emulator tests.
 
 ## Browser integration test
 

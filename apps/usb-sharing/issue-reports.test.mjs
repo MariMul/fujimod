@@ -25,8 +25,7 @@ async function submission(overrides = {}) {
       path: "A:\\FUJIMOD\\REPORTS\\R1234567.TAR",
       bytes: 1024,
       crc32: crc32(tar),
-      mailbox: "403a0000",
-      nonce: "12345678",
+      files: "403a0000",
       ...overrides,
     }),
   );

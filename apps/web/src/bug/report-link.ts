@@ -7,8 +7,7 @@ export interface ReportLink {
   path: string;
   bytes: number;
   crc32: string;
-  mailbox: string;
-  nonce: string;
+  files: string;
   archive?: string;
 }
 export function base64url(bytes: Uint8Array): string {
@@ -42,8 +41,7 @@ export function parseReportLink(hash: string): ReportLink {
     value.bytes < 1024 ||
     value.bytes > MAX_REPORT_BYTES ||
     !/^[a-f0-9]{8}$/.test(value.crc32) ||
-    !/^[a-f0-9]{8}$/.test(value.nonce) ||
-    !/^[a-f0-9]{8}$/.test(value.mailbox) ||
+    !/^[a-f0-9]{8}$/.test(value.files) ||
     (value.archive !== undefined && typeof value.archive !== 'string')
   )
     throw Error('Unsupported camera report link.');

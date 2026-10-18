@@ -21,6 +21,7 @@ export class ReportUsb implements ReportConnection {
   private device?: Device;
   private interfaces: Awaited<ReturnType<Device['interfaces']>> = [];
   private session?: Session;
+  private verified?: ReportLink;
   private choice?: CameraChoice;
   async initialize() {
     await initialize();
@@ -51,7 +52,7 @@ export class ReportUsb implements ReportConnection {
     }
     const session = this.session;
     try {
-      return await retrieveReport(
+      const report = await retrieveReport(
         {
           read: (address, count) => session.readMemory(address, count),
           write: (address, bytes) => session.writeMemory(address, bytes),
@@ -59,6 +60,8 @@ export class ReportUsb implements ReportConnection {
         link,
         progress,
       );
+      this.verified = { ...link };
+      return report;
     } catch (error) {
       // No close command or mode change after an unknown/wrong camera reply.
       session.abandon();
@@ -69,6 +72,13 @@ export class ReportUsb implements ReportConnection {
   }
   async remove(link: ReportLink) {
     const session = this.session;
+    if (
+      !this.verified ||
+      ['files', 'path', 'bytes', 'crc32', 'commit'].some(
+        (key) => this.verified![key as keyof ReportLink] !== link[key as keyof ReportLink],
+      )
+    )
+      throw Error('Read and verify this report before deleting it.');
     if (!session) throw Error('Camera disconnected.');
     await removeReport(
       {
@@ -77,6 +87,7 @@ export class ReportUsb implements ReportConnection {
       },
       link,
     );
+    this.verified = undefined;
   }
   devTools(): CameraBackend {
     const session = this.session,
@@ -152,6 +163,7 @@ export class ReportUsb implements ReportConnection {
     return () => events?.removeEventListener('disconnect', listener);
   }
   dispose() {
+    this.verified = undefined;
     this.session?.abandon();
     this.session?.free();
     this.session = undefined;

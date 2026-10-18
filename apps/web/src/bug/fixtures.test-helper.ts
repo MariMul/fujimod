@@ -17,8 +17,7 @@ export const link: ReportLink = {
   path: 'A:\\FUJIMOD\\REPORTS\\R1234567.TAR',
   bytes: tar.length,
   crc32: crc32(tar).toString(16).padStart(8, '0'),
-  mailbox: '403a0000',
-  nonce: '12345678',
+  files: '403a0000',
 };
 export const hash = (value = link) =>
   '#?report=' + base64url(new TextEncoder().encode(JSON.stringify(value)));
