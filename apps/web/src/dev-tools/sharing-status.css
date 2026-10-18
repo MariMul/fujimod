@@ -75,7 +75,23 @@
   margin: 4px 0 0;
   padding: 0;
   list-style: none;
-  font: 11px/16px ui-monospace, SFMono-Regular, monospace;
+  font:
+    11px/16px ui-monospace,
+    SFMono-Regular,
+    monospace;
   color: var(--dim);
   overflow-wrap: anywhere;
+}
+
+.owner-countdown {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: #fff0c2;
+  color: #352600;
+}
+.owner-countdown strong {
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
 }

@@ -72,6 +72,10 @@ pub enum Operation {
     /// Echo at the exporter without accessing or claiming USB.
     Probe,
     List,
+    /// A neutral progress line for the device owner's log; never touches USB.
+    OwnerStatus { message: String },
+    /// Owner banner and spoken ten-second countdown; reply only after it ends.
+    OwnerAttention { message: String },
     Open {
         configuration: u8,
         interface: u8,
@@ -215,6 +219,11 @@ impl Operation {
     pub fn validate(&self) -> crate::Result<()> {
         let invalid = |message: &str| crate::Error(message.into());
         match self {
+            Self::OwnerStatus { message } | Self::OwnerAttention { message } => {
+                if message.is_empty() || message.len() > MAX_REASON {
+                    return Err(invalid("owner message must be 1–512 UTF-8 bytes"));
+                }
+            }
             Self::ControlIn { setup, length } => {
                 setup.validate()?;
                 if *length > MAX_TRANSFER {
@@ -270,6 +279,24 @@ impl Setup {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn owner_requests_round_trip_and_bound_text() {
+        for operation in [
+            Operation::OwnerStatus { message: "stopped: camera in SET-UP mode".into() },
+            Operation::OwnerAttention { message: "Film the strip".into() },
+        ] {
+            operation.validate().unwrap();
+            let expected = serde_json::to_value(&operation).unwrap();
+            let wire = Frame::Request { id: 8, device: "camera".into(), operation, timeout_ms: 30000 }.encode().unwrap();
+            let Frame::Request { id, operation, .. } = Frame::decode(&wire).unwrap() else { panic!() };
+            assert_eq!(id, 8);
+            assert_eq!(serde_json::to_value(operation).unwrap(), expected);
+        }
+        for message in [String::new(), "é".repeat(257)] {
+            assert!(Operation::OwnerStatus { message: message.clone() }.validate().is_err());
+            assert!(Operation::OwnerAttention { message }.validate().is_err());
+        }
+    }
     #[test]
     fn reasons_are_optional_on_hello_and_bounded() {
         let without_reason: Frame =

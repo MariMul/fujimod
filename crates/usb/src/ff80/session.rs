@@ -102,6 +102,22 @@ impl Session {
     pub async fn write_memory(&mut self, command: WriteMemory) -> Result<()> {
         self.core.write_memory(command).await
     }
+    /// A neutral progress line in the share owner's log. No-op for local USB.
+    pub async fn owner_status(&mut self, message: &str) -> Result<()> {
+        match self.core.io.inner_mut() {
+            crate::connection::Backend::Proxy(io) => io.owner_message(
+                fujimod_usb_proxy::Operation::OwnerStatus { message: message.into() }).await,
+            _ => Ok(()),
+        }
+    }
+    /// Wait for the share owner's spoken ten-second countdown. No USB traffic.
+    pub async fn owner_attention(&mut self, message: &str) -> Result<()> {
+        match self.core.io.inner_mut() {
+            crate::connection::Backend::Proxy(io) => io.owner_message(
+                fujimod_usb_proxy::Operation::OwnerAttention { message: message.into() }).await,
+            _ => Err(fujimod_usb_proxy::Error("attention requires a shared Dev Tools page".into()).into()),
+        }
+    }
     /// Tell a share owner the camera's battery level (a firmware level name).
     /// Only shared (proxy) sessions have an owner; elsewhere this does nothing.
     pub async fn report_battery(&mut self, level: &str) -> Result<()> {

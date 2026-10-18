@@ -16,6 +16,13 @@ impl ProxyIo {
     pub(crate) async fn notify_owner(&mut self, frame: fujimod_usb_proxy::protocol::Frame) -> Result<()> {
         Ok(self.client.notify_owner(frame).await?)
     }
+    pub(crate) async fn owner_message(&mut self, operation: Operation) -> Result<()> {
+        let completion = self.client.request(&self.device, operation, Duration::from_secs(30)).await?;
+        if let Some(error) = completion.error {
+            return Err(fujimod_usb_proxy::Error(error).into());
+        }
+        Ok(())
+    }
     async fn exchange(
         &mut self,
         operation: Operation,

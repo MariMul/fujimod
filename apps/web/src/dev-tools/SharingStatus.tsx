@@ -33,12 +33,20 @@ export function SharingChip(props: { session: ShareSession; onOpen: () => void }
 /** Shown only while a remote controller is connected. */
 export function RemoteUseStrip(props: { session: ShareSession }) {
   return (
-    <Show when={props.session.controllers().size > 0}>
-      <div class="remote-use" role="status">
-        Your camera is being used remotely. Keep this tab in front and your computer on to stay
-        connected.
-      </div>
-    </Show>
+    <>
+      <Show when={props.session.countdown()}>
+        <div class="remote-use owner-countdown" role="status" aria-live="polite">
+          <span>{props.session.countdown()?.message}</span>
+          <strong>{props.session.countdown()?.remaining}</strong>
+        </div>
+      </Show>
+      <Show when={props.session.controllers().size > 0}>
+        <div class="remote-use" role="status">
+          Your camera is being used remotely. Keep this tab in front and your computer on to stay
+          connected.
+        </div>
+      </Show>
+    </>
   );
 }
 

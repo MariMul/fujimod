@@ -461,6 +461,22 @@ export class ShareHost {
               if (!this.device) throw Error(`Shared camera offline: ${this.offline}`);
               if (request.device !== this.device.descriptor.id)
                 throw Error('Unknown shared device');
+              if (request.operation.op === 'owner_status' || request.operation.op === 'owner_attention') {
+                if (this.owner !== frame.from) throw Error('Shared camera is not claimed');
+                const message = request.operation.message;
+                if (typeof message !== 'string' || !message.length || new TextEncoder().encode(message).length > 512)
+                  throw Error('Invalid owner message');
+                if (request.operation.op === 'owner_status') {
+                  if (!this.callbacks.toolStatus) throw Error('Owner log unavailable');
+                  this.callbacks.toolStatus(frame.from, message);
+                } else {
+                  if (!this.callbacks.countdown) throw Error('Owner countdown unavailable');
+                  await this.callbacks.countdown(frame.from, message);
+                  if (peer.ended || this.closed || this.owner !== frame.from || !this.device)
+                    throw Error('Owner countdown interrupted');
+                }
+                return {};
+              }
               if (request.operation.op === 'open') {
                 if (this.fenced)
                   throw Error('Shared camera completion unknown; reconnect on the host');

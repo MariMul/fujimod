@@ -3,6 +3,7 @@ import type { ShareStatus } from '../../../../crates/usb-proxy/web/peer.js';
 import { CameraTarget } from './camera';
 import { ConnectionState, type DevToolsController } from './controller';
 import { Level } from './log';
+import { createOwnerCountdown, type Countdown } from './owner-countdown';
 import { ShareHost, newTicket, shareUrl, signalUrl } from './sharing';
 
 /** Firmware battery level names at which the battery counts as exhausted. */
@@ -45,6 +46,11 @@ export function browserEnvironment(): SessionEnvironment {
   return {
     location: () => location.href,
     unlockAudio() {
+      if (typeof speechSynthesis !== 'undefined') {
+        const utterance = new SpeechSynthesisUtterance(' ');
+        utterance.volume = 0;
+        speechSynthesis.speak(utterance);
+      }
       if (typeof AudioContext === 'undefined') return;
       audio ??= new AudioContext();
       void audio.resume();
@@ -68,8 +74,11 @@ export function browserEnvironment(): SessionEnvironment {
       }
     },
     async wakeLock() {
-      const lock = (navigator as Navigator & { wakeLock?: { request(type: 'screen'): Promise<{ release(): Promise<void> }> } })
-        .wakeLock;
+      const lock = (
+        navigator as Navigator & {
+          wakeLock?: { request(type: 'screen'): Promise<{ release(): Promise<void> }> };
+        }
+      ).wakeLock;
       return lock?.request('screen').catch(() => undefined);
     },
     visible: () => document.visibilityState === 'visible',
@@ -101,6 +110,9 @@ export function createShareSession(tools: DevToolsController, environment = brow
     const [controllers, setControllers] = createSignal<ReadonlyMap<string, string>>(new Map());
     const [status, setStatus] = createSignal<ShareStatus>();
     const [problem, setProblem] = createSignal<Problem>();
+    const [countdown, setCountdown] = createSignal<Countdown>();
+    const ownerCountdown = createOwnerCountdown(setCountdown);
+    let countdownController: string | undefined;
     const [registration, setRegistration] = createSignal<Registration>();
     // Signals are committed in batches; operations use these plain values.
     let link = '';
@@ -160,6 +172,7 @@ export function createShareSession(tools: DevToolsController, environment = brow
             );
           },
           disconnected: (id, reason) => {
+            if (countdownController === id) ownerCountdown.cancel();
             setControllers((map) => {
               const next = new Map(map);
               next.delete(id);
@@ -169,6 +182,16 @@ export function createShareSession(tools: DevToolsController, environment = brow
             tools.connectionMessage(`Remote controller disconnected: ${reason}`);
           },
           traffic: (event) => tools.shareTraffic(event),
+          toolStatus: (_id, message) => tools.connectionMessage(message, Level.Info),
+          countdown: async (id, message) => {
+            tools.connectionMessage(message, Level.Info);
+            countdownController = id;
+            try {
+              await ownerCountdown.start(message);
+            } finally {
+              countdownController = undefined;
+            }
+          },
           state: publish,
           attention: (_id, message) =>
             raise({ kind: ProblemKind.Attention, message, urgent: true, reconnect: false }),
@@ -181,7 +204,8 @@ export function createShareSession(tools: DevToolsController, environment = brow
         }
         identity = currentIdentity();
         camera = {
-          model: tools.camera()?.firmware?.model ?? device.descriptor.product ?? identity.name ?? null,
+          model:
+            tools.camera()?.firmware?.model ?? device.descriptor.product ?? identity.name ?? null,
           serial: device.descriptor.serial,
         };
         link = link_;
@@ -199,6 +223,7 @@ export function createShareSession(tools: DevToolsController, environment = brow
 
     /** Revoke the link and end remote sessions; the local camera stays connected. */
     function stop() {
+      ownerCountdown.cancel();
       attempt++;
       pending = undefined;
       host?.stop();
@@ -244,6 +269,7 @@ export function createShareSession(tools: DevToolsController, environment = brow
         if (state === ConnectionState.Opening || state === ConnectionState.Choosing) return;
         const battery = host.status().battery;
         const exhausted = battery !== undefined && EXHAUSTED.has(battery);
+        ownerCountdown.cancel();
         host.cameraLost(exhausted ? 'battery' : 'unplugged');
         publish(host.status());
         setControllers(new Map());
@@ -251,7 +277,8 @@ export function createShareSession(tools: DevToolsController, environment = brow
           exhausted
             ? {
                 kind: ProblemKind.Battery,
-                message: 'Camera battery ran out. Charge it and turn it on, then reconnect it to keep sharing on the same link.',
+                message:
+                  'Camera battery ran out. Charge it and turn it on, then reconnect it to keep sharing on the same link.',
                 urgent: false,
                 reconnect: true,
               }
@@ -299,6 +326,7 @@ export function createShareSession(tools: DevToolsController, environment = brow
       controllers,
       status,
       problem,
+      countdown,
       registration,
       sharing: () => url() !== '',
       /** Whether a share exists now, for operation guards (not batched). */

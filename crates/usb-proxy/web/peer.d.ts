@@ -46,6 +46,10 @@ export interface Callbacks {
   battery?(id: string, level: string): void;
   /** A controller asks the owner's user to fix something only it can see. */
   attention?(id: string, message: string): void;
+  /** Neutral tool progress, including an expected refusal to continue. */
+  toolStatus?(id: string, message: string): void;
+  /** Resolves only after the owner's spoken ten-second countdown. */
+  countdown?(id: string, message: string): Promise<void>;
   /** Online state or battery changed. */
   state?(status: ShareStatus): void;
   error?(error: Error): void;

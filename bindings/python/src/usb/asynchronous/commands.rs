@@ -97,6 +97,14 @@ impl AsyncSession {
     async fn ping(&self) -> PyResult<Py<PyBytes>> {
         self.with(|s| Box::pin(s.ping())).await.map(bytes)
     }
+    /// Neutral tool progress in the owner's Dev Tools log.
+    async fn owner_status(&self, message: String) -> PyResult<()> {
+        self.with(move |s| Box::pin(async move { s.owner_status(&message).await })).await
+    }
+    /// Returns only after the owner's ten-second countdown finishes.
+    async fn owner_attention(&self, message: String) -> PyResult<()> {
+        self.with(move |s| Box::pin(async move { s.owner_attention(&message).await })).await
+    }
     /// Tell a share owner the camera's battery level; a no-op unless shared.
     async fn report_battery(&self, level: String) -> PyResult<()> {
         self.with(move |s| Box::pin(async move { s.report_battery(&level).await })).await

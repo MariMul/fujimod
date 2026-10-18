@@ -178,3 +178,20 @@ Agreed design, 2026-10-18.
   what happened and what to do, updates instead of stacking, and closes itself
   when the problem is fixed; Close dismisses it early. The chime is unlocked by
   the owner's click on Share or Connect camera. No system notifications.
+
+### Tool progress and owner countdowns
+
+A claimed controller can send `owner_status { message }` or
+`owner_attention { message }` requests on the existing authenticated connection.
+Messages contain 1–512 UTF-8 bytes. Neither operation reaches the USB device.
+The owner logs status as Info, including expected refusals to continue.
+Attention shows a banner and speaks ten through one using browser
+`speechSynthesis`. Its ordinary correlated reply is sent after the ten-second
+countdown completes; controllers must await it before starting the owner step.
+Stopping sharing, losing the camera or disconnecting the controller cancels the
+countdown. Missing owner handlers reject the request rather than claiming success.
+These operations are separate from battery reports and urgent camera alerts.
+
+Rust USB sessions expose `owner_status(message)` and `owner_attention(message)`,
+also available on native Python sessions. Local USB status does nothing; local
+USB attention fails because it has no owner page.
