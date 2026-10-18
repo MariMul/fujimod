@@ -55,6 +55,8 @@ export function createDevTools(
     publishConsoleState(next);
   };
   const currentConnection = () => state;
+  // Which source the current camera came from (physical USB, simulator, remote share).
+  let connectedTarget: CameraTarget | undefined;
   const [camera, setCamera] = createSignal<CameraChoice>();
   const [entries, setEntries] = createSignal<LogEntry[]>([]);
   const [discarded, setDiscarded] = createSignal(0);
@@ -145,6 +147,7 @@ export function createDevTools(
   }
   async function connect(target = CameraTarget.Usb) {
     if (target === CameraTarget.Usb && !supported) return;
+    connectedTarget = target;
     if (
       currentConnection() !== ConnectionState.Disconnected &&
       !(currentConnection() === ConnectionState.Unsupported && target !== CameraTarget.Usb)
@@ -301,6 +304,7 @@ export function createDevTools(
     connection,
     consoleState,
     camera,
+    target: () => connectedTarget,
     canShare: () => Boolean(backend.exportUsb) && (backend.canShare?.() ?? true),
     connectionMessage: message,
     shareTraffic: (event: ShareTrafficEvent) => {

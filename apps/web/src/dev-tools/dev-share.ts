@@ -1,4 +1,5 @@
 import { createEffect, createRoot } from 'solid-js';
+import { CameraTarget } from './camera';
 import { ConnectionState, ConsoleState, type DevToolsController } from './controller';
 import { Level } from './log';
 import type { ShareSession } from './share-session';
@@ -66,7 +67,9 @@ export function startDevShare(tools: DevToolsController, share: ShareSession): (
           return;
         }
         if (sharing) return;
-        if (state === ConnectionState.Connected && tools.canShare() && idle && !suspended) {
+        // Only physical cameras: a simulator registered here would receive camera jobs.
+        const physical = tools.target() === CameraTarget.Usb;
+        if (state === ConnectionState.Connected && physical && tools.canShare() && idle && !suspended) {
           void share.share().catch((error: unknown) => {
             tools.connectionMessage(String(error), Level.Error);
           });
