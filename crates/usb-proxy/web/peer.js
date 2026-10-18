@@ -118,19 +118,27 @@ function signaling(ticket, role, message, ended) {
     close: () => socket.close(),
   };
 }
-export async function gather(pc) {
+export async function gather(pc, { settle = 3000, limit = 12000 } = {}) {
   if (pc.iceGatheringState === 'complete') return;
+  // Some browsers leave gathering open when one interface or server never
+  // answers. After `settle`, send the candidates found so far; fail only if
+  // none exist by `limit`.
+  const found = () => /^a=candidate:/m.test(pc.localDescription?.sdp || '');
   await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
+    const finish = (error) => {
+      clearTimeout(settled);
+      clearTimeout(expired);
       pc.removeEventListener('icegatheringstatechange', changed);
-      reject(Error('ICE gathering timed out'));
-    }, 12000);
+      if (error) reject(error);
+      else resolve();
+    };
+    const settled = setTimeout(() => found() && finish(), settle);
+    const expired = setTimeout(
+      () => finish(found() ? undefined : Error('ICE gathering found no candidates')),
+      limit,
+    );
     function changed() {
-      if (pc.iceGatheringState === 'complete') {
-        clearTimeout(timer);
-        pc.removeEventListener('icegatheringstatechange', changed);
-        resolve();
-      }
+      if (pc.iceGatheringState === 'complete') finish();
     }
     pc.addEventListener('icegatheringstatechange', changed);
   });
