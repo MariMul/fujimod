@@ -320,6 +320,7 @@ class Guide:
             try:
                 self.video.finish()
                 self.report['video'] = 'video.mp4'
+                self.report['video_clean'] = 'video-clean.mp4'   # no helper overlays
             except BaseException as caught:
                 if error is None:
                     error = caught

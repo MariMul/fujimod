@@ -1,4 +1,8 @@
-"""Sampled LCD video with timestamped input badges; PNGs stay unannotated."""
+"""Sampled LCD video with timestamped input badges; PNGs stay unannotated.
+
+Two encodes of the same frames: video.mp4 with the input badges (guides and
+previews) and video-clean.mp4 without any helper overlay (website cards,
+heroes). Screenshots are always unannotated."""
 from io import BytesIO
 from ..presentation import SPEC, control, draw_badges
 import math
@@ -21,6 +25,7 @@ class Video:
             raise RuntimeError('Walkthrough video requires ffmpeg on PATH')
         self.output, self.fps = Path(output), fps
         self.process = None
+        self.clean = None
         self.frames = 0
         self.last_time = None
         self.last_png = None
@@ -101,20 +106,26 @@ class Video:
             if any(value % 2 for value in self.size):
                 raise ValueError('Video frame dimensions must be even')
             self.log = (self.output/'ffmpeg.log').open('wb')
-            try:
-                self.process = subprocess.Popen([
+            def encoder(name):
+                return subprocess.Popen([
                     'ffmpeg', '-v', 'error', '-y', '-f', 'rawvideo', '-pixel_format', 'rgb24',
                     '-video_size', f'{picture.width}x{picture.height}', '-framerate', str(self.fps),
                     '-i', '-', '-an', '-c:v', 'libx264', '-preset', 'fast', '-crf', '20',
-                    '-pix_fmt', 'yuv420p', '-movflags', '+faststart', str(self.output/'video.mp4'),
+                    '-pix_fmt', 'yuv420p', '-movflags', '+faststart', str(self.output/name),
                 ], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=self.log)
+            try:
+                self.process = encoder('video.mp4')
+                self.clean = encoder('video-clean.mp4')
             except BaseException:
+                if self.process is not None:
+                    self.process.kill()
                 self.log.close()
                 raise
         if picture.size != self.size:
             raise ValueError('LCD dimensions changed during walkthrough')
         self.process.stdin.write(draw_badges(picture, self._labels(), align='right',
                                             layout='stack').convert('RGB').tobytes())
+        self.clean.stdin.write(picture.convert('RGB').tobytes())
         self.frames += 1
 
     def frame(self, png, seconds):
@@ -154,17 +165,21 @@ class Video:
                 raise RuntimeError('No LCD frames recorded')
         finally:
             if self.process is not None:
+                results = []
                 try:
-                    self.process.stdin.close()
-                except BrokenPipeError:
-                    pass
-                try:
-                    result = self.process.wait(timeout=30)
-                except subprocess.TimeoutExpired:
-                    self.process.kill()
-                    self.process.wait()
-                    raise RuntimeError('Video encoding timed out; see ffmpeg.log')
+                    for process in (self.process, self.clean):
+                        try:
+                            process.stdin.close()
+                        except BrokenPipeError:
+                            pass
+                    for process in (self.process, self.clean):
+                        try:
+                            results.append(process.wait(timeout=30))
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                            process.wait()
+                            raise RuntimeError('Video encoding timed out; see ffmpeg.log')
                 finally:
                     self.log.close()
-                if result:
+                if any(results):
                     raise RuntimeError('Video encoding failed; see ffmpeg.log')
