@@ -458,7 +458,7 @@ pub fn overlays(data: &[u8], spec: &OverlayTable<'_>) -> Result<Vec<Overlay>> {
     )?;
     let group = words(u64::from(roots[1]), 3)?;
     require(
-        group[2] == section[6] && group[1] % 0x20000 == 0 && section[5] % 0x20000 == 0,
+        group[2] == section[6],
         Error::OverlayGroup {
             address: roots[1].into(),
             group_size: group[2],

@@ -231,3 +231,19 @@ fn structured_errors_keep_positions_and_values() {
         })
     ));
 }
+
+#[test]
+fn overlay_descriptors_address_bytes_not_hardware_flash_blocks() {
+    let mut data = overlay_fixture();
+    data.resize(0x20008, 0);
+    put(&mut data, 0x64 + 20, &[0x20004]);
+    put(&mut data, 0x100 + 4, &[0x40004]);
+    put(&mut data, 0x120 + 4, &[0x40004]);
+    put(&mut data, 0x138 + 4, &[0x40004]);
+    data[0x20004..].copy_from_slice(b"code");
+    let rows = parse_overlays(&data).unwrap();
+    assert_eq!(rows[0].dat_offset, 0x20004);
+    assert_eq!(rows[0].address, 0x40004);
+    assert_eq!(rows[0].sha256, sha256(b"code"));
+    assert!(parse_overlays(&data[..0x20007]).is_err());
+}

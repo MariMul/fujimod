@@ -28,3 +28,8 @@ The Python binding exposes `fujimod.firmware` with the same operations. Its
 `decode(source, mappings)` takes tuples `(name, DAT_offset, initialized_size,
 base, executable, method4)` and returns an `Image`. Header and diagnostic
 results are ordinary Python dictionaries; raw payloads are `bytes`.
+
+Section and overlay addresses are byte offsets, not hardware erase-block
+indices. The descriptor parser does not impose a processor's flash-block
+alignment; it checks table bounds, group sizes, payload extents and the supplied
+flash/DAT bias against every executable compressed stream.
