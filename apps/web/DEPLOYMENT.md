@@ -1,8 +1,11 @@
 # Production hosting
 
-The website is intentionally unpublished. Its Worker and public domain bindings
-have been removed, and the website publication workflow is disabled. Deploying
-the sharing service for testing does not authorize publishing the website.
+The website is intentionally unpublished. Its Worker has been removed and the
+website publication workflow is disabled. The separate `apps/domain-endpoint`
+Worker maintains DNS and HTTPS for `fujimod.com` and `www.fujimod.com`, returning
+an empty 404 for every HTTPS request and redirecting HTTP to HTTPS. It has no
+website assets. Deploying the sharing service for testing does not authorize
+publishing the website.
 
 The retained website configuration reserves `fujimod.com` and `www.fujimod.com`
 for a future explicitly requested publication. The separate
