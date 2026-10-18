@@ -91,8 +91,8 @@ fn unseal(ticket: &Ticket, peer: &str, value: &str) -> Result<Value> {
 pub(crate) struct PeerSocket {
     send: Sender<String>,
     receive: Receiver<Result<String>>,
-    /// Signalled when the I/O thread has flushed and exited.
-    finished: std::sync::mpsc::Receiver<()>,
+    /// Closed when the I/O thread has flushed and exited.
+    finished: Receiver<()>,
 }
 impl PeerSocket {
     pub async fn connect(url: &str, progress: &crate::Progress) -> Result<Self> {
@@ -102,7 +102,7 @@ impl PeerSocket {
         let (tx, outbound) = async_channel::bounded(1);
         let (incoming, rx) = async_channel::bounded(16);
         let (ready, wait) = async_channel::bounded(1);
-        let (finish, finished) = std::sync::mpsc::channel();
+        let (finish, finished) = async_channel::bounded::<()>(1);
         std::thread::Builder::new()
             .name("fujimod-webrtc".into())
             .spawn(move || {
@@ -114,7 +114,7 @@ impl PeerSocket {
                         let _ = incoming.send(Err(error)).await;
                     }
                 });
-                let _ = finish.send(());
+                finish.close();
             })
             .map_err(error)?;
         wait.recv().await.map_err(error)?.map_err(error)?;
@@ -128,7 +128,12 @@ impl PeerSocket {
     pub fn goodbye(&mut self, text: String) {
         if self.send.try_send(text).is_ok() {
             self.send.close();
-            let _ = self.finished.recv_timeout(Duration::from_secs(1));
+            futures_lite::future::block_on(futures_lite::future::or(
+                async {
+                    let _ = self.finished.recv().await;
+                },
+                futures_timer::Delay::new(Duration::from_secs(1)),
+            ));
         }
     }
     pub async fn send(&mut self, text: &str) -> Result<()> {
