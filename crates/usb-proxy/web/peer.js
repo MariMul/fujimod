@@ -1,3 +1,4 @@
+import { observeRequest } from './share-traffic.js';
 // WebRTC USB transport. Only encrypted SDP crosses the rendezvous service.
 const MAX = (8 * 1024 * 1024 * 4) / 3 + 65536;
 const encoder = new TextEncoder();
@@ -406,10 +407,9 @@ export class ShareHost {
             request.timeout_ms > 120000
           )
             throw Error('Invalid USB request');
-          let completion = { devices: [], data: '', transferred: 0, error: null };
-          try {
-            if (request.operation.op === 'probe') { /* Network echo; never touches USB. */ }
-            else if (request.operation.op === 'list') completion.devices = [this.device.descriptor];
+          const completion = await observeRequest(frame.from, request, async () => {
+            if (request.operation.op === 'probe') return {}; /* Network echo; never touches USB. */
+            else if (request.operation.op === 'list') return { devices: [this.device.descriptor] };
             else {
               if (request.device !== this.device.descriptor.id)
                 throw Error('Unknown shared device');
@@ -419,15 +419,11 @@ export class ShareHost {
                 if (this.owner !== undefined) throw Error('Shared camera is in use');
                 this.owner = frame.from;
               } else if (this.owner !== frame.from) throw Error('Shared camera is not claimed');
-              Object.assign(
-                completion,
-                await this.device.execute(request.operation, request.timeout_ms),
-              );
+              const completion = await this.device.execute(request.operation, request.timeout_ms);
               if (request.operation.op === 'close' && !completion.error) this.owner = undefined;
+              return completion;
             }
-          } catch (error) {
-            completion.error = error.message || String(error);
-          }
+          }, this.callbacks.traffic);
           await peer.send(JSON.stringify({ type: 'reply', id: request.id, completion }));
           if (completion.error) {
             this.callbacks.error?.(Error(completion.error));

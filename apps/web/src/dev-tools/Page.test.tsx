@@ -321,3 +321,41 @@ test('disconnect during host setup disposes the late host without registering it
     f.dispose();
   }
 });
+
+test('automatic sharing displays remote traffic and collapses bulk request/completion bursts', async () => {
+  const f = await mount();
+  try {
+    f.button('Connect camera').click();
+    await registered();
+    const callbacks = hosts.create.mock.calls[0][2];
+    for (let id = 0; id < 10000; id++) {
+      const event = {
+        controller: 'native-tool',
+        id,
+        device: 'camera',
+        timeoutMs: 5000,
+        operation: { op: 'transfer_in', endpoint: 0x82, length: 64 },
+      };
+      callbacks.traffic({ ...event, phase: 'submitted' });
+      callbacks.traffic({
+        ...event,
+        phase: 'completed',
+        elapsedMs: 1,
+        completion: { transferred: 64, data: '', deviceCount: 0 },
+      });
+    }
+    await vi.waitFor(() => {
+      flush();
+      expect(f.host.textContent).toContain('10000 submitted, 10000 completed');
+    });
+    expect(f.host.textContent).toContain('Remote native-tool');
+    expect(f.host.textContent).toContain('requested 640000 B, transferred 640000 B');
+    expect(
+      [...f.host.querySelectorAll('.dt-message')].filter((node) =>
+        node.textContent?.includes('transfer_in'),
+      ),
+    ).toHaveLength(1);
+  } finally {
+    f.dispose();
+  }
+});

@@ -1,3 +1,5 @@
+import type { ShareTrafficEvent } from './share-traffic.js';
+export type { ShareTrafficEvent } from './share-traffic.js';
 export interface Descriptor {
   id: string;
   vendor_id: number;
@@ -34,6 +36,8 @@ export interface Callbacks {
   connected?(id: string, reason: string): void;
   /** `reason`: the controller's goodbye ("done" or its error), or 'connection lost without goodbye'. */
   disconnected?(id: string, reason: string): void;
+  /** Passive owner-side request and completion observation, including failed operations. */
+  traffic?(event: ShareTrafficEvent): void;
   error?(error: Error): void;
 }
 export function newTicket(signal: string, stun?: string[]): Ticket;

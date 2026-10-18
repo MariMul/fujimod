@@ -125,6 +125,25 @@ test('Share popup warns, copies a capability URL and logs remote controller conn
     expect(
       f.host.querySelector('input[aria-label="Console command"]')!.hasAttribute('disabled'),
     ).toBe(true);
+    const event = {
+      controller: 'manual-tool',
+      id: 42,
+      timeoutMs: 5000,
+      operation: { op: 'transfer_out', endpoint: 1, data: 'AQID' },
+    };
+    mock.callbacks.traffic?.({ ...event, phase: 'submitted' });
+    mock.callbacks.traffic?.({
+      ...event,
+      phase: 'completed',
+      elapsedMs: 1,
+      completion: { transferred: 3, deviceCount: 0, error: 'stall' },
+    });
+    await vi.waitFor(() => {
+      flush();
+      expect(f.host.textContent).toContain('Remote manual-tool');
+    });
+    expect(f.host.textContent).toContain('transferred 3 B');
+    expect(f.host.textContent).toContain('1 failed: stall');
     mock.callbacks.connected?.('2', 'fujicam console hello');
     mock.callbacks.disconnected?.('2', 'done');
     flush();

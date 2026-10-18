@@ -1,3 +1,5 @@
+import { RemoteTrafficLog } from './remote-traffic';
+import type { ShareTrafficEvent } from '../../../../crates/usb-proxy/web/share-traffic.js';
 import { errorReportZip, type ReportSubmission } from '../engine/report';
 import { createSignal } from 'solid-js';
 import {
@@ -57,6 +59,7 @@ export function createDevTools(
   const [entries, setEntries] = createSignal<LogEntry[]>([]);
   const [discarded, setDiscarded] = createSignal(0);
   const buffer = new LogBuffer();
+  const remoteTraffic = new RemoteTrafficLog();
   let lastError: unknown;
   let link: CameraLink | undefined,
     disposed = false,
@@ -73,7 +76,7 @@ export function createDevTools(
   };
   const message = (text: string, level = Level.Info) =>
     log([{ layer: Layer.Connection, level, direction: Direction.Host, message: text }]);
-  const drain = () => log(backend.drain());
+  const drain = () => log([...backend.drain(), ...remoteTraffic.drain()]);
   const fail = (error: unknown) => {
     if (lastError === error) return;
     lastError = error;
@@ -96,6 +99,7 @@ export function createDevTools(
       if (disposed || closingAttempt !== attempt) return;
       backend.cancelPending?.();
       drain();
+      log(remoteTraffic.end());
       setConnection(offlineState);
       if (old) message('Disconnected');
     };
@@ -290,6 +294,7 @@ export function createDevTools(
     unlisten?.();
     unlistenError?.();
     backend.dispose();
+    remoteTraffic.end();
     disposed = true;
   }
   return {
@@ -298,6 +303,10 @@ export function createDevTools(
     camera,
     canShare: () => Boolean(backend.exportUsb) && (backend.canShare?.() ?? true),
     connectionMessage: message,
+    shareTraffic: (event: ShareTrafficEvent) => {
+      if (!disposed) remoteTraffic.record(event);
+    },
+    shareTrafficEnded: (controller: string) => log(remoteTraffic.end(controller)),
     async shareUsb() {
       if (
         state !== ConnectionState.Connected ||
@@ -314,6 +323,7 @@ export function createDevTools(
           throw Error('Camera disconnected');
         }
         drain();
+        log(remoteTraffic.begin(device.descriptor));
         message('Camera sharing started');
         return device;
       } catch (error) {
@@ -325,6 +335,7 @@ export function createDevTools(
       }
     },
     sharingEnded() {
+      log(remoteTraffic.end());
       if (state === ConnectionState.Sharing) {
         setConnection(ConnectionState.Blocked);
         message('Camera sharing ended');
@@ -409,6 +420,7 @@ export function createDevTools(
     },
     clear: () => {
       backend.drain();
+      remoteTraffic.clear();
       buffer.clear();
       setEntries([]);
       setDiscarded(0);

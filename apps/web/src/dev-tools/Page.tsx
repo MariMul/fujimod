@@ -154,8 +154,13 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
           tools.connectionMessage(
             reason ? `Remote controller connected: ${reason}` : 'Remote controller connected',
           ),
-        disconnected: (_id, reason) =>
-          tools.connectionMessage(`Remote controller disconnected: ${reason}`),
+        disconnected: (id, reason) => {
+          if (attempt === shareAttempt) tools.shareTrafficEnded(id);
+          tools.connectionMessage(`Remote controller disconnected: ${reason}`);
+        },
+        traffic: (event) => {
+          if (attempt === shareAttempt) tools.shareTraffic(event);
+        },
         error: (error) => tools.connectionMessage(error.message, Level.Error),
       });
       if (attempt !== shareAttempt || tools.connection() !== ConnectionState.Sharing) {
