@@ -1,4 +1,4 @@
-//! App80 wire types and the blocking adapter for its ff80 mailbox operation.
+//! App80 wire types for the awaitable ff80 mailbox operation.
 use super::*;
 pub(super) mod catalogue;
 
@@ -56,34 +56,11 @@ impl Mailbox {
     }
 }
 
-#[pyfunction]
-fn exchange<'py>(
-    py: Python<'py>,
-    session: &Session,
-    mailbox: &Mailbox,
-    request: &Request,
-) -> PyResult<Bound<'py, PyBytes>> {
-    if session.limits.configuration.get() < 33 {
-        return Err(PyValueError::new_err(
-            "App80 mailbox requires a 33-byte configuration command",
-        ));
-    }
-    session
-        .with(py, |s| block_on(mailbox.inner.exchange(s, &request.inner)))
-        .map(|reply| PyBytes::new(py, reply.raw()))
-}
-
 pub(super) fn types_module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     let module = PyModule::new(py, "fujimod.usb.app80")?;
     module.add_class::<CommandCode>()?;
     module.add_class::<Request>()?;
     module.add_class::<Mailbox>()?;
     catalogue::register(py, &module)?;
-    Ok(module)
-}
-pub(super) fn blocking_module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
-    let module = PyModule::new(py, "fujimod.usb.blocking.app80")?;
-    module.add_function(wrap_pyfunction!(exchange, &module)?)?;
-    catalogue::register_blocking(&module)?;
     Ok(module)
 }

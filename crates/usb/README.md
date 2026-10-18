@@ -79,8 +79,7 @@ synthetic exchanges. nusb's WebUSB backend compiles for `wasm32-unknown-unknown`
 The [JavaScript bindings](../../bindings/javascript/README.md) expose that
 backend; physical browser/camera integration remains unvalidated. No hardware
 access is part of the test suite. Native Python bindings live
-in `bindings/python/` at the workspace root, with an awaitable API and an explicit
-blocking adapter. All Rust public I/O is async and the
+in `bindings/python/` at the workspace root, with an awaitable API. All Rust public I/O is async and the
 internal test interface does not require `Send` futures.
 
 Protocol references are `fftlib.py` and `ffjlib.py` from
@@ -224,7 +223,7 @@ cargo run -p fujimod-usb --example service_catalogue -- definition.json firmware
 It prints metadata and performs no USB discovery. The native
 [Python bindings](../../bindings/python/README.md#firmware-selected-service-controls)
 expose these definitions, enum commands and typed replies through async and
-blocking adapters. The [JavaScript package](../../bindings/javascript/README.md#firmware-selected-service-controls)
+awaitable adapters. The [JavaScript package](../../bindings/javascript/README.md#firmware-selected-service-controls)
 exposes the same core through typed factories and discriminated reply unions.
 Pyodide exposes the same Python catalogue interface through that JavaScript
 module, retaining Rust's selection, request/reply codecs and session ownership.

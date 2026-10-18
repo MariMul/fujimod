@@ -2,7 +2,7 @@
 import struct
 import pytest
 from fujimod import usb
-from fujimod.usb.blocking import data
+from fujimod.usb import data
 
 testing=pytest.importorskip('fujimod.usb.testing')
 LIMITS=usb.FirmwareLimits(memory_read=1,memory_write=1,configuration=1,console=1)
@@ -43,14 +43,14 @@ class UploadPeer:
         return raw
 
 
-def opened(peer,**options):
-    return testing.peer_session(peer,LIMITS,ep_in=0x82,ep_out=1,**options)
+async def opened(peer,**options):
+    return (await testing.peer_session(peer,LIMITS,ep_in=0x82,ep_out=1,**options))
 
 
-def test_upload_returns_raw_setup_and_opaque_final_bytes_without_padding():
-    peer=UploadPeer();session=opened(peer)
+async def test_upload_returns_raw_setup_and_opaque_final_bytes_without_padding():
+    peer=UploadPeer();session=(await opened(peer))
     raw=bytes(range(256))+b'XYZ'
-    result=data.upload(session,raw,piece_bytes=128,mode=usb.DataWriteMode.Preserve)
+    result=(await data.upload(session,raw,piece_bytes=128,mode=usb.DataWriteMode.Preserve))
     assert peer.setup==(len(raw),0)
     assert list(map(len,peer.pieces))==[128,128,3]
     assert b''.join(peer.pieces)==raw
@@ -63,10 +63,10 @@ def test_upload_returns_raw_setup_and_opaque_final_bytes_without_padding():
 
 
 @pytest.mark.parametrize('status',[(1,0xffff),(0,1)])
-def test_refused_setup_is_a_completed_error_without_payload_retry_or_finalization(status):
-    peer=UploadPeer(status=status);session=opened(peer)
+async def test_refused_setup_is_a_completed_error_without_payload_retry_or_finalization(status):
+    peer=UploadPeer(status=status);session=(await opened(peer))
     with pytest.raises(usb.DeviceCommandError) as error:
-        data.upload(session,b'abc',piece_bytes=2,mode=usb.DataWriteMode.FillOnes)
+        (await data.upload(session,b'abc',piece_bytes=2,mode=usb.DataWriteMode.FillOnes))
     assert (error.value.command,error.value.primary,error.value.secondary)==(0x760001,*status)
     assert peer.setup==(3,1)
     assert peer.pieces==[] and peer.controls==[0xc0,0xd0,0xd1]
@@ -74,41 +74,41 @@ def test_refused_setup_is_a_completed_error_without_payload_retry_or_finalizatio
 
 
 @pytest.mark.parametrize('failure',['setup-short',1,2,'final-short'])
-def test_failed_upload_never_retries_or_allows_cleanup(failure):
-    peer=UploadPeer(failure=failure);session=opened(peer)
+async def test_failed_upload_never_retries_or_allows_cleanup(failure):
+    peer=UploadPeer(failure=failure);session=(await opened(peer))
     with pytest.raises((usb.ProtocolError,OSError)):
-        data.upload(session,b'abc',piece_bytes=2,mode=usb.DataWriteMode.Echo)
+        (await data.upload(session,b'abc',piece_bytes=2,mode=usb.DataWriteMode.Echo))
     assert peer.setup==(3,0x100)
     assert session.state==usb.SessionState.CompletionUnknown
     calls=peer.controls.copy()
-    with pytest.raises(usb.CompletionUnknownError): session.close()
+    with pytest.raises(usb.CompletionUnknownError): (await session.close())
     assert peer.controls==calls
     assert peer.controls.count(0xe8)==int(failure=='final-short')
 
 
-def test_invalid_lengths_modes_and_final_budget_fail_before_setup():
-    peer=UploadPeer();session=opened(peer,max_reply_bytes=31)
-    with pytest.raises(ValueError): data.upload(session,b'abc',piece_bytes=2,mode=usb.DataWriteMode.Preserve)
+async def test_invalid_lengths_modes_and_final_budget_fail_before_setup():
+    peer=UploadPeer();session=(await opened(peer,max_reply_bytes=31))
+    with pytest.raises(ValueError): (await data.upload(session,b'abc',piece_bytes=2,mode=usb.DataWriteMode.Preserve))
     assert peer.setup is None and session.state==usb.SessionState.Ready
-    session=opened(peer)
+    session=(await opened(peer))
     for raw,piece,mode,exception in [(b'',2,usb.DataWriteMode.Preserve,ValueError),
                                    (b'abc',0,usb.DataWriteMode.Preserve,ValueError),
                                    (b'abc',2,0,TypeError),
                                    (b'abc',2,usb.DataReadMode.Echo,TypeError)]:
-        with pytest.raises(exception): data.upload(session,raw,piece_bytes=piece,mode=mode)
+        with pytest.raises(exception): (await data.upload(session,raw,piece_bytes=piece,mode=mode))
     assert peer.setup is None and session.state==usb.SessionState.Ready
 
 
-def test_captured_x70_32_byte_e8_reply_completes_upload_and_allows_close():
+async def test_captured_x70_32_byte_e8_reply_completes_upload_and_allows_close():
     # X70 1.10, 2026-10-18T00:22:22Z: E8 32-byte receive after 64 KiB E0 pieces.
     reply=bytes.fromhex('0100760000000000000000000000000000000000000000000000000000000000')
-    peer=UploadPeer(acknowledgement=reply);session=opened(peer)
+    peer=UploadPeer(acknowledgement=reply);session=(await opened(peer))
     raw=b'X'*65536
-    result=data.upload(session,raw,piece_bytes=65536,mode=usb.DataWriteMode.Preserve)
+    result=(await data.upload(session,raw,piece_bytes=65536,mode=usb.DataWriteMode.Preserve))
     assert result.acknowledgement==reply and result.bytes_written==len(raw)
     assert peer.pieces==[raw] and peer.controls==[0xc0,0xd0,0xd1,0xe0,0xe8]
     assert session.state==usb.SessionState.Ready
-    session.close()
+    (await session.close())
     assert session.state==usb.SessionState.Closed and peer.controls[-1]==0xc4
 
 
@@ -118,13 +118,13 @@ def test_captured_x70_32_byte_e8_reply_completes_upload_and_allows_close():
     (1,1,usb.DeviceCommandError,True),
     (2,0xffff,usb.DeviceCommandError,True),
 ])
-def test_long_e8_validates_command_reserved_and_status_without_replay(word,value,exception,ready):
+async def test_long_e8_validates_command_reserved_and_status_without_replay(word,value,exception,ready):
     reply=bytearray(struct.pack('<8I',0x760001,0,0,0,9,8,7,6))
     struct.pack_into('<I',reply,word*4,value)
-    peer=UploadPeer(acknowledgement=bytes(reply));session=opened(peer)
-    with pytest.raises(exception): data.upload(session,b'abc',piece_bytes=3,mode=usb.DataWriteMode.Preserve)
+    peer=UploadPeer(acknowledgement=bytes(reply));session=(await opened(peer))
+    with pytest.raises(exception): (await data.upload(session,b'abc',piece_bytes=3,mode=usb.DataWriteMode.Preserve))
     assert peer.controls==[0xc0,0xd0,0xd1,0xe0,0xe8]
     assert session.state==(usb.SessionState.Ready if ready else usb.SessionState.CompletionUnknown)
     if not ready:
-        with pytest.raises(usb.CompletionUnknownError): session.close()
+        with pytest.raises(usb.CompletionUnknownError): (await session.close())
         assert peer.controls[-1]==0xe8

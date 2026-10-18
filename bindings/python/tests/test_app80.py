@@ -2,7 +2,7 @@
 import struct
 import pytest
 from fujimod import usb
-from fujimod.usb import app80, blocking
+from fujimod.usb import app80
 from test_stream import E, control, opened, LIMITS
 
 
@@ -18,17 +18,17 @@ def config_read(offset,data,*,page=0):
             E.control(control(0xd1,36+len(data))),E.read(36+len(data),command+data)]
 
 
-def test_exchange_uses_selected_mailbox_and_keeps_result_opaque():
+async def test_exchange_uses_selected_mailbox_and_keeps_result_opaque():
     request=app80.Request(app80.CommandCode(0x22),b'\xff')
     assert request.raw == b'\x22\xff'+bytes(31)
     result=b'\x01'+bytes(range(32))
-    session,script=opened([
+    session,script=(await opened([
         *config_write(0x181,request.raw[1:],page=2),
         *config_write(0x180,request.raw,page=2),
         *config_read(0x180,result,page=2),
-    ])
+    ]))
     mailbox=app80.Mailbox(page=2,offset=0x180,configuration_limit=256)
-    assert blocking.app80.exchange(session,mailbox,request) == result
+    assert (await usb.app80.exchange(session,mailbox,request)) == result
     assert session.state == usb.SessionState.Ready
     assert script.remaining == 0
 
@@ -43,50 +43,50 @@ def test_types_reject_wrong_selector_and_oversize_or_incomplete_definition():
     assert app80.Request(app80.CommandCode(0),b'').raw == bytes(33)
 
 
-def test_publish_failure_never_reads_mailbox_or_retries():
+async def test_publish_failure_never_reads_mailbox_or_retries():
     request=app80.Request(app80.CommandCode(1),b'')
-    session,script=opened([
+    session,script=(await opened([
         *config_write(0x81,request.raw[1:]),E.control_disconnected(control(0xd0,69)),
-    ])
+    ]))
     with pytest.raises(usb.TransferError):
-        blocking.app80.exchange(session,app80.Mailbox(page=0,offset=0x80,configuration_limit=256),request)
+        (await usb.app80.exchange(session,app80.Mailbox(page=0,offset=0x80,configuration_limit=256),request))
     assert session.state == usb.SessionState.CompletionUnknown
-    with pytest.raises(usb.CompletionUnknownError): session.ping()
+    with pytest.raises(usb.CompletionUnknownError): (await session.ping())
     assert script.remaining == 0
 
 
-def test_device_error_one_is_returned_without_polling():
+async def test_device_error_one_is_returned_without_polling():
     request=app80.Request(app80.CommandCode(2),b'')
     publish=config_write(0x80,request.raw)
     error=struct.pack('<9I',0x1a0002,1,0xffff,0,3,1,0,0x80,33)
     publish[-1]=E.read(36,error)
-    session,script=opened([*config_write(0x81,request.raw[1:]),*publish])
+    session,script=(await opened([*config_write(0x81,request.raw[1:]),*publish]))
     with pytest.raises(usb.DeviceCommandError) as failure:
-        blocking.app80.exchange(session,app80.Mailbox(page=0,offset=0x80,configuration_limit=256),request)
+        (await usb.app80.exchange(session,app80.Mailbox(page=0,offset=0x80,configuration_limit=256),request))
     assert (failure.value.primary,failure.value.secondary) == (1,0xffff)
     assert session.state == usb.SessionState.Ready
     assert script.remaining == 0
 
 
-def test_whole_exchange_budget_is_checked_before_first_write():
-    session,script=usb.testing.session([
+async def test_whole_exchange_budget_is_checked_before_first_write():
+    session,script=(await usb.testing.session([
         E.control(control(0xc0,8,token=0)),E.read(8,b'\x34\x12\x00\x00\x00\x00\x01\x00'),
-    ],LIMITS,max_reply_bytes=68)
+    ],LIMITS,max_reply_bytes=68))
     with pytest.raises(ValueError):
-        blocking.app80.exchange(session,app80.Mailbox(page=0,offset=0x80,configuration_limit=256),
-                               app80.Request(app80.CommandCode(1),b''))
+        (await usb.app80.exchange(session,app80.Mailbox(page=0,offset=0x80,configuration_limit=256),
+                               app80.Request(app80.CommandCode(1),b'')))
     assert session.state == usb.SessionState.Ready
     assert script.remaining == 0
 
 
-def test_session_firmware_limit_cannot_be_bypassed_by_a_mailbox_definition():
+async def test_session_firmware_limit_cannot_be_bypassed_by_a_mailbox_definition():
     limits=usb.FirmwareLimits(memory_read=256,memory_write=256,configuration=32,console=256)
-    session,script=usb.testing.session([
+    session,script=(await usb.testing.session([
         E.control(control(0xc0,8,token=0)),E.read(8,b'\x34\x12\x00\x00\x00\x00\x01\x00'),
-    ],limits)
+    ],limits))
     with pytest.raises(ValueError):
-        blocking.app80.exchange(session,app80.Mailbox(page=0,offset=0x80,configuration_limit=256),
-                               app80.Request(app80.CommandCode(1),b''))
+        (await usb.app80.exchange(session,app80.Mailbox(page=0,offset=0x80,configuration_limit=256),
+                               app80.Request(app80.CommandCode(1),b'')))
     assert session.state == usb.SessionState.Ready
     assert script.remaining == 0
 

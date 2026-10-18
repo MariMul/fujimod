@@ -24,7 +24,7 @@ async fn write_range(session: AsyncSession, address: u32, data: Vec<u8>) -> PyRe
 #[pyfunction]
 fn read_chunks(session: &AsyncSession, address: u32, length: u32) -> PyResult<reader::Reader> {
     let range = MemoryRange::new(Address(address), nz(length)?).map_err(error)?;
-    reader::Reader::new(session, range::Operation::Memory(range))
+    reader::Reader::new(session, reader::Operation::Memory(range))
 }
 #[pyfunction(name = "read_chunks")]
 fn data_chunks(
@@ -35,7 +35,7 @@ fn data_chunks(
 ) -> PyResult<reader::Reader> {
     let range = MemoryRange::new(Address(address), nz(length)?).map_err(error)?;
     window.inner.validate(range).map_err(error)?;
-    reader::Reader::new(session, range::Operation::Data(window.inner, range))
+    reader::Reader::new(session, reader::Operation::Data(window.inner, range))
 }
 #[pyfunction]
 #[pyo3(signature=(session,data,*,piece_bytes,mode))]

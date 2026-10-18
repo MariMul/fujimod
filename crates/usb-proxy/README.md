@@ -78,7 +78,7 @@ choices = await usb.interfaces(devices[0])
 # Select the intended device/interface, then use usb.Session.open as usual.
 ```
 
-Native Python also offers `fujimod.usb.blocking.discover_proxy(url, token,
+Native Python also offers `await fujimod.usb.discover_proxy(url, token,
 filter)`. JavaScript offers `usb.discoverProxy(url, token, filter)`; the returned
 Device works with the existing Session API. Pyodide must initialize the FujiMod
 JavaScript bridge as documented in `bindings/python/README.md`.

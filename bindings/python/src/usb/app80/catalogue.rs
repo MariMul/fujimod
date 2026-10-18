@@ -122,16 +122,6 @@ impl Service {
             .map_err(|e| command_error(py, e))
     }
 }
-#[pyfunction]
-fn execute(py: Python<'_>, session: &Session, invocation: &Invocation) -> PyResult<CommandReply> {
-    check_limit(
-        &session.limits,
-        invocation.inner.command().request().encoded_len(),
-    )?;
-    session
-        .with(py, |s| block_on(invocation.inner.execute(s)))
-        .map(|inner| CommandReply { inner })
-}
 pub(in crate::usb) fn check_limit(limits: &FirmwareLimits, length: usize) -> PyResult<()> {
     if (limits.configuration.get() as usize) < length {
         return Err(PyValueError::new_err(
@@ -150,7 +140,4 @@ pub(super) fn register(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult
     module.add_class::<Invocation>()?;
     module.add_class::<Service>()?;
     Ok(())
-}
-pub(super) fn register_blocking(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(execute, module)?)
 }

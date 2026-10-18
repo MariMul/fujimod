@@ -86,29 +86,7 @@ impl Script {
 }
 #[pyfunction]
 #[pyo3(signature=(exchanges,limits,*,max_reply_bytes=8388608,trace=None))]
-fn session(
-    py: Python<'_>,
-    exchanges: Vec<Exchange>,
-    limits: FirmwareLimits,
-    max_reply_bytes: u32,
-    trace: Option<&tracing::Trace>,
-) -> PyResult<(Session, Script)> {
-    let script = usb::testing::Script::new(exchanges.into_iter().map(|e| e.inner));
-    let trace = trace.map(|t| t.inner.clone());
-    let native = py
-        .detach(|| block_on(script.begin_session(max_reply_bytes, trace)))
-        .map_err(|e| convert_error(py, e))?;
-    Ok((
-        Session {
-            inner: Arc::new(Mutex::new(SessionSlot::Open(native))),
-            limits,
-        },
-        Script { inner: script },
-    ))
-}
-#[pyfunction]
-#[pyo3(signature=(exchanges,limits,*,max_reply_bytes=8388608,trace=None))]
-async fn async_session(
+async fn session(
     exchanges: Vec<Exchange>,
     limits: FirmwareLimits,
     max_reply_bytes: u32,
@@ -179,53 +157,48 @@ impl usb::testing::Peer for PythonPeer {
 /// returns bytes. They must not call back into this session or its readers.
 #[pyfunction]
 #[pyo3(signature=(peer,limits,*,ep_in,ep_out,max_reply_bytes=8388608,trace=None))]
-fn peer_session(
-    py: Python<'_>,
+async fn peer_session(
     peer: Py<PyAny>,
     limits: FirmwareLimits,
     ep_in: u8,
     ep_out: u8,
     max_reply_bytes: u32,
-    trace: Option<&tracing::Trace>,
-) -> PyResult<Session> {
+    trace: Option<tracing::Trace>,
+) -> PyResult<asynchronous::AsyncSession> {
     nz(max_reply_bytes)?;
     if !(0x81..=0x8f).contains(&ep_in) || !(1..=0x0f).contains(&ep_out) {
         return Err(PyValueError::new_err(
             "require explicit bulk IN/OUT endpoint addresses",
         ));
     }
-    for method in ["control", "write", "read"] {
-        if !peer.bind(py).getattr(method)?.is_callable() {
-            return Err(pyo3::exceptions::PyTypeError::new_err(
-                "virtual USB methods must be callable",
-            ));
+    Python::attach(|py| -> PyResult<()> {
+        for method in ["control", "write", "read"] {
+            if !peer.bind(py).getattr(method)?.is_callable() {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "virtual USB methods must be callable",
+                ));
+            }
         }
-    }
-    let trace = trace.map(|t| t.inner.clone());
-    let native = py
-        .detach(|| {
-            block_on(usb::testing::peer_session(
-                PythonPeer {
-                    inner: peer,
-                    ep_in,
-                    ep_out,
-                },
-                max_reply_bytes,
-                trace,
-            ))
-        })
-        .map_err(|error| convert_error(py, error))?;
-    Ok(Session {
-        inner: Arc::new(Mutex::new(SessionSlot::Open(native))),
-        limits,
-    })
+        Ok(())
+    })?;
+    let native = asynchronous::detached(usb::testing::peer_session(
+        PythonPeer {
+            inner: peer,
+            ep_in,
+            ep_out,
+        },
+        max_reply_bytes,
+        trace.map(|t| t.inner),
+    ))
+    .await
+    .map_err(asynchronous::error)?;
+    Ok(asynchronous::AsyncSession::new(native, limits))
 }
 pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     let module = PyModule::new(py, "fujimod.usb.testing")?;
     module.add_class::<Exchange>()?;
     module.add_class::<Script>()?;
     module.add_function(wrap_pyfunction!(session, &module)?)?;
-    module.add_function(wrap_pyfunction!(async_session, &module)?)?;
     module.add_function(wrap_pyfunction!(peer_session, &module)?)?;
     Ok(module)
 }

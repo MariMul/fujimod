@@ -4,7 +4,6 @@ import struct
 import pytest
 
 from fujimod import usb
-from fujimod.usb import blocking
 
 testing = pytest.importorskip("fujimod.usb.testing", reason="build bindings with --features testing")
 E = testing.Exchange
@@ -16,12 +15,12 @@ def control(kind, size, *, token=TOKEN, offset=0):
     return struct.pack(">BBIIH", kind, 0, offset, size, token)
 
 
-def opened(steps=(), *, packet_bytes=4):
-    return testing.session([
+async def opened(steps=(), *, packet_bytes=4):
+    return (await testing.session([
         E.control(control(0xC0, 8, token=0)),
         E.read(8, struct.pack("<HH", TOKEN, 0) + struct.pack(">I", packet_bytes)),
         *steps,
-    ], LIMITS)
+    ], LIMITS))
 
 
 def memory_read(address, data):
@@ -30,107 +29,107 @@ def memory_read(address, data):
             E.control(control(0xD1, 36 + len(data))), E.read(36 + len(data), request + data)]
 
 
-def test_stream_exclusively_owns_session_and_returns_exact_tail():
-    session, script = opened([*memory_read(0x1000, b"abcd"), *memory_read(0x1004, b"ef"),
-                             E.control(control(0xC4, 2)), E.read(2, TOKEN.to_bytes(2, "little"))])
-    with blocking.memory.read_chunks(session, 0x1000, 6) as reader:
+async def test_stream_exclusively_owns_session_and_returns_exact_tail():
+    session, script = (await opened([*memory_read(0x1000, b"abcd"), *memory_read(0x1004, b"ef"),
+                             E.control(control(0xC4, 2)), E.read(2, TOKEN.to_bytes(2, "little"))]))
+    async with usb.memory.read_chunks(session, 0x1000, 6) as reader:
         assert session.state == usb.SessionState.ReadingRange
         with pytest.raises(usb.SessionBusyError):
-            session.ping()
+            (await session.ping())
         with pytest.raises(usb.SessionBusyError):
-            session.close()
-        assert next(reader) == b"abcd"
+            (await session.close())
+        assert (await anext(reader)) == b"abcd"
         assert reader.bytes_completed == 4
-        assert next(reader) == b"ef"
+        assert (await anext(reader)) == b"ef"
         assert reader.bytes_completed == 6
-        with pytest.raises(StopIteration):
-            next(reader)
+        with pytest.raises(StopAsyncIteration):
+            (await anext(reader))
     assert session.state == usb.SessionState.Ready
-    assert session.close() == TOKEN.to_bytes(2, "little")
+    assert (await session.close()) == TOKEN.to_bytes(2, "little")
     assert session.state == usb.SessionState.Closed
     assert script.remaining == 0
 
 
-def test_early_close_restores_session_without_issuing_extra_commands():
-    session, script = opened(memory_read(0x1000, b"abcd"))
-    reader = blocking.memory.read_chunks(session, 0x1000, 8)
-    assert next(reader) == b"abcd"
-    reader.close()
+async def test_early_close_restores_session_without_issuing_extra_commands():
+    session, script = (await opened(memory_read(0x1000, b"abcd")))
+    reader = usb.memory.read_chunks(session, 0x1000, 8)
+    assert (await anext(reader)) == b"abcd"
+    (await reader.aclose())
     assert session.state == usb.SessionState.Ready
     assert reader.bytes_completed == 4
-    assert list(reader) == []
+    assert [part async for part in reader] == []
     assert script.remaining == 0
 
 
-def test_dropping_reader_returns_session_ownership_without_io():
-    session, script = opened()
-    reader = blocking.memory.read_chunks(session, 0x1000, 8)
+async def test_dropping_reader_returns_session_ownership_without_io():
+    session, script = (await opened())
+    reader = usb.memory.read_chunks(session, 0x1000, 8)
     del reader
     gc.collect()
     assert session.state == usb.SessionState.Ready
     assert script.remaining == 0
 
 
-def test_context_exception_returns_session_without_io():
-    session, script = opened()
+async def test_context_exception_returns_session_without_io():
+    session, script = (await opened())
     with pytest.raises(RuntimeError, match="consumer stopped"):
-        with blocking.memory.read_chunks(session, 0x1000, 8):
+        async with usb.memory.read_chunks(session, 0x1000, 8):
             raise RuntimeError("consumer stopped")
     assert session.state == usb.SessionState.Ready
     assert script.remaining == 0
 
 
-def test_stream_failure_keeps_delivered_bytes_and_fences_session():
+async def test_stream_failure_keeps_delivered_bytes_and_fences_session():
     second = memory_read(0x1004, b"efgh")
     second[-1] = E.disconnected(40, b"\x01\x00")
-    session, script = opened([*memory_read(0x1000, b"abcd"), *second])
+    session, script = (await opened([*memory_read(0x1000, b"abcd"), *second]))
     sink = bytearray()
-    reader = blocking.memory.read_chunks(session, 0x1000, 8)
-    sink.extend(next(reader))
+    reader = usb.memory.read_chunks(session, 0x1000, 8)
+    sink.extend((await anext(reader)))
     with pytest.raises(usb.TransferError) as failure:
-        next(reader)
+        (await anext(reader))
     assert sink == b"abcd"
     assert reader.bytes_completed == 4
     assert failure.value.partial == b"\x01\x00"
     assert failure.value.transferred == 2
     assert session.state == usb.SessionState.CompletionUnknown
     with pytest.raises(usb.CompletionUnknownError):
-        session.ping()
-    reader.close()
+        (await session.ping())
+    (await reader.aclose())
     with pytest.raises(usb.CompletionUnknownError):
-        blocking.memory.read_chunks(session,0x1000,4)
+        usb.memory.read_chunks(session,0x1000,4)
     assert script.remaining == 0
 
 
-def test_invalid_range_and_oversize_direct_read_reject_before_io():
-    session, script = opened()
+async def test_invalid_range_and_oversize_direct_read_reject_before_io():
+    session, script = (await opened())
     with pytest.raises(ValueError):
-        blocking.memory.read_chunks(session, 0xFFFFFFFF, 2)
+        usb.memory.read_chunks(session, 0xFFFFFFFF, 2)
     with pytest.raises(ValueError):
-        session.read_memory(0x1000, 6)  # negotiated limit 4; direct command never splits
+        (await session.read_memory(0x1000, 6))  # negotiated limit 4; direct command never splits
     assert session.state == usb.SessionState.Ready
     assert script.remaining == 0
 
 
-def test_selector_and_mode_types_cannot_be_substituted():
-    session, script = opened()
+async def test_selector_and_mode_types_cannot_be_substituted():
+    session, script = (await opened())
     with pytest.raises(TypeError):
-        session.device_info("Product")
+        (await session.device_info("Product"))
     with pytest.raises(TypeError):
-        session.device_info(4)
+        (await session.device_info(4))
     with pytest.raises(TypeError):
-        session.prepare_data_write(4, usb.DataReadMode.Pattern)
+        (await session.prepare_data_write(4, usb.DataReadMode.Pattern))
     assert session.state == usb.SessionState.Ready
     assert script.remaining == 0
 
 
-def test_camera_error_is_structured_and_does_not_wait_for_completion():
+async def test_camera_error_is_structured_and_does_not_wait_for_completion():
     steps = memory_read(0x1000, b"abcd")
     reply = bytearray(struct.pack("<5I", 0x200001, 1, 0xFFFF, 0, 2))
     steps[-1] = E.read(40, reply)
-    session, script = opened(steps)
+    session, script = (await opened(steps))
     with pytest.raises(usb.DeviceCommandError) as failure:
-        session.read_memory(0x1000, 4)
+        (await session.read_memory(0x1000, 4))
     assert (failure.value.command, failure.value.primary, failure.value.secondary) == (0x200001, 1, 0xFFFF)
     assert session.state == usb.SessionState.Ready
     assert script.remaining == 0
@@ -141,61 +140,69 @@ def test_camera_error_is_structured_and_does_not_wait_for_completion():
     ([E.control(control(0xC4, 2)), E.disconnected(2, b'\x12')], usb.TransferError),
     ([E.control(control(0xC4, 2)), E.read(2, b'\x12')], usb.ProtocolError),
 ])
-def test_failed_close_is_unknown_and_cannot_be_retried_or_used(steps,error):
-    session, script = opened(steps)
+async def test_failed_close_is_unknown_and_cannot_be_retried_or_used(steps,error):
+    session, script = (await opened(steps))
     with pytest.raises(error):
-        session.close()
+        (await session.close())
     assert session.state == usb.SessionState.CompletionUnknown
+    async def _async_149_22():
+        return await session.read_memory(4096, 4)
+    async def _async_152_22():
+        return usb.memory.read_chunks(session, 4096, 4)
     for operation in (session.close, session.ping,
-                      lambda: session.read_memory(0x1000, 4),
-                      lambda: blocking.memory.read_chunks(session, 0x1000, 4)):
+                      _async_149_22,
+                      _async_152_22):
         with pytest.raises(usb.CompletionUnknownError):
-            operation()
+            (await operation())
     assert session.state == usb.SessionState.CompletionUnknown
     assert script.remaining == 0
 
 
-def test_close_after_incomplete_command_cannot_claim_closed_or_send_c4():
-    session, script = opened([E.control(control(0xC2, 2)), E.disconnected(2, b'')])
+async def test_close_after_incomplete_command_cannot_claim_closed_or_send_c4():
+    session, script = (await opened([E.control(control(0xC2, 2)), E.disconnected(2, b'')]))
     with pytest.raises(usb.TransferError):
-        session.ping()
+        (await session.ping())
     with pytest.raises(usb.CompletionUnknownError):
-        session.close()
+        (await session.close())
     assert session.state == usb.SessionState.CompletionUnknown
     assert script.remaining == 0
 
 
-def test_completed_close_preserves_opaque_reply_and_rejects_further_io():
-    session, script = opened([E.control(control(0xC4, 2)), E.read(2, b'\xfe\xff')])
-    assert session.close() == b'\xfe\xff'
+async def test_completed_close_preserves_opaque_reply_and_rejects_further_io():
+    session, script = (await opened([E.control(control(0xC4, 2)), E.read(2, b'\xfe\xff')]))
+    assert (await session.close()) == b'\xfe\xff'
     assert session.state == usb.SessionState.Closed
+    async def _async_174_22():
+        return usb.memory.read_chunks(session, 4096, 4)
     for operation in (session.close, session.ping,
-                      lambda: blocking.memory.read_chunks(session, 0x1000, 4)):
+                      _async_174_22):
         with pytest.raises(usb.ClosedSessionError):
-            operation()
+            (await operation())
     assert script.remaining == 0
 
 
 @pytest.mark.parametrize('failed',[False,True])
-def test_abandon_releases_host_session_without_close_or_cleanup(failed):
+async def test_abandon_releases_host_session_without_close_or_cleanup(failed):
     steps=[E.control(control(0xC2, 2)), E.disconnected(2, b'')] if failed else []
-    session, script = opened(steps)
+    session, script = (await opened(steps))
     if failed:
-        with pytest.raises(usb.TransferError): session.ping()
+        with pytest.raises(usb.TransferError): (await session.ping())
     session.abandon()
     assert session.state == usb.SessionState.Abandoned
+    async def _async_189_22():
+        return usb.memory.read_chunks(session, 4096, 4)
     for operation in (session.close, session.ping, session.abandon,
-                      lambda: blocking.memory.read_chunks(session,0x1000,4)):
-        with pytest.raises(usb.ClosedSessionError): operation()
+                      _async_189_22):
+        with pytest.raises(usb.ClosedSessionError): (await operation())
     assert script.remaining == 0
 
 
-def test_abandon_does_not_revoke_a_range_readers_ownership():
-    session, script = opened()
-    reader=blocking.memory.read_chunks(session,0x1000,4)
-    with pytest.raises(usb.SessionBusyError): session.abandon()
-    assert session.state == usb.SessionState.ReadingRange
-    reader.close()
+async def test_abandon_cancels_an_idle_range_without_read_or_close_io():
+    session, script = await opened()
+    reader = usb.memory.read_chunks(session, 0x1000, 4)
     session.abandon()
     assert session.state == usb.SessionState.Abandoned
+    await reader.aclose()
+    with pytest.raises(usb.ClosedSessionError):
+        await session.ping()
     assert script.remaining == 0

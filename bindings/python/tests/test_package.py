@@ -3,7 +3,7 @@ import importlib
 import pytest
 
 from fujimod import defs, usb
-from fujimod.usb import blocking
+from fujimod import usb
 
 
 def test_one_package_supports_direct_submodule_imports():
@@ -13,16 +13,19 @@ def test_one_package_supports_direct_submodule_imports():
     assert defs.service.ServiceModes(4).mask == 4
     assert isinstance(usb.app80.Command.FlushConfiguration(), usb.app80.Command)
     assert importlib.import_module("fujimod.usb") is usb
-    assert importlib.import_module("fujimod.usb.blocking") is blocking
-    assert blocking.Session.__module__ == "fujimod.usb.blocking"
-    assert importlib.import_module("fujimod.usb.blocking.memory") is blocking.memory
+    assert importlib.import_module("fujimod.usb") is usb
+    assert usb.Session.__module__ == "fujimod.usb"
+    assert importlib.import_module("fujimod.usb.memory") is usb.memory
     assert importlib.import_module("fujimod.usb.memory") is usb.memory
     assert importlib.import_module("fujimod.usb.data") is usb.data
     assert usb.Session.__module__ == "fujimod.usb"
     assert not hasattr(usb.Device, "interfaces")
-    assert callable(blocking.interfaces) and callable(usb.interfaces)
-    assert not hasattr(blocking.Session, "read_range")
-    assert callable(blocking.memory.read_range)
+    assert callable(usb.interfaces)
+    assert not hasattr(usb, "blocking")
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("fujimod.usb.blocking")
+    assert not hasattr(usb.Session, "read_range")
+    assert callable(usb.memory.read_range)
 
 
 def test_selectors_are_typed_enums():

@@ -11,6 +11,7 @@ readme = "README.md"
 license-files = ["NOTICE"]
 
 [project.optional-dependencies]
+test = ["pytest>=9", "pytest-asyncio>=1"]
 walkthroughs = [
     "pillow>=12.3.0",
 ]
@@ -43,3 +44,6 @@ cache-keys = [
     { file = "../../crates/defs/src/**/*.rs" },
     { file = "../../crates/usb/src/**/*.rs" },
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

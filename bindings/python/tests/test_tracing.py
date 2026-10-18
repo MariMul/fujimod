@@ -1,20 +1,20 @@
 """Trace the production Rust session over synthetic USB only."""
 import pytest
 from fujimod import usb
-from fujimod.usb import blocking, tracing
+from fujimod.usb import tracing
 from test_stream import E, control, LIMITS, memory_read
 
 
-def opened(steps=(),*,trace):
-    return usb.testing.session([
+async def opened(steps=(),*,trace):
+    return (await usb.testing.session([
         E.control(control(0xc0,8,token=0)),E.read(8,b'\x34\x12\x00\x00\x00\x00\x01\x00'),*steps,
-    ],LIMITS,trace=trace)
+    ],LIMITS,trace=trace))
 
 
-def test_lifecycle_trace_is_typed_and_survives_session_close():
+async def test_lifecycle_trace_is_typed_and_survives_session_close():
     trace=tracing.Trace(max_events=32,max_bytes=4096)
-    session,script=opened([E.control(control(0xc4,2)),E.read(2,b'\x34\x12')],trace=trace)
-    session.close()
+    session,script=(await opened([E.control(control(0xc4,2)),E.read(2,b'\x34\x12')],trace=trace))
+    (await session.close())
     batch=trace.drain()
     assert batch.dropped_events == batch.dropped_bytes == 0
     events=batch.events
@@ -38,10 +38,10 @@ def test_lifecycle_trace_is_typed_and_survives_session_close():
     assert script.remaining == 0
 
 
-def test_failed_transfer_keeps_partial_bytes_and_fencing():
+async def test_failed_transfer_keeps_partial_bytes_and_fencing():
     trace=tracing.Trace(32,4096)
-    session,script=opened([E.control(control(0xc2,2)),E.disconnected(2,b'\x34')],trace=trace)
-    with pytest.raises(usb.TransferError): session.ping()
+    session,script=(await opened([E.control(control(0xc2,2)),E.disconnected(2,b'\x34')],trace=trace))
+    with pytest.raises(usb.TransferError): (await session.ping())
     event=trace.drain().events[-1]
     assert event.phase == tracing.Phase.Failed
     assert event.failure_kind == tracing.FailureKind.Transfer
@@ -51,19 +51,19 @@ def test_failed_transfer_keeps_partial_bytes_and_fencing():
     assert script.remaining == 0
 
 
-def test_open_failure_can_be_drained_without_a_session():
+async def test_open_failure_can_be_drained_without_a_session():
     trace=tracing.Trace(32,4096)
     with pytest.raises(usb.TransferError):
-        usb.testing.session([E.control_disconnected(control(0xc0,8,token=0))],LIMITS,trace=trace)
+        (await usb.testing.session([E.control_disconnected(control(0xc0,8,token=0))],LIMITS,trace=trace))
     events=trace.drain().events
     assert len(events) == 2
     assert events[-1].phase == tracing.Phase.Failed
     assert events[0].data == control(0xc0,8,token=0)
 
 
-def test_trace_overflow_reports_loss_without_changing_camera_exchange():
+async def test_trace_overflow_reports_loss_without_changing_camera_exchange():
     trace=tracing.Trace(max_events=2,max_bytes=4)
-    session,script=opened(trace=trace)
+    session,script=(await opened(trace=trace))
     batch=trace.drain()
     assert batch.dropped_events == 4
     assert batch.dropped_bytes == 40  # USB and FF80 retain complete requests and replies
@@ -74,13 +74,13 @@ def test_trace_overflow_reports_loss_without_changing_camera_exchange():
     assert script.remaining == 0
 
 
-def test_trace_can_be_drained_while_range_reader_owns_session():
+async def test_trace_can_be_drained_while_range_reader_owns_session():
     trace=tracing.Trace(32,4096)
-    session,script=opened(memory_read(0x1000,b'abcd'),trace=trace)
-    with blocking.memory.read_chunks(session,0x1000,4) as reader:
+    session,script=(await opened(memory_read(0x1000,b'abcd'),trace=trace))
+    async with usb.memory.read_chunks(session,0x1000,4) as reader:
         assert session.state == usb.SessionState.ReadingRange
         assert len(trace.drain().events)==4
-        assert next(reader)==b'abcd'
+        assert (await anext(reader))==b'abcd'
         events=trace.drain().events
         assert events[2].stage == tracing.Stage.BulkOut
         assert events[2].data[:4] == b'\x01\x00\x20\x00'
@@ -94,10 +94,10 @@ def test_invalid_trace_bounds_reject_before_allocating_or_opening():
         with pytest.raises(ValueError): tracing.Trace(events,bytes_)
 
 
-def test_completed_usb_transfer_does_not_certify_a_valid_protocol_reply():
+async def test_completed_usb_transfer_does_not_certify_a_valid_protocol_reply():
     trace=tracing.Trace(32,4096)
-    session,script=opened([E.control(control(0xc2,2)),E.read(2,b'\x34')],trace=trace)
-    with pytest.raises(usb.ProtocolError): session.ping()
+    session,script=(await opened([E.control(control(0xc2,2)),E.read(2,b'\x34')],trace=trace))
+    with pytest.raises(usb.ProtocolError): (await session.ping())
     batch=trace.drain()
     event=batch.events[-1]
     assert event.phase == tracing.Phase.Completed

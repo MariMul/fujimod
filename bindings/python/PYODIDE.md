@@ -48,8 +48,7 @@ Cancelling a command or pending chunk requests host cancellation in Rust and
 awaits its outcome before returning ownership. An incomplete exchange leaves
 `CompletionUnknown`; it does not send C4 or recovery. Cancelling an open waits
 for the open outcome, then abandons a session if one was created. Explicit
-abandonment remains terminal and cannot stop camera execution. The blocking
-adapter is native only.
+abandonment remains terminal and cannot stop camera execution.
 
 Run the end-to-end checks after building both artifacts:
 

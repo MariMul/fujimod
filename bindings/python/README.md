@@ -56,36 +56,19 @@ I/O polling releases the GIL. These native coroutines work with `await`,
 `asyncio.create_task`, cancellation and separate event loops. The Pyodide wheel
 uses an async Python/JavaScript adapter over the same Rust core.
 
-Synchronous callers use the explicit `blocking` API:
-
-```python
-from fujimod import usb
-from fujimod.usb import blocking
-
-# Supply these from the selected body/firmware definition, not global defaults.
-def identify(device, interface, firmware_limits):
-    session = blocking.Session.open(device, interface, firmware_limits)
-    try:
-        return session.device_info(usb.InfoSelector.Product)
-    finally:
-        if session.state == usb.SessionState.Ready:
-            session.close()
-```
-
-`blocking.discover(usb.DeviceFilter.Diagnostic)` returns device descriptors;
-`blocking.interfaces(device)` inspects available bulk interface selections.
-The caller selects the device and interface explicitly. `DeviceFilter.Fujifilm` includes
+Discover devices with `await usb.discover(usb.DeviceFilter.Diagnostic)` and
+inspect interface selections with `await usb.interfaces(device)`. The caller
+selects the device and interface explicitly. `DeviceFilter.Fujifilm` includes
 other Fujifilm USB modes for inventory, without opening a protocol session.
 
-All wire exchanges run through the async Rust implementation. This native
-blocking adapter releases Python's GIL during device I/O and serializes access
-to each session. Commands accept enums for selectors, views, modes and key
-states. Numbers represent addresses, lengths and raw device fields. Research
-queries require `usb.DiagnosticTag.research(value)` explicitly.
+All wire exchanges run through the async Rust implementation. Commands accept
+enums for selectors, views, modes and key states. Numbers represent addresses,
+lengths and raw device fields. Research queries require
+`usb.DiagnosticTag.research(value)` explicitly.
 
 `Session.read_memory` and `Session.write_memory` issue one camera request each.
-`blocking.memory.read_range` and `blocking.memory.write_range` use the library's
-composed operations. `blocking.memory.read_chunks` returns a context-managed
+`usb.memory.read_range` and `usb.memory.write_range` use the library's
+composed operations. `usb.memory.read_chunks` returns an async context-managed
 iterator that exclusively owns the session until iteration finishes or closes.
 Each yielded buffer can be saved immediately; failures retain the prior chunks.
 Configuration writes
@@ -110,8 +93,7 @@ when completion and ownership are known. When a completed command started
 application work whose completion or ownership is uncertain, `session.abandon()`
 releases host resources without issuing C4 or cleanup. Its terminal state is
 `Abandoned`, and all further I/O is rejected. Abandoning cannot stop firmware
-execution. The blocking adapter requires closing its range reader before
-abandoning the session.
+execution. Close or cancel an owned range reader with `await reader.aclose()`.
 
 For Python protocol/ownership tests, build an instrumented wheel with
 `maturin build --manifest-path bindings/python/Cargo.toml --features testing`.
@@ -121,7 +103,7 @@ including streaming, ownership, protocol errors and disconnects. The `testing`
 module is excluded from ordinary builds. No test opens a camera. Tests also cover
 asyncio wakeups, cancellation during I/O, concurrent calls and async iterators.
 
-Use `blocking.data.read_chunks(session, window, address, length)` for a streamed
+Use `async with usb.data.read_chunks(session, window, address, length)` for a streamed
 E1 memory range. Construct `usb.DataWindow(base, aperture_address,
 aperture_length, capacity, usb.OffsetMode.Checked)` from the selected firmware
 map; use `OffsetMode.Wrapping` only where firmware's pointer addition is known
@@ -140,14 +122,14 @@ immutable identifier from a selected firmware's service table. Construct
 `Request(code, arguments)` with at most 32 argument bytes; input is zero padded
 and never truncated. `Mailbox(page=..., offset=..., configuration_limit=...)`
 requires explicit firmware values. Call
-`blocking.app80.exchange(session, mailbox, request)` to stage, publish and read
+`await usb.app80.exchange(session, mailbox, request)` to stage, publish and read
 one result through Rust; it returns the exact 33 mailbox bytes. It holds session
 ownership for the complete operation, checks both mailbox and session limits
 before sending, and does no polling or retries. The publish write awaits its
 ff80 completion; mailbox bytes are not interpreted as a host wait instruction.
 
 For raw transfer logging, create `tracing.Trace(max_events=..., max_bytes=...)`
-from `fujimod.usb.tracing` and pass it as `trace=` when opening either kind of
+from `fujimod.usb.tracing` and pass it as `trace=` when opening a
 session. `trace.drain()` returns a batch of immutable events plus
 `dropped_events`/`dropped_bytes`. Events expose typed `stage`, `phase`,
 `request_kind` and `failure_kind`, raw `data`, correlation IDs, endpoint and
@@ -156,7 +138,7 @@ logs, including after an exception or failed session open. The recorder remains
 usable while a range reader owns the session. USB work never invokes Python
 callbacks. Callers choose whether trace loss stops their capture.
 
-Emulator integration tests can use `testing.peer_session(peer, limits, ep_in=...,
+Emulator integration tests can use `await testing.peer_session(peer, limits, ep_in=...,
 ep_out=...)` instead of a fixed transcript. The peer's `control(envelope: bytes)`
 and `write(data: bytes)` return `None`; `read(maximum: int)` returns bytes. These
 callbacks advance the virtual endpoint model synchronously and must not reenter
@@ -166,8 +148,8 @@ run in Rust; no USB discovery or physical connection is involved. This injection
 path is absent from regular builds. Production USB and trace recording never
 call Python callbacks.
 
-`blocking.data.upload(session, data, piece_bytes=..., mode=usb.DataWriteMode.Preserve)`
-holds one session lock across the setup, every E0 piece and final E8. It returns
+`await usb.data.upload(session, data, piece_bytes=..., mode=usb.DataWriteMode.Preserve)`
+holds exclusive session ownership across the setup, every E0 piece and final E8. It returns
 an immutable `UploadReply` with `setup`, `acknowledgement` and `bytes_written`.
 Mode and piece size are required inputs. The operation sends data unchanged,
 without padding, readback, retries or destination-buffer policy. A refused setup
@@ -216,7 +198,6 @@ if isinstance(reply.value, usb.app80.ReplyValue.Pins):
     levels = reply.value.levels
 ```
 
-`blocking.app80.execute` runs the same invocation for synchronous callers.
 `invocation.raw` and `invocation.decode(raw)` support offline inspection; neither
 performs USB I/O. `Definition.entries` preserves firmware order and typed codec,
 availability and transition metadata. The identity is supplied explicitly and

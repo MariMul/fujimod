@@ -1,7 +1,34 @@
 //! Owned async range iterators. Dropping a pending next closes the reader and
 //! returns the core session with its uncertain-completion fence intact.
 use super::*;
-use range::NativeReader;
+pub(super) enum Operation {
+    Memory(MemoryRange),
+    Data(usb::operations::data::DataWindow, MemoryRange),
+}
+pub(super) enum NativeReader {
+    Memory(usb::operations::memory::MemoryReader<ff80::Session>),
+    Data(usb::operations::data::DataReader<ff80::Session>),
+}
+impl NativeReader {
+    pub(super) fn bytes_completed(&self) -> u32 {
+        match self {
+            Self::Memory(r) => r.bytes_completed(),
+            Self::Data(r) => r.bytes_completed(),
+        }
+    }
+    pub(super) fn into_inner(self) -> ff80::Session {
+        match self {
+            Self::Memory(r) => r.into_inner(),
+            Self::Data(r) => r.into_inner(),
+        }
+    }
+    pub(super) async fn next_chunk(&mut self) -> usb::Result<Option<Vec<u8>>> {
+        match self {
+            Self::Memory(r) => r.next_chunk().await,
+            Self::Data(r) => r.next_chunk().await,
+        }
+    }
+}
 
 pub(super) struct State {
     slot: ReaderSlot,
@@ -24,17 +51,17 @@ pub(super) struct Reader {
     owner: Arc<Mutex<Slot>>,
 }
 impl Reader {
-    pub(super) fn new(session: &AsyncSession, operation: range::Operation) -> PyResult<Self> {
+    pub(super) fn new(session: &AsyncSession, operation: Operation) -> PyResult<Self> {
         let mut slot = lock(&session.inner)?;
         slot.available()?;
         let Slot::Open(native) = std::mem::replace(&mut *slot, Slot::CompletionUnknown) else {
             unreachable!()
         };
         let reader = match operation {
-            range::Operation::Memory(range) => NativeReader::Memory(
+            Operation::Memory(range) => NativeReader::Memory(
                 usb::operations::memory::MemoryReader::new(native, range, session.limits.memory),
             ),
-            range::Operation::Data(window, range) => NativeReader::Data(
+            Operation::Data(window, range) => NativeReader::Data(
                 usb::operations::data::DataReader::new(native, window, range)
                     .expect("window validated before taking ownership"),
             ),

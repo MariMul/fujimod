@@ -7,7 +7,7 @@ import json
 import pytest
 from fujimod import defs, usb
 from fujimod.defs import service as data
-from fujimod.usb import app80, blocking
+from fujimod.usb import app80
 from test_app80 import config_read, config_write
 from test_async import dispatched, run
 from test_async import opened as async_opened
@@ -237,12 +237,12 @@ def test_selection_failures_are_structured_and_unknown_values_stay_data():
     assert isinstance(research.decode(bytes(33)).value, app80.ReplyValue.Research)
 
 
-def test_blocking_execution_uses_the_selected_mailbox_and_does_not_poll_status_one():
+async def test_blocking_execution_uses_the_selected_mailbox_and_does_not_poll_status_one():
     invocation = save()
     raw = bytearray(invocation.raw)
     raw[8] = 1
-    session, script = opened(exchange(invocation, raw))
-    reply = blocking.app80.execute(session, invocation)
+    session, script = (await opened(exchange(invocation, raw)))
+    reply = (await usb.app80.execute(session, invocation))
     assert isinstance(reply.value.status, app80.SaveStatus.Failed)
     assert reply.raw == raw
     assert session.state == usb.SessionState.Ready and script.remaining == 0

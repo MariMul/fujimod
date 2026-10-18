@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from fujimod import usb
-from fujimod.usb import app80, blocking, tracing
+from fujimod.usb import app80, tracing
 from test_stream import E, TOKEN, LIMITS, control, memory_read
 from test_app80 import config_read, config_write
 from test_service_commands import info
@@ -16,7 +16,7 @@ testing = pytest.importorskip("fujimod.usb.testing")
 
 
 async def opened(steps=(), *, trace=None, limits=LIMITS):
-    return await testing.async_session([
+    return await testing.session([
         E.control(control(0xc0, 8, token=0)),
         E.read(8, struct.pack('<HH', TOKEN, 0) + struct.pack('>I', 4)),
         *steps,
@@ -33,7 +33,7 @@ async def dispatched(script):
 
 
 def run(test):
-    with patch.object(blocking, 'discover', side_effect=AssertionError('Physical USB forbidden')), \
+    with patch.object(usb, 'discover', side_effect=AssertionError('Physical USB forbidden')), \
          patch.object(usb, 'discover', side_effect=AssertionError('Physical USB forbidden')):
         return asyncio.run(test())
 
@@ -257,7 +257,7 @@ def test_diagnostic_and_upload_dtos_are_shared_across_async_and_blocking():
         assert reply.status == usb.CommandStatus.DeviceError
         assert (reply.primary,reply.secondary) == (1,0xffff) and reply.raw == query_reply
         result = await usb.data.upload(s,b'abc',piece_bytes=2,mode=usb.DataWriteMode.FillOnes)
-        assert isinstance(result,usb.data.UploadReply) and isinstance(result,blocking.data.UploadReply)
+        assert isinstance(result,usb.data.UploadReply) and isinstance(result,usb.data.UploadReply)
         assert result.setup.status == usb.CommandStatus.Success
         assert result.setup.fields == [9,8,7,6]
         assert (result.bytes_written,result.acknowledgement) == (3,b'\xff\x01\x80\x7f')
