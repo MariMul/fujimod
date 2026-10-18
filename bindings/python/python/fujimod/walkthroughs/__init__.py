@@ -17,25 +17,44 @@ from .text import MenuReference, encode, plain, ref
 SCHEMA = 3
 
 
-def walkthrough(title, *, start_from=None):
-    """Mark a two-argument (camera, guide) function for discovery."""
+# How a walkthrough is presented in owner documentation. Coverage counts every
+# role; the role only decides presentation:
+#   guide      the feature's main how-to, shown expanded (one per feature)
+#   alternate  another way to do the same task, listed collapsed
+#   tour       visits every option; source of option cards (contact sheet)
+#   test       behaviour checks, hidden from owner documentation
+ROLES = ('guide', 'alternate', 'tour', 'test')
+
+
+def walkthrough(title, *, start_from=None, role=None, feature=None):
+    """Mark a two-argument (camera, guide) function for discovery.
+
+    role is one of ROLES; feature names the owner task the walkthrough
+    documents (e.g. 'aspect_ratio'), shared by its guide and alternates.
+    Walkthroughs without a role are untriaged."""
     if not isinstance(title, str) or not title.strip():
         raise ValueError('A walkthrough needs a title')
     if start_from is not None and not hasattr(start_from, 'walkthrough_title'):
         raise ValueError('start_from must reference a walkthrough')
+    if role is not None and role not in ROLES:
+        raise ValueError(f'Walkthrough role must be one of {ROLES}')
+    if feature is not None and (not isinstance(feature, str) or not feature.isidentifier()):
+        raise ValueError('A walkthrough feature is an identifier, e.g. aspect_ratio')
     def decorate(function):
         function.walkthrough_title = title
         function.walkthrough_start_from = start_from
+        function.walkthrough_role = role
+        function.walkthrough_feature = feature
         return function
     return decorate
 
 
-def open_menu(item, *, title, start_from=None):
+def open_menu(item, *, title, start_from=None, role=None, feature=None):
     """Illustrate the highlighted menu destination before opening its page."""
     item = ref(menu=item) if isinstance(item, str) else item
     if not isinstance(item, MenuReference):
         raise ValueError('A menu starter needs a menu reference or item name')
-    @walkthrough(title, start_from=start_from)
+    @walkthrough(title, start_from=start_from, role=role, feature=feature)
     def visit(camera, guide):
         with guide.step(t'Choose {item.path()}'):
             camera.select_menu_item(item)
@@ -58,6 +77,14 @@ class Walkthrough:
     @property
     def start_from(self):
         return self.function.walkthrough_start_from
+
+    @property
+    def role(self):
+        return getattr(self.function, 'walkthrough_role', None)
+
+    @property
+    def feature(self):
+        return getattr(self.function, 'walkthrough_feature', None)
 
 
 class _FreshSourceLoader(importlib.machinery.SourceFileLoader):
@@ -123,7 +150,7 @@ class Guide:
     observes all adapter input paths; it must not infer coverage from prose.
     The factory is called once per run and must provide a fresh camera.
     """
-    def __init__(self, camera, output, *, identity, title, fps=15,
+    def __init__(self, camera, output, *, identity, title, role=None, feature=None, fps=15,
                  navigation_hold=.12, action_hold=.45):
         if not __debug__:
             raise RuntimeError('Walkthroughs require Python assertions')
@@ -133,7 +160,7 @@ class Guide:
         self.camera, self.output = camera, Path(output)
         self.video = Video(self.output, fps=fps)
         self.output.mkdir(parents=True, exist_ok=False)
-        self.report = dict(schema=SCHEMA, identity=identity, title=title, passed=False,
+        self.report = dict(schema=SCHEMA, identity=identity, title=title, role=role, feature=feature, passed=False,
                            steps=[], inputs=[], interactions=[], fixtures=[], prerequisites=[])
         self._inside_step = False
         self._recording = False
