@@ -246,6 +246,7 @@ export async function connectPeer(url) {
     async (frame) => {
       if (frame.type !== 'signal' || frame.from !== 'host') return;
       const answer = await unseal(ticket, id, frame.data);
+      if (answer.type === 'error') throw Error(`Share owner could not connect: ${answer.message}`);
       if (answer.type !== 'answer') throw Error('Invalid peer answer');
       await pc.setRemoteDescription(answer);
     },
@@ -303,9 +304,23 @@ export class ShareHost {
       ticket,
       'host',
       (frame) =>
-        this.message(frame).catch(() => {
+        this.message(frame).catch(async (error) => {
           this.peers.get(frame.from)?.close();
           this.peers.delete(frame.from);
+          // Report a failed connection on both ends instead of leaving the
+          // controller to time out waiting for an answer.
+          const reason = error instanceof Error ? error.message : String(error);
+          if (!this.closed) this.callbacks.error?.(Error(`Remote controller could not connect: ${reason}`));
+          if (frame.type !== 'signal' || this.closed) return;
+          try {
+            this.signal.send({
+              type: 'signal',
+              to: frame.from,
+              data: await seal(this.ticket, frame.from, { type: 'error', message: reason }),
+            });
+          } catch {
+            /* The controller still reports the last step it reached. */
+          }
         }),
       (error) => {
         if (!this.closed) {

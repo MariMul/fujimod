@@ -17,10 +17,10 @@ fn error(value: JsValue) -> Error {
 }
 pub(crate) struct PeerSocket(Channel);
 impl PeerSocket {
-    pub async fn connect(url: &str) -> Result<Self> {
-        Ok(Self(
-            connect_peer(url).await.map_err(error)?.unchecked_into(),
-        ))
+    pub async fn connect(url: &str, progress: &crate::Progress) -> Result<Self> {
+        let channel = connect_peer(url).await.map_err(error)?.unchecked_into();
+        progress("WebRTC data channel open");
+        Ok(Self(channel))
     }
     pub async fn send(&mut self, text: &str) -> Result<()> {
         self.0.send(text).await.map_err(error)?;

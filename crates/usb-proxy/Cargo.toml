@@ -43,3 +43,7 @@ gloo-net = { version = "0.6", features = ["websocket"], default-features = false
 name = "fujimod-usb-relay"
 path = "src/bin/relay.rs"
 required-features = ["relay"]
+
+[[bin]]
+name = "fujimod-share-probe"
+path = "src/bin/share_probe.rs"

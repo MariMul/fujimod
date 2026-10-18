@@ -75,6 +75,9 @@ async fn deadline<T>(
     .await
 }
 
+/// Receives each connection step as it completes, before any USB request.
+pub type Progress = std::sync::Arc<dyn Fn(&str) + Send + Sync>;
+
 /// One controller connection. Calls are exclusive and never retried. A dropped
 /// or failed call permanently fences this connection; reconnect explicitly.
 pub struct Client {
@@ -87,13 +90,31 @@ pub struct Client {
 }
 impl Client {
     pub async fn connect(url: &str, token: &str) -> Result<Self> {
+        Self::connect_with_progress(url, token, std::sync::Arc::new(|_: &str| {})).await
+    }
+    /// Connect, reporting each step. A failure names the last step reached, so
+    /// signaling, WebRTC and the proxy handshake can be told apart.
+    pub async fn connect_with_progress(url: &str, token: &str, progress: Progress) -> Result<Self> {
+        let reached = std::sync::Arc::new(std::sync::Mutex::new(String::from("started")));
+        let report: Progress = {
+            let reached = reached.clone();
+            std::sync::Arc::new(move |step: &str| {
+                *reached.lock().unwrap() = step.to_owned();
+                progress(step);
+            })
+        };
+        Self::connect_reporting(url, token, report)
+            .await
+            .map_err(|e| err(format!("{} (last step reached: {})", e.0, reached.lock().unwrap())))
+    }
+    async fn connect_reporting(url: &str, token: &str, progress: Progress) -> Result<Self> {
         let ticket = crate::share::Ticket::from_url(url)?;
         let token = ticket.as_ref().map(|t| t.key.as_str()).unwrap_or(token);
         deadline(
             Duration::from_secs(if ticket.is_some() { 30 } else { 10 }),
             async {
                 let mut socket = if ticket.is_some() {
-                    Socket::Peer(crate::peer::PeerSocket::connect(url).await?)
+                    Socket::Peer(crate::peer::PeerSocket::connect(url, &progress).await?)
                 } else {
                     #[cfg(not(target_arch = "wasm32"))]
                     let socket = async_tungstenite::smol::connect_async(url)
@@ -102,6 +123,7 @@ impl Client {
                         .0;
                     #[cfg(target_arch = "wasm32")]
                     let socket = WebSocket::open(url).map_err(err)?;
+                    progress("relay WebSocket connected");
                     Socket::Web(socket)
                 };
                 send(
@@ -113,16 +135,20 @@ impl Client {
                     },
                 )
                 .await?;
+                progress("proxy handshake sent");
                 match receive(&mut socket).await? {
                     Frame::Ready {
                         version: VERSION, ..
-                    } => Ok(Self {
+                    } => Ok({
+                        progress("proxy handshake ready");
+                        Self {
                         socket,
                         next_id: 0,
                         usable: true,
                         latency: Latency::default(),
                         probed_device: String::new(),
                         last_probe: None,
+                        }
                     }),
                     _ => Err(err("relay rejected protocol handshake")),
                 }

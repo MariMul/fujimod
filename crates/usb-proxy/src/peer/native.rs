@@ -93,8 +93,10 @@ pub(crate) struct PeerSocket {
     receive: Receiver<Result<String>>,
 }
 impl PeerSocket {
-    pub async fn connect(url: &str) -> Result<Self> {
+    pub async fn connect(url: &str, progress: &crate::Progress) -> Result<Self> {
         let ticket = Ticket::from_url(url)?.ok_or_else(|| error("invalid share URL"))?;
+        progress("share link parsed");
+        let progress = progress.clone();
         let (tx, outbound) = async_channel::bounded(1);
         let (incoming, rx) = async_channel::bounded(16);
         let (ready, wait) = async_channel::bounded(1);
@@ -102,7 +104,8 @@ impl PeerSocket {
             .name("fujimod-webrtc".into())
             .spawn(move || {
                 futures_lite::future::block_on(async {
-                    if let Err(error) = run(ticket, outbound, incoming.clone(), ready.clone()).await
+                    if let Err(error) =
+                        run(ticket, outbound, incoming.clone(), ready.clone(), progress).await
                     {
                         let _ = ready.send(Err(error.to_string())).await;
                         let _ = incoming.send(Err(error)).await;
@@ -145,6 +148,7 @@ async fn run(
     outbound: Receiver<String>,
     incoming: Sender<Result<String>>,
     ready: Sender<std::result::Result<(), String>>,
+    progress: crate::Progress,
 ) -> Result<()> {
     let std_socket = std::net::UdpSocket::bind("0.0.0.0:0").map_err(error)?;
     let port = std_socket.local_addr().map_err(error)?.port();
@@ -161,6 +165,7 @@ async fn run(
         rtc.add_local_candidate(Candidate::host(*addr, "udp").map_err(error)?);
         drain_setup(&mut rtc)?;
     }
+    progress(&format!("local candidates: {}", local.len()));
     // An optional STUN lookup uses the same socket as ICE, without a TURN path.
     for server in &ticket.stun {
         let name = server.trim_start_matches("stun:");
@@ -173,7 +178,12 @@ async fn run(
             if let Some(server) = addresses.into_iter().find(SocketAddr::is_ipv4) {
                 let mut client = stunclient::StunClient::new(server);
                 client.set_timeout(Duration::from_secs(2));
-                if let Ok(external) = client.query_external_address(&std_socket) {
+                let found = client.query_external_address(&std_socket);
+                progress(&match &found {
+                    Ok(external) => format!("STUN {server}: external address {external}"),
+                    Err(e) => format!("STUN {server}: no reply ({e})"),
+                });
+                if let Ok(external) = found {
                     let route = std::net::UdpSocket::bind("0.0.0.0:0").map_err(error)?;
                     route.connect(server).map_err(error)?;
                     let base = SocketAddr::new(route.local_addr().map_err(error)?.ip(), port);
@@ -192,6 +202,7 @@ async fn run(
         .query_pairs_mut()
         .append_pair("room", &ticket.room);
     let (mut signal, _) = connect_async(signal_url.as_str()).await.map_err(error)?;
+    progress("signaling connected");
     write(
         &mut signal,
         json!({"type":"join","role":"client","room":ticket.room}),
@@ -201,8 +212,9 @@ async fn run(
     let peer = welcome["peer"]
         .as_str()
         .filter(|_| welcome["type"] == "ready")
-        .ok_or_else(|| error("share unavailable"))?
+        .ok_or_else(|| error("share unavailable: no owner in this room"))?
         .to_owned();
+    progress("joined room; share owner present");
     let mut change = rtc.sdp_api();
     change.add_channel("fujimod-usb".into());
     let (offer, pending) = change
@@ -210,6 +222,7 @@ async fn run(
         .ok_or_else(|| error("missing WebRTC offer"))?;
     drain_setup(&mut rtc)?;
     write(&mut signal, json!({"type":"signal","data":seal(&ticket,&peer,json!({"type":"offer","sdp":offer.to_sdp_string()}))?})).await?;
+    progress("WebRTC offer sent; waiting for owner's answer");
     let answer = read(&mut signal).await?;
     if answer["type"] != "signal" || answer["from"] != "host" {
         return Err(error("share ended"));
@@ -221,9 +234,16 @@ async fn run(
             .as_str()
             .ok_or_else(|| error("invalid signaling reply"))?,
     )?;
+    if answer["type"] == "error" {
+        return Err(error(format!(
+            "share owner could not connect: {}",
+            answer["message"].as_str().unwrap_or("no reason given")
+        )));
+    }
     if answer["type"] != "answer" {
         return Err(error("invalid WebRTC answer"));
     }
+    progress("WebRTC answer received");
     rtc.sdp_api()
         .accept_answer(
             pending,
@@ -231,6 +251,7 @@ async fn run(
                 .map_err(error)?,
         )
         .map_err(error)?;
+    progress("WebRTC answer accepted; connecting ICE");
     let mut channel: Option<ChannelId> = None;
     let mut assembled = Vec::new();
     let mut packets: VecDeque<Vec<u8>> = VecDeque::new();
@@ -248,8 +269,13 @@ async fn run(
                         .map_err(error)?;
                 }
                 Output::Event(event) => match event {
+                    Event::IceConnectionStateChange(state) => {
+                        progress(&format!("ICE {state:?}"));
+                    }
+                    Event::Connected => progress("DTLS connected"),
                     Event::ChannelOpen(id, label) if label == "fujimod-usb" => {
                         channel = Some(id);
+                        progress("WebRTC data channel open");
                         if ready.send(Ok(())).await.is_err() {
                             return Ok(());
                         }

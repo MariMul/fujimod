@@ -3,7 +3,7 @@
 mod client;
 mod latency;
 pub mod protocol;
-pub use client::{Client, RemoteDevice};
+pub use client::{Client, Progress, RemoteDevice};
 pub use protocol::{Completion, Device, Endpoint, Interface, Operation, Setup};
 
 #[derive(Debug, thiserror::Error)]
