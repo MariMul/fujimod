@@ -24,6 +24,12 @@ const browser = await engine.launch({ headless: true });
 try {
   const context = await browser.newContext({
     acceptDownloads: true,
+    ...(engine === webkit
+      ? {
+          userAgent:
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+        }
+      : {}),
     viewport: { width: 390, height: 844 },
   });
   const sent = [],
@@ -80,10 +86,28 @@ try {
   });
   await page.goto(url.href);
   console.log(engine.name(), 'loaded report page');
-  await page.getByText('Connect over USB', { exact: true }).waitFor();
-  await page
-    .getByRole('heading', { name: 'Your camera data stays private until you press upload.' })
+  const usbAvailable = await page.evaluate(() => isSecureContext && 'usb' in navigator);
+  const usbCard = page.getByRole('region', { name: 'USB connection' });
+  await usbCard
+    .getByRole('heading', {
+      name: usbAvailable ? 'Connect over USB' : 'WebUSB unavailable',
+      exact: true,
+    })
     .waitFor();
+  assert.equal(
+    await usbCard.evaluate((e) => e.classList.contains('bug-usb-unavailable')),
+    !usbAvailable,
+  );
+  assert.equal(await page.locator('h1').count(), 0);
+  await page
+    .getByText(
+      'Your camera data is private and remains on your device until you press upload. Uploaded issue reports contain this data:',
+      { exact: true },
+    )
+    .waitFor();
+  await page.locator('.bug-platform').waitFor();
+  if (engine === webkit)
+    assert.match(await page.locator('.bug-platform').textContent(), /iPhone · Files/);
   await page.screenshot({ path: `${output}/browser-phone.png`, fullPage: true });
   assert.equal(await page.locator('body').evaluate((e) => e.scrollWidth > innerWidth), false);
   await page.locator('input[type=file]').setInputFiles(`${directory}/report.tar`);

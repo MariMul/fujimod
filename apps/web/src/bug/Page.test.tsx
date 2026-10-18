@@ -40,6 +40,9 @@ function submit(host: HTMLElement) {
 }
 test('two acquisition paths remain available; upload is disabled until an archive is read', async () => {
   const upload = vi.fn();
+  const agent = vi
+    .spyOn(navigator, 'userAgent', 'get')
+    .mockReturnValue('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)');
   const { host, dispose } = mount({ hash: hash(), supported: false, upload });
   try {
     await vi.waitFor(() => {
@@ -47,6 +50,15 @@ test('two acquisition paths remain available; upload is disabled until an archiv
       expect(host.textContent).toContain('Choose from SD card');
     });
     expect(host.textContent).toContain('/FUJIMOD/REPORTS/R1234567.TAR');
+    const usb = host.querySelector('[aria-label="USB connection"]')!;
+    expect(usb.classList.contains('bug-usb-unavailable')).toBe(true);
+    expect(usb.firstElementChild?.textContent).toBe('WebUSB unavailable');
+    expect(host.querySelector('.bug-platform')?.textContent).toContain('iPhone · Files');
+    expect(host.querySelector('h1')).toBeNull();
+    expect(host.textContent).not.toContain('Nothing is uploaded automatically.');
+    expect(host.textContent).toContain(
+      'Your camera data is private and remains on your device until you press upload.',
+    );
     expect(host.textContent).toContain('Chrome or Edge');
     expect(host.textContent).toContain('ready to upload your error report over USB');
     expect(button(host, 'Upload this information').disabled).toBe(true);
@@ -55,6 +67,7 @@ test('two acquisition paths remain available; upload is disabled until an archiv
     expect(upload).not.toHaveBeenCalled();
   } finally {
     dispose();
+    agent.mockRestore();
   }
 });
 test('inline report lists real entries locally and uploads only on explicit action', async () => {

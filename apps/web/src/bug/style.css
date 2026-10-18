@@ -1,30 +1,11 @@
 .bug-report.shell {
-  max-width: 780px;
+  max-width: 1040px;
   padding: 24px 20px 60px;
 }
 .bug-report header {
   flex-wrap: wrap;
   gap: 24px;
-}
-.bug-report h1 {
-  font-size: 24px;
-  font-weight: 500;
-}
-.bug-privacy {
-  margin: 40px 0;
-}
-.bug-privacy h2 {
-  font-size: clamp(30px, 6vw, 48px);
-  line-height: 1.1;
-  letter-spacing: -0.035em;
-  max-width: 650px;
-  margin: 0 0 18px;
-}
-.bug-privacy p {
-  font-size: 20px;
-  line-height: 1.5;
-  color: var(--dim);
-  max-width: 580px;
+  margin-bottom: 28px;
 }
 .bug-card {
   padding: 24px;
@@ -75,9 +56,6 @@
 }
 .bug-report [role='alert'] {
   color: #ffa7a7;
-}
-.bug-report.shell {
-  max-width: 1040px;
 }
 .bug-paths {
   display: grid;
@@ -159,4 +137,25 @@
   .bug-card {
     padding: 18px;
   }
+}
+
+.bug-usb-unavailable {
+  background: #101112;
+  border-color: #2b2c2e;
+}
+.bug-usb-unavailable .bug-unavailable-title {
+  color: #d0d0d0;
+  font-size: 24px;
+}
+.bug-unavailable-reason {
+  color: #a9aaad;
+}
+.bug-platform {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+}
+.bug-platform svg {
+  flex-shrink: 0;
 }

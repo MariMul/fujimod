@@ -3,7 +3,7 @@ import { DevTools } from '../dev-tools/Page';
 import type { CameraBackend, CameraChoice } from '../dev-tools/camera';
 import { downloadBlob } from '../ui/card';
 import { uploadReport, type UploadReport, type UploadReceipt } from './upload';
-import { fileGuide } from './file-guide';
+import { reportPlatform, type ReportPlatform } from './file-guide';
 import {
   parseReportLink,
   decode64,
@@ -39,7 +39,7 @@ export function BugReport(props: {
   const [connected, setConnected] = createSignal(false),
     [tools, setTools] = createSignal<CameraBackend>();
   const upload = untrack(() => props.upload) ?? uploadReport;
-  const guidance = typeof navigator === 'undefined' ? '' : fileGuide(navigator.userAgent);
+  const [platform, setPlatform] = createSignal<ReportPlatform>();
   const [entries, setEntries] = createSignal<ReportEntry[]>([]);
   const [fromUsb, setFromUsb] = createSignal(false);
   const [remove, setRemove] = createSignal(true);
@@ -48,6 +48,7 @@ export function BugReport(props: {
   const [description, setDescription] = createSignal('');
   let handedOff = false;
   onSettled(() => {
+    setPlatform(reportPlatform(navigator.userAgent, navigator.maxTouchPoints));
     try {
       const value = parseReportLink(untrack(() => props.hash) ?? location.hash);
       setLink(value);
@@ -177,16 +178,7 @@ export function BugReport(props: {
             <a href="../">
               <img src="../brand.png" alt="FujiMod" width="110" height="28" />
             </a>
-            <h1>Report a camera bug</h1>
           </header>
-          <section class="bug-privacy" aria-label="Privacy">
-            <h2>Your camera data stays private until you press upload.</h2>
-            <p>
-              Nothing is uploaded automatically. The description will appear in a public GitHub
-              issue. No GitHub account is needed. The diagnostic archive is shared privately with
-              FujiMod maintainers.
-            </p>
-          </section>
           <Show when={link()}>
             {(value) => (
               <>
@@ -201,21 +193,22 @@ export function BugReport(props: {
                   </strong>
                 </p>
                 <div class="bug-paths">
-                  <section class="bug-card" aria-label="USB connection">
-                    <h2>Connect over USB</h2>
-                    <p>
-                      Leave the QR screen open and plug in USB. If it was already plugged in, unplug
-                      and reconnect it.
-                    </p>
-                    <Show
-                      when={supported}
-                      fallback={
-                        <p>
-                          WebUSB is unavailable in this browser. Use Chrome or Edge on a computer,
-                          or choose the TAR file from your SD card.
-                        </p>
-                      }
-                    >
+                  <section
+                    class={{ 'bug-card': true, 'bug-usb-unavailable': !supported }}
+                    aria-label="USB connection"
+                  >
+                    <Show when={!supported}>
+                      <h2 class="bug-unavailable-title">WebUSB unavailable</h2>
+                      <p class="bug-unavailable-reason">
+                        Use Chrome or Edge on a computer, or choose the TAR file from your SD card.
+                      </p>
+                    </Show>
+                    <Show when={supported}>
+                      <h2>Connect over USB</h2>
+                      <p>
+                        Leave the QR screen open and plug in USB. If it was already plugged in,
+                        unplug and reconnect it.
+                      </p>
                       <p class="bug-wait">
                         <span class={{ 'bug-spinner': busy() }} aria-hidden="true" />
                         {busy()
@@ -251,14 +244,14 @@ export function BugReport(props: {
                           Read report
                         </button>
                       </Show>
+                      <details>
+                        <summary>After restarting the camera</summary>
+                        <p>
+                          Open the issue QR screen again, or enable SET UP → FUJIMOD DEVTOOLS → USB
+                          DEBUGGING, then reconnect USB.
+                        </p>
+                      </details>
                     </Show>
-                    <details>
-                      <summary>After restarting the camera</summary>
-                      <p>
-                        Open the issue QR screen again, or enable SET UP → FUJIMOD DEVTOOLS → USB
-                        DEBUGGING, then reconnect USB.
-                      </p>
-                    </details>
                   </section>
                   <section class="bug-card" aria-label="SD card file">
                     <h2>Choose from SD card</h2>
@@ -266,7 +259,40 @@ export function BugReport(props: {
                       Alternatively, find the issue report TAR file on the SD card at{' '}
                       <code class="bug-file">{value().path.slice(2).replaceAll('\\', '/')}</code>
                     </p>
-                    <p>{guidance}</p>
+                    <Show when={platform()}>
+                      {(device) => (
+                        <>
+                          <p class="bug-platform">
+                            <svg
+                              width="32"
+                              height="32"
+                              viewBox="0 0 32 32"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="1.5"
+                              aria-hidden="true"
+                            >
+                              <Show
+                                when={device().mobile}
+                                fallback={
+                                  <>
+                                    <rect x="3" y="5" width="26" height="18" rx="2" />
+                                    <path d="M16 23v5m-6 0h12" />
+                                  </>
+                                }
+                              >
+                                <rect x="8" y="2" width="16" height="28" rx="3" />
+                                <path d="M13 26h6" />
+                              </Show>
+                            </svg>
+                            <span>
+                              {device().name} · {device().fileManager}
+                            </span>
+                          </p>
+                          <p>{device().guide}</p>
+                        </>
+                      )}
+                    </Show>
                     <p>
                       If browsing the camera over USB/PTP only shows photos or videos, use a card
                       reader to access this folder.
@@ -283,7 +309,13 @@ export function BugReport(props: {
                   </section>
                 </div>
                 <section class="bug-card bug-contents">
-                  <h2>{archive() ? 'Report ready' : 'Uploaded issue reports contain'}</h2>
+                  <p>
+                    Your camera data is private and remains on your device until you press upload.
+                    Uploaded issue reports contain this data:
+                  </p>
+                  <Show when={archive()}>
+                    <h2>Report ready</h2>
+                  </Show>
                   <Show
                     when={archive()}
                     fallback={
