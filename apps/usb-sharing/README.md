@@ -1,8 +1,8 @@
 # USB sharing Worker
 
 Production rendezvous and temporary Cloudflare TURN credentials for the static
-[web application](../web/README.md). Cloudflare serves the static app at
-`https://fujimod.com` and this Worker at `https://share.fujimod.com`.
+[web application](../web/README.md). This Worker is available for testing at
+`https://share.fujimod.com`. The website is intentionally unpublished.
 See the [hosting configuration](../web/DEPLOYMENT.md).
 
 Each share room is a hibernating SQLite Durable Object. It routes opaque,
