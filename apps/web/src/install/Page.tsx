@@ -290,7 +290,7 @@ export default function InstallerPage(
           <Show
             when={
               state().guard === 'armed' &&
-              !['battery', 'boot', 'confirm', 'done'].includes(state().step)
+              !['battery', 'boot', 'confirm', 'done', 'manual-format', 'error'].includes(state().step)
             }
           >
             <p class="installer-guard">Settings-reset guard armed</p>
