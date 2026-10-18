@@ -30,8 +30,10 @@ export interface Ticket {
   stun: string[];
 }
 export interface Callbacks {
-  connected?(id: string): void;
-  disconnected?(id: string): void;
+  /** `reason`: why the controller connected (native tools send their command line), or ''. */
+  connected?(id: string, reason: string): void;
+  /** `reason`: the controller's goodbye ("done" or its error), or 'connection lost without goodbye'. */
+  disconnected?(id: string, reason: string): void;
   error?(error: Error): void;
 }
 export function newTicket(signal: string, stun?: string[]): Ticket;

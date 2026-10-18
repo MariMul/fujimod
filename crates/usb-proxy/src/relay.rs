@@ -132,6 +132,7 @@ async fn session(relay: Relay, mut socket: WebSocket) {
         version: VERSION,
         role,
         token,
+        ..
     })) = tokio::time::timeout(Duration::from_secs(10), receive(&mut socket)).await
     else {
         return;
@@ -365,7 +366,7 @@ mod tests {
         let (mut socket, _) = connect_async(url).await.unwrap();
         socket
             .send(Wire::Text(
-                serde_json::to_string(&Frame::Hello {
+                serde_json::to_string(&Frame::Hello { reason: None,
                     version: VERSION,
                     role: "exporter".into(),
                     token: TOKEN.into(),
@@ -472,7 +473,7 @@ mod tests {
         let (mut socket, _) = connect_async(&url).await.unwrap();
         socket
             .send(Wire::Text(
-                serde_json::to_string(&Frame::Hello {
+                serde_json::to_string(&Frame::Hello { reason: None,
                     version: 99,
                     role: "controller".into(),
                     token: TOKEN.into(),

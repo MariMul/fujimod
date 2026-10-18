@@ -75,6 +75,19 @@ async fn deadline<T>(
     .await
 }
 
+/// The connect reason shown to the device owner: FUJIMOD_USB_PROXY_REASON, or
+/// this process's command line.
+fn default_reason() -> Option<String> {
+    #[cfg(target_arch = "wasm32")]
+    return None;
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let text = std::env::var("FUJIMOD_USB_PROXY_REASON")
+            .unwrap_or_else(|_| std::env::args().collect::<Vec<_>>().join(" "));
+        (!text.is_empty()).then(|| bounded_reason(&text))
+    }
+}
+
 /// Receives each connection step as it completes, before any USB request.
 pub type Progress = std::sync::Arc<dyn Fn(&str) + Send + Sync>;
 
@@ -87,6 +100,8 @@ pub struct Client {
     latency: Latency,
     probed_device: String,
     last_probe: Option<Clock>,
+    /// The error that fenced this connection, sent as the disconnect reason.
+    failure: Option<String>,
 }
 impl Client {
     pub async fn connect(url: &str, token: &str) -> Result<Self> {
@@ -132,6 +147,7 @@ impl Client {
                         version: VERSION,
                         role: "controller".into(),
                         token: token.into(),
+                        reason: default_reason(),
                     },
                 )
                 .await?;
@@ -148,6 +164,7 @@ impl Client {
                         latency: Latency::default(),
                         probed_device: String::new(),
                         last_probe: None,
+                        failure: None,
                         }
                     }),
                     _ => Err(err("relay rejected protocol handshake")),
@@ -231,8 +248,12 @@ impl Client {
                 }
             },
         )
-        .await?;
+        .await
+        .inspect_err(|e| self.failure = Some(e.0.clone()))?;
         self.usable = reply.error.is_none();
+        if let Some(error) = &reply.error {
+            self.failure = Some(error.clone());
+        }
         Ok(reply)
     }
     pub async fn devices(&mut self) -> Result<Vec<Device>> {
@@ -257,6 +278,23 @@ impl Client {
                 token: token.into(),
             })
             .collect())
+    }
+}
+
+/// Tell the owner why this controller is leaving: "done", or the error that
+/// fenced the connection. Best effort; a lost goodbye shows as a lost connection.
+#[cfg(not(target_arch = "wasm32"))]
+impl Drop for Client {
+    fn drop(&mut self) {
+        if let Socket::Peer(peer) = &mut self.socket {
+            let reason = match &self.failure {
+                Some(error) => bounded_reason(&format!("ended after error: {error}")),
+                None => "done".to_owned(),
+            };
+            if let Ok(text) = serde_json::to_string(&Frame::Goodbye { reason }) {
+                peer.goodbye(text);
+            }
+        }
     }
 }
 

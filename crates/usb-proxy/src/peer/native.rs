@@ -91,6 +91,8 @@ fn unseal(ticket: &Ticket, peer: &str, value: &str) -> Result<Value> {
 pub(crate) struct PeerSocket {
     send: Sender<String>,
     receive: Receiver<Result<String>>,
+    /// Signalled when the I/O thread has flushed and exited.
+    finished: std::sync::mpsc::Receiver<()>,
 }
 impl PeerSocket {
     pub async fn connect(url: &str, progress: &crate::Progress) -> Result<Self> {
@@ -100,6 +102,7 @@ impl PeerSocket {
         let (tx, outbound) = async_channel::bounded(1);
         let (incoming, rx) = async_channel::bounded(16);
         let (ready, wait) = async_channel::bounded(1);
+        let (finish, finished) = std::sync::mpsc::channel();
         std::thread::Builder::new()
             .name("fujimod-webrtc".into())
             .spawn(move || {
@@ -111,13 +114,22 @@ impl PeerSocket {
                         let _ = incoming.send(Err(error)).await;
                     }
                 });
+                let _ = finish.send(());
             })
             .map_err(error)?;
         wait.recv().await.map_err(error)?.map_err(error)?;
         Ok(Self {
             send: tx,
             receive: rx,
+            finished,
         })
+    }
+    /// Queue a final message, close, and wait up to a second for it to be sent.
+    pub fn goodbye(&mut self, text: String) {
+        if self.send.try_send(text).is_ok() {
+            self.send.close();
+            let _ = self.finished.recv_timeout(Duration::from_secs(1));
+        }
     }
     pub async fn send(&mut self, text: &str) -> Result<()> {
         self.send.send(text.into()).await.map_err(error)
@@ -259,6 +271,8 @@ async fn run(
     let mut writable = true;
     let mut signal_alive = true;
     let started = Instant::now();
+    // Set when the controller closes: flush queued messages, then exit.
+    let mut closing: Option<Instant> = None;
     loop {
         let timeout = loop {
             match rtc.poll_output().map_err(error)? {
@@ -305,6 +319,13 @@ async fn run(
                 },
             }
         };
+        if let Some(since) = closing {
+            if (packets.is_empty() && since.elapsed() > Duration::from_millis(200))
+                || since.elapsed() > Duration::from_secs(1)
+            {
+                return Ok(());
+            }
+        }
         if !rtc.is_alive() || (channel.is_none() && started.elapsed() > Duration::from_secs(20)) {
             return Err(error("direct WebRTC connection unavailable"));
         }
@@ -330,15 +351,23 @@ async fn run(
             Signal(Result<Value>),
         }
         let wake = futures_lite::future::or(
-            async { Wake::Out(outbound.recv().await) },
+            async {
+                if closing.is_some() {
+                    std::future::pending::<()>().await;
+                }
+                Wake::Out(outbound.recv().await)
+            },
             futures_lite::future::or(
                 async { Wake::Udp(udp.recv_from(&mut buffer).await) },
                 futures_lite::future::or(
                     async {
-                        futures_timer::Delay::new(
-                            timeout.saturating_duration_since(Instant::now()),
-                        )
-                        .await;
+                        let wait = timeout.saturating_duration_since(Instant::now());
+                        let wait = if closing.is_some() {
+                            wait.min(Duration::from_millis(20))
+                        } else {
+                            wait
+                        };
+                        futures_timer::Delay::new(wait).await;
                         Wake::Tick
                     },
                     async {
@@ -362,7 +391,7 @@ async fn run(
                     packets.push_back(packet);
                 }
             }
-            Wake::Out(Err(_)) => return Ok(()),
+            Wake::Out(Err(_)) => closing = Some(Instant::now()),
             Wake::Udp(result) => {
                 let (size, source) = result.map_err(error)?;
                 let route = std::net::UdpSocket::bind("0.0.0.0:0").map_err(error)?;

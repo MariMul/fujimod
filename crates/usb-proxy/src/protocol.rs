@@ -4,6 +4,17 @@ use serde::{Deserialize, Serialize};
 pub const VERSION: u32 = 1;
 pub const MAX_TRANSFER: usize = 8 * 1024 * 1024;
 pub const MAX_MESSAGE: usize = MAX_TRANSFER * 4 / 3 + 65536;
+/// Connect and disconnect reasons are shown to the device owner; longer text is cut.
+pub const MAX_REASON: usize = 512;
+
+/// Cut a reason to MAX_REASON bytes on a character boundary.
+pub fn bounded_reason(text: &str) -> String {
+    let mut end = text.len().min(MAX_REASON);
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    text[..end].to_owned()
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Device {
@@ -87,6 +98,13 @@ pub enum Frame {
         version: u32,
         role: String,
         token: String,
+        /// Why this controller connected; native tools send their command line.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+    },
+    /// A controller's last message before it disconnects on purpose.
+    Goodbye {
+        reason: String,
     },
     Ready {
         version: u32,
@@ -169,5 +187,23 @@ impl Setup {
             return Err(crate::Error("invalid control setup".into()));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn reasons_are_optional_on_hello_and_bounded() {
+        let old: Frame = serde_json::from_str(
+            r#"{"type":"hello","version":1,"role":"controller","token":"t"}"#,
+        )
+        .unwrap();
+        assert!(matches!(old, Frame::Hello { reason: None, .. }));
+        let goodbye = serde_json::to_string(&Frame::Goodbye { reason: "done".into() }).unwrap();
+        assert_eq!(goodbye, r#"{"type":"goodbye","reason":"done"}"#);
+        let long = "é".repeat(MAX_REASON);
+        let cut = bounded_reason(&long);
+        assert!(cut.len() <= MAX_REASON && long.starts_with(&cut));
     }
 }

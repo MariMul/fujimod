@@ -118,6 +118,10 @@ function signaling(ticket, role, message, ended) {
     close: () => socket.close(),
   };
 }
+// Connect and disconnect reasons are display text from the controller.
+function reason(value) {
+  return typeof value === 'string' ? value.slice(0, 512) : '';
+}
 export async function gather(pc, { settle = 3000, limit = 12000 } = {}) {
   if (pc.iceGatheringState === 'complete') return;
   // Some browsers leave gathering open when one interface or server never
@@ -359,10 +363,12 @@ export class ShareHost {
       const peer = new PeerChannel(channel, pc);
       this.peers.set(frame.from, peer);
       let authenticated = false;
+      let goodbye;
       peer.onclose = () => {
         clearTimeout(timer);
         this.peers.delete(frame.from);
-        if (authenticated) this.callbacks.disconnected?.(frame.from);
+        if (authenticated)
+          this.callbacks.disconnected?.(frame.from, goodbye ?? 'connection lost without goodbye');
         if (this.owner === frame.from) {
           this.owner = undefined;
           this.fenced = true;
@@ -384,10 +390,15 @@ export class ShareHost {
           throw Error('Invalid peer authentication');
         authenticated = true;
         clearTimeout(timer);
-        this.callbacks.connected?.(frame.from);
+        this.callbacks.connected?.(frame.from, reason(hello.reason));
         await peer.send(JSON.stringify({ type: 'ready', version: 1, id: frame.from }));
         while (!peer.ended) {
           const request = JSON.parse(await peer.receive());
+          if (request.type === 'goodbye') {
+            goodbye = reason(request.reason) || 'done';
+            peer.close();
+            break;
+          }
           if (
             request.type !== 'request' ||
             !Number.isSafeInteger(request.id) ||
