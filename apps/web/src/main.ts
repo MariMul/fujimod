@@ -562,7 +562,6 @@ try {
     if (!entries.some((known) => known.sha256 === entry.sha256))
       entries.push(entry);
   const cameras: CameraSupport[] = entries
-    .filter((entry) => entry.emulate || release?.patches[entry.sha256])
     .map((firmware) => ({
       firmware,
       mod: Boolean(release?.patches[firmware.sha256]),
