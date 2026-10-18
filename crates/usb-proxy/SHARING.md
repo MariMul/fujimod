@@ -126,3 +126,25 @@ Worker runtime and forced-relay integration checks are described in
 [`apps/usb-sharing`](../../apps/usb-sharing/README.md#test). The Workers runtime
 checks use a mocked Cloudflare credentials API; live Cloudflare deployment and
 account credentials are separate from those offline checks.
+
+## Sharing status in Dev Tools
+
+Agreed design, 2026-10-18; not built yet.
+
+- **Top bar:** while the camera is shared, the status and Share button become
+  one accent **Sharing** chip, with "· N connected" while remote controllers
+  are attached. It opens the share dialog, which lists connected controllers
+  with their connect reasons. **Stop sharing** beside it revokes the link and
+  ends remote sessions but keeps the local camera connection; in local dev,
+  auto-share then stays off until the camera reconnects or Share is pressed.
+  **Disconnect** still ends everything.
+- **Strip:** only while at least one remote controller is connected, one slim
+  strip under the top bar, with no dialog, toast or dismiss button: "Your camera
+  is being used remotely. Keep this tab in front and your computer on to stay
+  connected." If the page was hidden during a remote session, the strip turns
+  amber on return and says when the connection was interrupted.
+- **Wake lock:** held only while a remote controller is connected; re-acquired
+  when the tab becomes visible again; released when the last controller leaves.
+- **Clean shutdown:** on page freeze or unload, stop sharing (controllers get a
+  clean disconnect) and close the camera session. Switching tabs alone does not
+  stop sharing.
