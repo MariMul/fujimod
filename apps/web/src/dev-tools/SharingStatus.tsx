@@ -10,8 +10,7 @@ export function SharingChip(props: { session: ShareSession; onOpen: () => void }
   return (
     <Show when={props.session.sharing()}>
       <button
-        class="pill share-chip"
-        classList={{ offline: offline() }}
+        class={offline() ? 'pill share-chip offline' : 'pill share-chip'}
         aria-label="Sharing details"
         onClick={() => props.onOpen()}
       >
@@ -50,8 +49,14 @@ export function ProblemAlert(props: { session: ShareSession }) {
     () => props.session.problem(),
     (problem) => {
       if (!dialog) return;
-      if (problem && !dialog.open) dialog.showModal();
-      if (!problem && dialog.open) dialog.close();
+      if (problem && !dialog.open) {
+        if (typeof dialog.showModal === 'function') dialog.showModal();
+        else dialog.setAttribute('open', '');
+      }
+      if (!problem && dialog.open) {
+        if (typeof dialog.close === 'function') dialog.close();
+        else dialog.removeAttribute('open');
+      }
       if (problem?.urgent) {
         dialog.classList.remove('shake');
         void dialog.offsetWidth; // restart the animation for each new problem

@@ -152,10 +152,25 @@ afterEach(() => {
   RegistrySocket.all = [];
   hosts.create.mockReset();
 });
+/** A ShareHost double that keeps its link when the camera leaves. */
+function shareHost(stop: () => void) {
+  let status: { online: boolean; reason?: string } = { online: true };
+  return {
+    stop,
+    status: () => status,
+    cameraLost: vi.fn((reason: string) => {
+      status = { online: false, reason };
+    }),
+    cameraReturned: vi.fn(() => {
+      status = { online: true };
+    }),
+  };
+}
 async function mount() {
   vi.stubGlobal('WebSocket', RegistrySocket);
   const stop = vi.fn();
-  hosts.create.mockResolvedValue({ stop });
+  const sharedHost = shareHost(stop);
+  hosts.create.mockResolvedValue(sharedHost);
   let disconnect = () => {};
   const exportUsb = vi.fn(async () => ({
     descriptor: {
@@ -202,6 +217,7 @@ async function mount() {
     button,
     exportUsb,
     stop,
+    sharedHost,
     disconnect: () => disconnect(),
     dispose: () => {
       dispose();
@@ -224,7 +240,7 @@ async function registered(index = 0) {
   flush();
   return socket;
 }
-test('auto share registers once, disables console, withdraws on disconnect and shares a fresh ticket on reconnect', async () => {
+test('auto share registers once and keeps its link while the camera is away', async () => {
   const f = await mount();
   try {
     f.button('Connect camera').click();
@@ -246,14 +262,23 @@ test('auto share registers once, disables console, withdraws on disconnect and s
     expect(f.exportUsb).toHaveBeenCalledOnce();
     f.disconnect();
     flush();
-    expect(first.close).toHaveBeenCalledOnce();
-    expect(f.stop).toHaveBeenCalledOnce();
-    f.button('Connect camera').click();
-    const second = await registered(1);
-    expect(hosts.create.mock.calls[0][0].room).not.toBe(hosts.create.mock.calls[1][0].room);
-    expect(hosts.create.mock.calls[0][0].key).not.toBe(hosts.create.mock.calls[1][0].key);
+    // The share and its registration stay; the camera is reported offline.
+    expect(first.close).not.toHaveBeenCalled();
+    expect(f.stop).not.toHaveBeenCalled();
+    expect(f.sharedHost.cameraLost).toHaveBeenCalledWith('unplugged');
+    const offline = JSON.parse(first.send.mock.calls.at(-1)![0]);
+    expect(offline.status).toEqual({ online: false, reason: 'unplugged' });
+    expect(f.host.textContent).toContain('Camera disconnected');
+    f.button('Reconnect camera').click();
+    await vi.waitFor(() => {
+      flush();
+      expect(f.sharedHost.cameraReturned).toHaveBeenCalledOnce();
+    });
+    expect(hosts.create).toHaveBeenCalledOnce();
+    expect(JSON.parse(first.send.mock.calls.at(-1)![0]).status).toEqual({ online: true });
+    expect(RegistrySocket.all).toHaveLength(1);
     f.dispose();
-    expect(second.close).toHaveBeenCalledOnce();
+    expect(first.close).toHaveBeenCalledOnce();
   } finally {
     f.dispose();
   }
@@ -311,7 +336,7 @@ test('disconnect during host setup disposes the late host without registering it
     });
     f.disconnect();
     flush();
-    finish({ stop: f.stop });
+    finish(shareHost(f.stop));
     await vi.waitFor(() => {
       flush();
       expect(f.stop).toHaveBeenCalledOnce();

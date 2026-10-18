@@ -11,7 +11,12 @@ vi.mock('./sharing', async (actual) => ({
   ShareHost: {
     create: async (_ticket: unknown, _device: unknown, callbacks: Callbacks) => {
       mock.callbacks = callbacks;
-      return { stop: mock.stop };
+      return {
+        stop: mock.stop,
+        status: () => ({ online: true }),
+        cameraLost: () => {},
+        cameraReturned: () => {},
+      };
     },
   },
 }));

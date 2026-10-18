@@ -2,15 +2,10 @@ import { For, Show, createEffect, createMemo, createSignal, onSettled, untrack }
 import { CameraTarget, type CameraBackend } from './camera';
 import { ConnectionState, ConsoleState, LineEnding, createDevTools } from './controller';
 import { Direction, Layer, Level, exportLog, hex, type LogEntry } from './log';
-import {
-  ShareHost,
-  newTicket,
-  shareUrl,
-  remoteControlUrl,
-  signalUrl,
-  useShareSheet,
-  sharingConfigured,
-} from './sharing';
+import { remoteControlUrl, useShareSheet, sharingConfigured } from './sharing';
+import { createShareSession } from './share-session';
+import { pageState } from './page-state';
+import { ProblemAlert, RemoteUseStrip, SharingChip } from './SharingStatus';
 import './sharing.css';
 import { scenarios } from './scenarios';
 import { LocalReports } from '../ui/local-reports';
@@ -87,11 +82,18 @@ function LogRow(props: { entry: LogEntry }) {
   );
 }
 export function DevTools(props: { backend?: CameraBackend; supported?: boolean; connectOnMount?: boolean }) {
-  const tools = createDevTools(
-    untrack(() => props.backend) ?? new CameraSources(),
-    untrack(() => props.supported) ?? (isSecureContext && 'usb' in navigator),
-    (error) => reports.crash(error),
-  );
+  // Tests pass their own backend and get their own instances; the page keeps one
+  // camera connection and share for its lifetime, across component hot swaps.
+  const owned = untrack(() => props.backend) !== undefined;
+  const page = owned ? undefined : pageState();
+  const tools =
+    page?.tools ??
+    createDevTools(
+      untrack(() => props.backend) ?? new CameraSources(),
+      untrack(() => props.supported) ?? (isSecureContext && 'usb' in navigator),
+      (error) => reports.crash(error),
+    );
+  const share = page?.share ?? createShareSession(tools);
   const context = () => ({
     event:
       tools.connection() === ConnectionState.Blocked ? ('crash' as const) : ('feedback' as const),
@@ -101,6 +103,7 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
     simulatorBuild: __FUJIMOD_SIMULATOR_BUILD__,
   });
   const reports = new LocalReports('dev-tools', context, tools.errorReport);
+  if (page) page.crash = (error) => reports.crash(error);
   const [activeLayers, setActiveLayers] = createSignal<ReadonlySet<Layer>>(
     new Set([Layer.Console, Layer.App80, Layer.Ff80]),
   );
@@ -110,87 +113,22 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
       ? CameraTarget.Emulator
       : CameraTarget.Usb,
   );
-  const [sharedUrl, setSharedUrl] = createSignal('');
+  const sharedUrl = share.url;
   const [sharingBusy, setSharingBusy] = createSignal(false);
   const [toast, setToast] = createSignal('');
   const [copyFallback, setCopyFallback] = createSignal(false);
   let shareDialog!: HTMLDialogElement;
-  let shareHost: ShareHost | undefined;
-  let shareAttempt = 0;
-  let shareTicket: ReturnType<typeof newTicket> | undefined;
-  let sharePromise:
-    | Promise<{ url: string; camera: { model: string | null; serial: string | null } }>
-    | undefined;
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
   function notice(text: string) {
     setToast(text);
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(() => setToast(''), 4500);
   }
-  function stopSharing() {
-    shareAttempt++;
-    shareTicket = undefined;
-    sharePromise = undefined;
-    shareHost?.stop();
-    shareHost = undefined;
-    setSharedUrl('');
-    tools.sharingEnded();
-  }
-  function sharingTicket() {
-    return (shareTicket ??= newTicket(signalUrl(location.href)));
-  }
-  function startSharing(ticket = sharingTicket()) {
-    if (sharePromise) return sharePromise;
-    const attempt = ++shareAttempt;
-    const url = shareUrl(location.href, ticket);
-    sharePromise = (async () => {
-      const device = await tools.shareUsb();
-      if (attempt !== shareAttempt) {
-        await device.close();
-        throw Error('Camera disconnected');
-      }
-      const host = await ShareHost.create(ticket, device, {
-        connected: (_id, reason) =>
-          tools.connectionMessage(
-            reason ? `Remote controller connected: ${reason}` : 'Remote controller connected',
-          ),
-        disconnected: (id, reason) => {
-          if (attempt === shareAttempt) tools.shareTrafficEnded(id);
-          tools.connectionMessage(`Remote controller disconnected: ${reason}`);
-        },
-        traffic: (event) => {
-          if (attempt === shareAttempt) tools.shareTraffic(event);
-        },
-        error: (error) => tools.connectionMessage(error.message, Level.Error),
-      });
-      if (attempt !== shareAttempt || tools.connection() !== ConnectionState.Sharing) {
-        host.stop();
-        throw Error('Camera disconnected');
-      }
-      shareHost = host;
-      setSharedUrl(url);
-      return {
-        url,
-        camera: {
-          model:
-            tools.camera()?.firmware?.model ??
-            device.descriptor.product ??
-            tools.camera()?.name ??
-            null,
-          serial: device.descriptor.serial,
-        },
-      };
-    })().catch((error: unknown) => {
-      if (attempt === shareAttempt) stopSharing();
-      throw error;
-    });
-    return sharePromise;
-  }
   function shareCamera() {
     if (sharingBusy()) return;
-    const ticket = sharingTicket();
-    const url = sharedUrl() || shareUrl(location.href, ticket);
+    share.unlockAudio();
     const sheet = useShareSheet();
+    const url = share.address();
     // Invoke the native sheet inside the camera button's activation, before I/O.
     const delivery = sheet ? navigator.share({ title: 'FujiMod camera', url }) : undefined;
     delivery?.catch((error: unknown) => {
@@ -199,7 +137,7 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
     setSharingBusy(true);
     void (async () => {
       try {
-        await startSharing(ticket);
+        await share.share();
         if (!sheet) {
           try {
             await navigator.clipboard.writeText(url);
@@ -243,12 +181,15 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
     const unlisten = reports.listen();
     let disposed = false;
     let stopDevShare: (() => void) | undefined;
-    window.addEventListener('pagehide', stopSharing);
-    if (import.meta.env.DEV || import.meta.env.MODE === 'local-preview') {
+    // The page-lifetime state starts its own development share; owned instances (tests) do here.
+    if (owned && (import.meta.env.DEV || import.meta.env.MODE === 'local-preview')) {
       void import('./dev-share').then(({ startDevShare }) => {
-        if (!disposed) stopDevShare = startDevShare(tools, startSharing);
+        if (!disposed) stopDevShare = startDevShare(tools, share);
       });
     }
+    // A hot-swapped component finds the camera already started (and maybe shared).
+    if (page?.started) return () => cleanup();
+    if (page) page.started = true;
     void tools.start().then(async () => {
       if (props.connectOnMount) { await tools.connect(CameraTarget.Usb); return; }
       try {
@@ -278,22 +219,19 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
         }
       }
     });
-    return () => {
+    function cleanup() {
       disposed = true;
       stopDevShare?.();
-      window.removeEventListener('pagehide', stopSharing);
       unlisten();
-      stopSharing();
       if (toastTimer) clearTimeout(toastTimer);
-      tools.dispose();
-    };
+      // Page-lifetime camera and share outlive the component; owned ones end with it.
+      if (owned) {
+        share.dispose();
+        tools.dispose();
+      }
+    }
+    return () => cleanup();
   });
-  createEffect(
-    () => tools.connection(),
-    (state) => {
-      if (state !== ConnectionState.Connected && state !== ConnectionState.Sharing) stopSharing();
-    },
-  );
   createEffect(
     () => ({ count: entries().length, follow: follow() }),
     ({ follow: enabled }) => {
@@ -368,8 +306,10 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
           <Feedback context={context} capture={tools.errorReport} local={reports} />
         </Show>
         <div class="dt-connection">
+          <SharingChip session={share} onOpen={() => shareDialog.showModal()} />
           <button
             class="pill"
+            hidden={share.sharing()}
             disabled={
               !sharingConfigured() ||
               !tools.canShare() ||
@@ -424,7 +364,7 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
                 <button
                   class="pill"
                   onClick={() => {
-                    stopSharing();
+                    share.stop();
                     tools.disconnect();
                   }}
                 >
@@ -439,6 +379,7 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
             <button
               class="pill dt-primary"
               onClick={() => {
+                share.unlockAudio();
                 void tools.connect(target());
               }}
             >
@@ -451,6 +392,8 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
           </Show>
         </div>
       </header>
+      <RemoteUseStrip session={share} />
+      <ProblemAlert session={share} />
       <dialog
         ref={(element) => {
           shareDialog = element;
@@ -490,11 +433,18 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
             onFocus={(event) => event.currentTarget.select()}
           />
         </Show>
+        <Show when={share.controllers().size > 0}>
+          <ul class="dt-share-controllers" aria-label="Connected controllers">
+            <For each={[...share.controllers().values()]}>
+              {(reason) => <li>{reason || 'Remote controller'}</li>}
+            </For>
+          </ul>
+        </Show>
         <Show when={sharedUrl()}>
           <button
             class="dt-text-button dt-share-stop"
             onClick={() => {
-              stopSharing();
+              share.stop();
               shareDialog.close();
             }}
           >

@@ -45,6 +45,7 @@ export function browserEnvironment(): SessionEnvironment {
   return {
     location: () => location.href,
     unlockAudio() {
+      if (typeof AudioContext === 'undefined') return;
       audio ??= new AudioContext();
       void audio.resume();
     },
@@ -101,6 +102,9 @@ export function createShareSession(tools: DevToolsController, environment = brow
     const [status, setStatus] = createSignal<ShareStatus>();
     const [problem, setProblem] = createSignal<Problem>();
     const [registration, setRegistration] = createSignal<Registration>();
+    // Signals are committed in batches; operations use these plain values.
+    let link = '';
+    let current: Registration | undefined;
     let host: ShareHost | undefined;
     let ticket: ReturnType<typeof newTicket> | undefined;
     let identity: { name: string | undefined; firmware: string | undefined } | undefined;
@@ -121,21 +125,30 @@ export function createShareSession(tools: DevToolsController, environment = brow
         record.battery = next.battery;
         record.battery_at_ms = Date.now() - (next.battery_age_ms ?? 0);
       }
-      if (url()) setRegistration({ url: url(), camera, status: record });
+      if (!link) return;
+      current = { url: link, camera, status: record };
+      setRegistration(current);
     };
     const currentIdentity = () => ({
       name: tools.camera()?.name,
       firmware: tools.camera()?.firmware?.id,
     });
 
+    /** The link this page shares (created on first use), available before any I/O. */
+    function address() {
+      ticket ??= newTicket(signalUrl(environment.location()));
+      return shareUrl(environment.location(), ticket);
+    }
+
     async function share(): Promise<Registration> {
       if (pending) return pending;
-      const current = ++attempt;
-      ticket ??= newTicket(signalUrl(environment.location()));
-      const link = shareUrl(environment.location(), ticket);
+      // One share per page: while it exists (even with the camera away) reuse it.
+      if (host && current) return current;
+      const mine = ++attempt;
+      const link_ = address();
       pending = (async () => {
         const device = await tools.shareUsb();
-        if (current !== attempt) {
+        if (mine !== attempt) {
           await device.close();
           throw Error('Camera disconnected');
         }
@@ -161,7 +174,7 @@ export function createShareSession(tools: DevToolsController, environment = brow
             raise({ kind: ProblemKind.Attention, message, urgent: true, reconnect: false }),
           error: (error) => tools.connectionMessage(error.message, Level.Error),
         });
-        if (current !== attempt) {
+        if (mine !== attempt || tools.connection() !== ConnectionState.Sharing) {
           host.stop();
           host = undefined;
           throw Error('Camera disconnected');
@@ -171,15 +184,16 @@ export function createShareSession(tools: DevToolsController, environment = brow
           model: tools.camera()?.firmware?.model ?? device.descriptor.product ?? identity.name ?? null,
           serial: device.descriptor.serial,
         };
-        setUrl(link);
+        link = link_;
+        setUrl(link_);
         publish(host.status());
-        return registration()!;
+        return current!;
       })();
       pending.catch(() => {
-        if (current === attempt) stop();
+        if (mine === attempt) stop();
       });
       return pending.finally(() => {
-        if (current === attempt) pending = undefined;
+        if (mine === attempt) pending = undefined;
       });
     }
 
@@ -191,6 +205,8 @@ export function createShareSession(tools: DevToolsController, environment = brow
       host = undefined;
       ticket = undefined;
       identity = undefined;
+      link = '';
+      current = undefined;
       setUrl('');
       setControllers(new Map());
       setStatus(undefined);
@@ -215,6 +231,7 @@ export function createShareSession(tools: DevToolsController, environment = brow
         return;
       }
       host.cameraReturned(await tools.shareUsb());
+      publish(host.status());
       setProblem(undefined);
     }
 
@@ -228,6 +245,7 @@ export function createShareSession(tools: DevToolsController, environment = brow
         const battery = host.status().battery;
         const exhausted = battery !== undefined && EXHAUSTED.has(battery);
         host.cameraLost(exhausted ? 'battery' : 'unplugged');
+        publish(host.status());
         setControllers(new Map());
         raise(
           exhausted
@@ -283,6 +301,9 @@ export function createShareSession(tools: DevToolsController, environment = brow
       problem,
       registration,
       sharing: () => url() !== '',
+      /** Whether a share exists now, for operation guards (not batched). */
+      active: () => link !== '',
+      address,
       share,
       stop,
       unlockAudio: () => environment.unlockAudio(),

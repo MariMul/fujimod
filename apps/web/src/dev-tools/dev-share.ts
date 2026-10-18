@@ -1,76 +1,97 @@
 import { createEffect, createRoot } from 'solid-js';
 import { ConnectionState, ConsoleState, type DevToolsController } from './controller';
 import { Level } from './log';
+import type { ShareSession } from './share-session';
 
-interface Registration {
-  url: string;
-  camera: { model: string | null; serial: string | null };
-}
-
-/** Loaded only by local development pages. The socket owns the registry entry. */
-export function startDevShare(
-  tools: DevToolsController,
-  share: () => Promise<Registration>,
-): () => void {
+/**
+ * Loaded only by local development pages. Shares a connected camera
+ * automatically and keeps its registration (link, camera, online state and
+ * battery) current in the relay's registry, where host tools find it. The
+ * socket owns the registry entry.
+ */
+export function startDevShare(tools: DevToolsController, share: ShareSession): () => void {
   let socket: WebSocket | undefined;
-  let generation = 0;
-  let pending = false;
-  const withdraw = () => {
-    generation++;
-    pending = false;
+  // Stop sharing turns automatic sharing off until the camera is reconnected.
+  let suspended = false;
+  const close = () => {
     socket?.close();
     socket = undefined;
   };
+  const open = () => {
+    const url = new URL('/usb-proxy/dev-share', location.href);
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    const connection = new WebSocket(url);
+    socket = connection;
+    let announced = false;
+    connection.onopen = () => {
+      const registration = share.registration();
+      if (connection === socket && registration) connection.send(JSON.stringify(registration));
+    };
+    connection.onmessage = ({ data }) => {
+      if (connection !== socket) return;
+      try {
+        const reply = JSON.parse(data);
+        if (reply.type !== 'registered')
+          throw Error(reply.message || 'Development share registration failed');
+        if (!announced) tools.connectionMessage('Development share registered');
+        announced = true;
+      } catch (error) {
+        tools.connectionMessage(String(error), Level.Error);
+        connection.close();
+      }
+    };
+    connection.onerror = () => {
+      if (connection === socket)
+        tools.connectionMessage('Development share registry unavailable', Level.Error);
+    };
+  };
   const dispose = createRoot((dispose) => {
     createEffect(
-      () => ({ state: tools.connection(), idle: tools.consoleState() === ConsoleState.Idle }),
-      ({ state, idle }) => {
+      () => share.registration(),
+      (registration) => {
+        if (!registration) return close();
+        if (!socket) return open();
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(registration));
+      },
+    );
+    createEffect(
+      () => ({
+        state: tools.connection(),
+        idle: tools.consoleState() === ConsoleState.Idle,
+        sharing: share.sharing(),
+      }),
+      ({ state, idle, sharing }) => {
         if (state !== ConnectionState.Connected && state !== ConnectionState.Sharing) {
-          withdraw();
+          suspended = false;
           return;
         }
-        if (!idle || !tools.canShare() || pending) return;
-        pending = true;
-        const current = generation;
-        void share()
-          .then((registration) => {
-            if (current !== generation) return;
-            const url = new URL('/usb-proxy/dev-share', location.href);
-            url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-            const connection = new WebSocket(url);
-            socket = connection;
-            connection.onopen = () => {
-              if (current === generation) connection.send(JSON.stringify(registration));
-            };
-            connection.onmessage = ({ data }) => {
-              if (current !== generation) return;
-              try {
-                const reply = JSON.parse(data);
-                if (reply.type === 'registered')
-                  tools.connectionMessage('Development share registered');
-                else throw Error(reply.message || 'Development share registration failed');
-              } catch (error) {
-                tools.connectionMessage(String(error), Level.Error);
-                connection.close();
-              }
-            };
-            connection.onerror = () => {
-              if (current === generation)
-                tools.connectionMessage('Development share registry unavailable', Level.Error);
-            };
-          })
-          .catch((error: unknown) => {
-            if (current === generation) tools.connectionMessage(String(error), Level.Error);
+        if (sharing) return;
+        if (state === ConnectionState.Connected && tools.canShare() && idle && !suspended) {
+          void share.share().catch((error: unknown) => {
+            tools.connectionMessage(String(error), Level.Error);
           });
+        }
+      },
+    );
+    let wasSharing = false;
+    createEffect(
+      () => share.sharing(),
+      (sharing) => {
+        // A share that ends while the camera stays connected was stopped on purpose.
+        if (wasSharing && !sharing && tools.connection() === ConnectionState.Connected)
+          suspended = true;
+        wasSharing = sharing;
       },
     );
     return dispose;
   });
-  const close = () => withdraw();
+  // An unloading page may never run another effect: withdraw synchronously.
   window.addEventListener('pagehide', close);
+  document.addEventListener('freeze', close);
   return () => {
     window.removeEventListener('pagehide', close);
+    document.removeEventListener('freeze', close);
     dispose();
-    withdraw();
+    close();
   };
 }
