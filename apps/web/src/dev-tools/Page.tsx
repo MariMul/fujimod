@@ -116,6 +116,11 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
   const [copyFallback, setCopyFallback] = createSignal(false);
   let shareDialog!: HTMLDialogElement;
   let shareHost: ShareHost | undefined;
+  let shareAttempt = 0;
+  let shareTicket: ReturnType<typeof newTicket> | undefined;
+  let sharePromise:
+    | Promise<{ url: string; camera: { model: string | null; serial: string | null } }>
+    | undefined;
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
   function notice(text: string) {
     setToast(text);
@@ -123,14 +128,62 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
     toastTimer = setTimeout(() => setToast(''), 4500);
   }
   function stopSharing() {
+    shareAttempt++;
+    shareTicket = undefined;
+    sharePromise = undefined;
     shareHost?.stop();
     shareHost = undefined;
     setSharedUrl('');
     tools.sharingEnded();
   }
+  function sharingTicket() {
+    return (shareTicket ??= newTicket(signalUrl(location.href)));
+  }
+  function startSharing(ticket = sharingTicket()) {
+    if (sharePromise) return sharePromise;
+    const attempt = ++shareAttempt;
+    const url = shareUrl(location.href, ticket);
+    sharePromise = (async () => {
+      const device = await tools.shareUsb();
+      if (attempt !== shareAttempt) {
+        await device.close();
+        throw Error('Camera disconnected');
+      }
+      const host = await ShareHost.create(ticket, device, {
+        connected: (_id, reason) =>
+          tools.connectionMessage(
+            reason ? `Remote controller connected: ${reason}` : 'Remote controller connected',
+          ),
+        disconnected: (_id, reason) =>
+          tools.connectionMessage(`Remote controller disconnected: ${reason}`),
+        error: (error) => tools.connectionMessage(error.message, Level.Error),
+      });
+      if (attempt !== shareAttempt || tools.connection() !== ConnectionState.Sharing) {
+        host.stop();
+        throw Error('Camera disconnected');
+      }
+      shareHost = host;
+      setSharedUrl(url);
+      return {
+        url,
+        camera: {
+          model:
+            tools.camera()?.firmware?.model ??
+            device.descriptor.product ??
+            tools.camera()?.name ??
+            null,
+          serial: device.descriptor.serial,
+        },
+      };
+    })().catch((error: unknown) => {
+      if (attempt === shareAttempt) stopSharing();
+      throw error;
+    });
+    return sharePromise;
+  }
   function shareCamera() {
     if (sharingBusy()) return;
-    const ticket = newTicket(signalUrl(location.href));
+    const ticket = sharingTicket();
     const url = sharedUrl() || shareUrl(location.href, ticket);
     const sheet = useShareSheet();
     // Invoke the native sheet inside the camera button's activation, before I/O.
@@ -141,20 +194,7 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
     setSharingBusy(true);
     void (async () => {
       try {
-        if (!sharedUrl()) {
-          const device = await tools.shareUsb();
-          const host = await ShareHost.create(ticket, device, {
-            connected: () => tools.connectionMessage('Remote controller connected'),
-            disconnected: () => tools.connectionMessage('Remote controller disconnected'),
-            error: (error) => tools.connectionMessage(error.message, Level.Error),
-          });
-          if (tools.connection() !== ConnectionState.Sharing) {
-            host.stop();
-            throw Error('Camera disconnected');
-          }
-          shareHost = host;
-          setSharedUrl(url);
-        }
+        await startSharing(ticket);
         if (!sheet) {
           try {
             await navigator.clipboard.writeText(url);
@@ -166,7 +206,6 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
         } else shareDialog.close();
       } catch (error) {
         notice(error instanceof Error ? error.message : String(error));
-        tools.sharingEnded();
       } finally {
         setSharingBusy(false);
       }
@@ -197,6 +236,14 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
   );
   onSettled(() => {
     const unlisten = reports.listen();
+    let disposed = false;
+    let stopDevShare: (() => void) | undefined;
+    window.addEventListener('pagehide', stopSharing);
+    if (import.meta.env.DEV || import.meta.env.MODE === 'local-preview') {
+      void import('./dev-share').then(({ startDevShare }) => {
+        if (!disposed) stopDevShare = startDevShare(tools, startSharing);
+      });
+    }
     void tools.start().then(async () => {
       if (props.connectOnMount) { await tools.connect(CameraTarget.Usb); return; }
       try {
@@ -227,12 +274,21 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
       }
     });
     return () => {
+      disposed = true;
+      stopDevShare?.();
+      window.removeEventListener('pagehide', stopSharing);
       unlisten();
-      shareHost?.stop();
+      stopSharing();
       if (toastTimer) clearTimeout(toastTimer);
       tools.dispose();
     };
   });
+  createEffect(
+    () => tools.connection(),
+    (state) => {
+      if (state !== ConnectionState.Connected && state !== ConnectionState.Sharing) stopSharing();
+    },
+  );
   createEffect(
     () => ({ count: entries().length, follow: follow() }),
     ({ follow: enabled }) => {

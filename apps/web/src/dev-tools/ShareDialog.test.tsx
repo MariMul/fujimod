@@ -4,6 +4,7 @@ import { expect, test, vi } from 'vite-plus/test';
 import { DevTools } from './Page';
 import { Progress, type CameraBackend } from './camera';
 import type { Callbacks } from '../../../../crates/usb-proxy/web/peer.js';
+vi.mock('./dev-share', () => ({ startDevShare: () => () => {} }));
 const mock = vi.hoisted(() => ({ callbacks: {} as Callbacks, stop: vi.fn() }));
 vi.mock('./sharing', async (actual) => ({
   ...(await actual<typeof import('./sharing')>()),
@@ -124,11 +125,11 @@ test('Share popup warns, copies a capability URL and logs remote controller conn
     expect(
       f.host.querySelector('input[aria-label="Console command"]')!.hasAttribute('disabled'),
     ).toBe(true);
-    mock.callbacks.connected?.('2');
-    mock.callbacks.disconnected?.('2');
+    mock.callbacks.connected?.('2', 'fujicam console hello');
+    mock.callbacks.disconnected?.('2', 'done');
     flush();
-    expect(f.host.textContent).toContain('Remote controller connected');
-    expect(f.host.textContent).toContain('Remote controller disconnected');
+    expect(f.host.textContent).toContain('Remote controller connected: fujicam console hello');
+    expect(f.host.textContent).toContain('Remote controller disconnected: done');
     f.button('Share').click();
     flush();
     f.button('Stop sharing').click();

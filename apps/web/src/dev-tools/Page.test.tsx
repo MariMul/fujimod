@@ -1,6 +1,6 @@
 import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
-import { expect, test, vi } from 'vite-plus/test';
+import { afterEach, expect, test, vi } from 'vite-plus/test';
 import { DevTools } from './Page';
 import { Progress, type CameraBackend } from './camera';
 import { Direction, Layer, Level } from './log';
@@ -127,5 +127,197 @@ test('simulator target is available without physical WebUSB and a pending boot c
   } finally {
     dispose();
     host.remove();
+  }
+});
+
+const hosts = vi.hoisted(() => ({ create: vi.fn() }));
+vi.mock('./sharing', async (actual) => ({
+  ...(await actual<typeof import('./sharing')>()),
+  ShareHost: { create: hosts.create },
+}));
+class RegistrySocket {
+  static all: RegistrySocket[] = [];
+  onopen?: () => void;
+  onmessage?: (event: { data: string }) => void;
+  onerror?: () => void;
+  send = vi.fn();
+  close = vi.fn();
+  constructor(readonly url: URL) {
+    RegistrySocket.all.push(this);
+  }
+}
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  RegistrySocket.all = [];
+  hosts.create.mockReset();
+});
+async function mount() {
+  vi.stubGlobal('WebSocket', RegistrySocket);
+  const stop = vi.fn();
+  hosts.create.mockResolvedValue({ stop });
+  let disconnect = () => {};
+  const exportUsb = vi.fn(async () => ({
+    descriptor: {
+      id: 'sim',
+      vendor_id: 0x4cb,
+      product_id: 0xff80,
+      manufacturer: null,
+      product: 'X70',
+      serial: 'SIM-123',
+      interfaces: [],
+    },
+    execute: async () => ({}),
+    close: async () => {},
+  }));
+  const backend: CameraBackend = {
+    initialize: async () => {},
+    pick: async () => ({ name: 'X70', interfaces: [{ id: 0, label: 'USB' }] }),
+    open: async () => ({
+      submit: async () => {},
+      poll: async () => ({ progress: Progress.Complete, status: 0, output: new Uint8Array() }),
+      usable: () => true,
+      close: async () => {},
+      abandon: () => {},
+    }),
+    exportUsb,
+    drain: () => [],
+    onDisconnect: (callback) => {
+      disconnect = callback;
+      return () => {};
+    },
+    dispose: () => {},
+  };
+  const host = document.createElement('div');
+  document.body.append(host);
+  const dispose = render(() => <DevTools backend={backend} supported={true} />, host);
+  const button = (name: string) =>
+    [...host.querySelectorAll('button')].find((b) => b.textContent === name)!;
+  await vi.waitFor(() => {
+    flush();
+    expect(button('Connect camera')).toBeTruthy();
+  });
+  return {
+    host,
+    button,
+    exportUsb,
+    stop,
+    disconnect: () => disconnect(),
+    dispose: () => {
+      dispose();
+      host.remove();
+    },
+  };
+}
+async function registered(index = 0) {
+  await vi.waitFor(() => {
+    flush();
+    expect(RegistrySocket.all).toHaveLength(index + 1);
+  });
+  const socket = RegistrySocket.all[index];
+  socket.onopen!();
+  expect(socket.url.pathname).toBe('/usb-proxy/dev-share');
+  const frame = JSON.parse(socket.send.mock.calls[0][0]);
+  expect(frame.camera).toEqual({ model: 'X70', serial: 'SIM-123' });
+  expect(frame.url).toContain('#?remotecontrol=');
+  socket.onmessage!({ data: '{"type":"registered"}' });
+  flush();
+  return socket;
+}
+test('auto share registers once, disables console, withdraws on disconnect and shares a fresh ticket on reconnect', async () => {
+  const f = await mount();
+  try {
+    f.button('Connect camera').click();
+    const first = await registered();
+    expect(f.host.textContent).toContain('Development share registered');
+    const callbacks = hosts.create.mock.calls[0][2];
+    callbacks.connected('controller', 'python tools/fujicam console hello');
+    callbacks.disconnected('controller', 'connection lost without goodbye');
+    flush();
+    expect(f.host.textContent).toContain(
+      'Remote controller connected: python tools/fujicam console hello',
+    );
+    expect(f.host.textContent).toContain(
+      'Remote controller disconnected: connection lost without goodbye',
+    );
+    expect(
+      f.host.querySelector('input[aria-label="Console command"]')!.hasAttribute('disabled'),
+    ).toBe(true);
+    expect(f.exportUsb).toHaveBeenCalledOnce();
+    f.disconnect();
+    flush();
+    expect(first.close).toHaveBeenCalledOnce();
+    expect(f.stop).toHaveBeenCalledOnce();
+    f.button('Connect camera').click();
+    const second = await registered(1);
+    expect(hosts.create.mock.calls[0][0].room).not.toBe(hosts.create.mock.calls[1][0].room);
+    expect(hosts.create.mock.calls[0][0].key).not.toBe(hosts.create.mock.calls[1][0].key);
+    f.dispose();
+    expect(second.close).toHaveBeenCalledOnce();
+  } finally {
+    f.dispose();
+  }
+});
+test('unshare withdraws without immediately sharing again; pagehide also withdraws', async () => {
+  const f = await mount();
+  const original = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal');
+  const originalClose = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close');
+  HTMLDialogElement.prototype.showModal = function () {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.open = false;
+  };
+  try {
+    f.button('Connect camera').click();
+    const first = await registered();
+    f.button('Share').click();
+    flush();
+    f.button('Stop sharing').click();
+    flush();
+    expect(first.close).toHaveBeenCalledOnce();
+    expect(hosts.create).toHaveBeenCalledOnce();
+    f.button('Disconnect').click();
+    await vi.waitFor(() => {
+      flush();
+      expect(f.button('Connect camera')).toBeTruthy();
+    });
+    f.button('Connect camera').click();
+    const second = await registered(1);
+    window.dispatchEvent(new Event('pagehide'));
+    expect(second.close).toHaveBeenCalledOnce();
+  } finally {
+    f.dispose();
+    if (original) Object.defineProperty(HTMLDialogElement.prototype, 'showModal', original);
+    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
+    if (originalClose) Object.defineProperty(HTMLDialogElement.prototype, 'close', originalClose);
+    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
+  }
+});
+test('disconnect during host setup disposes the late host without registering it', async () => {
+  const f = await mount();
+  let finish!: (host: { stop: () => void }) => void;
+  hosts.create.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  try {
+    f.button('Connect camera').click();
+    await vi.waitFor(() => {
+      flush();
+      expect(hosts.create).toHaveBeenCalledOnce();
+    });
+    f.disconnect();
+    flush();
+    finish({ stop: f.stop });
+    await vi.waitFor(() => {
+      flush();
+      expect(f.stop).toHaveBeenCalledOnce();
+    });
+    expect(RegistrySocket.all).toHaveLength(0);
+  } finally {
+    f.dispose();
   }
 });
