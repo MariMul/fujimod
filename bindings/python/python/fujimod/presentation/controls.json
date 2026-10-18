@@ -116,6 +116,10 @@
       "label": "USB",
       "text": "USB"
     },
+    "hdmi": {
+      "label": "HDMI",
+      "text": "HDMI"
+    },
     "fn": {
       "label": "Fn",
       "text": "Fn"
