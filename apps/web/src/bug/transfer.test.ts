@@ -1,5 +1,5 @@
 import { expect, test } from 'vite-plus/test';
-import { retrieveReport, mailboxAddress, type ReportMemory } from './transfer';
+import { retrieveReport, removeReport, mailboxAddress, type ReportMemory } from './transfer';
 import { tar, link } from './fixtures.test-helper';
 function camera() {
   const address = mailboxAddress(link),
@@ -38,6 +38,8 @@ function camera() {
         v.setUint32(12, chosen.getUint32(16, true), true);
         v.setUint32(16, chosen.getUint32(20, true), true);
         cursor = 0;
+      } else if (cmd === 5) {
+        v.setUint32(8, 0, true);
       } else if (cmd === 2 || cmd === 3) {
         cursor = 0;
         v.setUint32(28, 0, true);
@@ -78,4 +80,17 @@ test('selects the saved file even after the export channel has restarted', async
   v.setUint32(16, 0, true);
   const blob = await retrieveReport(memory, link, () => {});
   expect(new Uint8Array(await blob.arrayBuffer())).toEqual(tar);
+});
+
+test('delete refuses older builds and wrong captures before writing; checks acknowledgement', async () => {
+  const { memory, v, writes } = camera();
+  await expect(removeReport(memory, link)).rejects.toThrow('does not support');
+  expect(writes).toEqual([]);
+  v.setUint32(44, 1, true);
+  v.setUint32(8, 0, true);
+  await expect(removeReport(memory, link)).rejects.toThrow('requested report');
+  expect(writes).toEqual([]);
+  v.setUint32(8, parseInt(link.nonce, 16), true);
+  await removeReport(memory, link);
+  expect(writes).toEqual([5]);
 });

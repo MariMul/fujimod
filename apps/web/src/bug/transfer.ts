@@ -14,13 +14,8 @@ export function mailboxAddress(link: ReportLink): number {
     throw Error('Invalid report export channel.');
   return address;
 }
-export async function retrieveReport(
-  memory: ReportMemory,
-  link: ReportLink,
-  progress: (bytes: number) => void,
-): Promise<Blob> {
-  const address = mailboxAddress(link),
-    bytes = new Uint8Array(link.bytes);
+function channel(memory: ReportMemory, link: ReportLink) {
+  const address = mailboxAddress(link);
   async function header(selected = true) {
     const data = await memory.read(address, HEADER);
     if (data.length !== HEADER) throw Error('Incomplete export reply.');
@@ -46,7 +41,7 @@ export async function retrieveReport(
     await memory.write(address + 20, data);
     const deadline = performance.now() + 15000;
     for (;;) {
-      const view = await header(command !== 4),
+      const view = await header(command !== 4 && command !== 5),
         status = view.getInt32(24, true);
       if (!view.getUint32(20, true) && status !== 1) {
         if (status) throw Error(`Camera could not read the report (${status}).`);
@@ -57,6 +52,23 @@ export async function retrieveReport(
       await new Promise((resolve) => setTimeout(resolve, 40));
     }
   }
+  return { header, command, address };
+}
+export async function removeReport(memory: ReportMemory, link: ReportLink): Promise<void> {
+  const { header, command } = channel(memory, link);
+  const initial = await header();
+  if (!(initial.getUint32(44, true) & 1))
+    throw Error('This build does not support deleting reports.');
+  const result = await command(5);
+  if (result.getUint32(8, true) !== 0) throw Error('Camera did not confirm report deletion.');
+}
+export async function retrieveReport(
+  memory: ReportMemory,
+  link: ReportLink,
+  progress: (bytes: number) => void,
+): Promise<Blob> {
+  const { header, command, address } = channel(memory, link),
+    bytes = new Uint8Array(link.bytes);
   await header(false);
   const selection = new Uint8Array(32),
     fields = new DataView(selection.buffer);

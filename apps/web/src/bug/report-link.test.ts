@@ -1,6 +1,6 @@
 import { expect, test } from 'vite-plus/test';
 import { crc32 } from '../archive';
-import { parseReportLink, validateReport, decode64, base64url, cameraIssue } from './report-link';
+import { parseReportLink, validateReport, decode64, base64url } from './report-link';
 import { tar, link, hash } from './fixtures.test-helper';
 test('decodes the fragment locally and preserves the entire inline TAR', async () => {
   const value = { ...link, archive: base64url(tar) };
@@ -25,10 +25,4 @@ test('rejects malformed descriptors and damaged archives', () => {
   expect(() =>
     validateReport(invalid, { ...link, crc32: crc32(invalid).toString(16).padStart(8, '0') }),
   ).toThrow('checksum');
-});
-test('description is put in the GitHub URL only for the report action', () => {
-  const url = new URL(cameraIssue(link, '  Camera stopped responding  '));
-  expect(url.origin + url.pathname).toBe('https://github.com/justjake/fujimod/issues/new');
-  expect(url.searchParams.get('body')).toContain('Camera stopped responding');
-  expect(url.searchParams.get('body')).toContain('R1234567.TAR');
 });

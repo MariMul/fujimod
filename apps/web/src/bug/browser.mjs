@@ -2,6 +2,7 @@
 import { chromium, webkit } from 'playwright';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import assert from 'node:assert/strict';
 const directory = process.argv[2],
@@ -31,51 +32,91 @@ try {
   context.on('request', (request) => {
     if (!['GET', 'HEAD'].includes(request.method())) sent.push(request.url());
   });
-  let issueArrives;
-  const issueDelivered = new Promise((resolve) => {
-    issueArrives = resolve;
-  });
-  await context.route('https://github.com/**', (route) => {
-    issues.push(route.request().url());
-    issueArrives();
-    return route.fulfill({ status: 200, body: 'Intercepted issue preview; nothing submitted.' });
+  await context.route('https://share.fujimod.com/issue-reports', async (route) => {
+    const request = route.request();
+    console.log(engine.name(), 'intercepted explicit upload');
+    if (engine === chromium) {
+      const form = await new Request(request.url(), {
+        method: 'POST',
+        headers: request.headers(),
+        body: request.postDataBuffer(),
+      }).formData();
+      assert.deepEqual(
+        Buffer.from(await form.get('report').arrayBuffer()),
+        await readFile(`${directory}/report.tar`),
+      );
+      assert.equal(form.get('description'), 'The menu stopped responding after a mod callback.');
+      const metadata = JSON.parse(form.get('metadata'));
+      assert.equal(metadata.bytes, guide.bug_report.bytes);
+      assert.equal(metadata.archive, undefined);
+    }
+    issues.push(request.url());
+    return route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: request.headers()['idempotency-key'],
+        issueURL: 'https://github.com/justjake/fujimod/issues/123',
+      }),
+    });
   });
   const page = await context.newPage();
   page.on('pageerror', (e) => errors.push(String(e)));
+  await page.addInitScript(() => {
+    const send = window.fetch;
+    window.fetch = async (...args) => {
+      const body = args[1]?.body;
+      if (body instanceof FormData && body.has('report')) {
+        const file = body.get('report');
+        const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+        window.__reportUpload = {
+          digest: [...new Uint8Array(digest)].map((n) => n.toString(16).padStart(2, '0')).join(''),
+          description: body.get('description'),
+          metadata: JSON.parse(body.get('metadata')),
+        };
+      }
+      return send(...args);
+    };
+  });
   await page.goto(url.href);
-  await page.getByText('Connect your camera', { exact: true }).waitFor();
-  await page.getByText('Nothing is uploaded automatically.', { exact: true }).waitFor();
+  console.log(engine.name(), 'loaded report page');
+  await page.getByText('Connect over USB', { exact: true }).waitFor();
+  await page
+    .getByRole('heading', { name: 'Your camera data stays private until you press upload.' })
+    .waitFor();
   await page.screenshot({ path: `${output}/browser-phone.png`, fullPage: true });
   assert.equal(await page.locator('body').evaluate((e) => e.scrollWidth > innerWidth), false);
   await page.locator('input[type=file]').setInputFiles(`${directory}/report.tar`);
   await page.getByText('Report ready', { exact: true }).waitFor();
+  console.log(engine.name(), 'opened and validated TAR');
   await page.getByRole('textbox').fill('The menu stopped responding after a mod callback.');
-  const button = page.getByRole('button', { name: 'Download and report', exact: true });
+  assert.deepEqual(sent, []);
+  const button = page.getByRole('button', { name: 'Download a copy', exact: true });
   await button.waitFor();
   await page.waitForFunction(() => !document.querySelector('button[type=submit]').disabled);
   const downloadPromise = page.waitForEvent('download');
   await button.click();
   const download = await downloadPromise;
+  console.log(engine.name(), 'downloaded local copy');
   await download.saveAs(`${output}/${download.suggestedFilename()}`);
   assert.deepEqual(
     gunzipSync(await readFile(`${output}/${download.suggestedFilename()}`)),
     await readFile(`${directory}/report.tar`),
   );
-  let timeout;
-  try {
-    await Promise.race([
-      issueDelivered,
-      new Promise((_, reject) => {
-        timeout = setTimeout(() => reject(Error('Issue page did not open.')), 10000);
-      }),
-    ]);
-  } finally {
-    clearTimeout(timeout);
-  }
-  assert.equal(issues.length, 1);
-  assert.ok(issues[0].includes('camera-bug.yml'));
-  assert.ok(issues[0].includes('The+menu+stopped'));
   assert.deepEqual(sent, []);
+  await page.getByRole('button', { name: 'Upload this information', exact: true }).click();
+  await page.getByText('Report saved:', { exact: false }).waitFor();
+  const captured = await page.evaluate(() => window.__reportUpload);
+  assert.equal(
+    captured.digest,
+    createHash('sha256')
+      .update(await readFile(`${directory}/report.tar`))
+      .digest('hex'),
+  );
+  assert.equal(captured.description, 'The menu stopped responding after a mod callback.');
+  assert.equal(captured.metadata.archive, undefined);
+  assert.equal(issues.length, 1);
+  assert.deepEqual(sent, ['https://share.fujimod.com/issue-reports']);
   assert.deepEqual(errors, []);
   await page.screenshot({ path: `${output}/browser-ready-phone.png`, fullPage: true });
   await page.setViewportSize({ width: 1280, height: 960 });
@@ -98,7 +139,7 @@ try {
   console.log(
     'PASS',
     engine.name(),
-    'real camera walkthrough TAR, responsive page, private local processing and exact downloaded bytes.',
+    'real camera walkthrough TAR, responsive page, explicit upload only, exact TAR transfer and local download.',
   );
 } finally {
   await browser.close();

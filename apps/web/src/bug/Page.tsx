@@ -2,13 +2,15 @@ import { Show, For, createSignal, onSettled, untrack } from 'solid-js';
 import { DevTools } from '../dev-tools/Page';
 import type { CameraBackend, CameraChoice } from '../dev-tools/camera';
 import { downloadBlob } from '../ui/card';
-import { deliverReport } from '../ui/report-delivery';
+import { uploadReport, type UploadReport, type UploadReceipt } from './upload';
+import { fileGuide } from './file-guide';
 import {
   parseReportLink,
   decode64,
   validateReport,
   reportName,
-  cameraIssue,
+  reportEntries,
+  type ReportEntry,
   type ReportLink,
 } from './report-link';
 import { prepareDownload } from './download';
@@ -19,9 +21,12 @@ export function BugReport(props: {
   connection?: ReportConnection;
   hash?: string;
   supported?: boolean;
+  upload?: UploadReport;
 }) {
   const connection = untrack(() => props.connection) ?? new ReportUsb();
-  const supported = untrack(() => props.supported) ?? (isSecureContext && 'usb' in navigator);
+  const supported =
+    untrack(() => props.supported) ??
+    (typeof window !== 'undefined' && isSecureContext && 'usb' in navigator);
   const [link, setLink] = createSignal<ReportLink>();
   const [archive, setArchive] = createSignal<Blob>();
   const [download, setDownload] = createSignal<{ blob: Blob; name: string }>();
@@ -33,6 +38,13 @@ export function BugReport(props: {
     [ready, setReady] = createSignal(false);
   const [connected, setConnected] = createSignal(false),
     [tools, setTools] = createSignal<CameraBackend>();
+  const upload = untrack(() => props.upload) ?? uploadReport;
+  const guidance = typeof navigator === 'undefined' ? '' : fileGuide(navigator.userAgent);
+  const [entries, setEntries] = createSignal<ReportEntry[]>([]);
+  const [fromUsb, setFromUsb] = createSignal(false);
+  const [remove, setRemove] = createSignal(true);
+  const [receipt, setReceipt] = createSignal<UploadReceipt>();
+  let uploadId = '';
   const [description, setDescription] = createSignal('');
   let handedOff = false;
   onSettled(() => {
@@ -65,7 +77,10 @@ export function BugReport(props: {
     setBusy(false);
   }
   async function acceptArchive(blob: Blob, current: ReportLink) {
+    setEntries(reportEntries(new Uint8Array(await blob.arrayBuffer()), current));
     setArchive(blob);
+    setReceipt(undefined);
+    uploadId = crypto.randomUUID();
     setDownload(undefined);
     setStatus('Preparing download…');
     setDownload(await prepareDownload(blob, reportName(current)));
@@ -83,6 +98,7 @@ export function BugReport(props: {
         current,
       );
       setConnected(true);
+      setFromUsb(true);
       setStatus('Report retrieved from camera.');
     } catch (cause) {
       problem(cause);
@@ -112,10 +128,12 @@ export function BugReport(props: {
     setBusy(true);
     try {
       if (file.size !== link()!.bytes) throw Error('Choose the TAR file named in this report.');
+      setFromUsb(false);
       await acceptArchive(
         validateReport(new Uint8Array(await file.arrayBuffer()), link()!),
         link()!,
       );
+      setFromUsb(false);
       setStatus('Report opened from file.');
     } catch (cause) {
       problem(cause);
@@ -123,11 +141,32 @@ export function BugReport(props: {
       setBusy(false);
     }
   }
-  function submit(event: SubmitEvent) {
+  async function submit(event: SubmitEvent) {
     event.preventDefault();
-    if (!download() || !link()) return;
-    deliverReport({ ...download()!, issueURL: cameraIssue(link()!, description()) }, downloadBlob);
-    setStatus('Report downloaded. Attach it to the GitHub issue.');
+    if (!archive() || !link() || busy() || receipt()) return;
+    setBusy(true);
+    setError('');
+    setStatus('Uploading report…');
+    try {
+      const result = await upload(archive()!, link()!, description(), uploadId);
+      setReceipt(result);
+      const confirmation = result.issueURL
+        ? 'Report uploaded and GitHub issue created.'
+        : 'Report uploaded. GitHub issue creation is pending.';
+      setStatus(confirmation);
+      if (fromUsb() && connected() && remove() && connection.remove) {
+        try {
+          await connection.remove(link()!);
+          setStatus(confirmation + ' Deleted from camera.');
+        } catch {
+          setError('Your report was uploaded, but could not be deleted from the camera.');
+        }
+      }
+    } catch (cause) {
+      problem(cause);
+    } finally {
+      setBusy(false);
+    }
   }
   return (
     <Show
@@ -141,46 +180,58 @@ export function BugReport(props: {
             <h1>Report a camera bug</h1>
           </header>
           <section class="bug-privacy" aria-label="Privacy">
-            <h2>Nothing is uploaded automatically.</h2>
-            <p>Your report stays local and private on this device until you choose to share it.</p>
+            <h2>Your camera data stays private until you press upload.</h2>
+            <p>
+              Nothing is uploaded automatically. The description will appear in a public GitHub
+              issue. No GitHub account is needed. The diagnostic archive is shared privately with
+              FujiMod maintainers.
+            </p>
           </section>
           <Show when={link()}>
             {(value) => (
-              <section class="bug-card">
-                <Show
-                  when={archive()}
-                  fallback={
-                    <>
-                      <h2>Connect your camera</h2>
-                      <p>
-                        Leave the camera’s QR screen open, plug in USB, then connect below.
-                        Reconnect USB if it was already plugged in.
+              <>
+                <p>
+                  This web app uses WebUSB to read issue reports from a FujiMod camera showing the
+                  issue QR code. It also works if USB debugging is enabled.
+                </p>
+                <p>
+                  <strong>
+                    When your camera is showing the QR code, it’s ready to upload your error report
+                    over USB.
+                  </strong>
+                </p>
+                <div class="bug-paths">
+                  <section class="bug-card" aria-label="USB connection">
+                    <h2>Connect over USB</h2>
+                    <p>
+                      Leave the QR screen open and plug in USB. If it was already plugged in, unplug
+                      and reconnect it.
+                    </p>
+                    <Show
+                      when={supported}
+                      fallback={
+                        <p>
+                          WebUSB is unavailable in this browser. Use Chrome or Edge on a computer,
+                          or choose the TAR file from your SD card.
+                        </p>
+                      }
+                    >
+                      <p class="bug-wait">
+                        <span class={{ 'bug-spinner': busy() }} aria-hidden="true" />
+                        {busy()
+                          ? 'Working…'
+                          : connected()
+                            ? 'Camera connected'
+                            : 'Waiting for camera connection'}
                       </p>
-                      <p>
-                        If you restarted the camera, turn on SET UP → FUJIMOD DEVTOOLS → USB
-                        DEBUGGING before connecting.
-                      </p>
-                      <p class="bug-file">
-                        {reportName(value())} · {value().bytes.toLocaleString()} bytes
-                      </p>
-                      <Show
-                        when={supported}
-                        fallback={
-                          <p>
-                            USB is unavailable in this browser. Open this link on a computer with
-                            USB support, or choose the TAR from your SD card.
-                          </p>
-                        }
+                      <button
+                        class="pill primary"
+                        disabled={!ready() || busy() || connected()}
+                        onClick={() => void connect()}
                       >
-                        <button
-                          class="pill primary"
-                          disabled={!ready() || busy()}
-                          onClick={() => void connect()}
-                        >
-                          Connect camera
-                        </button>
-                      </Show>
-                      <Show when={choice() && choice()!.interfaces.length > 1}>
+                        Connect camera
+                      </button>
+                      <Show when={choice() && choice()!.interfaces.length > 1 && !connected()}>
                         <label>
                           Debug interface
                           <select
@@ -200,38 +251,118 @@ export function BugReport(props: {
                           Read report
                         </button>
                       </Show>
-                      <label class="bug-file-picker">
-                        Choose report from SD card
-                        <input
-                          type="file"
-                          accept=".tar,application/x-tar"
-                          disabled={busy()}
-                          onChange={(event) => void chooseFile(event)}
-                        />
-                      </label>
-                    </>
-                  }
-                >
-                  <h2>Report ready</h2>
-                  <p class="bug-file">
-                    {reportName(value())} · {archive()!.size.toLocaleString()} bytes
-                  </p>
-                  <form onSubmit={submit}>
+                    </Show>
+                    <details>
+                      <summary>After restarting the camera</summary>
+                      <p>
+                        Open the issue QR screen again, or enable SET UP → FUJIMOD DEVTOOLS → USB
+                        DEBUGGING, then reconnect USB.
+                      </p>
+                    </details>
+                  </section>
+                  <section class="bug-card" aria-label="SD card file">
+                    <h2>Choose from SD card</h2>
+                    <p>
+                      Alternatively, find the issue report TAR file on the SD card at{' '}
+                      <code class="bug-file">{value().path.slice(2).replaceAll('\\', '/')}</code>
+                    </p>
+                    <p>{guidance}</p>
+                    <p>
+                      If browsing the camera over USB/PTP only shows photos or videos, use a card
+                      reader to access this folder.
+                    </p>
+                    <label class="bug-file-picker">
+                      Choose report TAR
+                      <input
+                        type="file"
+                        accept=".tar,application/x-tar"
+                        disabled={busy()}
+                        onChange={(event) => void chooseFile(event)}
+                      />
+                    </label>
+                  </section>
+                </div>
+                <section class="bug-card bug-contents">
+                  <h2>{archive() ? 'Report ready' : 'Uploaded issue reports contain'}</h2>
+                  <Show
+                    when={archive()}
+                    fallback={
+                      <ul>
+                        <li>Current screen image</li>
+                        <li>Recent FujiMod activity and stock logs</li>
+                        <li>Camera UI state, settings and task diagnostics</li>
+                        <li>Firmware and FujiMod build information</li>
+                      </ul>
+                    }
+                  >
+                    <p class="bug-file">
+                      {reportName(value())} · {archive()!.size.toLocaleString()} bytes
+                    </p>
+                    <ul class="bug-inventory">
+                      <For each={entries()}>
+                        {(entry) => (
+                          <li>
+                            <code>{entry.name}</code>
+                            <span>{entry.bytes.toLocaleString()} bytes</span>
+                          </li>
+                        )}
+                      </For>
+                    </ul>
+                  </Show>
+                  <form onSubmit={(event) => void submit(event)}>
                     <label>
                       What happened?
                       <textarea
                         rows="5"
                         value={description()}
+                        disabled={!!receipt() || busy()}
                         onInput={(event) => setDescription(event.currentTarget.value)}
                       />
                     </label>
-                    <button class="pill primary" type="submit" disabled={!download()}>
-                      Download and report
+                    <label class="bug-delete">
+                      <input
+                        type="checkbox"
+                        checked={remove()}
+                        disabled={
+                          !fromUsb() || !connected() || !connection.remove || busy() || !!receipt()
+                        }
+                        onChange={(event) => setRemove(event.currentTarget.checked)}
+                      />{' '}
+                      Delete from camera after uploading
+                    </label>
+                    <button
+                      class="pill primary"
+                      type="submit"
+                      disabled={!archive() || busy() || !!receipt()}
+                    >
+                      Upload this information
                     </button>
+                    <Show when={download()}>
+                      <button
+                        class="pill"
+                        type="button"
+                        onClick={() => downloadBlob(download()!.blob, download()!.name)}
+                      >
+                        Download a copy
+                      </button>
+                    </Show>
                   </form>
+                  <Show when={receipt()}>
+                    {(saved) => (
+                      <p>
+                        Report saved: <code>{saved().id}</code>.{' '}
+                        <Show when={saved().issueURL}>
+                          <a href={saved().issueURL} target="_blank" rel="noopener noreferrer">
+                            View GitHub issue
+                          </a>
+                        </Show>
+                      </p>
+                    )}
+                  </Show>
                   <Show when={connected()}>
                     <button
                       class="pill"
+                      disabled={busy()}
                       onClick={() => {
                         try {
                           const backend = connection.devTools();
@@ -245,8 +376,8 @@ export function BugReport(props: {
                       Open Dev Tools
                     </button>
                   </Show>
-                </Show>
-              </section>
+                </section>
+              </>
             )}
           </Show>
           <p role="status" aria-live="polite">

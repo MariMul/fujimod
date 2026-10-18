@@ -9,12 +9,18 @@
   "observability": { "enabled": false },
   "durable_objects": {
     "bindings": [
+      { "name": "ISSUES", "class_name": "IssueReports" },
       { "name": "ROOMS", "class_name": "ShareRoom" },
       { "name": "TURN_BUDGET", "class_name": "TurnBudget" },
     ],
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ShareRoom", "TurnBudget"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["ShareRoom", "TurnBudget"] },
+    { "tag": "v2", "new_sqlite_classes": ["IssueReports"] },
+  ],
+  "r2_buckets": [{ "binding": "ISSUE_REPORTS", "bucket_name": "fujimod-issue-reports" }],
   "ratelimits": [
+    { "name": "ISSUE_LIMIT", "namespace_id": "1002", "simple": { "limit": 5, "period": 60 } },
     { "name": "CONNECTIONS", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },
   ],
   "vars": {

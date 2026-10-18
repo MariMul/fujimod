@@ -76,3 +76,87 @@
 .bug-report [role='alert'] {
   color: #ffa7a7;
 }
+.bug-report.shell {
+  max-width: 1040px;
+}
+.bug-paths {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin: 28px 0;
+}
+.bug-card {
+  min-width: 0;
+}
+.bug-file {
+  display: block;
+}
+.bug-card details {
+  margin-top: 24px;
+  color: var(--dim);
+  font-size: 14px;
+}
+.bug-card summary {
+  cursor: pointer;
+}
+.bug-contents {
+  margin-top: 24px;
+}
+.bug-contents li {
+  margin: 10px 0;
+}
+.bug-inventory {
+  padding: 0;
+  list-style: none;
+}
+.bug-inventory li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+.bug-inventory code {
+  overflow-wrap: anywhere;
+}
+.bug-inventory span {
+  color: var(--dim);
+  font-size: 13px;
+}
+.bug-delete {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+}
+.bug-wait {
+  color: var(--dim);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.bug-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--edge);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: bug-spin 1s linear infinite;
+}
+@keyframes bug-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bug-spinner {
+    animation: none;
+  }
+}
+@media (max-width: 650px) {
+  .bug-paths {
+    grid-template-columns: 1fr;
+  }
+  .bug-card {
+    padding: 18px;
+  }
+}

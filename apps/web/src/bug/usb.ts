@@ -5,12 +5,13 @@ import {
   type CameraChoice,
   type CameraLink,
 } from '../dev-tools/camera';
-import { retrieveReport } from './transfer';
+import { retrieveReport, removeReport } from './transfer';
 import type { ReportLink } from './report-link';
 export interface ReportConnection {
   initialize(): Promise<void>;
   choose(): Promise<CameraChoice | undefined>;
   read(id: number, link: ReportLink, progress: (bytes: number) => void): Promise<Blob>;
+  remove?(link: ReportLink): Promise<void>;
   devTools(): CameraBackend;
   onDisconnect?(callback: () => void): () => void;
   dispose(): void;
@@ -65,6 +66,17 @@ export class ReportUsb implements ReportConnection {
       this.session = undefined;
       throw error;
     }
+  }
+  async remove(link: ReportLink) {
+    const session = this.session;
+    if (!session) throw Error('Camera disconnected.');
+    await removeReport(
+      {
+        read: (address, count) => session.readMemory(address, count),
+        write: (address, bytes) => session.writeMemory(address, bytes),
+      },
+      link,
+    );
   }
   devTools(): CameraBackend {
     const session = this.session,

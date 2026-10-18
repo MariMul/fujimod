@@ -53,13 +53,18 @@ export function reportName(link: ReportLink): string {
   return link.path.split('\\').at(-1)!;
 }
 /** Checks the complete archive before making it available for reporting. No extraction to disk. */
-export function validateReport(bytes: Uint8Array<ArrayBuffer>, link: ReportLink): Blob {
+export interface ReportEntry {
+  name: string;
+  bytes: number;
+}
+export function reportEntries(bytes: Uint8Array<ArrayBuffer>, link: ReportLink): ReportEntry[] {
   if (bytes.length !== link.bytes || crc32(bytes).toString(16).padStart(8, '0') !== link.crc32)
     throw Error('The report is incomplete or belongs to another capture.');
   if (bytes.length % 512 || bytes.length < 1024) throw Error('Invalid TAR archive.');
   let offset = 0,
     ended = false;
   const names = new Set<string>();
+  const entries: ReportEntry[] = [];
   const text = (start: number, size: number) =>
     new TextDecoder().decode(bytes.subarray(start, start + size)).split('\0')[0];
   while (offset + 512 <= bytes.length) {
@@ -88,22 +93,14 @@ export function validateReport(bytes: Uint8Array<ArrayBuffer>, link: ReportLink)
     if (sum !== parseInt(checksum, 8)) throw Error('Invalid TAR checksum.');
     names.add(name);
     const size = parseInt(sizeField, 8);
+    entries.push({ name, bytes: size });
     offset += 512 + Math.ceil(size / 512) * 512;
     if (offset > bytes.length) throw Error('Truncated TAR entry.');
   }
   if (!ended) throw Error('The report archive has no end marker.');
-  return new Blob([bytes], { type: 'application/x-tar' });
+  return entries;
 }
-export function cameraIssue(link: ReportLink, description: string): string {
-  const url = new URL('https://github.com/justjake/fujimod/issues/new');
-  url.searchParams.set('title', '[Camera] Bug report');
-  url.searchParams.set('template', 'camera-bug.yml');
-  url.searchParams.set('feedback', description.trim());
-  url.searchParams.set('firmware', link.firmware);
-  url.searchParams.set('mod-build', link.commit);
-  url.searchParams.set(
-    'body',
-    `${description.trim()}\n\nCamera: ${link.firmware}\nBuild: ${link.commit}\nReport: ${reportName(link)}\n\nAttach the downloaded TAR file to this issue.`,
-  );
-  return url.href;
+export function validateReport(bytes: Uint8Array<ArrayBuffer>, link: ReportLink): Blob {
+  reportEntries(bytes, link);
+  return new Blob([bytes], { type: 'application/x-tar' });
 }

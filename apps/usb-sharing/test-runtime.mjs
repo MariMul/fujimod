@@ -1,5 +1,8 @@
 import { Miniflare } from 'miniflare';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
+execFileSync(fileURLToPath(new URL('./node_modules/.bin/wrangler', import.meta.url)), ['deploy', '--dry-run', '--outdir', 'build/worker-test'], { cwd: fileURLToPath(new URL('.', import.meta.url)), stdio: 'pipe' });
 const origin = 'https://justjake.github.io';
 export function runtime(options = {}) {
   return new Miniflare({
@@ -13,15 +16,19 @@ export function runtime(options = {}) {
             modules: {
               'worker.mjs': {
                 type: 'esm',
-                contents: readFileSync(new URL('./worker.mjs', import.meta.url), 'utf8'),
+                contents: readFileSync(new URL('./build/worker-test/worker.js', import.meta.url), 'utf8'),
               },
             },
           },
           exports: {
+            IssueReports: { type: 'durable-object', storage: 'sqlite' },
             ShareRoom: { type: 'durable-object', storage: 'sqlite' },
             TurnBudget: { type: 'durable-object', storage: 'sqlite' },
           },
           env: {
+            ISSUES: { type: 'durable-object', worker: 'sharing', exportName: 'IssueReports' },
+            ISSUE_REPORTS: { type: 'r2', name: 'reports' },
+            ISSUE_LIMIT: { type: 'rate-limit', namespace: '1002', simple: { limit: 5, period: 60 } },
             ROOMS: { type: 'durable-object', worker: 'sharing', exportName: 'ShareRoom' },
             TURN_BUDGET: { type: 'durable-object', worker: 'sharing', exportName: 'TurnBudget' },
             CONNECTIONS: {

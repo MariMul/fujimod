@@ -1,4 +1,6 @@
-// Rendezvous and temporary relay credentials only. USB payloads stay on WebRTC.
+// USB rendezvous and explicit issue-report intake. Shared USB payloads stay on WebRTC.
+import { issueReports } from './issue-reports.mjs';
+export { IssueReports } from './issue-reports.mjs';
 import { DurableObject } from 'cloudflare:workers';
 
 const ROOM = /^[A-Za-z0-9_-]{43}$/;
@@ -23,6 +25,7 @@ function attachment(socket) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === '/issue-reports') return issueReports(request, env);
     if (url.pathname === '/health' && request.method === 'GET')
       return Response.json({ service: 'fujimod-usb-sharing' });
     if (url.pathname !== '/usb-proxy/signal') return fail('Not found', 404);
