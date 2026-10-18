@@ -71,29 +71,29 @@ try {
       const { connectPeer, parseShare } = await import(
         '/@fs/' + root + 'crates/usb-proxy/web/peer.js'
       );
+      const { VERSION, encodeFrame, decodeFrame } = await import('/@fs/' + root + 'crates/usb-proxy/web/wire.js');
       const peer = await connectPeer(link);
       await peer.send(
-        JSON.stringify({
+        encodeFrame({
           type: 'hello',
-          version: 1,
+          version: VERSION,
           role: 'controller',
           token: parseShare(link).key,
           reason: 'remote-traffic browser check',
         }),
       );
-      const ready = JSON.parse(await peer.receive());
+      const ready = decodeFrame(await peer.receive());
       if (ready.type !== 'ready') throw Error('Peer handshake failed');
       let id = 0,
         device;
       const request = async (operation) => {
         await peer.send(
-          JSON.stringify({ type: 'request', id: ++id, device, operation, timeout_ms: 5000 }),
+          encodeFrame({ type: 'request', id: ++id, device, operation, timeout_ms: 5000 }),
         );
-        const reply = JSON.parse(await peer.receive());
+        const reply = decodeFrame(await peer.receive());
         if (reply.id !== id) throw Error('Wrong request correlation');
         return reply.completion;
       };
-      const encode = (bytes) => btoa(String.fromCharCode(...bytes));
       const words = (...values) => {
         const data = new Uint8Array(values.length * 4),
           view = new DataView(data.buffer);
@@ -110,10 +110,10 @@ try {
         return request({
           op: 'control_out',
           setup: { request_type: 'vendor', recipient: 'other', request: 0, value: 0, index: 0 },
-          data: encode(bytes),
+          data: bytes,
         });
       };
-      const out = (bytes) => request({ op: 'transfer_out', endpoint: 1, data: encode(bytes) });
+      const out = (bytes) => request({ op: 'transfer_out', endpoint: 1, data: bytes });
       const input = (length) => request({ op: 'transfer_in', endpoint: 0x82, length });
       const listed = await request({ op: 'list' });
       device = listed.devices[0].id;

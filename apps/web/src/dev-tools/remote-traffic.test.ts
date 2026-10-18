@@ -3,7 +3,6 @@ import { observeRequest } from '../../../../crates/usb-proxy/web/share-traffic.j
 import { RemoteTrafficLog } from './remote-traffic';
 import { Direction, Layer, Level } from './log';
 import type { Completion, Operation } from './usb-sharing';
-const encode = (data: Uint8Array) => Buffer.from(data).toString('base64');
 function words(...values: number[]) {
   const data = new Uint8Array(values.length * 4),
     view = new DataView(data.buffer);
@@ -55,22 +54,18 @@ function fixture() {
       {
         op: 'control_out',
         setup: { request_type: 'vendor', recipient: 'other', request: 0, value: 0, index: 0 },
-        data: encode(data),
+        data: data,
       },
       { transferred: 12 },
       controller,
     );
   };
   const out = (data: Uint8Array, controller = 'native') =>
-    send(
-      { op: 'transfer_out', endpoint: 1, data: encode(data) },
-      { transferred: data.length },
-      controller,
-    );
+    send({ op: 'transfer_out', endpoint: 1, data: data }, { transferred: data.length }, controller);
   const input = (data: Uint8Array, length = 64, controller = 'native', endpoint = 0x82) =>
     send(
       { op: 'transfer_in', endpoint, length },
-      { data: encode(data), transferred: data.length },
+      { data: data, transferred: data.length },
       controller,
     );
   return {
@@ -172,7 +167,7 @@ test('unframed transfers, standard controls, interrupt endpoints and mismatched 
     {
       op: 'control_out',
       setup: { request_type: 'standard', recipient: 'device', request: 6, value: 0, index: 0 },
-      data: encode(fake),
+      data: fake,
     },
     { transferred: 12 },
   );
@@ -187,7 +182,7 @@ test('unframed transfers, standard controls, interrupt endpoints and mismatched 
 });
 test('ten thousand data chunks and their envelopes collapse into two accurate summaries', async () => {
   const f = fixture(),
-    data = encode(new Uint8Array(64));
+    data = new Uint8Array(64);
   const envelope = new Uint8Array(12);
   envelope[0] = 0xe1;
   new DataView(envelope.buffer).setUint32(6, 64);
@@ -197,7 +192,7 @@ test('ten thousand data chunks and their envelopes collapse into two accurate su
         {
           op: 'control_out',
           setup: { request_type: 'vendor', recipient: 'other', request: 0, value: 0, index: 0 },
-          data: encode(envelope),
+          data: envelope,
         },
         { transferred: 12 },
       ],
@@ -260,7 +255,7 @@ test('pending requests, short writes and USB failures report actual sizes withou
   expect(failure.message).toContain('completion unknown');
   const command = words(0x200001, 0, 0, 0, 6, 0, 0);
   await f.control(0xd0, command.length);
-  await f.send({ op: 'transfer_out', endpoint: 1, data: encode(command) }, { transferred: 3 });
+  await f.send({ op: 'transfer_out', endpoint: 1, data: command }, { transferred: 3 });
   expect(f.log.end().some((e) => e.layer === Layer.Ff80)).toBe(false);
 });
 test('large command bodies and decoded-event floods stay bounded and report truncation and loss', async () => {
@@ -304,4 +299,13 @@ test('clearing visible traffic retains the pending command decoder but removes q
   await f.input(command);
   const decoded = f.log.drain(true).filter((e) => e.layer === Layer.Ff80);
   expect(decoded.map((e) => [e.direction, e.message])).toEqual([[Direction.In, 'Read memory']]);
+});
+test('large binary traffic retains full byte counts while observations keep bounded prefixes', async () => {
+  const f = fixture(),
+    data = new Uint8Array(8 * 1024 * 1024).fill(255);
+  await f.send({ op: 'transfer_out', endpoint: 1, data }, { transferred: data.length });
+  const entries = f.log.drain(true);
+  expect(entries).toHaveLength(1);
+  expect(entries[0].message).toContain('requested 8388608 B, transferred 8388608 B');
+  expect(entries[0].data?.length).toBe(256);
 });

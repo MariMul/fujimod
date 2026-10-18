@@ -11,12 +11,16 @@ export interface Descriptor {
 }
 export interface Operation {
   op: string;
+  data?: Uint8Array;
+  /** Full byte count when this is a bounded diagnostic snapshot. */
+  dataLength?: number;
   [key: string]: unknown;
 }
 export interface Completion {
   devices?: Descriptor[];
-  data?: string;
+  data?: Uint8Array;
   transferred?: number;
+  dataLength?: number;
   error?: string | null;
 }
 export interface SharedDevice {
@@ -45,8 +49,8 @@ export function parseShare(url: string): Ticket;
 export function shareUrl(current: string, ticket: Ticket): string;
 export function connectPeer(url: string): Promise<PeerChannel>;
 export class PeerChannel {
-  send(text: string): Promise<void>;
-  receive(): Promise<string>;
+  send(bytes: Uint8Array): Promise<void>;
+  receive(): Promise<Uint8Array>;
   close(): void;
 }
 export class ShareHost {

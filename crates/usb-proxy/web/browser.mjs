@@ -38,9 +38,9 @@ try {
   await mkdir(output, { recursive: true });
   await page.screenshot({ path: new URL('exporter.png', output).pathname });
   const python = process.env.USB_PROXY_TEST_PYTHON || new URL('../../../../.venv/bin/python', import.meta.url).pathname;
-  for (const mode of ['blocking', 'async']) {
+  for (const mode of ['discovery', 'async']) {
     const child = spawn(python, [new URL('./controller.py', import.meta.url).pathname, mode], {
-      env: { ...process.env, FUJIMOD_USB_PROXY_URL: 'ws://127.0.0.1:5202/usb-proxy/ws' }, stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, FUJIMOD_USB_PROXY_URL: ws.href }, stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '', stderr = '';
     child.stdout.on('data', (data) => { stdout += data; }); child.stderr.on('data', (data) => { stderr += data; });
@@ -60,7 +60,9 @@ try {
   ]);
   for (const name of ['pyodide.mjs', 'pyodide.asm.mjs', 'pyodide.asm.wasm', 'python_stdlib.zip', 'pyodide-lock.json']) assets.set('/pyodide/' + name, ['bindings/javascript/node_modules/pyodide/' + name, name.endsWith('.mjs') ? 'text/javascript' : name.endsWith('.wasm') ? 'application/wasm' : 'application/octet-stream']);
   await controller.route('**/*', async (route) => {
-    const entry = assets.get(new URL(route.request().url()).pathname);
+    const path = new URL(route.request().url()).pathname;
+    const entry = assets.get(path) ?? (path.startsWith('/pkg/snippets/') && path.endsWith('.js')
+      ? ['bindings/javascript' + path, 'text/javascript'] : undefined);
     if (!entry) return route.continue();
     await route.fulfill({ status: 200, contentType: entry[1], body: entry[2] ? entry[0] : await readFile(new URL(entry[0], root)) });
   });
@@ -90,7 +92,7 @@ try {
     for (const [path, text] of Object.entries(paths)) { py.FS.mkdirTree('/proxy-python/' + path.slice(0, path.lastIndexOf('/'))); py.FS.writeFile('/proxy-python/' + path, text); }
     py.globals.set('relay_url', ws); py.globals.set('relay_token', token);
     // The shared contract's native-only imports and main do not apply here.
-    const source = contract.split("if __name__ == '__main__':")[0].replace('from fujimod.usb import blocking', '');
+    const source = contract.split("if __name__ == '__main__':")[0];
     return await py.runPythonAsync("import sys;sys.path.insert(0,'/proxy-python')\n" + source + '\nawait check_async(relay_url, relay_token)');
   }, { paths, contract, ws: ws.href, token });
   assert.equal(pyodide, true);
@@ -98,10 +100,10 @@ try {
   const closes = await page.evaluate(() => fixture.log.filter((e) => e[0] === 'control' && e[1] === 0xc4).length);
   await page.evaluate(() => { fixture.state.hangControl = 0xc2; });
   const timed = await promisify(execFile)(python, [new URL('./controller.py', import.meta.url).pathname, 'timeout'], {
-    env: { ...process.env, FUJIMOD_USB_PROXY_URL: 'ws://127.0.0.1:5202/usb-proxy/ws' },
+    env: { ...process.env, FUJIMOD_USB_PROXY_URL: ws.href },
   });
   assert.equal(JSON.parse(timed.stdout).passed, true);
   assert.equal(await page.evaluate(() => fixture.log.filter((e) => e[0] === 'control' && e[1] === 0xc4).length), closes);
   await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
-  console.log('PASS real relay + browser exporter: native Python blocking/async, Wasm and Pyodide controllers; synthetic USB identification, binary memory/data and tracing');
+  console.log('PASS real relay + browser exporter: native Python discovery/explicit proxy, Wasm and Pyodide controllers; synthetic USB identification, binary memory/data and tracing');
 } finally { await browser.close(); }

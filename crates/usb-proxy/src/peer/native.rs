@@ -89,8 +89,8 @@ fn unseal(ticket: &Ticket, peer: &str, value: &str) -> Result<Value> {
     serde_json::from_slice(&decoded).map_err(error)
 }
 pub(crate) struct PeerSocket {
-    send: Sender<String>,
-    receive: Receiver<Result<String>>,
+    send: Sender<Vec<u8>>,
+    receive: Receiver<Result<Vec<u8>>>,
     /// Closed when the I/O thread has flushed and exited.
     finished: Receiver<()>,
 }
@@ -125,8 +125,8 @@ impl PeerSocket {
         })
     }
     /// Queue a final message, close, and wait up to a second for it to be sent.
-    pub fn goodbye(&mut self, text: String) {
-        if self.send.try_send(text).is_ok() {
+    pub fn goodbye(&mut self, bytes: Vec<u8>) {
+        if self.send.try_send(bytes).is_ok() {
             self.send.close();
             futures_lite::future::block_on(futures_lite::future::or(
                 async {
@@ -136,10 +136,10 @@ impl PeerSocket {
             ));
         }
     }
-    pub async fn send(&mut self, text: &str) -> Result<()> {
-        self.send.send(text.into()).await.map_err(error)
+    pub async fn send(&mut self, bytes: Vec<u8>) -> Result<()> {
+        self.send.send(bytes).await.map_err(error)
     }
-    pub async fn receive(&mut self) -> Result<String> {
+    pub async fn receive(&mut self) -> Result<Vec<u8>> {
         self.receive
             .recv()
             .await
@@ -162,8 +162,8 @@ fn drain_setup(rtc: &mut Rtc) -> Result<()> {
 }
 async fn run(
     ticket: Ticket,
-    outbound: Receiver<String>,
-    incoming: Sender<Result<String>>,
+    outbound: Receiver<Vec<u8>>,
+    incoming: Sender<Result<Vec<u8>>>,
     ready: Sender<std::result::Result<(), String>>,
     progress: crate::Progress,
 ) -> Result<()> {
@@ -311,8 +311,7 @@ async fn run(
                         assembled.extend_from_slice(&data.data[1..]);
                         if data.data[0] == 1 {
                             incoming
-                                .send(Ok(String::from_utf8(std::mem::take(&mut assembled))
-                                    .map_err(error)?))
+                                .send(Ok(std::mem::take(&mut assembled)))
                                 .await
                                 .map_err(error)?;
                         }
@@ -350,7 +349,7 @@ async fn run(
             }
         }
         enum Wake {
-            Out(std::result::Result<String, async_channel::RecvError>),
+            Out(std::result::Result<Vec<u8>, async_channel::RecvError>),
             Udp(std::io::Result<(usize, SocketAddr)>),
             Tick,
             Signal(Result<Value>),
@@ -386,12 +385,12 @@ async fn run(
         )
         .await;
         match wake {
-            Wake::Out(Ok(text)) => {
-                if text.len() > MAX_MESSAGE {
+            Wake::Out(Ok(bytes)) => {
+                if bytes.len() > MAX_MESSAGE {
                     return Err(error("USB message exceeds limit"));
                 }
-                for (index, chunk) in text.as_bytes().chunks(16000).enumerate() {
-                    let mut packet = vec![u8::from((index + 1) * 16000 >= text.len())];
+                for (index, chunk) in bytes.chunks(16000).enumerate() {
+                    let mut packet = vec![u8::from((index + 1) * 16000 >= bytes.len())];
                     packet.extend_from_slice(chunk);
                     packets.push_back(packet);
                 }

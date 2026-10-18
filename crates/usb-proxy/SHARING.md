@@ -34,8 +34,8 @@ the rendezvous service or WebRTC layer.
 WebRTC carries USB requests and completions on a reliable ordered data channel.
 The native implementation uses [str0m](https://docs.rs/str0m/); Wasm uses the
 browser's RTCPeerConnection through the same crate's bundled JavaScript module.
-A bounded framing layer splits large JSON/base64 transfers into 16,000-byte
-chunks. Transfer capacities and timeout fencing remain the USB proxy's existing
+Version 2 frames contain a bounded JSON metadata header and raw payload bytes.
+A bounded framing layer splits these binary frames into 16,000-byte chunks. Transfer capacities and timeout fencing remain the USB proxy's existing
 8 MiB and 120-second limits.
 
 WebSockets provide rendezvous, not NAT traversal. The signaling endpoint is

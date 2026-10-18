@@ -25,23 +25,9 @@ const text = (value: unknown, limit = 128) =>
 const number = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0;
 const hex = (value: number) => `0x${value.toString(16)}`;
-const size = (encoded: unknown) =>
-  typeof encoded === 'string'
-    ? Math.max(
-        0,
-        Math.floor((encoded.length * 3) / 4) -
-          (encoded.endsWith('==') ? 2 : encoded.endsWith('=') ? 1 : 0),
-      )
-    : 0;
-function bytes(encoded: unknown, limit = CAPTURE): Uint8Array {
-  if (typeof encoded !== 'string') return new Uint8Array();
-  try {
-    return Uint8Array.from(atob(encoded.slice(0, Math.ceil(limit / 3) * 4)), (c) =>
-      c.charCodeAt(0),
-    ).slice(0, limit);
-  } catch {
-    return new Uint8Array();
-  }
+const size = (data: unknown) => (data instanceof Uint8Array ? data.byteLength : 0);
+function bytes(data: unknown, limit = CAPTURE): Uint8Array {
+  return data instanceof Uint8Array ? data.slice(0, limit) : new Uint8Array();
 }
 const word = (data: Uint8Array, offset: number) =>
   new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(offset, true);
@@ -168,7 +154,9 @@ export class RemoteTrafficLog {
     group.timeout = event.timeoutMs;
     if (event.phase === 'submitted') {
       group.requests++;
-      group.requested += op.op.endsWith('_in') ? number(op.length) : size(op.data);
+      group.requested += op.op.endsWith('_in')
+        ? number(op.length)
+        : (op.dataLength ?? size(op.data));
       if (!group.sample.length) group.sample = bytes(op.data, 256);
     } else {
       group.completions++;
@@ -191,7 +179,7 @@ export class RemoteTrafficLog {
       setup.request !== 0 ||
       setup.value !== 0 ||
       setup.index !== 0 ||
-      size(op.data) !== 12
+      (op.dataLength ?? size(op.data)) !== 12
     )
       return;
     const data = bytes(op.data, 12);
@@ -262,13 +250,16 @@ export class RemoteTrafficLog {
     frame.endpoint = number(op.endpoint);
     // Data windows are opaque; their bulk chunks remain in the raw summary.
     if (![0xd0, 0xd1, 0xc0, 0xc2, 0xc4].includes(frame.kind)) return;
-    const encoded = inbound ? event.completion.data : op.data;
+    const data = inbound ? event.completion.data : op.data;
+    const available = inbound
+      ? (event.completion.dataLength ?? size(data))
+      : (op.dataLength ?? size(data));
     const transferred = number(event.completion.transferred);
-    if (transferred > size(encoded)) {
+    if (transferred > available) {
       state.frame = undefined;
       return;
     }
-    const capture = bytes(encoded, Math.min(transferred, CAPTURE - frame.capture.length));
+    const capture = bytes(data, Math.min(transferred, CAPTURE - frame.capture.length));
     const joined = new Uint8Array(frame.capture.length + capture.length);
     joined.set(frame.capture);
     joined.set(capture, frame.capture.length);

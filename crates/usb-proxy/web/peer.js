@@ -1,6 +1,7 @@
+import { VERSION, MAX_MESSAGE, encodeFrame, decodeFrame } from './wire.js';
 import { observeRequest } from './share-traffic.js';
 // WebRTC USB transport. Only encrypted SDP crosses the rendezvous service.
-const MAX = (8 * 1024 * 1024 * 4) / 3 + 65536;
+const MAX = MAX_MESSAGE;
 const encoder = new TextEncoder();
 export const encodeUrl = (bytes) => {
   let text = '';
@@ -176,10 +177,9 @@ export class PeerChannel {
         }
         this.parts = [];
         this.size = 0;
-        const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
         const waiter = this.waiters.shift();
-        if (waiter) waiter.resolve(text);
-        else this.queue.push(text);
+        if (waiter) waiter.resolve(bytes);
+        else this.queue.push(bytes);
         if (this.queue.length > 16) this.close();
       }
     };
@@ -189,8 +189,8 @@ export class PeerChannel {
       if (['failed', 'closed'].includes(pc.connectionState)) this.close();
     });
   }
-  async send(text) {
-    const bytes = encoder.encode(text);
+  async send(bytes) {
+    if (!(bytes instanceof Uint8Array)) throw Error('Expected binary peer frame');
     if (bytes.length > MAX) throw Error('USB message exceeds limit');
     for (let offset = 0; offset < bytes.length; offset += 16000) {
       if (this.channel.bufferedAmount > 262144)
@@ -381,10 +381,10 @@ export class ShareHost {
         }
       };
       void (async () => {
-        const hello = JSON.parse(await peer.receive());
+        const hello = decodeFrame(await peer.receive());
         if (
           hello.type !== 'hello' ||
-          hello.version !== 1 ||
+          hello.version !== VERSION ||
           hello.role !== 'controller' ||
           hello.token !== this.ticket.key
         )
@@ -392,9 +392,9 @@ export class ShareHost {
         authenticated = true;
         clearTimeout(timer);
         this.callbacks.connected?.(frame.from, reason(hello.reason));
-        await peer.send(JSON.stringify({ type: 'ready', version: 1, id: frame.from }));
+        await peer.send(encodeFrame({ type: 'ready', version: VERSION, id: frame.from }));
         while (!peer.ended) {
-          const request = JSON.parse(await peer.receive());
+          const request = decodeFrame(await peer.receive());
           if (request.type === 'goodbye') {
             goodbye = reason(request.reason) || 'done';
             peer.close();
@@ -424,7 +424,7 @@ export class ShareHost {
               return completion;
             }
           }, this.callbacks.traffic);
-          await peer.send(JSON.stringify({ type: 'reply', id: request.id, completion }));
+          await peer.send(encodeFrame({ type: 'reply', id: request.id, completion }));
           if (completion.error) {
             this.callbacks.error?.(Error(completion.error));
             peer.close();

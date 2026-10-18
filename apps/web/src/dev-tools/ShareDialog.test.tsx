@@ -129,7 +129,7 @@ test('Share popup warns, copies a capability URL and logs remote controller conn
       controller: 'manual-tool',
       id: 42,
       timeoutMs: 5000,
-      operation: { op: 'transfer_out', endpoint: 1, data: 'AQID' },
+      operation: { op: 'transfer_out', endpoint: 1, data: Uint8Array.of(1, 2, 3) },
     };
     mock.callbacks.traffic?.({ ...event, phase: 'submitted' });
     mock.callbacks.traffic?.({

@@ -21,23 +21,23 @@ enum Socket {
     Peer(crate::peer::PeerSocket),
 }
 async fn send(socket: &mut Socket, frame: &Frame) -> Result<()> {
-    let text = serde_json::to_string(frame).map_err(err)?;
-    if text.len() > MAX_MESSAGE {
+    let bytes = frame.encode()?;
+    if bytes.len() > MAX_MESSAGE {
         return Err(err("message exceeds limit"));
     }
     match socket {
-        Socket::Peer(peer) => peer.send(&text).await,
+        Socket::Peer(peer) => peer.send(bytes).await,
         Socket::Web(socket) => {
             #[cfg(not(target_arch = "wasm32"))]
-            let message = async_tungstenite::tungstenite::Message::Text(text.into());
+            let message = async_tungstenite::tungstenite::Message::Binary(bytes.into());
             #[cfg(target_arch = "wasm32")]
-            let message = gloo_net::websocket::Message::Text(text);
+            let message = gloo_net::websocket::Message::Bytes(bytes);
             socket.send(message).await.map_err(err)
         }
     }
 }
 async fn receive(socket: &mut Socket) -> Result<Frame> {
-    let text = match socket {
+    let bytes = match socket {
         Socket::Peer(peer) => peer.receive().await?,
         Socket::Web(socket) => loop {
             let message = socket
@@ -47,22 +47,22 @@ async fn receive(socket: &mut Socket) -> Result<Frame> {
                 .map_err(err)?;
             #[cfg(not(target_arch = "wasm32"))]
             match message {
-                async_tungstenite::tungstenite::Message::Text(text) => break text.to_string(),
+                async_tungstenite::tungstenite::Message::Binary(bytes) => break bytes.to_vec(),
                 async_tungstenite::tungstenite::Message::Ping(_)
                 | async_tungstenite::tungstenite::Message::Pong(_) => continue,
-                _ => return Err(err("expected text frame")),
+                _ => return Err(err("expected binary frame")),
             }
             #[cfg(target_arch = "wasm32")]
             match message {
-                gloo_net::websocket::Message::Text(text) => break text,
-                _ => return Err(err("expected text frame")),
+                gloo_net::websocket::Message::Bytes(bytes) => break bytes,
+                _ => return Err(err("expected binary frame")),
             }
         },
     };
-    if text.len() > MAX_MESSAGE {
+    if bytes.len() > MAX_MESSAGE {
         return Err(err("message exceeds limit"));
     }
-    serde_json::from_str(&text).map_err(err)
+    Frame::decode(&bytes)
 }
 async fn deadline<T>(
     duration: Duration,
@@ -120,7 +120,13 @@ impl Client {
         };
         Self::connect_reporting(url, token, report)
             .await
-            .map_err(|e| err(format!("{} (last step reached: {})", e.0, reached.lock().unwrap())))
+            .map_err(|e| {
+                err(format!(
+                    "{} (last step reached: {})",
+                    e.0,
+                    reached.lock().unwrap()
+                ))
+            })
     }
     async fn connect_reporting(url: &str, token: &str, progress: Progress) -> Result<Self> {
         let ticket = crate::share::Ticket::from_url(url)?;
@@ -158,13 +164,13 @@ impl Client {
                     } => Ok({
                         progress("proxy handshake ready");
                         Self {
-                        socket,
-                        next_id: 0,
-                        usable: true,
-                        latency: Latency::default(),
-                        probed_device: String::new(),
-                        last_probe: None,
-                        failure: None,
+                            socket,
+                            next_id: 0,
+                            usable: true,
+                            latency: Latency::default(),
+                            probed_device: String::new(),
+                            last_probe: None,
+                            failure: None,
                         }
                     }),
                     _ => Err(err("relay rejected protocol handshake")),
@@ -291,8 +297,8 @@ impl Drop for Client {
                 Some(error) => bounded_reason(&format!("ended after error: {error}")),
                 None => "done".to_owned(),
             };
-            if let Ok(text) = serde_json::to_string(&Frame::Goodbye { reason }) {
-                peer.goodbye(text);
+            if let Ok(bytes) = (Frame::Goodbye { reason }).encode() {
+                peer.goodbye(bytes);
             }
         }
     }

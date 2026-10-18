@@ -17,7 +17,7 @@ export type ShareTrafficEvent = Identity & (
   | {
       phase: 'completed';
       elapsedMs: number;
-      completion: Readonly<Pick<Completion, 'data' | 'transferred' | 'error'> & { deviceCount: number }>;
+      completion: Readonly<Pick<Completion, 'data' | 'dataLength' | 'transferred' | 'error'> & { deviceCount: number }>;
     }
 );
 export function observeRequest(

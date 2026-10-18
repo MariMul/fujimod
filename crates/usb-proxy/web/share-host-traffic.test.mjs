@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setTimeout as delay } from 'node:timers/promises';
+import { VERSION, encodeFrame, decodeFrame } from './wire.js';
 import { ShareHost, newTicket } from './peer.js';
 class Socket {
   constructor() { queueMicrotask(() => this.onopen?.()); }
@@ -19,13 +20,13 @@ class Connection extends EventTarget {
 class Channel extends EventTarget {
   readyState = 'open'; bufferedAmount = 0; sent = []; failReplies = false;
   send(packet) {
-    const frame = JSON.parse(new TextDecoder().decode(packet.subarray(1)));
+    const frame = decodeFrame(packet.subarray(1));
     if (this.failReplies && frame.type === 'reply') throw Error('Data channel send failed');
     this.sent.push(frame);
   }
   close() { if (this.readyState === 'closed') return; this.readyState = 'closed'; this.onclose?.(); this.dispatchEvent(new Event('close')); }
   input(frame) {
-    const bytes = new TextEncoder().encode(JSON.stringify(frame)), packet = new Uint8Array(bytes.length + 1);
+    const bytes = encodeFrame(frame), packet = new Uint8Array(bytes.length + 1);
     packet[0] = 1; packet.set(bytes, 1); this.onmessage({ data: packet.buffer });
   }
 }
@@ -44,13 +45,13 @@ async function fixture(observer) {
   globalThis.WebSocket = Socket; globalThis.RTCPeerConnection = Connection;
   const calls = [], errors = [], events = [], ticket = newTicket('wss://isolated.test/signal', []);
   const device = { descriptor: { id: 'camera' }, execute: async op => {
-    calls.push(op.op); return op.op === 'transfer_in' ? { data: 'AQID', transferred: 3 } : { transferred: 12 };
+    calls.push(op.op); return op.op === 'transfer_in' ? { data: Uint8Array.of(1, 2, 3), transferred: 3 } : { transferred: 12 };
   }, close: async () => {} };
   const host = await ShareHost.create(ticket, device, { traffic: event => { events.push(event); observer?.(event); }, error: error => errors.push(error) });
   await host.message({ type: 'signal', from: 'controller', data: await offer(ticket, 'controller') });
   const connection = Connection.all.at(-1), channel = new Channel();
   connection.ondatachannel({ channel });
-  channel.input({ type: 'hello', role: 'controller', version: 1, token: ticket.key, reason: 'isolated test' });
+  channel.input({ type: 'hello', role: 'controller', version: VERSION, token: ticket.key, reason: 'isolated test' });
   await until(() => channel.sent.some(frame => frame.type === 'ready'));
   return { channel, events, calls, errors,
     async request(id, operation) {
@@ -66,7 +67,7 @@ test('ShareHost reports every request/completion, including ownership failures',
   try {
     await f.request(1, { op: 'list' }); await f.request(2, { op: 'probe' });
     await f.request(3, { op: 'open' });
-    assert.equal((await f.request(4, { op: 'transfer_in', endpoint: 0x82, length: 64 })).data, 'AQID');
+    assert.deepEqual((await f.request(4, { op: 'transfer_in', endpoint: 0x82, length: 64 })).data, Uint8Array.of(1, 2, 3));
     await f.request(5, { op: 'close' });
     const failed = await f.request(6, { op: 'transfer_in', endpoint: 0x82, length: 64 });
     assert.match(failed.error, /not claimed/);

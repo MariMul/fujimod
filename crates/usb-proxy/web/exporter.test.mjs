@@ -22,8 +22,8 @@ test('descriptors, binary payloads and partial failures survive', async () => {
   const [info] = await exporter.inventory();
   assert.equal(info.interfaces[0].endpoints[0].address, 0x82);
   await exporter.execute(info.id, open);
-  assert.deepEqual(await exporter.execute(info.id, { op: 'transfer_in', endpoint: 0x82, length: 64 }), { data: 'AQID', transferred: 3, error: 'stall' });
-  assert.equal((await exporter.execute(info.id, { op: 'transfer_out', endpoint: 1, data: 'AP+A' })).transferred, 3);
+  assert.deepEqual(await exporter.execute(info.id, { op: 'transfer_in', endpoint: 0x82, length: 64 }), { data: Uint8Array.of(1, 2, 3), transferred: 3, error: 'stall' });
+  assert.equal((await exporter.execute(info.id, { op: 'transfer_out', endpoint: 1, data: Uint8Array.of(0, 255, 128) })).transferred, 3);
   assert.deepEqual(calls.at(-1), ['out', 1, [0, 255, 128]]);
   await exporter.stop(); assert.equal(calls.at(-1), 'close');
 });
@@ -62,7 +62,7 @@ test('latency probe requires no USB inventory or claim', async () => {
   const replies = [];
   exporter.onreply = (reply) => replies.push(reply);
   await exporter.request({ id: 1, device: '', timeout_ms: 10, operation: { op: 'probe' } });
-  assert.deepEqual(replies[0].completion, { devices: [], data: '', transferred: 0, error: null });
+  assert.deepEqual(replies[0].completion, { devices: [], data: new Uint8Array(), transferred: 0, error: null });
   assert.deepEqual(calls, []);
   assert.equal(exporter.claims.size, 0);
   assert.equal(exporter.fenced.size, 0);

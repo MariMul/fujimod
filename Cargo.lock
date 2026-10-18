@@ -917,7 +917,6 @@ dependencies = [
 name = "fujimod-usb"
 version = "0.1.0"
 dependencies = [
- "base64",
  "fujimod-defs",
  "fujimod-usb-proxy",
  "futures-lite",

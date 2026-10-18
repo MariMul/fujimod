@@ -1,3 +1,4 @@
+import { VERSION, encodeFrame, decodeFrame } from './wire.js';
 import { Exporter } from './usb-exporter.js';
 if (typeof document !== 'undefined') {
   const $ = (id) => document.getElementById(id);
@@ -15,7 +16,7 @@ if (typeof document !== 'undefined') {
   const inventory = async () => {
     const active = exporter;
     const devices = await active.inventory();
-    if (exporter === active && socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'inventory', devices }));
+    if (exporter === active && socket?.readyState === WebSocket.OPEN) socket.send(encodeFrame({ type: 'inventory', devices }));
     update();
   };
   const disconnected = async () => {
@@ -31,13 +32,14 @@ if (typeof document !== 'undefined') {
     if (!navigator.usb) { status('WebUSB unavailable'); return; }
     exporter = new Exporter(navigator.usb, update);
     socket = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/usb-proxy/ws`);
+    socket.binaryType = 'arraybuffer';
     const active = socket;
     $('connect').disabled = true; status('Connecting');
-    socket.onopen = () => { active.send(JSON.stringify({ type: 'hello', version: 1, role: 'exporter', token: $('token').value })); };
-    exporter.onreply = (frame) => { if (active.readyState === WebSocket.OPEN) active.send(JSON.stringify(frame)); update(); };
+    socket.onopen = () => { active.send(encodeFrame({ type: 'hello', version: VERSION, role: 'exporter', token: $('token').value })); };
+    exporter.onreply = (frame) => { if (active.readyState === WebSocket.OPEN) active.send(encodeFrame(frame)); update(); };
     socket.onmessage = async ({ data }) => {
-      const frame = JSON.parse(data);
-      if (frame.type === 'ready' && frame.version === 1) {
+      const frame = decodeFrame(data);
+      if (frame.type === 'ready' && frame.version === VERSION) {
         status(`Connected · ${frame.id}`);
         for (const id of ['add', 'refresh', 'disconnect']) $(id).disabled = false;
         await inventory();

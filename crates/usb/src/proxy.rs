@@ -1,7 +1,6 @@
 //! Adapt remote USB completions to the existing ff80 engine, without framing in
 //! the proxy crate. Native and Wasm controllers use this identical adapter.
 use crate::{Error, Result, connection::Io, error::TransferStage, ff80::framing::RequestKind};
-use base64::{Engine, engine::general_purpose::STANDARD};
 use fujimod_usb_proxy::{Client, Operation, Setup};
 use std::time::Duration;
 
@@ -23,9 +22,7 @@ impl ProxyIo {
             .client
             .request(&self.device, operation, self.timeout)
             .await?;
-        let data = STANDARD
-            .decode(&completion.data)
-            .map_err(|e| fujimod_usb_proxy::Error(e.to_string()))?;
+        let data = completion.data;
         if data.len() > fujimod_usb_proxy::protocol::MAX_TRANSFER {
             return Err(fujimod_usb_proxy::Error("oversized USB reply".into()).into());
         }
@@ -74,7 +71,7 @@ impl Io for ProxyIo {
                         value: 0,
                         index: 0,
                     },
-                    data: STANDARD.encode(envelope),
+                    data: envelope.to_vec(),
                 },
                 TransferStage::Control(kind),
             )
@@ -93,7 +90,7 @@ impl Io for ProxyIo {
             .exchange(
                 Operation::TransferOut {
                     endpoint: self.output,
-                    data: STANDARD.encode(bytes),
+                    data: bytes.to_vec(),
                 },
                 TransferStage::BulkOut,
             )

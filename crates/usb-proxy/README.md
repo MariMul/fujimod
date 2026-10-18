@@ -98,7 +98,13 @@ timeout)` expose the camera-independent transport. Operations are `Open`
 (explicit configuration/interface/alternate), `Close` (host resources only),
 `ControlIn/Out`, `TransferIn/Out` and `ClearHalt`. Endpoint addresses include
 the direction bit. `Completion` preserves payload, actual count and WebUSB
-status/DOMException error. Binary data uses base64 in versioned JSON frames.
+status/DOMException error. Version 2 binary frames carry a bounded JSON metadata header followed by raw USB
+bytes. Payloads never pass through JSON, UTF-8 or base64 conversion. Both WebRTC
+and WebSocket transports use this framing; older wire versions are rejected.
+The wire prefix is `46 55 02 00`, then a little-endian u32 metadata length,
+up to 64 KiB of UTF-8 JSON metadata (without any `data` property), then at most
+8 MiB of opaque payload. OUT requests and replies carry the payload; other
+frames reject trailing bytes.
 A request carries an integer ID; every reply must match it. Descriptors and
 routes are scoped to the current exporter connection and are not persistent IDs.
 

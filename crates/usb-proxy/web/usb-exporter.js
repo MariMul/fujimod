@@ -1,15 +1,7 @@
 // Browser USB exporter. No camera commands, memory maps or firmware policy.
 export const MAX_TRANSFER = 8 * 1024 * 1024;
-const encode = (data) => {
-  let text = '';
-  for (let i = 0; i < data.length; i += 32768)
-    text += String.fromCharCode(...data.subarray(i, i + 32768));
-  return btoa(text);
-};
-const decode = (text) => {
-  if (typeof text !== 'string' || text.length > Math.ceil(MAX_TRANSFER / 3) * 4)
-    throw Error('Transfer exceeds limit');
-  const data = Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+const payload = (data) => {
+  if (!(data instanceof Uint8Array)) throw Error('Expected binary USB payload');
   length(data.length);
   return data;
 };
@@ -139,11 +131,11 @@ export class Exporter {
     if (op === 'control_in')
       result = await device.controlTransferIn(setup, length(operation.length));
     else if (op === 'control_out')
-      result = await device.controlTransferOut(setup, decode(operation.data));
+      result = await device.controlTransferOut(setup, payload(operation.data));
     else if (op === 'transfer_in')
       result = await device.transferIn(operation.endpoint & 15, length(operation.length));
     else if (op === 'transfer_out')
-      result = await device.transferOut(operation.endpoint & 15, decode(operation.data));
+      result = await device.transferOut(operation.endpoint & 15, payload(operation.data));
     else if (op === 'clear_halt') {
       await device.clearHalt(operation.endpoint & 128 ? 'in' : 'out', operation.endpoint & 15);
       return {};
@@ -152,7 +144,7 @@ export class Exporter {
       ? new Uint8Array(result.data.buffer, result.data.byteOffset, result.data.byteLength)
       : new Uint8Array();
     return {
-      data: encode(data),
+      data,
       transferred: result.bytesWritten ?? data.length,
       error: result.status === 'ok' ? null : result.status,
     };
@@ -162,7 +154,7 @@ export class Exporter {
     if (frame.operation.op === 'probe') {
       this.onreply?.({
         type: 'reply', id: frame.id,
-        completion: { devices: [], data: '', transferred: 0, error: null },
+        completion: { devices: [], data: new Uint8Array(), transferred: 0, error: null },
       });
       return Promise.resolve();
     }
@@ -188,7 +180,7 @@ export class Exporter {
       this.onreply?.({
         type: 'reply',
         id: frame.id,
-        completion: { devices: [], data: '', transferred: 0, error: null, ...completion },
+        completion: { devices: [], data: new Uint8Array(), transferred: 0, error: null, ...completion },
       });
       await running.catch(() => {});
     });

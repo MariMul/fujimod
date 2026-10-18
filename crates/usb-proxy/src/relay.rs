@@ -85,6 +85,15 @@ pub fn router(token: String, origins: Vec<String>) -> Result<Router> {
                 )
             }),
         )
+        .route(
+            "/usb-proxy/wire.js",
+            get(|| async {
+                (
+                    [("content-type", "text/javascript")],
+                    include_str!("../web/wire.js"),
+                )
+            }),
+        )
         .route("/usb-proxy/ws", get(upgrade))
         .with_state(relay)
         .merge(crate::signaling::router()))
@@ -115,17 +124,17 @@ async fn upgrade(
 async fn receive(socket: &mut WebSocket) -> Option<Frame> {
     loop {
         match socket.recv().await? {
-            Ok(Message::Text(text)) => return serde_json::from_str(&text).ok(),
+            Ok(Message::Binary(bytes)) => return Frame::decode(&bytes).ok(),
             Ok(Message::Ping(_)) | Ok(Message::Pong(_)) => continue,
             _ => return None,
         }
     }
 }
 async fn send(socket: &mut WebSocket, frame: &Frame) -> bool {
-    socket
-        .send(Message::Text(serde_json::to_string(frame).unwrap().into()))
-        .await
-        .is_ok()
+    let Ok(bytes) = frame.encode() else {
+        return false;
+    };
+    socket.send(Message::Binary(bytes.into())).await.is_ok()
 }
 async fn session(relay: Relay, mut socket: WebSocket) {
     let Ok(Some(Frame::Hello {
@@ -180,12 +189,13 @@ async fn exporter(relay: Relay, socket: WebSocket, id: String) {
                 if pending.len() >= 128 { let _ = reply.send(failure("exporter request limit")); continue; }
                 sequence += 1;
                 let frame = Frame::Request { id: sequence, device, operation, timeout_ms };
-                if output.send(Message::Text(serde_json::to_string(&frame).unwrap().into())).await.is_err() { break; }
+                let Ok(bytes) = frame.encode() else { break; };
+                if output.send(Message::Binary(bytes.into())).await.is_err() { break; }
                 pending.insert(sequence, reply);
             }
             frame = input.next() => {
                 match frame {
-                    Some(Ok(Message::Text(text))) => match serde_json::from_str::<Frame>(&text) {
+                    Some(Ok(Message::Binary(bytes))) => match Frame::decode(&bytes) {
                         Ok(Frame::Inventory { mut devices }) if devices.len() <= 128 => {
                             // Never allow a browser to overwrite another exporter's namespace.
                             if devices.iter().any(|d| d.id.is_empty() || d.id.contains('/') || d.id.len() > 128) { break; }
@@ -365,25 +375,27 @@ mod tests {
     ) {
         let (mut socket, _) = connect_async(url).await.unwrap();
         socket
-            .send(Wire::Text(
-                serde_json::to_string(&Frame::Hello { reason: None,
+            .send(Wire::Binary(
+                (Frame::Hello {
+                    reason: None,
                     version: VERSION,
                     role: "exporter".into(),
                     token: TOKEN.into(),
                 })
+                .encode()
                 .unwrap()
                 .into(),
             ))
             .await
             .unwrap();
         let ready: Frame =
-            serde_json::from_str(socket.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
+            Frame::decode(&socket.next().await.unwrap().unwrap().into_data()).unwrap();
         let Frame::Ready { id, .. } = ready else {
             panic!()
         };
         socket
-            .send(Wire::Text(
-                serde_json::to_string(&Frame::Inventory {
+            .send(Wire::Binary(
+                (Frame::Inventory {
                     devices: vec![Device {
                         id: "camera".into(),
                         vendor_id: 0x04cb,
@@ -394,6 +406,7 @@ mod tests {
                         interfaces: vec![],
                     }],
                 })
+                .encode()
                 .unwrap()
                 .into(),
             ))
@@ -407,7 +420,7 @@ mod tests {
                     operation,
                     timeout_ms,
                     ..
-                }) = serde_json::from_str(frame.to_text().unwrap_or(""))
+                }) = Frame::decode(&frame.into_data())
                 else {
                     continue;
                 };
@@ -422,7 +435,7 @@ mod tests {
                 }
                 let completion = match operation {
                     Operation::TransferIn { length: 7, .. } => Completion {
-                        data: "AQID".into(),
+                        data: vec![1, 2, 3],
                         transferred: 3,
                         error: Some("stall".into()),
                         ..Completion::default()
@@ -435,10 +448,8 @@ mod tests {
                 };
                 tokio::time::sleep(rtt / 2).await;
                 if socket
-                    .send(Wire::Text(
-                        serde_json::to_string(&Frame::Reply { id, completion })
-                            .unwrap()
-                            .into(),
+                    .send(Wire::Binary(
+                        (Frame::Reply { id, completion }).encode().unwrap().into(),
                     ))
                     .await
                     .is_err()
@@ -472,18 +483,20 @@ mod tests {
         assert!(Client::connect(&url, "wrong").await.is_err());
         let (mut socket, _) = connect_async(&url).await.unwrap();
         socket
-            .send(Wire::Text(
-                serde_json::to_string(&Frame::Hello { reason: None,
+            .send(Wire::Binary(
+                (Frame::Hello {
+                    reason: None,
                     version: 99,
                     role: "controller".into(),
                     token: TOKEN.into(),
                 })
+                .encode()
                 .unwrap()
                 .into(),
             ))
             .await
             .unwrap();
-        assert!(!matches!(socket.next().await, Some(Ok(Wire::Text(_)))));
+        assert!(!matches!(socket.next().await, Some(Ok(Wire::Binary(_)))));
         server.abort();
     }
     #[tokio::test]
@@ -522,7 +535,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(partial.error.as_deref(), Some("stall"));
-        assert_eq!(partial.data, "AQID");
+        assert_eq!(partial.data, [1, 2, 3]);
         assert_eq!(partial.transferred, 3);
         assert!(
             first

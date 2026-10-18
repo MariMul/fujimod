@@ -8,8 +8,12 @@ function notify(callback, event) {
     // Diagnostics must never change transport behavior.
   }
 }
+// Diagnostic observers receive private bounded prefixes, never live payload buffers.
+const CAPTURE = 4096;
+const snapshot = (data) => data instanceof Uint8Array ? data.slice(0, CAPTURE) : new Uint8Array();
 export async function observeRequest(controller, request, execute, callback) {
-  const operation = { ...request.operation };
+  const operation = { ...request.operation, data: callback ? snapshot(request.operation.data) : undefined,
+    dataLength: request.operation.data?.byteLength ?? 0 };
   if (operation.setup) operation.setup = Object.freeze({ ...operation.setup });
   const identity = {
     controller,
@@ -20,7 +24,7 @@ export async function observeRequest(controller, request, execute, callback) {
   };
   const started = performance.now();
   notify(callback, { ...identity, phase: 'submitted' });
-  const completion = { devices: [], data: '', transferred: 0, error: null };
+  const completion = { devices: [], data: new Uint8Array(), transferred: 0, error: null };
   try {
     Object.assign(completion, await execute());
   } catch (error) {
@@ -31,7 +35,8 @@ export async function observeRequest(controller, request, execute, callback) {
     phase: 'completed',
     elapsedMs: performance.now() - started,
     completion: Object.freeze({
-      data: completion.data,
+      data: callback ? snapshot(completion.data) : undefined,
+      dataLength: completion.data.byteLength,
       transferred: completion.transferred,
       error: completion.error,
       deviceCount: completion.devices?.length ?? 0,
