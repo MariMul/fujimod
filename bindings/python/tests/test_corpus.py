@@ -17,6 +17,9 @@ class CorpusBinding(unittest.TestCase):
         indexes[0].merge(indexes[1]);i=indexes[0]
         f=i.find('synthetic',firmware='b')[0]
         self.assertEqual(i.names(f['id'],['a'])['synthetic'][0]['firmware'],'a')
+        donor=i.find('synthetic',firmware='a')[0]
+        i.add_name(donor['id'],'synthetic','invented-header')
+        self.assertEqual(i.names(f['id'],['a'])['synthetic'][0]['sources'],['invented-header'])
         self.assertEqual(i.pairs('a','b')[0]['grade'],'identical')
         self.assertEqual(len(i.members(f['family'])),2)
         self.assertEqual(i.calls(f['id']),[])
@@ -37,6 +40,7 @@ class CorpusBinding(unittest.TestCase):
             i.save(output);restored=Index.open(output)
             self.assertEqual(restored.family(f['family'])['annotations'][0]['text'],'synthetic')
             self.assertEqual(restored.symbols('synthetic_data')[0]['firmware'],'b')
+            self.assertEqual(restored.names(f['id'],['a'])['synthetic'][0]['sources'],['invented-header'])
         finally:
             output.unlink(missing_ok=True)
 

@@ -58,9 +58,12 @@ all test output goes under `target/corpus-tests`.
 
 Analysis names propagate through every grade, including weak links. Each donor
 returned by `names` or `find(name).name_donors` includes its grade and full
-`(firmware, unit, address)` identity. Weak names can cross one weak edge between
-families; weak edges never merge families, chain with one another, or authorize
-call propagation. `normalized_only` limits donors to identical/same-code links.
+`(firmware, unit, address)` identity. Its `sources` list retains the caller's
+`name-source` annotations for that name, so reports can select a donor source
+without conflating names attached to the same function. Weak names can cross one
+weak edge between families; weak edges never merge families, chain with one
+another, or authorize call propagation. `normalized_only` limits donors to
+identical/same-code links.
 Consumers that generate executable symbol maps must use that restriction or
 independently verified execution evidence.
 

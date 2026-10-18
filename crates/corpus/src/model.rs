@@ -141,6 +141,7 @@ pub struct NameDonor {
     #[serde(flatten)]
     pub key: FunctionKey,
     pub grade: Grade,
+    pub sources: Vec<String>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Pair {
@@ -522,6 +523,14 @@ impl Index {
                 names.entry(name.clone()).or_default().push(NameDonor {
                     key: f.key.clone(),
                     grade,
+                    sources: f
+                        .annotations
+                        .iter()
+                        .filter(|a| a.kind == "name-source" && a.text == *name)
+                        .map(|a| a.source.clone())
+                        .collect::<BTreeSet<_>>()
+                        .into_iter()
+                        .collect(),
                 });
             }
         }
