@@ -22,6 +22,8 @@ python-source = "python"
 [tool.uv]
 # Rebuild local installs when either the binding or its Rust implementation changes.
 cache-keys = [
+    { file = "../../crates/firmware/Cargo.toml" },
+    { file = "../../crates/firmware/src/**/*.rs" },
     { file = "pyproject.toml" },
     { file = "NOTICE" },
     { file = "Cargo.toml" },

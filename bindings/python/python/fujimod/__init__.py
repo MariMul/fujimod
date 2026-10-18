@@ -5,6 +5,8 @@ import sys
 if sys.platform == "emscripten":
     from . import defs, usb
 else:
-    from ._native import defs, usb
+    from ._native import defs, usb, firmware
 
 __all__ = ["defs", "usb"]
+if sys.platform != "emscripten":
+    __all__.append("firmware")

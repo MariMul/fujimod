@@ -1,0 +1,12 @@
+[package]
+name = "fujimod-firmware"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "Body-independent Fujifilm update-file decoding"
+
+[dependencies]
+sha2 = "0.10"
+thiserror.workspace = true

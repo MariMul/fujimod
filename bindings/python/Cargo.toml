@@ -16,6 +16,7 @@ doctest = false
 testing = ["fujimod-usb/testing"]
 
 [dependencies]
+fujimod-firmware = { path = "../../crates/firmware" }
 pyo3 = { workspace = true, features = ["experimental-async"] }
 fujimod-usb.workspace = true
 fujimod-defs.workspace = true

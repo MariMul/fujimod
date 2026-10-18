@@ -840,11 +840,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-firmware"
+version = "0.1.0"
+dependencies = [
+ "sha2",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "fujimod-python"
 version = "0.1.0"
 dependencies = [
  "fujimod-bindgen",
  "fujimod-defs",
+ "fujimod-firmware",
  "fujimod-usb",
  "futures-channel",
  "futures-lite",
