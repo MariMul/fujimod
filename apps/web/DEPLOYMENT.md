@@ -1,8 +1,13 @@
 # Production hosting
 
-Cloudflare Workers serves the static application at `https://fujimod.com` and
-`https://www.fujimod.com`. The separate [USB sharing Worker](../usb-sharing/README.md)
-uses `https://share.fujimod.com`; its WebSocket endpoint is
+The website is intentionally unpublished. Its Worker and public domain bindings
+have been removed, and the website publication workflow is disabled. Deploying
+the sharing service for testing does not authorize publishing the website.
+
+The retained website configuration reserves `fujimod.com` and `www.fujimod.com`
+for a future explicitly requested publication. The separate
+[USB sharing Worker](../usb-sharing/README.md) is available for testing at
+`https://share.fujimod.com`; its WebSocket endpoint is
 `wss://share.fujimod.com/usb-proxy/signal`.
 
 Gandi remains the registrar. Cloudflare hosts the entire DNS zone, delegated to
@@ -10,12 +15,12 @@ Gandi remains the registrar. Cloudflare hosts the entire DNS zone, delegated to
 mail service-discovery records were imported from Gandi before delegation changed.
 Worker custom domains manage the website's DNS records and HTTPS certificates.
 
-Initial migration completed on 2026-10-17. GitHub Pages is disabled. Both web
-hostnames passed HTTPS and build-hash checks; the sharing endpoint passed live
-owner/controller signaling and owner-revocation checks. The deployment token is
-stored in the repository's Actions secret.
+DNS migration completed on 2026-10-17. GitHub Pages is disabled. The sharing
+endpoint passed live owner/controller signaling and owner-revocation checks.
+The website was briefly deployed during migration and then taken offline at the
+owner's request; it is not part of the currently hosted service.
 
-The initial static deployment uses committed source `04bd01c12db5` and no local
+The withdrawn initial static deployment used committed source `04bd01c12db5` and no local
 simulator bundles or unpublished mod artifacts. There were no published GitHub
 releases to stage, so its catalog offers USB devices without simulator runtimes.
 The sharing Worker currently has no TURN secrets and provides STUN only. TURN
