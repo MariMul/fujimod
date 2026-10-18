@@ -98,7 +98,7 @@ execution. Close or cancel an owned range reader with `await reader.aclose()`.
 For Python protocol/ownership tests, build an instrumented wheel with
 `maturin build --manifest-path bindings/python/Cargo.toml --features testing`.
 Install it in the test environment, then run `pytest bindings/python/tests`.
-These tests replay synthetic USB exchanges through the production Rust session,
+These tests replay scripted USB exchanges through the production Rust session,
 including streaming, ownership, protocol errors and disconnects. The `testing`
 module is excluded from ordinary builds. No test opens a camera. Tests also cover
 asyncio wakeups, cancellation during I/O, concurrent calls and async iterators.

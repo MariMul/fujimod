@@ -231,11 +231,11 @@ test('auto share registers once, disables console, withdraws on disconnect and s
     const first = await registered();
     expect(f.host.textContent).toContain('Development share registered');
     const callbacks = hosts.create.mock.calls[0][2];
-    callbacks.connected('controller', 'python tools/fujicam console hello');
+    callbacks.connected('controller', 'python console hello');
     callbacks.disconnected('controller', 'connection lost without goodbye');
     flush();
     expect(f.host.textContent).toContain(
-      'Remote controller connected: python tools/fujicam console hello',
+      'Remote controller connected: python console hello',
     );
     expect(f.host.textContent).toContain(
       'Remote controller disconnected: connection lost without goodbye',

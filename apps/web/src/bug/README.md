@@ -39,8 +39,7 @@ and writes use the established diagnostic USB SDK.
 The 64-byte discovery record advertises a build tag, capacity and pointers to
 the shared request/state/status/path/buffer fields. Open/read/close operations
 are 1/2/3, failed-stream close is 4, existing-file rewrite/write are 5/6, and
-remove is 7. The private source `decomp/mods/lib/session-io/README.md` specifies
-every offset. The browser validates all pointers and detects another operation
+remove is 7. The browser validates all pointers and detects another operation
 intervening. A timeout never frees or reuses a pending camera buffer.
 
 The scanner wakes the existing report worker only for pending file requests.

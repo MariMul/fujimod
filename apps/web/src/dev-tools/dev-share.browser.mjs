@@ -92,7 +92,7 @@ try {
   assert.equal((await stat(new URL(file, registry))).mode & 0o777, 0o600);
   const first = JSON.parse(await readFile(new URL(file, registry), 'utf8'));
   const ticket = parseShare(first.url);
-  console.log('Simulator auto-shared; one private registry entry');
+  console.log('Simulator auto-shared; one share registry entry');
   assert.equal(new URL(first.url).origin, url.origin);
   assert.equal(typeof first.camera.model, 'string');
   assert.ok(Object.hasOwn(first.camera, 'serial'));

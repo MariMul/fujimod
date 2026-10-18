@@ -1,7 +1,7 @@
 """Compare the built web app with the approved HTML reference, in real browsers.
 
 Requires a local preview with DAT auto-loading. Reference art is supplied
-explicitly, so the public repository does not depend on a private checkout.
+explicitly.
 All screenshots and measured rectangles go to a fresh output directory.
 """
 import argparse

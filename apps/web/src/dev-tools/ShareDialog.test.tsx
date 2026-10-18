@@ -144,10 +144,10 @@ test('Share popup warns, copies a capability URL and logs remote controller conn
     });
     expect(f.host.textContent).toContain('transferred 3 B');
     expect(f.host.textContent).toContain('1 failed: stall');
-    mock.callbacks.connected?.('2', 'fujicam console hello');
+    mock.callbacks.connected?.('2', 'python console hello');
     mock.callbacks.disconnected?.('2', 'done');
     flush();
-    expect(f.host.textContent).toContain('Remote controller connected: fujicam console hello');
+    expect(f.host.textContent).toContain('Remote controller connected: python console hello');
     expect(f.host.textContent).toContain('Remote controller disconnected: done');
     f.button('Share').click();
     flush();

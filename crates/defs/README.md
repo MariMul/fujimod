@@ -36,5 +36,5 @@ unreviewed rule. The public API represents those cases with `ModeAvailability`.
 `next_mode` is the firmware table's pre-dispatch update, represented by
 `ModeTransition`; handlers can have additional effects. All numeric JSON fields
 are unsigned quantities. No body, command number, mailbox or firmware is chosen
-by default. Private extensions can supply this same schema to USB tooling,
-emulators and future SDK generation.
+by default. Callers supply definitions in this schema to USB tooling, emulators
+and SDK generation.

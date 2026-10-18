@@ -66,7 +66,7 @@ mise run javascript-format-check
 `mise run python-test` builds the native binding with its `testing` feature,
 then runs pytest discovery throughout the repository. This includes Python
 bindings, source-archive tests, simulation asset preparation and CI tooling.
-Install ffmpeg to exercise walkthrough media tests. Tests use synthetic USB
+Install ffmpeg to exercise walkthrough media tests. Tests use scripted USB
 transcripts and peers, not physical cameras.
 
 `mise run javascript-node-test` runs the proxy/exporter, asset staging and Worker
@@ -94,11 +94,9 @@ node scripts/ci/package-tests.mjs apps/web
 The web integration runner executes every declared `test:*` package script
 except interactive `*:watch` commands, so new one-shot suites join CI when added.
 
-Browser scripts requiring private firmware DATs, emulator bundles, an externally
-served camera session or physical hardware cannot run from this public checkout.
-They remain explicit rehearsals with their documented inputs. This CI does not
-certify firmware boots, compiled mod choices or illustrated mod walkthroughs.
-Those release requirements still need their own firmware/evidence pipeline.
+Browser scripts that take a firmware update file, a simulator bundle, a served
+camera session or a connected camera run only when given those inputs; CI does
+not run them.
 
 ## Coverage
 

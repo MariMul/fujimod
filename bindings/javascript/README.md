@@ -26,12 +26,11 @@ that exact version and `--locked --root target/tooling` from the repository root
 
 `WASM_BINDGEN` can select an explicitly installed CLI executable. By default,
 the build script uses `target/tooling/bin/wasm-bindgen` from the repository root.
-`pkg/`, `dist/` and `node_modules/` are generated and ignored. The package remains
-private while APIs and release metadata are being prepared; these commands do
-not publish it or change `apps/web`.
+`pkg/`, `dist/` and `node_modules/` are generated and ignored. The package is not
+yet published to npm; these commands do not publish it or change `apps/web`.
 
 Tests run compiled Wasm in Node. Instrumented tests exercise the real protocol
-core with synthetic endpoints. Production tests exclude that instrumentation
+core with scripted endpoints. Production tests exclude that instrumentation
 and exercise nusb's WebUSB backend against a fake `navigator.usb` device,
 including descriptors, interface/alternate selection, endpoint numbers, data
 transfers, picker cancellation and a stalled control transfer. No test opens

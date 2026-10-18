@@ -140,4 +140,4 @@ There is no automatic reconnect, recovery, persistence or hardware validation.
 Run `cargo test -p fujimod-usb-proxy --features relay` for relay/client checks,
 and `node --test crates/usb-proxy/web/exporter.test.mjs` for exporter checks.
 The browser integration test is `crates/usb-proxy/web/browser.mjs`; it uses the
-real relay and bindings with synthetic WebUSB only. No test accesses a camera.
+real relay and bindings with a scripted WebUSB device. No test accesses a camera.

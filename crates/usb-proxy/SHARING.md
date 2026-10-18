@@ -53,9 +53,7 @@ the Pages app. An unconfigured production build disables Share.
 
 For the local Vite development and preview servers, `/usb-proxy/` forwards to
 the local Rust service. Static deployments must set `FUJIMOD_SIGNAL_URL` at
-build time to a reachable `wss://.../usb-proxy/signal` endpoint. The private
-workspace's installed service and named Tailscale URL are documented in its
-`tools/usb_proxy/README.md`. Viewers must be able to reach the signaling endpoint;
+build time to a reachable `wss://.../usb-proxy/signal` endpoint. Viewers must be able to reach the signaling endpoint;
 a link containing a private tailnet endpoint is limited to that tailnet.
 
 Tickets use independent 256-bit random room IDs and capability keys. The key
@@ -111,7 +109,7 @@ Run Rust protocol, encrypted signaling and relay tests with
 `node --test crates/usb-proxy/web/exporter.test.mjs`.
 
 `FUJIMOD_WEB_URL=<named HTTPS app URL> node crates/usb-proxy/web/peer.browser.mjs`
-uses synthetic WebUSB with the real WebRTC/Rust path to test multi-megabyte
+uses a scripted WebUSB device with the real WebRTC/Rust path to test multi-megabyte
 transfers, a Pyodide controller, exclusive ownership and fencing. No physical USB is accessed.
 
 `FUJIMOD_WEB_URL=<named HTTPS app URL> node src/dev-tools/sharing.browser.mjs`

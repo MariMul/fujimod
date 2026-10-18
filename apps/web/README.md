@@ -153,7 +153,7 @@ npm run check  # lint, Solid reactivity rules and TypeScript checks
 npm test       # Vitest through Vite Plus, including TSX/DOM tests
 npm run build
 PLAYWRIGHT_BROWSERS_PATH=/path/to/browsers python tests/browser.py \
-  --output /fresh/ignored/proof --expected /path/to/private/sd-card
+  --output /fresh/ignored/proof --expected /path/to/sd-card
 ```
 
 `npm run test:watch` runs tests interactively. Tests stay alongside their
@@ -183,7 +183,7 @@ rules for removed APIs, effect signatures, store writes and reactive props.
 
 The browser check boots the real local DAT on desktop Chromium and WebKit's
 iPhone 13 emulation, checks live frames and a menu tap, saves page/model/LCD
-screenshots and verifies downloaded ZIP members against private builder output.
+screenshots and verifies downloaded ZIP members against the `--expected` files.
 WebKit emulation is a desktop browser check, not an iPhone hardware measurement.
 
 To reproduce the Movie-button execution fault in development, open
@@ -295,13 +295,11 @@ staging it under ignored `public/runtime/`. A patch-only release removes the
 emulation capability from the installed catalog. `npm run build` then bundles
 this repository into `dist/` and verifies every GLB is a real glTF 2 binary with
 identical source/deployment hashes. Pages checks out and pulls the LFS model
-objects before building. No private repository source is copied over the
-web app, and neither a stock DAT nor boot ROM is a public input.
+objects before building. Neither a firmware update nor a boot ROM is a build
+input.
 
 The Pages workflow runs only from main or a release targeting main. Review
-branches never deploy. The research repository pins the reviewed public commit
-as its `web` submodule. The private patch builder creates/verifies release
-artifacts and never copies, commits or pushes web app source.
+branches never deploy.
 
 ## JavaScript API
 

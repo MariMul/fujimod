@@ -93,7 +93,7 @@ HTTPS development preview. From this directory:
 FUJIMOD_WEB_URL=<named HTTPS URL> PYTHON=<Python with FujiMod installed> node peer.browser.mjs
 ```
 
-It runs a local Workers runtime, exports synthetic WebUSB, transfers 2 MiB in
+It runs a local Workers runtime, exports a scripted WebUSB device, transfers 2 MiB in
 both directions through native Python, connects a browser controller, and checks
 exclusive ownership. It never accesses physical USB. To force TURN, run a local
 TURN server listening on loopback with test-only credentials and loopback

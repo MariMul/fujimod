@@ -192,8 +192,7 @@ parameter+1. Replies preserve both fields, including unknown flag values.
 
 Bounded position has two input bytes and one output flag, initialized to zero
 by firmware. Callback result -97 writes 1 to a literal configuration key. The
-private extractor checks that the selected parameter table's output key agrees
-with that callback key; the public codec contains no key address. Other callback
+codec contains no key address. Other callback
 errors can leave the flag zero. Fixed position initializes a single output byte
 and submits its internal parameter `ff`; no callback result code is published.
 Primary/secondary parameter-callback commands take one input and return one raw

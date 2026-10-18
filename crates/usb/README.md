@@ -75,7 +75,7 @@ validate the longer reply's setup command echo, reserved word and status fields.
 Neither form is a readiness poll or a wait-for-execution API.
 
 The core is tested on native macOS and as Wasm in a JavaScript runtime using
-synthetic exchanges. nusb's WebUSB backend compiles for `wasm32-unknown-unknown`.
+scripted exchanges. nusb's WebUSB backend compiles for `wasm32-unknown-unknown`.
 The [JavaScript bindings](../../bindings/javascript/README.md) expose that
 backend; physical browser/camera integration remains unvalidated. No hardware
 access is part of the test suite. Native Python bindings live
@@ -83,14 +83,12 @@ in `bindings/python/` at the workspace root, with an awaitable API. All Rust pub
 internal test interface does not require `Send` futures.
 
 Protocol references are `fftlib.py` and `ffjlib.py` from
-[tiredboffin/fffw](https://github.com/tiredboffin/fffw/tree/bedc091e0b54a1a34aaf6929dd08e1db36d13b08/ff80), and
-X70 View's existing ff80 callers. The upstream MIT notice is retained in
-[LICENSE.fffw](LICENSE.fffw). No firmware images or private camera data are
-included.
+[tiredboffin/fffw](https://github.com/tiredboffin/fffw/tree/bedc091e0b54a1a34aaf6929dd08e1db36d13b08/ff80).
+The upstream MIT notice is retained in [LICENSE.fffw](LICENSE.fffw).
 
 Run `cargo test --workspace --all-features` from the repository root.
 
-The opt-in `testing` feature supplies strict synthetic exchange scripts through
+The opt-in `testing` feature supplies strict exchange scripts through
 the same session implementation. `testing::Peer` supplies synchronous virtual
 endpoint completions for firmware emulators using this same Rust core; it exists
 only in testing builds. These paths do not enumerate or open USB devices.

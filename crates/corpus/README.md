@@ -43,18 +43,16 @@ Locators can find by name/address, select family members in a firmware, follow
 calls and data references (including reverse references), read family
 annotations, and search mapped units with byte masks. `names` retains names
 and donor provenance; callers can require equal normalized code. Metadata
-annotations use explicit `kind`, `text`, and `source` fields, so names/types,
-readable C, research notes, and locator reports remain private caller data.
+annotations use explicit `kind`, `text`, and `source` fields.
 
 `save`/`open` use a versioned internal binary cache, not a portable interchange
-contract. Keep populated caches private. Rebuilding/addition changes numeric
+contract. Rebuilding/addition changes numeric
 function/family ids; persist `(firmware, unit, address)` keys in locator reports.
 Rebuild after adding units, or `merge` indexes and rebuild automatically.
 
 Python uses `from fujimod.corpus import Index`, with the same operations and
 JSON-compatible dictionaries. Build the extension through the existing
-`bindings/python` package. Tests use only synthetic listings and instructions;
-all test output goes under `target/corpus-tests`.
+`bindings/python` package. Test output goes under `target/corpus-tests`.
 
 Analysis names propagate through every grade, including weak links. Each donor
 returned by `names` or `find(name).name_donors` includes its grade and full
