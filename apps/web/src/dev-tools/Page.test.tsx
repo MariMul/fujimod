@@ -250,9 +250,7 @@ test('auto share registers once and keeps its link while the camera is away', as
     callbacks.connected('controller', 'python console hello');
     callbacks.disconnected('controller', 'connection lost without goodbye');
     flush();
-    expect(f.host.textContent).toContain(
-      'Remote controller connected: python console hello',
-    );
+    expect(f.host.textContent).toContain('Remote controller connected: python console hello');
     expect(f.host.textContent).toContain(
       'Remote controller disconnected: connection lost without goodbye',
     );

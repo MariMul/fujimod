@@ -1,8 +1,9 @@
 """Shared native/Pyodide boundary checks for signed and extended service fields."""
 
 
-def check_extended_values():
+def check_extended_values() -> bool:
     import json
+
     from fujimod import defs
     from fujimod.usb import app80 as a
 
@@ -110,8 +111,8 @@ def check_extended_values():
         )
     for invalid in [-32769, 32768, 1.5, float("nan"), float("inf"), "1", None]:
         try:
-            a.Command.SetLensPosition(position=invalid)
-        except (TypeError, OverflowError, ValueError):
+            a.Command.SetLensPosition(position=invalid)  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
+        except TypeError, OverflowError, ValueError:
             pass
         else:
             raise AssertionError(f"accepted invalid signed field {invalid!r}")

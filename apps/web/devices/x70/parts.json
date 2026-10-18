@@ -1,124 +1,56 @@
 {
-  "hidden": [
-    "ling_filter_21",
-    "ling_filter_glass_22",
-    "LBL_filter_14"
-  ],
+  "hidden": ["ling_filter_21", "ling_filter_glass_22", "LBL_filter_14"],
   "screen": "monitorr_screen_46",
   "inputs": {
-    "shutter": [
-      "shutter_28"
-    ],
-    "shutter_speed": [
-      "shutter_speed_59"
-    ],
-    "exposure_compensation": [
-      "Exposure_27"
-    ],
-    "aperture": [
-      "ring_aperture_24"
-    ],
-    "control_ring": [
-      "ring_control_19"
-    ],
-    "drive": [
-      "drive_37"
-    ],
-    "delete": [
-      "trash_44"
-    ],
-    "play": [
-      "play_45"
-    ],
+    "shutter": ["shutter_28"],
+    "shutter_speed": ["shutter_speed_59"],
+    "exposure_compensation": ["Exposure_27"],
+    "aperture": ["ring_aperture_24"],
+    "control_ring": ["ring_control_19"],
+    "drive": ["drive_37"],
+    "delete": ["trash_44"],
+    "play": ["play_45"],
     "menu_ok": {
-      "nodes": [
-        "menu_frame_48",
-        "menu_sw_49",
-        "LBL_MENU_10"
-      ],
+      "nodes": ["menu_frame_48", "menu_sw_49", "LBL_MENU_10"],
       "split": "four-way"
     },
-    "power": [
-      "on-off_38"
-    ],
-    "auto": [
-      "sw_auto_41"
-    ],
-    "focus_mode": [
-      "MCS_31",
-      "MCS2_52",
-      "MCS3_53"
-    ],
-    "disp": [
-      "LBL_DISP_9"
-    ],
+    "power": ["on-off_38"],
+    "auto": ["sw_auto_41"],
+    "focus_mode": ["MCS_31", "MCS2_52", "MCS3_53"],
+    "disp": ["LBL_DISP_9"],
     "up": {
-      "nodes": [
-        "menu_frame_48",
-        "menu_sw_49"
-      ],
+      "nodes": ["menu_frame_48", "menu_sw_49"],
       "split": "four-way"
     },
     "down": {
-      "nodes": [
-        "menu_frame_48",
-        "menu_sw_49"
-      ],
+      "nodes": ["menu_frame_48", "menu_sw_49"],
       "split": "four-way"
     },
     "left": {
-      "nodes": [
-        "menu_frame_48",
-        "menu_sw_49"
-      ],
+      "nodes": ["menu_frame_48", "menu_sw_49"],
       "split": "four-way"
     },
     "right": {
-      "nodes": [
-        "menu_frame_48",
-        "menu_sw_49"
-      ],
+      "nodes": ["menu_frame_48", "menu_sw_49"],
       "split": "four-way"
     },
-    "q": [
-      "LBL_Q_6"
-    ],
-    "ae_af_lock": [
-      "LBL_AEAF_8"
-    ],
-    "movie": [
-      "rec_29"
-    ],
+    "q": ["LBL_Q_6"],
+    "ae_af_lock": ["LBL_AEAF_8"],
+    "movie": ["rec_29"],
     "command_left": {
-      "nodes": [
-        "zoom_sw_36"
-      ]
+      "nodes": ["zoom_sw_36"]
     },
     "command_right": {
-      "nodes": [
-        "zoom_sw_36"
-      ]
+      "nodes": ["zoom_sw_36"]
     },
     "command_push": {
-      "nodes": [
-        "zoom_sw_36"
-      ]
+      "nodes": ["zoom_sw_36"]
     },
-    "fn7": [
-      "Fn_32"
-    ],
-    "wifi": [
-      "LBL_wifi_11"
-    ],
-    "lcd_touch": [
-      "monitorr_screen_46"
-    ],
-    "lcd_tilt": [
-      "monitorr_screen_46"
-    ],
-    "battery_cover": [
-      "body.bottom_set_50"
-    ]
+    "fn7": ["Fn_32"],
+    "wifi": ["LBL_wifi_11"],
+    "lcd_touch": ["monitorr_screen_46"],
+    "lcd_tilt": ["monitorr_screen_46"],
+    "battery_cover": ["body.bottom_set_50"]
   },
   "yaw": 3.141592653589793,
   "regions": {

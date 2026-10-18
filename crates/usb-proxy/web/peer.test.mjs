@@ -11,15 +11,18 @@ class Connection extends EventTarget {
 }
 const host = 'v=0\r\na=candidate:1 1 udp 1 10.0.0.1 5000 typ host\r\n';
 
-test('gathering that never completes sends the candidates found so far', async () => {
+await test('gathering that never completes sends the candidates found so far', async () => {
   await gather(new Connection(host), { settle: 10, limit: 100 });
 });
 
-test('gathering with no candidates fails at the limit', async () => {
-  await assert.rejects(gather(new Connection('v=0\r\n'), { settle: 10, limit: 50 }), /no candidates/);
+await test('gathering with no candidates fails at the limit', async () => {
+  await assert.rejects(
+    gather(new Connection('v=0\r\n'), { settle: 10, limit: 50 }),
+    /no candidates/,
+  );
 });
 
-test('completed gathering resolves at once', async () => {
+await test('completed gathering resolves at once', async () => {
   const connection = new Connection('v=0\r\n');
   setTimeout(() => {
     connection.iceGatheringState = 'complete';

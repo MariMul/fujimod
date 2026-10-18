@@ -8,6 +8,6 @@
   "observability": { "enabled": false },
   "routes": [
     { "pattern": "fujimod.com", "custom_domain": true },
-    { "pattern": "www.fujimod.com", "custom_domain": true }
-  ]
+    { "pattern": "www.fujimod.com", "custom_domain": true },
+  ],
 }

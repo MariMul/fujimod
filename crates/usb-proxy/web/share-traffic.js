@@ -10,10 +10,13 @@ function notify(callback, event) {
 }
 // Diagnostic observers receive private bounded prefixes, never live payload buffers.
 const CAPTURE = 4096;
-const snapshot = (data) => data instanceof Uint8Array ? data.slice(0, CAPTURE) : new Uint8Array();
+const snapshot = (data) => (data instanceof Uint8Array ? data.slice(0, CAPTURE) : new Uint8Array());
 export async function observeRequest(controller, request, execute, callback) {
-  const operation = { ...request.operation, data: callback ? snapshot(request.operation.data) : undefined,
-    dataLength: request.operation.data?.byteLength ?? 0 };
+  const operation = {
+    ...request.operation,
+    data: callback ? snapshot(request.operation.data) : undefined,
+    dataLength: request.operation.data?.byteLength ?? 0,
+  };
   if (operation.setup) operation.setup = Object.freeze({ ...operation.setup });
   const identity = {
     controller,

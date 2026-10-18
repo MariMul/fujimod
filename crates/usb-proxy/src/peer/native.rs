@@ -191,24 +191,24 @@ async fn run(
         } else {
             format!("{name}:3478")
         };
-        if let Ok(addresses) = name.to_socket_addrs() {
-            if let Some(server) = addresses.into_iter().find(SocketAddr::is_ipv4) {
-                let mut client = stunclient::StunClient::new(server);
-                client.set_timeout(Duration::from_secs(2));
-                let found = client.query_external_address(&std_socket);
-                progress(&match &found {
-                    Ok(external) => format!("STUN {server}: external address {external}"),
-                    Err(e) => format!("STUN {server}: no reply ({e})"),
-                });
-                if let Ok(external) = found {
-                    let route = std::net::UdpSocket::bind("0.0.0.0:0").map_err(error)?;
-                    route.connect(server).map_err(error)?;
-                    let base = SocketAddr::new(route.local_addr().map_err(error)?.ip(), port);
-                    rtc.add_local_candidate(
-                        Candidate::server_reflexive(external, base, "udp").map_err(error)?,
-                    );
-                    drain_setup(&mut rtc)?;
-                }
+        if let Ok(addresses) = name.to_socket_addrs()
+            && let Some(server) = addresses.into_iter().find(SocketAddr::is_ipv4)
+        {
+            let mut client = stunclient::StunClient::new(server);
+            client.set_timeout(Duration::from_secs(2));
+            let found = client.query_external_address(&std_socket);
+            progress(&match &found {
+                Ok(external) => format!("STUN {server}: external address {external}"),
+                Err(e) => format!("STUN {server}: no reply ({e})"),
+            });
+            if let Ok(external) = found {
+                let route = std::net::UdpSocket::bind("0.0.0.0:0").map_err(error)?;
+                route.connect(server).map_err(error)?;
+                let base = SocketAddr::new(route.local_addr().map_err(error)?.ip(), port);
+                rtc.add_local_candidate(
+                    Candidate::server_reflexive(external, base, "udp").map_err(error)?,
+                );
+                drain_setup(&mut rtc)?;
             }
         }
     }
@@ -323,30 +323,27 @@ async fn run(
                 },
             }
         };
-        if let Some(since) = closing {
-            if (packets.is_empty() && since.elapsed() > Duration::from_millis(200))
-                || since.elapsed() > Duration::from_secs(1)
-            {
-                return Ok(());
-            }
+        if let Some(since) = closing
+            && ((packets.is_empty() && since.elapsed() > Duration::from_millis(200))
+                || since.elapsed() > Duration::from_secs(1))
+        {
+            return Ok(());
         }
         if !rtc.is_alive() || (channel.is_none() && started.elapsed() > Duration::from_secs(20)) {
             return Err(error("direct WebRTC connection unavailable"));
         }
-        if writable {
-            if let (Some(id), Some(packet)) = (channel, packets.front()) {
-                let accepted = rtc
-                    .channel(id)
-                    .ok_or_else(|| error("data channel closed"))?
-                    .write(true, packet)
-                    .map_err(error)?;
-                if accepted {
-                    packets.pop_front();
-                } else {
-                    writable = false;
-                }
-                continue; // Drain the complete RTC output after every mutation.
+        if writable && let (Some(id), Some(packet)) = (channel, packets.front()) {
+            let accepted = rtc
+                .channel(id)
+                .ok_or_else(|| error("data channel closed"))?
+                .write(true, packet)
+                .map_err(error)?;
+            if accepted {
+                packets.pop_front();
+            } else {
+                writable = false;
             }
+            continue; // Drain the complete RTC output after every mutation.
         }
         enum Wake {
             Out(std::result::Result<Vec<u8>, async_channel::RecvError>),

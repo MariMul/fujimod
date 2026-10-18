@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-test('package runner keeps failures, runs later suites, and excludes interactive watch commands', (t) => {
+await test('package runner keeps failures, runs later suites, and excludes interactive watch commands', (t) => {
   const output = fileURLToPath(new URL('../../target/ci/', import.meta.url));
   mkdirSync(output, { recursive: true });
   const directory = mkdtempSync(`${output}package-tests-`);

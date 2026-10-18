@@ -102,7 +102,7 @@ function signaling(ticket, role, message, ended) {
       } else if (frame.type === 'ended') {
         socket.close();
         ended(Error('Camera sharing ended'));
-      } else Promise.resolve(message(frame)).catch(ended);
+      } else void Promise.resolve(message(frame)).catch((error) => ended(error));
     };
     socket.onerror = () => {
       clearTimeout(timer);
@@ -327,7 +327,8 @@ export class ShareHost {
           // Report a failed connection on both ends instead of leaving the
           // controller to time out waiting for an answer.
           const reason = error instanceof Error ? error.message : String(error);
-          if (!this.closed) this.callbacks.error?.(Error(`Remote controller could not connect: ${reason}`));
+          if (!this.closed)
+            this.callbacks.error?.(Error(`Remote controller could not connect: ${reason}`));
           if (frame.type !== 'signal' || this.closed) return;
           try {
             this.signal.send({
@@ -453,25 +454,31 @@ export class ShareHost {
             request.timeout_ms > 120000
           )
             throw Error('Invalid USB request');
-          const completion = await observeRequest(frame.from, request, async () => {
-            if (request.operation.op === 'probe') return {}; /* Network echo; never touches USB. */
-            else if (request.operation.op === 'list')
-              return { devices: [{ ...this.descriptor, status: this.status() }] };
-            else {
-              if (!this.device) throw Error(`Shared camera offline: ${this.offline}`);
-              if (request.device !== this.device.descriptor.id)
-                throw Error('Unknown shared device');
-              if (request.operation.op === 'open') {
-                if (this.fenced)
-                  throw Error('Shared camera completion unknown; reconnect on the host');
-                if (this.owner !== undefined) throw Error('Shared camera is in use');
-                this.owner = frame.from;
-              } else if (this.owner !== frame.from) throw Error('Shared camera is not claimed');
-              const completion = await this.device.execute(request.operation, request.timeout_ms);
-              if (request.operation.op === 'close' && !completion.error) this.owner = undefined;
-              return completion;
-            }
-          }, this.callbacks.traffic);
+          const completion = await observeRequest(
+            frame.from,
+            request,
+            async () => {
+              if (request.operation.op === 'probe')
+                return {}; /* Network echo; never touches USB. */
+              else if (request.operation.op === 'list')
+                return { devices: [{ ...this.descriptor, status: this.status() }] };
+              else {
+                if (!this.device) throw Error(`Shared camera offline: ${this.offline}`);
+                if (request.device !== this.device.descriptor.id)
+                  throw Error('Unknown shared device');
+                if (request.operation.op === 'open') {
+                  if (this.fenced)
+                    throw Error('Shared camera completion unknown; reconnect on the host');
+                  if (this.owner !== undefined) throw Error('Shared camera is in use');
+                  this.owner = frame.from;
+                } else if (this.owner !== frame.from) throw Error('Shared camera is not claimed');
+                const completion = await this.device.execute(request.operation, request.timeout_ms);
+                if (request.operation.op === 'close' && !completion.error) this.owner = undefined;
+                return completion;
+              }
+            },
+            this.callbacks.traffic,
+          );
           await peer.send(encodeFrame({ type: 'reply', id: request.id, completion }));
           if (completion.error) {
             this.callbacks.error?.(Error(completion.error));

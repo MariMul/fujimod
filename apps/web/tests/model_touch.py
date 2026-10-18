@@ -3,6 +3,7 @@
 Run against a Vite development server. The page uses the real model and panel
 with an input-recording engine; it never starts an emulator or accesses a camera.
 """
+
 import argparse
 import asyncio
 import json
@@ -10,12 +11,11 @@ from pathlib import Path
 
 from playwright.async_api import async_playwright
 
-
-HTML = '''<meta name="viewport" content="width=device-width,initial-scale=1">
+HTML = """<meta name="viewport" content="width=device-width,initial-scale=1">
 <div id="workspace"><div id="viewer" class="viewer"></div>
-<div id="panel"><div id="controls"></div></div></div>'''
+<div id="panel"><div id="controls"></div></div></div>"""
 
-SETUP = '''async () => {
+SETUP = """async () => {
   await import('/src/style.css');
   const THREE = await import('/node_modules/three/build/three.module.js');
   const {ModelViewer} = await import('/src/viewer/model.ts');
@@ -55,78 +55,96 @@ SETUP = '''async () => {
   };
   await new Promise(requestAnimationFrame);
   await new Promise(requestAnimationFrame);
-}'''
+}"""
 
 
-async def check(args):
+async def check(args: argparse.Namespace) -> None:
     args.output.mkdir(parents=True, exist_ok=False)
-    origin = args.url.rstrip('/')
+    origin = args.url.rstrip("/")
     async with async_playwright() as p:
         browser = await p.webkit.launch()
-        page = await browser.new_page(**p.devices['iPhone 13'])
+        page = await browser.new_page(**p.devices["iPhone 13"])
         errors = []
-        page.on('pageerror', lambda error: errors.append(str(error)))
-        await page.route(origin + '/', lambda route: route.fulfill(body=HTML, content_type='text/html'))
-        await page.goto(origin + '/')
+        page.on("pageerror", lambda error, errors=errors: errors.append(str(error)))
+        await page.route(
+            origin + "/",
+            lambda route: route.fulfill(body=HTML, content_type="text/html"),
+        )
+        await page.goto(origin + "/")
         await page.evaluate(SETUP)
         await page.wait_for_timeout(100)
         receipts = []
 
-        async def tap(identifier, point):
-            before = await page.evaluate('inputEvents.length')
-            await page.touchscreen.tap(point['x'], point['y'])
-            await page.wait_for_function('n=>inputEvents.length>=n+2', arg=before)
-            events = await page.evaluate('n=>inputEvents.slice(n)', before)
-            assert events == [['press', identifier], ['release', identifier]], events
-            feedback = page.locator('.model-input-feedback')
+        async def tap(identifier: str, point: dict[str, float]) -> None:
+            before = await page.evaluate("inputEvents.length")
+            await page.touchscreen.tap(point["x"], point["y"])
+            await page.wait_for_function("n=>inputEvents.length>=n+2", arg=before)
+            events = await page.evaluate("n=>inputEvents.slice(n)", before)
+            assert events == [["press", identifier], ["release", identifier]], events
+            feedback = page.locator(".model-input-feedback")
             assert await feedback.is_visible()
-            assert await feedback.get_attribute('data-input') == identifier
-            if identifier in ('up', 'down', 'left', 'right'):
-                assert await feedback.inner_text() == ''
-                assert await feedback.locator('svg').count() == 1
-                assert await feedback.get_attribute('aria-label') == identifier.title()
-            await page.wait_for_function('id=>document.querySelector(".model-input-marker").dataset.input===id', arg=identifier)
-            assert not await page.evaluate('wholePadGlows()')
+            assert await feedback.get_attribute("data-input") == identifier
+            if identifier in ("up", "down", "left", "right"):
+                assert await feedback.inner_text() == ""
+                assert await feedback.locator("svg").count() == 1
+                assert await feedback.get_attribute("aria-label") == identifier.title()
+            await page.wait_for_function(
+                'id=>document.querySelector(".model-input-marker").dataset.input===id',
+                arg=identifier,
+            )
+            assert not await page.evaluate("wholePadGlows()")
             receipts.append(dict(id=identifier, point=point, events=events))
 
-        for identifier, x, y in [('menu_ok', .5, .5), ('up', .5, .81), ('down', .5, .19),
-                                  ('left', .19, .5), ('right', .81, .5)]:
-            point = await page.evaluate('p=>controlPoint("menu_sw_49",p.x,p.y)', dict(x=x, y=y))
+        for identifier, x, y in [
+            ("menu_ok", 0.5, 0.5),
+            ("up", 0.5, 0.81),
+            ("down", 0.5, 0.19),
+            ("left", 0.19, 0.5),
+            ("right", 0.81, 0.5),
+        ]:
+            point = await page.evaluate(
+                'p=>controlPoint("menu_sw_49",p.x,p.y)', dict(x=x, y=y)
+            )
             await tap(identifier, point)
-            if identifier == 'down':
-                await page.locator('#viewer').screenshot(path=str(args.output/'down.png'))
+            if identifier == "down":
+                await page.locator("#viewer").screenshot(
+                    path=str(args.output / "down.png")
+                )
         # A slightly missed Q tap still reaches Q, rather than orbiting.
         point = await page.evaluate('()=>controlPoint("LBL_Q_6")')
-        point['x'] += 14
-        await tap('q', point)
+        point["x"] += 14
+        await tap("q", point)
         await page.wait_for_timeout(1250)
-        assert await page.locator('.model-input-feedback').is_hidden()
-        assert await page.locator('.model-input-marker').is_hidden()
+        assert await page.locator(".model-input-feedback").is_hidden()
+        assert await page.locator(".model-input-marker").is_hidden()
         # A genuine screen contact keeps its coordinates, even near a button.
-        screen = await page.evaluate('''() => {
+        screen = await page.evaluate("""() => {
           const point=controlPoint('monitorr_screen_46',.99,.5);
           return testViewer.pick({...point,clientX:point.x,clientY:point.y,pointerType:'touch'});
-        }''')
-        assert screen['id'] == 'lcd_touch' and 'point' in screen, screen
-        await page.evaluate('testViewer.faceLens()')
+        }""")
+        assert screen["id"] == "lcd_touch" and "point" in screen, screen
+        await page.evaluate("testViewer.faceLens()")
         await page.wait_for_timeout(450)
-        hidden = await page.evaluate('''() => {
+        hidden = await page.evaluate("""() => {
           const p=controlPoint('LBL_Q_6');
           return testViewer.nearbyButton({clientX:p.x,clientY:p.y,pointerType:'touch'});
-        }''')
-        assert hidden is None or hidden['id'] != 'q', hidden
+        }""")
+        assert hidden is None or hidden["id"] != "q", hidden
         assert not errors, errors
-        result = dict(browser=browser.version, taps=receipts, hidden_button=hidden, errors=errors)
-        (args.output/'result.json').write_text(json.dumps(result, indent=2)+'\n')
+        result = dict(
+            browser=browser.version, taps=receipts, hidden_button=hidden, errors=errors
+        )
+        (args.output / "result.json").write_text(json.dumps(result, indent=2) + "\n")
         print(json.dumps(result), flush=True)
         await browser.close()
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--url', default='http://127.0.0.1:5193')
-    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument("--url", default="http://127.0.0.1:5193")
+    parser.add_argument("--output", type=Path, required=True)
     asyncio.run(check(parser.parse_args()))
 
 
-if __name__ == '__main__': main()
+if __name__ == "__main__":
+    main()

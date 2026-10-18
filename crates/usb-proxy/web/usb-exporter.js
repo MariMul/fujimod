@@ -153,7 +153,8 @@ export class Exporter {
     // Network echoes bypass USB queues, including outstanding physical work.
     if (frame.operation.op === 'probe') {
       this.onreply?.({
-        type: 'reply', id: frame.id,
+        type: 'reply',
+        id: frame.id,
         completion: { devices: [], data: new Uint8Array(), transferred: 0, error: null },
       });
       return Promise.resolve();
@@ -180,7 +181,13 @@ export class Exporter {
       this.onreply?.({
         type: 'reply',
         id: frame.id,
-        completion: { devices: [], data: new Uint8Array(), transferred: 0, error: null, ...completion },
+        completion: {
+          devices: [],
+          data: new Uint8Array(),
+          transferred: 0,
+          error: null,
+          ...completion,
+        },
       });
       await running.catch(() => {});
     });
@@ -192,7 +199,7 @@ export class Exporter {
   }
   async stop() {
     this.stopped = true;
-    await Promise.all([...this.queues.values()]);
+    await Promise.all(this.queues.values());
     await Promise.all(
       [...this.devices.entries()]
         .filter(([id]) => this.claims.has(id))

@@ -31,14 +31,21 @@ export class DefaultSceneEngine extends WorkerEngine {
   private selectedScene: Scene | null = null;
   private bootStarted = false;
 
-  constructor(createWorker: () => Worker, onError: (error: Error) => void,
-              loadDefault: () => Promise<Scene>) {
+  constructor(
+    createWorker: () => Worker,
+    onError: (error: Error) => void,
+    loadDefault: () => Promise<Scene>,
+  ) {
     super(createWorker, onError);
     this.loadDefault = loadDefault;
   }
 
-  override async boot(dat: ArrayBuffer, config: EngineConfig,
-                      progress: (message: string, percent: number) => void, media?: BootMedia) {
+  override async boot(
+    dat: ArrayBuffer,
+    config: EngineConfig,
+    progress: (message: string, percent: number) => void,
+    media?: BootMedia,
+  ) {
     this.prepare(config);
     this.defaultScene ??= this.loadDefault();
     const loaded = await this.defaultScene;
@@ -52,7 +59,7 @@ export class DefaultSceneEngine extends WorkerEngine {
   override async setScene(scene: Scene | null) {
     this.selectedScene = scene;
     if (!this.bootStarted) return;
-    const image = scene ?? await (this.defaultScene ??= this.loadDefault());
+    const image = scene ?? (await (this.defaultScene ??= this.loadDefault()));
     if (this.selectedScene !== scene) return;
     await super.setScene(image);
   }

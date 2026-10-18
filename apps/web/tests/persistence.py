@@ -1,26 +1,40 @@
 """Exercise actual worker OPFS/IndexedDB round trips, without loading firmware."""
+
 import argparse
 import asyncio
 import json
 from pathlib import Path
 from urllib.parse import urljoin
 
-from playwright.async_api import async_playwright
+from playwright.async_api import Playwright, async_playwright
 
 
-async def check(playwright, args, name):
+async def check(playwright: Playwright, args: argparse.Namespace, name: str) -> None:
     browser = await getattr(playwright, name).launch(headless=False)
     try:
         context = await browser.new_context()
-        module = urljoin(args.url, 'checkpoint-store.js')
-        await context.route(module, lambda route: route.fulfill(
-            path=str(Path(__file__).resolve().parents[1] / 'src/engine/checkpoint-store.js'),
-            content_type='text/javascript'))
-        await context.route(args.url, lambda route: route.fulfill(
-            body='<html><body>Worker persistence check</body></html>', content_type='text/html'))
+        module = urljoin(args.url, "checkpoint-store.js")
+        await context.route(
+            module,
+            lambda route: route.fulfill(
+                path=str(
+                    Path(__file__).resolve().parents[1]
+                    / "src/engine/checkpoint-store.js"
+                ),
+                content_type="text/javascript",
+            ),
+        )
+        await context.route(
+            args.url,
+            lambda route: route.fulfill(
+                body="<html><body>Worker persistence check</body></html>",
+                content_type="text/html",
+            ),
+        )
         page = await context.new_page()
         await page.goto(args.url)
-        result = await page.evaluate('''async module => {
+        result = await page.evaluate(
+            """async module => {
           const source = `import {CheckpointStore} from ${JSON.stringify(module)};
             self.onmessage = async ({data}) => {
               try {
@@ -60,24 +74,26 @@ async def check(playwright, args, name):
             }
             return results;
           } finally { URL.revokeObjectURL(url); }
-        }''', module)
+        }""",
+            module,
+        )
         for item in result:
-            assert item['write'].get('saved') is True, item
-            assert item['read'].get('bytes') == [0, 1, 128, 255], item
-            assert item['write']['backend'] == item['read']['backend'], item
-            if item['fallback']:
-                assert item['write']['backend'] == 'indexeddb', item
-        (args.output / f'{name}.json').write_text(json.dumps(result, indent=2) + '\n')
+            assert item["write"].get("saved") is True, item
+            assert item["read"].get("bytes") == [0, 1, 128, 255], item
+            assert item["write"]["backend"] == item["read"]["backend"], item
+            if item["fallback"]:
+                assert item["write"]["backend"] == "indexeddb", item
+        (args.output / f"{name}.json").write_text(json.dumps(result, indent=2) + "\n")
         print(name, json.dumps(result), flush=True)
     finally:
         await browser.close()
 
 
-async def main():
+async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--url', default='http://127.0.0.1:5190/')
-    parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--engines', nargs='+', default=['chromium', 'webkit'])
+    parser.add_argument("--url", default="http://127.0.0.1:5190/")
+    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--engines", nargs="+", default=["chromium", "webkit"])
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     async with async_playwright() as playwright:
@@ -85,5 +101,5 @@ async def main():
             await check(playwright, args, name)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     asyncio.run(main())

@@ -60,43 +60,102 @@ try {
   );
   // Probe the real peer transport without claiming or accessing USB.
   const echo = await page.evaluate(async (repo) => {
-    const { connectPeer, parseShare } = await import('/@fs/' + repo + 'crates/usb-proxy/web/peer.js');
-    const { VERSION, encodeFrame, decodeFrame } = await import('/@fs/' + repo + 'crates/usb-proxy/web/wire.js');
+    const { connectPeer, parseShare } = await import(
+      '/@fs/' + repo + 'crates/usb-proxy/web/peer.js'
+    );
+    const { VERSION, encodeFrame, decodeFrame } = await import(
+      '/@fs/' + repo + 'crates/usb-proxy/web/wire.js'
+    );
     const before = JSON.stringify(peerTest.fixture.log);
     const peer = await connectPeer(peerTest.link);
     try {
-      await peer.send(encodeFrame({ type: 'hello', version: VERSION, role: 'controller',
-        token: parseShare(peerTest.link).key }));
+      await peer.send(
+        encodeFrame({
+          type: 'hello',
+          version: VERSION,
+          role: 'controller',
+          token: parseShare(peerTest.link).key,
+        }),
+      );
       const ready = decodeFrame(await peer.receive());
       if (ready.type !== 'ready') throw Error('Peer handshake failed');
-      await peer.send(encodeFrame({ type: 'request', id: 1, device: '',
-        operation: { op: 'probe' }, timeout_ms: 10 }));
+      await peer.send(
+        encodeFrame({
+          type: 'request',
+          id: 1,
+          device: '',
+          operation: { op: 'probe' },
+          timeout_ms: 10,
+        }),
+      );
       const reply = decodeFrame(await peer.receive());
       return { reply, untouched: before === JSON.stringify(peerTest.fixture.log) };
-    } finally { peer.close(); }
+    } finally {
+      peer.close();
+    }
   }, repo);
   assert.equal(echo.untouched, true);
-  assert.deepEqual({ ...echo.reply, completion: { ...echo.reply.completion, data: Object.values(echo.reply.completion.data) } }, { type: 'reply', id: 1,
-    completion: { devices: [], data: [], transferred: 0, error: null } });
+  assert.deepEqual(
+    {
+      ...echo.reply,
+      completion: { ...echo.reply.completion, data: Object.values(echo.reply.completion.data) },
+    },
+    { type: 'reply', id: 1, completion: { devices: [], data: [], transferred: 0, error: null } },
+  );
   console.log('PASS USB-free latency echo over real WebRTC');
   // Exercise the actual native Rust client, with all byte values through the transfer limit.
-  const rust = spawn('cargo', ['test', '-p', 'fujimod-usb-proxy', '--test', 'browser', '--', '--ignored'], {
-    cwd: repo, env: { ...process.env, FUJIMOD_USB_PROXY_TEST_LINK: link }, stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const rust = spawn(
+    'cargo',
+    ['test', '-p', 'fujimod-usb-proxy', '--test', 'browser', '--', '--ignored'],
+    {
+      cwd: repo,
+      env: { ...process.env, FUJIMOD_USB_PROXY_TEST_LINK: link },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
   let rustOutput = '';
-  rust.stdout.on('data', data => { rustOutput += data; });
-  rust.stderr.on('data', data => { rustOutput += data; });
-  const rustExit = await new Promise((resolve, reject) => { rust.on('exit', resolve); rust.on('error', reject); });
+  rust.stdout.on('data', (data) => {
+    rustOutput += data;
+  });
+  rust.stderr.on('data', (data) => {
+    rustOutput += data;
+  });
+  const rustExit = await new Promise((resolve, reject) => {
+    rust.on('exit', resolve);
+    rust.on('error', reject);
+  });
   assert.equal(rustExit, 0, rustOutput);
-  assert.deepEqual(await page.evaluate(() => peerTest.fixture.state.pieces.splice(0).map(data => ({
-    length: data.length, valid: data.every((value, i) => value === (i & 255)),
-  }))), [1, 16000, 16001, 262145, 8388608].map(length => ({ length, valid: true })));
-  console.log('PASS native Rust binary WebRTC upload/download through 8 MiB, including framing boundaries');
-  const python = process.env.USB_PROXY_TEST_PYTHON || new URL('../../../../.venv/bin/python', import.meta.url).pathname;
+  assert.deepEqual(
+    await page.evaluate(() =>
+      peerTest.fixture.state.pieces.splice(0).map((data) => ({
+        length: data.length,
+        valid: data.every((value, i) => value === (i & 255)),
+      })),
+    ),
+    [1, 16000, 16001, 262145, 8388608].map((length) => ({ length, valid: true })),
+  );
+  console.log(
+    'PASS native Rust binary WebRTC upload/download through 8 MiB, including framing boundaries',
+  );
+  const python =
+    process.env.USB_PROXY_TEST_PYTHON ||
+    new URL('../../../../.venv/bin/python', import.meta.url).pathname;
   async function native(script) {
     const env = { ...process.env, FUJIMOD_USB_PROXY_URL: link };
     delete env.FUJIMOD_USB_PROXY_TOKEN;
-    const child = spawn(python, ['-c', 'import asyncio\nasync def main():\n' + script.split('\n').map(line => '    ' + line).join('\n') + '\nasyncio.run(main())'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(
+      python,
+      [
+        '-c',
+        'import asyncio\nasync def main():\n' +
+          script
+            .split('\n')
+            .map((line) => '    ' + line)
+            .join('\n') +
+          '\nasyncio.run(main())',
+      ],
+      { env, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
     let out = '',
       err = '';
     child.stdout.on('data', (d) => (out += d));

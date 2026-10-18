@@ -12,14 +12,19 @@ interface Identity {
   operation: Readonly<Operation>;
   timeoutMs: number;
 }
-export type ShareTrafficEvent = Identity & (
-  | { phase: 'submitted' }
-  | {
-      phase: 'completed';
-      elapsedMs: number;
-      completion: Readonly<Pick<Completion, 'data' | 'dataLength' | 'transferred' | 'error'> & { deviceCount: number }>;
-    }
-);
+export type ShareTrafficEvent = Identity &
+  (
+    | { phase: 'submitted' }
+    | {
+        phase: 'completed';
+        elapsedMs: number;
+        completion: Readonly<
+          Pick<Completion, 'data' | 'dataLength' | 'transferred' | 'error'> & {
+            deviceCount: number;
+          }
+        >;
+      }
+  );
 export function observeRequest(
   controller: string,
   request: RemoteRequest,

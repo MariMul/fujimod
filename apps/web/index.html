@@ -19,38 +19,37 @@
         /></a>
         <nav class="site-nav" aria-label="Pages"><a href="./dev-tools/">Dev Tools</a></nav>
         <div class="meta build-info">
-          <a id="release-label" href="https://github.com/justjake/fujimod"
-            >Development</a
-          ><a href="https://github.com/justjake/fujimod"
-            >github.com/justjake/fujimod</a
-          >
+          <a id="release-label" href="https://github.com/justjake/fujimod">Development</a
+          ><a href="https://github.com/justjake/fujimod">github.com/justjake/fujimod</a>
         </div>
       </header>
       <main>
         <aside class="personal-note" aria-label="A note from Jake">
           <p>Hey,</p>
           <p>
-            FujiMod is a <span id="project-age"></span> day old unauthorized
-            firmware modification for Fujifilm X-series cameras. It has features
-            like <mark><span data-feature-icon="aspect"></span> aspect ratio crop</mark>
-            (<span id="crop-ratios"></span>),
-            <mark><span data-feature-icon="highlight"></span> highlight metering</mark>,
+            FujiMod is a <span id="project-age"></span> day old unauthorized firmware modification
+            for Fujifilm X-series cameras. It has features like
+            <mark><span data-feature-icon="aspect"></span> aspect ratio crop</mark> (<span
+              id="crop-ratios"
+            ></span
+            >), <mark><span data-feature-icon="highlight"></span> highlight metering</mark>,
             <mark><span data-feature-icon="snap"></span> snap focus</mark>,
             <mark>unlimited <span data-feature-icon="recipes"></span> recipes</mark> (that save
             <span data-feature-icon="white-balance"></span> white balance &amp;
             <mark><span data-feature-icon="shift"></span> shift</mark>), more
-            <span data-feature-icon="film"></span> film simulations
-            (<span data-feature-icon="eterna"></span> ETERNA 👍,
-            <span id="other-films"></span> 🤷) and <a href="#features">more</a>.
-            Although it currently supports <span id="supported-models">the cameras listed below</span>,
-            we have a plan to eventually support all <span id="camera-count"></span>
+            <span data-feature-icon="film"></span> film simulations (<span
+              data-feature-icon="eterna"
+            ></span>
+            ETERNA 👍, <span id="other-films"></span> 🤷) and <a href="#features">more</a>. Although
+            it currently supports <span id="supported-models">the cameras listed below</span>, we
+            have a plan to eventually support all <span id="camera-count"></span>
             camera models.
           </p>
           <p>
             FujiMod is <mark>not ready</mark> for your camera. It is too new and changing too
             quickly. I’ll release <mark>SD card dual boot</mark> and then
-            <mark>installable firmware</mark> as I gain confidence in our design and
-            simulation testing system.
+            <mark>installable firmware</mark> as I gain confidence in our design and simulation
+            testing system.
           </p>
           <p>Until then, you can try it in the <em>camera emulator</em> below.</p>
           <p class="signature">-Jake</p>
@@ -93,8 +92,7 @@
               hidden
               aria-label="Boot progress"
             ></progress>
-            <span id="status" role="status" aria-live="polite"></span
-            ><span id="live-label"></span>
+            <span id="status" role="status" aria-live="polite"></span><span id="live-label"></span>
           </div>
           <aside class="panel" id="panel" aria-label="Camera controls" hidden>
             <div id="controls"></div>
@@ -112,21 +110,22 @@
                 <button class="pill" id="card-download">Download all</button
                 ><button class="pill" id="card-format">Format</button>
               </div>
-              <span
-                class="visually-hidden"
-                id="card-status"
-                role="status"
-              ></span>
+              <span class="visually-hidden" id="card-status" role="status"></span>
             </div>
-            <section id="connections" class="connections" aria-label="External connections" hidden></section>
+            <section
+              id="connections"
+              class="connections"
+              aria-label="External connections"
+              hidden
+            ></section>
           </aside>
         </section>
         <details class="features" id="features">
           <summary>More features</summary>
           <p>
-            Golden ratio composition guides, masked, darkened or bordered crop
-            surrounds, and an EV/ISO dial option that lets the exposure
-            compensation dial select ISO. Availability varies by camera and build.
+            Golden ratio composition guides, masked, darkened or bordered crop surrounds, and an
+            EV/ISO dial option that lets the exposure compensation dial select ISO. Availability
+            varies by camera and build.
           </p>
         </details>
         <section class="gens" id="camera-table" aria-label="Cameras"></section>
@@ -140,9 +139,7 @@
       <div class="act">
         <button class="pill primary" id="undo" hidden disabled>Undo 10 s</button
         ><button class="pill" id="restart">Restart</button
-        ><button class="pill" id="error-report">
-          Download and report
-        </button>
+        ><button class="pill" id="error-report">Download and report</button>
       </div>
     </section>
     <dialog id="feedback-dialog" aria-labelledby="feedback-title">
@@ -154,14 +151,23 @@
             <figcaption>Report includes simulator state</figcaption>
           </figure>
           <div>
-            <textarea aria-label="Feedback (optional)" id="feedback-description" rows="5" placeholder="Share a bug, idea, or other feedback…"></textarea>
+            <textarea
+              aria-label="Feedback (optional)"
+              id="feedback-description"
+              rows="5"
+              placeholder="Share a bug, idea, or other feedback…"
+            ></textarea>
           </div>
         </div>
         <p id="feedback-status" role="status" hidden></p>
         <div class="act">
           <button class="pill" value="cancel">Cancel</button>
-          <button class="pill primary" id="feedback-prepare" value="download">Download and report</button>
-          <a class="pill" id="feedback-issue" target="_blank" rel="noopener noreferrer" hidden>Open GitHub</a>
+          <button class="pill primary" id="feedback-prepare" value="download">
+            Download and report
+          </button>
+          <a class="pill" id="feedback-issue" target="_blank" rel="noopener noreferrer" hidden
+            >Open GitHub</a
+          >
         </div>
       </form>
     </dialog>

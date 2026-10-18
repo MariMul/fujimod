@@ -13,7 +13,8 @@ function payloadOwner(frame) {
     return frame.operation;
 }
 export function encodeFrame(frame) {
-  const owner = payloadOwner(frame), data = owner?.data ?? empty;
+  const owner = payloadOwner(frame),
+    data = owner?.data ?? empty;
   if (!(data instanceof Uint8Array) || data.length > MAX_TRANSFER)
     throw Error('Invalid binary USB payload');
   // Omit the raw bytes without traversing or copying them into JSON arrays.
@@ -33,15 +34,24 @@ export function encodeFrame(frame) {
 }
 export function decodeFrame(input) {
   const bytes = input instanceof ArrayBuffer ? new Uint8Array(input) : input;
-  if (!(bytes instanceof Uint8Array) || bytes.length < 8 || bytes.length > MAX_MESSAGE ||
-      bytes[0] !== 70 || bytes[1] !== 85 || bytes[2] !== VERSION || bytes[3] !== 0)
+  if (
+    !(bytes instanceof Uint8Array) ||
+    bytes.length < 8 ||
+    bytes.length > MAX_MESSAGE ||
+    bytes[0] !== 70 ||
+    bytes[1] !== 85 ||
+    bytes[2] !== VERSION ||
+    bytes[3] !== 0
+  )
     throw Error('Invalid binary proxy frame');
   const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(4, true);
   if (header > MAX_HEADER || header > bytes.length - 8 || bytes.length - 8 - header > MAX_TRANSFER)
     throw Error('Invalid binary proxy frame length');
   const frame = JSON.parse(decoder.decode(bytes.subarray(8, 8 + header)));
-  if (!frame || typeof frame !== 'object' || Array.isArray(frame)) throw Error('Invalid proxy metadata');
-  const owner = payloadOwner(frame), data = bytes.subarray(8 + header);
+  if (!frame || typeof frame !== 'object' || Array.isArray(frame))
+    throw Error('Invalid proxy metadata');
+  const owner = payloadOwner(frame),
+    data = bytes.subarray(8 + header);
   if ('data' in (frame.operation ?? {}) || 'data' in (frame.completion ?? {}))
     throw Error('Payload must be binary');
   if (owner) {

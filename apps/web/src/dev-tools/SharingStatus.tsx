@@ -66,7 +66,9 @@ export function ProblemAlert(props: { session: ShareSession }) {
   );
   return (
     <dialog
-      ref={dialog}
+      ref={(element) => {
+        dialog = element;
+      }}
       class="problem-alert"
       aria-label="Camera problem"
       onClose={() => props.session.dismissProblem()}

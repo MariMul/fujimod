@@ -456,7 +456,7 @@ enum BindingError {
     Poisoned,
 }
 impl BindingError {
-    fn into_python(self, py: Python<'_>) -> PyErr {
+    fn into_python(self, _py: Python<'_>) -> PyErr {
         match self {
             BindingError::Busy => {
                 SessionBusyError::new_err("session is owned by another operation or range reader")

@@ -103,7 +103,9 @@ export default defineConfig(({ mode, command }) => ({
     __FUJIMOD_SIMULATOR_BUILD__: JSON.stringify(
       `${execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], { encoding: 'utf8' }).trim()} / ${new Date().toISOString()}`,
     ),
-    __FUJIMOD_SIGNAL_URL__: JSON.stringify(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_SIGNAL_URL || ''),
+    __FUJIMOD_SIGNAL_URL__: JSON.stringify(
+      loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_SIGNAL_URL || '',
+    ),
     __FUJIMOD_LOCAL_DAT__:
       (command === 'serve' || mode === 'local-preview') &&
       Boolean(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_DAT),
@@ -111,7 +113,12 @@ export default defineConfig(({ mode, command }) => ({
       existsSync('public/runtime/catalog.json') ? 'runtime/catalog.json' : 'catalog.json',
     ),
   },
-  plugins: [solid(), bugReportRoute(), simulatorReports(), localArtifacts(loadEnv(mode, process.cwd(), 'FUJIMOD_'))],
+  plugins: [
+    solid(),
+    bugReportRoute(),
+    simulatorReports(),
+    localArtifacts(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
+  ],
   lint: {
     jsPlugins: ['eslint-plugin-solid'],
     settings: { solid: { version: 2 } },
@@ -171,13 +178,25 @@ export default defineConfig(({ mode, command }) => ({
       },
     ],
   },
-  server: { proxy: { '/usb-proxy': { target: 'http://127.0.0.1:5202', ws: true } }, host: '127.0.0.1', fs: { strict: true, allow: [resolve('../..')] } },
-  preview: { proxy: { '/usb-proxy': { target: 'http://127.0.0.1:5202', ws: true } }, host: '127.0.0.1', allowedHosts: ['cozycat.tail2b5ca.ts.net'] },
+  server: {
+    proxy: { '/usb-proxy': { target: 'http://127.0.0.1:5202', ws: true } },
+    host: '127.0.0.1',
+    fs: { strict: true, allow: [resolve('../..')] },
+  },
+  preview: {
+    proxy: { '/usb-proxy': { target: 'http://127.0.0.1:5202', ws: true } },
+    host: '127.0.0.1',
+    allowedHosts: ['cozycat.tail2b5ca.ts.net'],
+  },
   build: {
     target: 'es2022',
     outDir: mode === 'local-preview' ? 'dist-local-preview' : 'dist',
     rolldownOptions: {
-      input: { main: resolve('index.html'), devTools: resolve('dev-tools/index.html'), bug: resolve('bug/index.html') },
+      input: {
+        main: resolve('index.html'),
+        devTools: resolve('dev-tools/index.html'),
+        bug: resolve('bug/index.html'),
+      },
     },
   },
   worker: { format: 'es' },

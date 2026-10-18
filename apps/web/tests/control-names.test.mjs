@@ -5,8 +5,14 @@ const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), '
 test('Model, panels and recordings share complete control presentations', () => {
   const parts = read('../devices/x70/parts.json');
   const panel = read('../devices/x70/panel.json');
-  const { controls, icons } = read('../../../bindings/python/python/fujimod/presentation/controls.json');
-  assert.equal(Object.hasOwn(panel, 'inputLabels'), false, 'Names belong only in shared presentation');
+  const { controls, icons } = read(
+    '../../../bindings/python/python/fujimod/presentation/controls.json',
+  );
+  assert.equal(
+    Object.hasOwn(panel, 'inputLabels'),
+    false,
+    'Names belong only in shared presentation',
+  );
   assert.equal(Object.hasOwn(parts, 'labels'), false, 'Names belong only in shared presentation');
   const ids = new Set([...Object.keys(parts.inputs), ...parts.order]);
   for (const regions of Object.values(parts.regions))

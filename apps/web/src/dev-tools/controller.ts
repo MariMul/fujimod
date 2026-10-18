@@ -280,7 +280,7 @@ export function createDevTools(
       timer = setInterval(drain, 50);
       unlistenError = backend.errors?.(fail);
       unlisten = backend.onDisconnect(() => {
-        disconnect(true);
+        void disconnect(true);
         message('USB device removed', Level.Warning);
       });
     } catch (error) {
@@ -305,7 +305,7 @@ export function createDevTools(
     consoleState,
     camera,
     target: () => connectedTarget,
-    canShare: () => Boolean(backend.exportUsb) && (backend.canShare?.() ?? true),
+    canShare: () => typeof backend.exportUsb === 'function' && (backend.canShare?.() ?? true),
     connectionMessage: message,
     shareTraffic: (event: ShareTrafficEvent) => {
       if (!disposed) remoteTraffic.record(event);

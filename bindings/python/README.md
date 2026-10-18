@@ -20,6 +20,7 @@ The default USB API is awaitable and runs directly on `asyncio`:
 ```python
 from fujimod import usb
 
+
 async def identify(device, interface, firmware_limits):
     session = await usb.Session.open(device, interface, firmware_limits)
     try:
@@ -27,6 +28,7 @@ async def identify(device, interface, firmware_limits):
     finally:
         if session.state == usb.SessionState.Ready:
             await session.close()
+
 
 async def download(session, address, length, consume):
     async with usb.memory.read_chunks(session, address, length) as reader:
@@ -273,7 +275,6 @@ validated signal units or a host poll.
 Service enums, checked quantities, command/action factories, structured replies
 and public registrations come from the [shared Rust generator](../generator/README.md).
 Builds regenerate them automatically; validation remains in the core.
-
 
 WPS and station controls use `Command.Wps(action=...)` and
 `Command.Station(action=...)`. Their action enums are `WpsAction` and

@@ -8,7 +8,11 @@ export class RotaryPart {
   private destination = 0;
   private updatedAt = 0;
   private dragging = false;
-  constructor(readonly target: THREE.Object3D, bounds: THREE.Box3, labels: THREE.Object3D[] = []) {
+  constructor(
+    readonly target: THREE.Object3D,
+    bounds: THREE.Box3,
+    labels: THREE.Object3D[] = [],
+  ) {
     const extent = bounds.getSize(new THREE.Vector3()).toArray();
     const axisIndex = extent.indexOf(Math.min(...extent));
     this.axis = new THREE.Vector3().setComponent(axisIndex, 1).applyQuaternion(target.quaternion);
@@ -19,16 +23,16 @@ export class RotaryPart {
     for (const node of [target, ...labels]) this.pivot.attach(node);
   }
   setPosition(index: number) {
-    this.angle = this.destination = index * Math.PI / 12;
+    this.angle = this.destination = (index * Math.PI) / 12;
     this.applyAngle();
   }
   turn(direction: number) {
     if (this.angle === this.destination) this.updatedAt = performance.now();
-    this.destination += direction * Math.PI / 12;
+    this.destination += (direction * Math.PI) / 12;
   }
   preview(fraction: number) {
     this.dragging = true;
-    this.angle = this.destination + fraction * Math.PI / 12;
+    this.angle = this.destination + (fraction * Math.PI) / 12;
     this.applyAngle();
   }
   settle() {
@@ -43,9 +47,10 @@ export class RotaryPart {
   advance(now: number): boolean {
     if (this.dragging || this.angle === this.destination) return false;
     const remaining = this.destination - this.angle;
-    const travel = Math.max(0, now - this.updatedAt) * (Math.PI / 12) / 60;
+    const travel = (Math.max(0, now - this.updatedAt) * (Math.PI / 12)) / 60;
     this.updatedAt = now;
-    this.angle = Math.abs(remaining) <= travel ? this.destination : this.angle + Math.sign(remaining) * travel;
+    this.angle =
+      Math.abs(remaining) <= travel ? this.destination : this.angle + Math.sign(remaining) * travel;
     this.applyAngle();
     return true;
   }

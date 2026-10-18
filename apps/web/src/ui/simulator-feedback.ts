@@ -17,7 +17,10 @@ export function simulatorIssue(description: string, context: SimulatorIssueConte
   url.searchParams.set('template', `simulator-${context.event}.yml`);
   url.searchParams.set('labels', labels.join(','));
   const camera = context.camera;
-  url.searchParams.set('title', `[Simulator${camera ? ` · ${camera.model}` : ''}] ${context.event === 'crash' ? 'Crash' : 'Feedback'}`);
+  url.searchParams.set(
+    'title',
+    `[Simulator${camera ? ` · ${camera.model}` : ''}] ${context.event === 'crash' ? 'Crash' : 'Feedback'}`,
+  );
   url.searchParams.set('feedback', description.trim());
   url.searchParams.set('firmware', camera?.id ?? 'Not identified');
   url.searchParams.set('mod-build', context.modBuild);
@@ -26,9 +29,9 @@ export function simulatorIssue(description: string, context: SimulatorIssueConte
     const fault = context.fault;
     // Keep the full diagnostic data in the ZIP; include only a brief summary in the URL.
     const details = ['type', 'device', 'operation', 'address', 'pc', 'cpu']
-      .filter(key => fault.details[key] != null)
-      .map(key => `${key}: ${String(fault.details[key]).slice(0, 160)}`);
+      .filter((key) => fault.details[key] != null)
+      .map((key) => `${key}: ${String(fault.details[key]).slice(0, 160)}`);
     url.searchParams.set('crash', `${fault.kind}: ${fault.message}\n${details.join('\n')}`);
   }
-  return { description, issue: {url: url.href, fields: Object.fromEntries(url.searchParams)} };
+  return { description, issue: { url: url.href, fields: Object.fromEntries(url.searchParams) } };
 }

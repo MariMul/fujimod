@@ -105,12 +105,18 @@ impl Session {
     /// Tell a share owner the camera's battery level (a firmware level name).
     /// Only shared (proxy) sessions have an owner; elsewhere this does nothing.
     pub async fn report_battery(&mut self, level: &str) -> Result<()> {
-        self.notify_owner(fujimod_usb_proxy::protocol::Frame::Status { battery: level.into() }).await
+        self.notify_owner(fujimod_usb_proxy::protocol::Frame::Status {
+            battery: level.into(),
+        })
+        .await
     }
     /// Ask a share owner's user to fix a problem only this controller can see.
     /// Only shared (proxy) sessions have an owner; elsewhere this does nothing.
     pub async fn request_attention(&mut self, message: &str) -> Result<()> {
-        self.notify_owner(fujimod_usb_proxy::protocol::Frame::Attention { message: message.into() }).await
+        self.notify_owner(fujimod_usb_proxy::protocol::Frame::Attention {
+            message: message.into(),
+        })
+        .await
     }
     async fn notify_owner(&mut self, frame: fujimod_usb_proxy::protocol::Frame) -> Result<()> {
         match self.core.io.inner_mut() {

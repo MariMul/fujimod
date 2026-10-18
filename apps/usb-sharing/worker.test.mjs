@@ -61,7 +61,7 @@ async function until(predicate) {
   assert.fail('condition not reached');
 }
 
-test('real Worker routes encrypted signaling to assigned peers and revokes owner rooms', async () => {
+await test('real Worker routes encrypted signaling to assigned peers and revokes owner rooms', async () => {
   const mf = runtime();
   try {
     const health = await mf.dispatchFetch('https://worker.example/health');
@@ -109,7 +109,7 @@ test('real Worker routes encrypted signaling to assigned peers and revokes owner
   }
 });
 
-test('master secret stays server-side; one temporary credential per room is budgeted and revoked', async () => {
+await test('master secret stays server-side; one temporary credential per room is budgeted and revoked', async () => {
   const requests = [];
   const ice = [
     {
@@ -154,7 +154,7 @@ test('master secret stays server-side; one temporary credential per room is budg
   }
 });
 
-test('invalid frames and partial credential configuration fail closed', async () => {
+await test('invalid frames and partial credential configuration fail closed', async () => {
   const mf = runtime({ bindings: { TURN_KEY_ID: 'missing-token' } });
   try {
     const owner = await connect(mf, room(), 'host');

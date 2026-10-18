@@ -14,11 +14,13 @@ export class DetentFeedback {
     this.haptics = false;
     try {
       // Reserve tactile feedback for touch; mouse and keyboard get an audible click.
-      if ("pointerType" in event && event.pointerType === 'touch') {
+      if ('pointerType' in event && event.pointerType === 'touch') {
         this.haptics = Boolean(navigator.vibrate?.(0));
         if (this.haptics) return;
       }
-    } catch { /* Permissions or platform restrictions can reject vibration. */ }
+    } catch {
+      /* Permissions or platform restrictions can reject vibration. */
+    }
     try {
       // Transient maps to iOS's ambient session. Older WebKit already defaults
       // Web Audio to ambient; leave that default alone when AudioSession is absent.
@@ -26,13 +28,17 @@ export class DetentFeedback {
       if (session) session.type = 'transient';
       this.context ??= new AudioContext();
       if (this.context.state === 'suspended') void this.context.resume().catch(() => {});
-    } catch { /* Feedback must never prevent a camera input. */ }
+    } catch {
+      /* Feedback must never prevent a camera input. */
+    }
   }
 
   step(sound: DetentSound = 'compact') {
     try {
       if (this.haptics && navigator.vibrate?.(8)) return;
-    } catch { /* Unsupported vibration falls through to an already unlocked context. */ }
+    } catch {
+      /* Unsupported vibration falls through to an already unlocked context. */
+    }
     const context = this.context;
     if (!context || context.state !== 'running' || document.hidden) return;
     let buffer = this.buffers.get(sound);
@@ -45,7 +51,7 @@ export class DetentFeedback {
     const source = context.createBufferSource();
     source.buffer = buffer;
     // Tiny variations keep repeated ticks from sounding like a sampled loop.
-    source.playbackRate.value = .985 + Math.random() * .03;
+    source.playbackRate.value = 0.985 + Math.random() * 0.03;
     source.connect(context.destination);
     source.onended = () => source.disconnect();
     source.start();

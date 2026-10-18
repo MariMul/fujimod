@@ -34,7 +34,9 @@ export function pageState(): PageState {
   pinned.__fujimodDevToolsPage = state;
   if (import.meta.env.DEV || import.meta.env.MODE === 'local-preview') {
     const current = state;
-    void import('./dev-share').then(({ startDevShare }) => startDevShare(current.tools, current.share));
+    void import('./dev-share').then(({ startDevShare }) =>
+      startDevShare(current.tools, current.share),
+    );
   }
   return state;
 }

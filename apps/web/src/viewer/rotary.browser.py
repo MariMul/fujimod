@@ -10,13 +10,41 @@ probe injects matching touch pointer moves inside that down handler, before the
 native release. This tests viewer/OrbitControls arbitration in WebKit, not iPhone
 hardware panning, vibration, audio output or the physical mute switch.
 """
+
 import argparse
 import asyncio
 import base64
 import json
 from html import escape
 from pathlib import Path
-from playwright.async_api import async_playwright
+from typing import TypedDict, cast
+
+from playwright.async_api import (
+    Page,
+    Route,
+    async_playwright,
+)
+
+
+class RotaryCheck(TypedDict, total=False):
+    name: str
+    detents: int
+    before: object
+    after: object
+    pointer: object
+    feedback: object
+    requests: list[dict[str, object]]
+    lcd_changed: bool
+
+
+class RotaryReport(TypedDict, total=False):
+    browser: str
+    emulation: str
+    touch_moves: str
+    errors: list[str]
+    checks: list[RotaryCheck]
+    empty_touch_orbits: bool
+
 
 HELPERS = r"""() => {
   const v = window.__viewer, canvas = v.renderer.domElement;
@@ -91,140 +119,260 @@ HELPERS = r"""() => {
 }"""
 
 
-async def lcd(page, path):
-    encoded = await page.locator('#lcd-source').evaluate("c=>c.toDataURL('image/png').split(',')[1]")
+async def lcd(page: Page, path: Path) -> None:
+    encoded = await page.locator("#lcd-source").evaluate(
+        "c=>c.toDataURL('image/png').split(',')[1]"
+    )
     path.write_bytes(base64.b64decode(encoded))
 
 
-async def settle(page):
-    await page.evaluate('async()=>{await __engine.queue;window.__settleTick=__engine.state.virtual_ticks+24000000;}')
-    await page.wait_for_function('__engine.state.virtual_ticks>=__settleTick',timeout=90000)
+async def settle(page: Page) -> None:
+    await page.evaluate(
+        "async()=>{await __engine.queue;window.__settleTick=__engine.state.virtual_ticks+24000000;}"
+    )
+    await page.wait_for_function(
+        "__engine.state.virtual_ticks>=__settleTick", timeout=90000
+    )
     await page.wait_for_timeout(750)
 
 
-def write_report(output, report):
-    (output/'result.json').write_text(json.dumps(report,indent=2)+'\n')
-    sections=[]
-    for check in report['checks']:
-        name=check['name']
-        figures=''.join(f'<figure><figcaption>{phase.title()}</figcaption><a href="{name}-{phase}.png">'
-                        f'<img src="{name}-lcd-{phase}.png" alt="{escape(name)} LCD {phase}">'
-                        f'<img src="{name}-{phase}.png" alt="{escape(name)} model {phase}"></a></figure>'
-                        for phase in ['before','after'])
-        sections.append(f'<section><h2>{escape(name)} · {check["detents"]} detents</h2><div>{figures}</div></section>')
-    (output/'index.html').write_text('<!doctype html><meta charset="utf-8"><title>Rotary touch proof</title>'
-        '<style>body{background:#151515;color:#eee;font:16px system-ui;max-width:1100px;margin:40px auto;padding:20px}'
-        'section>div{display:grid;grid-template-columns:1fr 1fr;gap:20px}figure{margin:0}img{width:100%;display:block;margin:10px 0}'
-        'a{color:inherit}section{border-top:1px solid #666;margin-top:32px}</style><h1>WebKit iPhone 13 rotary proof</h1>'
-        '<p>Real local firmware. Trusted native touch starts and injected touch pointer moves. '
-        'Physical iPhone audio, vibration and mute switch were not measured.</p>'+''.join(sections))
+def write_report(output: Path, report: RotaryReport) -> None:
+    (output / "result.json").write_text(json.dumps(report, indent=2) + "\n")
+    sections = []
+    for check in report["checks"]:
+        name = check["name"]
+        figures = "".join(
+            f'<figure><figcaption>{phase.title()}</figcaption><a href="{name}-{phase}.png">'
+            f'<img src="{name}-lcd-{phase}.png" alt="{escape(name)} LCD {phase}">'
+            f'<img src="{name}-{phase}.png" alt="{escape(name)} model {phase}"></a></figure>'
+            for phase in ["before", "after"]
+        )
+        sections.append(
+            f"<section><h2>{escape(name)} · {check['detents']} detents</h2><div>{figures}</div></section>"
+        )
+    (output / "index.html").write_text(
+        '<!doctype html><meta charset="utf-8"><title>Rotary touch proof</title>'
+        "<style>body{background:#151515;color:#eee;font:16px system-ui;max-width:1100px;margin:40px auto;padding:20px}"
+        "section>div{display:grid;grid-template-columns:1fr 1fr;gap:20px}figure{margin:0}img{width:100%;display:block;margin:10px 0}"
+        "a{color:inherit}section{border-top:1px solid #666;margin-top:32px}</style><h1>WebKit iPhone 13 rotary proof</h1>"
+        "<p>Real local firmware. Trusted native touch starts and injected touch pointer moves. "
+        "Physical iPhone audio, vibration and mute switch were not measured.</p>"
+        + "".join(sections)
+    )
 
 
-async def run(args):
+async def run(args: argparse.Namespace) -> None:
     args.output.mkdir(parents=True, exist_ok=False)
     async with async_playwright() as p:
         browser = await p.webkit.launch(headless=False)
-        page = await browser.new_page(**p.devices['iPhone 13'])
+        page = await browser.new_page(**p.devices["iPhone 13"])
         errors = []
-        page.on('pageerror', lambda e: errors.append(str(e)))
+        page.on("pageerror", lambda e: errors.append(str(e)))
         # Disable hot reload only, while preserving Vite's real environment/CSS.
-        await page.add_init_script("window.WebSocket=class{static OPEN=1;static CONNECTING=0;readyState=0;addEventListener(){}removeEventListener(){}send(){}close(){}};")
+        await page.add_init_script(
+            "window.WebSocket=class{static OPEN=1;static CONNECTING=0;readyState=0;addEventListener(){}removeEventListener(){}send(){}close(){}};"
+        )
         await page.add_init_script("""window.__requests=[];
           const W=window.Worker;window.Worker=class extends W{
             constructor(...a){super(...a);this.addEventListener('message',({data})=>{if(data.state?.display)window.__state=data.state;});}
             postMessage(data,...a){if(data.type==='request'&&data.action!=='advance'&&data.action!=='state')window.__requests.push(data);return super.postMessage(data,...a);}
           };""")
-        async def expose(route):
+
+        async def expose(route: Route) -> None:
             response = await route.fetch()
-            body = (await response.text()).replace('this.host = host;', 'window.__viewer=this;this.host=host;')
-            body = body.replace('this.detent.beginGesture(event);', 'this.detent.beginGesture(event);window.__afterDown?.(event);')
+            body = (await response.text()).replace(
+                "this.host = host;", "window.__viewer=this;this.host=host;"
+            )
+            body = body.replace(
+                "this.detent.beginGesture(event);",
+                "this.detent.beginGesture(event);window.__afterDown?.(event);",
+            )
             await route.fulfill(response=response, body=body)
-        await page.route('**/src/viewer/model.ts*', expose)
-        async def expose_engine(route):
-            response=await route.fetch()
-            body=(await response.text()).replace('this.onError = onError;', 'window.__engine=this;this.onError=onError;')
-            await route.fulfill(response=response,body=body)
-        await page.route('**/src/engine/worker-engine.ts*', expose_engine)
-        report = dict(browser=browser.version, emulation='iPhone 13', touch_moves='injected after trusted native touch down', checks=[])
+
+        await page.route("**/src/viewer/model.ts*", expose)
+
+        async def expose_engine(route: Route) -> None:
+            response = await route.fetch()
+            body = (await response.text()).replace(
+                "this.onError = onError;", "window.__engine=this;this.onError=onError;"
+            )
+            await route.fulfill(response=response, body=body)
+
+        await page.route("**/src/engine/worker-engine.ts*", expose_engine)
+        report: RotaryReport = dict(
+            browser=browser.version,
+            emulation="iPhone 13",
+            touch_moves="injected after trusted native touch down",
+            checks=[],
+        )
         try:
             await page.goto(args.url)
             if args.dat:
-                await page.wait_for_function("document.querySelector('#camera-table').children.length > 0")
-                await page.locator('#firmware-file').set_input_files(str(args.dat))
-            await page.wait_for_function("document.querySelector('#live-label').textContent==='LIVE'", timeout=180000)
-            await page.wait_for_function("Number(document.querySelector('#viewer').dataset.frames)>3", timeout=60000)
+                await page.wait_for_function(
+                    "document.querySelector('#camera-table').children.length > 0"
+                )
+                await page.locator("#firmware-file").set_input_files(str(args.dat))
+            await page.wait_for_function(
+                "document.querySelector('#live-label').textContent==='LIVE'",
+                timeout=180000,
+            )
+            await page.wait_for_function(
+                "Number(document.querySelector('#viewer').dataset.frames)>3",
+                timeout=60000,
+            )
             await page.evaluate(HELPERS)
-            await page.evaluate('()=>__engine.setScene({width:160,height:120,rgb:new Uint8Array(160*120*3).fill(128)})')
-            await page.locator('button[data-id=disp]').tap()
-            await page.evaluate('window.scrollTo(0,0)')
+            await page.evaluate(
+                "()=>__engine.setScene({width:160,height:120,rgb:new Uint8Array(160*120*3).fill(128)})"
+            )
+            await page.locator("button[data-id=disp]").tap()
+            await page.evaluate("window.scrollTo(0,0)")
             await settle(page)
-            print('Booted real firmware in WebKit', flush=True)
+            print("Booted real firmware in WebKit", flush=True)
 
-            async def check(name, model_id, dx, dy=0, front=False, setup=None, lcd_region='values'):
-                if setup: await page.evaluate(setup)
+            async def check(
+                name: str,
+                model_id: str,
+                dx: float,
+                dy: float = 0,
+                front: bool = False,
+                setup: str | None = None,
+                lcd_region: str = "values",
+            ) -> None:
+                if setup:
+                    await page.evaluate(setup)
                 await settle(page)
-                await page.evaluate('(front)=>__view(front,front?1.4:2,front?1.2:0)', front)
+                await page.evaluate(
+                    "(front)=>__view(front,front?1.4:2,front?1.2:0)", front
+                )
                 await page.wait_for_timeout(100)
-                point = await page.evaluate('(id)=>__find(id)', model_id)
+                point = await page.evaluate("(id)=>__find(id)", model_id)
                 # A trusted stationary touch prepares audio without taking a detent.
-                await page.touchscreen.tap(point['x'],point['y'])
+                await page.touchscreen.tap(point["x"], point["y"])
                 await page.wait_for_timeout(100)
-                before = await page.evaluate('(id)=>({pose:__pose(),rotation:__viewer.rotary.get(id).part.pivot.quaternion.toArray(),feedback:__feedback,sounds:__soundClicks,requests:__requests.length,queue:__state.navigation.physical_input_queue})', model_id)
-                before_hash = await page.evaluate('(region)=>__lcdHash(region)', lcd_region)
-                await page.screenshot(path=str(args.output/f'{name}-before.png'))
-                await lcd(page,args.output/f'{name}-lcd-before.png')
-                await page.evaluate('([dx,dy])=>__swipe(dx,dy)', [dx,dy])
-                await page.touchscreen.tap(point['x'],point['y'])
+                before = await page.evaluate(
+                    "(id)=>({pose:__pose(),rotation:__viewer.rotary.get(id).part.pivot.quaternion.toArray(),feedback:__feedback,sounds:__soundClicks,requests:__requests.length,queue:__state.navigation.physical_input_queue})",
+                    model_id,
+                )
+                before_hash = await page.evaluate(
+                    "(region)=>__lcdHash(region)", lcd_region
+                )
+                await page.screenshot(path=str(args.output / f"{name}-before.png"))
+                await lcd(page, args.output / f"{name}-lcd-before.png")
+                await page.evaluate("([dx,dy])=>__swipe(dx,dy)", [dx, dy])
+                await page.touchscreen.tap(point["x"], point["y"])
                 await settle(page)
-                after = await page.evaluate('(id)=>({pose:__pose(),rotation:__viewer.rotary.get(id).part.pivot.quaternion.toArray(),feedback:__feedback,sounds:__soundClicks,audioState:__viewer.detent.context?.state,touch:__touch,down:__down,requests:__requests,queue:__state.navigation.physical_input_queue})', model_id)
-                after_hash = await page.evaluate('(region)=>__lcdHash(region)', lcd_region)
-                await page.screenshot(path=str(args.output/f'{name}-after.png'))
-                await lcd(page,args.output/f'{name}-lcd-after.png')
-                item=dict(name=name,point=point,down=after['down'],pose=before['pose'],rotation_before=before['rotation'],rotation_after=after['rotation'],detents=after['feedback']-before['feedback'],sound_clicks=after['sounds']-before['sounds'],audio_state=after.get('audioState'),lcd_before=before_hash,lcd_after=after_hash,queue_before=before['queue'],queue_after=after['queue'],requests=after['requests'][before['requests']:])
-                report['checks'].append(item)
-                write_report(args.output,report)
-                print(json.dumps(item),flush=True)
-                assert after['pose']==before['pose'], f'{name} orbited'
-                assert after['rotation']!=before['rotation'], f'{name} did not visibly rotate'
-                assert after['feedback']-before['feedback']==max(abs(dx),abs(dy))//16, f'{name} lost a detent'
-                assert after['touch']==dict(trusted=True,type='touch',captured=True), after['touch']
-                assert after['sounds']-before['sounds']==after['feedback']-before['feedback'], f'{name} missing Web Audio clicks'
-                assert before_hash!=after_hash, f'{name} did not change LCD shooting values'
-                if name=='rear-command':
-                    assert [request['action'] for request in item['requests']]==['press','release','press','release']
-                    assert after['queue']['completed']-before['queue']['completed']==4
+                after = await page.evaluate(
+                    "(id)=>({pose:__pose(),rotation:__viewer.rotary.get(id).part.pivot.quaternion.toArray(),feedback:__feedback,sounds:__soundClicks,audioState:__viewer.detent.context?.state,touch:__touch,down:__down,requests:__requests,queue:__state.navigation.physical_input_queue})",
+                    model_id,
+                )
+                after_hash = await page.evaluate(
+                    "(region)=>__lcdHash(region)", lcd_region
+                )
+                await page.screenshot(path=str(args.output / f"{name}-after.png"))
+                await lcd(page, args.output / f"{name}-lcd-after.png")
+                item = dict(
+                    name=name,
+                    point=point,
+                    down=after["down"],
+                    pose=before["pose"],
+                    rotation_before=before["rotation"],
+                    rotation_after=after["rotation"],
+                    detents=after["feedback"] - before["feedback"],
+                    sound_clicks=after["sounds"] - before["sounds"],
+                    audio_state=after.get("audioState"),
+                    lcd_before=before_hash,
+                    lcd_after=after_hash,
+                    queue_before=before["queue"],
+                    queue_after=after["queue"],
+                    requests=after["requests"][before["requests"] :],
+                )
+                report["checks"].append(cast(RotaryCheck, item))
+                write_report(args.output, report)
+                print(json.dumps(item), flush=True)
+                assert after["pose"] == before["pose"], f"{name} orbited"
+                assert after["rotation"] != before["rotation"], (
+                    f"{name} did not visibly rotate"
+                )
+                assert (
+                    after["feedback"] - before["feedback"]
+                    == max(abs(dx), abs(dy)) // 16
+                ), f"{name} lost a detent"
+                assert after["touch"] == dict(
+                    trusted=True, type="touch", captured=True
+                ), after["touch"]
+                assert (
+                    after["sounds"] - before["sounds"]
+                    == after["feedback"] - before["feedback"]
+                ), f"{name} missing Web Audio clicks"
+                assert before_hash != after_hash, (
+                    f"{name} did not change LCD shooting values"
+                )
+                if name == "rear-command":
+                    assert [
+                        request["action"]
+                        for request in after["requests"][before["requests"] :]
+                    ] == [
+                        "press",
+                        "release",
+                        "press",
+                        "release",
+                    ]
+                    assert (
+                        after["queue"]["completed"] - before["queue"]["completed"] == 4
+                    )
 
-            await check('shutter-speed','shutter_speed',-32)
-            await check('exposure','exposure_compensation',32,setup="__select('shutter_speed','A')")
-            await check('aperture','aperture',32,front=True)
+            await check("shutter-speed", "shutter_speed", -32)
+            await check(
+                "exposure",
+                "exposure_compensation",
+                32,
+                setup="__select('shutter_speed','A')",
+            )
+            await check("aperture", "aperture", 32, front=True)
             # Assign ISO through the stock Fn7 menu, then turn AUTO1 -> AUTO2.
-            await check('control-ring','control_ring',32,front=True,lcd_region='menu',setup="async()=>{for(const id of ['fn7','down','menu_ok']){await __engine.press(id);await __engine.release(id);}}")
+            await check(
+                "control-ring",
+                "control_ring",
+                32,
+                front=True,
+                lcd_region="menu",
+                setup="async()=>{for(const id of ['fn7','down','menu_ok']){await __engine.press(id);await __engine.release(id);}}",
+            )
             # Leave the ISO popup and use the stock Q custom-setting BASE -> C2.
-            await check('rear-command','command_push',32,lcd_region='menu',setup="async()=>{for(const id of ['disp','q']){await __engine.press(id);await __engine.release(id);}}")
+            await check(
+                "rear-command",
+                "command_push",
+                32,
+                lcd_region="menu",
+                setup="async()=>{for(const id of ['disp','q']){await __engine.press(id);await __engine.release(id);}}",
+            )
             # A touch starting on empty canvas must continue to OrbitControls.
             await page.evaluate("""() => {
               const c=__viewer.renderer.domElement;
               c.addEventListener('pointerdown',e=>{for(let i=1;i<=8;i++)c.dispatchEvent(new PointerEvent('pointermove',{pointerId:e.pointerId,pointerType:'touch',clientX:e.clientX+5*i,clientY:e.clientY,buttons:1,bubbles:true}));},{once:true});
             }""")
-            rect = await page.locator('#viewer canvas').first.bounding_box()
-            before = await page.evaluate('__pose()')
-            await page.touchscreen.tap(rect['x']+10,rect['y']+50)
-            assert await page.evaluate('__pose()') != before, 'Empty touch failed to orbit'
-            report['empty_touch_orbits']=True
+            rect = await page.locator("#viewer canvas").first.bounding_box()
+            assert rect is not None
+            before = await page.evaluate("__pose()")
+            await page.touchscreen.tap(rect["x"] + 10, rect["y"] + 50)
+            assert await page.evaluate("__pose()") != before, (
+                "Empty touch failed to orbit"
+            )
+            report["empty_touch_orbits"] = True
             assert not errors, errors
-            report['errors']=errors
-            write_report(args.output,report)
+            report["errors"] = errors
+            write_report(args.output, report)
         except BaseException:
-            await page.screenshot(path=str(args.output/'failed.png'),full_page=True)
-            (args.output/'errors.json').write_text(json.dumps(errors,indent=2))
+            await page.screenshot(path=str(args.output / "failed.png"), full_page=True)
+            (args.output / "errors.json").write_text(json.dumps(errors, indent=2))
             raise
         finally:
             await browser.close()
 
 
-if __name__=='__main__':
-    parser=argparse.ArgumentParser()
-    parser.add_argument('--url',default='http://127.0.0.1:5194/')
-    parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument('--dat',type=Path)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--url", default="http://127.0.0.1:5194/")
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--dat", type=Path)
     asyncio.run(run(parser.parse_args()))

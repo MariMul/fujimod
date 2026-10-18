@@ -1,8 +1,8 @@
-import { test } from "node:test";
-import assert from "node:assert/strict";
-import { runtime } from "./test-runtime.mjs";
-const origin = "https://justjake.github.io";
-const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { runtime } from './test-runtime.mjs';
+const origin = 'https://justjake.github.io';
+const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const tar = new Uint8Array(1024);
 function crc32(bytes) {
   let crc = 0xffffffff;
@@ -10,68 +10,68 @@ function crc32(bytes) {
     crc ^= b;
     for (let n = 0; n < 8; n++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
   }
-  return ((crc ^ 0xffffffff) >>> 0).toString(16).padStart(8, "0");
+  return ((crc ^ 0xffffffff) >>> 0).toString(16).padStart(8, '0');
 }
 async function submission(overrides = {}) {
   const body = new FormData();
-  body.set("report", new Blob([tar]), "R1234567.TAR");
-  body.set("description", "Menu froze");
+  body.set('report', new Blob([tar]), 'R1234567.TAR');
+  body.set('description', 'Menu froze');
   body.set(
-    "metadata",
+    'metadata',
     JSON.stringify({
       v: 1,
-      firmware: "x70-110",
-      commit: "a".repeat(8),
-      path: "A:\\FUJIMOD\\REPORTS\\R1234567.TAR",
+      firmware: 'x70-110',
+      commit: 'a'.repeat(8),
+      path: 'A:\\FUJIMOD\\REPORTS\\R1234567.TAR',
       bytes: 1024,
       crc32: crc32(tar),
-      files: "403a0000",
+      files: '403a0000',
       ...overrides,
     }),
   );
-  const encoded = new Request("https://worker.example/issue-reports", { method: "POST", body });
+  const encoded = new Request('https://worker.example/issue-reports', { method: 'POST', body });
   const bytes = new Uint8Array(await encoded.arrayBuffer());
   return {
-    method: "POST",
+    method: 'POST',
     headers: {
       Origin: origin,
-      "Idempotency-Key": id,
-      "Content-Type": encoded.headers.get("Content-Type"),
-      "Content-Length": String(bytes.length),
+      'Idempotency-Key': id,
+      'Content-Type': encoded.headers.get('Content-Type'),
+      'Content-Length': String(bytes.length),
     },
     body: bytes,
   };
 }
-test("explicit intake saves privately, creates one issue and deduplicates retries", async () => {
+await test('explicit intake saves privately, creates one issue and deduplicates retries', async () => {
   let issues = 0;
   const mf = runtime({
-    bindings: { GITHUB_ISSUES_TOKEN: "test-only" },
+    bindings: { GITHUB_ISSUES_TOKEN: 'test-only' },
     outboundService: async (request) => {
-      assert.equal(request.url, "https://api.github.com/repos/justjake/fujimod/issues");
+      assert.equal(request.url, 'https://api.github.com/repos/justjake/fujimod/issues');
       const body = await request.json();
       assert.match(body.body, /Menu froze/);
       assert.match(body.body, /stored privately/);
-      assert.equal(body.body.includes("/report.tar"), false);
+      assert.equal(body.body.includes('/report.tar'), false);
       issues++;
       return Response.json(
-        { html_url: "https://github.com/justjake/fujimod/issues/123" },
+        { html_url: 'https://github.com/justjake/fujimod/issues/123' },
         { status: 201 },
       );
     },
   });
   try {
     const first = await mf.dispatchFetch(
-      "https://worker.example/issue-reports",
+      'https://worker.example/issue-reports',
       await submission(),
     );
     assert.equal(first.status, 201);
     assert.equal((await first.json()).id, id);
     assert.equal(
-      (await mf.dispatchFetch("https://worker.example/issue-reports", await submission())).status,
+      (await mf.dispatchFetch('https://worker.example/issue-reports', await submission())).status,
       200,
     );
     assert.equal(issues, 1);
-    const bucket = await mf.getR2Bucket("ISSUE_REPORTS");
+    const bucket = await mf.getR2Bucket('ISSUE_REPORTS');
     assert.deepEqual(
       new Uint8Array(await (await bucket.get(`${id}/report.tar`)).arrayBuffer()),
       tar,
@@ -84,23 +84,23 @@ test("explicit intake saves privately, creates one issue and deduplicates retrie
     await mf.dispose();
   }
 });
-test("rejects unconfigured service, invalid data and untrusted origins without submitting", async () => {
+await test('rejects unconfigured service, invalid data and untrusted origins without submitting', async () => {
   let calls = 0;
   const mf = runtime({
     outboundService: async () => {
       calls++;
-      throw Error("Must not submit");
+      throw Error('Must not submit');
     },
   });
   try {
     assert.equal(
-      (await mf.dispatchFetch("https://worker.example/issue-reports", await submission())).status,
+      (await mf.dispatchFetch('https://worker.example/issue-reports', await submission())).status,
       503,
     );
     const request = await submission();
-    request.headers.Origin = "https://attacker.example";
+    request.headers.Origin = 'https://attacker.example';
     assert.equal(
-      (await mf.dispatchFetch("https://worker.example/issue-reports", request)).status,
+      (await mf.dispatchFetch('https://worker.example/issue-reports', request)).status,
       403,
     );
     assert.equal(calls, 0);
@@ -108,18 +108,18 @@ test("rejects unconfigured service, invalid data and untrusted origins without s
     await mf.dispose();
   }
   const configured = runtime({
-    bindings: { GITHUB_ISSUES_TOKEN: "test-only" },
+    bindings: { GITHUB_ISSUES_TOKEN: 'test-only' },
     outboundService: async () => {
       calls++;
-      throw Error("Must not submit");
+      throw Error('Must not submit');
     },
   });
   try {
     assert.equal(
       (
         await configured.dispatchFetch(
-          "https://worker.example/issue-reports",
-          await submission({ crc32: "00000000" }),
+          'https://worker.example/issue-reports',
+          await submission({ crc32: '00000000' }),
         )
       ).status,
       400,
@@ -129,25 +129,25 @@ test("rejects unconfigured service, invalid data and untrusted origins without s
     await configured.dispose();
   }
 });
-test("uncertain GitHub response retains the archive without duplicate issues", async () => {
+await test('uncertain GitHub response retains the archive without duplicate issues', async () => {
   let calls = 0;
   const mf = runtime({
-    bindings: { GITHUB_ISSUES_TOKEN: "test-only" },
+    bindings: { GITHUB_ISSUES_TOKEN: 'test-only' },
     outboundService: async () => {
       calls++;
-      return new Response("Unavailable", { status: 502 });
+      return new Response('Unavailable', { status: 502 });
     },
   });
   try {
     const response = await mf.dispatchFetch(
-      "https://worker.example/issue-reports",
+      'https://worker.example/issue-reports',
       await submission(),
     );
     assert.equal(response.status, 202);
     assert.deepEqual(await response.json(), { id });
-    await mf.dispatchFetch("https://worker.example/issue-reports", await submission());
+    await mf.dispatchFetch('https://worker.example/issue-reports', await submission());
     assert.equal(calls, 1);
-    assert.ok(await (await mf.getR2Bucket("ISSUE_REPORTS")).get(`${id}/report.tar`));
+    assert.ok(await (await mf.getR2Bucket('ISSUE_REPORTS')).get(`${id}/report.tar`));
   } finally {
     await mf.dispose();
   }

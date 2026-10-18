@@ -68,8 +68,11 @@ export function browserEnvironment(): SessionEnvironment {
       }
     },
     async wakeLock() {
-      const lock = (navigator as Navigator & { wakeLock?: { request(type: 'screen'): Promise<{ release(): Promise<void> }> } })
-        .wakeLock;
+      const lock = (
+        navigator as Navigator & {
+          wakeLock?: { request(type: 'screen'): Promise<{ release(): Promise<void> }> };
+        }
+      ).wakeLock;
       return lock?.request('screen').catch(() => undefined);
     },
     visible: () => document.visibilityState === 'visible',
@@ -181,7 +184,8 @@ export function createShareSession(tools: DevToolsController, environment = brow
         }
         identity = currentIdentity();
         camera = {
-          model: tools.camera()?.firmware?.model ?? device.descriptor.product ?? identity.name ?? null,
+          model:
+            tools.camera()?.firmware?.model ?? device.descriptor.product ?? identity.name ?? null,
           serial: device.descriptor.serial,
         };
         link = link_;
@@ -251,7 +255,8 @@ export function createShareSession(tools: DevToolsController, environment = brow
           exhausted
             ? {
                 kind: ProblemKind.Battery,
-                message: 'Camera battery ran out. Charge it and turn it on, then reconnect it to keep sharing on the same link.',
+                message:
+                  'Camera battery ran out. Charge it and turn it on, then reconnect it to keep sharing on the same link.',
                 urgent: false,
                 reconnect: true,
               }
@@ -291,7 +296,7 @@ export function createShareSession(tools: DevToolsController, environment = brow
     // Leaving or freezing the page: end remote sessions and the camera session cleanly.
     const unlistenLeave = environment.onLeave(() => {
       if (host) stop();
-      tools.disconnect();
+      void tools.disconnect();
     });
 
     return {

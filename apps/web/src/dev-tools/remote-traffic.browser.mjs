@@ -71,7 +71,9 @@ try {
       const { connectPeer, parseShare } = await import(
         '/@fs/' + root + 'crates/usb-proxy/web/peer.js'
       );
-      const { VERSION, encodeFrame, decodeFrame } = await import('/@fs/' + root + 'crates/usb-proxy/web/wire.js');
+      const { VERSION, encodeFrame, decodeFrame } = await import(
+        '/@fs/' + root + 'crates/usb-proxy/web/wire.js'
+      );
       const peer = await connectPeer(link);
       await peer.send(
         encodeFrame({

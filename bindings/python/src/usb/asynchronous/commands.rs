@@ -99,11 +99,13 @@ impl AsyncSession {
     }
     /// Tell a share owner the camera's battery level; a no-op unless shared.
     async fn report_battery(&self, level: String) -> PyResult<()> {
-        self.with(move |s| Box::pin(async move { s.report_battery(&level).await })).await
+        self.with(move |s| Box::pin(async move { s.report_battery(&level).await }))
+            .await
     }
     /// Ask a share owner's user to fix a problem; a no-op unless shared.
     async fn request_attention(&self, message: String) -> PyResult<()> {
-        self.with(move |s| Box::pin(async move { s.request_attention(&message).await })).await
+        self.with(move |s| Box::pin(async move { s.request_attention(&message).await }))
+            .await
     }
     async fn device_info(&self, selector: InfoSelector) -> PyResult<String> {
         self.with(move |s| Box::pin(s.device_info(selector.into())))

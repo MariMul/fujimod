@@ -324,16 +324,16 @@ It also identifies the firmware, release and included mods.
 
 Each command has a 20-byte header:
 
-| Byte | Field |
-| --- | --- |
-| 0 | Opcode: 1 COPY, 2 FUJI_LZ, 3 WRITE |
-| 1 | Output: 0 ffboot, 1 ffsys |
-| 2 | Flags: bit 0 XOR source with 0xff; all other bits zero |
-| 3 | Reserved, zero |
-| 4 | Destination offset, u32 |
-| 8 | Output byte count, u32 |
-| 12 | DAT source offset, u32 (zero for WRITE) |
-| 16 | DAT source byte count, u32 (zero for WRITE) |
+| Byte | Field                                                  |
+| ---- | ------------------------------------------------------ |
+| 0    | Opcode: 1 COPY, 2 FUJI_LZ, 3 WRITE                     |
+| 1    | Output: 0 ffboot, 1 ffsys                              |
+| 2    | Flags: bit 0 XOR source with 0xff; all other bits zero |
+| 3    | Reserved, zero                                         |
+| 4    | Destination offset, u32                                |
+| 8    | Output byte count, u32                                 |
+| 12   | DAT source offset, u32 (zero for WRITE)                |
+| 16   | DAT source byte count, u32 (zero for WRITE)            |
 
 COPY reads DAT bytes, optionally XOR-decoding them. FUJI_LZ uses Fuji's
 method-4 stream (not the LZ4 codec): a five-u32 header then literal runs and

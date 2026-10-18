@@ -1,17 +1,23 @@
 """Compositions delegated to the Rust diagnostic-data operations."""
 
+from collections.abc import Buffer
 from dataclasses import dataclass
-from . import Session, Reader, DataWindow, DataWriteMode, DiagnosticReply
+from typing import TYPE_CHECKING, Self
+
 from .._bridge import (
-    jsusb,
-    uint,
-    unwrap,
-    enum_in,
     buffer_in,
     buffer_out,
     call,
+    enum_in,
+    jsusb,
     snapshot,
+    uint,
+    unwrap,
 )
+from . import DataWindow, DataWriteMode, DiagnosticReply, Reader, Session
+
+if TYPE_CHECKING:
+    from _fujimod_js import JsUploadReply as JsUploadReply
 
 
 @dataclass(frozen=True)
@@ -21,7 +27,7 @@ class UploadReply:
     bytes_written: int
 
     @classmethod
-    def _from_js(cls, value):
+    def _from_js(cls, value: JsUploadReply) -> Self:
         return snapshot(
             value,
             lambda v: cls(
@@ -32,18 +38,22 @@ class UploadReply:
         )
 
 
-async def upload(session, data, *, piece_bytes, mode):
+async def upload(
+    session: Session, data: Buffer, *, piece_bytes: int, mode: DataWriteMode
+) -> UploadReply:
     return await session._call(
         jsusb.data.upload,
+        UploadReply._from_js,
         unwrap(session, Session),
         buffer_in(data),
         uint(piece_bytes),
         enum_in(mode, DataWriteMode),
-        decode=UploadReply._from_js,
     )
 
 
-def read_chunks(session, window, address, length):
+def read_chunks(
+    session: Session, window: DataWindow, address: int, length: int
+) -> Reader:
     return Reader._wrap(
         call(
             jsusb.data.readChunks,

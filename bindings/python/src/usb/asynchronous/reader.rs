@@ -35,7 +35,7 @@ pub(super) struct State {
     completed: u32,
 }
 enum ReaderSlot {
-    Idle(NativeReader),
+    Idle(Box<NativeReader>),
     InFlight {
         cancel: oneshot::Sender<()>,
         waiters: Vec<oneshot::Sender<()>>,
@@ -59,15 +59,15 @@ impl Reader {
         };
         let reader = match operation {
             Operation::Memory(range) => NativeReader::Memory(
-                usb::operations::memory::MemoryReader::new(native, range, session.limits.memory),
+                usb::operations::memory::MemoryReader::new(*native, range, session.limits.memory),
             ),
             Operation::Data(window, range) => NativeReader::Data(
-                usb::operations::data::DataReader::new(native, window, range)
+                usb::operations::data::DataReader::new(*native, window, range)
                     .expect("window validated before taking ownership"),
             ),
         };
         let state = Arc::new(Mutex::new(State {
-            slot: ReaderSlot::Idle(reader),
+            slot: ReaderSlot::Idle(Box::new(reader)),
             completed: 0,
         }));
         *slot = Slot::ReadingRange(Arc::downgrade(&state));
@@ -77,15 +77,15 @@ impl Reader {
         })
     }
 }
-fn restore(owner: &Mutex<Slot>, reader: NativeReader) {
+fn restore(owner: &Mutex<Slot>, reader: Box<NativeReader>) {
     if let Ok(mut slot) = owner.lock()
         && matches!(*slot, Slot::ReadingRange(_))
     {
-        *slot = Slot::Open(reader.into_inner());
+        *slot = Slot::Open(Box::new(reader.into_inner()));
     }
 }
 enum Close {
-    Ready(NativeReader),
+    Ready(Box<NativeReader>),
     Waiting {
         cancel: Option<oneshot::Sender<()>>,
         done: oneshot::Receiver<()>,
@@ -150,7 +150,7 @@ enum Disposition {
     Continue,
 }
 struct ChunkLease {
-    reader: Option<NativeReader>,
+    reader: Option<Box<NativeReader>>,
     state: Arc<Mutex<State>>,
     owner: Arc<Mutex<Slot>>,
     disposition: Disposition,

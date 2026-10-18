@@ -56,7 +56,14 @@ run = "uv run --locked ruff check ."
 run = "uv run --locked ruff format --check ."
 
 [tasks.python-typecheck]
-run = "uv run --locked ty check --error-on-warning"
+run = ["mise run python-binding-types", "uv run --locked ty check --error-on-warning"]
+
+[tasks.python-binding-types]
+run = [
+  "npm --prefix bindings/javascript run build",
+  "node scripts/ci/javascript-python-types.mjs",
+  "cargo run --locked -p fujimod-bindgen -- --python-types target/python-types",
+]
 
 [tasks.python-build-test]
 run = [

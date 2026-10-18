@@ -25,6 +25,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
+        with:
+          javascript: 'true'
       - run: mise run python-lint
       - if: ${{ !cancelled() }}
         run: mise run python-format-check
@@ -137,7 +139,7 @@ jobs:
       - name: Pyodide contracts in Node and Chromium
         if: ${{ !cancelled() }}
         run: |
-          uv run --locked python bindings/python/scripts/build_web_wheel.py --output target/web-wheels
+          uv run --locked python bindings/python/scripts/build_web_wheel.py --out target/web-wheels
           npm --prefix bindings/javascript run test:pyodide:browser
       - if: ${{ !cancelled() }}
         run: mise run web-coverage

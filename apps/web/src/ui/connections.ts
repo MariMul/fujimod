@@ -25,8 +25,14 @@ export class ConnectionsPanel {
       const name = document.createElement('b');
       name.textContent = row.label;
       const status = document.createElement('span');
-      const connection = {connected: 'Connected', disconnected: 'Disconnected', unknown: 'Unknown'}[row.connection];
-      const support = {modeled: 'Modeled', partial: 'Partly modeled', unmodeled: 'Unmodeled'}[row.support];
+      const connection = {
+        connected: 'Connected',
+        disconnected: 'Disconnected',
+        unknown: 'Unknown',
+      }[row.connection];
+      const support = { modeled: 'Modeled', partial: 'Partly modeled', unmodeled: 'Unmodeled' }[
+        row.support
+      ];
       status.textContent = `${connection} · ${support}`;
       const limits = document.createElement('small');
       limits.textContent = row.limits;

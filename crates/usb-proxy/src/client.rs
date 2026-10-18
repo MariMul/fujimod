@@ -17,7 +17,7 @@ fn err(e: impl std::fmt::Display) -> Error {
     Error(e.to_string())
 }
 enum Socket {
-    Web(WebSocket),
+    Web(Box<WebSocket>),
     Peer(crate::peer::PeerSocket),
 }
 async fn send(socket: &mut Socket, frame: &Frame) -> Result<()> {
@@ -145,7 +145,7 @@ impl Client {
                     #[cfg(target_arch = "wasm32")]
                     let socket = WebSocket::open(url).map_err(err)?;
                     progress("relay WebSocket connected");
-                    Socket::Web(socket)
+                    Socket::Web(Box::new(socket))
                 };
                 send(
                     &mut socket,

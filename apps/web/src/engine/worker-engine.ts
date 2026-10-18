@@ -1,14 +1,5 @@
-import {
-  CameraPace,
-  RequestTimings,
-  type CameraPerformance,
-} from "./performance.ts";
-import {
-  EngineError,
-  faultFrom,
-  stateFault,
-  type EngineFault,
-} from "./fault.ts";
+import { CameraPace, RequestTimings, type CameraPerformance } from './performance.ts';
+import { EngineError, faultFrom, stateFault, type EngineFault } from './fault.ts';
 import type {
   Engine,
   Connection,
@@ -23,9 +14,9 @@ import type {
   CardReadOptions,
   BootInput,
   ReplayStep,
-} from "./api";
-import { digest } from "./checkpoint-store.js";
-import { errorReportZip, type ReportSubmission } from "./report.ts";
+} from './api';
+import { digest } from './checkpoint-store.js';
+import { errorReportZip, type ReportSubmission } from './report.ts';
 
 type State = {
   connections?: Connection[];
@@ -84,7 +75,7 @@ export class WorkerEngine implements Engine {
   private bootReject?: (error: Error) => void;
   private started = false;
   private bootMedia?: BootMedia;
-  private inputTable?: { url: string; value: Promise<{inputs: any[]}> };
+  private inputTable?: { url: string; value: Promise<{ inputs: any[] }> };
   private workerFailed = false;
   private reportIdentity: Record<string, unknown> = {};
   private rawErrors: unknown[] = [];
@@ -95,19 +86,19 @@ export class WorkerEngine implements Engine {
     this.worker.onerror = (event) => {
       this.workerFailed = true;
       this.rawErrors.push({
-        source: "worker-event",
+        source: 'worker-event',
         message: event.message,
         filename: event.filename,
         line: event.lineno,
         column: event.colno,
       });
-      this.fail(Error(event.message || "Emulator worker failed."));
+      this.fail(Error(event.message || 'Emulator worker failed.'));
     };
   }
   private fail(error: Error) {
     const first = !this.fault;
     this.rawErrors.push({
-      source: "engine",
+      source: 'engine',
       guest_ticks: this.state.virtual_ticks,
       fault: faultFrom(error),
     });
@@ -125,16 +116,23 @@ export class WorkerEngine implements Engine {
   }
   private loadInputs(config: EngineConfig) {
     const url = new URL(config.inputs, document.baseURI).href;
-    if (this.inputTable?.url !== url) this.inputTable = {url, value: (async () => {
-      const response = await fetch(url);
-      if (!response.ok) throw Error("Emulator inputs are unavailable.");
-      return response.json();
-    })()};
+    if (this.inputTable?.url !== url)
+      this.inputTable = {
+        url,
+        value: (async () => {
+          const response = await fetch(url);
+          if (!response.ok) throw Error('Emulator inputs are unavailable.');
+          return response.json();
+        })(),
+      };
     return this.inputTable.value;
   }
   prepare(config: EngineConfig) {
     void this.loadInputs(config).catch(() => {});
-    this.worker.postMessage({ type: "prepare", bundle: new URL(config.bundle, document.baseURI).href });
+    this.worker.postMessage({
+      type: 'prepare',
+      bundle: new URL(config.bundle, document.baseURI).href,
+    });
   }
   async boot(
     dat: ArrayBuffer,
@@ -143,12 +141,15 @@ export class WorkerEngine implements Engine {
     media?: BootMedia,
     initialScene: Scene | null = this.scene,
   ) {
-    this.replayMode = config.execution?.mode === "replay";
+    this.replayMode = config.execution?.mode === 'replay';
     this.bootMedia = media;
     this.sceneInput = config.boot.sceneInput;
     this.scene = initialScene;
     this.prepare(config);
-    const seeds = (media?.identities ?? Promise.resolve([])).then(identities => ({ identities, error: undefined }), error => ({ identities: undefined, error }));
+    const seeds = (media?.identities ?? Promise.resolve([])).then(
+      (identities) => ({ identities, error: undefined }),
+      (error) => ({ identities: undefined, error }),
+    );
     this.reportIdentity = {
       firmwareSha256: await digest(dat),
       bundleVersion: null,
@@ -158,12 +159,11 @@ export class WorkerEngine implements Engine {
       protocol: config.boot,
       execution: config.execution,
     };
-    performance.mark("camera-engine-dat-hashed");
+    performance.mark('camera-engine-dat-hashed');
     this.progressListener = progress;
     const table = await this.loadInputs(config);
     this.powerInput = table.inputs.find(
-      (item: { id: string; binding?: { type: string } }) =>
-        item.binding?.type === "session_power",
+      (item: { id: string; binding?: { type: string } }) => item.binding?.type === 'session_power',
     )?.id;
     this.inputs = table.inputs.map(
       (item: {
@@ -188,7 +188,7 @@ export class WorkerEngine implements Engine {
         stages: item.binding?.stages,
       }),
     );
-    performance.mark("camera-engine-inputs-ready");
+    performance.mark('camera-engine-inputs-ready');
     await new Promise<void>((resolve, reject) => {
       this.bootReject = reject;
       this.worker.onmessage = ({ data }) => {
@@ -200,68 +200,73 @@ export class WorkerEngine implements Engine {
               ...data.runtime.identity,
             };
         }
-        if (data.identity)
-          this.reportIdentity = { ...this.reportIdentity, ...data.identity };
-        if (data.type === "card_files_needed") {
-          void (this.bootMedia?.load() ?? Promise.resolve([])).then(seedFiles => {
-            if (this.disposed) return;
-            const files = seedFiles.map(file => ({path:file.path,bytes:file.bytes.slice().buffer}));
-            this.worker.postMessage({type:"card_files",files},files.map(file=>file.bytes));
-          }).catch(error => this.fail(error as Error));
+        if (data.identity) this.reportIdentity = { ...this.reportIdentity, ...data.identity };
+        if (data.type === 'card_files_needed') {
+          void (this.bootMedia?.load() ?? Promise.resolve([]))
+            .then((seedFiles) => {
+              if (this.disposed) return;
+              const files = seedFiles.map((file) => ({
+                path: file.path,
+                bytes: file.bytes.slice().buffer,
+              }));
+              this.worker.postMessage(
+                { type: 'card_files', files },
+                files.map((file) => file.bytes),
+              );
+            })
+            .catch((error) => this.fail(error as Error));
           return;
         }
-        if (data.type === "profile_result") {
+        if (data.type === 'profile_result') {
           const pending = this.pending.get(data.id);
           this.pending.delete(data.id);
           pending?.resolve(data.report);
         }
-        if (data.type === "progress")
-          this.progressListener?.(data.message, data.percent);
-        if (data.type === "error") {
-          this.rawErrors.push({ source: "worker", ...data });
+        if (data.type === 'progress') this.progressListener?.(data.message, data.percent);
+        if (data.type === 'error') {
+          this.rawErrors.push({ source: 'worker', ...data });
           this.rawErrors = this.rawErrors.slice(-32);
           const pending = this.pending.get(data.id);
           if (!data.fault && pending) {
             this.pending.delete(data.id);
             pending.reject(Error(data.error));
-          } else
-            this.fail(new EngineError(data.fault ?? faultFrom(data.error)));
+          } else this.fail(new EngineError(data.fault ?? faultFrom(data.error)));
         }
         if (data.card) this.observeCard(data.card);
         if (data.state?.connections) {
           this.latestConnections = data.state.connections;
           for (const listener of this.connectionListeners) listener(this.latestConnections);
         }
-        if (data.type === "card_result") {
+        if (data.type === 'card_result') {
           const pending = this.pending.get(data.id);
           this.pending.delete(data.id);
           pending?.resolve(data);
         }
-        if (data.type === "error_report_result") {
+        if (data.type === 'error_report_result') {
           const pending = this.pending.get(data.id);
           this.pending.delete(data.id);
           pending?.resolve(data);
         }
-        if (data.type === "sensor_ready") {
+        if (data.type === 'sensor_ready') {
           const pending = this.pending.get(data.id);
           this.pending.delete(data.id);
           pending?.resolve(data);
         }
-        if (data.type === "ready") {
+        if (data.type === 'ready') {
           this.bootMedia = undefined;
-          performance.mark("camera-worker-ready");
+          performance.mark('camera-worker-ready');
           this.bootReject = undefined;
           this.state = data.state;
           this.publish(data.frame);
-          performance.mark("camera-first-frame-presented");
+          performance.mark('camera-first-frame-presented');
           this.alive = true;
           this.wall = performance.now();
           this.ticks = this.state.virtual_ticks;
           this.pace.reset(this.ticks);
-          if (config.execution?.mode !== "replay") this.schedule();
+          if (config.execution?.mode !== 'replay') this.schedule();
           resolve();
         }
-        if (data.type === "result" || data.type === "restarted") {
+        if (data.type === 'result' || data.type === 'restarted') {
           const pending = this.pending.get(data.id);
           this.pending.delete(data.id);
           const fault = stateFault(data.state);
@@ -276,41 +281,43 @@ export class WorkerEngine implements Engine {
         }
       };
       const bundle = new URL(config.bundle, document.baseURI).href;
-      void seeds.then(({ identities, error }) => {
-        if (!identities) throw error;
-        if (this.disposed) throw Error("Emulator closed.");
-        this.started = true;
-        performance.mark("camera-engine-sent");
-        const scene = this.scenePayload();
-        this.worker.postMessage(
-          { type: "boot", dat, config, seedIdentity: identities, bundle, scene },
-          scene ? [dat, scene.rgb] : [dat],
-        );
-      }).catch(reject);
+      void seeds
+        .then(({ identities, error }) => {
+          if (!identities) throw error;
+          if (this.disposed) throw Error('Emulator closed.');
+          this.started = true;
+          performance.mark('camera-engine-sent');
+          const scene = this.scenePayload();
+          this.worker.postMessage(
+            { type: 'boot', dat, config, seedIdentity: identities, bundle, scene },
+            scene ? [dat, scene.rgb] : [dat],
+          );
+        })
+        .catch(reject);
     });
     return this.inputs;
   }
   private rpc<T>(
     type:
-      | "request"
-      | "card"
-      | "rollback"
-      | "restart"
-      | "profile"
-      | "error_report"
-      | "sensor"
-      | "sensor_reset",
+      | 'request'
+      | 'card'
+      | 'rollback'
+      | 'restart'
+      | 'profile'
+      | 'error_report'
+      | 'sensor'
+      | 'sensor_reset',
     fields: Record<string, unknown>,
     transfer: Transferable[] = [],
     timeoutMs?: number,
   ): Promise<T> {
-    if (this.disposed) return Promise.reject(Error("Emulator closed."));
+    if (this.disposed) return Promise.reject(Error('Emulator closed.'));
     const id = ++this.serial;
     return new Promise((resolve, reject) => {
       const timer = timeoutMs
         ? setTimeout(() => {
             this.pending.delete(id);
-            reject(Error("Error report worker timed out."));
+            reject(Error('Error report worker timed out.'));
           }, timeoutMs)
         : undefined;
       this.pending.set(id, {
@@ -326,37 +333,34 @@ export class WorkerEngine implements Engine {
       this.worker.postMessage({ type, id, ...fields }, transfer);
     });
   }
-  private request(
-    action: string,
-    options: Record<string, unknown> = {},
-  ): Promise<Reply> {
-    if (!this.alive) return Promise.reject(Error("Emulator is not ready."));
-    return this.rpc<Reply>("request", { action, options });
+  private request(action: string, options: Record<string, unknown> = {}): Promise<Reply> {
+    if (!this.alive) return Promise.reject(Error('Emulator is not ready.'));
+    return this.rpc<Reply>('request', { action, options });
   }
   /** Replay normal device inputs and guest-time slices without wall-clock pacing. */
   async replay(steps: readonly ReplayStep[]) {
-    if (!this.replayMode) throw Error("Replay requires an engine booted in replay execution mode.");
+    if (!this.replayMode) throw Error('Replay requires an engine booted in replay execution mode.');
     this.reportIdentity.replay = steps;
     for (const step of steps) {
-      if (step.action !== "advance") {
+      if (step.action !== 'advance') {
         const { action, ...options } = step;
         await this.input(action, options);
         continue;
       }
       if (!Number.isSafeInteger(step.ticks) || step.ticks <= 0)
-        throw Error("Replay advances require positive integer guest ticks.");
+        throw Error('Replay advances require positive integer guest ticks.');
       const target = this.state.virtual_ticks + step.ticks;
       let slices = 0;
       while (this.state.virtual_ticks < target) {
-        if (++slices > 10000) throw Error("Replay exceeded its instruction budget.");
-        await this.request("advance", { limit: 200000, pause_at_tick: target });
+        if (++slices > 10000) throw Error('Replay exceeded its instruction budget.');
+        await this.request('advance', { limit: 200000, pause_at_tick: target });
         if (slices % 10 === 0) {
-          const sample = await this.request("state", { pixels: true });
+          const sample = await this.request('state', { pixels: true });
           this.publish(sample.frame);
         }
       }
     }
-    const sample = await this.request("state", { pixels: true });
+    const sample = await this.request('state', { pixels: true });
     this.publish(sample.frame);
   }
   private observeCard(card: CardState) {
@@ -372,24 +376,18 @@ export class WorkerEngine implements Engine {
       for (const listener of this.cardListeners) listener({ ...card });
     }
   }
-  restartWithCardFiles(
-    files: CardFile[],
-    progress: (message: string, percent: number) => void,
-  ) {
+  restartWithCardFiles(files: CardFile[], progress: (message: string, percent: number) => void) {
     return this.restartCard(files, progress, false, []);
   }
   formatCard(progress: (message: string, percent: number) => void) {
     return this.restartCard([], progress, true, []);
   }
-  powerCycle(
-    inputs: BootInput[],
-    progress: (message: string, percent: number) => void,
-  ) {
+  powerCycle(inputs: BootInput[], progress: (message: string, percent: number) => void) {
     return this.restartCard([], progress, false, inputs);
   }
   async insertCard(present: boolean) {
     this.requireCardReady();
-    await this.rpc("card", { action: "present", present });
+    await this.rpc('card', { action: 'present', present });
   }
   private restartCard(
     files: CardFile[],
@@ -398,7 +396,7 @@ export class WorkerEngine implements Engine {
     bootInputs: BootInput[],
   ) {
     const task = this.queue.then(async () => {
-      if (!this.alive && !this.fault) throw Error("Emulator is not ready.");
+      if (!this.alive && !this.fault) throw Error('Emulator is not ready.');
       this.alive = false;
       clearTimeout(this.timer);
       const previousProgress = this.progressListener;
@@ -410,7 +408,7 @@ export class WorkerEngine implements Engine {
       try {
         const scene = this.scenePayload();
         const reply = await this.rpc<Reply>(
-          "restart",
+          'restart',
           {
             cardFiles,
             initialPositions: this.selectedPositions,
@@ -445,21 +443,20 @@ export class WorkerEngine implements Engine {
     return task;
   }
   private requireCardReady() {
-    if (!this.alive && !this.fault) throw Error("Emulator is restarting.");
+    if (!this.alive && !this.fault) throw Error('Emulator is restarting.');
   }
   async cardState() {
     this.requireCardReady();
-    return (await this.rpc<CardReply>("card", { action: "state" })).card;
+    return (await this.rpc<CardReply>('card', { action: 'state' })).card;
   }
   async cardTree(revision?: number) {
     this.requireCardReady();
-    return (await this.rpc<CardReply>("card", { action: "tree", revision }))
-      .tree!;
+    return (await this.rpc<CardReply>('card', { action: 'tree', revision })).tree!;
   }
   async readCardFile(path: string, options: CardReadOptions = {}) {
     this.requireCardReady();
-    const reply = await this.rpc<CardReply>("card", {
-      action: "read",
+    const reply = await this.rpc<CardReply>('card', {
+      action: 'read',
       path,
       ...options,
     });
@@ -468,7 +465,9 @@ export class WorkerEngine implements Engine {
   connections(listener: (rows: Connection[]) => void) {
     this.connectionListeners.add(listener);
     listener(this.latestConnections);
-    return () => { this.connectionListeners.delete(listener); };
+    return () => {
+      this.connectionListeners.delete(listener);
+    };
   }
   cardChanges(listener: (state: CardState) => void) {
     this.cardListeners.add(listener);
@@ -484,7 +483,7 @@ export class WorkerEngine implements Engine {
       ...this.state.display,
       sequence: ++this.sequence,
     };
-    this.presentation.measure("lcdCopy", () => {
+    this.presentation.measure('lcdCopy', () => {
       for (const listener of this.listeners) listener(frame);
     });
   }
@@ -496,11 +495,11 @@ export class WorkerEngine implements Engine {
   }
   profile(limit = 2_000_000) {
     const task = this.queue.then(async () => {
-      if (!this.alive) throw Error("Emulator is not ready.");
+      if (!this.alive) throw Error('Emulator is not ready.');
       this.alive = false;
       clearTimeout(this.timer);
       try {
-        return await this.rpc<Record<string, unknown>>("profile", { limit });
+        return await this.rpc<Record<string, unknown>>('profile', { limit });
       } finally {
         if (!this.fault && !this.disposed) {
           this.alive = true;
@@ -517,47 +516,48 @@ export class WorkerEngine implements Engine {
       this.errorListeners.delete(listener);
     };
   }
-  async errorReport(submission: Promise<ReportSubmission> = Promise.resolve({description: ""})): Promise<Blob> {
+  async errorReport(
+    submission: Promise<ReportSubmission> = Promise.resolve({ description: '' }),
+  ): Promise<Blob> {
     let detail: Record<string, unknown> & { checkpoint?: ArrayBuffer } = {};
     if (this.started && !this.workerFailed && !this.disposed) {
       try {
-        detail = await this.rpc("error_report", {}, [], 30000);
+        detail = await this.rpc('error_report', {}, [], 30000);
       } catch (error) {
         detail = { snapshot: { unavailable: String(error) } };
       }
     } else
       detail = {
         snapshot: {
-          unavailable:
-            "The emulator worker is unavailable or has not initialized.",
+          unavailable: 'The emulator worker is unavailable or has not initialized.',
         },
       };
     const { checkpoint, ...worker } = detail;
     const report = {
-        schema: "fujimod-error-report-v1",
-        createdAt: new Date().toISOString(),
-        ...worker,
-        error: this.fault ?? null,
-        rawErrors: this.rawErrors,
-        identity: {
-          ...this.reportIdentity,
-          ...((worker.identity as object) ?? {}),
-        },
-        clientInputs: this.recentInputs,
-        state: this.state,
-        runtime: this.latestRuntime,
-        browser: {
-          userAgent: navigator.userAgent,
-          platform: navigator.platform,
-          language: navigator.language,
-        },
-      };
-    return errorReportZip({ ...report, ...await submission }, checkpoint);
+      schema: 'fujimod-error-report-v1',
+      createdAt: new Date().toISOString(),
+      ...worker,
+      error: this.fault ?? null,
+      rawErrors: this.rawErrors,
+      identity: {
+        ...this.reportIdentity,
+        ...(worker.identity as object),
+      },
+      clientInputs: this.recentInputs,
+      state: this.state,
+      runtime: this.latestRuntime,
+      browser: {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        language: navigator.language,
+      },
+    };
+    return errorReportZip({ ...report, ...(await submission) }, checkpoint);
   }
   async rollback(seconds: number) {
     this.alive = false;
     clearTimeout(this.timer);
-    const result = await this.rpc<Reply>("rollback", { seconds });
+    const result = await this.rpc<Reply>('rollback', { seconds });
     this.state = result.state;
     this.fault = undefined;
     this.touches.clear();
@@ -587,35 +587,28 @@ export class WorkerEngine implements Engine {
     try {
       const started = performance.now();
       do {
-        const wallCap =
-          this.ticks + Math.floor((performance.now() - this.wall) * 12000);
+        const wallCap = this.ticks + Math.floor((performance.now() - this.wall) * 12000);
         const preview = this.latestRuntime.preview as {
           frames_per_second: number;
         } | null;
-        const cap = preview ? Math.min(
-          wallCap,
-          this.state.virtual_ticks + Math.floor(6000000 / preview.frames_per_second),
-        ) : wallCap;
+        const cap = preview
+          ? Math.min(
+              wallCap,
+              this.state.virtual_ticks + Math.floor(6000000 / preview.frames_per_second),
+            )
+          : wallCap;
         const before = this.state.virtual_ticks;
-        await this.request("advance", { limit: 200000, pause_at_tick: cap });
-        if (
-          this.state.virtual_ticks === before ||
-          this.state.image_frames !== this.lastImageFrame
-        )
+        await this.request('advance', { limit: 200000, pause_at_tick: cap });
+        if (this.state.virtual_ticks === before || this.state.image_frames !== this.lastImageFrame)
           break;
       } while (performance.now() - started < 12 && this.alive);
       if (!this.alive) return;
-      if (
-        this.state.image_frames !== this.lastImageFrame ||
-        performance.now() >= this.nextFrame
-      ) {
+      if (this.state.image_frames !== this.lastImageFrame || performance.now() >= this.nextFrame) {
         const pixels =
-          this.state.image_frames !== this.lastImageFrame ||
-          performance.now() >= this.nextPixels;
-        const sample = await this.request("state", { pixels });
+          this.state.image_frames !== this.lastImageFrame || performance.now() >= this.nextPixels;
+        const sample = await this.request('state', { pixels });
         if (sample.frame?.byteLength) {
-          if (this.state.image_frames !== this.lastImageFrame)
-            this.presentedImageFrames++;
+          if (this.state.image_frames !== this.lastImageFrame) this.presentedImageFrames++;
           this.publish(sample.frame);
           this.lastImageFrame = this.state.image_frames ?? -1;
           this.nextPixels = performance.now() + 500;
@@ -645,17 +638,14 @@ export class WorkerEngine implements Engine {
       action,
       options: { ...options },
       guest_ticks: this.state.virtual_ticks,
-      timestampSource: "last-observed",
+      timestampSource: 'last-observed',
     });
     this.recentInputs = this.recentInputs.slice(-256);
     if (!this.alive)
-      return Promise.reject(
-        new EngineError(this.fault ?? faultFrom("Camera is paused.")),
-      );
+      return Promise.reject(new EngineError(this.fault ?? faultFrom('Camera is paused.')));
     // Serialize gestures, including quick pointerup before press acknowledgement.
     const task = this.queue.then(async () => {
-      if (!this.alive)
-        throw new EngineError(this.fault ?? faultFrom("Camera is paused."));
+      if (!this.alive) throw new EngineError(this.fault ?? faultFrom('Camera is paused.'));
       await this.request(action, options);
     });
     this.queue = task.catch(() => {});
@@ -663,38 +653,38 @@ export class WorkerEngine implements Engine {
   }
   press(id: string, stage?: string, point?: { x: number; y: number }) {
     const input = this.inputs.find((input) => input.id === id);
-    if (input?.kind === "touch") {
+    if (input?.kind === 'touch') {
       const pixels = {
         x: Math.round((point?.x ?? 0.5) * (this.state.display?.width ?? 720)),
         y: Math.round((point?.y ?? 0.5) * (this.state.display?.height ?? 480)),
       };
       this.touches.set(id, pixels);
-      return this.input("touch", { id, phase: "press", ...pixels });
+      return this.input('touch', { id, phase: 'press', ...pixels });
     }
-    return this.input("press", { id, ...(stage ? { stage } : {}) });
+    return this.input('press', { id, ...(stage ? { stage } : {}) });
   }
   release(id: string) {
-    const touch =
-      this.inputs.find((input) => input.id === id)?.kind === "touch";
+    const touch = this.inputs.find((input) => input.id === id)?.kind === 'touch';
     return this.input(
-      touch ? "touch" : "release",
-      touch ? { id, phase: "release", ...this.touches.get(id) } : { id },
+      touch ? 'touch' : 'release',
+      touch ? { id, phase: 'release', ...this.touches.get(id) } : { id },
     );
   }
   setPosition(id: string, position: string | number) {
-    if (id === this.powerInput) return this.power(position === "on");
+    if (id === this.powerInput) return this.power(position === 'on');
     const result =
-      typeof position === "number"
-        ? this.input("rotate", { id, steps: position })
-        : this.input("set_position", { id, position });
+      typeof position === 'number'
+        ? this.input('rotate', { id, steps: position })
+        : this.input('set_position', { id, position });
     return result.then(() => {
-      if (typeof position === "string") this.selectedPositions[id] = position;
+      if (typeof position === 'string') this.selectedPositions[id] = position;
     });
   }
 
   private scenePayload() {
-    return this.scene ? { width: this.scene.width, height: this.scene.height,
-      rgb: this.scene.rgb.slice().buffer } : undefined;
+    return this.scene
+      ? { width: this.scene.width, height: this.scene.height, rgb: this.scene.rgb.slice().buffer }
+      : undefined;
   }
   async setScene(scene: Scene | null) {
     if (!this.sceneInput) {
@@ -704,27 +694,18 @@ export class WorkerEngine implements Engine {
     this.scene = scene;
     if (!this.alive) return;
     if (!scene) {
-      await this.rpc("sensor_reset", {});
+      await this.rpc('sensor_reset', {});
       return;
     }
     const rgb = scene.rgb.slice().buffer;
-    await this.rpc(
-      "sensor",
-      { rgb, width: scene.width, height: scene.height },
-      [rgb],
-    );
+    await this.rpc('sensor', { rgb, width: scene.width, height: scene.height }, [rgb]);
   }
   async power(on: boolean) {
     if (on) {
       if (this.state.power?.on !== false) return;
-      return this.restartCard(
-        [],
-        this.progressListener ?? (() => {}),
-        false,
-        [],
-      );
+      return this.restartCard([], this.progressListener ?? (() => {}), false, []);
     }
-    await this.input(on ? "power_on" : "power_off", {});
+    await this.input(on ? 'power_on' : 'power_off', {});
     this.wall = performance.now();
     this.ticks = this.state.virtual_ticks;
     this.pace.reset(this.ticks);
@@ -735,7 +716,7 @@ export class WorkerEngine implements Engine {
     this.alive = false;
     clearTimeout(this.timer);
     this.worker.terminate();
-    const error = Error("Emulator closed.");
+    const error = Error('Emulator closed.');
     this.bootReject?.(error);
     this.bootReject = undefined;
     for (const pending of this.pending.values()) pending.reject(error);

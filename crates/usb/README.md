@@ -484,7 +484,6 @@ bytes initialized to zero. A full-length name makes the reviewed firmware write
 its terminator through the table's extra key (configuration key zero on the
 studied layout); the host does not add a compensating write.
 
-
 ## Remote USB
 
 The [USB proxy crate](../usb-proxy/README.md) exports browser-permitted devices

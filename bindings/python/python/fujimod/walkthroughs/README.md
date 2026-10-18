@@ -8,17 +8,18 @@ The library has no camera, firmware or repository dependency.
 ```python
 from fujimod.walkthroughs import open_menu, ref, walkthrough
 
-page = ref(menu='settings_item')
-option = ref(menu='option_item')
-settings = open_menu(page, title='Settings')
+page = ref(menu="settings_item")
+option = ref(menu="option_item")
+settings = open_menu(page, title="Settings")
 
-@walkthrough('Use a feature', start_from=settings)
+
+@walkthrough("Use a feature", start_from=settings)
 def example(camera, guide):
-    with guide.step(t'Choose {option.path(relative_to=page)}'):
+    with guide.step(t"Choose {option.path(relative_to=page)}"):
         camera.select_menu_item(option)
     camera.open_menu_item(option)
-    with guide.step('Example option'):
-        assert camera.current_option() == 'example'
+    with guide.step("Example option"):
+        assert camera.current_option() == "example"
 ```
 
 A normal walkthrough can also be a `start_from` prerequisite. Branches start

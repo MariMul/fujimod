@@ -6,10 +6,10 @@
   "workers_dev": false,
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "404-page"
+    "not_found_handling": "404-page",
   },
   "routes": [
     { "pattern": "fujimod.com", "custom_domain": true },
-    { "pattern": "www.fujimod.com", "custom_domain": true }
-  ]
+    { "pattern": "www.fujimod.com", "custom_domain": true },
+  ],
 }

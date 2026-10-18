@@ -2,19 +2,19 @@
   "name": "fujimod",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "description": "FujiMod asynchronous camera tools for JavaScript and WebUSB",
+  "files": [
+    "dist",
+    "pkg",
+    "NOTICE"
+  ],
+  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
   },
-  "files": [
-    "dist",
-    "pkg",
-    "NOTICE"
-  ],
   "scripts": {
     "build": "node scripts/build.mjs && tsc",
     "test": "node scripts/build.mjs --testing && tsc && tsc -p tsconfig.types.json && node --test tests/usb.test.mjs && node scripts/build.mjs && tsc && tsc -p tsconfig.types.json && node --test tests/production.mjs",

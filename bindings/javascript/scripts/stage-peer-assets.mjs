@@ -10,8 +10,12 @@ export async function stagePeerAssets(pkg, source = sources) {
     if (!entry.isDirectory()) continue;
     const web = join(pkg, 'snippets', entry.name, 'web');
     let generated;
-    try { generated = await readFile(join(web, 'peer.js')); }
-    catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+    try {
+      generated = await readFile(join(web, 'peer.js'));
+    } catch (error) {
+      if (error.code === 'ENOENT') continue;
+      throw error;
+    }
     if (!generated.equals(peer)) throw Error('wasm-bindgen peer.js differs from its source');
     for (const name of ['share-traffic.js', 'wire.js'])
       await copyFile(join(source, name), join(web, name));

@@ -5,16 +5,22 @@ import importlib
 import json
 
 import pytest
+from contract_assertions import expect
 from fujimod import defs, usb
 from fujimod.defs import service as data
-from fujimod.usb import app80
+from fujimod.usb import app80, testing
 from test_app80 import config_read, config_write
 from test_async import dispatched, run
 from test_async import opened as async_opened
 from test_stream import LIMITS, E, opened
 
 
-def definition(rows=None, *, firmware_id="synthetic-b-v2", expected=None):
+def definition(
+    rows: list[tuple[int, str, list[int], int | None]] | None = None,
+    *,
+    firmware_id: str = "synthetic-b-v2",
+    expected: defs.FirmwareIdentity | None = None,
+) -> data.Definition:
     if rows is None:
         rows = [(153, "flush_configuration", [7], 4)]
     document = {
@@ -49,12 +55,14 @@ def definition(rows=None, *, firmware_id="synthetic-b-v2", expected=None):
     return data.Definition.from_json(json.dumps(document), identity)
 
 
-def save():
+def save() -> app80.Invocation:
     service = app80.Service(definition())
     return service.prepare(data.ServiceModes(4), app80.Command.FlushConfiguration())
 
 
-def exchange(invocation, raw):
+def exchange(
+    invocation: app80.Invocation, raw: bytes | bytearray
+) -> list[testing.Exchange]:
     return [
         *config_write(0x241, invocation.raw[1:], page=3),
         *config_write(0x240, invocation.raw, page=3),
@@ -62,7 +70,7 @@ def exchange(invocation, raw):
     ]
 
 
-def test_shared_data_namespace_keeps_enum_metadata_and_explicit_identity():
+def test_shared_data_namespace_keeps_enum_metadata_and_explicit_identity() -> None:
     assert importlib.import_module("fujimod.defs") is defs
     assert importlib.import_module("fujimod.defs.service") is data
     d = definition([(153, "flush_configuration", [7], None)])
@@ -80,9 +88,9 @@ def test_shared_data_namespace_keeps_enum_metadata_and_explicit_identity():
     assert d.select(153, data.ServiceModes(4)) is None
     d = definition()
     assert d.select(153, data.ServiceModes(1)) is None
-    assert isinstance(
-        d.select(153, data.ServiceModes(4)).enabled_modes, data.ModeAvailability.Modes
-    )
+    selected = d.select(153, data.ServiceModes(4))
+    assert selected is not None
+    assert isinstance(selected.enabled_modes, data.ModeAvailability.Modes)
     with pytest.raises(TypeError):
         d.select(153, 4)
     with pytest.raises(defs.DefinitionError) as failed:
@@ -101,7 +109,7 @@ def test_shared_data_namespace_keeps_enum_metadata_and_explicit_identity():
         entry.codec = data.Codec.Research
 
 
-def test_enum_inputs_do_not_accept_integers_or_strings_as_selectors():
+def test_enum_inputs_do_not_accept_integers_or_strings_as_selectors() -> None:
     assert app80.ProfileBank.First != 0 and app80.ProfileBank.First != "First"
     for constructor, argument in [
         (app80.PinBank, 16),
@@ -112,20 +120,22 @@ def test_enum_inputs_do_not_accept_integers_or_strings_as_selectors():
             constructor(argument)
         assert isinstance(failed.value.reason, app80.CommandFailure.Argument)
     with pytest.raises(TypeError):
-        app80.Command.ReadPins(bank=0)
+        app80.Command.ReadPins(bank=0)  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     with pytest.raises(TypeError):
-        app80.Command.ProfileByte(action="read")
+        app80.Command.ProfileByte(action="read")  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     with pytest.raises(TypeError):
-        app80.ProfileAction.Read(bank=0, index=app80.ProfileIndex(1))
+        app80.ProfileAction.Read(bank=0, index=app80.ProfileIndex(1))  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     with pytest.raises(TypeError):
-        app80.Service(definition()).prepare(4, app80.Command.FlushConfiguration())
+        app80.Service(definition()).prepare(4, app80.Command.FlushConfiguration())  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     with pytest.raises(TypeError):
-        app80.Service(definition()).prepare(data.ServiceModes(4), "save")
+        app80.Service(definition()).prepare(data.ServiceModes(4), "save")  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     with pytest.raises(OverflowError):
         app80.Command.WriteChannel(channel=1, value=65536)
 
 
-def test_every_command_variant_converts_to_the_core_codec_without_dispatch_strings():
+def test_every_command_variant_converts_to_the_core_codec_without_dispatch_strings() -> (
+    None
+):
     cases = [
         (
             "write_pins",
@@ -202,7 +212,7 @@ def test_every_command_variant_converts_to_the_core_codec_without_dispatch_strin
         assert invocation.configuration_limit == 512
 
 
-def test_selection_failures_are_structured_and_unknown_values_stay_data():
+def test_selection_failures_are_structured_and_unknown_values_stay_data() -> None:
     service = app80.Service(definition())
     with pytest.raises(app80.CommandError) as failed:
         service.prepare(data.ServiceModes(1), app80.Command.FlushConfiguration())
@@ -217,9 +227,10 @@ def test_selection_failures_are_structured_and_unknown_values_stay_data():
         )
     assert isinstance(failed.value.reason, app80.CommandFailure.OversizeArguments)
     ambiguous = app80.Service(
-        definition(
-            [(153, "flush_configuration", [7], 4), (154, "flush_configuration", [7], 4)]
-        )
+        definition([
+            (153, "flush_configuration", [7], 4),
+            (154, "flush_configuration", [7], 4),
+        ])
     )
     with pytest.raises(app80.CommandError) as failed:
         ambiguous.prepare(data.ServiceModes(4), app80.Command.FlushConfiguration())
@@ -237,19 +248,26 @@ def test_selection_failures_are_structured_and_unknown_values_stay_data():
     assert isinstance(research.decode(bytes(33)).value, app80.ReplyValue.Research)
 
 
-async def test_blocking_execution_uses_the_selected_mailbox_and_does_not_poll_status_one():
+async def test_blocking_execution_uses_the_selected_mailbox_and_does_not_poll_status_one() -> (
+    None
+):
     invocation = save()
     raw = bytearray(invocation.raw)
     raw[8] = 1
-    session, script = (await opened(exchange(invocation, raw)))
-    reply = (await usb.app80.execute(session, invocation))
-    assert isinstance(reply.value.status, app80.SaveStatus.Failed)
+    session, script = await opened(exchange(invocation, raw))
+    reply = await usb.app80.execute(session, invocation)
+    assert isinstance(
+        expect(reply.value, app80.ReplyValue.ConfigurationSaved).status,
+        app80.SaveStatus.Failed,
+    )
     assert reply.raw == raw
     assert session.state == usb.SessionState.Ready and script.remaining == 0
 
 
-def test_result_variants_keep_values_rejection_and_unknown_status_separate():
-    def decode(codec, slots, command, changes):
+def test_result_variants_keep_values_rejection_and_unknown_status_separate() -> None:
+    def decode(
+        codec: str, slots: list[int], command: app80.Command, changes: dict[int, int]
+    ) -> app80.ReplyValue:
         invocation = app80.Service(definition([(153, codec, slots, 4)])).prepare(
             data.ServiceModes(4), command
         )
@@ -295,10 +313,15 @@ def test_result_variants_keep_values_rejection_and_unknown_status_separate():
         and value.result.value == 0x12345678
     )
     assert isinstance(
-        decode("memory_word", list(range(10)), read, {1: 0}).result,
+        expect(
+            decode("memory_word", list(range(10)), read, {1: 0}),
+            app80.ReplyValue.ReadWord,
+        ).result,
         app80.WordReadResult.Rejected,
     )
-    unknown = decode("memory_word", list(range(10)), read, {1: 42}).result
+    unknown = expect(
+        decode("memory_word", list(range(10)), read, {1: 42}), app80.ReplyValue.ReadWord
+    ).result
     assert (
         isinstance(unknown, app80.WordReadResult.Unknown) and unknown.raw_status == 42
     )
@@ -306,27 +329,39 @@ def test_result_variants_keep_values_rejection_and_unknown_status_separate():
         address=app80.WordAddress(0x40001000), value=0x12345678
     )
     assert isinstance(
-        decode("memory_word", list(range(10)), write, {1: 1}).result,
+        expect(
+            decode("memory_word", list(range(10)), write, {1: 1}),
+            app80.ReplyValue.WriteWord,
+        ).result,
         app80.WordWriteResult.Confirmed,
     )
     assert isinstance(
-        decode("memory_word", list(range(10)), write, {1: 0}).result,
+        expect(
+            decode("memory_word", list(range(10)), write, {1: 0}),
+            app80.ReplyValue.WriteWord,
+        ).result,
         app80.WordWriteResult.Rejected,
     )
-    unknown = decode("memory_word", list(range(10)), write, {1: 42}).result
+    unknown = expect(
+        decode("memory_word", list(range(10)), write, {1: 42}),
+        app80.ReplyValue.WriteWord,
+    ).result
     assert (
         isinstance(unknown, app80.WordWriteResult.Unknown) and unknown.raw_status == 42
     )
 
 
-def test_async_execution_preserves_typed_results_and_fences_foreign_replies():
-    async def test():
+def test_async_execution_preserves_typed_results_and_fences_foreign_replies() -> None:
+    async def test() -> None:
         invocation = save()
         raw = bytearray(invocation.raw)
         raw[8] = 0
         session, script = await async_opened(exchange(invocation, raw))
         reply = await app80.execute(session, invocation)
-        assert isinstance(reply.value.status, app80.SaveStatus.Success)
+        assert isinstance(
+            expect(reply.value, app80.ReplyValue.ConfigurationSaved).status,
+            app80.SaveStatus.Success,
+        )
         assert session.state == usb.SessionState.Ready and script.remaining == 0
         session, script = await async_opened(exchange(invocation, bytes(33)))
         with pytest.raises(usb.ProtocolError):
@@ -341,8 +376,8 @@ def test_async_execution_preserves_typed_results_and_fences_foreign_replies():
     run(test)
 
 
-def test_cancellation_during_publish_restores_the_fenced_session_owner():
-    async def test():
+def test_cancellation_during_publish_restores_the_fenced_session_owner() -> None:
+    async def test() -> None:
         invocation = save()
         steps = [
             *config_write(0x241, invocation.raw[1:], page=3),
@@ -363,15 +398,20 @@ def test_cancellation_during_publish_restores_the_fenced_session_owner():
     run(test)
 
 
-def test_session_limit_is_checked_before_staging_and_allows_a_smaller_host_limit():
-    async def test():
+def test_session_limit_is_checked_before_staging_and_allows_a_smaller_host_limit() -> (
+    None
+):
+    async def test() -> None:
         invocation = save()
         raw = bytearray(invocation.raw)
         raw[8] = 0
         # The definition's 512-byte limit is not the size of this 33-byte request.
         session, script = await async_opened(exchange(invocation, raw), limits=LIMITS)
         assert isinstance(
-            (await app80.execute(session, invocation)).value.status,
+            expect(
+                (await app80.execute(session, invocation)).value,
+                app80.ReplyValue.ConfigurationSaved,
+            ).status,
             app80.SaveStatus.Success,
         )
         assert script.remaining == 0

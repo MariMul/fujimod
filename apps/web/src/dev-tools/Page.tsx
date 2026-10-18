@@ -81,7 +81,11 @@ function LogRow(props: { entry: LogEntry }) {
     </div>
   );
 }
-export function DevTools(props: { backend?: CameraBackend; supported?: boolean; connectOnMount?: boolean }) {
+export function DevTools(props: {
+  backend?: CameraBackend;
+  supported?: boolean;
+  connectOnMount?: boolean;
+}) {
   // Tests pass their own backend and get their own instances; the page keeps one
   // camera connection and share for its lifetime, across component hot swaps.
   const owned = untrack(() => props.backend) !== undefined;
@@ -191,7 +195,10 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
     if (page?.started) return () => cleanup();
     if (page) page.started = true;
     void tools.start().then(async () => {
-      if (props.connectOnMount) { await tools.connect(CameraTarget.Usb); return; }
+      if (props.connectOnMount) {
+        await tools.connect(CameraTarget.Usb);
+        return;
+      }
       try {
         if (remoteControlUrl(location.href)) {
           setTarget(CameraTarget.Remote);
@@ -337,8 +344,7 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
           </select>
           <span class="dt-status" role="status">
             <i class={tools.connection() === ConnectionState.Connected ? 'online' : ''} />
-            {tools.connection() === ConnectionState.Unsupported &&
-            target() !== CameraTarget.Usb
+            {tools.connection() === ConnectionState.Unsupported && target() !== CameraTarget.Usb
               ? 'Disconnected'
               : tools.connection() === ConnectionState.Choosing &&
                   target() === CameraTarget.Emulator
@@ -348,8 +354,7 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
           <Show
             when={
               tools.connection() === ConnectionState.Disconnected ||
-              (tools.connection() === ConnectionState.Unsupported &&
-                target() !== CameraTarget.Usb)
+              (tools.connection() === ConnectionState.Unsupported && target() !== CameraTarget.Usb)
             }
             fallback={
               <Show
@@ -365,7 +370,7 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
                   class="pill"
                   onClick={() => {
                     share.stop();
-                    tools.disconnect();
+                    void tools.disconnect();
                   }}
                 >
                   {tools.connection() === ConnectionState.Choosing ||

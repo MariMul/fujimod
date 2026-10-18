@@ -237,7 +237,7 @@ export class ShareRoom extends DurableObject {
     }
     await this.schedule();
   }
-  async webSocketClose(socket, code) {
+  async webSocketClose(socket) {
     await this.remove(socket);
     socket.close(1000);
   }

@@ -48,7 +48,7 @@ fn bytes(data: impl AsRef<[u8]>) -> Py<PyBytes> {
 type Operation<'a, T> = Pin<Box<dyn Future<Output = usb::Result<T>> + Send + 'a>>;
 
 enum Slot {
-    Open(ff80::Session),
+    Open(Box<ff80::Session>),
     InFlight(oneshot::Sender<()>),
     ReadingRange(std::sync::Weak<Mutex<reader::State>>),
     Closed,
@@ -81,7 +81,7 @@ impl AsyncSession {
         Self {
             token: native.info().id,
             packet_bytes: native.info().advertised_packet_bytes.get(),
-            inner: Arc::new(Mutex::new(Slot::Open(native))),
+            inner: Arc::new(Mutex::new(Slot::Open(Box::new(native)))),
             limits,
         }
     }
@@ -109,7 +109,7 @@ impl AsyncSession {
 /// Closing consumes the native session. A dropped close can only restore an
 /// unknown terminal state; an ordinary operation restores the fenced core.
 enum Resource {
-    Open(ff80::Session),
+    Open(Box<ff80::Session>),
     Closing,
     Closed,
 }

@@ -42,7 +42,7 @@ export async function checkExtendedService(usb, defs, installWebUsb) {
   );
   const service = new a.Service(definition);
   const modes = new defs.service.ServiceModes(4);
-  const position = value => service.prepare(modes, a.Command.setLensPosition(value));
+  const position = (value) => service.prepare(modes, a.Command.setLensPosition(value));
 
   try {
     for (const [value, bytes] of [
@@ -56,16 +56,12 @@ export async function checkExtendedService(usb, defs, installWebUsb) {
 
     const device9Read = service.prepare(
       modes,
-      a.Command.device9(
-        a.Device9Action.read(0x12, 0x34, new a.Device9Count(29)),
-      ),
+      a.Command.device9(a.Device9Action.read(0x12, 0x34, new a.Device9Count(29))),
     );
     const payload = Uint8Array.from({ length: 29 }, (_, index) => 0x80 + index);
     const device9Write = service.prepare(
       modes,
-      a.Command.device9(
-        a.Device9Action.write(0x56, 0x78, new a.Device9Payload(payload)),
-      ),
+      a.Command.device9(a.Device9Action.write(0x56, 0x78, new a.Device9Payload(payload))),
     );
     assert.equal(device9Read.raw.length, 34);
     assert.equal(device9Write.raw.length, 34);
@@ -119,7 +115,7 @@ export async function checkExtendedService(usb, defs, installWebUsb) {
       const before = fixture.log.length;
       assert.throws(
         () => a.execute(limitedSession, device9Read),
-        error => error.kind === usb.ErrorKind.InvalidArgument,
+        (error) => error.kind === usb.ErrorKind.InvalidArgument,
       );
       assert.equal(fixture.log.length, before);
     } finally {

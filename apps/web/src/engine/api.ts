@@ -1,7 +1,7 @@
-import type { ReportSubmission } from "./report";
-import type { CameraPerformance } from "./performance";
-import type { EngineFault } from "./fault";
-export type { EngineFault } from "./fault";
+import type { ReportSubmission } from './report';
+import type { CameraPerformance } from './performance';
+import type { EngineFault } from './fault';
+export type { EngineFault } from './fault';
 /** The only emulator contract used by the web app. All scheduling is engine-owned. */
 export interface Input {
   id: string;
@@ -16,8 +16,8 @@ export interface Input {
 export interface Connection {
   id: string;
   label: string;
-  connection: "connected" | "disconnected" | "unknown";
-  support: "modeled" | "partial" | "unmodeled";
+  connection: 'connected' | 'disconnected' | 'unknown';
+  support: 'modeled' | 'partial' | 'unmodeled';
   limits: string;
 }
 export interface Frame {
@@ -49,7 +49,7 @@ export interface CardState {
 export interface CardEntry {
   path: string;
   name: string;
-  kind: "file" | "directory";
+  kind: 'file' | 'directory';
   bytes: number;
   children?: CardEntry[];
 }
@@ -81,9 +81,9 @@ export interface BootProtocol {
   sceneInput: boolean;
 }
 export type ReplayStep =
-  | { action: "press" | "release"; id: string; stage?: string }
-  | { action: "set_position"; id: string; position: string }
-  | { action: "advance"; ticks: number };
+  | { action: 'press' | 'release'; id: string; stage?: string }
+  | { action: 'set_position'; id: string; position: string }
+  | { action: 'advance'; ticks: number };
 export interface EngineConfig {
   firmwareId: string;
   bundle: string;
@@ -92,7 +92,7 @@ export interface EngineConfig {
   initialPositions?: Record<string, string>;
   restart?: boolean;
   /** Cold, fixed-clock execution with no wall-clock pump; inputs use replay(). */
-  execution?: { mode: "replay"; clockSeconds2000: number };
+  execution?: { mode: 'replay'; clockSeconds2000: number };
 }
 export interface Engine {
   prepare(config: EngineConfig): void;
@@ -113,9 +113,7 @@ export interface Engine {
     files: CardFile[],
     progress: (message: string, percent: number) => void,
   ): Promise<void>;
-  formatCard(
-    progress: (message: string, percent: number) => void,
-  ): Promise<void>;
+  formatCard(progress: (message: string, percent: number) => void): Promise<void>;
   insertCard(present: boolean): Promise<void>;
   powerCycle(
     inputs: BootInput[],
@@ -129,11 +127,7 @@ export interface Engine {
   /** Media changes, including busy transitions; refresh the tree after writes settle. */
   cardChanges(listener: (state: CardState) => void): () => void;
   frames(listener: (frame: Frame) => void): () => void;
-  press(
-    id: string,
-    stage?: string,
-    point?: { x: number; y: number },
-  ): Promise<void>;
+  press(id: string, stage?: string, point?: { x: number; y: number }): Promise<void>;
   release(id: string): Promise<void>;
   setPosition(id: string, position: string | number): Promise<void>;
   setScene(scene: Scene | null): Promise<void>;

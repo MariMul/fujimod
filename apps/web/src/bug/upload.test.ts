@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { test, expect, vi } from 'vite-plus/test';
 import { uploadReport } from './upload';
 import { link, tar } from './fixtures.test-helper';
@@ -11,7 +12,9 @@ test('explicit upload omits inline descriptor bytes and validates the acknowledg
     await uploadReport(new Blob([tar]), { ...link, archive: 'unused' }, 'Frozen menu', id);
     const init = fetcher.mock.calls[0]?.[1] as RequestInit;
     const body = init.body as FormData;
-    expect(JSON.parse(String(body.get('metadata'))).archive).toBeUndefined();
+    const metadata = body.get('metadata');
+    assert(typeof metadata === 'string');
+    expect(JSON.parse(metadata).archive).toBeUndefined();
     expect(body.get('description')).toBe('Frozen menu');
     fetcher.mockResolvedValueOnce(Response.json({ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }));
     await expect(uploadReport(new Blob([tar]), link, '', id)).rejects.toThrow('did not confirm');

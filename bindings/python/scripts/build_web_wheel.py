@@ -12,14 +12,14 @@ import csv
 import hashlib
 import io
 import json
-from pathlib import Path
 import tomllib
 import zipfile
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def build(output):
+def build(output: Path) -> Path:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
     version = project["version"]
     dist = f"fujimod-{version}.dist-info"
@@ -38,7 +38,8 @@ def build(output):
     rows = []
     for path, data in files.items():
         digest = (
-            base64.urlsafe_b64encode(hashlib.sha256(data).digest())
+            base64
+            .urlsafe_b64encode(hashlib.sha256(data).digest())
             .rstrip(b"=")
             .decode()
         )
