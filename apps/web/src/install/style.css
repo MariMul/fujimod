@@ -1,0 +1,158 @@
+.installer.shell {
+  max-width: 800px;
+  padding: 28px 24px 64px;
+}
+.installer header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 60px;
+}
+.installer-preview {
+  margin-left: auto;
+  font-size: 12px;
+  color: #eab86b;
+}
+.installer-heading p {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--dim, #9caaa5);
+  margin: 0 0 10px;
+}
+.installer h1 {
+  font-size: 38px;
+  margin: 0 0 28px;
+  letter-spacing: -0.04em;
+}
+.installer-steps {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+  color: var(--dim, #9caaa5);
+  font-size: 12px;
+}
+.installer-panel {
+  border: 1px solid var(--edge, #303935);
+  border-radius: 16px;
+  padding: 30px;
+  background: var(--panel, #151b18);
+  min-height: 260px;
+}
+.installer h2 {
+  margin: 0 0 20px;
+  font-size: 24px;
+}
+.installer p,
+.installer li {
+  line-height: 1.6;
+}
+.installer li {
+  margin: 8px 0;
+}
+.installer label {
+  display: block;
+  margin: 16px 0 8px;
+}
+.installer select {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  padding: 12px;
+  color: inherit;
+  background: var(--bg, #101513);
+  border: 1px solid var(--edge, #303935);
+  border-radius: 8px;
+}
+.installer button {
+  padding: 11px 18px;
+  border: 1px solid var(--edge, #303935);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  margin-top: 20px;
+  font-weight: 600;
+}
+.installer button.primary {
+  background: #d7f078;
+  color: #15200c;
+  border-color: #d7f078;
+}
+.installer button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.installer-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 16px 20px;
+  border: 1px solid var(--edge, #303935);
+  border-radius: 8px;
+}
+.installer-card span {
+  color: var(--dim, #9caaa5);
+  font-size: 13px;
+}
+.installer-erase {
+  border-top: 1px solid var(--edge, #303935);
+  margin-top: 28px;
+  padding-top: 16px;
+}
+.installer-erase h3 {
+  font-size: 16px;
+}
+.installer-erase label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.installer .danger {
+  color: #ffb6ae;
+  border-color: #90544e;
+}
+.installer progress {
+  width: 100%;
+  accent-color: #d7f078;
+}
+.installer-guard {
+  margin-top: 28px !important;
+  font-size: 12px;
+  color: #a9c489;
+}
+.installer details {
+  margin-top: 24px;
+}
+.installer code {
+  font-size: 0.9em;
+}
+@media (max-width: 520px) {
+  .installer.shell {
+    padding: 20px 16px;
+  }
+  .installer header {
+    flex-wrap: wrap;
+    margin-bottom: 36px;
+  }
+  .installer-panel {
+    padding: 22px;
+  }
+  .installer h1 {
+    font-size: 32px;
+  }
+  .installer-steps {
+    gap: 14px;
+  }
+  .installer-preview {
+    margin-left: 0;
+  }
+}
+.installer-steps li[aria-current='step'] {
+  color: #d7f078;
+  font-weight: 650;
+  border-bottom: 2px solid #d7f078;
+  padding-bottom: 8px;
+}
