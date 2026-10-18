@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { parseReportLink, base64url, reportEntries } from "../web/src/bug/report-link.ts";
+import { parseReportMetadata, reportEntries } from "../web/src/bug/report-link.ts";
 const json = (value, status = 200) =>
   Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
 const MAX_UPLOAD = 8 * 1024 * 1024;
@@ -76,7 +76,7 @@ export class IssueReports extends DurableObject {
         }).formData();
         const source = form.get("metadata");
         if (typeof source !== "string" || source.length > 4096) throw Error();
-        metadata = parseReportLink("#?report=" + base64url(new TextEncoder().encode(source)));
+        metadata = parseReportMetadata(JSON.parse(source));
         if (metadata.archive) throw Error();
         description = form.get("description");
         archive = form.get("report");

@@ -13,11 +13,24 @@ export const tar = Uint8Array.from(
 export const link: ReportLink = {
   v: 1,
   firmware: 'x70-110',
-  commit: 'a'.repeat(40),
+  commit: 'a'.repeat(8),
   path: 'A:\\FUJIMOD\\REPORTS\\R1234567.TAR',
   bytes: tar.length,
   crc32: crc32(tar).toString(16).padStart(8, '0'),
   files: '403a0000',
 };
 export const hash = (value = link) =>
-  '#?report=' + base64url(new TextEncoder().encode(JSON.stringify(value)));
+  '#?report=' +
+  base64url(
+    new TextEncoder().encode(
+      JSON.stringify({
+        v: value.v,
+        b: value.commit,
+        r: value.path.match(/R([a-fA-F0-9]{7})\.TAR$/)?.[1] ?? '',
+        n: value.bytes,
+        c: value.crc32,
+        f: value.files,
+        a: value.archive,
+      }),
+    ),
+  );

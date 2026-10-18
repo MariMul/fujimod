@@ -26,3 +26,29 @@ test('rejects malformed descriptors and damaged archives', () => {
     validateReport(invalid, { ...link, crc32: crc32(invalid).toString(16).padStart(8, '0') }),
   ).toThrow('checksum');
 });
+
+test('the camera QR carries only compact retrieval metadata', () => {
+  const encoded = hash().split('=')[1];
+  const wire = JSON.parse(new TextDecoder().decode(decode64(encoded)));
+  expect(wire).toEqual({
+    v: 1,
+    b: link.commit,
+    r: '1234567',
+    n: tar.length,
+    c: link.crc32,
+    f: link.files,
+  });
+  expect(('https://fujimod.com/bug' + hash()).length).toBeLessThan(190);
+  expect(parseReportLink(hash())).toEqual(link);
+  for (const changes of [
+    { b: 'a'.repeat(40) },
+    { b: 12345678 },
+    { r: '../x' },
+    { firmware: 'x70-110' },
+  ])
+    expect(() =>
+      parseReportLink(
+        '#?report=' + base64url(new TextEncoder().encode(JSON.stringify({ ...wire, ...changes }))),
+      ),
+    ).toThrow();
+});

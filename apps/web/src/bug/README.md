@@ -29,7 +29,7 @@ that adapter; it does not open another device chooser or USB session.
 
 ## Shared session-file access
 
-The QR `files` address identifies `x70_file_api` from the session-io library,
+The expanded `files` address identifies `x70_file_api` from the session-io library,
 the same file operations used by the RAW/photo-session tools. The previous
 report-specific channel, commands and nonce are removed. `DeviceFiles` is the
 reusable browser reader; `bug/transfer.ts` supplies X70 1.10 address bounds and
@@ -68,3 +68,14 @@ FUJIMOD_WEB_URL=https://your-host.ts.net/ node src/bug/browser.mjs PATH_TO_GUIDE
 ```
 
 Screenshots and results are written to ignored `apps/web/build/bug-report/`.
+
+## Compact QR descriptor
+
+The URL fragment contains base64url-encoded, minified JSON generated from
+`link.schema.json`. Its keys are `v` (format/firmware version, currently X70 1.10),
+`b` (eight hexadecimal build digits), `r` (seven-digit report ID), `n` (TAR bytes),
+`c` (CRC32), `f` (shared file discovery address), and optional `a` (inline TAR).
+The page reconstructs the fixed FUJIMOD/REPORTS directory and R<id>.TAR filename;
+the shared file service selects the mounted drive. Expanded upload metadata uses
+descriptive names. The full commit and firmware identity remain in the TAR's
+`manifest.json`.

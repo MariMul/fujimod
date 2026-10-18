@@ -26,21 +26,45 @@ export function parseReportLink(hash: string): ReportLink {
   const encoded = new URLSearchParams(hash.replace(/^#\??/, '')).get('report');
   if (!encoded || encoded.length > MAX_REPORT_BYTES * 2)
     throw Error('This link has no valid camera report.');
-  const value = JSON.parse(
-    new TextDecoder('utf-8', { fatal: true }).decode(decode64(encoded)),
-  ) as ReportLink;
+  const wire = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(decode64(encoded)));
+  if (
+    !wire ||
+    typeof wire !== 'object' ||
+    Array.isArray(wire) ||
+    typeof wire.r !== 'string' ||
+    !/^[a-fA-F0-9]{7}$/.test(wire.r) ||
+    Object.keys(wire).some((key) => !['v', 'b', 'r', 'n', 'c', 'f', 'a'].includes(key))
+  )
+    throw Error('Unsupported camera report link.');
+  return parseReportMetadata({
+    v: wire.v,
+    firmware: 'x70-110',
+    commit: wire.b,
+    path: `A:\\FUJIMOD\\REPORTS\\R${wire.r}.TAR`,
+    bytes: wire.n,
+    crc32: wire.c,
+    files: wire.f,
+    ...(wire.a === undefined ? {} : { archive: wire.a }),
+  });
+}
+/** Expanded upload metadata; the full build identity stays in manifest.json. */
+export function parseReportMetadata(value: ReportLink): ReportLink {
   if (
     !value ||
     typeof value !== 'object' ||
     Array.isArray(value) ||
     value.v !== 1 ||
     value.firmware !== 'x70-110' ||
-    !/^[a-f0-9]{40}$/.test(value.commit) ||
+    typeof value.commit !== 'string' ||
+    !/^[a-f0-9]{8}$/.test(value.commit) ||
+    typeof value.path !== 'string' ||
     !/^[A-Z]:\\FUJIMOD\\REPORTS\\R[a-fA-F0-9]{7}\.TAR$/.test(value.path) ||
     !Number.isSafeInteger(value.bytes) ||
     value.bytes < 1024 ||
     value.bytes > MAX_REPORT_BYTES ||
+    typeof value.crc32 !== 'string' ||
     !/^[a-f0-9]{8}$/.test(value.crc32) ||
+    typeof value.files !== 'string' ||
     !/^[a-f0-9]{8}$/.test(value.files) ||
     (value.archive !== undefined && typeof value.archive !== 'string')
   )

@@ -9,40 +9,35 @@
       "minimum": 0,
       "maximum": 1
     },
-    "firmware": {
+    "b": {
       "type": "string",
-      "maxLength": 16,
+      "maxLength": 8,
       "default": ""
     },
-    "commit": {
+    "r": {
       "type": "string",
-      "maxLength": 40,
+      "maxLength": 7,
       "default": ""
     },
-    "path": {
-      "type": "string",
-      "maxLength": 64,
-      "default": ""
-    },
-    "bytes": {
+    "n": {
       "type": "integer",
       "minimum": 0,
       "maximum": 67108864,
       "default": 0
     },
-    "crc32": {
+    "c": {
       "type": "string",
       "maxLength": 8,
       "default": ""
     },
-    "archive": {
+    "f": {
+      "type": "string",
+      "maxLength": 8,
+      "default": ""
+    },
+    "a": {
       "type": "string",
       "maxLength": 2048,
-      "default": ""
-    },
-    "files": {
-      "type": "string",
-      "maxLength": 8,
       "default": ""
     }
   },

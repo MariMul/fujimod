@@ -21,7 +21,7 @@ async function submission(overrides = {}) {
     JSON.stringify({
       v: 1,
       firmware: "x70-110",
-      commit: "a".repeat(40),
+      commit: "a".repeat(8),
       path: "A:\\FUJIMOD\\REPORTS\\R1234567.TAR",
       bytes: 1024,
       crc32: crc32(tar),
