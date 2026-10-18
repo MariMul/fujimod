@@ -132,7 +132,7 @@ mise run rust-coverage
 source <(cargo llvm-cov show-env --sh)
 mise run python-test
 mkdir -p target/coverage/rust
-cargo llvm-cov report --all-features --lcov --output-path target/coverage/rust/lcov.info
-cargo llvm-cov report --all-features --html --output-dir target/coverage/rust
+cargo llvm-cov report --lcov --output-path target/coverage/rust/lcov.info
+cargo llvm-cov report --html --output-dir target/coverage/rust
 uv run --locked python scripts/ci/coverage_summary.py
 ```
