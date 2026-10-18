@@ -23,7 +23,9 @@ SCHEMA = 3
 #   alternate  another way to do the same task, listed collapsed
 #   tour       visits every option; source of option cards (contact sheet)
 #   test       behaviour checks, hidden from owner documentation
-ROLES = ('guide', 'alternate', 'tour', 'test')
+#   hero       a short clip made for a feature's card (e.g. turning through
+#              every aspect ratio), not a route to follow
+ROLES = ('guide', 'alternate', 'tour', 'test', 'hero')
 
 
 def walkthrough(title, *, start_from=None, role=None, feature=None):
