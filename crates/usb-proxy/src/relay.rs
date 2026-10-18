@@ -404,6 +404,7 @@ mod tests {
                         product: None,
                         serial: None,
                         interfaces: vec![],
+                        status: None,
                     }],
                 })
                 .encode()

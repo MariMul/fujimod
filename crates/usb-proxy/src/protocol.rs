@@ -28,6 +28,22 @@ pub struct Device {
     pub product: Option<String>,
     pub serial: Option<String>,
     pub interfaces: Vec<Interface>,
+    /// Shared devices only: whether the camera is present, and its last battery report.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<DeviceStatus>,
+}
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct DeviceStatus {
+    pub online: bool,
+    /// Why the device is offline: "battery", "unplugged", "not responding".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    /// Last battery level a controller reported, in the firmware's own names.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub battery: Option<String>,
+    /// Milliseconds since that report.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub battery_age_ms: Option<u64>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Interface {
@@ -110,6 +126,16 @@ pub enum Frame {
     /// A controller's last message before it disconnects on purpose.
     Goodbye {
         reason: String,
+    },
+    /// Controller to owner, no reply: a battery reading the owner cannot take
+    /// itself while the camera is shared.
+    Status {
+        battery: String,
+    },
+    /// Controller to owner, no reply: a problem only the controller can see
+    /// (for example, the camera stopped answering); the owner alerts its user.
+    Attention {
+        message: String,
     },
     Ready {
         version: u32,

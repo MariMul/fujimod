@@ -361,6 +361,9 @@ impl<I> Observed<I> {
     pub(crate) fn new(io: I, trace: Option<Trace>) -> Self {
         Self { io, trace }
     }
+    pub(crate) fn inner_mut(&mut self) -> &mut I {
+        &mut self.io
+    }
 }
 impl<I: Io> Io for Observed<I> {
     async fn release(&mut self) -> Result<()> {

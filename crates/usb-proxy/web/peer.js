@@ -308,6 +308,10 @@ export class ShareHost {
   constructor(ticket, device, callbacks) {
     this.ticket = ticket;
     this.device = device;
+    // The link outlives the camera: while it is away, controllers see it offline.
+    this.descriptor = device.descriptor;
+    this.offline = undefined;
+    this.battery = undefined;
     this.callbacks = callbacks;
     this.peers = new Map();
     this.owner = undefined;
@@ -343,6 +347,38 @@ export class ShareHost {
       },
     );
   }
+  /** Online state and last controller battery report, as controllers see it. */
+  status() {
+    const status = { online: !this.offline };
+    if (this.offline) status.reason = this.offline;
+    if (this.battery) {
+      status.battery = this.battery.level;
+      status.battery_age_ms = Math.max(0, Date.now() - this.battery.at);
+    }
+    return status;
+  }
+  /** The camera went away; keep the link and report it offline with `reason`. */
+  cameraLost(reason) {
+    if (this.closed || !this.device) return;
+    const device = this.device;
+    const owner = this.owner;
+    this.device = undefined;
+    this.offline = reason;
+    this.owner = undefined;
+    this.fenced = false;
+    if (owner !== undefined) this.peers.get(owner)?.close();
+    void device.close().catch(() => {});
+    this.callbacks.state?.(this.status());
+  }
+  /** The same camera is back (the caller checked its identity); share it again. */
+  cameraReturned(device) {
+    if (this.closed) return;
+    this.device = device;
+    this.descriptor = device.descriptor;
+    this.offline = undefined;
+    this.fenced = false;
+    this.callbacks.state?.(this.status());
+  }
   async message(frame) {
     if (this.closed) return;
     if (frame.type === 'left') {
@@ -377,7 +413,7 @@ export class ShareHost {
             this.callbacks.error?.(
               Error('Remote controller disconnected while USB was claimed; completion unknown'),
             );
-          void this.device.close().catch((error) => this.callbacks.error?.(error));
+          void this.device?.close().catch((error) => this.callbacks.error?.(error));
         }
       };
       void (async () => {
@@ -400,6 +436,16 @@ export class ShareHost {
             peer.close();
             break;
           }
+          if (request.type === 'status') {
+            this.battery = { level: reason(request.battery), at: Date.now() };
+            this.callbacks.battery?.(frame.from, this.battery.level);
+            this.callbacks.state?.(this.status());
+            continue;
+          }
+          if (request.type === 'attention') {
+            this.callbacks.attention?.(frame.from, reason(request.message));
+            continue;
+          }
           if (
             request.type !== 'request' ||
             !Number.isSafeInteger(request.id) ||
@@ -409,8 +455,10 @@ export class ShareHost {
             throw Error('Invalid USB request');
           const completion = await observeRequest(frame.from, request, async () => {
             if (request.operation.op === 'probe') return {}; /* Network echo; never touches USB. */
-            else if (request.operation.op === 'list') return { devices: [this.device.descriptor] };
+            else if (request.operation.op === 'list')
+              return { devices: [{ ...this.descriptor, status: this.status() }] };
             else {
+              if (!this.device) throw Error(`Shared camera offline: ${this.offline}`);
               if (request.device !== this.device.descriptor.id)
                 throw Error('Unknown shared device');
               if (request.operation.op === 'open') {
@@ -451,6 +499,6 @@ export class ShareHost {
     this.signal.close();
     for (const peer of this.peers.values()) peer.close();
     this.peers.clear();
-    void this.device.close().catch((error) => this.callbacks.error?.(error));
+    void this.device?.close().catch((error) => this.callbacks.error?.(error));
   }
 }

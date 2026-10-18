@@ -13,6 +13,9 @@ pub(crate) struct ProxyIo {
     pub timeout: Duration,
 }
 impl ProxyIo {
+    pub(crate) async fn notify_owner(&mut self, frame: fujimod_usb_proxy::protocol::Frame) -> Result<()> {
+        Ok(self.client.notify_owner(frame).await?)
+    }
     async fn exchange(
         &mut self,
         operation: Operation,

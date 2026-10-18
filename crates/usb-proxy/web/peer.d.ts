@@ -42,7 +42,20 @@ export interface Callbacks {
   disconnected?(id: string, reason: string): void;
   /** Passive owner-side request and completion observation, including failed operations. */
   traffic?(event: ShareTrafficEvent): void;
+  /** A controller reported the camera's battery level (firmware level name). */
+  battery?(id: string, level: string): void;
+  /** A controller asks the owner's user to fix something only it can see. */
+  attention?(id: string, message: string): void;
+  /** Online state or battery changed. */
+  state?(status: ShareStatus): void;
   error?(error: Error): void;
+}
+export interface ShareStatus {
+  online: boolean;
+  /** Why the camera is offline: 'battery', 'unplugged' or 'not responding'. */
+  reason?: string;
+  battery?: string;
+  battery_age_ms?: number;
 }
 export function newTicket(signal: string, stun?: string[]): Ticket;
 export function parseShare(url: string): Ticket;
@@ -55,5 +68,10 @@ export class PeerChannel {
 }
 export class ShareHost {
   static create(ticket: Ticket, device: SharedDevice, callbacks?: Callbacks): Promise<ShareHost>;
+  status(): ShareStatus;
+  /** The camera went away; keep the link and report it offline with `reason`. */
+  cameraLost(reason: string): void;
+  /** The same camera is back (caller checked its identity); share it again. */
+  cameraReturned(device: SharedDevice): void;
   stop(): void;
 }

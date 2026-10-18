@@ -262,6 +262,16 @@ impl Client {
         }
         Ok(reply)
     }
+    /// Send the owner a Status or Attention frame; the owner does not reply.
+    pub async fn notify_owner(&mut self, frame: Frame) -> Result<()> {
+        if !matches!(frame, Frame::Status { .. } | Frame::Attention { .. }) {
+            return Err(err("only status and attention frames are notifications"));
+        }
+        if !self.usable {
+            return Err(err("connection fenced; completion unknown"));
+        }
+        send(&mut self.socket, &frame).await
+    }
     pub async fn devices(&mut self) -> Result<Vec<Device>> {
         let completion = self
             .request("", Operation::List, Duration::from_secs(5))
