@@ -242,7 +242,16 @@
   font-size: 10px;
 }
 .dt-message {
-  flex: 1 0 320px;
+  flex: 1 1 320px;
+  min-width: 320px;
+  /* One long message (a full command line, a hex dump) must not widen every row. */
+  max-width: 120ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dt-row[aria-expanded='true'] .dt-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .dt-size {
   text-align: right;
