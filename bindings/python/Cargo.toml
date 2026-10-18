@@ -20,6 +20,8 @@ fujimod-firmware = { path = "../../crates/firmware" }
 pyo3 = { workspace = true, features = ["experimental-async"] }
 fujimod-usb.workspace = true
 fujimod-defs.workspace = true
+fujimod-corpus = { path = "../../crates/corpus" }
+serde_json.workspace = true
 futures-lite.workspace = true
 futures-channel.workspace = true
 nusb.workspace = true
