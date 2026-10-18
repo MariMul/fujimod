@@ -27,9 +27,12 @@ alignment preserve the earlier clone pairer's behavior. Features include
 normalized SHA-256, instruction trigrams, referenced strings, constants, data
 references and call edges. Rare strings plus high trigram agreement and shared
 constants supply additional seeds. Cross-ISA feature seeds require two shared
-strings and two nontrivial constants; these are heuristic call-site-grade
+strings and two nontrivial constants, with shared strings covering at least a
+quarter of each function's strings; these are heuristic call-site-grade
 matches, never equal-code evidence. Weak/dissimilar call-site candidates are
-retained as graded name evidence, but never merge families or propagate calls.
+retained when two independent caller families nominate them without conflicting
+votes across discovery rounds. They carry graded names but never merge families
+or propagate calls. Instruction-token call alignment runs only within one ISA.
 
 `pairs(reference, other)` projects the combined families into `identical`,
 `same-code`, `call-site`, and `weak` evidence. `identical` means equal normalized

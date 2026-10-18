@@ -61,7 +61,8 @@ fn similarity(a: &Function, b: &Function) -> f64 {
     2. * n as f64 / (a.tokens.len() + b.tokens.len()) as f64
 }
 fn aligned(a: &Function, b: &Function) -> Vec<(u64, u64)> {
-    if a.calls.is_empty() || b.calls.is_empty() {
+    // Instruction-token positions have no shared meaning across instruction sets.
+    if a.architecture != b.architecture || a.calls.is_empty() || b.calls.is_empty() {
         return Vec::new();
     }
     if a.signature == b.signature {
@@ -194,7 +195,10 @@ impl Index {
             let qualifies = if x.architecture == y.architecture {
                 x.instructions >= 8 && y.instructions >= 8 && gram >= 0.85 && constants >= 2
             } else {
-                strings >= 2 && constants >= 2
+                strings >= 2
+                    && constants >= 2
+                    && strings * 4 >= x.strings.len()
+                    && strings * 4 >= y.strings.len()
             };
             if qualifies {
                 feature_votes
@@ -220,9 +224,11 @@ impl Index {
             }
         }
         let mut seen = HashSet::new();
-        let mut weak = BTreeSet::new();
+        let mut weak = BTreeMap::<(usize, usize), BTreeSet<usize>>::new();
+        let mut all_votes = BTreeMap::<(usize, String), BTreeSet<usize>>::new();
         while !frontier.is_empty() {
             let mut votes = BTreeMap::<(usize, String), BTreeSet<usize>>::new();
+            let mut sources = BTreeMap::<(usize, usize), BTreeSet<usize>>::new();
             for (a, b) in std::mem::take(&mut frontier) {
                 if !seen.insert((a.min(b), a.max(b))) {
                     continue;
@@ -234,6 +240,15 @@ impl Index {
                     if groups.root(x) == groups.root(y) {
                         continue;
                     }
+                    sources.entry((x.min(y), x.max(y))).or_default().insert(a);
+                    all_votes
+                        .entry((x, self.functions[y].key.firmware.clone()))
+                        .or_default()
+                        .insert(y);
+                    all_votes
+                        .entry((y, self.functions[x].key.firmware.clone()))
+                        .or_default()
+                        .insert(x);
                     votes
                         .entry((x, self.functions[y].key.firmware.clone()))
                         .or_default()
@@ -260,13 +275,26 @@ impl Index {
                     || x.instructions.max(y.instructions)
                         > 4 * x.instructions.min(y.instructions).max(1)
                 {
-                    weak.insert(((*a).min(b), (*a).max(b)));
+                    let key = ((*a).min(b), (*a).max(b));
+                    weak.entry(key).or_default().extend(&sources[&key]);
                     continue;
                 }
                 frontier.extend(groups.join(*a, b));
             }
         }
-        self.weak = weak.into_iter().collect();
+        // Dissimilar callees need two separate caller families, with no conflicting
+        // nomination in any discovery round. Repeating a call in one body is one vote.
+        self.weak = weak
+            .into_iter()
+            .filter_map(|((a, b), callers)| {
+                let independent: BTreeSet<_> =
+                    callers.into_iter().map(|i| groups.root(i)).collect();
+                (independent.len() >= 2
+                    && all_votes[&(a, self.functions[b].key.firmware.clone())].len() == 1
+                    && all_votes[&(b, self.functions[a].key.firmware.clone())].len() == 1)
+                    .then_some((a, b))
+            })
+            .collect();
         self.families.clear();
         self.membership = vec![0; self.functions.len()];
         let mut roots = BTreeMap::new();

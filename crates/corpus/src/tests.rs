@@ -127,14 +127,26 @@ fn tiny_code_is_not_a_seed_and_weak_names_do_not_propagate_calls() {
     function(&mut i, "a", "main", 300, &["one", "two"], &[], &[]);
     function(&mut i, "b", "main", 3000, &["one", "three"], &[], &[]);
     i.build();
-    assert_eq!(i.pairs("a", "b").len(), 2);
+    assert_eq!(i.pairs("a", "b").len(), 1);
+    assert!(i.find(Some("weak_name"), None, Some("b"), None).is_empty());
+    // A second call site in the same caller is not independent support.
+    i.functions[0].calls.push((3, 200));
+    i.functions[3].calls.push((3, 2000));
+    i.build();
+    assert_eq!(i.pairs("a", "b").len(), 1);
+    // A separate caller family can nominate the same dissimilar callees.
+    let second = &["push R", "xor R #7", "bl T", "pop pc"];
+    function(&mut i, "a", "main", 150, second, &[(2, 200)], &[]);
+    function(&mut i, "b", "main", 1500, second, &[(2, 2000)], &[]);
+    i.build();
+    assert_eq!(i.pairs("a", "b").len(), 3);
     let found = i.find(Some("weak_name"), None, Some("b"), None);
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].key.address, 2000);
     assert_eq!(found[0].name_donors[0].grade, Grade::Weak);
     assert!(i.inherited_names(found[0].id, None, true).is_empty());
     assert_eq!(i.sample_links(50, 42)["weak"].links.len(), 1);
-    assert_eq!(i.pairs("a", "b")[1].grade, Grade::Weak);
+    assert_eq!(i.pairs("a", "b").last().unwrap().grade, Grade::Weak);
 }
 fn input(fw: &str, arch: Architecture) -> UnitInput {
     UnitInput {
@@ -267,6 +279,36 @@ fn feature_seeds_bridge_architectures_but_do_not_claim_equal_code() {
         Grade::CallSite
     );
     assert!(!i.name_support(0, b).unwrap().corroborated);
+}
+
+#[test]
+fn cross_isa_seeds_require_string_coverage_and_never_align_instruction_positions() {
+    let mut i = Index::new();
+    function(&mut i, "a", "main", 100, CALLER, &[(2, 200)], &[]);
+    function(&mut i, "a", "main", 200, LEAF, &[], &["unrelated_leaf"]);
+    function(&mut i, "b", "main", 1000, CALLER, &[(2, 2000)], &[]);
+    function(&mut i, "b", "main", 2000, CHANGED, &[], &[]);
+    for f in &mut i.functions {
+        if f.key.firmware == "b" {
+            f.architecture = Architecture::Aarch64;
+        }
+        if f.key.address == 100 || f.key.address == 1000 {
+            f.strings = BTreeSet::from(["shared alpha".into(), "shared beta".into()]);
+            f.constants = BTreeSet::from([123456, 456789]);
+        }
+    }
+    i.build();
+    assert_eq!(i.pairs("a", "b").len(), 1);
+    assert!(
+        i.find(Some("unrelated_leaf"), None, Some("b"), None)
+            .is_empty()
+    );
+    // Two coincident labels inside a large resolver cannot seed a small consumer.
+    i.functions[0]
+        .strings
+        .extend((0..20).map(|n| format!("unrelated label {n}")));
+    i.build();
+    assert!(i.pairs("a", "b").is_empty());
 }
 
 #[test]
