@@ -1,4 +1,4 @@
-"""Public binding checks use synthetic code, never camera code or disassembly."""
+"""Corpus binding checks: indexing, names, annotations and cache round trips."""
 from pathlib import Path
 import struct
 import unittest

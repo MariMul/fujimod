@@ -1,4 +1,4 @@
-"""Public firmware binding tests use synthetic containers only."""
+"""Firmware binding checks: inversion, decompression and container parsing."""
 import hashlib
 import struct
 import unittest

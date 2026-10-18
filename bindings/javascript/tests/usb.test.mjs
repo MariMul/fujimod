@@ -169,8 +169,6 @@ test('cancelPending on a pending chunk closes the reader and restores fenced own
   assert.equal(reader.bytesCompleted,0);assert.equal(session.state,usb.SessionState.CompletionUnknown);
 });
 
-// These synthetic bodies deliberately differ from the studied firmware's codes,
-// mode flags, mailbox and argument positions.
 function serviceDefinition(rows = [[153,'flush_configuration',[7],4]], expectedId='synthetic-b-v2') {
   const document={schema:1,firmware:{id:'synthetic-b-v2',model:'Body B',version:'2',sha256:'ab'.repeat(32)},
     mailbox:{page:3,offset:0x240,configuration_limit:512},entries:rows.map(([code,codec,slots,enabled_modes])=>({code,label:codec,codec,slots,enabled_modes,next_mode:0,firmware_kind:19,handler:4294967296,parameter_table:8192}))};
