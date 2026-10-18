@@ -91,6 +91,23 @@ fn write_private(path: &Path, value: &Value) -> std::io::Result<()> {
     std::fs::rename(temporary, path)
 }
 
+/// The share's camera state as host tools need it: present or not (and why),
+/// and the last battery level with its wall-clock time. Unknown fields are dropped.
+fn status(value: &Value) -> Value {
+    let text = |key: &str| {
+        value[key]
+            .as_str()
+            .map(|s| Value::String(crate::protocol::bounded_reason(s)))
+            .unwrap_or(Value::Null)
+    };
+    json!({
+        "online": value["online"].as_bool().unwrap_or(true),
+        "reason": text("reason"),
+        "battery": text("battery"),
+        "battery_at_ms": value["battery_at_ms"].as_u64(),
+    })
+}
+
 async fn session(registry: Registry, mut socket: WebSocket) {
     let id = registry.counter.fetch_add(1, Ordering::Relaxed);
     let path = registry
@@ -106,7 +123,11 @@ async fn session(registry: Registry, mut socket: WebSocket) {
         let reply = match serde_json::from_str::<Value>(&text) {
             Ok(frame) => match frame["url"].as_str().map(Ticket::from_url) {
                 Some(Ok(Some(_))) => {
-                    let entry = json!({"url": frame["url"], "camera": frame["camera"]});
+                    let entry = json!({
+                        "url": frame["url"],
+                        "camera": frame["camera"],
+                        "status": status(&frame["status"]),
+                    });
                     match write_private(&path, &entry) {
                         Ok(()) => json!({"type": "registered"}),
                         Err(error) => json!({"type": "error", "message": error.to_string()}),
@@ -182,6 +203,24 @@ mod tests {
         let stored: Value = serde_json::from_slice(&std::fs::read(&entry).unwrap()).unwrap();
         assert_eq!(stored["url"], link());
         assert_eq!(stored["camera"]["model"], "X70");
+        assert_eq!(stored["status"]["online"], true);
+
+        socket
+            .send(Wire::Text(
+                json!({"url": link(), "camera": {"model": "X70"},
+                       "status": {"online": false, "reason": "battery", "battery": "END",
+                                  "battery_at_ms": 5, "extra": "dropped"}})
+                .to_string()
+                .into(),
+            ))
+            .await
+            .unwrap();
+        socket.next().await.unwrap().unwrap();
+        let stored: Value = serde_json::from_slice(&std::fs::read(&entry).unwrap()).unwrap();
+        assert_eq!(
+            stored["status"],
+            json!({"online": false, "reason": "battery", "battery": "END", "battery_at_ms": 5})
+        );
 
         socket.close(None).await.unwrap();
         for _ in 0..50 {
