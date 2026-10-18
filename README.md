@@ -47,3 +47,8 @@ The [shared binding generator](bindings/generator/README.md) derives service
 value wrappers, command/action factories, structured replies and language exports
 from Rust declarations. Routine service features need only Rust code; shared
 adapters handle execution and language boundaries.
+
+## Continuous integration
+
+See [CI.md](CI.md) for the required checks, local commands, coverage reports and
+the distinction between public tests and firmware-dependent rehearsals.

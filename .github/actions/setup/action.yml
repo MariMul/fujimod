@@ -1,0 +1,25 @@
+name: FujiMod toolchains
+description: Install the repository's pinned toolchains and development dependencies
+inputs:
+  javascript:
+    description: Install all JavaScript packages and matching Wasm tools
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
+    - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+      with:
+        shared-key: ${{ runner.os }}-ci
+    - shell: bash
+      run: uv sync --locked
+    - if: inputs.javascript == 'true'
+      shell: bash
+      run: |
+        rustup target add wasm32-unknown-unknown
+        npm ci
+        npm --prefix bindings/javascript ci
+        npm --prefix apps/web ci
+        npm --prefix apps/usb-sharing ci
+        npm --prefix bindings/javascript run setup:tooling
+        echo "$GITHUB_WORKSPACE/target/tooling/bin" >> "$GITHUB_PATH"

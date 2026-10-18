@@ -1,0 +1,68 @@
+[project]
+name = "fujimod-development"
+version = "0.0.0"
+requires-python = ">=3.11"
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = "py310"
+preview = true
+extend-exclude = ["target", "node_modules", "dist", "dist-local-preview", "pkg", "mods/lib/settings/upstream"]
+
+[tool.ruff.lint]
+# Astral's recommended core groups, plus complete signatures and stub hygiene.
+select = ["E4", "E7", "E9", "F", "UP", "B", "SIM", "I", "ANN", "PYI", "PGH003", "RUF100"]
+
+[tool.ty.environment]
+python-version = "3.10"
+extra-paths = ["bindings/python/python", "bindings/python/tests", "scripts/ci"]
+
+[tool.ty.src]
+exclude = ["target", "**/node_modules", "**/dist", "**/dist-local-preview", "bindings/javascript/pkg", "mods/lib/settings/upstream"]
+
+[tool.ty.rules]
+# Astral's stricter-checking guidance; no blanket ignores or untyped returns.
+blanket-ignore-comment = "error"
+dynamic-function-decorator-return = "error"
+missing-type-argument = "error"
+possibly-unresolved-reference = "error"
+unsound-assignment = "error"
+unsound-return-statement = "error"
+unsound-yield = "error"
+unused-ignore-comment = "error"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+norecursedirs = [".*", "node_modules", "target", "build", "dist", "dist-local-preview", "pkg", "upstream"]
+addopts = "--strict-config --strict-markers --continue-on-collection-errors -ra"
+
+[tool.coverage.run]
+branch = true
+relative_files = true
+data_file = "target/coverage/python/.coverage"
+source = ["bindings/python/python/fujimod", "apps/web/src/engine", "crates/simulation/environments", "scripts/ci"]
+omit = ["*/test_*.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+
+[tool.coverage.html]
+directory = "target/coverage/python/html"
+
+[tool.coverage.xml]
+output = "target/coverage/python/coverage.xml"
+
+[dependency-groups]
+dev = [
+    "maturin>=1.15,<2",
+    "pillow>=12.3",
+    "playwright>=1.64",
+    "pytest>=9",
+    "pytest-asyncio>=1",
+    "pytest-cov>=7",
+    "ruff>=0.15",
+    "ty>=0.0.1",
+]

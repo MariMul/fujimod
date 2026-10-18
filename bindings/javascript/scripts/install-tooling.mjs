@@ -26,8 +26,10 @@ try {
   execFileSync('tar', ['-xzf', join(directory, 'cli.tar.gz'), '-C', directory]);
   const bin = fileURLToPath(new URL('target/tooling/bin/', root));
   await mkdir(bin, { recursive: true });
-  const executable = process.platform === 'win32' ? 'wasm-bindgen.exe' : 'wasm-bindgen';
-  await copyFile(join(directory, name, executable), join(bin, executable));
-  await chmod(join(bin, executable), 0o755);
+  for (const tool of ['wasm-bindgen', 'wasm-bindgen-test-runner']) {
+    const executable = process.platform === 'win32' ? `${tool}.exe` : tool;
+    await copyFile(join(directory, name, executable), join(bin, executable));
+    await chmod(join(bin, executable), 0o755);
+  }
   console.log(`Installed wasm-bindgen ${version}`);
 } finally { await rm(directory, { recursive: true, force: true }); }

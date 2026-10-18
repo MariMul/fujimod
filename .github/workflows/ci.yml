@@ -1,0 +1,173 @@
+name: CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: '1'
+  WRANGLER_SEND_METRICS: 'false'
+jobs:
+  python-quality:
+    name: Python lint, format and types
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: mise run python-lint
+      - if: ${{ !cancelled() }}
+        run: mise run python-format-check
+      - if: ${{ !cancelled() }}
+        run: mise run python-typecheck
+
+  rust-quality:
+    name: Rust format and Clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: mise run rust-format-check
+      - if: ${{ !cancelled() }}
+        run: mise run rust-check
+
+  javascript-quality:
+    name: JavaScript and TypeScript lint, format and types
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          javascript: 'true'
+      - run: npm --prefix bindings/javascript run build
+      - run: mise run javascript-lint
+      - if: ${{ !cancelled() }}
+        run: mise run web-check
+      - if: ${{ !cancelled() }}
+        run: mise run javascript-format-check
+
+  native-tests:
+    name: Rust and Python tests with coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # show-env and cargo llvm-cov otherwise choose different default directories.
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target/llvm-cov-target
+      CARGO_LLVM_COV_TARGET_DIR: ${{ github.workspace }}/target/llvm-cov-target
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Install coverage and media tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          rustup component add llvm-tools-preview
+          cargo install cargo-llvm-cov --version 0.9.1 --locked
+      - run: mise run rust-coverage
+      - name: Rust documentation tests
+        if: ${{ !cancelled() }}
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
+        run: cargo test --workspace --all-features --locked --doc
+      - name: Build instrumented Python bindings
+        if: ${{ !cancelled() }}
+        run: |
+          cargo llvm-cov show-env --sh > "$RUNNER_TEMP/llvm-coverage.env"
+          source "$RUNNER_TEMP/llvm-coverage.env"
+          mise run python-build-test
+      - name: Python tests (also run independent tests after build failures)
+        if: ${{ !cancelled() }}
+        run: |
+          cargo llvm-cov show-env --sh > "$RUNNER_TEMP/llvm-coverage.env"
+          source "$RUNNER_TEMP/llvm-coverage.env"
+          mise run python-pytest
+      - name: Rust coverage reports including Python's native calls
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p target/coverage/rust
+          cargo llvm-cov report --all-features --lcov --output-path target/coverage/rust/lcov.info
+          cargo llvm-cov report --all-features --html --output-dir target/coverage/rust
+      - name: Coverage summary
+        if: always()
+        run: uv run --locked python scripts/ci/coverage_summary.py >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: always()
+        with:
+          name: native-coverage
+          path: target/coverage
+          if-no-files-found: error
+          retention-days: 14
+
+  javascript-tests:
+    name: JavaScript, Wasm, Pyodide and browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          lfs: true
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          javascript: 'true'
+      - run: npm --prefix apps/web exec -- playwright install --with-deps chromium webkit
+      - run: mise run javascript-node-test
+      - if: ${{ !cancelled() }}
+        run: mise run rust-wasm-test
+      - if: ${{ !cancelled() }}
+        run: mise run javascript-browser-test
+      - name: Pyodide contracts in Node and Chromium
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --locked python bindings/python/scripts/build_web_wheel.py --output target/web-wheels
+          npm --prefix bindings/javascript run test:pyodide:browser
+      - if: ${{ !cancelled() }}
+        run: mise run web-coverage
+      - if: ${{ !cancelled() }}
+        run: mise run web-build
+      - name: All declared web integration test scripts
+        if: ${{ !cancelled() }}
+        run: node scripts/ci/package-tests.mjs apps/web
+      - if: ${{ !cancelled() }}
+        run: npm --prefix apps/usb-sharing run check
+      - name: Coverage summary
+        if: always()
+        run: uv run --locked python scripts/ci/coverage_summary.py >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: always()
+        with:
+          name: javascript-coverage
+          path: target/coverage
+          if-no-files-found: error
+          retention-days: 14
+
+  required:
+    name: CI required
+    if: always()
+    needs: [python-quality, rust-quality, javascript-quality, native-tests, javascript-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every check to succeed
+        env:
+          RESULTS: ${{ join(needs.*.result, ',') }}
+        run: |
+          test "$RESULTS" = 'success,success,success,success,success'

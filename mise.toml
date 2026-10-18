@@ -1,5 +1,7 @@
 [tools]
 node = "26.12.0"
+python = "3.14.8"
+uv = "0.13.1"
 rust = { version = "1.99.1", profile = "minimal", components = ["rustfmt", "clippy"] }
 
 [tasks.web-build]
@@ -46,3 +48,43 @@ run = "npm test"
 [tasks.javascript-browser-test]
 dir = "{{config_root}}/bindings/javascript"
 run = "npm run test:browser"
+
+[tasks.python-lint]
+run = "uv run --locked ruff check ."
+
+[tasks.python-format-check]
+run = "uv run --locked ruff format --check ."
+
+[tasks.python-typecheck]
+run = "uv run --locked ty check --error-on-warning"
+
+[tasks.python-build-test]
+run = [
+  "uv run --locked maturin develop --manifest-path bindings/python/Cargo.toml --features testing --locked",
+  "uv run --locked python -c 'from fujimod.usb import testing'",
+]
+
+[tasks.python-test]
+run = ["mise run python-build-test", "mise run python-pytest"]
+
+[tasks.python-pytest]
+run = "uv run --locked pytest --cov --cov-report=term-missing --cov-report=xml --cov-report=html --junitxml=target/coverage/python/junit.xml"
+
+[tasks.javascript-lint]
+run = "npm run lint"
+
+[tasks.javascript-format-check]
+run = "npm run format:check"
+
+[tasks.javascript-node-test]
+run = "npm run test:node"
+
+[tasks.rust-format-check]
+run = "cargo fmt --all -- --check"
+
+[tasks.rust-coverage]
+run = "cargo llvm-cov --workspace --all-features --locked --no-report"
+
+[tasks.web-coverage]
+dir = "{{config_root}}/apps/web"
+run = "npm test -- --coverage --coverage.reportOnFailure --coverage.provider=v8 --coverage.reporter=text --coverage.reporter=lcov --coverage.reporter=html --coverage.reporter=json-summary --coverage.reportsDirectory=../../target/coverage/web --coverage.include='src/**/*.{ts,tsx,mjs}' --coverage.include='devices/**/*.ts' --coverage.include='scripts/**/*.mjs' --coverage.exclude='**/*.test.*' --coverage.exclude='**/*.d.ts' --coverage.exclude='**/*.fixture.*'"
