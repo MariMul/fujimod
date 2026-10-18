@@ -32,9 +32,14 @@ export function pageState(): PageState {
     return created;
   });
   pinned.__fujimodDevToolsPage = state;
-  if (import.meta.env.DEV || import.meta.env.MODE === 'local-preview') {
+  if (
+    typeof window !== 'undefined' &&
+    (import.meta.env.DEV || import.meta.env.MODE === 'local-preview')
+  ) {
     const current = state;
-    void import('./dev-share').then(({ startDevShare }) => startDevShare(current.tools, current.share));
+    void import('./dev-share').then(({ startDevShare }) =>
+      startDevShare(current.tools, current.share),
+    );
   }
   return state;
 }
