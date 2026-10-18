@@ -15,6 +15,10 @@ Its sample files are not bootable firmware; it does not emulate firmware or
 assert hardware behavior. The production route does not select that adapter.
 The real connection action stays disabled until a hardware adapter is supplied.
 
+The manual formatting path leaves the SD card in the camera and directs the user
+to its Format menu. After reconnecting, the installer probes the filesystem again;
+formatting in the camera does not bypass the FAT32 requirement.
+
 ## Adapter requirements
 
 - Identify the exact connected camera and firmware, and whether the current boot
@@ -45,5 +49,5 @@ FujiMod. It does not claim an automatic post-boot firmware identification.
 
 Tests cover ordering, explicit erase consent, wrong firmware, guard failures,
 source/read-back hash mismatch, card swaps, falsely successful formatting,
-manual formatting, disconnection and repeated clicks. They use the test adapter;
-they do not establish hardware safety or execute stock firmware.
+in-camera formatting and filesystem rechecks, disconnection and repeated clicks.
+They use the test adapter; they do not establish hardware safety or execute stock firmware.

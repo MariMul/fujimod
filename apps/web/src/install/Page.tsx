@@ -177,7 +177,7 @@ export default function InstallerPage(
               <Show when={state().card?.filesystem !== 'FAT32'}>
                 <p>Dual boot requires FAT32.</p>
                 <button disabled={state().busy} onClick={() => installer.manualFormat()}>
-                  Format on my computer
+                  Format on the camera
                 </button>
                 <Show when={state().card?.filesystem === 'exFAT' && adapter().canFormat}>
                   <div class="installer-erase">
@@ -206,7 +206,7 @@ export default function InstallerPage(
               </Show>
             </Match>
             <Match when={state().step === 'manual-format'}>
-              <h2>Format the card on your computer</h2>
+              <h2>Format the card on your camera</h2>
               <p>
                 {state().guard === 'armed'
                   ? 'Settings-reset guard verified.'
@@ -218,10 +218,13 @@ export default function InstallerPage(
                   disconnect USB.
                 </li>
                 <li>
-                  Remove the SD card and format it as FAT32 on your computer. Formatting deletes all
-                  data on the card.
+                  Leave the SD card in the camera. Reinsert the battery and turn the camera on
+                  normally.
                 </li>
-                <li>Put the card and battery back in the camera, then reconnect USB.</li>
+                <li>
+                  Use the camera’s Format menu. Formatting deletes all photos and files on the card.
+                </li>
+                <li>Turn the camera off, reboot into service mode, then reconnect USB.</li>
               </ol>
               <button class="primary" onClick={() => installer.reconnectFormatted()}>
                 Card formatted — reconnect
@@ -290,7 +293,9 @@ export default function InstallerPage(
           <Show
             when={
               state().guard === 'armed' &&
-              !['battery', 'boot', 'confirm', 'done', 'manual-format', 'error'].includes(state().step)
+              !['battery', 'boot', 'confirm', 'done', 'manual-format', 'error'].includes(
+                state().step,
+              )
             }
           >
             <p class="installer-guard">Settings-reset guard armed</p>

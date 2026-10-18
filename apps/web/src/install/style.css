@@ -16,7 +16,7 @@
 .installer-heading p {
   font-size: 11px;
   letter-spacing: 0.14em;
-  color: var(--dim, #9caaa5);
+  color: var(--dim);
   margin: 0 0 10px;
 }
 .installer h1 {
@@ -31,14 +31,14 @@
   list-style: none;
   padding: 0;
   margin: 0 0 20px;
-  color: var(--dim, #9caaa5);
+  color: var(--dim);
   font-size: 12px;
 }
 .installer-panel {
-  border: 1px solid var(--edge, #303935);
+  border: 1px solid var(--edge);
   border-radius: 16px;
   padding: 30px;
-  background: var(--panel, #151b18);
+  background: var(--key);
   min-height: 260px;
 }
 .installer h2 {
@@ -62,13 +62,13 @@
   max-width: 360px;
   padding: 12px;
   color: inherit;
-  background: var(--bg, #101513);
-  border: 1px solid var(--edge, #303935);
+  background: var(--key);
+  border: 1px solid var(--edge);
   border-radius: 8px;
 }
 .installer button {
   padding: 11px 18px;
-  border: 1px solid var(--edge, #303935);
+  border: 1px solid var(--edge);
   border-radius: 8px;
   background: transparent;
   color: inherit;
@@ -77,9 +77,9 @@
   font-weight: 600;
 }
 .installer button.primary {
-  background: #d7f078;
-  color: #15200c;
-  border-color: #d7f078;
+  background: #fff;
+  color: #000;
+  border-color: #fff;
 }
 .installer button:disabled {
   opacity: 0.4;
@@ -90,15 +90,15 @@
   align-items: center;
   gap: 20px;
   padding: 16px 20px;
-  border: 1px solid var(--edge, #303935);
+  border: 1px solid var(--edge);
   border-radius: 8px;
 }
 .installer-card span {
-  color: var(--dim, #9caaa5);
+  color: var(--dim);
   font-size: 13px;
 }
 .installer-erase {
-  border-top: 1px solid var(--edge, #303935);
+  border-top: 1px solid var(--edge);
   margin-top: 28px;
   padding-top: 16px;
 }
@@ -111,17 +111,17 @@
   gap: 10px;
 }
 .installer .danger {
-  color: #ffb6ae;
-  border-color: #90544e;
+  color: var(--red);
+  border-color: var(--red);
 }
 .installer progress {
   width: 100%;
-  accent-color: #d7f078;
+  accent-color: #fff;
 }
 .installer-guard {
   margin-top: 28px !important;
   font-size: 12px;
-  color: #a9c489;
+  color: var(--dim);
 }
 .installer details {
   margin-top: 24px;
@@ -151,8 +151,8 @@
   }
 }
 .installer-steps li[aria-current='step'] {
-  color: #d7f078;
+  color: #fff;
   font-weight: 650;
-  border-bottom: 2px solid #d7f078;
+  border-bottom: 2px solid #fff;
   padding-bottom: 8px;
 }

@@ -156,7 +156,7 @@ test('disconnect during a write stops before readback; double clicks never repea
   expect(write).toHaveBeenCalledTimes(1);
 });
 
-test('external formatting verifies the exit guard, then requires a fresh connection and card probe', async () => {
+test('in-camera formatting verifies the exit guard, then requires a fresh connection and card probe', async () => {
   const { installer, adapter, calls } = fixture('exFAT');
   await installer.connect();
   await installer.manualFormat();
@@ -166,6 +166,12 @@ test('external formatting verifies the exit guard, then requires a fresh connect
   installer.reconnectFormatted();
   expect(installer.state.step).toBe('connect');
   expect(installer.state.card).toBeUndefined();
+  await installer.connect();
+  expect(installer.state.card?.filesystem).toBe('exFAT');
+  await installer.install();
+  expect(calls).not.toContain('write');
+  await installer.manualFormat();
+  installer.reconnectFormatted();
   await adapter.format('preview', 'preview-card');
   await installer.connect();
   expect(installer.state.card?.filesystem).toBe('FAT32');

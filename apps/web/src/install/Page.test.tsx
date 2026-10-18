@@ -91,3 +91,45 @@ test('the hardware route cannot select a camera or write data without a verified
     host.remove();
   }
 });
+
+test('manual formatting uses the camera menu and rechecks exFAT without writing', async () => {
+  const adapter = previewAdapter('exFAT'),
+    host = document.createElement('div');
+  document.body.append(host);
+  const format = vi.spyOn(adapter, 'format'),
+    write = vi.spyOn(adapter, 'write'),
+    card = vi.spyOn(adapter, 'card'),
+    dispose = render(() => <Page adapter={adapter} preview />, host);
+  try {
+    await vi.waitFor(() => {
+      flush();
+      expect(host.querySelector('select')).toBeTruthy();
+    });
+    const select = host.querySelector('select')!;
+    select.value = 'x70-110';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    flush();
+    await click(host, 'Continue');
+    await click(host, 'Connect camera');
+    await click(host, 'Format on the camera');
+    await vi.waitFor(() => {
+      flush();
+      expect(host.textContent).toContain('Use the camera’s Format menu');
+    });
+    expect(host.textContent).toContain('Leave the SD card in the camera');
+    expect(host.textContent).not.toContain('computer');
+    await click(host, 'Card formatted — reconnect');
+    await click(host, 'Connect camera');
+    await vi.waitFor(() => {
+      flush();
+      expect(host.textContent).toContain('exFAT');
+    });
+    expect(card).toHaveBeenCalledTimes(2);
+    expect(button(host, 'Install FujiMod')).toBeUndefined();
+    expect(format).not.toHaveBeenCalled();
+    expect(write).not.toHaveBeenCalled();
+  } finally {
+    dispose();
+    host.remove();
+  }
+});
