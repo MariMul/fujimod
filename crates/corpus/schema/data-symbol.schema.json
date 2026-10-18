@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fujimod.com/schemas/corpus-data-symbol.schema.json",
+  "title": "Named corpus data range",
+  "type": "object",
+  "required": [
+    "firmware",
+    "unit",
+    "address",
+    "length",
+    "name",
+    "kind",
+    "source"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "firmware": {
+      "type": "string",
+      "minLength": 1
+    },
+    "unit": {
+      "type": "string",
+      "minLength": 1
+    },
+    "address": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    },
+    "length": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "$schema": {
+      "type": "string"
+    }
+  }
+}

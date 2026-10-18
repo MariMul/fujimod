@@ -200,14 +200,40 @@ pub(crate) fn decode(u: &Unit) -> Result<(Vec<Function>, Vec<String>)> {
                 {
                     calls.push((texts.len(), t as u64));
                 }
-                for c in P.imm.captures_iter(op) {
-                    if let Some(v) = number(&c[1])
-                        && !u.pointer(v as u64)
-                    {
-                        constants.insert(v as u64);
+                if !matches!(b, "movw" | "movt") {
+                    for c in P.imm.captures_iter(op) {
+                        if let Some(v) = number(&c[1])
+                            && !u.pointer(v as u64)
+                        {
+                            constants.insert(v as u64);
+                        }
                     }
                 }
                 if u.input.architecture == Architecture::Arm32 {
+                    if let (Some(low), Some(high)) = (u.read(a, 4), u.read(a + 4, 4)) {
+                        let low = u32::from_le_bytes(low.try_into().unwrap());
+                        let high = u32::from_le_bytes(high.try_into().unwrap());
+                        if low & 0x0ff00000 == 0x03000000
+                            && high & 0x0ff00000 == 0x03400000
+                            && (low ^ high) & 0xf000f000 == 0
+                            && low >> 28 != 15
+                            && (low >> 12) & 15 != 15
+                            && insns.contains_key(&(a + 4))
+                        {
+                            let imm = |w: u32| (w & 0xfff) | ((w >> 4) & 0xf000);
+                            let value = (imm(low) | (imm(high) << 16)) as u64;
+                            if u.pointer(value) {
+                                refs.push(Reference {
+                                    site: a,
+                                    target: u.canonical_address(value),
+                                    kind: "movw-movt".into(),
+                                    text: read_string(u, value),
+                                });
+                            } else {
+                                constants.insert(value);
+                            }
+                        }
+                    }
                     if let Some(t) = literal(a, op) {
                         refs.push(Reference {
                             site: a,
@@ -222,7 +248,7 @@ pub(crate) fn decode(u: &Unit) -> Result<(Vec<Function>, Vec<String>)> {
                             if u.pointer(v) {
                                 refs.push(Reference {
                                     site: a,
-                                    target: v,
+                                    target: u.canonical_address(v),
                                     kind: "data".into(),
                                     text: read_string(u, v),
                                 });
@@ -244,6 +270,28 @@ pub(crate) fn decode(u: &Unit) -> Result<(Vec<Function>, Vec<String>)> {
                             kind: m.clone(),
                             text: read_string(u, v as u64),
                         });
+                    }
+                    if m == "adrp"
+                        && let Some((next_m, next_op)) = insns.get(&(a + 4))
+                        && next_m == "add"
+                        && let Some(c) = P.imm.captures(op)
+                        && let Some(page) = number(&c[1])
+                        && let Some(bytes) = u.read(a + 4, 4)
+                    {
+                        let word = u32::from_le_bytes(bytes.try_into().unwrap());
+                        let rd = op.split(',').next().unwrap_or("");
+                        let args: Vec<_> = next_op.split(',').map(str::trim).collect();
+                        if args.len() >= 3 && args[1] == rd && word & 0xff800000 == 0x91000000 {
+                            let offset = (((word >> 10) & 0xfff) as u64)
+                                << if word & (1 << 22) != 0 { 12 } else { 0 };
+                            let value = (page as u64).wrapping_add(offset);
+                            refs.push(Reference {
+                                site: a,
+                                target: u.canonical_address(value),
+                                kind: "adrp-add".into(),
+                                text: read_string(u, value),
+                            });
+                        }
                     }
                     texts.push(normalize64(m, op));
                 }

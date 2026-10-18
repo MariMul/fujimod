@@ -51,6 +51,40 @@ class Index:
     def members(self, family, firmware=None):
         return self._query('members', id=family, firmware=firmware)
 
+    def string_frequencies(self, strings):
+        return self._query('string_frequencies', strings=list(strings))
+
+    def body_sha256(self, function):
+        return self._query('body_sha256', id=function)
+
+    def name_support(self, function, other):
+        return self._query('name_support', id=function, other=other)
+
+    def find_strings(self, strings, firmware=None):
+        return self._query('find_strings', strings=list(strings), firmware=firmware)
+
+    def add_name(self, function, name, source):
+        self._native.add_name(function, name, source)
+
+    def read(self, firmware, unit, address, size):
+        result = self._query('read', firmware=firmware, unit=unit, address=address, size=size)
+        return None if result is None else bytes(result)
+
+    def add_symbol(self, symbol):
+        self._native.add_symbol(json.dumps(symbol))
+
+    def symbols(self, name=None, *, firmware=None, unit=None):
+        return self._query('symbols', name=name, firmware=firmware, unit=unit)
+
+    def features(self, function):
+        return self._query('features', id=function)
+
+    def sample_links(self, count=50, seed=0):
+        return self._query('sample_links', count=count, seed=seed)
+
+    def data_witnesses(self, function, length=64):
+        return self._query('data_witnesses', id=function, length=length)
+
     def normalized_tokens(self, function):
         return self._query('normalized_tokens', id=function)
 

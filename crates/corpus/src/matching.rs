@@ -286,6 +286,7 @@ impl Index {
                 .annotations
                 .extend(self.functions[i].annotations.clone());
         }
+        self.reindex_weak();
     }
     pub fn pairs(&self, reference: &str, other: &str) -> Vec<Pair> {
         let mut out = Vec::new();
@@ -304,7 +305,7 @@ impl Index {
                 out.push(self.pair(a, b));
             }
         }
-        // Weak links are evidence only: they never transmit names or propagate calls.
+        // Weak links remain separate from family membership and call propagation.
         for &(a, b) in &self.weak {
             let (a, b) = if self.functions[a].key.firmware == reference
                 && self.functions[b].key.firmware == other
@@ -332,9 +333,9 @@ impl Index {
         out.sort_by(|a, b| a.reference.cmp(&b.reference));
         out
     }
-    fn pair(&self, a: usize, b: usize) -> Pair {
+    pub(crate) fn grade(&self, a: usize, b: usize) -> Grade {
         let (x, y) = (&self.functions[a], &self.functions[b]);
-        let grade = if x.architecture != y.architecture || x.signature != y.signature {
+        if x.architecture != y.architecture || x.signature != y.signature {
             Grade::CallSite
         } else {
             let calls: HashMap<usize, u64> = y.calls.iter().copied().collect();
@@ -351,11 +352,22 @@ impl Index {
             } else {
                 Grade::SameCode
             }
-        };
+        }
+    }
+    pub(crate) fn weak_pair(&self, a: usize, b: usize) -> Pair {
+        Pair {
+            reference: self.functions[a].key.clone(),
+            other: self.functions[b].key.clone(),
+            grade: Grade::Weak,
+            similarity: similarity(&self.functions[a], &self.functions[b]),
+        }
+    }
+    pub(crate) fn pair(&self, a: usize, b: usize) -> Pair {
+        let (x, y) = (&self.functions[a], &self.functions[b]);
         Pair {
             reference: x.key.clone(),
             other: y.key.clone(),
-            grade,
+            grade: self.grade(a, b),
             similarity: similarity(x, y),
         }
     }

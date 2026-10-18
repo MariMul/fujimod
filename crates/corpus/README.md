@@ -29,7 +29,7 @@ references and call edges. Rare strings plus high trigram agreement and shared
 constants supply additional seeds. Cross-ISA feature seeds require two shared
 strings and two nontrivial constants; these are heuristic call-site-grade
 matches, never equal-code evidence. Weak/dissimilar call-site candidates are
-retained as evidence links, but never merge families or propagate names/calls.
+retained as graded name evidence, but never merge families or propagate calls.
 
 `pairs(reference, other)` projects the combined families into `identical`,
 `same-code`, `call-site`, and `weak` evidence. `identical` means equal normalized
@@ -38,7 +38,7 @@ code with consistently resolved callees; it does **not** mean byte equality.
 
 Locators can find by name/address, select family members in a firmware, follow
 calls and data references (including reverse references), read family
-annotations, and search mapped units with byte masks. `names` retains aliases
+annotations, and search mapped units with byte masks. `names` retains names
 and donor provenance; callers can require equal normalized code. Metadata
 annotations use explicit `kind`, `text`, and `source` fields, so names/types,
 readable C, research notes, and locator reports remain private caller data.
@@ -52,3 +52,28 @@ Python uses `from fujimod.corpus import Index`, with the same operations and
 JSON-compatible dictionaries. Build the extension through the existing
 `bindings/python` package. Tests use only synthetic listings and instructions;
 all test output goes under `target/corpus-tests`.
+
+Analysis names propagate through every grade, including weak links. Each donor
+returned by `names` or `find(name).name_donors` includes its grade and full
+`(firmware, unit, address)` identity. Weak names can cross one weak edge between
+families; weak edges never merge families, chain with one another, or authorize
+call propagation. `normalized_only` limits donors to identical/same-code links.
+Consumers that generate executable symbol maps must use that restriction or
+independently verified execution evidence.
+
+`sample_links(count, seed)` draws deterministic bottom-k samples of every grade
+over the complete pair population, with cross-ISA links separated. `features`,
+`body_sha256`, `data_witnesses`, `string_frequencies`, and `name_support` report
+observational corroboration. A positive witness is not ground-truth proof;
+corroboration never blocks names in analysis or locator queries.
+
+Address aliases are explicit one-hop byte mappings in `UnitInput.address_aliases`.
+They affect reads; pointer classification remains a separate caller-supplied
+window policy. Adjacent A32 MOVW/MOVT and AArch64 ADRP/ADD materializations expose
+complete data/string references rather than address fragments. Caches prior to
+`FMCORP03` must be regenerated.
+
+Named data ranges use `DataSymbol` and
+[`schema/data-symbol.schema.json`](schema/data-symbol.schema.json). `add_symbol`
+checks the complete mapped range; `symbols` queries it independently of function
+families. `add_name` records donor provenance and survives subset/merge/save.

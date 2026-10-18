@@ -70,6 +70,11 @@ fn propagates_across_three_firmwares_and_keeps_grades() {
     function(&mut i, "b", "main", 3000, CHANGED, &[], &["bridge"]);
     // The changed leaf is uniquely shared by B and C, and receives A's name through B.
     function(&mut i, "c", "main", 30000, CHANGED, &[], &[]);
+    for f in &mut i.functions {
+        if f.key.address == 3000 || f.key.address == 30000 {
+            f.strings.insert("synthetic bridge role".into());
+        }
+    }
     i.build();
     let pairs = i.pairs("a", "b");
     assert_eq!(pairs.len(), 3);
@@ -107,7 +112,7 @@ fn overlapping_banks_and_unresolved_calls_stay_distinct() {
     assert_eq!(i.resolve(one, 200), Some(one));
 }
 #[test]
-fn tiny_code_is_not_a_seed_and_weak_does_not_propagate() {
+fn tiny_code_is_not_a_seed_and_weak_names_do_not_propagate_calls() {
     let mut i = Index::new();
     function(&mut i, "a", "main", 1, &["bx lr"], &[], &[]);
     function(&mut i, "b", "main", 2, &["bx lr"], &[], &[]);
@@ -116,13 +121,19 @@ fn tiny_code_is_not_a_seed_and_weak_does_not_propagate() {
     let mut i = Index::new();
     function(&mut i, "a", "main", 100, CALLER, &[(2, 200)], &[]);
     function(&mut i, "b", "main", 1000, CALLER, &[(2, 2000)], &[]);
-    function(&mut i, "a", "main", 200, LEAF, &[(1, 300)], &[]);
+    function(&mut i, "a", "main", 200, LEAF, &[(1, 300)], &["weak_name"]);
     let big: Vec<_> = (0..40).map(|_| "different").collect();
     function(&mut i, "b", "main", 2000, &big, &[(1, 3000)], &[]);
     function(&mut i, "a", "main", 300, &["one", "two"], &[], &[]);
     function(&mut i, "b", "main", 3000, &["one", "three"], &[], &[]);
     i.build();
     assert_eq!(i.pairs("a", "b").len(), 2);
+    let found = i.find(Some("weak_name"), None, Some("b"), None);
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].key.address, 2000);
+    assert_eq!(found[0].name_donors[0].grade, Grade::Weak);
+    assert!(i.inherited_names(found[0].id, None, true).is_empty());
+    assert_eq!(i.sample_links(50, 42)["weak"].links.len(), 1);
     assert_eq!(i.pairs("a", "b")[1].grade, Grade::Weak);
 }
 fn input(fw: &str, arch: Architecture) -> UnitInput {
@@ -131,6 +142,7 @@ fn input(fw: &str, arch: Architecture) -> UnitInput {
         unit: "main".into(),
         architecture: arch,
         address_ranges: vec![(0x40000, 0x10000000)],
+        address_aliases: vec![],
         functions: vec![Boundary {
             address: 0x1000,
             ranges: vec![(0x1000, 0x1014)],
@@ -247,9 +259,14 @@ fn feature_seeds_bridge_architectures_but_do_not_claim_equal_code() {
     }
     i.build();
     assert_eq!(i.pairs("a", "b")[0].grade, Grade::CallSite);
-    let b = i.find(Some("from_a"), None, Some("b"), None)[0].id;
+    assert_eq!(i.find(Some("from_a"), None, Some("b"), None).len(), 1);
+    let b = i.find(None, Some(200), Some("b"), None)[0].id;
     assert!(i.inherited_names(b, None, true).is_empty());
-    assert!(!i.inherited_names(b, None, false).is_empty());
+    assert_eq!(
+        i.inherited_names(b, None, false)["from_a"][0].grade,
+        Grade::CallSite
+    );
+    assert!(!i.name_support(0, b).unwrap().corroborated);
 }
 
 #[test]
@@ -287,4 +304,176 @@ fn merge_is_atomic_on_duplicate_unit_and_annotations_survive_rebuild() {
     assert_eq!(i.functions.len(), 1);
     i.build();
     assert_eq!(i.families[0].annotations[0].text, "synthetic signature");
+}
+
+#[test]
+fn split_address_references_and_aliases_recover_strings() {
+    let words = [
+        0xe3010080u32,
+        0xe3440000,
+        0xe12fff1e,
+        0xe320f000,
+        0xe320f000,
+    ];
+    let mut bytes = vec![0; 0x100];
+    for (i, w) in words.iter().enumerate() {
+        bytes[i * 4..i * 4 + 4].copy_from_slice(&w.to_le_bytes());
+    }
+    bytes[0x80..0x95].copy_from_slice(b"synthetic task label\0");
+    let mut meta = input("a", Architecture::Arm32);
+    meta.address_aliases = vec![(0x40001000, 0x40001100, 0x1000)];
+    meta.address_ranges.push((0x40001000, 0x40001100));
+    let mut i = Index::new();
+    i.add_unit(
+        meta,
+        vec![Region {
+            address: 0x1000,
+            bytes: bytes.clone(),
+        }],
+    )
+    .unwrap();
+    i.build();
+    assert!(i.functions[0].strings.contains("synthetic task label"));
+    assert!(
+        i.data_references(0)
+            .iter()
+            .any(|r| r.kind == "movw-movt" && r.target == 0x1080)
+    );
+    let unit = &i.units[0];
+    assert!(unit.read(0x400010ff, 2).is_none());
+    assert_eq!(unit.read(0x40001080, 20), unit.read(0x1080, 20));
+    let words = [
+        0x90000000u32,
+        0x91020000,
+        0xd65f03c0,
+        0xd503201f,
+        0xd503201f,
+    ];
+    for (n, w) in words.iter().enumerate() {
+        bytes[n * 4..n * 4 + 4].copy_from_slice(&w.to_le_bytes());
+    }
+    let mut j = Index::new();
+    j.add_unit(
+        input("b", Architecture::Aarch64),
+        vec![Region {
+            address: 0x1000,
+            bytes,
+        }],
+    )
+    .unwrap();
+    j.build();
+    assert!(j.functions[0].strings.contains("synthetic task label"));
+    assert!(
+        j.data_references(0)
+            .iter()
+            .any(|r| r.kind == "adrp-add" && r.target == 0x1080)
+    );
+}
+
+#[test]
+fn uncorroborated_names_propagate_with_their_grade() {
+    let mut i = Index::new();
+    function(&mut i, "a", "main", 100, LEAF, &[], &["source_name"]);
+    function(&mut i, "b", "main", 200, LEAF, &[], &[]);
+    i.build();
+    assert_eq!(i.pairs("a", "b")[0].grade, Grade::Identical);
+    assert!(!i.name_support(0, 1).unwrap().corroborated);
+    assert_eq!(
+        i.inherited_names(1, None, false)["source_name"][0].grade,
+        Grade::Identical
+    );
+    assert_eq!(i.find(Some("source_name"), None, Some("b"), None).len(), 1);
+    i.add_name(1, "local_name".into(), "synthetic".into())
+        .unwrap();
+    assert_eq!(i.find(Some("local_name"), None, Some("b"), None).len(), 1);
+    let first = serde_json::to_value(i.sample_links(50, 42)).unwrap();
+    i.functions.reverse();
+    i.build();
+    assert_eq!(first, serde_json::to_value(i.sample_links(50, 42)).unwrap());
+}
+#[test]
+fn cross_isa_corroboration_uses_a_separate_constant_table() {
+    let mut i = Index::new();
+    for (fw, arch, words) in [
+        (
+            "a",
+            Architecture::Arm32,
+            vec![
+                0xe3011234u32,
+                0xe3401000,
+                0xe3022345,
+                0xe3402000,
+                0xe12fff1e,
+            ],
+        ),
+        (
+            "b",
+            Architecture::Aarch64,
+            vec![
+                0xd2824681u32,
+                0xd28468a2,
+                0xd503201f,
+                0xd503201f,
+                0xd65f03c0,
+            ],
+        ),
+    ] {
+        let mut meta = input(fw, arch);
+        meta.functions[0].names = if fw == "a" {
+            vec!["table_algorithm".into()]
+        } else {
+            vec![]
+        };
+        meta.functions[0].references = vec![
+            Reference {
+                site: 0x1000,
+                target: 0x2000,
+                kind: "data".into(),
+                text: None,
+            },
+            Reference {
+                site: 0x1000,
+                target: 0x3000,
+                kind: "string".into(),
+                text: Some("synthetic alpha role".into()),
+            },
+            Reference {
+                site: 0x1004,
+                target: 0x3100,
+                kind: "string".into(),
+                text: Some("synthetic beta role".into()),
+            },
+        ];
+        let table: Vec<u8> = (0..16u32)
+            .flat_map(|n| {
+                0xdeadbeefu32
+                    .wrapping_add(n.wrapping_mul(0x1234567))
+                    .to_le_bytes()
+            })
+            .collect();
+        i.add_unit(
+            meta,
+            vec![
+                Region {
+                    address: 0x1000,
+                    bytes: words.into_iter().flat_map(u32::to_le_bytes).collect(),
+                },
+                Region {
+                    address: 0x2000,
+                    bytes: table,
+                },
+            ],
+        )
+        .unwrap();
+    }
+    i.build();
+    assert_eq!(i.pairs("a", "b").len(), 1);
+    let support = i.name_support(0, 1).unwrap();
+    assert!(support.corroborated);
+    assert_eq!(support.constant_tables.len(), 1);
+    assert!(!support.exact_body_bytes);
+    assert!(
+        i.inherited_names(1, None, false)
+            .contains_key("table_algorithm")
+    );
 }

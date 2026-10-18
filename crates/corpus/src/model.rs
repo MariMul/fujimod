@@ -15,7 +15,7 @@ pub enum Error {
     Binary(#[from] bincode::Error),
 }
 pub type Result<T> = std::result::Result<T, Error>;
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Architecture {
     Arm32,
@@ -65,6 +65,9 @@ pub struct UnitInput {
     pub architecture: Architecture,
     /// Pointer windows, including aliases, supplied by the caller. No camera map is built in.
     pub address_ranges: Vec<(u64, u64)>,
+    /// (alias start, exclusive end, mapped start), explicit one-hop mappings.
+    #[serde(default)]
+    pub address_aliases: Vec<(u64, u64, u64)>,
     pub functions: Vec<Boundary>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -73,7 +76,24 @@ pub struct Unit {
     pub regions: Vec<Region>,
 }
 impl Unit {
+    pub fn canonical_address(&self, address: u64) -> u64 {
+        self.input
+            .address_aliases
+            .iter()
+            .find_map(|&(lo, hi, target)| {
+                (lo <= address && address < hi).then(|| target + (address - lo))
+            })
+            .unwrap_or(address)
+    }
     pub fn read(&self, address: u64, size: usize) -> Option<&[u8]> {
+        if self.input.address_aliases.iter().any(|&(lo, hi, _)| {
+            lo <= address
+                && address < hi
+                && address.checked_add(size as u64).is_none_or(|end| end > hi)
+        }) {
+            return None;
+        }
+        let address = self.canonical_address(address);
         self.regions.iter().find_map(|r| {
             let offset = usize::try_from(address.checked_sub(r.address)?).ok()?;
             r.bytes.get(offset..offset.checked_add(size)?)
@@ -117,6 +137,12 @@ impl Grade {
     }
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NameDonor {
+    #[serde(flatten)]
+    pub key: FunctionKey,
+    pub grade: Grade,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Pair {
     pub reference: FunctionKey,
     pub other: FunctionKey,
@@ -137,15 +163,32 @@ pub struct FunctionView {
     pub names: Vec<String>,
     pub instructions: usize,
     pub signature: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub name_donors: Vec<NameDonor>,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DataSymbol {
+    pub firmware: String,
+    pub unit: String,
+    pub address: u64,
+    pub length: usize,
+    pub name: String,
+    pub kind: String,
+    pub source: String,
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Index {
+    #[serde(skip)]
+    pub(crate) inspection: std::sync::Arc<crate::quality::InspectionCache>,
     pub(crate) units: Vec<Unit>,
+    pub(crate) data_symbols: Vec<DataSymbol>,
     pub(crate) functions: Vec<Function>,
     pub(crate) tokens: Vec<String>,
     pub(crate) families: Vec<Family>,
     pub(crate) membership: Vec<usize>,
     pub(crate) weak: Vec<(usize, usize)>,
+    #[serde(skip)]
+    pub(crate) weak_families: HashMap<usize, BTreeSet<usize>>,
     #[serde(skip)]
     pub(crate) intern: HashMap<String, u32>,
     #[serde(skip)]
@@ -164,6 +207,8 @@ impl Index {
         &self.families
     }
     pub(crate) fn reindex(&mut self) {
+        self.inspection =
+            std::sync::Arc::new(crate::quality::InspectionCache::new(&self.functions));
         self.intern = self
             .tokens
             .iter()
@@ -176,12 +221,24 @@ impl Index {
             .enumerate()
             .map(|(i, f)| (f.key.clone(), i))
             .collect();
+        self.reindex_weak();
         self.targets.clear();
         for (i, f) in self.functions.iter().enumerate() {
             self.targets
                 .entry((f.key.firmware.clone(), f.key.address))
                 .or_default()
                 .push(i);
+        }
+    }
+    pub(crate) fn reindex_weak(&mut self) {
+        self.weak_families.clear();
+        for &(a, b) in &self.weak {
+            if let (Some(&x), Some(&y)) = (self.membership.get(a), self.membership.get(b))
+                && x != y
+            {
+                self.weak_families.entry(x).or_default().insert(y);
+                self.weak_families.entry(y).or_default().insert(x);
+            }
         }
     }
     pub fn add_unit(&mut self, input: UnitInput, mut regions: Vec<Region>) -> Result<()> {
@@ -208,6 +265,23 @@ impl Index {
             return Err(Error::Invalid("overlapping regions in one unit".into()));
         }
         let unit = Unit { input, regions };
+        let mut alias_ranges = unit.input.address_aliases.clone();
+        alias_ranges.sort_unstable();
+        if alias_ranges.windows(2).any(|w| w[0].1 > w[1].0)
+            || alias_ranges.iter().any(|&(lo, hi, target)| {
+                hi <= lo
+                    || lo == target
+                    || target.checked_add(hi - lo).is_none()
+                    || !unit.regions.iter().any(|r| {
+                        r.address <= target
+                            && target + (hi - lo) <= r.address + r.bytes.len() as u64
+                    })
+            })
+        {
+            return Err(Error::Invalid(
+                "invalid or overlapping address aliases".into(),
+            ));
+        }
         let mut seen = BTreeSet::new();
         for b in &unit.input.functions {
             if !seen.insert(b.address)
@@ -281,6 +355,7 @@ impl Index {
             self.functions.push(f);
         }
         self.units.extend(other.units);
+        self.data_symbols.extend(other.data_symbols);
         self.build();
         Ok(())
     }
@@ -297,6 +372,12 @@ impl Index {
                 .functions
                 .iter()
                 .filter(|f| firmwares.contains(&f.key.firmware))
+                .cloned()
+                .collect(),
+            data_symbols: self
+                .data_symbols
+                .iter()
+                .filter(|s| firmwares.contains(&s.firmware))
                 .cloned()
                 .collect(),
             tokens: self.tokens.clone(),
@@ -328,6 +409,7 @@ impl Index {
             names: f.names.clone(),
             instructions: f.instructions,
             signature: f.signature.iter().map(|b| format!("{b:02x}")).collect(),
+            name_donors: vec![],
         }
     }
     pub fn find(
@@ -337,27 +419,51 @@ impl Index {
         firmware: Option<&str>,
         unit: Option<&str>,
     ) -> Vec<FunctionView> {
+        let candidates =
+            name.map(|name| {
+                let mut found = BTreeSet::new();
+                for (donor, f) in self
+                    .functions
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, f)| f.names.iter().any(|n| n == name))
+                {
+                    found.insert(donor);
+                    let Some(&family) = self.membership.get(donor) else {
+                        continue;
+                    };
+                    found.extend(&self.families[family].members);
+                    if let Some(adjacent) = self.weak_families.get(&family) {
+                        for &other in adjacent {
+                            found.extend(
+                                self.families[other].members.iter().copied().filter(|&id| {
+                                    self.functions[id].key.firmware != f.key.firmware
+                                }),
+                            );
+                        }
+                    }
+                }
+                found
+            });
         self.functions
             .iter()
             .enumerate()
-            .filter(|(_, f)| {
+            .filter(|(id, f)| {
                 firmware.is_none_or(|x| f.key.firmware == x)
                     && unit.is_none_or(|x| f.key.unit == x)
                     && address.is_none_or(|x| f.key.address == x)
-                    && name.is_none_or(|x| {
-                        f.names.iter().any(|n| n == x)
-                            || self
-                                .membership
-                                .get(self.keys[&f.key])
-                                .is_some_and(|&family| {
-                                    self.families[family]
-                                        .members
-                                        .iter()
-                                        .any(|&i| self.functions[i].names.iter().any(|n| n == x))
-                                })
-                    })
+                    && candidates.as_ref().is_none_or(|c| c.contains(id))
             })
-            .map(|(i, _)| self.view(i))
+            .map(|(i, _)| {
+                let mut view = self.view(i);
+                if let Some(name) = name {
+                    view.name_donors = self
+                        .inherited_names(i, None, false)
+                        .remove(name)
+                        .unwrap_or_default();
+                }
+                view
+            })
             .collect()
     }
     pub fn members(&self, family: usize, firmware: Option<&str>) -> Vec<FunctionView> {
@@ -369,28 +475,54 @@ impl Index {
             .map(|&i| self.view(i))
             .collect()
     }
+    /// Analysis names carry their donor and grade. A weak edge exposes names
+    /// from the adjacent family; weak edges never merge families or chain.
     pub fn inherited_names(
         &self,
         id: usize,
         donors: Option<&BTreeSet<String>>,
         normalized_only: bool,
-    ) -> BTreeMap<String, Vec<FunctionKey>> {
-        let mut names = BTreeMap::<String, Vec<FunctionKey>>::new();
-        if id >= self.functions.len() || self.membership.is_empty() {
+    ) -> BTreeMap<String, Vec<NameDonor>> {
+        let mut names = BTreeMap::<String, Vec<NameDonor>>::new();
+        let Some(&family) = self.membership.get(id) else {
             return names;
+        };
+        let mut candidates: Vec<_> = self.families[family]
+            .members
+            .iter()
+            .map(|&i| {
+                (
+                    i,
+                    if i == id {
+                        Grade::Identical
+                    } else {
+                        self.grade(i, id)
+                    },
+                )
+            })
+            .collect();
+        if !normalized_only && let Some(adjacent) = self.weak_families.get(&family) {
+            for &other in adjacent {
+                candidates.extend(self.families[other].members.iter().filter_map(|&i| {
+                    (self.functions[i].key.firmware != self.functions[id].key.firmware)
+                        .then_some((i, Grade::Weak))
+                }));
+            }
         }
-        // Strong family membership carries names; consumers may request equal-code evidence only.
-        for &i in &self.families[self.membership[id]].members {
+        candidates.sort_by_key(|&(i, _)| i);
+        candidates.dedup_by_key(|entry| entry.0);
+        for (i, grade) in candidates {
             let f = &self.functions[i];
-            if (normalized_only
-                && (f.signature != self.functions[id].signature
-                    || f.architecture != self.functions[id].architecture))
+            if (normalized_only && !grade.normalized())
                 || !donors.is_none_or(|d| d.contains(&f.key.firmware))
             {
                 continue;
             }
-            for n in &f.names {
-                names.entry(n.clone()).or_default().push(f.key.clone());
+            for name in &f.names {
+                names.entry(name.clone()).or_default().push(NameDonor {
+                    key: f.key.clone(),
+                    grade,
+                });
             }
         }
         names
@@ -434,6 +566,47 @@ impl Index {
                     .map(move |r| (self.view(i), r.clone()))
             })
             .collect()
+    }
+    pub fn add_symbol(&mut self, symbol: DataSymbol) -> Result<()> {
+        if symbol.name.is_empty()
+            || symbol.length == 0
+            || self
+                .read(
+                    &symbol.firmware,
+                    &symbol.unit,
+                    symbol.address,
+                    symbol.length,
+                )
+                .is_none()
+        {
+            return Err(Error::Invalid("invalid or unmapped data symbol".into()));
+        }
+        if !self.data_symbols.contains(&symbol) {
+            self.data_symbols.push(symbol);
+        }
+        Ok(())
+    }
+    pub fn symbols(
+        &self,
+        name: Option<&str>,
+        firmware: Option<&str>,
+        unit: Option<&str>,
+    ) -> Vec<&DataSymbol> {
+        self.data_symbols
+            .iter()
+            .filter(|s| {
+                name.is_none_or(|n| n == s.name)
+                    && firmware.is_none_or(|f| f == s.firmware)
+                    && unit.is_none_or(|u| u == s.unit)
+            })
+            .collect()
+    }
+    pub fn read(&self, firmware: &str, unit: &str, address: u64, size: usize) -> Option<Vec<u8>> {
+        self.units
+            .iter()
+            .find(|u| u.input.firmware == firmware && u.input.unit == unit)?
+            .read(address, size)
+            .map(|b| b.to_vec())
     }
     pub fn search(
         &self,
@@ -499,7 +672,7 @@ impl Index {
     pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
         let mut file = std::io::BufWriter::new(std::fs::File::create(path)?);
         use std::io::Write;
-        file.write_all(b"FMCORP01")?;
+        file.write_all(b"FMCORP03")?;
         bincode::serialize_into(&mut file, self)?;
         file.flush()?;
         Ok(())
@@ -509,7 +682,7 @@ impl Index {
         let mut file = std::io::BufReader::new(std::fs::File::open(path)?);
         let mut magic = [0; 8];
         file.read_exact(&mut magic)?;
-        if &magic != b"FMCORP01" {
+        if &magic != b"FMCORP03" {
             return Err(Error::Invalid("unsupported index format".into()));
         }
         let mut value: Self = bincode::deserialize_from(file)?;

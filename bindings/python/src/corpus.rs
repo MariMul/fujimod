@@ -67,6 +67,15 @@ impl CorpusIndex {
                 "find"=>serde_json::to_value(self.inner.find(s("name"),a.get("address").and_then(Value::as_u64),s("firmware"),s("unit"))),
                 "members"=>serde_json::to_value(self.inner.members(id()?,s("firmware"))),
                 "family"=>serde_json::to_value(self.inner.families().get(id()?)),
+                "string_frequencies"=>serde_json::to_value(self.inner.string_frequencies(&serde_json::from_value(a["strings"].clone()).map_err(invalid)?)),
+                "body_sha256"=>serde_json::to_value(self.inner.body_sha256(id()?)),
+                "name_support"=>serde_json::to_value(self.inner.name_support(id()?,a["other"].as_u64().ok_or_else(||invalid("other required"))? as usize)),
+                "find_strings"=>serde_json::to_value(self.inner.find_strings(&serde_json::from_value(a["strings"].clone()).map_err(invalid)?,s("firmware"))),
+                "read"=>serde_json::to_value(self.inner.read(s("firmware").ok_or_else(||invalid("firmware required"))?,s("unit").ok_or_else(||invalid("unit required"))?,a["address"].as_u64().ok_or_else(||invalid("address required"))?,a["size"].as_u64().ok_or_else(||invalid("size required"))? as usize)),
+                "symbols"=>serde_json::to_value(self.inner.symbols(s("name"),s("firmware"),s("unit"))),
+                "features"=>serde_json::to_value(self.inner.functions().get(id()?)),
+                "sample_links"=>serde_json::to_value(self.inner.sample_links(a["count"].as_u64().unwrap_or(50) as usize,a["seed"].as_u64().unwrap_or(0))),
+                "data_witnesses"=>serde_json::to_value(self.inner.data_witnesses(id()?,a["length"].as_u64().unwrap_or(64) as usize)),
                 "normalized_tokens"=>serde_json::to_value(self.inner.normalized_tokens(id()?)),
                 "calls"=>serde_json::to_value(self.inner.calls(id()?)),
                 "data_references"=>serde_json::to_value(self.inner.data_references(id()?)),
@@ -85,6 +94,14 @@ impl CorpusIndex {
             }.map_err(invalid)?;
             serde_json::to_string(&v).map_err(invalid)
         })
+    }
+    fn add_symbol(&mut self, symbol: &str) -> PyResult<()> {
+        self.inner
+            .add_symbol(serde_json::from_str(symbol).map_err(invalid)?)
+            .map_err(invalid)
+    }
+    fn add_name(&mut self, id: usize, name: String, source: String) -> PyResult<()> {
+        self.inner.add_name(id, name, source).map_err(invalid)
     }
     fn annotate(&mut self, family: usize, annotation: &str) -> PyResult<()> {
         self.inner

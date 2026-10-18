@@ -25,12 +25,18 @@ class CorpusBinding(unittest.TestCase):
         self.assertEqual(i.search('b',body[:4],unit='bank')[0]['address'],0x1000)
         with self.assertRaises(ValueError):i.search('b',b'')
         with self.assertRaises(ValueError):i.search('b',body,mask=b'x')
+        i.add_symbol(dict(firmware='b',unit='bank',address=0x1000,length=4,name='synthetic_data',kind='fixture',source='test'))
+        self.assertEqual(i.symbols('synthetic_data')[0]['address'],0x1000)
+        self.assertEqual(i.read('b','bank',0x1000,4),body[:4])
+        self.assertIsNone(i.read('b','bank',0x9999,4))
+        self.assertTrue(i.name_support(f['id'], i.find('synthetic',firmware='a')[0]['id'])['corroborated'])
         i.annotate(f['family'],'note','synthetic','test')
         output=Path(__file__).resolve().parents[3]/'target/corpus-tests/python.index'
         output.parent.mkdir(parents=True,exist_ok=True)
         try:
             i.save(output);restored=Index.open(output)
             self.assertEqual(restored.family(f['family'])['annotations'][0]['text'],'synthetic')
+            self.assertEqual(restored.symbols('synthetic_data')[0]['firmware'],'b')
         finally:
             output.unlink(missing_ok=True)
 
