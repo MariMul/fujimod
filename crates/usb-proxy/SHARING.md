@@ -146,3 +146,35 @@ Agreed design, 2026-10-18; not built yet.
 - **Clean shutdown:** on page freeze or unload, stop sharing (controllers get a
   clean disconnect) and close the camera session. Switching tabs alone does not
   stop sharing.
+
+## Camera disconnects and battery
+
+Agreed design, 2026-10-18.
+
+- **A share outlives its camera.** The share link (room and key) lasts as long
+  as the owner's tab. When the camera disconnects, the owner stays in the room
+  and reports the device offline with a reason (`battery`, `unplugged`,
+  `not responding`). When a previously approved camera reconnects, the page
+  opens it without a picker if the browser allows, otherwise one click on
+  **Reconnect camera**. Before re-exporting, with no controller attached, it
+  reads the camera's identity (FF80 product name and firmware version, plus a
+  per-body identifier from firmware-specific configuration where one is
+  known) and re-shares on the same link only if it matches. Local-dev
+  registrations stay, marked offline, so the queue keeps the same link.
+- **Battery is read by controllers, not by the sharing page.** FF80 has no
+  battery command; battery comes from firmware-specific RAM (X70 1.10:
+  `tools/x70_battery.py`). Controller tools read it when a session opens,
+  between jobs and periodically during long jobs, and send it to the owner as a
+  status message. The owner shows the latest reading with its age and includes
+  it in the device list every controller sees. The owner's own console reads
+  battery only when it is not sharing.
+- **Battery death is a normal disconnect.** The queue starts no job at or below
+  PREEND ("waiting for charge"). A disconnect after a PREEND or END reading is
+  classified as battery: no alarm, no failure counted, job keeps its place.
+- **Unexpected disconnects alert the owner.** The page alerts for what it sees
+  (camera unplugged or dead with battery fine); a controller sends an
+  attention message for what only it sees (camera present but not
+  answering). The alert is a modal that shakes on arrival with a chime, says
+  what happened and what to do, updates instead of stacking, and closes itself
+  when the problem is fixed; Close dismisses it early. The chime is unlocked by
+  the owner's click on Share or Connect camera. No system notifications.
