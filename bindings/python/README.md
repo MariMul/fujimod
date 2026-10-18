@@ -132,7 +132,7 @@ memory reader. It sends no setup, retry or finalization commands. On failure,
 data delivered with the failed USB completion; previously yielded chunks remain
 with the caller. The session then rejects further requests.
 
-`session.empty_response()` sends one E8 and returns its four raw bytes; those
+`session.empty_response()` sends one E8 and returns its complete four-byte or 32-byte reply; those
 bytes do not indicate camera readiness or execution completion.
 
 App80 wire types live in `fujimod.usb.app80`. `CommandCode(value)` is a distinct
@@ -172,7 +172,8 @@ an immutable `UploadReply` with `setup`, `acknowledgement` and `bytes_written`.
 Mode and piece size are required inputs. The operation sends data unchanged,
 without padding, readback, retries or destination-buffer policy. A refused setup
 is a structured `DeviceCommandError`; a failed exchange fences the session.
-The final four bytes remain opaque and do not certify application completion.
+A four-byte acknowledgement remains opaque. A 32-byte reply is validated against
+the upload setup command and status fields. Neither certifies application completion.
 
 `session.prepare_capabilities()` returns immutable `usb.CapabilitiesReply`
 metadata with `byte_length` and `raw`. It does not download or parse the table.

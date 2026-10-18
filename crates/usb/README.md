@@ -66,12 +66,13 @@ chunks already returned successfully.
 `operations::data::upload` owns the complete setup/E0/E8 sequence. Supply the
 setup mode and E0 piece size explicitly. It checks the final receive budget
 before setup, stops on a framed setup error, and sends each piece and E8 once.
-Its `UploadReply` preserves the raw setup fields and four acknowledgement bytes.
+Its `UploadReply` preserves the raw setup fields and complete acknowledgement (4 or 32 bytes).
 Padding, destination-buffer ownership and readback/retry policy stay above this
 composition. The debug memory packet limit does not constrain E0 data pieces.
 
-`Session::empty_response()` exposes E8's four raw acknowledgement bytes. It is
-not a readiness poll or a wait-for-execution API.
+`Session::empty_response()` preserves E8's four-byte or 32-byte raw reply. Uploads
+validate the longer reply's setup command echo, reserved word and status fields.
+Neither form is a readiness poll or a wait-for-execution API.
 
 The core is tested on native macOS and as Wasm in a JavaScript runtime using
 synthetic exchanges. nusb's WebUSB backend compiles for `wasm32-unknown-unknown`.

@@ -110,12 +110,13 @@ impl<S: BorrowMut<Session>> DataReader<S> {
     }
 }
 
-/// Completed transport stages of a prepared upload. E8's raw bytes are opaque;
-/// they do not certify that uploaded application data was consumed or executed.
+/// Completed transport stages of a prepared upload, including the full E8 reply.
+/// A 32-byte reply is checked against the setup command and its status fields.
+/// Neither reply form certifies that application data was consumed or executed.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UploadReply {
     pub setup: crate::ff80::commands::diagnostic::DiagnosticReply,
-    pub acknowledgement: [u8; 4],
+    pub acknowledgement: Vec<u8>,
     pub bytes_written: u32,
 }
 
@@ -150,6 +151,16 @@ pub async fn upload(
         session.write_data(part).await?;
     }
     let acknowledgement = session.empty_response().await?;
+    if acknowledgement.len() == 32 {
+        // X70 hardware also returns the setup command's complete reply on E8.
+        // A framed refusal is completed; malformed ownership/status framing is not.
+        if let Err(error) = crate::ff80::commands::status(&acknowledgement, 0x760001, 32) {
+            if matches!(error, Error::Protocol(_)) {
+                session.invalidate_completion();
+            }
+            return Err(error);
+        }
+    }
     Ok(UploadReply {
         setup,
         acknowledgement,

@@ -217,3 +217,80 @@ fn cancelling_final_upload_acknowledgement_fences_the_session() {
     ));
     assert_eq!(script.remaining(), 0);
 }
+
+#[cfg(feature = "testing")]
+#[test]
+fn captured_long_upload_acknowledgement_checks_echo_reserved_and_status() {
+    use crate::{
+        ff80::{
+            SessionState,
+            commands::diagnostic::DataWriteMode,
+            framing::{RequestKind, envelope},
+        },
+        testing::{Exchange as E, Script},
+    };
+    use futures_lite::future::block_on;
+    // Captured X70 E8 response: 01007600 followed by 28 zero bytes.
+    for (word, value, success, ready) in [
+        (0, 0x760001, true, true),
+        (0, 0x550001, false, false),
+        (3, 1, false, false),
+        (1, 1, false, true),
+        (2, 0xffff, false, true),
+    ] {
+        let mut setup = vec![0; 32];
+        setup[..4].copy_from_slice(&0x760001u32.to_le_bytes());
+        setup[20..24].copy_from_slice(&3u32.to_le_bytes());
+        let mut reply = vec![0; 32];
+        reply[..4].copy_from_slice(&0x760001u32.to_le_bytes());
+        reply[word * 4..word * 4 + 4].copy_from_slice(&u32::to_le_bytes(value));
+        let script = Script::new([
+            E::Control(envelope(RequestKind::Open, 8, 0)),
+            E::Read {
+                maximum: 8,
+                data: vec![0x34, 0x12, 0, 0, 0, 0, 0, 1],
+            },
+            E::Control(envelope(RequestKind::WriteCommand, 32, 0x1234)),
+            E::Write(setup.clone()),
+            E::Control(envelope(RequestKind::ReadCommand, 32, 0x1234)),
+            E::Read {
+                maximum: 32,
+                data: setup,
+            },
+            E::Control(envelope(RequestKind::WriteData, 3, 0x1234)),
+            E::Write(b"abc".to_vec()),
+            E::Control(envelope(RequestKind::EmptyResponse, 32, 0x1234)),
+            E::Read {
+                maximum: 32,
+                data: reply.clone(),
+            },
+        ]);
+        let mut session = block_on(script.begin_session(32, None)).unwrap();
+        let result = block_on(upload(&mut session, b"abc", nz(3), DataWriteMode::Preserve));
+        assert_eq!(result.is_ok(), success);
+        if success {
+            let result = result.unwrap();
+            assert_eq!(result.acknowledgement, reply);
+            assert_eq!(result.bytes_written, 3);
+        } else if ready {
+            assert!(matches!(
+                result,
+                Err(Error::DeviceStatus {
+                    command: 0x760001,
+                    ..
+                })
+            ));
+        } else {
+            assert!(matches!(result, Err(Error::Protocol(_))));
+        }
+        assert_eq!(
+            session.state(),
+            if ready {
+                SessionState::Ready
+            } else {
+                SessionState::CompletionUnknown
+            }
+        );
+        assert_eq!(script.remaining(), 0);
+    }
+}

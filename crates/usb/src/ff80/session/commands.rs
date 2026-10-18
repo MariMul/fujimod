@@ -71,8 +71,9 @@ impl Session {
     pub async fn write_data(&mut self, bytes: &[u8]) -> Result<()> {
         self.core.write_data(bytes).await
     }
-    /// One E8 empty acknowledgement. The four raw bytes are not a readiness flag.
-    pub async fn empty_response(&mut self) -> Result<[u8; 4]> {
+    /// One E8 acknowledgement: four raw bytes or a 32-byte command reply.
+    /// The caller interprets the reply; it does not establish execution completion.
+    pub async fn empty_response(&mut self) -> Result<Vec<u8>> {
         self.core.empty_response().await
     }
     pub async fn send_event(&mut self, event: DebugEvent, limit: NonZeroU32) -> Result<Vec<u8>> {
@@ -252,7 +253,7 @@ impl<I: Io> Core<I> {
         self.state = SessionState::Ready;
         Ok(())
     }
-    pub(super) async fn empty_response(&mut self) -> Result<[u8; 4]> {
+    pub(super) async fn empty_response(&mut self) -> Result<Vec<u8>> {
         check_limit(32, self.max_reply_bytes)?;
         self.start()?;
         self.io
@@ -261,7 +262,14 @@ impl<I: Io> Core<I> {
                 envelope(RequestKind::EmptyResponse, 32, self.info.id),
             )
             .await?;
-        let bytes: [u8; 4] = exact(self.io.read(32).await?)?;
+        let bytes = self.io.read(32).await?;
+        if !matches!(bytes.len(), 4 | 32) {
+            return Err(ProtocolError::ReplyLength {
+                expected: 32,
+                actual: bytes.len(),
+            }
+            .into());
+        }
         self.state = SessionState::Ready;
         Ok(bytes)
     }

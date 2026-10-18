@@ -9,7 +9,8 @@ LIMITS=usb.FirmwareLimits(memory_read=1,memory_write=1,configuration=1,console=1
 
 
 class UploadPeer:
-    def __init__(self,*,status=(0,0),failure=None):
+    def __init__(self,*,status=(0,0),failure=None,acknowledgement=b'\xff\x01\x80\x7f'):
+        self.acknowledgement=acknowledgement
         self.status,self.failure=status,failure
         self.controls=[];self.pieces=[];self.setup=None;self.pending=b'';self.kind=None
 
@@ -21,7 +22,8 @@ class UploadPeer:
             self.pending=b'\x34\x12\0\0\0\0\0\x01'  # debug limit1 is not an E0 limit
         else:
             assert token==0x1234
-            if kind==0xe8: self.pending=b'x' if self.failure=='final-short' else b'\xff\x01\x80\x7f'
+            if kind==0xe8: self.pending=b'x' if self.failure=='final-short' else self.acknowledgement
+            elif kind==0xc4: self.pending=b'\x34\x12'
             else: assert kind in (0xd0,0xd1,0xe0)
 
     def write(self,raw):
@@ -95,3 +97,34 @@ def test_invalid_lengths_modes_and_final_budget_fail_before_setup():
                                    (b'abc',2,usb.DataReadMode.Echo,TypeError)]:
         with pytest.raises(exception): data.upload(session,raw,piece_bytes=piece,mode=mode)
     assert peer.setup is None and session.state==usb.SessionState.Ready
+
+
+def test_captured_x70_32_byte_e8_reply_completes_upload_and_allows_close():
+    # X70 1.10, 2026-10-18T00:22:22Z: E8 32-byte receive after 64 KiB E0 pieces.
+    reply=bytes.fromhex('0100760000000000000000000000000000000000000000000000000000000000')
+    peer=UploadPeer(acknowledgement=reply);session=opened(peer)
+    raw=b'X'*65536
+    result=data.upload(session,raw,piece_bytes=65536,mode=usb.DataWriteMode.Preserve)
+    assert result.acknowledgement==reply and result.bytes_written==len(raw)
+    assert peer.pieces==[raw] and peer.controls==[0xc0,0xd0,0xd1,0xe0,0xe8]
+    assert session.state==usb.SessionState.Ready
+    session.close()
+    assert session.state==usb.SessionState.Closed and peer.controls[-1]==0xc4
+
+
+@pytest.mark.parametrize('word,value,exception,ready',[
+    (0,0x550001,usb.ProtocolError,False),
+    (3,1,usb.ProtocolError,False),
+    (1,1,usb.DeviceCommandError,True),
+    (2,0xffff,usb.DeviceCommandError,True),
+])
+def test_long_e8_validates_command_reserved_and_status_without_replay(word,value,exception,ready):
+    reply=bytearray(struct.pack('<8I',0x760001,0,0,0,9,8,7,6))
+    struct.pack_into('<I',reply,word*4,value)
+    peer=UploadPeer(acknowledgement=bytes(reply));session=opened(peer)
+    with pytest.raises(exception): data.upload(session,b'abc',piece_bytes=3,mode=usb.DataWriteMode.Preserve)
+    assert peer.controls==[0xc0,0xd0,0xd1,0xe0,0xe8]
+    assert session.state==(usb.SessionState.Ready if ready else usb.SessionState.CompletionUnknown)
+    if not ready:
+        with pytest.raises(usb.CompletionUnknownError): session.close()
+        assert peer.controls[-1]==0xe8
