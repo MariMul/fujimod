@@ -71,8 +71,9 @@ fn chunk(range: MemoryRange, offset: u32, maximum: u32) -> Option<MemoryRange> {
 }
 
 /// Commands per batch for whole-range reads and writes: over a device share
-/// each batch is one network round trip (256 × 256 bytes = 64 KiB).
-const BATCH_COMMANDS: usize = 256;
+/// each batch is one network round trip (128 × 256 bytes = 32 KiB; the
+/// batch description of 128 commands stays well under the 64 KiB header).
+const BATCH_COMMANDS: usize = 128;
 
 /// Collect a range, a batch of bounded commands at a time.
 pub async fn read_range(
