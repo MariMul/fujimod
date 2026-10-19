@@ -20,22 +20,15 @@
 .catalog-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 10px;
-}
-.catalog-tile {
-  background: var(--key);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 14px 16px 12px;
+  gap: 28px 24px;
 }
 .catalog-tile-preview {
   position: relative;
   display: block;
-  width: calc(100% + 32px);
-  margin: -14px -16px 12px;
+  margin: 0 0 10px;
   aspect-ratio: 3 / 2;
   background: #000;
-  border-radius: 13px 13px 0 0;
+  border-radius: 10px;
   overflow: hidden;
 }
 .catalog-tile-preview img,
