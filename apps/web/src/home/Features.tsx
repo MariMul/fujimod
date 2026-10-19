@@ -1,3 +1,6 @@
+// @generated
+// This file is code generated. Do not edit directly.
+// Update the feature documentation sources and regenerate the catalog.
 import { For, Show, createSignal, onCleanup } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import featureIcons from '../ui/assets/feature-icons.svg?url';
@@ -53,7 +56,6 @@ const CARDS: Record<string, Card> = {
       MASKED: 'The area outside the frame is black.',
       DARKENED: 'The area outside the frame is darkened.',
       'WHITE BORDER': 'A white line marks the frame.',
-      OFF: 'Nothing marks the frame.',
     },
     related: [],
     manual: null,
@@ -118,7 +120,7 @@ const CARDS: Record<string, Card> = {
     manual: null,
     changes: null,
   },
-  controls_row_exposure_dial: {
+  bindings_row_exposure_dial: {
     title: 'EV DIAL',
     path: ['SET-UP', 'BUTTON/DIAL SETTING'],
     summary: 'Choose the setting the exposure compensation dial adjusts.',
@@ -127,7 +129,7 @@ const CARDS: Record<string, Card> = {
     manual: null,
     changes: null,
   },
-  controls_row_command_dial: {
+  bindings_row_command_dial: {
     title: 'COMMAND CONTROL',
     path: ['SET-UP', 'BUTTON/DIAL SETTING'],
     summary: 'Choose the setting the command control adjusts.',
@@ -136,14 +138,14 @@ const CARDS: Record<string, Card> = {
     manual: null,
     changes: null,
   },
-  controls_row_control_ring: {
-    title: 'CONTROL RING',
-    path: ['SET-UP', 'BUTTON/DIAL SETTING'],
-    summary: 'Choose the setting the control ring adjusts.',
+  control_ring_setting: {
+    title: 'CONTROL RING SETTING',
+    path: ['SHOOTING MENU'],
+    summary: null,
     choices: {},
     related: [],
-    manual: null,
-    changes: null,
+    manual: 'menu_shooting/control_ring_setting',
+    changes: 'Adds exposure compensation and mod actions to the control ring settings.',
   },
   menu_theme_item: {
     title: 'MENU THEME',
@@ -162,7 +164,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: 'menu_shooting/edit-save_custom_setting',
     changes:
-      'Each slot C1–C7 holds a recipe saved as a named file on the memory card. Choose SAVE CURRENT SETTINGS, SAVE AS NEW RECIPE, CHOOSE FROM SD CARD or CLEAR SLOT.',
+      'Each slot C1–C7 holds a recipe saved as a named file on the memory card, including ISO, white balance and white balance shift. Choose SAVE CURRENT SETTINGS, SAVE AS NEW RECIPE, CHOOSE FROM SD CARD or CLEAR SLOT.',
   },
   snap_menu_item: {
     title: 'MF SNAP FOCUS',
@@ -305,10 +307,7 @@ export function FeatureCatalog() {
             <Icon name="film" />
             <Ref card="film_simulation">FILM SIMULATION</Ref>
           </h4>
-          <p>
-            Simulate the effects of additional types of film. Create your own film simulations in
-            FILM EDITOR.
-          </p>
+          <p>Simulate the effects of additional types of film.</p>
           <div class="catalog-chips">
             <span class="catalog-chip">
               <Icon name="eterna" />
@@ -336,12 +335,21 @@ export function FeatureCatalog() {
         </article>
         <article class="catalog-tile">
           <h4>
+            <Icon name="film" />
+            <Ref card="film_editor_item">FILM EDITOR</Ref>
+          </h4>
+          <p>Create and edit your own film simulations, saved as files on the memory card.</p>
+          <div class="catalog-where">SHOOTING MENU</div>
+        </article>
+        <article class="catalog-tile">
+          <h4>
             <Icon name="recipes" />
             <span>Unlimited Recipes</span>
           </h4>
           <p>
             Store custom settings as named files on the memory card and load them into{' '}
-            <span class="nowrap">C1–C7</span>.
+            <span class="nowrap">C1–C7</span>. ISO, white balance and white balance shift are saved
+            with each recipe.
           </p>
           <div class="catalog-chips">
             <span class="catalog-chip action">SAVE CURRENT SETTINGS</span>
@@ -462,10 +470,9 @@ export function FeatureCatalog() {
             <span>Unlocked Controls</span>
           </h4>
           <p>
-            Assign ISO, white balance, film simulation or other settings to the exposure
-            compensation dial, command control or control ring.
+            Customize every button, dial, and lever. Adjust ISO by turning the exposure dial, or
+            switch between picture and movie mode.
           </p>
-          <div class="catalog-where">SET-UP › BUTTON/DIAL SETTING</div>
         </article>
         <article class="catalog-tile">
           <h4>
