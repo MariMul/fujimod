@@ -1,4 +1,7 @@
-import { For, Show, createSignal, onCleanup } from 'solid-js';
+// @generated
+// This file is code generated. Do not edit directly.
+// Update the feature documentation sources and regenerate the catalog.
+import { For, Show, createSignal, onCleanup, untrack } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import featureIcons from '../ui/assets/feature-icons.svg?url';
 import './features.css';
@@ -11,11 +14,15 @@ type Card = {
   related: { card: string; reason: string }[];
   manual: string | null;
   changes: string | null;
+  media: Media | null;
 };
+/** Preview recording: clean clip, still, and each option's range in the clip. */
+type Media = { video: string; still: string; clips: Record<string, [number, number]> };
 /** What a hover card shows: a control, or one option of it. */
 type Target = { card: string; choice?: string; anchor: HTMLElement };
 
 const MANUAL = 'https://fujifilm-dsc.com/en/manual/x70/';
+const MEDIA = '/artifacts/docs/';
 const CARDS: Record<string, Card> = {
   shape_aspect_item: {
     title: 'ASPECT RATIO',
@@ -44,6 +51,20 @@ const CARDS: Record<string, Card> = {
     ],
     manual: null,
     changes: null,
+    media: {
+      video: '37c90c4d1a075a4a5a27ed75.mp4',
+      still: '791bc0583147291c967f28a7.webp',
+      clips: {
+        '4:3': [2.4, 3.6],
+        '16:9': [4.333, 5.533],
+        '65:24': [6.2, 7.4],
+        '17:6': [8.067, 9.267],
+        '3:4': [10.0, 11.2],
+        '1:1': [11.867, 13.067],
+        '7:6': [13.733, 14.933],
+        '5:4': [15.6, 16.8],
+      },
+    },
   },
   shape_surround_item: {
     title: 'SURROUND VIEW',
@@ -53,11 +74,19 @@ const CARDS: Record<string, Card> = {
       MASKED: 'The area outside the frame is black.',
       DARKENED: 'The area outside the frame is darkened.',
       'WHITE BORDER': 'A white line marks the frame.',
-      OFF: 'Nothing marks the frame.',
     },
     related: [],
     manual: null,
     changes: null,
+    media: {
+      video: '448cb646e88726defb699014.mp4',
+      still: '9d6eb8ec516272409b0a5b42.webp',
+      clips: {
+        MASKED: [2.067, 3.533],
+        DARKENED: [4.3, 5.8],
+        'WHITE BORDER': [6.367, 7.867],
+      },
+    },
   },
   shape_desqueeze_item: {
     title: 'DESQUEEZE',
@@ -67,6 +96,11 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    media: {
+      video: 'c5f8533b4aaac9c1887e9a0e.mp4',
+      still: '14e40029dc71ac8c738046db.webp',
+      clips: {},
+    },
   },
   shape_jpeg_item: {
     title: 'DESQUEEZE JPEG',
@@ -76,6 +110,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    media: null,
   },
   image_size: {
     title: 'IMAGE SIZE',
@@ -86,6 +121,11 @@ const CARDS: Record<string, Card> = {
     manual: 'menu_shooting/image_size',
     changes:
       'Aspect ratio selection moved to SHAPE & ASPECT > ASPECT RATIO; IMAGE SIZE now sets L, M or S only.',
+    media: {
+      video: 'a91adaa9cb3fa2cd4014027c.mp4',
+      still: '5fa2374c21f4cdeea25b2466.webp',
+      clips: {},
+    },
   },
   film_simulation: {
     title: 'FILM SIMULATION',
@@ -96,6 +136,7 @@ const CARDS: Record<string, Card> = {
     manual: 'menu_shooting/film_simulation',
     changes:
       'Adds ETERNA, Neutral and approximations of four film simulations from newer cameras, and films saved on the memory card. Approximations are marked (approx.) in the camera.',
+    media: null,
   },
   film_editor_item: {
     title: 'FILM EDITOR',
@@ -105,6 +146,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    media: null,
   },
   hdmi_rec_behavior_item: {
     title: 'HDMI OUTPUT',
@@ -117,8 +159,9 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    media: null,
   },
-  controls_row_exposure_dial: {
+  bindings_row_exposure_dial: {
     title: 'EV DIAL',
     path: ['SET-UP', 'BUTTON/DIAL SETTING'],
     summary: 'Choose the setting the exposure compensation dial adjusts.',
@@ -126,8 +169,9 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    media: null,
   },
-  controls_row_command_dial: {
+  bindings_row_command_dial: {
     title: 'COMMAND CONTROL',
     path: ['SET-UP', 'BUTTON/DIAL SETTING'],
     summary: 'Choose the setting the command control adjusts.',
@@ -135,15 +179,22 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    media: {
+      video: 'd03bdc7e9a753a3fcee60f19.mp4',
+      still: 'f04ee7c1e38d81f7db20ef68.webp',
+      clips: {},
+    },
   },
-  controls_row_control_ring: {
-    title: 'CONTROL RING',
-    path: ['SET-UP', 'BUTTON/DIAL SETTING'],
-    summary: 'Choose the setting the control ring adjusts.',
+  control_ring_setting: {
+    title: 'CONTROL RING SETTING',
+    path: ['SHOOTING MENU'],
+    summary: null,
     choices: {},
     related: [],
-    manual: null,
-    changes: null,
+    manual: 'menu_shooting/control_ring_setting',
+    changes:
+      'Adds EXPOSURE COMP. and the FujiMod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.',
+    media: null,
   },
   menu_theme_item: {
     title: 'MENU THEME',
@@ -153,6 +204,11 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    media: {
+      video: 'aea3aba85b1f13d4a08a0b61.mp4',
+      still: '03459ef6a62bc18b01455f18.webp',
+      clips: {},
+    },
   },
   edit_save_custom_setting: {
     title: 'EDIT/SAVE CUSTOM SETTING',
@@ -163,6 +219,7 @@ const CARDS: Record<string, Card> = {
     manual: 'menu_shooting/edit-save_custom_setting',
     changes:
       'Each slot C1–C7 holds a recipe saved as a named file on the memory card. Choose SAVE CURRENT SETTINGS, SAVE AS NEW RECIPE, CHOOSE FROM SD CARD or CLEAR SLOT.',
+    media: null,
   },
   snap_menu_item: {
     title: 'MF SNAP FOCUS',
@@ -172,6 +229,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    media: null,
   },
   bug_report_shortcut: {
     title: 'BUG REPORT SHORTCUT',
@@ -181,6 +239,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    media: null,
   },
 };
 
@@ -208,12 +267,48 @@ function Ratio(props: { width: number; height: number }) {
   );
 }
 
+function CardVideo(props: { media: Media; choice?: string }) {
+  let video: HTMLVideoElement | undefined;
+  // A release without docs media (or a missing file) shows no video at all.
+  const [failed, setFailed] = createSignal(false);
+  // Read once: the card's own range, still valid while its video is closing.
+  const range = untrack(() => (props.choice ? props.media.clips[props.choice] : undefined));
+  const clip = () => range;
+  return (
+    <Show when={!failed()}>
+      <video
+        ref={(element) => {
+          video = element;
+        }}
+        class="catalog-card-video"
+        src={MEDIA + props.media.video}
+        poster={MEDIA + props.media.still}
+        muted
+        autoplay
+        loop
+        playsinline
+        preload="metadata"
+        onLoadedMetadata={() => {
+          const range = clip();
+          if (video && range) video.currentTime = range[0];
+        }}
+        onTimeUpdate={() => {
+          const range = clip();
+          if (video && range && video.currentTime >= range[1]) video.currentTime = range[0];
+        }}
+        onError={() => setFailed(true)}
+      />
+    </Show>
+  );
+}
+
 function CardBody(props: { target: Target }) {
   const card = () => CARDS[props.target.card];
   const choice = () => props.target.choice;
   const path = () => [...card().path, card().title, ...(choice() ? [choice()!] : [])].join(' › ');
   return (
     <>
+      <Show when={card().media}>{(media) => <CardVideo media={media()} choice={choice()} />}</Show>
       <div class="catalog-card-title">{choice() ?? card().title}</div>
       <Show
         when={choice()}
@@ -462,10 +557,9 @@ export function FeatureCatalog() {
             <span>Unlocked Controls</span>
           </h4>
           <p>
-            Assign ISO, white balance, film simulation or other settings to the exposure
-            compensation dial, command control or control ring.
+            Assign ISO, white balance, film simulation, ASPECT RATIO, SELECT RECIPE or other
+            settings to the exposure compensation dial, command control or control ring.
           </p>
-          <div class="catalog-where">SET-UP › BUTTON/DIAL SETTING</div>
         </article>
         <article class="catalog-tile">
           <h4>
