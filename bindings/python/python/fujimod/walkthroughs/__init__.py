@@ -292,7 +292,7 @@ class Guide:
         if not self._preparing:
             self.video.still(self.camera.capture(), self.navigation_hold if navigation else self.action_hold)
 
-    def run(self, function, *, prerequisites=()):
+    def run(self, function, *, prerequisites=(), restored=()):
         if self._used:
             raise RuntimeError('A Guide can run only once')
         self._used = True
@@ -300,6 +300,10 @@ class Guide:
         try:
             self._preparing = True
             self.camera.start_recording(self)
+            # Prerequisites whose end state the camera was resumed from; their
+            # own recordings passed, and they are not executed again here.
+            for name in restored:
+                self.report['prerequisites'].append(dict(walkthrough=name, passed=True, restored=True))
             for name, prepare in prerequisites:
                 self.report['stage'] = 'prerequisite'
                 print('Replaying prerequisite: ' + name, flush=True)
