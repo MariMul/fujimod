@@ -42,7 +42,14 @@ class TestIntersectionObserver implements IntersectionObserver {
   }
 }
 
+// Fades and the touch settle delay run on timers; settle() lets them finish.
+const settle = () => {
+  vi.advanceTimersByTime(1000);
+  flush();
+};
+
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   observers.length = 0;
   play.mockReset().mockResolvedValue();
   pause.mockReset();
@@ -56,6 +63,7 @@ beforeEach(() => {
   vi.stubGlobal('IntersectionObserver', TestIntersectionObserver);
 });
 afterEach(() => {
+  vi.useRealTimers();
   dispose?.();
   dispose = undefined;
   document.body.replaceChildren();
@@ -85,9 +93,12 @@ function mount(mobile = false) {
   const previews = [...host.querySelectorAll('.catalog-tile-preview')];
   const fire = (type: string, index = 0) => {
     tiles[index].dispatchEvent(new MouseEvent(type));
-    flush();
+    settle();
   };
-  const visible = (...ratios: number[]) => observer().emit(previews, ratios);
+  const visible = (...ratios: number[]) => {
+    observer().emit(previews, ratios);
+    settle();
+  };
   return { host, tiles, fire, visible };
 }
 
@@ -143,15 +154,15 @@ test('hidden tabs release playback; mode changes and disposal clean up observati
   expect(host.querySelectorAll('video')).toHaveLength(1);
   vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
   document.dispatchEvent(new Event('visibilitychange'));
-  flush();
+  settle();
   expect(host.querySelector('video')).toBeNull();
   vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
   document.dispatchEvent(new Event('visibilitychange'));
-  flush();
+  settle();
   expect(host.querySelectorAll('video')).toHaveLength(1);
   media.matches = false;
   media.dispatchEvent(new Event('change'));
-  flush();
+  settle();
   expect(host.querySelector('video')).toBeNull();
   fire('mouseenter');
   expect(host.querySelectorAll('video')).toHaveLength(1);
@@ -200,7 +211,7 @@ test('a late rejection from an unloaded video cannot disable its replacement', a
   expect(replacement).not.toBe(first);
   expect(host.querySelector('video')).toBe(replacement);
   replacement!.dispatchEvent(new Event('error'));
-  flush();
+  settle();
   expect(host.querySelector('video')).toBeNull();
   expect(host.querySelectorAll('img')).toHaveLength(2);
 });
@@ -217,4 +228,37 @@ test('desktop hover takes priority over focus and returns focus playback afterwa
   fire('mouseleave', 1);
   expect(tiles[0].querySelector('video')).not.toBeNull();
   expect(host.querySelectorAll('video')).toHaveLength(1);
+});
+
+test('a preview fades out over its still before unloading, and returning keeps it', () => {
+  const { host, tiles, visible } = mount();
+  visible(1, 0);
+  tiles[0].dispatchEvent(new MouseEvent('mouseenter'));
+  flush();
+  const video = host.querySelector('video')!;
+  video.dispatchEvent(new Event('playing'));
+  flush();
+  tiles[0].dispatchEvent(new MouseEvent('mouseleave'));
+  flush();
+  expect(video.classList.contains('leaving')).toBe(true);
+  expect(video.isConnected).toBe(true);
+  tiles[0].dispatchEvent(new MouseEvent('mouseenter'));
+  settle();
+  expect(host.querySelector('video')).toBe(video);
+  expect(video.classList.contains('leaving')).toBe(false);
+  expect(load).not.toHaveBeenCalled();
+});
+
+test('touch scrolling keeps a mostly visible preview and starts a new one once settled', () => {
+  const { tiles, visible } = mount(true);
+  visible(1, 0.5);
+  const first = tiles[0].querySelector('video')!;
+  visible(0.75, 1);
+  expect(tiles[0].querySelector('video')).toBe(first);
+  expect(tiles[1].querySelector('video')).toBeNull();
+  observer().emit([...document.querySelectorAll('.catalog-tile-preview')], [0.25, 1]);
+  expect(tiles[1].querySelector('video')).toBeNull();
+  settle();
+  expect(tiles[1].querySelector('video')).not.toBeNull();
+  expect(tiles[0].querySelector('video')).toBeNull();
 });

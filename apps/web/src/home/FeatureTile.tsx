@@ -1,10 +1,10 @@
 import { Show, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
-import { fadeLoop } from './fade-loop';
+import { LOOP_FADE_MS, fadeLoop } from './fade-loop';
 import { watchFeaturePreview } from './feature-preview';
 
 /** Mounted only while this tile owns the catalog's single playback slot. */
-function PreviewVideo(props: { src: string; failed: () => void }) {
+function PreviewVideo(props: { src: string; leaving: boolean; failed: () => void }) {
   let video: HTMLVideoElement | undefined;
   let disposed = false;
   const [playing, setPlaying] = createSignal(false);
@@ -30,7 +30,7 @@ function PreviewVideo(props: { src: string; failed: () => void }) {
       ref={(element) => {
         video = element;
       }}
-      class={['catalog-tile-video', { playing: playing() }]}
+      class={['catalog-tile-video', { playing: playing(), leaving: props.leaving }]}
       src={props.src}
       muted
       playsinline
@@ -51,11 +51,23 @@ export function FeatureTile(props: {
 }) {
   let preview: HTMLDivElement | undefined;
   let playback: ReturnType<typeof watchFeaturePreview> | undefined;
+  // The video stays mounted while it fades out over the still.
   const [active, setActive] = createSignal(false);
+  const [mounted, setMounted] = createSignal(false);
+  let leave: ReturnType<typeof setTimeout> | undefined;
+  const activate = (next: boolean) => {
+    clearTimeout(leave);
+    setActive(next);
+    if (next) setMounted(true);
+    else leave = setTimeout(() => setMounted(false), LOOP_FADE_MS);
+  };
   onSettled(() => {
     if (!preview) return;
-    playback = watchFeaturePreview(preview, setActive);
-    return () => playback?.dispose();
+    playback = watchFeaturePreview(preview, activate);
+    return () => {
+      clearTimeout(leave);
+      playback?.dispose();
+    };
   });
 
   return (
@@ -83,9 +95,10 @@ export function FeatureTile(props: {
             }}
           >
             <img src={`/artifacts/docs/${media().still}`} alt="" loading="lazy" />
-            <Show when={active()}>
+            <Show when={mounted()}>
               <PreviewVideo
                 src={`/artifacts/docs/${media().video}`}
+                leaving={!active()}
                 failed={() => playback?.disable()}
               />
             </Show>

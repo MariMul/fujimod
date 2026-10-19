@@ -1,3 +1,6 @@
+/** How long scrolling must rest on a tile before its preview starts on touch devices. */
+const SETTLE_MS = 250;
+
 type Preview = {
   activate: (active: boolean) => void;
   ratio: number;
@@ -10,6 +13,7 @@ type Preview = {
 class FeaturePreviews {
   private entries = new Map<HTMLElement, Preview>();
   private active?: Preview;
+  private pending?: ReturnType<typeof setTimeout>;
   private mobile = matchMedia('(hover: none), (pointer: coarse)');
   private observer = new IntersectionObserver(
     (entries) => {
@@ -43,10 +47,19 @@ class FeaturePreviews {
         }
       }
     }
+    // On touch devices the playing tile keeps playing while it stays mostly in
+    // view, and a new one starts only once scrolling settles on it.
+    if (this.mobile.matches && next && this.active?.available && this.active.ratio >= 0.75)
+      next = this.active;
+    clearTimeout(this.pending);
     if (next === this.active) return;
-    this.active?.activate(false);
-    this.active = next;
-    next?.activate(true);
+    const swap = () => {
+      this.active?.activate(false);
+      this.active = next;
+      next?.activate(true);
+    };
+    if (this.mobile.matches && next) this.pending = setTimeout(swap, SETTLE_MS);
+    else swap();
   };
 
   watch(element: HTMLElement, activate: Preview['activate']) {
@@ -77,6 +90,7 @@ class FeaturePreviews {
         this.entries.delete(element);
         this.update();
         if (!this.entries.size) {
+          clearTimeout(this.pending);
           this.observer.disconnect();
           this.mobile.removeEventListener('change', this.update);
           document.removeEventListener('visibilitychange', this.update);
