@@ -50,10 +50,9 @@ Use typed APIs when their command semantics are established. An unknown reply's
 command-specific fields still need firmware-specific validation; successful USB
 completion cannot establish ownership or application completion.
 
-Some statically identified operations remain deliberately unclassified: `1a0000` has an
-empty acknowledgement on studied firmware; `1a0001` returns a status byte whose
-meaning needs a firmware definition; `200001` function 4 uses the log handler on
-studied firmware; `660002` prepares firmware download buffers but its complete
+Some statically identified operations remain deliberately unclassified: `1a0000` returns an
+empty acknowledgement; `1a0001` returns a status byte whose
+meaning needs a firmware definition; `200001` function 4 uses the log handler; `660002` prepares firmware download buffers but its complete
 update lifecycle is not implemented. They can be inspected through the explicit
 research API. No firmware-update workflow or universal calibration/reset codes
 are inferred from those handlers.

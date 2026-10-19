@@ -23,8 +23,8 @@ endpoint passed live owner/controller signaling and owner-revocation checks.
 The website was briefly deployed during migration and then taken offline at the
 owner's request; it is not part of the currently hosted service.
 
-The withdrawn initial static deployment used committed source `04bd01c12db5` and no local
-simulator bundles or unpublished mod artifacts. There were no published GitHub
+The withdrawn initial static deployment used committed source `04bd01c12db5` and no
+simulator bundles or mod artifacts. There were no published GitHub
 releases to stage, so its catalog offers USB devices without simulator runtimes.
 The sharing Worker currently has no TURN secrets and provides STUN only. TURN
 usage monitoring and a budget cutoff must be implemented before enabling relay
@@ -54,7 +54,7 @@ npx wrangler deploy
 Use Wrangler sign-in or a deployment API token. `cf` keeps its OAuth credentials
 separately from Wrangler. No Cloudflare secret belongs in the static build.
 Build only committed source and approved release artifacts; local simulator
-bundles, firmware inputs and unpublished mod builds are not production assets.
+bundles, firmware inputs and unreleased mod builds are not production assets.
 
 ## Verify
 
