@@ -1,34 +1,28 @@
 # Production hosting
 
-The website is intentionally unpublished. Its Worker has been removed and the
-website publication workflow is disabled. The separate `apps/domain-endpoint`
-Worker maintains DNS and HTTPS for `fujimod.com` and `www.fujimod.com`, returning
-an empty 404 for every HTTPS request and redirecting HTTP to HTTPS. It has no
-website assets. Deploying the sharing service for testing does not authorize
-publishing the website.
-
-The retained website configuration reserves `fujimod.com` and `www.fujimod.com`
-for a future explicitly requested publication. The separate
-[USB sharing Worker](../usb-sharing/README.md) is available for testing at
-`https://share.fujimod.com`; its WebSocket endpoint is
-`wss://share.fujimod.com/usb-proxy/signal`.
+The website is published at `fujimod.com` and `www.fujimod.com` (owner request,
+2026-10-19). The `fujimod-web` Worker serves the static build from
+`.github/workflows/cloudflare.yml`; its first deployment, run
+[39289474235](https://github.com/justjake/fujimod/actions/runs/39289474235),
+moved both custom domains from the `apps/domain-endpoint` placeholder Worker,
+which no longer serves them and can be retired. The separate
+[USB sharing Worker](../usb-sharing/README.md) serves `https://share.fujimod.com`;
+its WebSocket endpoint is `wss://share.fujimod.com/usb-proxy/signal`.
 
 Gandi remains the registrar. Cloudflare hosts the entire DNS zone, delegated to
 `ali.ns.cloudflare.com` and `rudy.ns.cloudflare.com`. Mail, SPF, DKIM, webmail and
 mail service-discovery records were imported from Gandi before delegation changed.
 Worker custom domains manage the website's DNS records and HTTPS certificates.
+GitHub Pages is disabled.
 
-DNS migration completed on 2026-10-17. GitHub Pages is disabled. The sharing
-endpoint passed live owner/controller signaling and owner-revocation checks.
-The website was briefly deployed during migration and then taken offline at the
-owner's request; it is not part of the currently hosted service.
-
-The withdrawn initial static deployment used committed source `04bd01c12db5` and no
-simulator bundles or mod artifacts. There were no published GitHub
-releases to stage, so its catalog offers USB devices without simulator runtimes.
 The sharing Worker currently has no TURN secrets and provides STUN only. TURN
 usage monitoring and a budget cutoff must be implemented before enabling relay
 credentials; the existing issuance quota is not a spending cap.
+
+Every deployment stages the newest published release's assets, including the
+homepage's feature media (`docs-media.json`). A release without that inventory
+deploys a homepage without preview clips, so build each release with
+`tools/build_patch_release.py --docs-media`.
 
 ## Releases
 
