@@ -13,10 +13,10 @@ from fujimod.walkthroughs import Guide, discover
 from fujimod.walkthroughs.media import Video
 
 
-def png(color='white'):
+def png(color='white', size=(320, 240)):
     from PIL import Image
     buffer = BytesIO()
-    Image.new('RGB', (320, 240), color).save(buffer, format='PNG')
+    Image.new('RGB', size, color).save(buffer, format='PNG')
     return buffer.getvalue()
 
 
@@ -76,6 +76,29 @@ class WalkthroughTests(unittest.TestCase):
         self.assertGreater(min(ImageStat.Stat(picture.crop((135,140,185,178))).mean), 250)
         self.assertEqual(plain(report['steps'][0]['title']), 'Example')
         self.assertIn('video.mp4', report['artifacts'])
+
+    @unittest.skipUnless(shutil.which('ffmpeg'), 'ffmpeg required')
+    def test_output_switch_keeps_native_screenshot_and_fixed_video_canvas(self):
+        from PIL import Image
+        camera, guide = self.guide()
+        def run(camera, guide):
+            with guide.step('First output', hold=.2):
+                pass
+            with guide.step('Second output', hold=.2):
+                camera.png = png('red', (640, 360))
+        report = guide.run(run)
+        screenshot = (guide.output/'screenshots/002.png').read_bytes()
+        self.assertEqual(screenshot, camera.png)
+        with Image.open(BytesIO(screenshot)) as image:
+            self.assertEqual(image.size, (640, 360))
+        for name in ('video.mp4', 'video-clean.mp4'):
+            frame = subprocess.check_output(['ffmpeg', '-v', 'error', '-i', str(guide.output/name),
+                '-vf', 'reverse', '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'png', '-'])
+            with Image.open(BytesIO(frame)) as image:
+                self.assertEqual(image.size, (320, 240))
+                self.assertLess(max(image.getpixel((160, 0))[:3]), 10)
+                self.assertGreater(image.getpixel((160, 120))[0], 240)
+        self.assertTrue(report['passed'])
 
     def test_failed_assertion_never_produces_passing_report_or_step(self):
         camera, guide = self.guide()
@@ -193,7 +216,8 @@ class WalkthroughTests(unittest.TestCase):
         observed=[]
         def write(raw):
             observed.append(raw);video.frames+=1
-            video.process=Mock();video.process.wait.return_value=0;video.log=Mock()
+            video.process=Mock();video.process.wait.return_value=0
+            video.clean=Mock();video.clean.wait.return_value=0;video.log=Mock()
         with patch.object(video,'_write',side_effect=write):
             video.frame(camera.png,0)
             video.frame(b'last observation',1)

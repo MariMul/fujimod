@@ -96,9 +96,11 @@ class Video:
                 for badge in self.badges]
 
     def _write(self, png):
-        from PIL import Image
+        from PIL import Image, ImageOps
         if png != self._decoded_png:
             self._decoded_image = Image.open(BytesIO(png)).convert('RGBA')
+            if self.size is not None and self._decoded_image.size != self.size:
+                self._decoded_image = ImageOps.pad(self._decoded_image, self.size, color=(0, 0, 0, 255))
             self._decoded_png = png
         picture = self._decoded_image
         if self.process is None:
