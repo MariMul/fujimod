@@ -73,7 +73,7 @@ try {
         if (route === '/') {
           assert.equal(await page.locator('#workspace').count(), 1);
           assert.equal(await page.locator('#simulation-canvas,#view-3d,#view-lcd').count(), 0);
-          assert.equal(await page.locator('#lcd-source').isVisible(), true);
+          assert.equal(await page.locator('#lcd-source').isVisible(), false);
           assert.equal(await page.locator('#idle-cameras').count(), 0);
           assert.equal(
             await page.getByRole('button', { name: 'New camera', exact: true }).count(),
@@ -130,8 +130,12 @@ try {
         await page.evaluate(() => window.__hydrationDOM === document.querySelector('#workspace')),
         'hydrate existing homepage nodes',
       );
-      await page.locator('a[href="#features"]').click();
-      assert.equal(new URL(page.url()).hash, '#features');
+      const note = page.locator('.personal-note');
+      assert.match(await note.innerText(), /It is \d+ days old and changing too quickly/);
+      assert.equal(await note.locator('mark, em, strong, b, svg').count(), 0);
+      assert.equal(await note.locator('a').count(), 1);
+      await note.getByRole('link', { name: 'camera emulator', exact: true }).click();
+      assert.equal(new URL(page.url()).hash, '#workspace');
       await page.locator('#features .catalog-ref').first().focus();
       assert.equal(await page.locator('.catalog-card.on').count(), 1);
       await page.locator('#viewer-settings-toggle').click();

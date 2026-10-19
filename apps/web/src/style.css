@@ -77,7 +77,9 @@ header .meta a:first-child {
 }
 .personal-note .signature {
   margin-bottom: 0;
-  text-align: right;
+}
+.personal-note .signature-name {
+  margin-left: 2em;
 }
 .personal-note a {
   text-underline-offset: 3px;
@@ -145,12 +147,20 @@ header .meta a:first-child {
 }
 /* idle */
 .idle .viewer {
-  min-height: 520px;
+  min-height: 240px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 28px;
+}
+.stage.idle .viewer {
+  position: relative;
+  height: auto;
+}
+.stage.idle #lcd-source.flat,
+.stage.idle .ghost {
+  display: none;
 }
 .idle .ghost {
   position: absolute;
@@ -969,6 +979,7 @@ footer {
     grid-template-columns: 1fr;
     margin-inline: -14px;
     border: 0;
+    border-top: 1px solid var(--edge);
     border-radius: 0;
     overflow: visible;
   }
@@ -1216,7 +1227,6 @@ footer a {
   width: calc(100% - 32px);
   height: calc(100% - 88px);
   object-fit: contain;
-  touch-action: none;
 }
 .err {
   max-height: calc(100dvh - 20px - env(safe-area-inset-bottom));

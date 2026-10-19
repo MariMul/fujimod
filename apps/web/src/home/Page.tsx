@@ -67,7 +67,7 @@ export default function Home() {
         </header>
         <main>
           <Show when={!state.activeCamera && state.savedCameras.length === 0}>
-            <PersonalNote cameras={state.cameras} />
+            <PersonalNote />
             <FeatureCatalog />
           </Show>
           <CameraLibrary

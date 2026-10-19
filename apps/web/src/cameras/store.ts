@@ -37,6 +37,27 @@ async function transaction<T>(
   mode: IDBTransactionMode,
   run: (tx: IDBTransaction, result: (value: T) => void, fail: (error: unknown) => void) => void,
 ): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await transactionAttempt(stores, mode, run);
+    } catch (error) {
+      // WebKit can transiently abort an initial open/read. Reopen once for
+      // read-only operations; never replay a write or hide persistent failures.
+      if (
+        mode !== 'readonly' ||
+        attempt > 0 ||
+        !(error instanceof DOMException) ||
+        error.name !== 'AbortError'
+      )
+        throw error;
+    }
+  }
+}
+async function transactionAttempt<T>(
+  stores: string[],
+  mode: IDBTransactionMode,
+  run: (tx: IDBTransaction, result: (value: T) => void, fail: (error: unknown) => void) => void,
+): Promise<T> {
   const db = await database();
   try {
     return await new Promise<T>((resolve, reject) => {
