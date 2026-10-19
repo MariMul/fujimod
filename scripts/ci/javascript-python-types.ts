@@ -82,7 +82,7 @@ function python(type: ts.Type, hint: string): string {
   if (flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined | ts.TypeFlags.Void)) return 'None';
   if (flags & ts.TypeFlags.StringLiteral)
     return `Literal[${JSON.stringify((type as ts.LiteralType).value)}]`;
-  if (flags & ts.TypeFlags.NumberLiteral) return `Literal[${(type as ts.LiteralType).value}]`;
+  if (flags & ts.TypeFlags.NumberLiteral) return `Literal[${(type as ts.NumberLiteralType).value}]`;
   if (flags & ts.TypeFlags.BooleanLiteral)
     return `Literal[${(type as ts.Type & { intrinsicName: string }).intrinsicName === 'true' ? 'True' : 'False'}]`;
   if (flags & ts.TypeFlags.StringLike) return 'str';
