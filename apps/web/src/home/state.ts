@@ -45,6 +45,7 @@ export function createHomeState() {
     message: '',
     error: false,
     live: '',
+    loading: false,
     progress: undefined as number | undefined,
     firmware: undefined as Firmware | undefined,
     speed: undefined as number | undefined,

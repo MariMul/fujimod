@@ -16,6 +16,7 @@ import generations from '../../devices/generations.json';
 import { ViewerOverlays } from '../viewer/Overlays';
 import '../style.css';
 import '../navigation.css';
+import './loading.css';
 
 export default function Home() {
   const [state, setState] = createHomeState();
@@ -148,14 +149,19 @@ export default function Home() {
                   event.currentTarget.value = '';
                 }}
               />
-              <progress
-                id="boot-progress"
-                class="visually-hidden"
-                max="100"
-                value={state.progress ?? 0}
-                hidden={state.progress === undefined}
-                aria-label="It takes a bit to boot a camera in the browser."
-              />
+              <div id="camera-loading" class="camera-loading" hidden={!state.loading}>
+                <p>
+                  It takes a bit to boot a camera
+                  <br />
+                  in the browser.
+                </p>
+                <progress
+                  id="boot-progress"
+                  max="100"
+                  value={state.progress}
+                  aria-label={state.message || 'Loading camera'}
+                />
+              </div>
               <span id="status" class={{ error: state.error }} role="status" aria-live="polite">
                 {state.message}
               </span>

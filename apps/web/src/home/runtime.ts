@@ -8,7 +8,6 @@ import type { PatchResult } from '../patch/patcher';
 import { validateCatalog, type Catalog, type Firmware } from '../catalog';
 import { validateIndex, verifyPatch } from '../patch/catalog';
 import { sha256 } from '../patch/patcher';
-import { createEngine } from '../engine';
 import { EngineError, FAULT_UNDO_SECONDS, faultFrom, type EngineFault } from '../engine/fault';
 import { cachedFetch } from '../asset-cache';
 import type { Engine, CardFile, BootMedia } from '../engine/api';
@@ -64,7 +63,6 @@ export function startHome(
   let manualSelection = false;
   let build = 'Development';
   let patchWorker: Worker | undefined;
-  let preparedEngine: { value: Engine; bundle: string; adapter: string } | undefined;
   let replayScenario: ReplayScenario | undefined;
   let modEnabled = true;
   let modFirmwareHash: string | undefined;
@@ -134,12 +132,19 @@ export function startHome(
       s.error = error;
     });
   }
-  function progress(message: string, percent: number) {
+  function progress(message: string, percent?: number) {
     status(message);
     setState((s) => {
+      s.loading = true;
+      s.promptVisible = false;
       s.progress = percent;
     });
-    viewer.bootProgress(percent);
+  }
+  function finishLoading() {
+    setState((s) => {
+      s.loading = false;
+      s.progress = undefined;
+    });
   }
   function title(speed?: number) {
     setState((s) => {
@@ -155,10 +160,7 @@ export function startHome(
     setState((s) => {
       s.live = 'STOPPED';
     });
-    setState((s) => {
-      s.progress = undefined;
-    });
-    viewer.bootProgress();
+    finishLoading();
     status(fault.message, true);
     const canUndo = !!engine && fault.undoSeconds === FAULT_UNDO_SECONDS;
     setState((s) => {
@@ -206,6 +208,7 @@ export function startHome(
     setState((s) => {
       s.live = 'RESTARTING';
     });
+    progress('Booting camera…');
     try {
       await operation();
       viewer.fault(false);
@@ -221,10 +224,7 @@ export function startHome(
     } catch (error) {
       showFault(faultFrom(error));
     } finally {
-      setState((s) => {
-        s.progress = undefined;
-      });
-      viewer.bootProgress();
+      finishLoading();
     }
   }
   async function loadDevice(body: string) {
@@ -273,20 +273,14 @@ export function startHome(
     setState((s) => {
       s.camerasVisible = true;
     });
-    setState((s) => {
-      s.progress = undefined;
-    });
-    viewer.bootProgress();
+    finishLoading();
     title();
   }
-  function makeEngine(config: NonNullable<Firmware['emulate']> & { firmwareId: string }) {
+  async function makeEngine(config: NonNullable<Firmware['emulate']> & { firmwareId: string }) {
+    const { createEngine } = await import('../engine');
     let value: Engine;
     value = createEngine(config, (error) => {
       if (engine === value) showFault(faultFrom(error));
-      else if (preparedEngine?.value === value) {
-        preparedEngine = undefined;
-        value.dispose();
-      }
     });
     return value;
   }
@@ -379,6 +373,7 @@ export function startHome(
     selectedFile = undefined;
     selectedFirmware = undefined;
     firmwareHash = undefined;
+    progress('Checking firmware…');
     try {
       if (!file.size || file.size > 256 * 1024 * 1024)
         throw Error('Choose a firmware DAT smaller than 256 MB.');
@@ -418,6 +413,7 @@ export function startHome(
           fpUpdate = !!metadata.outputs.fpupdate;
         }
         if (current !== generation) return;
+        finishLoading();
         const action = await choice.choose(
           firmwareActions(flags, {
             fpUpdate,
@@ -439,15 +435,16 @@ export function startHome(
               downloadBlob(new Blob([result.fpupdate]), 'FPUPDATE.DAT');
             }
           }
+          finishLoading();
           setState((s) => {
-            s.progress = undefined;
+            s.promptVisible = true;
           });
-          viewer.bootProgress();
           status(action ? 'Download ready' : '');
           return;
         }
       }
       if (!entry.emulate || !device) throw Error('Emulation unsupported for this firmware.');
+      progress('Loading emulator…');
       if (!replayScenario && !activeCamera) {
         activeCamera = await cameras.create(file, entry, modEnabled);
         if (current !== generation) return;
@@ -475,22 +472,16 @@ export function startHome(
         s.camerasVisible = false;
       });
       title();
-      const active =
-        preparedEngine?.bundle === entry.emulate.bundle &&
-        preparedEngine.adapter === entry.emulate.adapter
-          ? preparedEngine.value
-          : makeEngine({ ...entry.emulate, firmwareId: entry.id });
-      if (preparedEngine && preparedEngine.value !== active) preparedEngine.value.dispose();
-      preparedEngine = undefined;
+      const active = await makeEngine({ ...entry.emulate, firmwareId: entry.id });
+      if (disposed || current !== generation) {
+        active.dispose();
+        return;
+      }
       engine = active;
       active.metrics((metrics) => {
         if (current !== generation) return;
         window.cameraPerformance = metrics;
         title(metrics.speed);
-        setState((s) => {
-          s.progress = undefined;
-        });
-        viewer.bootProgress();
       });
       window.profileCamera = (limit) => active.profile(limit);
       active.connections((rows) => {
@@ -526,7 +517,8 @@ export function startHome(
       active.frames((frame) => {
         if (current === generation) viewer.frame(frame);
       });
-      const modSupported = !!device.sdBoot && !!release?.patches[entry.sha256];
+      const modSupported =
+        'sdBoot' in device && !!device.sdBoot && !!release?.patches[entry.sha256];
       updateModButtons(true);
       setState((s) => {
         s.modSupported = modSupported;
@@ -567,10 +559,7 @@ export function startHome(
       panel.render(inputs, active, device.panel, positions);
       panel.synchronize(positions);
       setCardEngine(active);
-      setState((s) => {
-        s.progress = undefined;
-      });
-      viewer.bootProgress();
+      finishLoading();
       updateModButtons(false);
       setState((s) => {
         s.live = 'LIVE';
@@ -709,12 +698,6 @@ export function startHome(
       const localDat =
         replayScenario && __FUJIMOD_LOCAL_DAT__ ? cachedFetch('/local/firmware.dat') : undefined;
       const first = cameras.find((camera) => camera.firmware.model_asset);
-      if (localDat && first?.firmware.emulate) {
-        const config = first.firmware.emulate;
-        const value = makeEngine({ ...config, firmwareId: first.firmware.id });
-        preparedEngine = { value, bundle: config.bundle, adapter: config.adapter };
-        value.prepare({ ...config, firmwareId: first.firmware.id });
-      }
       if (first?.firmware.model_asset) {
         const device = await loadDevice(first.firmware.model_asset);
         if (device)
@@ -753,7 +736,6 @@ export function startHome(
   document.addEventListener('visibilitychange', saveHidden);
   const unload = () => {
     engine?.dispose();
-    preparedEngine?.value.dispose();
   };
   window.addEventListener('beforeunload', unload);
   void initialize();

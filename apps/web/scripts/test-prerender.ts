@@ -86,6 +86,13 @@ try {
       await noJs.close();
       const context = await browser.newContext();
       const page = await context.newPage();
+      const runtimeRequests: string[] = [],
+        workers: string[] = [];
+      page.on('worker', (worker) => workers.push(worker.url()));
+      page.on('request', (request) => {
+        if (/\/runtime\/(?!catalog\.json)|default-dunes|pyodide-worker/.test(request.url()))
+          runtimeRequests.push(request.url());
+      });
       const errors: string[] = [],
         diagnostics: string[] = [];
       page.on('pageerror', (error) => errors.push(error.message));
@@ -116,6 +123,8 @@ try {
         );
         throw error;
       }
+      assert.deepEqual(runtimeRequests, [], 'The idle homepage must not download the emulator');
+      assert.deepEqual(workers, [], 'The idle homepage must not create an emulator worker');
       assert.equal(await page.locator('#workspace').count(), 1);
       assert.ok(
         await page.evaluate(() => window.__hydrationDOM === document.querySelector('#workspace')),

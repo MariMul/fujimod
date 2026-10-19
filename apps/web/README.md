@@ -88,8 +88,16 @@ recognized bodies without installed capabilities show unsupported. Patching
 and emulation are independent capabilities. Release-only patch entries also
 work without a web app source change.
 
-The homepage opens **Your cameras** without booting a session. Uploading or
-dropping a supported DAT creates a separate virtual camera, including when the
+The homepage opens **Your cameras** without loading emulator code, creating its
+worker or downloading its runtime. The engine is imported only after launching
+supplied firmware or opening a saved camera. A visible loading bar covers file
+verification, the lazy import and runtime downloads with indeterminate progress;
+guest execution supplies measured boot progress. The bar clears only when the
+camera is ready or loading fails. The real-download browser gate is
+`src/home/lazy-loading.browser.ts`; it holds module and runtime requests to
+verify both loading phases in Chromium and WebKit.
+
+Uploading or dropping a supported DAT creates a separate virtual camera, including when the
 same file is used twice. Its firmware, SD card and committed internal storage
 stay in this browser's IndexedDB. Choose a saved camera to reopen it, or use
 **Cameras** to save the current session and return to the library.

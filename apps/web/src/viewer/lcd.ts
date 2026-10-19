@@ -2,12 +2,11 @@ import { createStore } from 'solid-js';
 import { badgeStyle } from '../feedback/input';
 import type { Frame } from '../engine/api';
 
-/** Compose guest LCD frames, boot progress and fault feedback on a 2D canvas. */
+/** Compose guest LCD frames and fault feedback on a 2D canvas. */
 export class LCDViewer {
   readonly ui;
   private setUi;
   private lcdImage?: ImageData;
-  private bootPercent?: number;
   private faulted = false;
   private faultStart?: number;
   private faultImage?: ImageData;
@@ -37,34 +36,6 @@ export class LCDViewer {
       });
     }, badgeStyle.press_ms);
   }
-  bootProgress(percent?: number) {
-    this.bootPercent = percent;
-    const context = this.lcd.getContext('2d')!;
-    if (percent === undefined) {
-      if (this.lcdImage) context.putImageData(this.lcdImage, 0, 0);
-      else context.clearRect(0, 0, this.lcd.width, this.lcd.height);
-    } else {
-      const w = this.lcd.width,
-        h = this.lcd.height;
-      context.fillStyle = '#101012';
-      context.fillRect(0, 0, w, h);
-      context.fillStyle = '#d4d4d8';
-      context.font = `${w / 30}px system-ui, sans-serif`;
-      context.textAlign = 'center';
-      context.textBaseline = 'middle';
-      context.fillText('It takes a bit to boot a camera', w / 2, h * 0.43);
-      context.fillText('in the browser.', w / 2, h * 0.5);
-      context.fillStyle = '#343438';
-      context.fillRect(w * 0.16, h * 0.59, w * 0.68, h * 0.025);
-      context.fillStyle = '#d4d4d8';
-      context.fillRect(
-        w * 0.16,
-        h * 0.59,
-        (w * 0.68 * Math.min(100, Math.max(0, percent))) / 100,
-        h * 0.025,
-      );
-    }
-  }
   frame(frame: Frame) {
     if (frame.rgb.length !== frame.width * frame.height * 3) throw Error('Invalid LCD frame size.');
     if (this.lcd.width !== frame.width || this.lcd.height !== frame.height) {
@@ -82,7 +53,6 @@ export class LCDViewer {
     }
     context.putImageData(image, 0, 0);
 
-    if (this.bootPercent !== undefined) this.bootProgress(this.bootPercent);
     if (this.faulted) this.paintFault();
     this.host.dataset.frames = String(frame.sequence);
   }

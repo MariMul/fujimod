@@ -112,19 +112,19 @@ export interface Engine {
   boot(
     dat: ArrayBuffer,
     config: EngineConfig,
-    progress: (message: string, percent: number) => void,
+    progress: (message: string, percent?: number) => void,
     media?: BootMedia,
   ): Promise<Input[]>;
   /** Restart with these files merged into existing media; matching paths are replaced. */
   restartWithCardFiles(
     files: CardFile[],
-    progress: (message: string, percent: number) => void,
+    progress: (message: string, percent?: number) => void,
   ): Promise<void>;
-  formatCard(progress: (message: string, percent: number) => void): Promise<void>;
+  formatCard(progress: (message: string, percent?: number) => void): Promise<void>;
   insertCard(present: boolean): Promise<void>;
   powerCycle(
     inputs: BootInput[],
-    progress: (message: string, percent: number) => void,
+    progress: (message: string, percent?: number) => void,
   ): Promise<void>;
   cardState(): Promise<CardState>;
   cardTree(revision?: number): Promise<CardTree>;

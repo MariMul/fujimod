@@ -277,11 +277,11 @@ async function boot(
   seedIdentity = identities;
   bootStarted = performance.now();
   bootStages.length = 0;
-  send('progress', { message: 'Loading camera runtime…', percent: 3 });
+  send('progress', { message: 'Loading camera runtime…' });
   const runtime = await prepareRuntime(bundle),
     protocol = config.boot;
   bootStage('runtime-loaded');
-  send('progress', { message: 'Checking firmware…', percent: 8 });
+  send('progress', { message: 'Loading camera storage…' });
   const inputs = await fetch(new URL('firmware-inputs.zip', bundle), {
     cache: 'no-store',
   });

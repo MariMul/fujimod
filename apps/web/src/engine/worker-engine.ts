@@ -75,7 +75,7 @@ export class WorkerEngine implements Engine {
   private inputs: Input[] = [];
   private powerInput?: string;
   private touches = new Map<string, { x: number; y: number }>();
-  private progressListener?: (message: string, percent: number) => void;
+  private progressListener?: (message: string, percent?: number) => void;
   private selectedPositions: Record<string, string> = {};
   private scene: Scene | null = null;
   private sceneInput = false;
@@ -149,10 +149,11 @@ export class WorkerEngine implements Engine {
   async boot(
     dat: ArrayBuffer,
     config: EngineConfig,
-    progress: (message: string, percent: number) => void,
+    progress: (message: string, percent?: number) => void,
     media?: BootMedia,
     initialScene: Scene | null = this.scene,
   ) {
+    progress('Loading camera runtime…');
     this.pace.reset(0);
     this.replayMode = config.execution?.mode === 'replay';
     this.bootMedia = media;
@@ -413,13 +414,13 @@ export class WorkerEngine implements Engine {
       for (const listener of this.cardListeners) listener({ ...card });
     }
   }
-  restartWithCardFiles(files: CardFile[], progress: (message: string, percent: number) => void) {
+  restartWithCardFiles(files: CardFile[], progress: (message: string, percent?: number) => void) {
     return this.restartCard(files, progress, false, []);
   }
-  formatCard(progress: (message: string, percent: number) => void) {
+  formatCard(progress: (message: string, percent?: number) => void) {
     return this.restartCard([], progress, true, []);
   }
-  powerCycle(inputs: BootInput[], progress: (message: string, percent: number) => void) {
+  powerCycle(inputs: BootInput[], progress: (message: string, percent?: number) => void) {
     return this.restartCard([], progress, false, inputs);
   }
   async insertCard(present: boolean) {
@@ -428,7 +429,7 @@ export class WorkerEngine implements Engine {
   }
   private restartCard(
     files: CardFile[],
-    progress: (message: string, percent: number) => void,
+    progress: (message: string, percent?: number) => void,
     replaceCard: boolean,
     bootInputs: BootInput[],
   ) {
