@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@solidjs/web": "2.0.0-rc.15",
+    "animejs": "4.5.0",
     "fujimod": "file:../../bindings/javascript",
     "solid-js": "2.0.0-rc.15"
   },

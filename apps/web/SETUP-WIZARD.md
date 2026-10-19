@@ -29,5 +29,27 @@ An illustrated, animated walkthrough that takes a camera owner through:
   because it is harmless and adds protection. The wizard always teaches
   the battery removal, the exit that works on every body, including those
   where no guard is known.
-- **Animation library:** under discussion (comparison in the conversation of
-  2026-10-18); chosen library recorded here once picked.
+- **Animation library: anime.js 4.5.0 (MIT).** The owner prefers open source:
+  GSAP and Remotion were set aside for their licences, Rive for its account-bound
+  pipeline, and dotLottie (open) because per-camera baked files suit one shared
+  script worse than animating our own SVG.
+
+## How it is built (`src/setup/`, route `/setup/`)
+
+- `cameras.ts`: each body as measurements and named parts (top plate, back, base,
+  USB side), plus whether its entry was tried and whether an exit guard is known.
+- `scene.ts`: draws a camera from those parts as the back plus an oblique top plate
+  or base. Everything the picture can show is one state object (zoom, tilt, switch
+  angle, arrows, cable, battery door); `draw` renders it each frame.
+- `steps.ts`: one anime.js timeline per step, moving that state from wherever the
+  previous step left it, so transitions are continuous. Captions start at
+  timeline labels and are read from the playhead, so seeking (screenshot checks,
+  reduced motion) keeps captions right. `window.setupSeek(ms)` jumps for checks.
+- **Exit order taught:** battery out with the cable still in, then unplug, switch
+  to OFF, battery back, switch on without holding buttons. Unplugging first is
+  avoided because USB removal is itself a service-mode event on these bodies.
+- **Connect:** the USB package loads when the step opens, so the button goes
+  straight to Chrome's chooser; a dimmed overlay points to where Chrome shows it.
+- **Not built yet:** arming the exit guard and turning on debug mode from the
+  browser. The page says so; both need reviewed camera operations in the Rust core.
+

@@ -4,7 +4,8 @@ import { getRequestEvent, HydrationScript } from '@solidjs/web';
 export default function Document(props: { children: JSX.Element }) {
   const path = new URL(getRequestEvent()?.request.url ?? window.location.href).pathname;
   const bug = /^\/bug(?:\/|$)/.test(path),
-    tools = /^\/dev-tools(?:\/|$)/.test(path);
+    tools = /^\/dev-tools(?:\/|$)/.test(path),
+    setup = /^\/setup(?:\/|$)/.test(path);
   return (
     <html lang="en">
       <head>
@@ -16,7 +17,9 @@ export default function Document(props: { children: JSX.Element }) {
           content={
             bug
               ? 'Retrieve and prepare a private camera bug report locally.'
-              : tools
+              : setup
+                ? 'Put your camera in service mode and connect it over USB, step by step.'
+                : tools
                 ? 'FujiMod USB console and protocol logs.'
                 : 'Try your camera firmware in the browser and build Fujimod SD boot files.'
           }
@@ -28,7 +31,13 @@ export default function Document(props: { children: JSX.Element }) {
           <script src="/__browser-diagnostics.js" />
         </Show>
         <title>
-          {bug ? 'Report a camera bug · FujiMod' : tools ? 'Dev Tools · FujiMod' : 'Fujimod'}
+          {bug
+            ? 'Report a camera bug · FujiMod'
+            : setup
+              ? 'Set up USB access · FujiMod'
+              : tools
+                ? 'Dev Tools · FujiMod'
+                : 'Fujimod'}
         </title>
         <link rel="icon" href="data:," />
         <HydrationScript />

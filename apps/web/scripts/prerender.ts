@@ -1,7 +1,7 @@
 import { access, mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-export const routes = ['/', '/dev-tools/', '/bug/'];
+export const routes = ['/', '/dev-tools/', '/bug/', '/setup/'];
 /** Render through start mode's production handler, using the same entries as dev and hydration. */
 export async function prerender(output = 'dist') {
   const { handleRequest } = await import(pathToFileURL(resolve(output, 'server/server.js')).href);
@@ -16,6 +16,7 @@ export async function prerender(output = 'dist') {
       '/': 'id="workspace"',
       '/dev-tools/': 'Dev Tools',
       '/bug/': 'class="shell bug-report"',
+      '/setup/': 'class="setup"',
     }[route];
     if (!html.includes(expected) || !/<script[^>]+type="module"/.test(html))
       throw Error(`Prerender ${route}: missing content or hydration entry`);
