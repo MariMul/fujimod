@@ -197,6 +197,28 @@ impl Session {
     pub async fn request_attention(&mut self, message: &str) -> Result<()> {
         self.notify_owner(fujimod_usb_proxy::protocol::Frame::Attention { message: message.into() }).await
     }
+    /// What the tool is doing now, above the share owner's log footer; an
+    /// empty title clears it. No-op for local USB.
+    pub async fn owner_activity(&mut self, title: &str) -> Result<()> {
+        self.notify_owner(fujimod_usb_proxy::protocol::Frame::Activity {
+            title: fujimod_usb_proxy::protocol::bounded_reason(title),
+        })
+        .await
+    }
+    /// Start a `total`-unit progress bar under the share owner's log.
+    pub async fn owner_progress_start(&mut self, label: &str, total: u64) -> Result<()> {
+        self.notify_owner(fujimod_usb_proxy::protocol::Frame::ProgressStart {
+            label: fujimod_usb_proxy::protocol::bounded_reason(label),
+            total,
+        })
+        .await
+    }
+    pub async fn owner_progress_update(&mut self, done: u64) -> Result<()> {
+        self.notify_owner(fujimod_usb_proxy::protocol::Frame::ProgressUpdate { done }).await
+    }
+    pub async fn owner_progress_done(&mut self) -> Result<()> {
+        self.notify_owner(fujimod_usb_proxy::protocol::Frame::ProgressDone).await
+    }
     async fn notify_owner(&mut self, frame: fujimod_usb_proxy::protocol::Frame) -> Result<()> {
         match self.core.io.inner_mut() {
             crate::connection::Backend::Proxy(io) => io.notify_owner(frame).await,

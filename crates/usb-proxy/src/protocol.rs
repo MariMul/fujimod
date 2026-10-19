@@ -175,6 +175,21 @@ pub enum Frame {
     Attention {
         message: String,
     },
+    /// Controller to owner, no reply: what the tool is doing now, shown above
+    /// the owner's log footer until replaced; an empty title clears it.
+    Activity {
+        title: String,
+    },
+    /// Controller to owner, no reply: a progress bar under the owner's log,
+    /// `total` units long, until ProgressDone.
+    ProgressStart {
+        label: String,
+        total: u64,
+    },
+    ProgressUpdate {
+        done: u64,
+    },
+    ProgressDone,
     Ready {
         version: u32,
         id: String,
@@ -397,6 +412,21 @@ mod tests {
         let long = "é".repeat(MAX_REASON);
         let cut = bounded_reason(&long);
         assert!(cut.len() <= MAX_REASON && long.starts_with(&cut));
+    }
+    #[test]
+    fn activity_and_progress_notifications_round_trip() {
+        for frame in [
+            Frame::Activity { title: "Uploading".into() },
+            Frame::ProgressStart { label: "Uploading".into(), total: 93056 },
+            Frame::ProgressUpdate { done: 16384 },
+            Frame::ProgressDone,
+        ] {
+            let json = serde_json::to_value(&frame).unwrap();
+            let decoded = Frame::decode(&frame.encode().unwrap()).unwrap();
+            assert_eq!(serde_json::to_value(decoded).unwrap(), json);
+        }
+        let done = serde_json::to_value(Frame::ProgressDone).unwrap();
+        assert_eq!(done, serde_json::json!({"type": "progress_done"}));
     }
     #[test]
     fn batch_carries_out_payloads_in_step_order_and_rejects_mismatch() {

@@ -105,6 +105,20 @@ impl AsyncSession {
     async fn owner_attention(&self, message: String) -> PyResult<()> {
         self.with(move |s| Box::pin(async move { s.owner_attention(&message).await })).await
     }
+    /// What the tool is doing now, above the owner's log footer ('' clears).
+    async fn owner_activity(&self, title: String) -> PyResult<()> {
+        self.with(move |s| Box::pin(async move { s.owner_activity(&title).await })).await
+    }
+    /// Start a progress bar of `total` units under the owner's log.
+    async fn owner_progress_start(&self, label: String, total: u64) -> PyResult<()> {
+        self.with(move |s| Box::pin(async move { s.owner_progress_start(&label, total).await })).await
+    }
+    async fn owner_progress_update(&self, done: u64) -> PyResult<()> {
+        self.with(move |s| Box::pin(async move { s.owner_progress_update(done).await })).await
+    }
+    async fn owner_progress_done(&self) -> PyResult<()> {
+        self.with(|s| Box::pin(s.owner_progress_done())).await
+    }
     /// Tell a share owner the camera's battery level; a no-op unless shared.
     async fn report_battery(&self, level: String) -> PyResult<()> {
         self.with(move |s| Box::pin(async move { s.report_battery(&level).await })).await

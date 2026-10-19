@@ -264,8 +264,16 @@ impl Client {
     }
     /// Send the owner a Status or Attention frame; the owner does not reply.
     pub async fn notify_owner(&mut self, frame: Frame) -> Result<()> {
-        if !matches!(frame, Frame::Status { .. } | Frame::Attention { .. }) {
-            return Err(err("only status and attention frames are notifications"));
+        if !matches!(
+            frame,
+            Frame::Status { .. }
+                | Frame::Attention { .. }
+                | Frame::Activity { .. }
+                | Frame::ProgressStart { .. }
+                | Frame::ProgressUpdate { .. }
+                | Frame::ProgressDone
+        ) {
+            return Err(err("only status, attention, activity and progress frames are notifications"));
         }
         if !self.usable {
             return Err(err("connection fenced; completion unknown"));
