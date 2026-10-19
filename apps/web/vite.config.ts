@@ -68,22 +68,42 @@ function localArtifacts(env: Record<string, string>): Plugin {
           return;
         }
         if (gzip) res.setHeader('Content-Encoding', 'gzip');
-        else res.setHeader('Content-Length', info.size);
+        else res.setHeader('Content-Length', last - first + 1);
         res.setHeader(
           'Content-Type',
           path.endsWith('.mjs') || path.endsWith('.js')
             ? 'text/javascript'
             : path.endsWith('.json')
               ? 'application/json'
+        // Mobile Safari fetches video in byte ranges and stalls without them.
+        const range = gzip ? null : /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+        const first = range ? (range[1] ? Number(range[1]) : info.size - Number(range[2])) : 0;
+        const last =
+          range && range[1] && range[2] ? Math.min(Number(range[2]), info.size - 1) : info.size - 1;
+        if (range && (first > last || first < 0)) {
+          res.statusCode = 416;
+          res.setHeader('Content-Range', `bytes */${info.size}`);
+          res.end();
+          return;
+        }
+        if (!gzip) res.setHeader('Accept-Ranges', 'bytes');
+        if (range) {
+          res.statusCode = 206;
+          res.setHeader('Content-Range', `bytes ${first}-${last}/${info.size}`);
+        }
               : path.endsWith('.wasm')
                 ? 'application/wasm'
-                : 'application/octet-stream',
+                : path.endsWith('.mp4')
+                  ? 'video/mp4'
+                  : path.endsWith('.webp')
+                    ? 'image/webp'
+                    : 'application/octet-stream',
         );
         if (req.method === 'HEAD') {
           res.end();
           return;
         }
-        const stream = createReadStream(path);
+        const stream = createReadStream(path, { start: first, end: last });
         (gzip ? stream.pipe(createGzip({ level: 1 })) : stream).pipe(res);
       } catch {
         res.statusCode = 404;

@@ -1,5 +1,5 @@
 /** How long scrolling must rest on a tile before its preview starts on touch devices. */
-const SETTLE_MS = 80;
+const SETTLE_MS = 250;
 
 type Preview = {
   activate: (active: boolean) => void;
