@@ -123,6 +123,14 @@ export async function stageSite(inputs: SiteInputs, destination = 'public') {
         throw Error(`Unexpected feature media: ${name}`);
       await copy(join(inputs.media, name), 'artifacts/docs/' + name);
     }
+    const featureSource = await readFile(
+      new URL('../src/home/Features.tsx', import.meta.url),
+      'utf8',
+    );
+    const installedMedia = new Set(files.map((file) => file.path));
+    for (const match of featureSource.matchAll(/['"]([0-9a-f]{24}\.(?:mp4|webp))['"]/g))
+      if (!installedMedia.has('artifacts/docs/' + match[1]))
+        throw Error(`Missing feature media: ${match[1]}`);
     if (!files.some((file) => file.path.startsWith('artifacts/docs/')))
       throw Error('Feature media is missing.');
     await mkdir(target, { recursive: true });
