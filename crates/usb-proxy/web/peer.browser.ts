@@ -1,3 +1,4 @@
+import './browser-state.ts';
 // Synthetic USB over real browser<->Rust WebRTC, including SCTP chunking.
 import { createRequire } from 'node:module';
 import { readFile } from 'node:fs/promises';
@@ -6,7 +7,8 @@ import assert from 'node:assert/strict';
 const require = createRequire(
   new URL('../../../bindings/javascript/package.json', import.meta.url),
 );
-const { chromium } = require('playwright');
+const { chromium } =
+  require('playwright') as typeof import('../../../bindings/javascript/node_modules/playwright/index.js');
 const base = process.env.FUJIMOD_WEB_URL;
 if (!base) throw Error('Set FUJIMOD_WEB_URL');
 const repo = new URL('../../../', import.meta.url).pathname;
@@ -19,14 +21,14 @@ try {
     (socket) => socket.close(),
   );
   const page = await context.newPage();
-  const errors = [];
+  const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.goto(new URL('usb-proxy/', base).href);
   const link = await page.evaluate(
     async ({ repo, base }) => {
-      const { installWebUsb } = await import(
-        '/@fs/' + repo + 'bindings/javascript/tests/webusb-fixture.mjs'
-      );
+      const { installWebUsb } = (await import(
+        '/@fs/' + repo + 'bindings/javascript/tests/webusb-fixture.ts'
+      )) as typeof import('../../../bindings/javascript/tests/webusb-fixture.ts');
       const fixture = installWebUsb();
       fixture.iface.alternates[0].endpoints = [
         { endpointNumber: 2, direction: 'in', type: 'bulk', packetSize: 64 },
@@ -37,66 +39,120 @@ try {
         fixture.device.opened = false;
         fixture.iface.claimed = false;
       };
-      const { exportUsbDevice } = await import(
+      const { exportUsbDevice } = (await import(
         '/@fs/' + repo + 'apps/web/src/dev-tools/usb-sharing.ts'
-      );
-      const { ShareHost, newTicket, shareUrl } = await import(
-        '/@fs/' + repo + 'crates/usb-proxy/web/peer.js'
-      );
+      )) as { exportUsbDevice: (device: object) => Promise<import('./types.ts').SharedDevice> };
+      const { ShareHost, newTicket, shareUrl } = (await import(
+        '/@fs/' + repo + 'crates/usb-proxy/web/peer.ts'
+      )) as typeof import('./peer.ts');
       const signal = new URL('usb-proxy/signal', base);
       signal.protocol = 'wss:';
       const ticket = newTicket(signal.href, []),
-        logs = [];
+        logs: string[] = [];
       const host = await ShareHost.create(ticket, await exportUsbDevice(fixture.device), {
         connected: () => logs.push('connected'),
         disconnected: () => logs.push('disconnected'),
         error: (e) => logs.push(e.message),
       });
       const link = shareUrl(new URL('dev-tools/', base).href, ticket);
-      globalThis.peerTest = { host, logs, fixture, link };
+      globalThis.peerTest = { host, logs, fixture, link } as typeof peerTest;
       return link;
     },
     { repo, base },
   );
   // Probe the real peer transport without claiming or accessing USB.
   const echo = await page.evaluate(async (repo) => {
-    const { connectPeer, parseShare } = await import('/@fs/' + repo + 'crates/usb-proxy/web/peer.js');
-    const { VERSION, encodeFrame, decodeFrame } = await import('/@fs/' + repo + 'crates/usb-proxy/web/wire.js');
+    const { connectPeer, parseShare } = (await import(
+      '/@fs/' + repo + 'crates/usb-proxy/web/peer.ts'
+    )) as typeof import('./peer.ts');
+    const { VERSION, encodeMessage, decodeMessage } = (await import(
+      '/@fs/' + repo + 'crates/usb-proxy/web/wire.ts'
+    )) as typeof import('./wire.ts');
     const before = JSON.stringify(peerTest.fixture.log);
     const peer = await connectPeer(peerTest.link);
     try {
-      await peer.send(encodeFrame({ type: 'hello', version: VERSION, role: 'controller',
-        token: parseShare(peerTest.link).key }));
-      const ready = decodeFrame(await peer.receive());
+      await peer.send(
+        encodeMessage({
+          type: 'hello',
+          version: VERSION,
+          role: 'controller',
+          token: parseShare(peerTest.link).key,
+        }),
+      );
+      const ready = decodeMessage(await peer.receive());
       if (ready.type !== 'ready') throw Error('Peer handshake failed');
-      await peer.send(encodeFrame({ type: 'request', id: 1, device: '',
-        operation: { op: 'probe' }, timeout_ms: 10 }));
-      const reply = decodeFrame(await peer.receive());
+      await peer.send(
+        encodeMessage({ type: 'execute', seq: 1, device: '', op: { op: 'probe' }, timeout_ms: 10 }),
+      );
+      const reply = decodeMessage(await peer.receive());
+      if (reply.type !== 'result') throw Error('Expected USB result');
       return { reply, untouched: before === JSON.stringify(peerTest.fixture.log) };
-    } finally { peer.close(); }
+    } finally {
+      peer.close();
+    }
   }, repo);
   assert.equal(echo.untouched, true);
-  assert.deepEqual({ ...echo.reply, completion: { ...echo.reply.completion, data: Object.values(echo.reply.completion.data) } }, { type: 'reply', id: 1,
-    completion: { devices: [], data: [], transferred: 0, error: null } });
+  assert.deepEqual(
+    {
+      ...echo.reply,
+      completion: { ...echo.reply.completion, data: Object.values(echo.reply.completion.data!) },
+    },
+    { type: 'result', seq: 1, completion: { devices: [], data: [], transferred: 0, error: null } },
+  );
   console.log('PASS USB-free latency echo over real WebRTC');
   // Exercise the actual native Rust client, with all byte values through the transfer limit.
-  const rust = spawn('cargo', ['test', '-p', 'fujimod-usb-proxy', '--test', 'browser', '--', '--ignored'], {
-    cwd: repo, env: { ...process.env, FUJIMOD_USB_PROXY_TEST_LINK: link }, stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const rust = spawn(
+    'cargo',
+    ['test', '-p', 'fujimod-usb-proxy', '--test', 'browser', '--', '--ignored'],
+    {
+      cwd: repo,
+      env: { ...process.env, FUJIMOD_USB_PROXY_TEST_LINK: link },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
   let rustOutput = '';
-  rust.stdout.on('data', data => { rustOutput += data; });
-  rust.stderr.on('data', data => { rustOutput += data; });
-  const rustExit = await new Promise((resolve, reject) => { rust.on('exit', resolve); rust.on('error', reject); });
+  rust.stdout.on('data', (data) => {
+    rustOutput += data;
+  });
+  rust.stderr.on('data', (data) => {
+    rustOutput += data;
+  });
+  const rustExit = await new Promise((resolve, reject) => {
+    rust.on('exit', resolve);
+    rust.on('error', reject);
+  });
   assert.equal(rustExit, 0, rustOutput);
-  assert.deepEqual(await page.evaluate(() => peerTest.fixture.state.pieces.splice(0).map(data => ({
-    length: data.length, valid: data.every((value, i) => value === (i & 255)),
-  }))), [1, 16000, 16001, 262145, 8388608].map(length => ({ length, valid: true })));
-  console.log('PASS native Rust binary WebRTC upload/download through 8 MiB, including framing boundaries');
-  const python = process.env.USB_PROXY_TEST_PYTHON || new URL('../../../../.venv/bin/python', import.meta.url).pathname;
-  async function native(script) {
-    const env = { ...process.env, FUJIMOD_USB_PROXY_URL: link };
+  assert.deepEqual(
+    await page.evaluate(() =>
+      peerTest.fixture.state.pieces.splice(0).map((data) => ({
+        length: data.length,
+        valid: data.every((value, i) => value === (i & 255)),
+      })),
+    ),
+    [1, 16000, 16001, 262145, 8388608].map((length) => ({ length, valid: true })),
+  );
+  console.log(
+    'PASS native Rust binary WebRTC upload/download through 8 MiB, including framing boundaries',
+  );
+  const python =
+    process.env.USB_PROXY_TEST_PYTHON ||
+    new URL('../../../../.venv/bin/python', import.meta.url).pathname;
+  async function native(script: string) {
+    const env: NodeJS.ProcessEnv = { ...process.env, FUJIMOD_USB_PROXY_URL: link };
     delete env.FUJIMOD_USB_PROXY_TOKEN;
-    const child = spawn(python, ['-c', 'import asyncio\nasync def main():\n' + script.split('\n').map(line => '    ' + line).join('\n') + '\nasyncio.run(main())'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(
+      python,
+      [
+        '-c',
+        'import asyncio\nasync def main():\n' +
+          script
+            .split('\n')
+            .map((line) => '    ' + line)
+            .join('\n') +
+          '\nasyncio.run(main())',
+      ],
+      { env, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
     let out = '',
       err = '';
     child.stdout.on('data', (d) => (out += d));
@@ -135,7 +191,7 @@ print('native 2 MiB upload and download passed')
   })
     .trim()
     .split('\n');
-  const paths = Object.fromEntries(
+  const paths: Record<string, string> = Object.fromEntries(
     await Promise.all(
       pythonFiles.map(async (path) => [
         path.slice('bindings/python/python/'.length),
@@ -146,10 +202,12 @@ print('native 2 MiB upload and download passed')
   await page.evaluate(
     async ({ repo, paths }) => {
       const pyRoot = '/@fs/' + repo + 'bindings/javascript/node_modules/pyodide/';
-      const { loadPyodide } = await import(pyRoot + 'pyodide.mjs');
-      const { registerPyodide, initialize } = await import(
+      const { loadPyodide } = (await import(
+        pyRoot + 'pyodide.mjs'
+      )) as typeof import('../../../bindings/javascript/node_modules/pyodide/pyodide.js');
+      const { registerPyodide, initialize } = (await import(
         '/@fs/' + repo + 'bindings/javascript/dist/index.js'
-      );
+      )) as typeof import('../../../bindings/javascript/src/index.ts');
       const py = await loadPyodide({ indexURL: pyRoot });
       await initialize();
       registerPyodide(py);
@@ -175,7 +233,9 @@ await session.close()
   );
   console.log('PASS Pyodide controller using the same share URL');
   await page.evaluate(async (repo) => {
-    const { initialize, usb } = await import('/@fs/' + repo + 'bindings/javascript/dist/index.js');
+    const { initialize, usb } = (await import(
+      '/@fs/' + repo + 'bindings/javascript/dist/index.js'
+    )) as typeof import('../../../bindings/javascript/src/index.ts');
     await initialize();
     const devices = await usb.discoverProxy(peerTest.link, '', usb.DeviceFilter.Diagnostic);
     const choices = await devices[0].interfaces();

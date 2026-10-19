@@ -34,8 +34,8 @@ the rendezvous service or WebRTC layer.
 WebRTC carries USB requests and completions on a reliable ordered data channel.
 The native implementation uses [str0m](https://docs.rs/str0m/); Wasm uses the
 browser's RTCPeerConnection through the same crate's bundled JavaScript module.
-Version 2 frames contain a bounded JSON metadata header and raw payload bytes.
-A bounded framing layer splits these binary frames into 16,000-byte chunks. Transfer capacities and timeout fencing remain the USB proxy's existing
+Messages are postcard values with inline payload bytes, pipelined as described in
+[PIPELINE.md](PIPELINE.md). A bounded framing layer splits them into 16,000-byte chunks. Transfer capacities and timeout fencing remain the USB proxy's existing
 8 MiB and 120-second limits.
 
 WebSockets provide rendezvous, not NAT traversal. The signaling endpoint is
@@ -106,13 +106,13 @@ not retry or patch the guest. Physical camera handoff has not been tested.
 
 Run Rust protocol, encrypted signaling and relay tests with
 `cargo test -p fujimod-usb-proxy --features relay` and exporter tests with
-`node --test crates/usb-proxy/web/exporter.test.mjs`.
+`node --test crates/usb-proxy/web/exporter.test.ts`.
 
-`FUJIMOD_WEB_URL=<named HTTPS app URL> node crates/usb-proxy/web/peer.browser.mjs`
+`FUJIMOD_WEB_URL=<named HTTPS app URL> node crates/usb-proxy/web/peer.browser.ts`
 uses a scripted WebUSB device with the real WebRTC/Rust path to test multi-megabyte
 transfers, a Pyodide controller, exclusive ownership and fencing. No physical USB is accessed.
 
-`FUJIMOD_WEB_URL=<named HTTPS app URL> node src/dev-tools/sharing.browser.mjs`
+`FUJIMOD_WEB_URL=<named HTTPS app URL> node src/dev-tools/sharing.browser.ts`
 from `apps/web/` boots the configured stock-firmware simulator, checks the real
 Share popup and clipboard, opens the link in a separate browser context,
 executes a firmware console command remotely, exercises native Python with the

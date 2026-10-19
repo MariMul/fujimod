@@ -1,3 +1,4 @@
+import { browserScript } from '../../scripts/browser-script.ts';
 // Real served Dev Tools, ShareHost and WebRTC with synthetic WebUSB only.
 import { chromium } from 'playwright';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
@@ -10,11 +11,10 @@ await mkdir(output, { recursive: true });
 const url = new URL('dev-tools/', process.env.FUJIMOD_WEB_URL);
 const run = crypto.randomUUID();
 url.searchParams.set('remote-traffic-test', run);
-const upstream = await readFile(
-  new URL('../../../../bindings/javascript/tests/webusb-fixture.mjs', import.meta.url),
-  'utf8',
+const upstream = await browserScript(
+  new URL('../../../../bindings/javascript/tests/webusb-fixture.ts', import.meta.url),
 );
-const consoleFixture = await readFile(new URL('./usb-fixture.mjs', import.meta.url), 'utf8');
+const consoleFixture = await browserScript(new URL('./usb-fixture.ts', import.meta.url));
 const browser = await chromium.launch({
   headless: true,
   args: ['--disable-features=WebRtcHideLocalIpsWithMdns'],
@@ -42,7 +42,7 @@ try {
   `,
   );
   // Capture this isolated fixture's registration without advertising it to host tools.
-  let link;
+  let link: string | undefined;
   await context.routeWebSocket(
     (url) => url.pathname === '/usb-proxy/dev-share',
     (socket) => {
@@ -53,7 +53,7 @@ try {
     },
   );
   const owner = await context.newPage(),
-    errors = [];
+    errors: string[] = [];
   owner.on('pageerror', (error) => {
     errors.push(String(error));
     console.error(String(error));
@@ -69,12 +69,14 @@ try {
   const result = await remote.evaluate(
     async ({ root, link }) => {
       const { connectPeer, parseShare } = await import(
-        '/@fs/' + root + 'crates/usb-proxy/web/peer.js'
+        '/@fs/' + root + 'crates/usb-proxy/web/peer.ts'
       );
-      const { VERSION, encodeFrame, decodeFrame } = await import('/@fs/' + root + 'crates/usb-proxy/web/wire.js');
+      const { VERSION, encodeMessage, decodeMessage } = await import(
+        '/@fs/' + root + 'crates/usb-proxy/web/wire.ts'
+      );
       const peer = await connectPeer(link);
       await peer.send(
-        encodeFrame({
+        encodeMessage({
           type: 'hello',
           version: VERSION,
           role: 'controller',
@@ -82,25 +84,23 @@ try {
           reason: 'remote-traffic browser check',
         }),
       );
-      const ready = decodeFrame(await peer.receive());
+      const ready = decodeMessage(await peer.receive());
       if (ready.type !== 'ready') throw Error('Peer handshake failed');
-      let id = 0,
-        device;
-      const request = async (operation) => {
-        await peer.send(
-          encodeFrame({ type: 'request', id: ++id, device, operation, timeout_ms: 5000 }),
-        );
-        const reply = decodeFrame(await peer.receive());
-        if (reply.id !== id) throw Error('Wrong request correlation');
+      let seq = 0,
+        device = '';
+      const request = async (op: import('../../../../crates/usb-proxy/web/peer.ts').Operation) => {
+        await peer.send(encodeMessage({ type: 'execute', seq: ++seq, device, op, timeout_ms: 5000 }));
+        const reply = decodeMessage(await peer.receive());
+        if (reply.type !== 'result' || reply.seq !== seq) throw Error('Wrong request correlation');
         return reply.completion;
       };
-      const words = (...values) => {
+      const words = (...values: number[]) => {
         const data = new Uint8Array(values.length * 4),
           view = new DataView(data.buffer);
         values.forEach((n, i) => view.setUint32(i * 4, n, true));
         return data;
       };
-      const control = (kind, size, offset = 0) => {
+      const control = (kind: number, size: number, offset = 0) => {
         const bytes = new Uint8Array(12),
           view = new DataView(bytes.buffer);
         bytes[0] = kind;
@@ -113,10 +113,10 @@ try {
           data: bytes,
         });
       };
-      const out = (bytes) => request({ op: 'transfer_out', endpoint: 1, data: bytes });
-      const input = (length) => request({ op: 'transfer_in', endpoint: 0x82, length });
+      const out = (bytes: Uint8Array) => request({ op: 'transfer_out', endpoint: 1, data: bytes });
+      const input = (length: number) => request({ op: 'transfer_in', endpoint: 0x82, length });
       const listed = await request({ op: 'list' });
-      device = listed.devices[0].id;
+      device = listed.devices![0].id;
       await request({ op: 'open', configuration: 1, interface: 2, alternate: 3 });
       await control(0xc0, 8);
       await input(64);
@@ -139,7 +139,7 @@ try {
       }
       const failure = await request({ op: 'transfer_in', endpoint: 0x83, length: 64 });
       peer.close();
-      return { requests: id, error: failure.error, controller: ready.id };
+      return { requests: seq, error: failure.error, controller: ready.id };
     },
     { root, link },
   );

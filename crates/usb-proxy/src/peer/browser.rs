@@ -1,6 +1,6 @@
 use crate::{Error, Result};
 use wasm_bindgen::prelude::*;
-#[wasm_bindgen(module = "/web/peer.js")]
+#[wasm_bindgen(module = "/web/build/peer.js")]
 extern "C" {
     #[wasm_bindgen(catch, js_name=connectPeer)]
     async fn connect_peer(url: &str) -> std::result::Result<JsValue, JsValue>;

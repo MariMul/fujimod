@@ -101,7 +101,9 @@ impl PeerSocket {
         progress("share link parsed");
         let progress = progress.clone();
         let (tx, outbound) = async_channel::bounded(1);
-        let (incoming, rx) = async_channel::bounded(16);
+        // Unbounded: results queue while the controller is still sending; its
+        // in-flight limit bounds them. A bounded queue would block the I/O thread.
+        let (incoming, rx) = async_channel::unbounded();
         let (ready, wait) = async_channel::bounded(1);
         let (finish, finished) = async_channel::bounded::<()>(1);
         std::thread::Builder::new()

@@ -241,7 +241,7 @@ impl Connection {
                     output,
                     packet_size,
                     timeout: options.timeout,
-                    pending: Vec::new(),
+                    unsynced: Vec::new(),
                 }),
                 max_reply_bytes: options.max_reply_bytes.get(),
             });

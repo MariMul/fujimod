@@ -45,12 +45,16 @@ value (serde, stable wire format 1.0): unsigned varints, length-prefixed byte
 strings and one-byte enum tags. No JSON on the data path. Payload bytes are
 inline byte strings, not text. Signaling (SDP exchange) is unchanged.
 
-Messages, controller to exporter: `Hello`, `Execute { seq, op }`, `Expect`,
-`Sync { seq }`, `Goodbye`, and the owner notices (`Status`, `Attention`,
-`Activity`, `ProgressStart`, `ProgressUpdate`, `ProgressDone`, and the owner
-requests `OwnerStatus`, `OwnerAttention`, which are operations). Exporter to
-controller: `Ready`, `Result { seq, transferred, data, error }`,
-`ExpectFailed { seq, actual }`, `Synced { seq, discarded }`.
+Messages, controller to exporter: `Hello`, `Execute { seq, device, timeout_ms,
+op }`, `Expect`, `Sync { seq }`, `Goodbye`, and the owner notices (`Status`,
+`Attention`, `Activity`, `ProgressStart`, `ProgressUpdate`, `ProgressDone`).
+Notices are shown when the exporter reaches them, so progress tracks USB work
+rather than submission. Exporter to controller: `Ready`, `Result { seq,
+completion }`, `ExpectFailed { seq, actual }`, `Synced { seq, discarded }`. A
+held expectation sends nothing. Between the relay and a browser exporter,
+`Routed { stream, message }` carries one controller's messages; the exporter
+keeps a pipeline per stream. A USB error still ends the controller's connection
+after its result, as in protocol 3; a failed expectation does not.
 
 `op` is one of `Probe`, `List`, `Open`, `Close`, `ControlIn`, `ControlOut`,
 `TransferIn`, `TransferOut`, `ClearHalt`, `OwnerStatus`, `OwnerAttention`.
@@ -70,13 +74,17 @@ own deadline at the exporter; an expired deadline still fences the device
 
 ## Client API
 
-Rust sessions gain a pipeline: `let mut p = session.pipeline();` then
-`p.read_memory(..)`, `p.write_memory(..)`, `p.command(..)`, `p.expect(handle,
-offset, bytes)`, and `p.sync().await` returning each result. Operations are sent
-as they are added. A local (non-shared) session runs the same calls in order on
-USB with the same stop-on-error and assertion semantics. Range reads and writes
-are pipelines with one sync. Python exposes the same through
-`session.pipeline()`.
+`Client::submit` and `Client::expect` send at once and return a sequence number;
+`Client::sync` waits and returns every outcome since the last sync, in order:
+`Completed`, `Discarded`, `Held` or `Failed(actual)`. `Client::request` is one
+operation and its sync. Flow control waits for results only when the window is
+full. A cancelled call fences the connection.
+
+FujiMod sessions stream through this without new calls: every USB step is
+submitted as the ff80 engine issues it, and only a read, whose reply the engine
+needs, syncs. `read_memory_many` and `write_memory_many` (and the range reads
+and writes built on them) stream all their commands with one sync per 1024
+commands. Session-level expectations are not exposed yet.
 
 ## Removed
 

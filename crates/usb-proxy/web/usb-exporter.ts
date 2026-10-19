@@ -1,17 +1,28 @@
+import type { Operation, Completion, Descriptor } from './types.ts';
+import type { Usb, UsbDevice } from './webusb.ts';
 // Browser USB exporter. No camera commands, memory maps or firmware policy.
 export const MAX_TRANSFER = 8 * 1024 * 1024;
-const payload = (data) => {
+const payload = (data: unknown) => {
   if (!(data instanceof Uint8Array)) throw Error('Expected binary USB payload');
   length(data.length);
   return data;
 };
-const length = (value) => {
-  if (!Number.isInteger(value) || value < 0 || value > MAX_TRANSFER)
+const length = (value: unknown): number => {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > MAX_TRANSFER)
     throw Error('Invalid transfer length');
   return value;
 };
 export class Exporter {
-  constructor(usb, changed = () => {}) {
+  usb: Usb;
+  changed: () => void;
+  devices: Map<string, UsbDevice>;
+  ids: WeakMap<UsbDevice, string>;
+  sequence: number;
+  claims: Map<string, number>;
+  queues: Map<string, Promise<void>>;
+  fenced: Set<string>;
+  stopped: boolean;
+  constructor(usb: Usb, changed = () => {}) {
     this.usb = usb;
     this.changed = changed;
     this.devices = new Map();
@@ -22,7 +33,7 @@ export class Exporter {
     this.fenced = new Set();
     this.stopped = false;
   }
-  async inventory() {
+  async inventory(): Promise<Descriptor[]> {
     const devices = await this.usb.getDevices();
     this.devices.clear();
     return devices.map((device) => {
@@ -56,26 +67,30 @@ export class Exporter {
       };
     });
   }
-  async execute(id, operation) {
+  async execute(id: string, operation: Operation): Promise<Completion> {
     const device = this.devices.get(id);
     if (!device) throw Error('Device disconnected');
     const op = operation.op;
     if (this.stopped && op !== 'close') throw Error('Exporter stopped');
     if (this.fenced.has(id) && op !== 'close') throw Error('Device fenced; reconnect exporter');
     if (op === 'open') {
+      const configuration = length(operation.configuration),
+        ifaceNumber = length(operation.interface),
+        alternate = length(operation.alternate);
       if (this.claims.has(id)) throw Error('Device already claimed');
       await device.open();
       try {
-        if (device.configuration?.configurationValue !== operation.configuration)
-          await device.selectConfiguration(operation.configuration);
-        await device.claimInterface(operation.interface);
+        if (device.configuration?.configurationValue !== configuration)
+          await device.selectConfiguration(configuration);
+        await device.claimInterface(ifaceNumber);
         // Record the claim before alternate selection so failure can release it.
-        this.claims.set(id, operation.interface);
-        const selected = device.configuration.interfaces.find(
-          (iface) => iface.interfaceNumber === operation.interface,
+        this.claims.set(id, ifaceNumber);
+        const selected = device.configuration?.interfaces.find(
+          (iface) => iface.interfaceNumber === ifaceNumber,
         );
-        if (selected.alternate?.alternateSetting !== operation.alternate)
-          await device.selectAlternateInterface(operation.interface, operation.alternate);
+        if (!selected) throw Error('Interface unavailable');
+        if (selected.alternate?.alternateSetting !== alternate)
+          await device.selectAlternateInterface(ifaceNumber, alternate);
       } catch (error) {
         await device.close();
         this.claims.delete(id);
@@ -95,6 +110,7 @@ export class Exporter {
     if (['transfer_in', 'transfer_out', 'clear_halt'].includes(op)) {
       const endpoint = operation.endpoint;
       if (
+        typeof endpoint !== 'number' ||
         !Number.isInteger(endpoint) ||
         endpoint < 1 ||
         endpoint > 255 ||
@@ -104,9 +120,10 @@ export class Exporter {
         (op === 'transfer_out' && endpoint & 128)
       )
         throw Error('Invalid endpoint');
-      const iface = device.configuration.interfaces.find(
+      const iface = device.configuration?.interfaces.find(
         (i) => i.interfaceNumber === this.claims.get(id),
       );
+      if (!iface) throw Error('Interface unavailable');
       const alternate =
         iface.alternate ||
         iface.alternates.find((a) => a.alternateSetting === iface.alternateSetting);
@@ -128,16 +145,20 @@ export class Exporter {
       value: operation.setup.value,
       index: operation.setup.index,
     };
+    if (op.startsWith('control_') && !setup) throw Error('Missing control setup');
     if (op === 'control_in')
-      result = await device.controlTransferIn(setup, length(operation.length));
+      result = await device.controlTransferIn(setup!, length(operation.length));
     else if (op === 'control_out')
-      result = await device.controlTransferOut(setup, payload(operation.data));
+      result = await device.controlTransferOut(setup!, payload(operation.data));
     else if (op === 'transfer_in')
-      result = await device.transferIn(operation.endpoint & 15, length(operation.length));
+      result = await device.transferIn(length(operation.endpoint) & 15, length(operation.length));
     else if (op === 'transfer_out')
-      result = await device.transferOut(operation.endpoint & 15, payload(operation.data));
+      result = await device.transferOut(length(operation.endpoint) & 15, payload(operation.data));
     else if (op === 'clear_halt') {
-      await device.clearHalt(operation.endpoint & 128 ? 'in' : 'out', operation.endpoint & 15);
+      await device.clearHalt(
+        length(operation.endpoint) & 128 ? 'in' : 'out',
+        length(operation.endpoint) & 15,
+      );
       return {};
     } else throw Error('Unsupported USB operation');
     const data = result.data
@@ -149,50 +170,43 @@ export class Exporter {
       error: result.status === 'ok' ? null : result.status,
     };
   }
-  request(frame) {
+  /** Run one operation on device `id` after its earlier ones. A failure or
+   * expired deadline fences the device; the physical transfer stays queued. */
+  run(id: string, operation: Operation, timeout_ms: number): Promise<Completion> {
     // Network echoes bypass USB queues, including outstanding physical work.
-    if (frame.operation.op === 'probe') {
-      this.onreply?.({
-        type: 'reply', id: frame.id,
-        completion: { devices: [], data: new Uint8Array(), transferred: 0, error: null },
-      });
-      return Promise.resolve();
-    }
-    // Serialize per device, including late completions after a timed-out request.
-    const previous = this.queues.get(frame.device) || Promise.resolve();
+    if (operation.op === 'probe') return Promise.resolve({});
+    const previous = this.queues.get(id) || Promise.resolve();
+    let reported!: (completion: Completion) => void;
+    const reply = new Promise<Completion>((resolve) => (reported = resolve));
     const task = previous.then(async () => {
-      let timer;
-      const running = this.execute(frame.device, frame.operation);
-      const timeout = new Promise((_, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const running = this.execute(id, operation);
+      const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
-          this.fenced.add(frame.device);
+          this.fenced.add(id);
           reject(Error('USB deadline expired; completion unknown'));
-        }, frame.timeout_ms);
+        }, timeout_ms);
       });
-      const reply = Promise.race([running, timeout])
-        .catch((error) => {
-          this.fenced.add(frame.device);
-          return { error: error.message || String(error) };
-        })
-        .finally(() => clearTimeout(timer));
+      reported(
+        await Promise.race([running, timeout])
+          .catch((error) => {
+            this.fenced.add(id);
+            return { error: error.message || String(error) };
+          })
+          .finally(() => clearTimeout(timer)),
+      );
       // Keep the physical operation in the queue even after reporting timeout.
-      const completion = await reply;
-      this.onreply?.({
-        type: 'reply',
-        id: frame.id,
-        completion: { devices: [], data: new Uint8Array(), transferred: 0, error: null, ...completion },
-      });
       await running.catch(() => {});
     });
     this.queues.set(
-      frame.device,
+      id,
       task.catch(() => {}),
     );
-    return task;
+    return reply;
   }
   async stop() {
     this.stopped = true;
-    await Promise.all([...this.queues.values()]);
+    await Promise.all(this.queues.values());
     await Promise.all(
       [...this.devices.entries()]
         .filter(([id]) => this.claims.has(id))

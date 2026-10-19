@@ -102,7 +102,7 @@ impl Session {
     pub async fn write_memory(&mut self, command: WriteMemory) -> Result<()> {
         self.core.write_memory(command).await
     }
-    /// Several reads; over a device share they travel as one round trip.
+    /// Several reads; over a device share they stream with one wait.
     pub async fn read_memory_many(&mut self, commands: Vec<ReadMemory>) -> Result<Vec<Vec<u8>>> {
         if !matches!(self.core.io.inner_mut(), Backend::Proxy(_)) {
             let mut replies = Vec::with_capacity(commands.len());
@@ -120,7 +120,7 @@ impl Session {
         let replies = self.many(framed).await?;
         self.decode_many(commands.into_iter().zip(replies).map(|(c, r)| move || c.decode(r)))
     }
-    /// Several writes; over a device share they travel as one round trip.
+    /// Several writes; over a device share they stream with one wait.
     pub async fn write_memory_many(&mut self, commands: Vec<WriteMemory>) -> Result<()> {
         if !matches!(self.core.io.inner_mut(), Backend::Proxy(_)) {
             for command in commands {
@@ -137,7 +137,7 @@ impl Session {
         self.decode_many(commands.into_iter().zip(replies).map(|(c, r)| move || c.decode(r)))?;
         Ok(())
     }
-    /// Raw replies for framed commands as one share batch. A failure leaves
+    /// Raw replies for framed commands as one share pipeline. A failure leaves
     /// the session's completion unknown until every reply decodes.
     async fn many(&mut self, commands: Vec<(Vec<u8>, u32)>) -> Result<Vec<Vec<u8>>> {
         let id = self.core.info.id;
@@ -196,38 +196,38 @@ impl Session {
     /// Tell a share owner the camera's battery level (a firmware level name).
     /// Only shared (proxy) sessions have an owner; elsewhere this does nothing.
     pub async fn report_battery(&mut self, level: &str) -> Result<()> {
-        self.notify_owner(fujimod_usb_proxy::protocol::Frame::Status { battery: level.into() }).await
+        self.notify_owner(fujimod_usb_proxy::Message::Status { battery: level.into() }).await
     }
     /// Ask a share owner's user to fix a problem only this controller can see.
     /// Only shared (proxy) sessions have an owner; elsewhere this does nothing.
     pub async fn request_attention(&mut self, message: &str) -> Result<()> {
-        self.notify_owner(fujimod_usb_proxy::protocol::Frame::Attention { message: message.into() }).await
+        self.notify_owner(fujimod_usb_proxy::Message::Attention { message: message.into() }).await
     }
     /// What the tool is doing now, above the share owner's log footer; an
     /// empty title clears it. No-op for local USB.
     pub async fn owner_activity(&mut self, title: &str) -> Result<()> {
-        self.notify_owner(fujimod_usb_proxy::protocol::Frame::Activity {
+        self.notify_owner(fujimod_usb_proxy::Message::Activity {
             title: fujimod_usb_proxy::protocol::bounded_reason(title),
         })
         .await
     }
     /// Start a `total`-unit progress bar under the share owner's log.
     pub async fn owner_progress_start(&mut self, label: &str, total: u64) -> Result<()> {
-        self.notify_owner(fujimod_usb_proxy::protocol::Frame::ProgressStart {
+        self.notify_owner(fujimod_usb_proxy::Message::ProgressStart {
             label: fujimod_usb_proxy::protocol::bounded_reason(label),
             total,
         })
         .await
     }
     pub async fn owner_progress_update(&mut self, done: u64) -> Result<()> {
-        self.notify_owner(fujimod_usb_proxy::protocol::Frame::ProgressUpdate { done }).await
+        self.notify_owner(fujimod_usb_proxy::Message::ProgressUpdate { done }).await
     }
     pub async fn owner_progress_done(&mut self) -> Result<()> {
-        self.notify_owner(fujimod_usb_proxy::protocol::Frame::ProgressDone).await
+        self.notify_owner(fujimod_usb_proxy::Message::ProgressDone).await
     }
-    async fn notify_owner(&mut self, frame: fujimod_usb_proxy::protocol::Frame) -> Result<()> {
+    async fn notify_owner(&mut self, message: fujimod_usb_proxy::Message) -> Result<()> {
         match self.core.io.inner_mut() {
-            crate::connection::Backend::Proxy(io) => io.notify_owner(frame).await,
+            crate::connection::Backend::Proxy(io) => io.notify_owner(message).await,
             _ => Ok(()),
         }
     }

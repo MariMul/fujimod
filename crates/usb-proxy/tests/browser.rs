@@ -1,9 +1,9 @@
-//! Driven by web/peer.browser.mjs against its isolated WebUSB fixture.
-use fujimod_usb_proxy::{Client, Operation, Setup};
+//! Driven by web/peer.browser.ts against its isolated WebUSB fixture.
+use fujimod_usb_proxy::{Client, Operation, Recipient, RequestType, Setup};
 use std::time::Duration;
 
 #[test]
-#[ignore = "requires the isolated exporter started by web/peer.browser.mjs"]
+#[ignore = "requires the isolated exporter started by web/peer.browser.ts"]
 fn binary_native_browser_transfers() {
     futures_lite::future::block_on(async {
         let link =
@@ -40,8 +40,8 @@ fn binary_native_browser_transfers() {
                         &device.id,
                         Operation::ControlOut {
                             setup: Setup {
-                                request_type: "vendor".into(),
-                                recipient: "other".into(),
+                                request_type: RequestType::Vendor,
+                                recipient: Recipient::Other,
                                 request: 0,
                                 value: 0,
                                 index: 0,

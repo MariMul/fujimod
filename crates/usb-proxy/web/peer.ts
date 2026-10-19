@@ -1,28 +1,48 @@
-import { VERSION, MAX_MESSAGE, encodeFrame, decodeFrame } from './wire.js';
-import { observeRequest } from './share-traffic.js';
+import type {
+  Ticket,
+  SharedDevice,
+  Callbacks,
+  ShareStatus,
+  Descriptor,
+  SignalFrame,
+} from './types.ts';
+export type {
+  Ticket,
+  SharedDevice,
+  Callbacks,
+  ShareStatus,
+  Descriptor,
+  Operation,
+  Completion,
+} from './types.ts';
+export type { ShareTrafficEvent } from './share-traffic.ts';
+import { VERSION, MAX_MESSAGE, encodeMessage, decodeMessage } from './wire.ts';
+import { observeRequest } from './share-traffic.ts';
+import { Pipeline } from './pipeline.ts';
+import type { ExecuteMessage, Completion as UsbCompletion } from './types.ts';
 // WebRTC USB transport. Only encrypted SDP crosses the rendezvous service.
 const MAX = MAX_MESSAGE;
 const encoder = new TextEncoder();
-export const encodeUrl = (bytes) => {
+export const encodeUrl = (bytes: Uint8Array) => {
   let text = '';
   for (let i = 0; i < bytes.length; i += 32768)
     text += String.fromCharCode(...bytes.subarray(i, i + 32768));
   return btoa(text).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
 };
-const decodeUrl = (text) =>
+const decodeUrl = (text: string) =>
   Uint8Array.from(atob(text.replaceAll('-', '+').replaceAll('_', '/')), (c) => c.charCodeAt(0));
 const random = () => encodeUrl(crypto.getRandomValues(new Uint8Array(32)));
-export function newTicket(signal, stun = ['stun:stun.cloudflare.com:3478']) {
+export function newTicket(signal: string, stun = ['stun:stun.cloudflare.com:3478']): Ticket {
   return { v: 1, signal, room: random(), key: random(), stun };
 }
-export function parseShare(url) {
+export function parseShare(url: string): Ticket {
   const values = new URLSearchParams(new URL(url).hash.slice(1).replace(/^\?/, '')).getAll(
     'remotecontrol',
   );
   const [value] = values;
   if (values.length !== 1 || !value || value.length > 4096)
     throw Error('Invalid camera share link');
-  const ticket = JSON.parse(new TextDecoder().decode(decodeUrl(value)));
+  const ticket: Ticket = JSON.parse(new TextDecoder().decode(decodeUrl(value)));
   const signal = new URL(ticket.signal);
   if (
     ticket.v !== 1 ||
@@ -40,18 +60,18 @@ export function parseShare(url) {
     throw Error('Invalid camera share link');
   return ticket;
 }
-export function shareUrl(current, ticket) {
+export function shareUrl(current: string, ticket: Ticket) {
   const url = new URL(current);
   url.hash = '?remotecontrol=' + encodeUrl(encoder.encode(JSON.stringify(ticket)));
   return url.href;
 }
-async function cryptKey(ticket) {
+async function cryptKey(ticket: Ticket) {
   return crypto.subtle.importKey('raw', decodeUrl(ticket.key), 'AES-GCM', false, [
     'encrypt',
     'decrypt',
   ]);
 }
-async function seal(ticket, peer, value) {
+async function seal(ticket: Ticket, peer: string, value: object) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const data = new Uint8Array(
     await crypto.subtle.encrypt(
@@ -65,7 +85,11 @@ async function seal(ticket, peer, value) {
   result.set(data, 12);
   return encodeUrl(result);
 }
-async function unseal(ticket, peer, value) {
+async function unseal(
+  ticket: Ticket,
+  peer: string,
+  value: string,
+): Promise<RTCSessionDescriptionInit | { type: 'error'; message: string }> {
   const bytes = decodeUrl(value);
   const data = await crypto.subtle.decrypt(
     {
@@ -78,18 +102,23 @@ async function unseal(ticket, peer, value) {
   );
   return JSON.parse(new TextDecoder().decode(data));
 }
-function signaling(ticket, role, message, ended) {
+function signaling(
+  ticket: Ticket,
+  role: string,
+  message: (frame: SignalFrame) => void | Promise<void>,
+  ended: (error: Error) => void,
+) {
   const url = new URL(ticket.signal);
   url.searchParams.set('room', ticket.room);
   const socket = new WebSocket(url);
-  const ready = new Promise((resolve, reject) => {
+  const ready = new Promise<SignalFrame>((resolve, reject) => {
     const timer = setTimeout(() => {
       socket.close();
       reject(Error('Signaling connection timed out'));
     }, 10000);
     socket.onopen = () => socket.send(JSON.stringify({ type: 'join', room: ticket.room, role }));
     socket.onmessage = ({ data }) => {
-      const frame = JSON.parse(data);
+      const frame: SignalFrame = JSON.parse(data);
       if (frame.type === 'ready') {
         clearTimeout(timer);
         resolve(frame);
@@ -116,22 +145,28 @@ function signaling(ticket, role, message, ended) {
   });
   return {
     ready,
-    send: (frame) => socket.send(JSON.stringify(frame)),
+    send: (frame: object) => socket.send(JSON.stringify(frame)),
     close: () => socket.close(),
   };
 }
 // Connect and disconnect reasons are display text from the controller.
-function reason(value) {
+function reason(value: unknown) {
   return typeof value === 'string' ? value.slice(0, 512) : '';
 }
-export async function gather(pc, { settle = 3000, limit = 12000 } = {}) {
+export async function gather(
+  pc: Pick<
+    RTCPeerConnection,
+    'iceGatheringState' | 'localDescription' | 'addEventListener' | 'removeEventListener'
+  >,
+  { settle = 3000, limit = 12000 } = {},
+) {
   if (pc.iceGatheringState === 'complete') return;
   // Some browsers leave gathering open when one interface or server never
   // answers. After `settle`, send the candidates found so far; fail only if
   // none exist by `limit`.
   const found = () => /^a=candidate:/m.test(pc.localDescription?.sdp || '');
-  await new Promise((resolve, reject) => {
-    const finish = (error) => {
+  await new Promise<void>((resolve, reject) => {
+    const finish = (error?: Error) => {
       clearTimeout(settled);
       clearTimeout(expired);
       pc.removeEventListener('icegatheringstatechange', changed);
@@ -151,7 +186,16 @@ export async function gather(pc, { settle = 3000, limit = 12000 } = {}) {
 }
 // Ordered, bounded framing handles USB requests larger than a single SCTP message.
 export class PeerChannel {
-  constructor(channel, pc) {
+  channel: RTCDataChannel;
+  pc: RTCPeerConnection;
+  queue: Uint8Array[];
+  waiters: { resolve: (bytes: Uint8Array) => void; reject: (error: Error) => void }[];
+  parts: Uint8Array[];
+  size: number;
+  queued = 0;
+  ended: boolean;
+  onclose?: () => void;
+  constructor(channel: RTCDataChannel, pc: RTCPeerConnection) {
     this.channel = channel;
     this.pc = pc;
     this.queue = [];
@@ -179,8 +223,13 @@ export class PeerChannel {
         this.size = 0;
         const waiter = this.waiters.shift();
         if (waiter) waiter.resolve(bytes);
-        else this.queue.push(bytes);
-        if (this.queue.length > 16) this.close();
+        else {
+          this.queue.push(bytes);
+          this.queued += bytes.length;
+        }
+        // A pipelining controller keeps up to 4096 operations and 1 MiB (or
+        // one larger transfer) in flight; anything beyond that is a fault.
+        if (this.queue.length > 16384 || this.queued > 2 * MAX) this.close();
       }
     };
     channel.onclose = () => this.close();
@@ -189,12 +238,12 @@ export class PeerChannel {
       if (['failed', 'closed'].includes(pc.connectionState)) this.close();
     });
   }
-  async send(bytes) {
+  async send(bytes: Uint8Array) {
     if (!(bytes instanceof Uint8Array)) throw Error('Expected binary peer frame');
     if (bytes.length > MAX) throw Error('USB message exceeds limit');
     for (let offset = 0; offset < bytes.length; offset += 16000) {
       if (this.channel.bufferedAmount > 262144)
-        await new Promise((resolve, reject) => {
+        await new Promise<void>((resolve, reject) => {
           const low = () => {
               cleanup();
               resolve();
@@ -221,10 +270,14 @@ export class PeerChannel {
       this.channel.send(packet);
     }
   }
-  receive() {
-    if (this.queue.length) return Promise.resolve(this.queue.shift());
+  receive(): Promise<Uint8Array> {
+    if (this.queue.length) {
+      const bytes = this.queue.shift()!;
+      this.queued -= bytes.length;
+      return Promise.resolve(bytes);
+    }
     if (this.ended) return Promise.reject(Error('Peer disconnected; completion unknown'));
-    return new Promise((resolve, reject) => this.waiters.push({ resolve, reject }));
+    return new Promise<Uint8Array>((resolve, reject) => this.waiters.push({ resolve, reject }));
   }
   close() {
     if (this.ended) return;
@@ -233,22 +286,23 @@ export class PeerChannel {
       waiter.reject(Error('Peer disconnected; completion unknown'));
     this.parts = [];
     this.queue = [];
+    this.queued = 0;
     this.size = 0;
     this.channel.close();
     this.pc.close();
     this.onclose?.();
   }
 }
-function configuration(stun) {
+function configuration(stun: string[]) {
   return { iceServers: stun.map((urls) => ({ urls })) };
 }
-export async function connectPeer(url) {
+export async function connectPeer(url: string) {
   const ticket = parseShare(url),
     pc = new RTCPeerConnection(configuration(ticket.stun || []));
   const channel = pc.createDataChannel('fujimod-usb', { ordered: true });
   const peer = new PeerChannel(channel, pc);
-  let rejectOpen;
-  const opened = new Promise((resolve, reject) => {
+  let rejectOpen: (error: Error) => void = () => {};
+  const opened = new Promise<void>((resolve, reject) => {
     rejectOpen = reject;
     channel.onopen = () => resolve();
   });
@@ -274,14 +328,14 @@ export async function connectPeer(url) {
     rejectOpen(Error('Direct connection unavailable'));
     peer.close();
   }, 25000);
-  let id;
+  let id = '';
   try {
     const ready = await signal.ready;
     id = ready.peer;
     if (ready.ice_servers) pc.setConfiguration({ iceServers: ready.ice_servers });
     await pc.setLocalDescription(await pc.createOffer());
     await gather(pc);
-    signal.send({ type: 'signal', data: await seal(ticket, id, pc.localDescription.toJSON()) });
+    signal.send({ type: 'signal', data: await seal(ticket, id, pc.localDescription!.toJSON()) });
     await opened;
     peer.onclose = () => signal.close();
     return peer;
@@ -294,7 +348,19 @@ export async function connectPeer(url) {
   }
 }
 export class ShareHost {
-  static async create(ticket, device, callbacks = {}) {
+  ticket: Ticket;
+  device: SharedDevice | undefined;
+  descriptor: Descriptor;
+  offline: string | undefined;
+  battery: { level: string; at: number } | undefined;
+  callbacks: Callbacks;
+  peers: Map<string, { close(): void }>;
+  owner: string | undefined;
+  closed: boolean;
+  fenced: boolean;
+  iceServers: RTCIceServer[] = [];
+  signal: ReturnType<typeof signaling>;
+  static async create(ticket: Ticket, device: SharedDevice, callbacks: Callbacks = {}) {
     const host = new ShareHost(ticket, device, callbacks);
     try {
       const ready = await host.signal.ready;
@@ -305,7 +371,7 @@ export class ShareHost {
       throw error;
     }
   }
-  constructor(ticket, device, callbacks) {
+  constructor(ticket: Ticket, device: SharedDevice, callbacks: Callbacks) {
     this.ticket = ticket;
     this.device = device;
     // The link outlives the camera: while it is away, controllers see it offline.
@@ -327,7 +393,8 @@ export class ShareHost {
           // Report a failed connection on both ends instead of leaving the
           // controller to time out waiting for an answer.
           const reason = error instanceof Error ? error.message : String(error);
-          if (!this.closed) this.callbacks.error?.(Error(`Remote controller could not connect: ${reason}`));
+          if (!this.closed)
+            this.callbacks.error?.(Error(`Remote controller could not connect: ${reason}`));
           if (frame.type !== 'signal' || this.closed) return;
           try {
             this.signal.send({
@@ -349,7 +416,7 @@ export class ShareHost {
   }
   /** Online state and last controller battery report, as controllers see it. */
   status() {
-    const status = { online: !this.offline };
+    const status: ShareStatus = { online: !this.offline };
     if (this.offline) status.reason = this.offline;
     if (this.battery) {
       status.battery = this.battery.level;
@@ -358,7 +425,7 @@ export class ShareHost {
     return status;
   }
   /** The camera went away; keep the link and report it offline with `reason`. */
-  cameraLost(reason) {
+  cameraLost(reason: string) {
     if (this.closed || !this.device) return;
     const device = this.device;
     const owner = this.owner;
@@ -371,7 +438,7 @@ export class ShareHost {
     this.callbacks.state?.(this.status());
   }
   /** The same camera is back (the caller checked its identity); share it again. */
-  cameraReturned(device) {
+  cameraReturned(device: SharedDevice) {
     if (this.closed) return;
     this.device = device;
     this.descriptor = device.descriptor;
@@ -379,7 +446,39 @@ export class ShareHost {
     this.fenced = false;
     this.callbacks.state?.(this.status());
   }
-  async message(frame) {
+  /** One operation for controller `from`, under the share's ownership rules. */
+  async run(from: string, peer: PeerChannel, message: ExecuteMessage): Promise<UsbCompletion> {
+    const op = message.op;
+    if (op.op === 'probe') return {}; /* Network echo; never touches USB. */
+    if (op.op === 'list') return { devices: [{ ...this.descriptor, status: this.status() }] };
+    if (!this.device) throw Error(`Shared camera offline: ${this.offline}`);
+    if (message.device !== this.device.descriptor.id) throw Error('Unknown shared device');
+    if (op.op === 'owner_status' || op.op === 'owner_attention') {
+      if (this.owner !== from) throw Error('Shared camera is not claimed');
+      const text = op.message;
+      if (typeof text !== 'string' || !text.length || new TextEncoder().encode(text).length > 512)
+        throw Error('Invalid owner message');
+      if (op.op === 'owner_status') {
+        if (!this.callbacks.toolStatus) throw Error('Owner log unavailable');
+        this.callbacks.toolStatus(from, text);
+      } else {
+        if (!this.callbacks.countdown) throw Error('Owner countdown unavailable');
+        await this.callbacks.countdown(from, text);
+        if (peer.ended || this.closed || this.owner !== from || !this.device)
+          throw Error('Owner countdown interrupted');
+      }
+      return {};
+    }
+    if (op.op === 'open') {
+      if (this.fenced) throw Error('Shared camera completion unknown; reconnect on the host');
+      if (this.owner !== undefined) throw Error('Shared camera is in use');
+      this.owner = from;
+    } else if (this.owner !== from) throw Error('Shared camera is not claimed');
+    const completion = await this.device.execute(op, message.timeout_ms);
+    if (op.op === 'close' && !completion.error) this.owner = undefined;
+    return completion;
+  }
+  async message(frame: SignalFrame) {
     if (this.closed) return;
     if (frame.type === 'left') {
       this.peers.get(frame.peer)?.close();
@@ -400,12 +499,16 @@ export class ShareHost {
       const peer = new PeerChannel(channel, pc);
       this.peers.set(frame.from, peer);
       let authenticated = false;
-      let goodbye;
+      let goodbye: string | undefined;
+      let progress: { label: string; done: number; total: number } | undefined;
       peer.onclose = () => {
         clearTimeout(timer);
         this.peers.delete(frame.from);
         if (authenticated)
           this.callbacks.disconnected?.(frame.from, goodbye ?? 'connection lost without goodbye');
+        // A controller's activity and progress end with its connection.
+        this.callbacks.activity?.(frame.from, '');
+        if (progress) this.callbacks.progress?.(frame.from, undefined);
         if (this.owner === frame.from) {
           this.owner = undefined;
           this.fenced = true;
@@ -417,7 +520,7 @@ export class ShareHost {
         }
       };
       void (async () => {
-        const hello = decodeFrame(await peer.receive());
+        const hello = decodeMessage(await peer.receive());
         if (
           hello.type !== 'hello' ||
           hello.version !== VERSION ||
@@ -427,70 +530,63 @@ export class ShareHost {
           throw Error('Invalid peer authentication');
         authenticated = true;
         clearTimeout(timer);
-        this.callbacks.connected?.(frame.from, reason(hello.reason));
-        await peer.send(encodeFrame({ type: 'ready', version: VERSION, id: frame.from }));
+        this.callbacks.connected?.(frame.from, reason(hello.reason ?? undefined));
+        await peer.send(encodeMessage({ type: 'ready', version: VERSION, id: frame.from }));
+        const pipeline = new Pipeline((message) =>
+          observeRequest(
+            frame.from,
+            { id: message.seq, device: message.device, operation: message.op, timeout_ms: message.timeout_ms },
+            () => this.run(frame.from, peer, message),
+            this.callbacks.traffic,
+          ),
+        );
         while (!peer.ended) {
-          const request = decodeFrame(await peer.receive());
-          if (request.type === 'goodbye') {
-            goodbye = reason(request.reason) || 'done';
+          const message = decodeMessage(await peer.receive());
+          if (message.type === 'goodbye') {
+            goodbye = reason(message.reason) || 'done';
             peer.close();
             break;
           }
-          if (request.type === 'status') {
-            this.battery = { level: reason(request.battery), at: Date.now() };
+          // Notices arrive in pipeline order, so they describe finished work.
+          if (message.type === 'status') {
+            this.battery = { level: reason(message.battery), at: Date.now() };
             this.callbacks.battery?.(frame.from, this.battery.level);
             this.callbacks.state?.(this.status());
             continue;
           }
-          if (request.type === 'attention') {
-            this.callbacks.attention?.(frame.from, reason(request.message));
+          if (message.type === 'attention') {
+            this.callbacks.attention?.(frame.from, reason(message.message));
+            continue;
+          }
+          if (message.type === 'activity') {
+            this.callbacks.activity?.(frame.from, reason(message.title));
+            continue;
+          }
+          if (message.type === 'progress_start') {
+            progress = { label: reason(message.label), done: 0, total: message.total };
+            this.callbacks.progress?.(frame.from, progress);
+            continue;
+          }
+          if (message.type === 'progress_update') {
+            if (progress) progress = { ...progress, done: Math.min(message.done, progress.total) };
+            this.callbacks.progress?.(frame.from, progress);
+            continue;
+          }
+          if (message.type === 'progress_done') {
+            progress = undefined;
+            this.callbacks.progress?.(frame.from, undefined);
             continue;
           }
           if (
-            request.type !== 'request' ||
-            !Number.isSafeInteger(request.id) ||
-            request.timeout_ms < 1 ||
-            request.timeout_ms > 120000
+            !Pipeline.carries(message) ||
+            (message.type === 'execute' && (message.timeout_ms < 1 || message.timeout_ms > 120000))
           )
             throw Error('Invalid USB request');
-          const completion = await observeRequest(frame.from, request, async () => {
-            if (request.operation.op === 'probe') return {}; /* Network echo; never touches USB. */
-            else if (request.operation.op === 'list')
-              return { devices: [{ ...this.descriptor, status: this.status() }] };
-            else {
-              if (!this.device) throw Error(`Shared camera offline: ${this.offline}`);
-              if (request.device !== this.device.descriptor.id)
-                throw Error('Unknown shared device');
-              if (request.operation.op === 'owner_status' || request.operation.op === 'owner_attention') {
-                if (this.owner !== frame.from) throw Error('Shared camera is not claimed');
-                const message = request.operation.message;
-                if (typeof message !== 'string' || !message.length || new TextEncoder().encode(message).length > 512)
-                  throw Error('Invalid owner message');
-                if (request.operation.op === 'owner_status') {
-                  if (!this.callbacks.toolStatus) throw Error('Owner log unavailable');
-                  this.callbacks.toolStatus(frame.from, message);
-                } else {
-                  if (!this.callbacks.countdown) throw Error('Owner countdown unavailable');
-                  await this.callbacks.countdown(frame.from, message);
-                  if (peer.ended || this.closed || this.owner !== frame.from || !this.device)
-                    throw Error('Owner countdown interrupted');
-                }
-                return {};
-              }
-              if (request.operation.op === 'open') {
-                if (this.fenced)
-                  throw Error('Shared camera completion unknown; reconnect on the host');
-                if (this.owner !== undefined) throw Error('Shared camera is in use');
-                this.owner = frame.from;
-              } else if (this.owner !== frame.from) throw Error('Shared camera is not claimed');
-              const completion = await this.device.execute(request.operation, request.timeout_ms);
-              if (request.operation.op === 'close' && !completion.error) this.owner = undefined;
-              return completion;
-            }
-          }, this.callbacks.traffic);
-          await peer.send(encodeFrame({ type: 'reply', id: request.id, completion }));
-          if (completion.error) {
-            this.callbacks.error?.(Error(completion.error));
+          const reply = await pipeline.handle(message);
+          if (reply) await peer.send(encodeMessage(reply));
+          // A USB failure ends the connection; nothing queued behind it runs.
+          if (reply?.type === 'result' && reply.completion.error) {
+            this.callbacks.error?.(Error(reply.completion.error));
             peer.close();
             break;
           }
@@ -506,7 +602,7 @@ export class ShareHost {
     this.signal.send({
       type: 'signal',
       to: frame.from,
-      data: await seal(this.ticket, frame.from, pc.localDescription.toJSON()),
+      data: await seal(this.ticket, frame.from, pc.localDescription!.toJSON()),
     });
   }
   stop() {
