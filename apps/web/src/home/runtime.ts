@@ -13,7 +13,7 @@ import { EngineError, FAULT_UNDO_SECONDS, faultFrom, type EngineFault } from '..
 import { cachedFetch } from '../asset-cache';
 import type { Engine, CardFile, BootMedia } from '../engine/api';
 import { errorReportZip, type ReportSubmission } from '../engine/report';
-import { ModelViewer, type ModelData } from '../viewer/model';
+import { LCDViewer } from '../viewer/lcd';
 import type { SimulatorIssueContext } from '../ui/simulator-feedback';
 import type { ReplayScenario } from '../scenarios';
 import type { DevicePanel, PowerCombo } from '../ui/layout';
@@ -21,7 +21,7 @@ import type { DevicePanel, PowerCombo } from '../ui/layout';
 import { ControlSession } from '../ui/controls';
 import { downloadBlob } from '../ui/download';
 import { firmwareActions, type createFirmwareChoice } from '../ui/firmware-actions';
-import type { HomeState } from './state';
+import type { HomeState, PreviewCredit } from './state';
 import type { HomeSetter } from './state';
 
 import { supportedCameras } from './state';
@@ -29,10 +29,10 @@ declare const __FUJIMOD_LOCAL_DAT__: boolean;
 declare const __FUJIMOD_SIMULATOR_BUILD__: string;
 declare const __FUJIMOD_CATALOG__: string;
 const adapters = import.meta.glob<{
-  model?: ModelData;
   panel: DevicePanel;
   initialPositions: Record<string, string>;
   preview?: string;
+  previewCredit?: PreviewCredit;
   sdBoot?: boolean;
 }>('../../devices/*/index.ts');
 export function startHome(
@@ -41,15 +41,13 @@ export function startHome(
   refs: {
     viewer: HTMLElement;
     workspace: HTMLElement;
-    canvas: HTMLCanvasElement;
     lcd: HTMLCanvasElement;
-    controls: HTMLElement;
     file: HTMLInputElement;
   },
   choice: ReturnType<typeof createFirmwareChoice>,
 ) {
   performance.mark('camera-module-ready');
-  const viewer = new ModelViewer(refs.viewer, refs.canvas, refs.lcd, refs.controls, refs.workspace);
+  const viewer = new LCDViewer(refs.viewer, refs.lcd);
   const panel = new ControlSession(viewer, (error) => showFault(faultFrom(error)), runCombo);
   const [cardEngine, setCardEngine] = createSignal<Engine>();
   const stopInputs = panel.listen();
@@ -64,11 +62,9 @@ export function startHome(
     latestFault: EngineFault | undefined;
   let firmwareHash: string | undefined;
   let manualSelection = false;
-  let build = 'Development',
-    modelLoaded: string | undefined;
+  let build = 'Development';
   let patchWorker: Worker | undefined;
   let preparedEngine: { value: Engine; bundle: string; adapter: string } | undefined;
-  let modelLoading: Promise<void> = Promise.resolve();
   let replayScenario: ReplayScenario | undefined;
   let modEnabled = true;
   let modFirmwareHash: string | undefined;
@@ -115,12 +111,6 @@ export function startHome(
     setState((s) => {
       s.modDisabled = disabled;
       s.modEnabled = modEnabled;
-    });
-  }
-  function setView(mode: '3d' | 'lcd') {
-    viewer.view(mode);
-    setState((s) => {
-      s.view = mode;
     });
   }
   async function restart() {
@@ -237,25 +227,10 @@ export function startHome(
       viewer.bootProgress();
     }
   }
-  function credit(data: ModelData) {
-    setState((s) => {
-      s.credit = data.credit;
-    });
-  }
   async function loadDevice(body: string) {
     const load = adapters[`../../devices/${body}/index.ts`];
     if (!load) return;
     const device = await load();
-    if (device.model && modelLoaded !== body) {
-      const model = device.model;
-      modelLoaded = body;
-      modelLoading = viewer
-        .load(model)
-        .then(() => {
-          if (!disposed) credit(model);
-        })
-        .catch((error) => viewer.showRendererError(error));
-    }
     return device;
   }
   function reset() {
@@ -269,7 +244,6 @@ export function startHome(
     setState((s) => {
       s.connections = [];
     });
-    viewer.setSceneConsumer();
     engine?.dispose();
     engine = undefined;
     patchWorker?.terminate();
@@ -486,13 +460,6 @@ export function startHome(
       }
       if (camera && !restart) modEnabled = camera.modEnabled;
       setState((s) => {
-        s.creditVisible = !!device.model;
-      });
-      setState((s) => {
-        s.hasModel = !!device.model;
-      });
-      setView(device.model ? '3d' : 'lcd');
-      setState((s) => {
         s.idle = false;
       });
       setState((s) => {
@@ -516,7 +483,6 @@ export function startHome(
       if (preparedEngine && preparedEngine.value !== active) preparedEngine.value.dispose();
       preparedEngine = undefined;
       engine = active;
-      if (entry.emulate.boot.sceneInput) viewer.setSceneConsumer((scene) => active.setScene(scene));
       active.metrics((metrics) => {
         if (current !== generation) return;
         window.cameraPerformance = metrics;
@@ -584,7 +550,10 @@ export function startHome(
           },
           bootSource,
           execution: replayScenario
-            ? { mode: 'replay', clockSeconds2000: replayScenario.clockSeconds2000 }
+            ? {
+                mode: replayScenario.interactive ? 'live' : 'replay',
+                clockSeconds2000: replayScenario.clockSeconds2000,
+              }
             : undefined,
         },
         progress,
@@ -592,9 +561,6 @@ export function startHome(
       );
       if (current !== generation) return;
       performance.mark('camera-engine-ready');
-      await modelLoading;
-      if (current !== generation) return;
-      performance.mark('camera-model-ready');
       const positions = Object.fromEntries(
         inputs.filter((input) => input.initial).map((input) => [input.id, input.initial!]),
       );
@@ -612,7 +578,6 @@ export function startHome(
       refs.viewer.dataset.bootSeconds = ((performance.now() - started) / 1000).toFixed(3);
       status('Camera ready');
       if (replayScenario) {
-        setView(replayScenario.view);
         refs.workspace.scrollIntoView({ block: 'start', behavior: 'instant' });
         if (!replayScenario.interactive) {
           panel.disable();
@@ -755,6 +720,7 @@ export function startHome(
         if (device)
           setState((s) => {
             s.bodyPreview = `url(${device.preview})`;
+            s.previewCredit = device.previewCredit;
           });
       }
       if (localDat) {
@@ -800,7 +766,6 @@ export function startHome(
     localReports,
     undo,
     restart,
-    setView,
     selectMod,
     openCamera,
     closeCamera,

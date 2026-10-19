@@ -25,7 +25,6 @@ try {
   const chooser = page.waitForEvent('filechooser');
   await page.locator('#firmware-prompt').click();
   await (await chooser).setFiles(dat);
-  await page.locator('#view-lcd').click();
   async function ready() {
     await page.waitForFunction(
       () =>

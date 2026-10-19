@@ -11,9 +11,7 @@ on review branches; the Pages workflow deploys approved main builds only.
 
 `@solidjs/vite-plugin` runs in native start mode with `ssr: true`. The plugin
 owns client/server entries and hydration; `src/App.tsx` selects the three pages
-and `src/Document.tsx` owns their HTML document and metadata. Development
-source updates reload the document because Bevy owns a single renderer per page. Browser-only
-emulator, USB and graphics work starts after hydration. Engine/input protocols
+and `src/Document.tsx` owns their HTML document and metadata. Browser-only emulator, USB and LCD work starts after hydration. Engine/input protocols
 remain separate from the Solid components that display their state.
 
 `npm run build` renders `/`, `/dev-tools/` and `/bug/` through start mode's
@@ -78,12 +76,14 @@ FUJIMOD_WEB_URL=https://your-host.ts.net/ node src/dev-tools/browser-emulator.ts
 
 ## Camera viewer
 
-The TypeScript web app uses SolidJS 2 for new UI and Bevy 0.20.0 (Rust/Wasm/WebGPU) for the camera viewer.
+The TypeScript web app uses SolidJS 2 and a 2D canvas for the camera LCD.
+The web app does not build, load or ship the standalone Bevy simulation, its
+Wasm modules, camera model or environment assets.
 Vite Plus provides the development server, builds, Oxlint, Oxfmt and Vitest.
 Solid components own the homepage, camera controls, SD browser, viewer overlays, dialogs and status displays. Drop a
 DAT anywhere on the viewer, or choose it there. The whole-file SHA-256 selects
 `public/catalog.json`: firmware ID, body, model, optional engine artifact and
-optional 3D model. Unrecognized files stay on the neutral camera silhouette;
+optional device controls. Unrecognized files stay on the neutral camera silhouette;
 recognized bodies without installed capabilities show unsupported. Patching
 and emulation are independent capabilities. Release-only patch entries also
 work without a web app source change.
@@ -104,20 +104,18 @@ beside the library and keep the previous successful save. See the
 press/release, setPosition, setScene and power. The shared Pyodide WorkerEngine adapter
 owns pacing, request ordering and disposal; it wraps the existing Pyodide
 session worker. No register addresses or firmware bindings appear in rendering
-or panel code. The input artifact belongs to the emulator. Model nodes,
-3D part mappings live in `devices/x70/parts.json`; panel layout, labels, faces
-and power-on gestures live in `devices/x70/panel.json`.
+or panel code. The input artifact belongs to the emulator. Panel layout, labels, faces and power-on gestures live in `devices/x70/panel.json`.
 Control names, feedback icons, and badge styling have one source in
 `bindings/python/python/fujimod/presentation/controls.json` (relative to the
-FujiMod root). Both the web viewer and Python walkthrough renderer consume it;
-neither the panel nor model mapping defines control names. Directions display
+FujiMod root). Both the web viewer and Python walkthrough renderer consume it.
+The panel does not define control names. Directions display
 only an arrow, with a separate accessible name. Panel faces and captions describe
 the printed arrangement of the controls.
 The catalog selects the shared Pyodide engine and supplies its Python boot
-protocol. Device directories contain model, panel and initial-position data;
-adding a body does not add conditionals to the worker or viewer. `src/viewer/model.ts` translates browser input and projects DOM overlays;
-`crates/simulation` owns glTF loading, LCD UV mapping, picking, orbiting and
-physical/observer camera poses. The panel is
+protocol. Device directories contain panel and initial-position data;
+adding a body does not add conditionals to the worker or viewer.
+`src/viewer/lcd.ts` composes guest LCD frames, boot progress and fault feedback.
+The standalone `crates/simulation` renderer is retained for separate development. The panel is
 rendered from body data by shared dial, key, shutter and segmented controls.
 The SD tree shows actual FAT files, offers downloads and format, and retains
 media through power cycles. Generated patch files seed the initial card.
@@ -138,13 +136,11 @@ The model is **CAMERA ( Fujifilm X70 )** by
 [McCLOUD2101](https://sketchfab.com/McCLOUD2101),
 [original model](https://sketchfab.com/3d-models/camera-fujifilm-x70-5fd32c3c004f4fe4aecaaab8e2b89783),
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-The model uses Git LFS. Its hidden filter attachment is selected by node data;
-the glTF itself is unchanged. The page repeats attribution when loaded.
-Model taps show the selected button name and a marker that remains briefly after
-release. Touch picking accepts nearby visible buttons while preserving direct
-LCD contacts; the four-way selector marks one direction without lighting its
-entire shared mesh. `tests/simulation_browser.py` checks the real Bevy viewer and firmware runtime,
-including movement, inspection and model control picking.
+The idle body preview derives from this model. The Git LFS model is retained in
+`crates/simulation/assets/x70.glb` for standalone simulation work.
+`src/home/viewport-controls.browser.ts` exercises real LCD frames and menu input,
+both firmware modes, responsive layouts and the absence of 3D asset requests in
+Chromium and WebKit. Its deterministic development preview is `?scenario=x70-lcd#workspace`.
 
 X-M1 1.50 uses the same Wasm runtime with its checked REC graph, native LCD
 and calibrated menu/sub-command controls. It has no 3D model, host RGB scene,
@@ -220,7 +216,7 @@ and TypeScript's JSX import source is `@solidjs/web`. Oxlint enables Solid 2
 rules for removed APIs, effect signatures, store writes and reactive props.
 
 The browser check boots the real local DAT on desktop Chromium and WebKit's
-iPhone 13 emulation, checks live frames and a menu tap, saves page/model/LCD
+iPhone 13 emulation, checks live frames and a menu tap, saves page/viewer/LCD
 screenshots and verifies downloaded ZIP members against the `--expected` files.
 WebKit emulation is a desktop browser check, not an iPhone hardware measurement.
 
@@ -330,10 +326,8 @@ workflow repeats those checks before publishing Pages.
 `browser.json` supplies a hash/size inventory of generated runtime artifacts and
 a capability catalog. `scripts/stage-browser.ts` verifies each artifact before
 staging it under ignored `public/runtime/`. A patch-only release removes the
-emulation capability from the installed catalog. `npm run build` then bundles
-this repository into `dist/` and verifies every GLB is a real glTF 2 binary with
-identical source/deployment hashes. Pages checks out and pulls the LFS model
-objects before building. Neither a firmware update nor a boot ROM is a build
+emulation capability from the installed catalog. `npm run build` then bundles the web app into `dist/`.
+The static-host browser gate rejects packaged 3D models, environments and simulation modules. Neither a firmware update nor a boot ROM is a build
 input.
 
 The Pages workflow runs only from main or a release targeting main. Review

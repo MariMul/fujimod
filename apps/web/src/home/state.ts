@@ -5,8 +5,14 @@ import { validateIndex } from '../patch/catalog';
 import type { Connection } from '../engine/api';
 import type { EngineFault } from '../engine/fault';
 import type { FaultContext } from '../ui/fault';
-import type { ModelData } from '../viewer/model';
 import type { CameraSupport } from '../ui/cameras';
+export interface PreviewCredit {
+  title: string;
+  author: string;
+  url: string;
+  authorUrl: string;
+  license: string;
+}
 export type Release = ReturnType<typeof validateIndex>;
 declare const __FUJIMOD_INITIAL_CATALOG__: Catalog;
 declare const __FUJIMOD_INITIAL_RELEASE__: unknown;
@@ -55,11 +61,8 @@ export function createHomeState() {
     modSupported: false,
     modDisabled: true,
     modEnabled: true,
-    hasModel: true,
-    view: '3d' as '3d' | 'lcd',
-    creditVisible: true,
-    credit: undefined as ModelData['credit'] | undefined,
     bodyPreview: '',
+    previewCredit: undefined as PreviewCredit | undefined,
     connections: [] as Connection[],
     buildLabel: import.meta.env.DEV || !release ? 'Development' : `Build ${release.release}`,
     buildURL:

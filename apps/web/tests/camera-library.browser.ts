@@ -57,7 +57,6 @@ const monitor = setInterval(() => {
     .catch(() => {});
 }, 30000);
 async function ready() {
-  await page.locator('#view-lcd').click();
   await page.waitForFunction(
     () =>
       document.querySelector('#live-label')?.textContent === 'LIVE' ||
@@ -118,11 +117,11 @@ try {
   await page.locator('#viewer-tools[data-ready="true"]').waitFor();
   assert.equal(await page.getByRole('button', { name: 'New camera', exact: true }).count(), 0);
   await page.waitForFunction(
-    () => document.querySelector<HTMLElement>('#viewer')?.dataset.renderer === 'bevy',
+    () => document.querySelector<HTMLElement>('#viewer')?.dataset.renderer === 'lcd',
     undefined,
     { timeout: 60000 },
   );
-  console.log('Renderer ready');
+  console.log('LCD ready');
   assert.equal(await page.locator('.saved-camera').count(), 0);
   assert.equal(await page.locator('#live-label').innerText(), '');
   const storageResult = await page.evaluate(async () => {

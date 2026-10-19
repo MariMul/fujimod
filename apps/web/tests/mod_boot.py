@@ -124,7 +124,6 @@ async def check(args):
                 assert found == wanted, (address, found, wanted)
             receipt.update(verified_mod_words=word_count, verified_immutable_sections=len(ranges)-word_count,
                            sd_image_sha256=manifest['ffboot']['sha256'])
-            await page.locator('#view-lcd').click()
             await page.locator('#viewer').screenshot(path=str(args.output / 'modded-camera.png'))
             (args.output / 'result.json').write_text(json.dumps(receipt, indent=2)+'\n')
             print(f"PASS: {word_count} mod words and {len(ranges)-word_count} immutable sections in running browser RAM")

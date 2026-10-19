@@ -3,7 +3,6 @@ import { loadEnv, type Plugin, type Connect } from 'vite';
 import solid from '@solidjs/vite-plugin';
 import { simulatorReports } from './scripts/local-reports.ts';
 import { bugReportRoute } from './src/bug/route.ts';
-import { simulationAssets } from './scripts/simulation-assets.ts';
 import { browserDiagnostics } from './scripts/browser-diagnostics.ts';
 import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync, readFileSync } from 'node:fs';
@@ -131,7 +130,6 @@ export default defineConfig(({ mode, command }) => ({
     solid({ start: true, ssr: true }),
     bugReportRoute(),
     simulatorReports(),
-    simulationAssets(),
     browserDiagnostics(),
     localArtifacts(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
     {

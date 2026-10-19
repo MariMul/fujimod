@@ -1,5 +1,5 @@
 import { CameraLibrary } from '../cameras/Library';
-import { For, Show, createSignal, onSettled } from 'solid-js';
+import { Show, createSignal, onSettled } from 'solid-js';
 import { createHomeState } from './state';
 import { startHome, type HomeRuntime } from './runtime';
 import { Controls } from '../ui/controls';
@@ -14,7 +14,6 @@ import { EmulatorFeedback } from './Feedback';
 import { ViewportControls } from './ViewportControls';
 import generations from '../../devices/generations.json';
 import { ViewerOverlays } from '../viewer/Overlays';
-import { rendererBackend, rendererURL } from '../viewer/renderer';
 import '../style.css';
 import '../navigation.css';
 
@@ -23,25 +22,14 @@ export default function Home() {
   const [runtime, setRuntime] = createSignal<HomeRuntime>();
   const [dragging, setDragging] = createSignal(false);
   const [feedback, setFeedback] = createSignal<{ event: 'feedback' | 'crash' }>();
-  const [backend, setBackend] = createSignal('webgl2'),
-    [gpu, setGpu] = createSignal(false);
   const choice = createFirmwareChoice();
   let viewer!: HTMLDivElement,
     workspace!: HTMLElement,
-    controls!: HTMLDivElement,
     file!: HTMLInputElement,
-    canvas!: HTMLCanvasElement,
     lcd!: HTMLCanvasElement;
   onSettled(() => {
-    const app = startHome(
-      state,
-      setState,
-      { viewer, workspace, controls, file, canvas, lcd },
-      choice,
-    );
+    const app = startHome(state, setState, { viewer, workspace, file, lcd }, choice);
     setRuntime(app);
-    setBackend(rendererBackend(location.search));
-    setGpu('gpu' in navigator);
     if (new URLSearchParams(location.search).has('feedback')) setFeedback({ event: 'feedback' });
     const dragOver = (event: DragEvent) => {
       if (event.dataTransfer?.types.includes('Files')) event.preventDefault();
@@ -98,7 +86,7 @@ export default function Home() {
           <section ref={workspace} class={['stage', { idle: state.idle }]} id="workspace">
             <div
               ref={viewer}
-              class={['viewer', { dragging: dragging(), 'lcd-mode': state.view === 'lcd' }]}
+              class={['viewer lcd-mode', { dragging: dragging() }]}
               id="viewer"
               aria-label="Camera viewer"
               style={{ '--body-preview': state.bodyPreview }}
@@ -114,17 +102,10 @@ export default function Home() {
               }}
             >
               <canvas
-                ref={canvas}
-                id="simulation-canvas"
-                class="model-canvas"
-                tabindex="0"
-                aria-label="Camera environment"
-              />
-              <canvas
                 ref={lcd}
                 id="lcd-source"
-                hidden={state.view !== 'lcd'}
-                class={{ flat: state.view === 'lcd' }}
+                class="flat"
+                aria-label="Camera LCD"
                 width="720"
                 height="480"
               />
@@ -134,29 +115,15 @@ export default function Home() {
                 {(actions) => (
                   <ViewportControls
                     active={state.toolbarVisible}
-                    view={state.view}
-                    hasModel={state.hasModel}
                     title={
                       state.firmware ? `${state.firmware.model} · ${state.firmware.version}` : ''
                     }
                     speed={state.speed}
-                    mode={runtime()?.viewer.ui.mode ?? 'inspect'}
-                    error={runtime()?.viewer.ui.error}
                     modSupported={state.modSupported}
                     modEnabled={state.modEnabled}
                     modDisabled={state.modDisabled}
-                    backend={backend()}
-                    gpu={gpu()}
                     feedback={actions}
-                    setView={(view) => runtime()?.setView(view)}
-                    face={(face) =>
-                      face === 'screen'
-                        ? runtime()?.viewer.faceScreen()
-                        : runtime()?.viewer.faceLens()
-                    }
-                    toggleMode={() => runtime()?.viewer.toggleMode()}
                     selectMod={(enabled) => void runtime()?.selectMod(enabled)}
-                    selectRenderer={(value) => location.assign(rendererURL(location.href, value))}
                   />
                 )}
               </EmulatorFeedback>
@@ -200,7 +167,7 @@ export default function Home() {
               aria-label="Camera controls"
               hidden={!state.panelVisible}
             >
-              <div ref={controls} id="controls">
+              <div id="controls">
                 <Controls session={runtime()?.panel} />
               </div>
               <hr />
@@ -211,19 +178,6 @@ export default function Home() {
               />
               <Connections rows={state.connections} />
             </aside>
-            <svg id="leaders" viewBox={runtime()?.viewer.ui.viewBox || '0 0 1 1'}>
-              <For each={runtime()?.viewer.ui.paths ?? []}>
-                {(path) => (
-                  <path
-                    data-input={path.id}
-                    data-x={path.x}
-                    data-y={path.y}
-                    d={path.d}
-                    class={{ active: path.active }}
-                  />
-                )}
-              </For>
-            </svg>
           </section>
           <CameraTable
             columns={generations}
@@ -231,8 +185,8 @@ export default function Home() {
             emulate={(firmware) => runtime()?.selectFirmware(firmware)}
           />
         </main>
-        <footer id="model-credit" hidden={!state.creditVisible}>
-          <Show when={state.credit}>
+        <footer id="preview-credit" hidden={!state.idle}>
+          <Show when={state.previewCredit}>
             {(credit) => (
               <>
                 "<a href={credit().url}>{credit().title}</a>" by{' '}

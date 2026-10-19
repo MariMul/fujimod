@@ -1,8 +1,9 @@
 # Camera environment simulation
 
 Shared Rust/Bevy 0.20.0 world, physical camera rig and observer rendering.
-The web app uses this renderer for its camera model, picking, dial pivots and
-firmware LCD texture. Environments live beside the implementation in
+The web app currently uses LCD-only rendering. This standalone crate retains
+camera model rendering, picking, dial pivots and firmware LCD textures.
+Environments live beside the implementation in
 `environments/`; native and browser rendering consume the same prepared asset.
 There are no device-specific quality variants.
 
@@ -18,9 +19,9 @@ In Walk mode, WASD moves at 1.4 m/s and captured mouse movement turns the player
 and camera. Right click enters Inspect, releases the mouse and moves the
 observer close to the camera's rear glass. Dragging orbits the observer; the
 physical camera pose and sensor image stay fixed. Right click returns to Walk.
-The on-screen Walk/Inspect toggle and touch stick/drag issue the same commands.
+Browser hosts can issue the same navigation commands.
 Focus loss clears movement. A spatial index of the static scan supplies ground following, wall checks and floor-gap boundaries, independently of rendering visibility. The controller is in Rust; browser event capture
-and DOM controls stay in the web app.
+and DOM controls belong to the embedding host.
 
 Interactive movement uses real elapsed time, independently of guest execution
 speed. `Simulation::advance(seconds)` provides explicit time for scenarios.
@@ -39,10 +40,9 @@ profile; it is not a camera calibration. These are declared approximations, not 
 actuator calibration. No firmware PC, private RAM or software mode determines
 world behavior. No autofocus decision is supplied by the environment.
 
-The web firmware engine currently runs in the existing Pyodide worker. Its
-RGB image-input adapter remains the boundary to that runtime, including pixel
-transfer. The world and renderer share one Bevy world; this does **not** yet
-merge the Pyodide execution backend into the Bevy Wasm module. Native callers
+The web firmware engine runs in a separate Pyodide worker. A host can submit
+sensor frames through its RGB image-input adapter. The world and renderer
+share one Bevy world; firmware execution remains a separate runtime. Native callers
 can consume `SensorFrame` directly. Interactive sensor submission renders again when the world, physical pose or
 optics change. The emulator retains that source between updates. Native scenario
 rendering samples each requested interval, holding scenario time fixed until
@@ -51,7 +51,7 @@ completed frame; display rendering is independent.
 
 ## Assets
 
-Crouch End Station is installed and loads by default in the browser. The same
+Crouch End Station is installed for standalone rendering. The same
 GLB is used on every device and by native scenarios. It contains 347,393 faces,
 512,089 vertices and a 2048 px photographic atlas (20,055,032 bytes). The scan has
 incomplete geometry outside its captured coverage; walking stops at floor gaps.
@@ -89,9 +89,8 @@ Photogrammetry can select unlit materials to preserve photographed lighting;
 the camera body uses its PBR materials. LCD geometry gets independent UVs and
 an unlit texture. No shader is needed for the initial optics implementation.
 
-The web build's `simulation-assets` plugin serves/packages assets directly
-from this crate. To open an installed environment, use
-`?environment=crouch-end-station`. That URL is retained when selecting firmware.
+The web app does not package these assets. Use the environment manifest with
+the standalone native renderer.
 Large curated GLBs use Git LFS. Source downloads, conversion intermediates and
 scenario output stay in ignored build/output directories.
 
@@ -102,19 +101,18 @@ From the FujiMod workspace, use its Mise toolchain:
 ```sh
 cargo test -p fujimod-simulation --lib
 cargo check -p fujimod-simulation --examples
+npm ci --prefix crates/simulation/tools
 node crates/simulation/build-web.ts
 python3 crates/simulation/environments/crouch-end-station/test_prepare.py
 ```
 
-The browser app's build/check/test pre-scripts build the Wasm module. Generated
+The web app currently uses LCD-only rendering and does not build or load this crate.
+Build its standalone Wasm modules explicitly with the command above. Generated
 bindings and Wasm live under `bindings/javascript/pkg/simulation/`, never in
-source control; the app imports `fujimod/simulation/webgl2` or
-`fujimod/simulation/webgpu` only after choosing a backend. The default build
+source control. The generated entry points are `fujimod/simulation/webgl2` and
+`fujimod/simulation/webgpu`. The default build
 command produces both variants; pass `webgl2` or `webgpu` to build just one.
 The Cargo features have the same names and are mutually exclusive on Wasm.
-The viewer's renderer selector reloads into `?renderer=webgl2` (the default) or
-`?renderer=webgpu`, preserving environment/scenario parameters. It loads only
-the selected module; a WebGPU failure never silently substitutes WebGL2.
 Both browser backends use the same resolution, assets, lighting and effects.
 Every browser build uses size optimization, thin LTO, and Binaryen. The script
 caches generated bindings and optimization until the compiled Wasm changes.
@@ -140,10 +138,6 @@ cargo run -p fujimod-simulation --example render_scenario -- \
   target/simulation-runs/a-fresh-run apps/web/devices/x70/parts.json
 ```
 
-`apps/web/tests/simulation_browser.py` exercises the real firmware web app:
-Bevy identity, live LCD frames, invariant camera pose during inspection,
-walking at real-time speed, and a model control click. It requires the local
-firmware preview or an explicit DAT. It does not access a camera/USB device.
 GPU image comparisons should use tolerances across adapters; exact pose and
 command replay tests do not depend on GPU pixels.
 

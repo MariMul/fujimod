@@ -6,23 +6,13 @@ import './viewport-controls.css';
 
 export function ViewportControls(props: {
   active: boolean;
-  view: '3d' | 'lcd';
-  hasModel: boolean;
   title: string;
   speed?: number;
-  mode: 'inspect' | 'walk';
-  error?: string;
   modSupported: boolean;
   modEnabled: boolean;
   modDisabled: boolean;
-  backend: string;
-  gpu: boolean;
   feedback: EmulatorFeedbackActions;
-  setView: (view: '3d' | 'lcd') => void;
-  face: (face: 'screen' | 'lens') => void;
-  toggleMode: () => void;
   selectMod: (enabled: boolean) => void;
-  selectRenderer: (backend: 'webgl2' | 'webgpu') => void;
 }) {
   let settings!: HTMLDetailsElement;
   let trigger!: HTMLElement;
@@ -49,69 +39,11 @@ export function ViewportControls(props: {
       </Show>
       <div
         id="viewer-tools"
-        class={['viewport-tools', { 'viewport-tools-idle': !props.active }]}
+        class="viewport-tools"
         data-ready={String(props.feedback.ready)}
         role="group"
         aria-label="Viewport controls"
       >
-        <Show when={props.active}>
-          <div class="viewport-tool-group" role="group" aria-label="Viewer mode">
-            <For each={['3d', 'lcd'] as const}>
-              {(view) => (
-                <button
-                  type="button"
-                  id={`view-${view}`}
-                  class={{ selected: props.view === view }}
-                  aria-pressed={props.view === view ? 'true' : 'false'}
-                  hidden={view === '3d' && !props.hasModel}
-                  onClick={() => props.setView(view)}
-                >
-                  {view === '3d' ? '3D' : 'LCD'}
-                </button>
-              )}
-            </For>
-          </div>
-          <Show when={props.view === '3d' && props.hasModel}>
-            <div class="viewport-tool-group" role="group" aria-label="Camera orientation">
-              <button
-                type="button"
-                id="face-screen"
-                disabled={!!props.error}
-                onClick={() => props.face('screen')}
-              >
-                <Icon name="monitor" />
-                <span>Screen</span>
-              </button>
-              <button
-                type="button"
-                id="face-lens"
-                disabled={!!props.error}
-                onClick={() => props.face('lens')}
-              >
-                <Icon name="camera" />
-                <span>Lens</span>
-              </button>
-            </div>
-            <div class="viewport-tool-group" role="group" aria-label="Navigation mode">
-              <For each={['inspect', 'walk'] as const}>
-                {(mode) => (
-                  <button
-                    type="button"
-                    class={{ selected: props.mode === mode }}
-                    aria-pressed={props.mode === mode ? 'true' : 'false'}
-                    disabled={!!props.error}
-                    onClick={() => {
-                      if (props.mode !== mode) props.toggleMode();
-                    }}
-                  >
-                    <Icon name={mode === 'inspect' ? 'scan' : 'walk'} />
-                    <span>{mode === 'inspect' ? 'Inspect' : 'Walk'}</span>
-                  </button>
-                )}
-              </For>
-            </div>
-          </Show>
-        </Show>
         <details
           ref={settings}
           class="viewport-settings"
@@ -155,29 +87,6 @@ export function ViewportControls(props: {
                         }}
                       >
                         {enabled ? 'FujiMod' : 'Unmodded'}
-                      </button>
-                    )}
-                  </For>
-                </div>
-              </div>
-            </Show>
-            <Show when={props.active && props.view === '3d' && props.hasModel}>
-              <div class="viewport-setting">
-                <span class="viewport-setting-label">Renderer</span>
-                <div class="viewport-setting-options" role="group" aria-label="3D renderer">
-                  <For each={['webgl2', 'webgpu'] as const}>
-                    {(backend) => (
-                      <button
-                        type="button"
-                        class={{ selected: props.backend === backend }}
-                        aria-pressed={props.backend === backend ? 'true' : 'false'}
-                        disabled={backend === 'webgpu' && !props.gpu}
-                        onClick={() => {
-                          close();
-                          if (props.backend !== backend) props.selectRenderer(backend);
-                        }}
-                      >
-                        {backend === 'webgl2' ? 'WebGL2' : 'WebGPU'}
                       </button>
                     )}
                   </For>

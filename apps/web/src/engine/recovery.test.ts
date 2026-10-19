@@ -45,6 +45,37 @@ function setup() {
   engine.frames((frame) => frames.push(frame));
   return { worker, engine, sent, errors, frames };
 }
+test('fixed-clock live previews keep pacing while deterministic replays wait for explicit steps', async () => {
+  for (const mode of ['live', 'replay'] as const) {
+    const { engine, sent } = setup();
+    let pumps = 0;
+    Object.assign(globalThis, {
+      window: {
+        setTimeout: () => {
+          pumps++;
+          return 0;
+        },
+      },
+    });
+    try {
+      await engine.boot(
+        new ArrayBuffer(1),
+        {
+          ...testConfig(false),
+          execution: { mode, clockSeconds2000: 845510400 },
+        },
+        () => {},
+      );
+      assert.deepEqual(sent.find((data) => data.type === 'boot')!.config.execution, {
+        mode,
+        clockSeconds2000: 845510400,
+      });
+      assert.equal(pumps, mode === 'live' ? 1 : 0);
+    } finally {
+      engine.dispose();
+    }
+  }
+});
 test('an LCD-only runtime advances without a sensor preview clock', async () => {
   const { engine, worker, sent, errors } = setup();
   await engine.boot(

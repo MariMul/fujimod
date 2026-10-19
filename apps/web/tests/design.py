@@ -117,7 +117,7 @@ async def check(p, args, name, kind):
                 await page.route('**/local/firmware.dat',lambda r:r.fulfill(status=404,body=''))
                 page.on('pageerror',lambda e:errors.append(str(e)))
                 await page.goto(args.url)
-                await page.wait_for_function('document.querySelector("#model-credit").textContent.includes("McCLOUD")')
+                await page.wait_for_function('document.querySelector("#viewer").dataset.renderer === "lcd"')
                 await page.wait_for_timeout(500)
             elif state == 'running':
                 await page.close()

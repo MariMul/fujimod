@@ -1,4 +1,3 @@
-import type { ModelViewer } from '../viewer/model';
 import type { DetentSound } from '../feedback/detent-sound';
 import type { Engine } from '../engine/api';
 declare global {
@@ -8,7 +7,6 @@ declare global {
     clickTimbres: number[];
     vibrations: (number | number[])[];
     haptics: boolean;
-    modelSounds: Record<string, DetentSound>;
     panel: ControlSession;
     fixtureReady: boolean;
   }
@@ -42,16 +40,9 @@ AudioContext.prototype.createBufferSource = function (...args) {
   };
   return source;
 };
-const viewer = new Proxy(
-  {
-    configureRotary(_inputs: unknown, _step: unknown, sounds: Record<string, DetentSound>) {
-      window.modelSounds = sounds;
-    },
-  },
-  { get: (target, key) => Reflect.get(target, key) ?? (() => {}) },
-);
+const viewer = { pressFeedback() {} };
 window.panel = new ControlSession(
-  viewer as unknown as ModelViewer,
+  viewer,
   (error) => {
     throw error;
   },

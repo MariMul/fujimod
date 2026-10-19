@@ -1,4 +1,4 @@
-/** Real firmware and renderer walkthrough against the configured development preview. */
+/** LCD-only walkthrough against real firmware in the configured development preview. */
 import { chromium, webkit, type Page } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -38,13 +38,6 @@ async function menu(page: Page) {
     true,
   );
 }
-async function state(page: Page) {
-  return JSON.parse((await page.locator('#viewer').getAttribute('data-simulation')) ?? '{}') as {
-    observerPosition: number[];
-    mode: string;
-    renderer: string;
-  };
-}
 const browser = await chromium.launch({ headless: true });
 let activePage: Page | undefined;
 try {
@@ -52,7 +45,12 @@ try {
   // Pin each navigation to its loaded source while other development work continues.
   await context.routeWebSocket('**/*', () => {});
   const page = await context.newPage(),
-    errors: string[] = [];
+    errors: string[] = [],
+    graphicsRequests: string[] = [];
+  page.on('request', (request) => {
+    if (/simulation[\/-]|\.glb(?:\?|$)|\/environments\//.test(request.url()))
+      graphicsRequests.push(request.url());
+  });
   activePage = page;
   page.setDefaultTimeout(60000);
   page.on('pageerror', (error) => errors.push(error.message));
@@ -76,7 +74,6 @@ try {
   const chooser = page.waitForEvent('filechooser');
   await page.locator('#firmware-prompt').click();
   await (await chooser).setFiles(dat);
-  await page.locator('#view-lcd').click();
   await ready(page);
   console.log('Created first camera from native file chooser and booted firmware');
   assert.equal(
@@ -91,11 +88,6 @@ try {
         .data.some((value) => value > 0),
     ),
     true,
-  );
-  await page.locator('#view-3d').click();
-  await page.waitForFunction(
-    () =>
-      JSON.parse(document.querySelector<HTMLElement>('#viewer')?.dataset.simulation ?? '{}').ready,
   );
   for (const width of [320, 390, 820, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -136,29 +128,6 @@ try {
     await page.locator('#viewer-settings-toggle').press('Escape');
   }
   console.log('Responsive viewport geometry passed');
-  await page.locator('#face-screen').click();
-  const screen = await state(page);
-  await page.locator('#face-lens').click();
-  await page.waitForFunction(
-    (before) =>
-      document.querySelector<HTMLElement>('#viewer')?.dataset.simulation &&
-      JSON.stringify(
-        JSON.parse(document.querySelector<HTMLElement>('#viewer')!.dataset.simulation!)
-          .observerPosition,
-      ) !== JSON.stringify(before),
-    screen.observerPosition,
-  );
-  await screenshot(page, 'inspect');
-  await page.getByRole('button', { name: 'Walk', exact: true }).click();
-  await page.waitForFunction(
-    () => document.querySelector<HTMLElement>('#viewer')?.dataset.mode === 'walk',
-  );
-  await page.keyboard.press('Escape');
-  await screenshot(page, 'walk');
-  await page.getByRole('button', { name: 'Inspect', exact: true }).click();
-  await page.waitForFunction(
-    () => document.querySelector<HTMLElement>('#viewer')?.dataset.mode === 'inspect',
-  );
   await menu(page);
   await screenshot(page, 'settings');
   await page.locator('#viewer-settings-toggle').press('Escape');
@@ -173,7 +142,6 @@ try {
     false,
   );
   for (const label of ['Unmodded', 'FujiMod']) {
-    await page.locator('#view-lcd').click();
     await menu(page);
     await page.getByRole('button', { name: label, exact: true }).click();
     await ready(page);
@@ -186,18 +154,33 @@ try {
     await screenshot(page, label.toLowerCase());
     await page.locator('#viewer-settings-toggle').press('Escape');
   }
-  await page.locator('#view-3d').click();
   // The shareable preview executes the same checked native boot from a fixed initial state.
-  const preview = new URL('?scenario=x70-inspect#workspace', base).href;
+  const preview = new URL('?scenario=x70-lcd#workspace', base).href;
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(preview, { waitUntil: 'domcontentloaded' });
   await ready(page);
-  assert.equal(await page.locator('#view-3d').getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('#viewer').getAttribute('data-renderer'), 'lcd');
+  assert.equal(
+    await page.locator('#simulation-canvas,#view-3d,#view-lcd,#face-screen,#face-lens').count(),
+    0,
+  );
+  assert.equal(await page.getByRole('group', { name: '3D renderer' }).count(), 0);
+  const frames = Number(await page.locator('#viewer').getAttribute('data-frames'));
   await page.waitForFunction(
-    () =>
-      JSON.parse(document.querySelector<HTMLElement>('#viewer')?.dataset.simulation ?? '{}').ready,
+    (before) => Number(document.querySelector<HTMLElement>('#viewer')?.dataset.frames) > before + 1,
+    frames,
+  );
+  const beforeMenu = await page
+    .locator('#lcd-source')
+    .evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+  await page.locator('#controls button[data-id="menu_ok"]').click();
+  await page.waitForFunction(
+    (before) => document.querySelector<HTMLCanvasElement>('#lcd-source')!.toDataURL() !== before,
+    beforeMenu,
   );
   await screenshot(page, 'shared-preview');
+  assert.deepEqual(graphicsRequests, []);
+
   assert.deepEqual(errors, []);
   await writeFile(
     new URL('result.json', output),
@@ -205,17 +188,7 @@ try {
       {
         preview,
         errors,
-        controls: [
-          '3D',
-          'LCD',
-          'Screen',
-          'Lens',
-          'Inspect',
-          'Walk',
-          'FujiMod',
-          'Unmodded',
-          'Feedback',
-        ],
+        controls: ['FujiMod', 'Unmodded', 'Feedback'],
         widths: [320, 390, 820, 1440],
       },
       null,
@@ -223,7 +196,7 @@ try {
     ),
   );
   console.log(
-    'Passed: first upload, real native boots, views/orientations/navigation, both firmware modes, feedback, menu dismissal, responsive layouts and shared preview',
+    'Passed: first upload, real native boots, LCD rendering, both firmware modes, feedback, menu dismissal, responsive layouts and shared preview',
   );
 } catch (error) {
   if (activePage) await screenshot(activePage, 'failure').catch(() => {});
@@ -246,7 +219,21 @@ try {
     true,
   );
   await screenshot(page, 'webkit-feedback');
-  console.log('Passed: WebKit first-use menu and feedback');
+  await page.locator('#feedback-dialog button[value="cancel"]').click();
+  const graphicsRequests: string[] = [];
+  page.on('request', (request) => {
+    if (/simulation[\/-]|\.glb(?:\?|$)|\/environments\//.test(request.url()))
+      graphicsRequests.push(request.url());
+  });
+  await page.goto(new URL('?scenario=x70-lcd#workspace', base).href, {
+    waitUntil: 'domcontentloaded',
+  });
+  await ready(page);
+  assert.equal(await page.locator('#viewer').getAttribute('data-renderer'), 'lcd');
+  assert.equal(await page.locator('#simulation-canvas,#view-3d').count(), 0);
+  await screenshot(page, 'webkit-lcd');
+  assert.deepEqual(graphicsRequests, []);
+  console.log('Passed: WebKit first-use menu, feedback and real LCD boot without 3D assets');
 } finally {
   await safari.close();
 }

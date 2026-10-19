@@ -4,11 +4,18 @@ declare global {
   }
 }
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { resolve, sep, extname } from 'node:path';
 import { chromium, webkit } from 'playwright';
 import assert from 'node:assert/strict';
 const root = resolve(process.argv[2] || 'dist/client');
+for (const file of await readdir(root, { recursive: true })) {
+  assert.ok(
+    !/\.glb$|fujimod_simulation|(?:^|[\\/])environments[\\/]/.test(file),
+    `Unexpected 3D asset: ${file}`,
+  );
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://test');
   const path = resolve(
@@ -65,8 +72,13 @@ try {
         }
         if (route === '/') {
           assert.equal(await page.locator('#workspace').count(), 1);
+          assert.equal(await page.locator('#simulation-canvas,#view-3d,#view-lcd').count(), 0);
+          assert.equal(await page.locator('#lcd-source').isVisible(), true);
           assert.equal(await page.locator('#idle-cameras').count(), 0);
-          assert.equal(await page.getByRole('button', { name: 'New camera', exact: true }).count(), 0);
+          assert.equal(
+            await page.getByRole('button', { name: 'New camera', exact: true }).count(),
+            0,
+          );
           assert.ok((await page.locator('#camera-table .gen').count()) > 0);
         }
         await page.close();
@@ -80,7 +92,7 @@ try {
       page.on('console', (msg) => {
         if (/hydration|unclaimed|\[[A-Z_]+\]/i.test(msg.text())) diagnostics.push(msg.text());
       });
-      // The static-host test exercises hydration/UI; renderer execution has its own real-runtime gate.
+      // The static-host test exercises hydration/UI; firmware execution has its own real-runtime gate.
       await page.addInitScript(() => {
         window.__hydrationDOM = null;
         document.addEventListener('DOMContentLoaded', () => {

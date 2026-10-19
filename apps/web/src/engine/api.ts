@@ -94,8 +94,8 @@ export interface EngineConfig {
   restart?: boolean;
   /** Explicit SD image handoff for runtimes that start after the boot ROM. */
   bootSource?: 'sd' | 'internal';
-  /** Cold, fixed-clock execution with no wall-clock pump; inputs use replay(). */
-  execution?: { mode: 'replay'; clockSeconds2000: number };
+  /** Cold boot with a fixed RTC; replay mode advances only through replay(). */
+  execution?: { mode: 'live' | 'replay'; clockSeconds2000: number };
 }
 export interface Engine {
   prepare(config: EngineConfig): void;

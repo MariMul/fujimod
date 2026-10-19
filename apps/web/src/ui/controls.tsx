@@ -1,7 +1,7 @@
 import { For, Show, Switch, Match, createSignal, createEffect, onSettled, untrack } from 'solid-js';
 import { inputName } from '../feedback/input';
 import type { Engine, Input } from '../engine/api';
-import type { ModelHit, ModelViewer } from '../viewer/model';
+import type { LCDViewer } from '../viewer/lcd';
 import type { ControlNode, DevicePanel, PowerCombo } from './layout';
 import { Icon } from './icons';
 import type { DetentSound } from '../feedback/detent-sound';
@@ -20,7 +20,6 @@ export class ControlSession {
   detentSounds: Record<string, DetentSound> = {};
   inputs = new Map<string, Input>();
   relativeSteps = new Map<string, number>();
-  modelFractions = new Map<string, number>();
   positions = new Map<string, string>();
   renders = new Map<string, () => void>();
   holds = new Map<number | string, string>();
@@ -35,23 +34,13 @@ export class ControlSession {
   rotation?: { dial: HTMLElement; fraction: number; center?: number };
   private pulseQueue: Promise<unknown> = Promise.resolve();
   constructor(
-    readonly viewer: ModelViewer,
+    readonly viewer: Pick<LCDViewer, 'pressFeedback'>,
     readonly error: (error: unknown) => void,
     readonly combo: (combo: PowerCombo) => Promise<void>,
   ) {
     const [revision, setRevision] = createSignal(0);
     this.revision = revision;
     this.changed = () => setRevision((n) => n + 1);
-    viewer.onRotaryPreview = (id, fraction) => {
-      fraction = this.clampFraction(id, fraction);
-      this.modelFractions.set(id, fraction);
-      this.changed();
-      this.renders.get(id)?.();
-      return fraction;
-    };
-    viewer.onPointerEnd = (pointer) => this.release(pointer);
-    viewer.onPointerDown = (hit, event) => this.modelDown(hit, event);
-    viewer.onHover = (id) => this.feedback(id ? [id] : []);
   }
   listen() {
     const release = (event: PointerEvent) => this.release(event.pointerId);
@@ -96,13 +85,6 @@ export class ControlSession {
     visit(data.layout);
     this.data = data;
     this.changed();
-    this.viewer.configureRotary(
-      inputs,
-      (id, direction) => this.step(id, direction),
-      this.detentSounds,
-    );
-    for (const id of this.positions.keys()) this.syncRotary(id);
-    this.viewer.setRotaryEnabled(true);
   }
   index(id: string) {
     return Math.max(
@@ -202,15 +184,6 @@ export class ControlSession {
     const index = positions.findIndex((p) => p.id === this.positions.get(id));
     return Math.max(-index, Math.min(positions.length - 1 - index, fraction));
   }
-  private syncRotary(id: string) {
-    const input = this.inputs.get(id);
-    if (!input?.positions?.length) return;
-    const index = input.positions.findIndex((p) => p.id === this.positions.get(id));
-    const initial = input.positions.findIndex(
-      (p) => p.id === (input.initial ?? input.positions![0].id),
-    );
-    if (index >= 0) this.viewer.setRotaryPosition(id, index - Math.max(0, initial));
-  }
   position(id: string, value: string) {
     if (
       !this.ready ||
@@ -221,7 +194,6 @@ export class ControlSession {
       return;
     this.positions.set(id, value);
     this.changed();
-    this.syncRotary(id);
     this.renders.get(id)?.();
     this.feedback([id]);
     const engine = this.engine!;
@@ -248,7 +220,6 @@ export class ControlSession {
     if (input.relative) {
       this.relativeSteps.set(id, (this.relativeSteps.get(id) ?? 0) + Math.sign(direction));
       this.changed();
-      this.viewer.turnRotary(id, Math.sign(direction));
       void this.engine!.setPosition(id, Math.sign(direction)).catch(this.error);
       return true;
     }
@@ -278,13 +249,7 @@ export class ControlSession {
     });
     return task;
   }
-  press(
-    id: string,
-    pointer: number | string,
-    stage?: string,
-    point?: { x: number; y: number },
-    surfacePoint?: ModelHit['surfacePoint'],
-  ) {
+  press(id: string, pointer: number | string, stage?: string, point?: { x: number; y: number }) {
     if (
       !this.ready ||
       !this.powered ||
@@ -294,7 +259,7 @@ export class ControlSession {
       return;
     this.holds.set(pointer, id);
     this.feedback([id]);
-    this.viewer.pressFeedback(id, this.inputs.get(id)?.kind === 'touch' ? surfacePoint : undefined);
+    this.viewer.pressFeedback(id);
     void this.engine!.press(id, stage, point).catch(this.error);
   }
   release(pointer: number | string) {
@@ -305,7 +270,7 @@ export class ControlSession {
     void engine?.release(id).catch((error) => {
       if (this.engine === engine && this.ready) this.error(error);
     });
-    this.viewer.setOrbit(true);
+
     setTimeout(() => {
       if (!this.holds.size) this.feedback([]);
     }, 160);
@@ -319,7 +284,6 @@ export class ControlSession {
     this.active = ids;
     this.glowing = glow;
     this.changed();
-    this.viewer.highlight(ids);
   }
   rotate(id: string, dial: HTMLElement, event: PointerEvent) {
     if (event.button !== 0 || !this.ready || !this.powered || !this.inputs.get(id)?.supported)
@@ -328,7 +292,6 @@ export class ControlSession {
     this.detent.beginGesture(event);
     event.preventDefault();
     dial.setPointerCapture(event.pointerId);
-    this.viewer.setOrbit(false);
     const values = dial.querySelector<HTMLElement>('.vals')!;
     const ticks = dial.classList.contains('ticks');
     const initialTicks = parseFloat(values.style.backgroundPositionX) || 0;
@@ -387,7 +350,6 @@ export class ControlSession {
         rotation.fraction = this.clampFraction(id, remainder / 16);
       }
       this.changed();
-      this.viewer.previewRotary(id, rotation.fraction, true);
       if (ticks) values.style.backgroundPositionX = `${tickPosition + remainder}px`;
       else this.renders.get(id)?.();
     };
@@ -401,14 +363,12 @@ export class ControlSession {
       dial.removeEventListener('lostpointercapture', end);
       this.rotation = undefined;
       this.changed();
-      this.viewer.previewRotary(id, 0, false);
       values.style.transition = ticks
         ? 'background-position-x 140ms ease-out'
         : 'transform 140ms ease-out';
       if (ticks) values.style.backgroundPositionX = `${tickPosition}px`;
       else this.renders.get(id)?.();
       if (dial.hasPointerCapture(event.pointerId)) dial.releasePointerCapture(event.pointerId);
-      this.viewer.setOrbit(true);
       this.stopRotation = undefined;
     };
     this.stopRotation = cleanup;
@@ -417,27 +377,8 @@ export class ControlSession {
     window.addEventListener('pointercancel', end);
     dial.addEventListener('lostpointercapture', end);
   }
-  private modelDown(hit: ModelHit, event: PointerEvent) {
-    const input = this.inputs.get(hit.id);
-    if (!input?.supported || !this.ready || input.kind === 'dial' || input.kind === 'ring') return;
-    event.preventDefault();
-    event.stopPropagation();
-    this.viewer.setOrbit(false);
-    if (this.viewer.isPointerHeld(event.pointerId))
-      this.viewer.canvas.setPointerCapture(event.pointerId);
-    if (input.positions?.length) this.step(hit.id, 1);
-    else
-      this.press(
-        hit.id,
-        event.pointerId,
-        input.stages ? 'full' : undefined,
-        hit.point,
-        hit.surfacePoint,
-      );
-  }
   private availability() {
     this.changed();
-    this.viewer.setRotaryEnabled(this.ready && this.powered);
   }
   disable() {
     this.ready = false;
@@ -461,7 +402,6 @@ export class ControlSession {
     for (const [id, value] of Object.entries(positions)) {
       this.positions.set(id, value);
       this.changed();
-      this.syncRotary(id);
       this.renders.get(id)?.();
     }
     if (this.powerID && positions[this.powerID]) this.powered = positions[this.powerID] === 'on';
@@ -473,13 +413,11 @@ export class ControlSession {
     this.stopShutter?.();
     this.powered = true;
     this.powerID = undefined;
-    this.viewer.setRotaryEnabled(false);
     this.data = undefined;
     this.changed();
     this.inputs.clear();
     this.detentSounds = {};
     this.positions.clear();
-    this.modelFractions.clear();
     this.relativeSteps.clear();
 
     this.renders.clear();
@@ -598,10 +536,7 @@ function Dial(props: { session: ControlSession; id: string; node: ControlNode })
         values.style.transform = `translateX(${dial.clientWidth / 2 - rotation.center}px)`;
         return;
       }
-      const fraction =
-        rotation?.dial === dial
-          ? rotation.fraction
-          : (props.session.modelFractions.get(props.id) ?? 0);
+      const fraction = rotation?.dial === dial ? rotation.fraction : 0;
       const visual = Math.max(
         0,
         Math.min(positions.length - 1, props.session.index(props.id) + fraction),
@@ -659,7 +594,7 @@ function Dial(props: { session: ControlSession; id: string; node: ControlNode })
         style={{
           'background-position-x':
             props.node.variant === 'ticks'
-              ? `${((props.session.read().relativeSteps.get(props.id) ?? 0) + (props.session.read().rotation?.dial === dial ? props.session.read().rotation!.fraction : (props.session.read().modelFractions.get(props.id) ?? 0))) * 16}px`
+              ? `${((props.session.read().relativeSteps.get(props.id) ?? 0) + (props.session.read().rotation?.dial === dial ? props.session.read().rotation!.fraction : 0)) * 16}px`
               : undefined,
         }}
       >

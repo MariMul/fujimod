@@ -353,7 +353,7 @@ async function startSession(
       1000,
   );
   runtime.globals.set('clock_seconds_2000', config.execution?.clockSeconds2000 ?? clock);
-  if (config.execution?.mode === 'replay' || config.camera) recovery.bypassPersistence();
+  if (config.execution || config.camera) recovery.bypassPersistence();
   runtime.globals.set('boot_step', protocol.step);
   if (restarting) recovery.bypassPersistence();
   const ownedSave =

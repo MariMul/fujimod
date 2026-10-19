@@ -1025,18 +1025,6 @@ a:focus-visible,
 .viewer {
   min-width: 0;
 }
-.viewer > canvas.model-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  touch-action: none;
-  display: block;
-}
-.stage.idle .model-canvas {
-  filter: saturate(0) brightness(0.16) blur(14px);
-  pointer-events: none;
-}
 #firmware-prompt {
   z-index: 2;
 }
@@ -1230,15 +1218,6 @@ footer a {
   object-fit: contain;
   touch-action: none;
 }
-.viewer.lcd-mode .model-canvas {
-  display: none !important;
-}
-.viewer.lcd-mode .model-input-marker {
-  display: none;
-}
-#leaders {
-  display: none;
-}
 .err {
   max-height: calc(100dvh - 20px - env(safe-area-inset-bottom));
   overflow: auto;
@@ -1277,42 +1256,13 @@ footer a {
   }
 }
 
-.stage.idle .model-canvas {
-  display: none !important;
-}
 .viewer:not(.idle) .ghost {
   pointer-events: none;
 }
 .stage:not(.idle) .ghost {
   display: none;
 }
-.model-input-marker {
-  position: absolute;
-  z-index: 1;
-  width: 16px;
-  height: 16px;
-  border: 2px solid #e7f5df;
-  border-radius: 50%;
-  background: #2b784866;
-  box-shadow: 0 0 0 2px #0009;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  font: 700 12px/1 system-ui;
-}
-.model-input-marker svg {
-  width: 12px;
-  height: 12px;
-}
-.model-input-marker.pressed {
-  background: #57bd7c;
-  box-shadow:
-    0 0 0 5px #2b784866,
-    0 0 0 7px #0008;
-}
-.model-input-feedback {
+.lcd-input-feedback {
   position: absolute;
   z-index: 2;
   bottom: 64px;
@@ -1323,13 +1273,6 @@ footer a {
   justify-content: center;
   white-space: nowrap;
   pointer-events: none;
-}
-.model-input-feedback.renderer-error {
-  left: 16px;
-  right: 16px;
-  transform: none;
-  white-space: normal;
-  text-align: center;
 }
 
 header > a {
@@ -1349,30 +1292,6 @@ header > a {
 /* Six 30px reference rows keep the viewer stable as card files change. */
 .tree {
   min-height: 180px;
-}
-
-.model-input-marker.touch-crosshair {
-  width: 26px;
-  height: 26px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  filter: drop-shadow(0 1px 1px #000) drop-shadow(0 -1px 1px #000);
-}
-.model-input-marker.touch-crosshair::before,
-.model-input-marker.touch-crosshair::after {
-  content: '';
-  position: absolute;
-  background: #a1ffb9;
-}
-.model-input-marker.touch-crosshair::before {
-  width: 26px;
-  height: 2px;
-}
-.model-input-marker.touch-crosshair::after {
-  width: 2px;
-  height: 26px;
 }
 
 #feedback-dialog {
@@ -1484,46 +1403,6 @@ header > a {
   line-height: 1.5;
 }
 
-.environment-credit {
-  position: absolute;
-  right: 12px;
-  bottom: 2px;
-  z-index: 5;
-  font-size: 9px;
-  line-height: 1.2;
-  color: #ddd;
-  background: #101012aa;
-  padding: 1px 6px;
-}
-.simulation-stick {
-  display: none;
-}
-@media (pointer: coarse) {
-  .viewer[data-mode='walk'] .simulation-stick {
-    display: grid;
-    place-items: center;
-    position: absolute;
-    left: 24px;
-    bottom: 64px;
-    width: 96px;
-    height: 96px;
-    border: 1px solid #ffffff66;
-    border-radius: 50%;
-    background: #11111155;
-    touch-action: none;
-    z-index: 5;
-  }
-  .simulation-stick span {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: #ffffff99;
-  }
-}
-.viewer.lcd-mode .simulation-stick,
-.viewer.lcd-mode .environment-credit {
-  display: none;
-}
 @media (min-width: 821px) {
   .stage:not(.idle) {
     height: min(760px, calc(100svh - 48px));

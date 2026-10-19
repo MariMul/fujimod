@@ -22,7 +22,7 @@ declare global {
   function report(kind: string, detail: unknown) {
     if (++reports > 60) return;
     const viewer = document.querySelector<HTMLElement>('#viewer');
-    const canvas = document.querySelector<HTMLCanvasElement>('#simulation-canvas');
+    const canvas = document.querySelector<HTMLCanvasElement>('#lcd-source');
     const state = viewer?.dataset;
     const body = JSON.stringify({
       session,
@@ -34,17 +34,12 @@ declare global {
       page: location.pathname,
       visibility: document.visibilityState,
       renderer: state?.renderer,
-      backend: state?.rendererBackend,
-      wasmMemoryBytes: state?.wasmMemoryBytes,
       emulatorMemoryBytes:
         window.cameraPerformance?.runtime?.wasmMemoryBytes ?? bootMemory?.wasmMemoryBytes,
       emulatorPeakMemoryBytes:
         window.cameraPerformance?.runtime?.peakWasmMemoryBytes ?? bootMemory?.peakWasmMemoryBytes,
       emulatorBootStage: bootMemory?.stage,
-      rendererError: state?.rendererError,
-      stage: state?.rendererStage,
-      simulation: state?.simulation,
-      polls: state?.renderFrames,
+      frames: state?.frames,
       canvas: canvas && {
         width: canvas.width,
         height: canvas.height,

@@ -3,7 +3,6 @@ import { flush } from 'solid-js';
 import { beforeAll, afterEach, expect, test, vi } from 'vite-plus/test';
 import { ControlSession, Controls } from './controls';
 import type { Engine, Input } from '../engine/api';
-import type { ModelViewer } from '../viewer/model';
 import type { DevicePanel } from './layout';
 let dispose: (() => void) | undefined;
 beforeAll(() => {
@@ -26,15 +25,10 @@ function mount(inputs: Input[], data: DevicePanel) {
     release: vi.fn(async () => {}),
   };
   const viewer = {
-    configureRotary: vi.fn(),
-    setRotaryPosition: vi.fn(),
-    setRotaryEnabled: vi.fn(),
-    highlight: vi.fn(),
-    turnRotary: vi.fn(),
     pressFeedback: vi.fn(),
   };
   const session = new ControlSession(
-    viewer as unknown as ModelViewer,
+    viewer,
     (error) => {
       throw error;
     },
@@ -154,14 +148,9 @@ test('keyboard dials stop at their physical limits and relative dials preserve d
 test('a mounted empty panel reacts to the guest input inventory arriving later', () => {
   const host = document.createElement('div');
   document.body.append(host);
-  const viewer = {
-    configureRotary: vi.fn(),
-    setRotaryEnabled: vi.fn(),
-    setRotaryPosition: vi.fn(),
-    highlight: vi.fn(),
-  };
+  const viewer = { pressFeedback: vi.fn() };
   const session = new ControlSession(
-    viewer as unknown as ModelViewer,
+    viewer,
     (error) => {
       throw error;
     },

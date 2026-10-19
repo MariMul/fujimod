@@ -9,11 +9,11 @@ import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { browserDiagnostics } from '../scripts/browser-diagnostics.ts';
 
-test('development diagnostics capture async failures, console panics and renderer state without URL credentials', async () => {
+test('development diagnostics capture async failures, console errors and LCD state without URL credentials', async () => {
   const sent: {
     kind: string;
     detail?: string;
-    simulation?: string;
+    frames?: string;
     webgpu?: boolean;
     emulatorBootStage?: string;
     emulatorMemoryBytes?: number;
@@ -38,7 +38,7 @@ test('development diagnostics capture async failures, console panics and rendere
       visibilityState: 'visible',
       addEventListener() {},
       querySelector: () => ({
-        dataset: { renderer: 'bevy', simulation: '{"ready":false}', renderFrames: '2' },
+        dataset: { renderer: 'lcd', frames: '2' },
       }),
     },
     window: {
@@ -49,7 +49,7 @@ test('development diagnostics capture async failures, console panics and rendere
     fetch: async (_url: string, request: { body: string }) => sent.push(JSON.parse(request.body)),
     setTimeout: (callback: () => void) => timers.push(callback),
   });
-  browserConsole.error('Bevy GPU panic');
+  browserConsole.error('LCD display failure');
   events.unhandledrejection({
     reason: 'GPU failure https://example.com/file?token=secret#fragment',
   });
@@ -60,7 +60,7 @@ test('development diagnostics capture async failures, console panics and rendere
     ['startup', 'console.error', 'unhandledrejection', 'error', 'checkpoint'],
   );
   assert.equal(sent[2].detail, 'GPU failure https://example.com/file');
-  assert.equal(sent[4].simulation, '{"ready":false}');
+  assert.equal(sent[4].frames, '2');
   assert.equal(sent[4].webgpu, true);
   events['camera-boot-memory']({
     detail: { stage: 'board-created', wasmMemoryBytes: 600000000, peakWasmMemoryBytes: 700000000 },

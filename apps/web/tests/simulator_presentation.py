@@ -10,7 +10,7 @@ from playwright.async_api import async_playwright
 async def run(args):
     args.output.mkdir(parents=True, exist_ok=False)
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=False, args=['--enable-unsafe-webgpu'])
+        browser = await playwright.chromium.launch(headless=False)
         context = await browser.new_context(viewport={'width': 1440, 'height': 1000})
         await context.add_init_script('''
           window.presentationBoots = [];
@@ -35,11 +35,6 @@ async def run(args):
         await page.goto(args.url)
         await page.locator('#workspace').scroll_into_view_if_needed()
         await page.screenshot(timeout=120000, path=str(args.output / 'startup.png'))
-        await page.wait_for_function("document.querySelector('#viewer').dataset.renderer === 'bevy' || document.querySelector('#viewer').dataset.rendererError", timeout=120000)
-        renderer_error = await page.locator('#viewer').get_attribute('data-renderer-error')
-        assert not renderer_error, renderer_error
-        # Capture real boot progress if model initialization finishes before boot.
-        await page.wait_for_function("JSON.parse(document.querySelector('#viewer').dataset.simulation || '{}')?.ready", timeout=120000)
         await page.screenshot(timeout=120000, path=str(args.output / 'initial.png'))
         async def ready(source, count):
             await page.wait_for_function("([source,count]) => presentationBoots.length >= count && presentationBoots.at(-1).source === source && document.querySelector('#live-label').textContent === 'LIVE'", arg=[source, count], timeout=240000)
@@ -54,25 +49,16 @@ async def run(args):
         await page.locator('#viewer-settings-toggle').click()
         assert await modded.get_attribute('aria-pressed') == 'true'
         await page.screenshot(timeout=120000, path=str(args.output / 'fujimod.png'))
-        await page.locator('#face-lens').click()
-        await page.wait_for_timeout(350)
-        await page.screenshot(timeout=120000, path=str(args.output / 'front.png'))
-        await page.locator('#face-screen').click()
-        await page.locator('#viewer-settings-toggle').click()
         await unmodded.click()
         await ready('internal', 2)
+        await page.locator('#viewer-settings-toggle').click()
         assert await unmodded.get_attribute('aria-pressed') == 'true'
         await page.screenshot(timeout=120000, path=str(args.output / 'unmodded.png'))
-        await page.locator('#viewer-settings-toggle').click()
         await modded.click()
         await ready('sd', 3)
-        await page.locator('#view-lcd').click()
         await page.wait_for_function("document.querySelector('#viewer').classList.contains('lcd-mode') && !document.querySelector('#lcd-source').hidden")
-        assert await page.locator('#view-lcd').get_attribute('aria-pressed') == 'true'
         assert await page.locator('#lcd-source').evaluate('node => node.getContext("2d").getImageData(0,0,node.width,node.height).data.some(value => value > 0)')
         await page.screenshot(path=str(args.output / 'lcd.png'))
-        await page.locator('#view-3d').click()
-        assert await page.locator('#view-3d').get_attribute('aria-pressed') == 'true'
         inputs_url = await page.evaluate('new URL(presentationBoots.at(-1).inputs,document.baseURI).href')
         input_table = (await (await page.request.get(inputs_url)).json())['inputs']
         unavailable = {}

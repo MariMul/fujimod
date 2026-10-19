@@ -3,7 +3,6 @@ import type { ReplayStep } from './engine/api';
 export interface ReplayScenario {
   firmwareId: string;
   clockSeconds2000: number;
-  view: '3d' | 'lcd';
   interactive: boolean;
   steps: readonly ReplayStep[];
 }
@@ -13,7 +12,6 @@ const scenarios: Record<string, ReplayScenario> = {
   'x70-movie': {
     firmwareId: 'x70-110',
     clockSeconds2000: 845510400, // 2026-10-17 00:00:00, fixed RTC input.
-    view: 'lcd',
     interactive: false,
     steps: [
       { action: 'press', id: 'movie' },
@@ -21,10 +19,9 @@ const scenarios: Record<string, ReplayScenario> = {
       { action: 'advance', ticks: 120000000 },
     ],
   },
-  'x70-inspect': {
+  'x70-lcd': {
     firmwareId: 'x70-110',
     clockSeconds2000: 845510400,
-    view: '3d',
     interactive: true,
     steps: [],
   },

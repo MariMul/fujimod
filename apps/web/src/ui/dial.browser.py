@@ -136,7 +136,6 @@ async def check(browser_type, url, output):
         assert (await snapshot(dial))['selected'] == initial_value
         results[identifier] = dict(initial=initial, samples=samples, released=released, timbre=timbres[0])
     assert results['aperture']['timbre'] != results['shutter_speed']['timbre']
-    assert await page.evaluate('modelSounds.aperture !== modelSounds.shutter_speed')
     # Relative tick strips retain their position across gestures and snap too.
     ticks = page.locator('.dial[data-id="control_ring"]')
     box = await ticks.bounding_box()

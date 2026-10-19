@@ -68,7 +68,7 @@ for (const backend of backends) {
       'fujimod_simulation',
     ]);
     const wasm = join(staging, 'fujimod_simulation_bg.wasm');
-    run(process.env.WASM_OPT ?? join(root, 'apps/web/node_modules/.bin/wasm-opt'), [
+    run(process.env.WASM_OPT ?? join(root, 'crates/simulation/tools/node_modules/.bin/wasm-opt'), [
       wasm,
       '-Oz',
       '--enable-bulk-memory',

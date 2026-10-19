@@ -96,7 +96,6 @@ async def check(args):
             await wait('Number(document.querySelector("#viewer").dataset.frames)>3')
             assert await page.locator('#controls [data-id="battery_cover"]').count()==0
             report['checks']['battery_cover_has_no_host_power_interlock']=True
-            await tap(page.locator('#face-screen'))
             await save('shooting')
             print('BOOT',report['boot_seconds'],flush=True)
 
