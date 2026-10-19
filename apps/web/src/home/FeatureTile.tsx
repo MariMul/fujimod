@@ -1,79 +1,92 @@
-import { Show, createSignal, onCleanup } from 'solid-js';
+import { Show, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
+import { watchFeaturePreview } from './feature-preview';
 
-/** A screenshot that gives way to its recording while the tile is hovered or focused. */
+/** Mounted only while this tile owns the catalog's single playback slot. */
+function PreviewVideo(props: { src: string; failed: () => void }) {
+  let video: HTMLVideoElement | undefined;
+  let disposed = false;
+  const [playing, setPlaying] = createSignal(false);
+  const failed = () => {
+    if (!disposed) props.failed();
+  };
+  onSettled(() => {
+    const element = video!;
+    // Set the property as well as the attribute for mobile autoplay policies.
+    element.muted = true;
+    void element.play().catch(failed);
+    return () => {
+      disposed = true;
+      element.pause();
+      element.removeAttribute('src');
+      element.load();
+    };
+  });
+  return (
+    <video
+      ref={(element) => {
+        video = element;
+      }}
+      class={['catalog-tile-video', { playing: playing() }]}
+      src={props.src}
+      muted
+      loop
+      playsinline
+      preload="none"
+      aria-hidden="true"
+      onPlaying={() => {
+        if (!disposed) setPlaying(true);
+      }}
+      onError={failed}
+    />
+  );
+}
+
+/** Screenshots at rest; viewport playback on touch devices, hover/focus on desktop. */
 export function FeatureTile(props: {
   media?: { still: string; video: string } | null;
   children: JSX.Element;
 }) {
-  let video: HTMLVideoElement | undefined;
-  let hovered = false;
-  let focused = false;
-  let failed = false;
-  const [playing, setPlaying] = createSignal(false);
-
-  const update = () => {
-    if (!video) return;
-    if ((hovered || focused) && !failed) {
-      if (!video.getAttribute('src')) video.src = `/artifacts/docs/${props.media!.video}`;
-      void video.play().catch(() => setPlaying(false));
-    } else {
-      video.pause();
-      video.currentTime = 0;
-      setPlaying(false);
-    }
-  };
-  onCleanup(() => video?.pause());
+  let preview: HTMLDivElement | undefined;
+  let playback: ReturnType<typeof watchFeaturePreview> | undefined;
+  const [active, setActive] = createSignal(false);
+  onSettled(() => {
+    if (!preview) return;
+    playback = watchFeaturePreview(preview, setActive);
+    return () => playback?.dispose();
+  });
 
   return (
     <article
       class="catalog-tile"
       tabindex="0"
-      onMouseEnter={() => {
-        hovered = true;
-        update();
-      }}
-      onMouseLeave={() => {
-        hovered = false;
-        update();
-      }}
-      onFocusIn={() => {
-        focused = true;
-        update();
-      }}
+      onMouseEnter={() => playback?.hover(true)}
+      onMouseLeave={() => playback?.hover(false)}
+      onFocusIn={() => playback?.focus(true)}
       onFocusOut={(event) => {
         if (
           event.relatedTarget instanceof Node &&
           event.currentTarget.contains(event.relatedTarget)
         )
           return;
-        focused = false;
-        update();
+        playback?.focus(false);
       }}
     >
       <Show when={props.media}>
         {(media) => (
-          <div class="catalog-tile-preview">
+          <div
+            class="catalog-tile-preview"
+            ref={(element) => {
+              preview = element;
+            }}
+          >
             <img src={`/artifacts/docs/${media().still}`} alt="" loading="lazy" />
-            <video
-              ref={(element) => {
-                video = element;
-              }}
-              class={['catalog-tile-video', { playing: playing() }]}
-              muted
-              loop
-              playsinline
-              preload="none"
-              aria-hidden="true"
-              onPlaying={() => {
-                if (hovered || focused) setPlaying(true);
-                else video?.pause();
-              }}
-              onError={() => {
-                failed = true;
-                update();
-              }}
-            />
+            <Show when={active()}>
+              <PreviewVideo
+                src={`/artifacts/docs/${media().video}`}
+                failed={() => playback?.disable()}
+              />
+            </Show>
           </div>
         )}
       </Show>
