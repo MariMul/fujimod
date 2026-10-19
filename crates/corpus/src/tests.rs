@@ -43,6 +43,95 @@ fn function(
 const CALLER: &[&str] = &["push R", "mov R", "bl T", "bl T", "pop pc"];
 const LEAF: &[&str] = &["push R", "mov R #1", "str R", "pop pc"];
 const CHANGED: &[&str] = &["push R", "mov R #2", "str R", "pop pc"];
+
+#[test]
+fn relocation_candidates_keep_all_banks_weak_and_do_not_merge_or_name_them() {
+    let mut i = Index::new();
+    function(
+        &mut i,
+        "a",
+        "main",
+        100,
+        &[
+            "movwne R, #0x1234",
+            "movtne R, #0x12",
+            "ldr R, [R]",
+            "bx lr",
+        ],
+        &[],
+        &["role"],
+    );
+    for unit in ["bank-one", "bank-two"] {
+        function(
+            &mut i,
+            "b",
+            unit,
+            1000,
+            &[
+                "movwne R, #0x5678",
+                "movtne R, #0x34",
+                "ldr R, [R]",
+                "bx lr",
+            ],
+            &[],
+            &[],
+        );
+    }
+    i.build();
+    let source = i.find(Some("role"), None, Some("a"), None)[0].id;
+    let families = i.families.len();
+    assert!(i.find(Some("role"), None, Some("b"), None).is_empty());
+    let matches = i.candidates(source, "b");
+    assert_eq!(matches.len(), 2);
+    assert!(
+        matches
+            .iter()
+            .all(|m| m.grade == Grade::Weak && m.origins == ["relocation-shape"])
+    );
+    assert_ne!(matches[0].function.key.unit, matches[1].function.key.unit);
+    assert_eq!(i.families.len(), families);
+    assert!(i.find(Some("role"), None, Some("b"), None).is_empty());
+}
+
+#[test]
+fn mov_low_encoding_variant_only_nominates_with_a_following_matching_movt() {
+    let mut i = Index::new();
+    function(
+        &mut i,
+        "a",
+        "main",
+        100,
+        &["movw R, K", "movt R, K", "strb R, [R]", "bx lr"],
+        &[],
+        &["role"],
+    );
+    function(
+        &mut i,
+        "b",
+        "main",
+        200,
+        &["mov R, #0x20c", "movt R, K", "strb R, [R]", "bx lr"],
+        &[],
+        &[],
+    );
+    function(
+        &mut i,
+        "b",
+        "main",
+        300,
+        &["mov R, #0x20c", "movtne R, K", "strb R, [R]", "bx lr"],
+        &[],
+        &[],
+    );
+    i.build();
+    let source = i.find(Some("role"), None, Some("a"), None)[0].id;
+    let matches = i.candidates(source, "b");
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].function.key.address, 200);
+    assert_eq!(matches[0].grade, Grade::Weak);
+    assert!(i.candidates(usize::MAX, "b").is_empty());
+}
+
 #[test]
 fn propagates_across_three_firmwares_and_keeps_grades() {
     let mut i = Index::new();

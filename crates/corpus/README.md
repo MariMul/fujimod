@@ -65,6 +65,14 @@ identical/same-code links.
 Consumers that generate executable symbol maps must use that restriction or
 independently verified execution evidence.
 
+`candidates(function_id, firmware)` returns all family members, one-hop weak
+links and relocation-shape nominations, retaining unit identity and origins.
+Shape-only nominations have weak grade. They account for conditional split
+address immediates and MOV/MOVW low halves followed by MOVT, without merging
+families or transferring names. Callers verify actual instructions, references
+and ambiguity before accepting a locator result. This query uses an in-memory
+cache and does not change the serialized index format.
+
 `sample_links(count, seed)` draws deterministic bottom-k samples of every grade
 over the complete pair population, with cross-ISA links separated. `features`,
 `body_sha256`, `data_witnesses`, `string_frequencies`, and `name_support` report

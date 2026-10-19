@@ -12,6 +12,7 @@ pub(crate) struct InspectionCache {
     pub bodies: RwLock<HashMap<usize, Option<String>>>,
     pub tables: RwLock<HashMap<usize, Vec<DataWitness>>>,
     pub anchors: RwLock<HashMap<usize, BTreeSet<[u8; 32]>>>,
+    pub candidate_shapes: RwLock<HashMap<String, HashMap<(Architecture, [u8; 32]), Vec<usize>>>>,
 }
 impl InspectionCache {
     pub fn new(functions: &[Function]) -> Self {

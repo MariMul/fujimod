@@ -66,6 +66,7 @@ impl CorpusIndex {
                 },
                 "find"=>serde_json::to_value(self.inner.find(s("name"),a.get("address").and_then(Value::as_u64),s("firmware"),s("unit"))),
                 "members"=>serde_json::to_value(self.inner.members(id()?,s("firmware"))),
+                "candidates"=>serde_json::to_value(self.inner.candidates(id()?,s("firmware").ok_or_else(||invalid("firmware required"))?)),
                 "family"=>serde_json::to_value(self.inner.families().get(id()?)),
                 "string_frequencies"=>serde_json::to_value(self.inner.string_frequencies(&serde_json::from_value(a["strings"].clone()).map_err(invalid)?)),
                 "body_sha256"=>serde_json::to_value(self.inner.body_sha256(id()?)),

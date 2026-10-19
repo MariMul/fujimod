@@ -59,6 +59,12 @@ class Pair(TypedDict):
     similarity: float
 
 
+class FunctionCandidate(TypedDict):
+    function: FunctionView
+    grade: str
+    origins: list[str]
+
+
 class DataSymbol(TypedDict):
     firmware: str
     unit: str

@@ -38,6 +38,11 @@ class CorpusBinding(unittest.TestCase):
         f = i.find("synthetic", firmware="b")[0]
         self.assertEqual(i.names(f["id"], ["a"])["synthetic"][0]["firmware"], "a")
         donor = i.find("synthetic", firmware="a")[0]
+        candidates = i.candidates(donor["id"], "b")
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["function"]["key"], f["key"])
+        self.assertEqual(candidates[0]["grade"], "identical")
+        self.assertIn("family", candidates[0]["origins"])
         i.add_name(donor["id"], "synthetic", "invented-header")
         self.assertEqual(
             i.names(f["id"], ["a"])["synthetic"][0]["sources"], ["invented-header"]
