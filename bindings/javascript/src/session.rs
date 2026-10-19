@@ -132,7 +132,7 @@ impl Session {
             max_reply_bytes,
         }
     }
-    fn call(&self, operation: Operation) -> Result<js_sys::Promise, JsValue> {
+    pub(crate) fn call(&self, operation: Operation) -> Result<js_sys::Promise, JsValue> {
         let (cancel, mut cancelled) = oneshot::channel();
         let native = take_native(
             &self.owner,
@@ -475,6 +475,12 @@ impl Session {
     }
 }
 pub(crate) enum Operation {
+    UploadOwned(
+        fujimod_mod_install::OwnedUpload,
+        fujimod_mod_install::UploadDestination,
+        usb::ff80::commands::memory::DebugMemoryLimits,
+    ),
+    VerifyOwned(fujimod_mod_install::OwnedUpload, usb::operations::data::DataWindow),
     Sequence(Vec<usb::ff80::sequence::SequenceCommand>, usb::ff80::commands::memory::DebugMemoryLimits),
     Ping,
     Close,
@@ -526,6 +532,14 @@ impl Operation {
             unreachable!("ordinary operation owns its native session")
         };
         match self {
+            Self::UploadOwned(image, destination, limits) => image
+                .upload(s, destination, limits)
+                .await
+                .map(|inner| UploadReply { inner }.into()),
+            Self::VerifyOwned(image, window) => image
+                .verify(s, window)
+                .await
+                .map(|_| JsValue::UNDEFINED),
             Self::Sequence(commands, limits) => s.sequence(commands, limits).await
                 .map(|replies| replies.into_iter().map(bytes).collect::<js_sys::Array>().into()),
             Self::Ping => s.ping().await.map(bytes),

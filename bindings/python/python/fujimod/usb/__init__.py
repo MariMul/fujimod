@@ -54,17 +54,87 @@ class CommandSequence(Handle):
         self._js = call(jsusb.CommandSequence.new)
 
     def read(self, address, length, expected=None):
-        return call(self._js.read, uint(address), uint(length),
-                    None if expected is None else buffer_in(expected))
+        return call(
+            self._js.read,
+            uint(address),
+            uint(length),
+            None if expected is None else buffer_in(expected),
+        )
 
     def write(self, address, data):
         return call(self._js.write, uint(address), buffer_in(data))
 
     def query(self, tag, statuses=None):
         from pyodide.ffi import to_js
-        pairs = [(uint(primary), uint(secondary)) for primary, secondary in
-                 ([(0, 0)] if statuses is None else statuses)]
+
+        pairs = [
+            (uint(primary), uint(secondary))
+            for primary, secondary in ([(0, 0)] if statuses is None else statuses)
+        ]
         return call(self._js.query, uint(tag), to_js(pairs, create_pyproxies=False))
+
+    @classmethod
+    def verified_writes(cls, address, data, limits, packet_bytes):
+        return [
+            cls._wrap(batch)
+            for batch in call(
+                jsusb.CommandSequence.verifiedWrites,
+                uint(address),
+                buffer_in(data),
+                unwrap(limits, FirmwareLimits),
+                uint(packet_bytes),
+            )
+        ]
+
+
+class InstallQueries(Handle):
+    def __init__(self, callback, stock, output, original):
+        self._js = call(
+            jsusb.InstallQueries.new,
+            uint(callback),
+            uint(stock),
+            uint(output),
+            buffer_in(original),
+        )
+
+    def call(self, callback, tag, statuses, output):
+        from pyodide.ffi import to_js
+
+        pairs = [(uint(primary), uint(secondary)) for primary, secondary in statuses]
+        return tuple(
+            call(
+                self._js.call,
+                uint(callback),
+                uint(tag),
+                to_js(pairs, create_pyproxies=False),
+                buffer_in(output),
+            ).to_py()
+        )
+
+    def finish(self):
+        return CommandSequence._wrap(call(self._js.finish))
+
+
+class OwnedUpload(Handle):
+    def __init__(
+        self, allocation_address, allocation_size, address, data, piece_bytes, alignment
+    ):
+        self._js = call(
+            jsusb.OwnedUpload.new,
+            uint(allocation_address),
+            uint(allocation_size),
+            uint(address),
+            buffer_in(data),
+            uint(piece_bytes),
+            uint(alignment),
+        )
+
+    @staticmethod
+    def padded_size(length, piece_bytes):
+        return call(jsusb.OwnedUpload.paddedSize, uint(length), uint(piece_bytes))
+
+    image_bytes = property(lambda self: self._js.imageBytes)
+    padded_bytes = property(lambda self: self._js.paddedBytes)
 
 
 class Session(Handle):
@@ -123,8 +193,29 @@ class Session(Handle):
         return await self._call(self._js.ping, decode=buffer_out)
 
     async def execute_sequence(self, sequence):
-        return await self._call(self._js.executeSequence, unwrap(sequence, CommandSequence),
-                                decode=lambda replies: [buffer_out(r) for r in replies])
+        return await self._call(
+            self._js.executeSequence,
+            unwrap(sequence, CommandSequence),
+            decode=lambda replies: [buffer_out(r) for r in replies],
+        )
+
+    async def upload_owned(self, image, pointer, original, capacity_address, capacity):
+        from .data import UploadReply
+
+        return await self._call(
+            self._js.uploadOwned,
+            unwrap(image, OwnedUpload),
+            uint(pointer),
+            uint(original),
+            uint(capacity_address),
+            uint(capacity),
+            decode=UploadReply._from_js,
+        )
+
+    async def verify_owned(self, image, window):
+        await self._call(
+            self._js.verifyOwned, unwrap(image, OwnedUpload), unwrap(window, DataWindow)
+        )
 
     async def close(self):
         return await self._call(self._js.close, decode=buffer_out)

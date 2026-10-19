@@ -49,6 +49,19 @@ indices into the resulting list of byte strings; write results are empty.
 beside USB even over a share; a failed guard prevents later commands and fences
 the session. Native and Pyodide use the same Rust implementation.
 
+The [mod installation helpers](../../crates/mod-install/README.md) add
+`usb.InstallQueries(callback, stock, output, original)` for checked borrowed
+callback batches. `call(callback, tag, statuses, output)` returns query/output
+indices; `finish()` returns a `CommandSequence`. Use
+`usb.CommandSequence.verified_writes(address, data, limits, packet_bytes)` for
+bounded write/readback batches. `usb.OwnedUpload(allocation_address,
+allocation_size, address, data, piece_bytes, alignment)` validates padding inside
+an owned allocation; `await session.upload_owned(image, pointer, original,
+capacity_address, capacity)` borrows, uploads and restores its stock destination.
+`await session.verify_owned(image, window)` checks every image byte before the
+caller publishes hooks or runs initialization. Addresses and ownership must be
+qualified by the caller; the helpers never infer them from a camera name.
+
 Python cancellation drops the actual Rust operation. An interrupted exchange
 restores a session fenced as `CompletionUnknown`; it sends no cleanup or retry.
 A pending operation reports `InFlight`, and another operation fails with

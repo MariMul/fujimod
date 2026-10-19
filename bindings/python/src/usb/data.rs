@@ -1,7 +1,7 @@
 //! Composed E1 range operations with an explicit firmware mapping.
 use super::*;
 
-#[pyclass(module = "fujimod.usb", frozen)]
+#[pyclass(module = "fujimod.usb", frozen, from_py_object)]
 #[derive(Clone)]
 pub(super) struct DataWindow {
     pub(super) inner: usb::operations::data::DataWindow,

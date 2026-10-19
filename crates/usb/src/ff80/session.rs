@@ -83,7 +83,8 @@ impl Session {
         self.core.state
     }
     /// A composition observed an invalid nested response after its USB exchange.
-    pub(crate) fn invalidate_completion(&mut self) {
+    /// This host-side fence sends no I/O and cannot restore a usable session.
+    pub fn invalidate_completion(&mut self) {
         self.core.state = SessionState::CompletionUnknown;
     }
     pub fn max_reply_bytes(&self) -> NonZeroU32 {

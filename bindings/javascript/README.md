@@ -45,6 +45,15 @@ npm run test:browser
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` can select an explicitly installed Chromium
 binary. Permission UI and physical camera integration remain unvalidated.
 
+The [mod installation helpers](../../crates/mod-install/README.md) expose
+`usb.InstallQueries` for guarded borrowed callback batches,
+`usb.CommandSequence.verifiedWrites` for packet-sized write/readback batches,
+and `usb.OwnedUpload` for padded images within caller-owned allocations.
+`session.uploadOwned` borrows and restores the qualified stock destination;
+`session.verifyOwned` compares the complete image through a qualified bulk
+window. Callers provide firmware addresses, ownership and accepted status pairs,
+then publish hooks or run initialization only after successful verification.
+
 ## Connect and identify
 
 Call `await initialize()` once before enabling the GUI's connect action. It

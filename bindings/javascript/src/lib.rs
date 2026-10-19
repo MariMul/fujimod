@@ -11,6 +11,7 @@ mod requests;
 mod service;
 mod session;
 mod sequence;
+mod install;
 #[cfg(feature = "testing")]
 mod testing;
 mod tracing;

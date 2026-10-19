@@ -3246,6 +3246,7 @@ name = "fujimod"
 version = "0.1.0"
 dependencies = [
  "fujimod-defs",
+ "fujimod-mod-install",
  "fujimod-simulation",
  "fujimod-usb",
 ]
@@ -3295,6 +3296,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-bindgen",
  "fujimod-defs",
+ "fujimod-mod-install",
  "fujimod-usb",
  "futures-channel",
  "futures-lite",
@@ -3305,6 +3307,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-mod-install"
+version = "0.1.0"
+dependencies = [
+ "fujimod-usb",
+ "futures-lite",
+]
+
+[[package]]
 name = "fujimod-python"
 version = "0.1.0"
 dependencies = [
@@ -3312,6 +3322,7 @@ dependencies = [
  "fujimod-corpus",
  "fujimod-defs",
  "fujimod-firmware",
+ "fujimod-mod-install",
  "fujimod-usb",
  "futures-channel",
  "futures-lite",
@@ -5567,6 +5578,7 @@ version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "229ca13b8a15bb0d1487b81ab975bfcd97513416499a8312011b6036e42e0de4"
 dependencies = [
+ "inventory",
  "libc",
  "once_cell",
  "portable-atomic",

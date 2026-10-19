@@ -12,6 +12,7 @@ mod commands;
 mod operations;
 mod reader;
 mod sequence;
+mod install;
 
 /// Poll native USB without holding Python's interpreter lock. PyO3 supplies the
 /// asyncio coroutine/waker; nusb supplies native I/O wakeups. No worker runtime.
@@ -181,6 +182,7 @@ pub(super) fn register(
 ) -> PyResult<()> {
     module.add_class::<AsyncSession>()?;
     module.add_class::<sequence::CommandSequence>()?;
+    install::register(module)?;
     module.add_class::<reader::Reader>()?;
     module.add_function(wrap_pyfunction!(self::discover, module)?)?;
     module.add_function(wrap_pyfunction!(self::discover_proxy, module)?)?;

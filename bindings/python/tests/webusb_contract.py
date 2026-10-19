@@ -65,7 +65,9 @@ async def check():
     assert batch.protocol_events
     assert all(e.layer == tracing.Layer.Ff80 for e in batch.protocol_events)
     assert any(e.command == 0x150000 and e.data for e in batch.protocol_events)
-    assert len({e.sequence for e in [*batch.events, *batch.protocol_events]}) == len(batch.events) + len(batch.protocol_events)
+    assert len({e.sequence for e in [*batch.events, *batch.protocol_events]}) == len(
+        batch.events
+    ) + len(batch.protocol_events)
     assert any(
         e.stage == tracing.Stage.BulkIn and e.endpoint == 0x82 for e in batch.events
     )
@@ -234,6 +236,7 @@ async def check_commands():
 
 async def run():
     await check()
+    await check_install_helpers()
     await check_pending_reader()
     await check_commands()
     await check_service_catalogue()
@@ -247,6 +250,44 @@ async def run():
     assert check_configuration_values()
     assert check_transfer_values()
     return True
+
+
+async def check_install_helpers():
+    import struct
+
+    limits = usb.FirmwareLimits(
+        memory_read=256, memory_write=256, configuration=256, console=256
+    )
+    device = await usb.request_device(usb.DeviceFilter.Diagnostic)
+    interface = (await usb.interfaces(device))[0]
+    session = await usb.Session.open(device, interface, limits)
+    raw = bytes(range(256)) + b"tail"
+    for batch in usb.CommandSequence.verified_writes(
+        0xA400, raw, limits, session.packet_bytes
+    ):
+        await session.execute_sequence(batch)
+    assert await memory.read_range(session, 0xA400, len(raw)) == raw
+    await session.write_memory(0xB000, struct.pack("<I", 0xC000))
+    await session.write_memory(0xB100, b"orig")
+    plan = usb.InstallQueries(0xB000, 0xC000, 0xB100, b"orig")
+    queried, output = plan.call(0xC100, 17, [(1, 0xFFFF)], b"seed")
+    replies = await session.execute_sequence(plan.finish())
+    assert len(replies[queried]) == 32 and replies[output] == b"seed"
+    assert await session.read_memory(0xB000, 4) == struct.pack("<I", 0xC000)
+    assert await session.read_memory(0xB100, 4) == b"orig"
+    await session.write_memory(0xA000, struct.pack("<I", 0x8000))
+    await session.write_memory(0xA004, struct.pack("<I", 32))
+    image = usb.OwnedUpload(0x4000, 16, 0x4000, bytes(range(11)), 8, 4)
+    assert image.padded_bytes == usb.OwnedUpload.padded_size(11, 8) == 16
+    assert image.image_bytes == 11
+    receipt = await session.upload_owned(image, 0xA000, 0x8000, 0xA004, 32)
+    assert receipt.bytes_written == 16
+    assert await session.read_memory(0xA000, 4) == struct.pack("<I", 0x8000)
+    # This fixture's E1 source is the declared incrementing byte pattern.
+    await session.verify_owned(
+        image, usb.DataWindow(0x4000, 0x4000, 16, 4, usb.OffsetMode.Checked)
+    )
+    assert await session.close() == b"\xaa\xbb"
 
 
 async def check_service_catalogue():
@@ -504,9 +545,10 @@ async def check_service_catalogue():
         app80.CommandFailure.OversizeArguments,
     )
     ambiguous = app80.Service(
-        definition(
-            [(153, "flush_configuration", [7], 4), (154, "flush_configuration", [7], 4)]
-        )
+        definition([
+            (153, "flush_configuration", [7], 4),
+            (154, "flush_configuration", [7], 4),
+        ])
     )
     assert isinstance(
         failure(

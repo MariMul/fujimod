@@ -11,8 +11,10 @@ default = []
 simulation = ["dep:fujimod-simulation"]
 defs = ["dep:fujimod-defs"]
 usb = ["defs", "dep:fujimod-usb"]
+mod-install = ["usb", "dep:fujimod-mod-install"]
 
 [dependencies]
 fujimod-simulation = { workspace = true, optional = true }
 fujimod-defs = { workspace = true, optional = true }
 fujimod-usb = { workspace = true, optional = true }
+fujimod-mod-install = { workspace = true, optional = true }

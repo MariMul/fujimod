@@ -21,7 +21,8 @@ main releases. Review branches do not deploy Pages.
 
 The root Cargo workspace contains reusable implementation crates under `crates/`.
 The `fujimod` facade exposes components through optional features; enable `usb`
-for `fujimod::usb`. The [USB crate](crates/usb/README.md) provides the initial
+for `fujimod::usb`. The [mod installation crate](crates/mod-install/README.md)
+provides checked uploads and borrowed callback batches. The [USB crate](crates/usb/README.md) provides the initial
 asynchronous service/debug protocol implementation.
 The [definitions crate](crates/defs/README.md) loads caller-selected firmware
 data through `fujimod::defs`, shared by USB and future emulator/SDK components.

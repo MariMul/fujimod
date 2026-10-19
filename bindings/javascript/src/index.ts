@@ -101,6 +101,8 @@ export const usb = Object.freeze({
   FirmwareDownloadReply: native.FirmwareDownloadReply,
   DataWindow: native.DataWindow,
   CommandSequence: native.CommandSequence,
+  InstallQueries: native.InstallQueries,
+  OwnedUpload: native.OwnedUpload,
   OffsetMode: native.OffsetMode,
   memory: Object.freeze({
     readRange: native.readMemoryRange,
