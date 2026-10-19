@@ -104,6 +104,13 @@ impl Session {
     }
     /// Several reads; over a device share they travel as one round trip.
     pub async fn read_memory_many(&mut self, commands: Vec<ReadMemory>) -> Result<Vec<Vec<u8>>> {
+        if !matches!(self.core.io.inner_mut(), Backend::Proxy(_)) {
+            let mut replies = Vec::with_capacity(commands.len());
+            for command in commands {
+                replies.push(self.core.read_memory(command).await?);
+            }
+            return Ok(replies);
+        }
         let mut framed = Vec::with_capacity(commands.len());
         for command in &commands {
             let size = command.range().length().get();
@@ -115,6 +122,12 @@ impl Session {
     }
     /// Several writes; over a device share they travel as one round trip.
     pub async fn write_memory_many(&mut self, commands: Vec<WriteMemory>) -> Result<()> {
+        if !matches!(self.core.io.inner_mut(), Backend::Proxy(_)) {
+            for command in commands {
+                self.core.write_memory(command).await?;
+            }
+            return Ok(());
+        }
         let mut framed = Vec::with_capacity(commands.len());
         for command in &commands {
             check_limit(command.range().length().get(), self.core.info.advertised_packet_bytes.get())?;
@@ -124,16 +137,9 @@ impl Session {
         self.decode_many(commands.into_iter().zip(replies).map(|(c, r)| move || c.decode(r)))?;
         Ok(())
     }
-    /// Raw replies for framed commands: one batch through a share, else one
-    /// command at a time. A failure leaves the session's completion unknown.
+    /// Raw replies for framed commands as one share batch. A failure leaves
+    /// the session's completion unknown until every reply decodes.
     async fn many(&mut self, commands: Vec<(Vec<u8>, u32)>) -> Result<Vec<Vec<u8>>> {
-        if !matches!(self.core.io.inner_mut(), Backend::Proxy(_)) {
-            let mut replies = Vec::with_capacity(commands.len());
-            for (bytes, size) in commands {
-                replies.push(self.core.command(bytes, size, Ok).await?);
-            }
-            return Ok(replies);
-        }
         let id = self.core.info.id;
         let max_reply = self.core.max_reply_bytes;
         let mut framed = Vec::with_capacity(commands.len());
