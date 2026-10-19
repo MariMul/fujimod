@@ -1,5 +1,6 @@
 .tool-progress {
-  height: 3px;
+  flex: none;
+  height: 4px;
   background: #ffffff14;
 }
 .tool-progress i {
