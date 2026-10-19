@@ -305,9 +305,23 @@ async fn run(
             match rtc.poll_output().map_err(error)? {
                 Output::Timeout(at) => break at,
                 Output::Transmit(packet) => {
-                    udp.send(packet.source, packet.destination, &packet.contents)
+                    // A candidate pair this host cannot route to (an IPv6 or
+                    // foreign LAN address) is a failed ICE check, not a failed
+                    // connection: ICE carries on with the other pairs.
+                    if let Err(failure) = udp
+                        .send(packet.source, packet.destination, &packet.contents)
                         .await
-                        .map_err(error)?;
+                    {
+                        let unreachable = matches!(
+                            failure.kind(),
+                            std::io::ErrorKind::HostUnreachable
+                                | std::io::ErrorKind::NetworkUnreachable
+                                | std::io::ErrorKind::AddrNotAvailable
+                        ) || matches!(failure.raw_os_error(), Some(49 | 50 | 51 | 65));
+                        if !unreachable {
+                            return Err(error(failure));
+                        }
+                    }
                 }
                 Output::Event(event) => match event {
                     Event::IceConnectionStateChange(state) => {
