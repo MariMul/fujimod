@@ -89,7 +89,9 @@ pub type Progress = std::sync::Arc<dyn Fn(&str) + Send + Sync>;
 
 /// Time beyond an operation's own USB deadline allowed for the network and
 /// the exporter's turnaround before its completion is declared unknown.
-const NETWORK_ALLOWANCE: Duration = Duration::from_secs(5);
+/// Generous for poor Wi-Fi: a lost connection is reported when the channel
+/// closes, so this only bounds a silent stall.
+const NETWORK_ALLOWANCE: Duration = Duration::from_secs(60);
 
 /// What became of one pipelined operation.
 #[derive(Clone, Debug, PartialEq)]

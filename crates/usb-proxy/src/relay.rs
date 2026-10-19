@@ -473,9 +473,14 @@ mod tests {
                                 error: Some("stall".into()),
                                 ..Completion::default()
                             },
+                            // A transfer the device never answers: the exporter
+                            // reports its own USB deadline, as browsers do.
                             Operation::TransferIn { length: 9, .. } => {
-                                std::future::pending::<()>().await;
-                                unreachable!()
+                                tokio::time::sleep(Duration::from_millis(timeout_ms.into())).await;
+                                Completion {
+                                    error: Some("USB deadline expired; completion unknown".into()),
+                                    ..Completion::default()
+                                }
                             }
                             Operation::TransferIn { length, .. } => {
                                 let data: Vec<u8> = (0..length).map(|i| (seq as usize + i) as u8).collect();
@@ -652,10 +657,12 @@ mod tests {
         let mut client = available(&url).await;
         client.request(&route, open(), Duration::from_secs(1)).await.unwrap();
         events.recv().await;
-        let error = client.request(&route, read(9), Duration::from_millis(30)).await.unwrap_err();
-        assert!(error.to_string().contains("completion unknown"), "{error}");
+        let expired = client.request(&route, read(9), Duration::from_millis(30)).await.unwrap();
+        assert!(expired.error.unwrap().contains("completion unknown"));
         assert!(matches!(events.recv().await, Some(Operation::TransferIn { length: 9, .. })));
         assert!(client.request(&route, Operation::Close, Duration::from_secs(1)).await.is_err());
+        // Only the relay's host-only release follows; the transfer is not replayed.
+        assert!(matches!(events.recv().await, Some(Operation::Close)));
         assert!(events.try_recv().is_err());
         exporter.abort();
         server.abort();

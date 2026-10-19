@@ -122,7 +122,7 @@ pipeline through without waiting. Other sockets cannot interleave transfers.
 No transfer is retried. A USB error ends the connection after its result; an
 expired deadline, cancelled call or unexpected message fences the client.
 Each operation's USB deadline goes unchanged to the exporter; the controller
-waits that long plus five seconds for its result. A timed-out browser transfer
+waits that long plus 60 seconds for its result. A timed-out browser transfer
 stays in its queue until the actual USB promise settles; a new request cannot
 overtake it. On disconnect, host-only close is queued after existing work. If
 that close is uncertain, the lease remains unavailable until the exporter
