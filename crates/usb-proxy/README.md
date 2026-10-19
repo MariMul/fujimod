@@ -135,8 +135,10 @@ an in-flight transfer: a host deadline is not evidence of device completion.
 There is no automatic reconnect, recovery, persistence or hardware validation.
 
 Run `npm ci` from the repository root before building the relay or Wasm target.
-Cargo compiles the TypeScript transport to ignored `web/build/` assets before
-embedding browser modules; generated JavaScript is never committed.
+Cargo type-checks the TypeScript transport, then bundles each browser entry
+(`peer.ts` for the Wasm controller, `exporter.ts` for the relay page) with
+Rolldown into one self-contained module in ignored `web/build/`; generated
+JavaScript is never committed.
 
 Run `cargo test -p fujimod-usb-proxy --features relay` for relay/client checks,
 and `node --test crates/usb-proxy/web/exporter.test.ts` for exporter checks.

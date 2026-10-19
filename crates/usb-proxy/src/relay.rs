@@ -84,33 +84,6 @@ pub fn router(token: String, origins: Vec<String>) -> Result<Router> {
                 )
             }),
         )
-        .route(
-            "/usb-proxy/usb-exporter.js",
-            get(|| async {
-                (
-                    [("content-type", "text/javascript")],
-                    include_str!("../web/build/usb-exporter.js"),
-                )
-            }),
-        )
-        .route(
-            "/usb-proxy/wire.js",
-            get(|| async {
-                (
-                    [("content-type", "text/javascript")],
-                    include_str!("../web/build/wire.js"),
-                )
-            }),
-        )
-        .route(
-            "/usb-proxy/pipeline.js",
-            get(|| async {
-                (
-                    [("content-type", "text/javascript")],
-                    include_str!("../web/build/pipeline.js"),
-                )
-            }),
-        )
         .route("/usb-proxy/ws", get(upgrade))
         .with_state(relay)
         .merge(crate::signaling::router()))

@@ -1,4 +1,3 @@
-import { stagePeerAssets } from './stage-peer-assets.ts';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
@@ -9,15 +8,6 @@ function run(command: string, args: string[]) {
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
-run('npm', [
-  'exec',
-  '--prefix',
-  'bindings/javascript',
-  '--',
-  'tsc',
-  '-p',
-  'crates/usb-proxy/web/tsconfig.json',
-]);
 const testing = process.argv.includes('--testing');
 run('cargo', [
   'build',
@@ -38,6 +28,5 @@ run(process.env.WASM_BINDGEN ?? join(root, 'target/tooling/bin/wasm-bindgen'), [
   'fujimod',
 ]);
 
-await stagePeerAssets(pkg);
 
 run('cargo', ['run', '-p', 'fujimod-bindgen', '--', '--out', pkg]);

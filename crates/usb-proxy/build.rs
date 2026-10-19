@@ -1,42 +1,65 @@
-use std::{env, path::PathBuf, process::Command};
+use std::{
+    env,
+    path::{Path, PathBuf},
+    process::Command,
+};
+
+/// Browser entry points. Each is bundled with everything it imports into one
+/// self-contained module in web/build/: wasm-bindgen copies only the file a
+/// `#[wasm_bindgen(module)]` names, and the relay serves one script.
+const ENTRIES: [&str; 2] = ["peer", "exporter"];
 
 fn main() {
-    for source in [
-        "tsconfig.json",
-        "peer.ts",
-        "wire.ts",
-        "pipeline.ts",
-        "share-traffic.ts",
-        "usb-exporter.ts",
-        "exporter.ts",
-        "types.ts",
-        "webusb.ts",
-    ] {
-        println!("cargo:rerun-if-changed=web/{source}");
+    let manifest = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
+    let web = manifest.join("web");
+    println!("cargo:rerun-if-changed=web/tsconfig.json");
+    for entry in std::fs::read_dir(&web).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_some_and(|e| e == "ts") {
+            println!("cargo:rerun-if-changed={}", path.display());
+        }
     }
     let wasm = env::var("CARGO_CFG_TARGET_ARCH").as_deref() == Ok("wasm32");
     let relay = env::var_os("CARGO_FEATURE_RELAY").is_some();
     if !wasm && !relay {
         return;
     }
-    for output in ["peer", "wire", "pipeline", "share-traffic", "usb-exporter", "exporter"] {
-        println!("cargo:rerun-if-changed=web/build/{output}.js");
+    for entry in ENTRIES {
+        println!("cargo:rerun-if-changed=web/build/{entry}.js");
     }
-    println!("cargo:rerun-if-changed=../../node_modules/typescript/package.json");
-    let manifest = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
-    let compiler = manifest.join("../../node_modules/typescript/bin/tsc");
+    let modules = manifest.join("../../node_modules");
+    println!("cargo:rerun-if-changed={}", modules.join("typescript/package.json").display());
+    println!("cargo:rerun-if-changed={}", modules.join("rolldown/package.json").display());
+    node(
+        &modules.join("typescript/bin/tsc"),
+        &["--project", &web.join("tsconfig.json").display().to_string(), "--noEmit"],
+        "USB browser TypeScript check",
+    );
+    for entry in ENTRIES {
+        node(
+            &modules.join("rolldown/bin/cli.mjs"),
+            &[
+                &web.join(format!("{entry}.ts")).display().to_string(),
+                "--format",
+                "esm",
+                "--file",
+                &web.join(format!("build/{entry}.js")).display().to_string(),
+            ],
+            "USB browser bundle",
+        );
+    }
+}
+
+fn node(script: &Path, args: &[&str], what: &str) {
     assert!(
-        compiler.is_file(),
-        "USB browser assets require the declared TypeScript compiler; run npm ci at the repository root"
+        script.is_file(),
+        "{what} requires {}; run npm ci at the repository root",
+        script.display()
     );
     let status = Command::new("node")
-        .arg(compiler)
-        .arg("--project")
-        .arg(manifest.join("web/tsconfig.json"))
+        .arg(script)
+        .args(args)
         .status()
         .expect("USB browser assets require Node.js; install the toolchain declared in mise.toml");
-    assert!(
-        status.success(),
-        "USB browser TypeScript compilation failed"
-    );
+    assert!(status.success(), "{what} failed");
 }
