@@ -102,6 +102,57 @@ impl Session {
     pub async fn write_memory(&mut self, command: WriteMemory) -> Result<()> {
         self.core.write_memory(command).await
     }
+    /// Execute a bounded sequence, checking each reply before the next command
+    /// reaches USB. A condition failure is terminal, including on local USB.
+    pub async fn sequence(&mut self, commands: Vec<super::sequence::SequenceCommand>,
+                          limits: super::commands::memory::DebugMemoryLimits) -> Result<Vec<Vec<u8>>> {
+        use super::sequence::CheckedCommand;
+        check_limit(commands.len().try_into().map_err(|_| Error::InvalidLength)?, 512)?;
+        let commands: Vec<CheckedCommand> = commands.into_iter()
+            .map(|c| CheckedCommand::new(c, limits)).collect::<Result<_>>()?;
+        for command in &commands {
+            check_limit(command.reply_size, self.core.max_reply_bytes)?;
+            check_limit(command.reply_size, fujimod_usb_proxy::protocol::MAX_TRANSFER as u32)?;
+            check_limit(command.request.len().try_into().map_err(|_| Error::InvalidLength)?,
+                        fujimod_usb_proxy::protocol::MAX_TRANSFER as u32)?;
+            if command.request.len() >= 36 {
+                check_limit(command.reply_size.saturating_sub(36).max(command.request.len().saturating_sub(36) as u32),
+                            self.info().advertised_packet_bytes.get())?;
+            }
+        }
+        if commands.is_empty() { return Ok(Vec::new()); }
+        if !matches!(self.core.io.inner_mut(), Backend::Proxy(_)) {
+            let mut replies = Vec::with_capacity(commands.len());
+            for command in commands {
+                replies.push(self.core.command(command.request.clone(), command.reply_size,
+                                               |r| command.decode(r)).await?);
+            }
+            return Ok(replies);
+        }
+        let framed = commands.iter().map(|c| crate::proxy::CheckedExchange {
+            write: envelope(RequestKind::WriteCommand, c.request.len() as u32, self.core.info.id),
+            bytes: c.request.clone(), read: envelope(RequestKind::ReadCommand, c.reply_size, self.core.info.id),
+            reply: c.reply_size as usize, expected: c.expected.clone() }).collect();
+        self.core.start()?;
+        let trace = self.core.io.trace();
+        let spans: Vec<_> = commands.iter().map(|c| trace.as_ref().map(|t|
+            t.protocol(crate::trace::Layer::Ff80,
+                u32::from_le_bytes(c.request[..4].try_into().expect("command header")), &c.request))).collect();
+        let Backend::Proxy(io) = self.core.io.inner_mut() else { unreachable!() };
+        let replies = io.checked_commands(framed).await;
+        if replies.is_err() {
+            for span in spans.into_iter().flatten() { span.complete(&replies, &[]); }
+            return replies;
+        }
+        let mut result = Vec::with_capacity(commands.len());
+        for ((command, raw), span) in commands.iter().zip(replies?).zip(spans) {
+            let decoded = command.decode(raw.clone());
+            if let Some(span) = span { span.complete(&decoded, &raw); }
+            result.push(decoded?);
+        }
+        self.core.state = SessionState::Ready;
+        Ok(result)
+    }
     /// Several reads; over a device share they stream with one wait.
     pub async fn read_memory_many(&mut self, commands: Vec<ReadMemory>) -> Result<Vec<Vec<u8>>> {
         if !matches!(self.core.io.inner_mut(), Backend::Proxy(_)) {

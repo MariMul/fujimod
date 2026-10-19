@@ -40,7 +40,9 @@ export class Pipeline {
     }
     if (message.type === 'expect') {
       const data = this.results.get(message.of);
-      if (expectationHolds(data, message.offset, message.bytes, message.mask)) return;
+      if ((message.length == null || data?.length === message.length) &&
+          (expectationHolds(data, message.offset, message.bytes, message.mask) ||
+           message.alternatives?.some(bytes => expectationHolds(data, message.offset, bytes, message.mask)))) return;
       this.failed = true;
       return {
         type: 'expect_failed',
@@ -48,7 +50,10 @@ export class Pipeline {
         actual: data?.slice(message.offset, message.offset + message.bytes.length) ?? empty,
       };
     }
-    const completion = await this.execute(message);
+    let completion = await this.execute(message);
+    if (!completion.error && (message.op.op === 'control_out' || message.op.op === 'transfer_out') &&
+        (completion.transferred ?? 0) !== (message.op.data?.length ?? 0))
+      completion = { ...completion, error: 'short OUT transfer' };
     if (completion.error) this.failed = true;
     else if (completion.data?.length) this.keep(message.seq, completion.data);
     return { type: 'result', seq: message.seq, completion };

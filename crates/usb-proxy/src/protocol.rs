@@ -5,7 +5,7 @@
 //! Variant and field order is the wire format; append, never reorder.
 use serde::{Deserialize, Serialize};
 
-pub const VERSION: u32 = 4;
+pub const VERSION: u32 = 5;
 pub const MAX_TRANSFER: usize = 8 * 1024 * 1024;
 /// One message: a whole transfer plus its framing and text fields.
 pub const MAX_MESSAGE: usize = MAX_TRANSFER + 65536;
@@ -212,6 +212,8 @@ pub enum Message {
         #[serde(with = "serde_bytes")]
         bytes: Vec<u8>,
         mask: Option<serde_bytes::ByteBuf>,
+        length: Option<u32>,
+        alternatives: Vec<serde_bytes::ByteBuf>,
     },
     /// Answered with Synced once every earlier operation has finished; ends
     /// a failed pipeline's discarding.
@@ -279,9 +281,15 @@ impl Message {
                 }
                 op.validate()
             }
-            Self::Expect { bytes, mask, .. } => {
+            Self::Expect { bytes, mask, length, alternatives, .. } => {
                 if bytes.len() > MAX_TRANSFER || mask.as_ref().is_some_and(|m| m.len() != bytes.len()) {
                     return Err(crate::Error("an expectation's mask must match its bytes".into()));
+                }
+                if length.is_some_and(|n| n as usize > MAX_TRANSFER) {
+                    return Err(crate::Error("expectation length exceeds transfer limit".into()));
+                }
+                if alternatives.len() > 8 || alternatives.iter().any(|a| a.len() != bytes.len()) {
+                    return Err(crate::Error("expectation alternatives must have equal lengths (at most eight)".into()));
                 }
                 Ok(())
             }
@@ -413,8 +421,8 @@ pub(crate) fn vectors() -> Vec<(&'static str, Message)> {
         ("transfer_in", execute(9, Operation::TransferIn { endpoint: 0x82, length: 16384 })),
         ("transfer_out", execute(300, Operation::TransferOut { endpoint: 1, data: vec![0, 255] })),
         ("clear_halt", execute(11, Operation::ClearHalt { endpoint: 0x82 })),
-        ("expect", Message::Expect { seq: 12, of: 9, offset: 4, bytes: vec![0xaa, 0xbb], mask: None }),
-        ("expect_masked", Message::Expect { seq: 13, of: 9, offset: 0, bytes: vec![0x10], mask: Some(serde_bytes::ByteBuf::from(vec![0xf0])) }),
+        ("expect", Message::Expect { seq: 12, of: 9, offset: 4, bytes: vec![0xaa, 0xbb], mask: None, length: Some(8), alternatives: vec![vec![0xcc, 0xdd].into()] }),
+        ("expect_masked", Message::Expect { seq: 13, of: 9, offset: 0, bytes: vec![0x10], mask: Some(serde_bytes::ByteBuf::from(vec![0xf0])), length: None, alternatives: vec![] }),
         ("sync", Message::Sync { seq: 14 }),
         ("result", Message::Result { seq: 9, completion: Completion { devices: vec![], data: vec![9, 8, 7], transferred: 3, error: None } }),
         ("result_error", Message::Result { seq: 10, completion: Completion { error: Some("stall".into()), ..Completion::default() } }),
@@ -498,7 +506,7 @@ mod tests {
         assert!(!expectation_holds(&data, usize::MAX, &[1], None));
         assert!(expectation_holds(&data, 3, &[0x14], Some(&[0x0f])));
         assert!(!expectation_holds(&data, 3, &[0x14], Some(&[0xf0])));
-        let bad = Message::Expect { seq: 1, of: 0, offset: 0, bytes: vec![1, 2], mask: Some(vec![1].into()) };
+        let bad = Message::Expect { seq: 1, of: 0, offset: 0, bytes: vec![1, 2], mask: Some(vec![1].into()), length: None, alternatives: vec![] };
         assert!(bad.validate().is_err());
     }
     #[test]

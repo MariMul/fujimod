@@ -19,6 +19,14 @@ async def check_discovery():
     assert session.token == 0x1234
     assert await session.device_info(usb.InfoSelector.Product) == 'SYNTHETIC'
     assert await session.read_data(123, 5) == bytes([123, 124, 125, 126, 127])
+    plan = usb.CommandSequence()
+    plan.write(0x9000, b'old!')
+    plan.read(0x9000, 4, b'old!')
+    query = plan.query(77, [(0, 0), (1, 0xffff)])
+    plan.write(0x9000, b'new!')
+    result = await session.execute_sequence(plan)
+    assert result[1] == b'old!' and result[query][4:12] == bytes.fromhex('01000000ffff0000')
+    assert await session.read_memory(0x9000, 4) == b'new!'
     await session.write_memory(0x2000, b'\0\xff\x80')
     assert await session.read_memory(0x2000, 3) == b'\0\xff\x80'
     assert await session.close() == b'\xaa\xbb'
@@ -32,6 +40,13 @@ async def check_async(url, token):
     session = await usb.Session.open(devices[0], choices[0], limits())
     assert await session.device_info(usb.InfoSelector.Product) == 'SYNTHETIC'
     assert await session.read_data(123, 5) == bytes([123, 124, 125, 126, 127])
+    plan = usb.CommandSequence()
+    plan.write(0x9000, b'old!')
+    plan.read(0x9000, 4, b'old!')
+    plan.query(77, [(0, 0), (1, 0xffff)])
+    plan.write(0x9000, b'new!')
+    assert (await session.execute_sequence(plan))[1] == b'old!'
+    assert await session.read_memory(0x9000, 4) == b'new!'
     assert await session.close() == b'\xaa\xbb'
     return True
 

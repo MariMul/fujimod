@@ -6,6 +6,18 @@ use crate::{Error, Result, connection::Io, error::TransferStage, ff80::framing::
 use fujimod_usb_proxy::{Client, Message, Operation, Outcome, Recipient, RequestType, Setup};
 use std::time::Duration;
 
+pub(crate) struct CheckedExchange {
+    pub write: [u8; 12],
+    pub bytes: Vec<u8>,
+    pub read: [u8; 12],
+    pub reply: usize,
+    pub expected: Vec<Vec<u8>>,
+}
+enum CheckedStep {
+    Out(usize),
+    Reply,
+    Guard,
+}
 pub(crate) struct ProxyIo {
     pub client: Client,
     pub device: String,
@@ -114,6 +126,41 @@ impl ProxyIo {
         let earlier_replies = self.unsynced[..earlier].iter().filter(|s| s.2.is_none()).count();
         let mut replies = self.sync().await?;
         Ok(replies.split_off(earlier_replies))
+    }
+    /// Exporter-side reply guards stop a dependent sequence before its next
+    /// USB command. This owns a separate pipeline, with no outstanding steps.
+    pub(crate) async fn checked_commands(&mut self,
+        commands: Vec<CheckedExchange>) -> Result<Vec<Vec<u8>>> {
+        self.sync().await?;
+        let mut steps = Vec::new();
+        for CheckedExchange { write, bytes, read, reply, mut expected } in commands {
+            let length = self.read_length(reply)?;
+            for op in [Operation::ControlOut { setup: vendor_setup(), data: write.to_vec() },
+                       Operation::TransferOut { endpoint: self.output, data: bytes },
+                       Operation::ControlOut { setup: vendor_setup(), data: read.to_vec() }] {
+                let count = match &op { Operation::ControlOut { data, .. } | Operation::TransferOut { data, .. } => data.len(), _ => unreachable!() };
+                let seq = self.client.submit(&self.device, op, self.timeout).await?;
+                steps.push((seq, CheckedStep::Out(count)));
+            }
+            let seq = self.client.submit(&self.device, Operation::TransferIn { endpoint: self.input, length }, self.timeout).await?;
+            steps.push((seq, CheckedStep::Reply));
+            let first = expected.remove(0);
+            let seq = self.client.expect(seq, 0, first, None, Some(reply as u32), expected).await?;
+            steps.push((seq, CheckedStep::Guard));
+        }
+        let outcomes = self.client.sync().await?;
+        if outcomes.len() != steps.len() { return Err(fujimod_usb_proxy::Error("inconsistent checked pipeline outcome".into()).into()); }
+        let mut replies = Vec::new();
+        for (index, ((seq, expected), (done, outcome))) in steps.into_iter().zip(outcomes).enumerate() {
+            if seq != done { return Err(fujimod_usb_proxy::Error("inconsistent checked pipeline sequence".into()).into()); }
+            match (expected, outcome) {
+                (CheckedStep::Guard, Outcome::Held) => (),
+                (CheckedStep::Reply, Outcome::Completed(c)) if c.error.is_none() => replies.push(c.data),
+                (CheckedStep::Out(n), Outcome::Completed(c)) if c.error.is_none() && c.transferred == n => (),
+                _ => return Err(fujimod_usb_proxy::Error(format!("checked command {} stopped at step {} (sequence {seq}); completion unknown", index / 5, index % 5)).into()),
+            }
+        }
+        Ok(replies)
     }
     fn read_length(&self, maximum: usize) -> Result<usize> {
         maximum

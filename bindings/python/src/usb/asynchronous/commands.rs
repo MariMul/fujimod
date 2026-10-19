@@ -3,6 +3,11 @@ use super::*;
 
 #[pymethods]
 impl AsyncSession {
+    async fn execute_sequence(&self, sequence: super::sequence::CommandSequence) -> PyResult<Vec<Py<PyBytes>>> {
+        let limits = self.limits.memory;
+        self.with(move |s| Box::pin(s.sequence(sequence.commands, limits)))
+            .await.map(|replies| replies.into_iter().map(bytes).collect())
+    }
     #[staticmethod]
     #[pyo3(signature=(device,interface,limits,*,timeout_ms=5000,max_reply_bytes=8388608,trace=None))]
     async fn open(

@@ -52,6 +52,16 @@ the negotiated packet limit and the host reply budget, and retains the number
 of successfully returned bytes. Previously returned buffers remain with the
 caller if a later chunk fails.
 
+`Session::sequence` accepts up to 512 `ff80::sequence::SequenceCommand` values:
+bounded memory reads (optionally checking expected bytes), writes, and
+diagnostic queries with explicit accepted status pairs. Every reply must have
+its exact length, command/parameter echoes and expected status or data before
+the next command runs. Over a device share these checks run at the exporter,
+so a dependent sequence waits once. A failed condition discards later work and
+leaves the session in `CompletionUnknown`. Local USB enforces the same checks.
+The sequence is not atomic against device tasks and performs no retries or
+cleanup. It validates all command limits before its first USB exchange.
+
 Use `operations::data::DataReader` to download a CPU address range through E1.
 Supply a `DataWindow` with the diagnostic pointer, allowed address aperture,
 per-command capacity and `OffsetMode::Checked` or `OffsetMode::Wrapping` from

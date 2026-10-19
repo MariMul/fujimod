@@ -10,6 +10,7 @@ mod range;
 mod requests;
 mod service;
 mod session;
+mod sequence;
 #[cfg(feature = "testing")]
 mod testing;
 mod tracing;

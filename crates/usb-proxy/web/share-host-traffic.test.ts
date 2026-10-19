@@ -114,7 +114,7 @@ async function fixture(observer?: (event: ShareTrafficEvent) => void) {
       calls.push(op.op);
       return op.op === 'transfer_in'
         ? { data: Uint8Array.of(1, 2, 3), transferred: 3 }
-        : { transferred: 12 };
+        : { transferred: op.op === 'transfer_out' || op.op === 'control_out' ? (op.data?.length ?? 0) : 12 };
     },
     close: async () => {},
   };

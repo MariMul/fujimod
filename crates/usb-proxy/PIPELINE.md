@@ -1,4 +1,4 @@
-# Pipelined USB over shares (protocol 4)
+# Pipelined USB over shares (protocol 5)
 
 Agreed design, 2026-10-19. Replaces request/reply transfers and the v3 batch.
 
@@ -30,13 +30,19 @@ controller matches results to operations by sequence number as they arrive.
 
 ## Assertions
 
-`Expect { of, offset, bytes, mask }` compares bytes of an earlier IN result
+`Expect { of, offset, bytes, mask, length, alternatives }` compares bytes of an earlier IN result
 (`of` is its sequence number) at the exporter. A mismatch fails the pipeline
 like a USB error: later operations are discarded until `Sync`. This turns
 "read, check it is still X, then write" into one streamed sequence: the write
 runs only if the check passed, with no round trip in between. `mask`, when
 present, ANDs both sides first. The exporter compares bytes only; it knows
 nothing about what they mean.
+
+`length`, when present, requires the exact IN extent. `alternatives` allows
+up to eight other byte strings of the same width under the same mask. The
+length check must hold and one byte comparison must match. This permits
+explicit alternate replies without accepting unrelated status combinations.
+Protocol 5 requires updating controllers and reloading browser exporters.
 
 ## Wire format
 

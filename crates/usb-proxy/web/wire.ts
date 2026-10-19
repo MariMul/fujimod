@@ -1,10 +1,10 @@
 import type { Message, Operation, Completion, Descriptor, ShareStatus } from './types.ts';
-// Version 4: every message is one postcard value (PIPELINE.md): unsigned
+// Version 5: every message is one postcard value (PIPELINE.md): unsigned
 // LEB128 varints, length-prefixed UTF-8 strings and byte strings, one-varint
 // enum tags. The order of variants and fields below is the wire format and
 // matches src/protocol.rs; vectors.json, generated from the Rust types, keeps
 // the two in step. Payload bytes are decoded as views, never copied or texted.
-export const VERSION = 4;
+export const VERSION = 5;
 export const MAX_TRANSFER = 8 * 1024 * 1024;
 export const MAX_MESSAGE = MAX_TRANSFER + 65536;
 const MESSAGES = [
@@ -298,6 +298,14 @@ function writeCompletion(w: Writer, c: Completion) {
   w.varint(c.transferred ?? 0);
   w.option(c.error, (e) => w.string(e));
 }
+function validateExpect(m: Extract<Message, { type: 'expect' }>) {
+  if (m.bytes.length > MAX_TRANSFER || (m.mask != null && m.mask.length !== m.bytes.length))
+    throw Error('Expectation mask must match its bytes');
+  if (m.length != null && (!Number.isInteger(m.length) || m.length < 0 || m.length > MAX_TRANSFER))
+    throw Error('Expectation length exceeds transfer limit');
+  if ((m.alternatives?.length ?? 0) > 8 || m.alternatives?.some(a => a.length !== m.bytes.length))
+    throw Error('Expectation alternatives must have equal lengths (at most eight)');
+}
 function readCompletion(r: Reader): Completion {
   return {
     devices: r.sequence(() => readDevice(r)),
@@ -350,11 +358,14 @@ function write(w: Writer, m: Message) {
       writeOperation(w, m.op);
       break;
     case 'expect':
+      validateExpect(m);
       w.varint(m.seq);
       w.varint(m.of);
       w.varint(m.offset);
       w.data(m.bytes);
       w.option(m.mask, (v) => w.data(v));
+      w.option(m.length, (v) => w.varint(v));
+      w.sequence(m.alternatives ?? [], (v) => w.data(v));
       break;
     case 'sync':
       w.varint(m.seq);
@@ -403,8 +414,11 @@ function read(r: Reader, nested = false): Message {
       return { type, devices: r.sequence(() => readDevice(r)) };
     case 'execute':
       return { type, seq: r.varint(), device: r.string(), timeout_ms: r.varint(), op: readOperation(r) };
-    case 'expect':
-      return { type, seq: r.varint(), of: r.varint(), offset: r.varint(), bytes: r.raw(), mask: r.option(() => r.raw()) };
+    case 'expect': {
+      const message = { type, seq: r.varint(), of: r.varint(), offset: r.varint(), bytes: r.raw(), mask: r.option(() => r.raw()), length: r.option(() => r.varint()), alternatives: r.sequence(() => r.raw()) };
+      validateExpect(message);
+      return message;
+    }
     case 'sync':
       return { type, seq: r.varint() };
     case 'result':

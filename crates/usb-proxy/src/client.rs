@@ -274,13 +274,15 @@ impl Client {
     /// Fail the pipeline at the exporter unless bytes `offset..` of IN result
     /// `of` equal `bytes` (both ANDed with `mask` when given). Later operations
     /// then run only if it held, without a round trip.
-    pub async fn expect(&mut self, of: u64, offset: usize, bytes: Vec<u8>, mask: Option<Vec<u8>>) -> Result<u64> {
+    pub async fn expect(&mut self, of: u64, offset: usize, bytes: Vec<u8>, mask: Option<Vec<u8>>, length: Option<u32>, alternatives: Vec<Vec<u8>>) -> Result<u64> {
         let message = Message::Expect {
             seq: self.next_seq + 1,
             of,
             offset: u32::try_from(offset).map_err(|_| err("expectation offset out of range"))?,
             bytes,
             mask: mask.map(serde_bytes::ByteBuf::from),
+            length,
+            alternatives: alternatives.into_iter().map(serde_bytes::ByteBuf::from).collect(),
         };
         message.validate()?;
         self.begin()?;

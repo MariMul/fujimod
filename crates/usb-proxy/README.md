@@ -94,7 +94,7 @@ physical host topology is unavailable.
 ## Low-level controllers
 
 `Client::connect(url, token)`, `devices()`, `submit(device_id, operation,
-timeout)`, `expect(of, offset, bytes, mask)`, `sync()` and `request(device_id,
+timeout)`, `expect(of, offset, bytes, mask, length, alternatives)`, `sync()` and `request(device_id,
 operation, timeout)` expose the camera-independent transport. Operations are
 `Open` (explicit configuration/interface/alternate), `Close` (host resources
 only), `ControlIn/Out`, `TransferIn/Out` and `ClearHalt`. Endpoint addresses

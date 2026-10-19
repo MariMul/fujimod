@@ -21,6 +21,7 @@ pub enum ErrorKind {
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProtocolFailureKind {
+    ExpectationMismatch,
     ReplyLength,
     CommandEcho,
     FunctionEcho,
@@ -87,6 +88,7 @@ fn protocol(value: &JsValue, source: usb::error::ProtocolError) {
             ProtocolFailureKind::FunctionEcho
         }
         P::ParameterEcho => ProtocolFailureKind::ParameterEcho,
+        P::ExpectationMismatch => ProtocolFailureKind::ExpectationMismatch,
         P::ReservedField(raw) => {
             property(value, "reserved", raw);
             ProtocolFailureKind::ReservedField

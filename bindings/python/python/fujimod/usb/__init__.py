@@ -49,6 +49,24 @@ from .._bridge import (
 )
 
 
+class CommandSequence(Handle):
+    def __init__(self):
+        self._js = call(jsusb.CommandSequence.new)
+
+    def read(self, address, length, expected=None):
+        return call(self._js.read, uint(address), uint(length),
+                    None if expected is None else buffer_in(expected))
+
+    def write(self, address, data):
+        return call(self._js.write, uint(address), buffer_in(data))
+
+    def query(self, tag, statuses=None):
+        from pyodide.ffi import to_js
+        pairs = [(uint(primary), uint(secondary)) for primary, secondary in
+                 ([(0, 0)] if statuses is None else statuses)]
+        return call(self._js.query, uint(tag), to_js(pairs, create_pyproxies=False))
+
+
 class Session(Handle):
     def __init__(self):
         raise TypeError("use await Session.open(...)")
@@ -103,6 +121,10 @@ class Session(Handle):
 
     async def ping(self):
         return await self._call(self._js.ping, decode=buffer_out)
+
+    async def execute_sequence(self, sequence):
+        return await self._call(self._js.executeSequence, unwrap(sequence, CommandSequence),
+                                decode=lambda replies: [buffer_out(r) for r in replies])
 
     async def close(self):
         return await self._call(self._js.close, decode=buffer_out)

@@ -78,6 +78,7 @@ pub enum Error {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProtocolError {
+    ExpectationMismatch,
     ReplyLength { expected: usize, actual: usize },
     CommandEcho { expected: u32, actual: u32 },
     FunctionEcho { expected: u32, actual: u32 },

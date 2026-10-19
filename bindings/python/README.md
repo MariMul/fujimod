@@ -40,6 +40,15 @@ operations, `usb.data.upload` and `usb.app80.exchange` are awaitable. Chunk
 factories acquire ownership synchronously and return async iterators. Use
 `async with` or `await reader.aclose()` when ending iteration early.
 
+Use `usb.CommandSequence()` and `await session.execute_sequence(sequence)` for
+bounded dependent reads, writes and diagnostic queries. `read(address, length,
+expected=None)`, `write(address, data)` and `query(tag, statuses=None)` return
+indices into the resulting list of byte strings; write results are empty.
+`statuses` is a list of accepted `(primary, secondary)` pairs, defaulting to
+`[(0, 0)]`. Reads check their full expected data when supplied. Guards run
+beside USB even over a share; a failed guard prevents later commands and fences
+the session. Native and Pyodide use the same Rust implementation.
+
 Python cancellation drops the actual Rust operation. An interrupted exchange
 restores a session fenced as `CompletionUnknown`; it sends no cleanup or retry.
 A pending operation reports `InFlight`, and another operation fails with

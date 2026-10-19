@@ -495,9 +495,11 @@ mod tests {
                         }
                         Some(Message::Result { seq, completion })
                     }
-                    Message::Expect { seq, of, offset, bytes, mask } => {
+                    Message::Expect { seq, of, offset, bytes, mask, length, alternatives } => {
                         let data = results.get(&(stream, of)).cloned().unwrap_or_default();
-                        if expectation_holds(&data, offset as usize, &bytes, mask.as_deref().map(|m| m.as_slice())) {
+                        let mask = mask.as_deref().map(|m| m.as_slice());
+                        if length.is_none_or(|n| data.len() == n as usize) && (expectation_holds(&data, offset as usize, &bytes, mask)
+                            || alternatives.iter().any(|a| expectation_holds(&data, offset as usize, a, mask))) {
                             None
                         } else {
                             failed.insert(stream, true);
@@ -602,8 +604,8 @@ mod tests {
         // An expectation that holds lets the rest run; one that fails discards
         // everything after it, without touching USB, until the sync.
         let of = client.submit(&route, read(4), Duration::from_secs(1)).await.unwrap();
-        let held = client.expect(of, 1, vec![of as u8 + 1], None).await.unwrap();
-        let failed = client.expect(of, 0, vec![0xee, 0xff], Some(vec![0xff, 0x0f])).await.unwrap();
+        let held = client.expect(of, 1, vec![of as u8 + 1], None, None, vec![]).await.unwrap();
+        let failed = client.expect(of, 0, vec![0xee, 0xff], Some(vec![0xff, 0x0f]), None, vec![]).await.unwrap();
         let skipped = client.submit(&route, Operation::TransferOut { endpoint: 1, data: vec![2] }, Duration::from_secs(1)).await.unwrap();
         let outcomes: HashMap<u64, Outcome> = client.sync().await.unwrap().into_iter().collect();
         assert_eq!(outcomes[&held], Outcome::Held);

@@ -100,6 +100,8 @@ export interface ExpectMessage {
   offset: number;
   bytes: Uint8Array;
   mask?: Uint8Array | null;
+  length?: number | null;
+  alternatives?: Uint8Array[];
 }
 export interface ResultMessage {
   type: 'result';
