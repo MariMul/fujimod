@@ -52,17 +52,17 @@ const CARDS: Record<string, Card> = {
     manual: null,
     changes: null,
     media: {
-      video: '37c90c4d1a075a4a5a27ed75.mp4',
-      still: '791bc0583147291c967f28a7.webp',
+      video: '8f2228a9aa821724e27d820e.mp4',
+      still: '7344d905c6565071d4d8884a.webp',
       clips: {
         '4:3': [2.4, 3.6],
-        '16:9': [4.333, 5.533],
-        '65:24': [6.2, 7.4],
-        '17:6': [8.067, 9.267],
-        '3:4': [10.0, 11.2],
-        '1:1': [11.867, 13.067],
-        '7:6': [13.733, 14.933],
-        '5:4': [15.6, 16.8],
+        '16:9': [4.4, 5.6],
+        '65:24': [6.333, 7.533],
+        '17:6': [8.2, 9.4],
+        '3:4': [10.2, 11.4],
+        '1:1': [12.133, 13.333],
+        '7:6': [14.0, 15.2],
+        '5:4': [15.867, 17.067],
       },
     },
   },
@@ -79,11 +79,11 @@ const CARDS: Record<string, Card> = {
     manual: null,
     changes: null,
     media: {
-      video: '448cb646e88726defb699014.mp4',
-      still: '9d6eb8ec516272409b0a5b42.webp',
+      video: 'a599c8ea004343cc7bf5c5f2.mp4',
+      still: 'c93cab41b0bcc26ed5aea52b.webp',
       clips: {
         MASKED: [2.067, 3.533],
-        DARKENED: [4.3, 5.8],
+        DARKENED: [4.233, 5.733],
         'WHITE BORDER': [6.367, 7.867],
       },
     },
@@ -97,8 +97,8 @@ const CARDS: Record<string, Card> = {
     manual: null,
     changes: null,
     media: {
-      video: 'c5f8533b4aaac9c1887e9a0e.mp4',
-      still: '14e40029dc71ac8c738046db.webp',
+      video: '31aa03626b40a910b877a7f5.mp4',
+      still: '07fd4db58388f822468f4871.webp',
       clips: {},
     },
   },
@@ -110,7 +110,11 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    media: null,
+    media: {
+      video: 'b012ce185c1d43f8eff6089a.mp4',
+      still: 'd59cd6ca22f18b60ea163521.webp',
+      clips: {},
+    },
   },
   image_size: {
     title: 'IMAGE SIZE',
@@ -122,8 +126,8 @@ const CARDS: Record<string, Card> = {
     changes:
       'Aspect ratio selection moved to SHAPE & ASPECT > ASPECT RATIO; IMAGE SIZE now sets L, M or S only.',
     media: {
-      video: 'a91adaa9cb3fa2cd4014027c.mp4',
-      still: '5fa2374c21f4cdeea25b2466.webp',
+      video: '0d1dee8fd5ba8dc790a09efe.mp4',
+      still: '87e626806aba3963efd315b6.webp',
       clips: {},
     },
   },
@@ -148,6 +152,26 @@ const CARDS: Record<string, Card> = {
     changes: null,
     media: null,
   },
+  photometry: {
+    title: 'PHOTOMETRY',
+    path: ['SHOOTING MENU'],
+    summary: null,
+    choices: {
+      HIGHLIGHT:
+        'Exposure is reduced when bright areas dominate the scene. A small bright detail may still be overexposed.',
+    },
+    related: [],
+    manual: 'menu_shooting/photometry',
+    changes:
+      'Adds HIGHLIGHT, which reduces exposure when bright areas dominate the scene. The shooting, Fn and Q displays mark it with an asterisk in brackets.',
+    media: {
+      video: 'fba276f690101281f306f16e.mp4',
+      still: 'b299b67ddaa0124df953f638.webp',
+      clips: {
+        HIGHLIGHT: [5.4, 6.6],
+      },
+    },
+  },
   hdmi_rec_behavior_item: {
     title: 'HDMI OUTPUT',
     path: ['SET-UP'],
@@ -159,7 +183,11 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    media: null,
+    media: {
+      video: '99e638a541d48837efdaacd5.mp4',
+      still: '6c69d6d3a2e2dc5c16b13e11.webp',
+      clips: {},
+    },
   },
   bindings_row_exposure_dial: {
     title: 'EV DIAL',
@@ -169,7 +197,11 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    media: null,
+    media: {
+      video: '19f720b7c6ddb0b29729302b.mp4',
+      still: '05c772863c343af831174d4a.webp',
+      clips: {},
+    },
   },
   bindings_row_command_dial: {
     title: 'COMMAND CONTROL',
@@ -180,8 +212,8 @@ const CARDS: Record<string, Card> = {
     manual: null,
     changes: null,
     media: {
-      video: 'd03bdc7e9a753a3fcee60f19.mp4',
-      still: 'f04ee7c1e38d81f7db20ef68.webp',
+      video: 'c85986eacecaf8b482ed5a31.mp4',
+      still: 'a50d677c3c00ac62e8e71465.webp',
       clips: {},
     },
   },
@@ -194,7 +226,11 @@ const CARDS: Record<string, Card> = {
     manual: 'menu_shooting/control_ring_setting',
     changes:
       'Adds EXPOSURE COMP. and the FujiMod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.',
-    media: null,
+    media: {
+      video: '4fc0400b834e42c1f928a895.mp4',
+      still: '36df5a09eb7a8fe1a582b153.webp',
+      clips: {},
+    },
   },
   menu_theme_item: {
     title: 'MENU THEME',
@@ -205,8 +241,8 @@ const CARDS: Record<string, Card> = {
     manual: null,
     changes: null,
     media: {
-      video: 'aea3aba85b1f13d4a08a0b61.mp4',
-      still: '03459ef6a62bc18b01455f18.webp',
+      video: '8f2581c314f148e8932546bb.mp4',
+      still: 'fab7ea3af462c39c7be32fcd.webp',
       clips: {},
     },
   },
@@ -219,7 +255,11 @@ const CARDS: Record<string, Card> = {
     manual: 'menu_shooting/edit-save_custom_setting',
     changes:
       'Each slot C1–C7 holds a recipe saved as a named file on the memory card. Choose SAVE CURRENT SETTINGS, SAVE AS NEW RECIPE, CHOOSE FROM SD CARD or CLEAR SLOT.',
-    media: null,
+    media: {
+      video: '8791cbbad1c9851095aeadbf.mp4',
+      still: 'dbf279fdb2d032d3521cf2f6.webp',
+      clips: {},
+    },
   },
   snap_menu_item: {
     title: 'MF SNAP FOCUS',
@@ -229,7 +269,11 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    media: null,
+    media: {
+      video: 'e30c206a4d6ae0e1f6cb4b38.mp4',
+      still: '61012a6defebe45e0b455162.webp',
+      clips: {},
+    },
   },
   bug_report_shortcut: {
     title: 'BUG REPORT SHORTCUT',
@@ -239,7 +283,11 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    media: null,
+    media: {
+      video: '2b974b2380611cabd247d8f0.mp4',
+      still: 'b9305752ea40f97ee080cb67.webp',
+      clips: {},
+    },
   },
 };
 
@@ -451,6 +499,24 @@ export function FeatureCatalog() {
           <div class="catalog-where">SHOOTING MENU</div>
         </article>
         <article class="catalog-tile">
+          <TileVideo card="photometry" />
+          <h4>
+            <Icon name="highlight" />
+            <Ref card="photometry">PHOTOMETRY</Ref>
+          </h4>
+          <p>Choose HIGHLIGHT to reduce exposure when bright areas dominate the scene.</p>
+          <div class="catalog-chips">
+            <span class="catalog-chip stock">MULTI</span>
+            <span class="catalog-chip stock">SPOT</span>
+            <span class="catalog-chip stock">AVERAGE</span>
+            <Ref card="photometry" choice="HIGHLIGHT" class="catalog-chip">
+              HIGHLIGHT
+            </Ref>
+          </div>
+          <div class="catalog-where">SHOOTING MENU</div>
+        </article>
+        <article class="catalog-tile">
+          <TileVideo card="edit_save_custom_setting" />
           <h4>
             <Icon name="recipes" />
             <span>Unlimited Recipes</span>
@@ -564,6 +630,7 @@ export function FeatureCatalog() {
           <div class="catalog-where">{'SHOOTING MENU › SHAPE & ASPECT'}</div>
         </article>
         <article class="catalog-tile">
+          <TileVideo card="snap_menu_item" />
           <h4>
             <Icon name="snap" />
             <Ref card="snap_menu_item">MF SNAP FOCUS</Ref>
@@ -575,7 +642,7 @@ export function FeatureCatalog() {
       <h3>Handling and display</h3>
       <div class="catalog-grid">
         <article class="catalog-tile">
-          <TileVideo card="bindings_row_command_dial" />
+          <TileVideo card="bindings_row_exposure_dial" />
           <h4>
             <Icon name="controls" />
             <span>Unlocked Controls</span>
@@ -586,6 +653,7 @@ export function FeatureCatalog() {
           </p>
         </article>
         <article class="catalog-tile">
+          <TileVideo card="hdmi_rec_behavior_item" />
           <h4>
             <Icon name="hdmi" />
             <Ref card="hdmi_rec_behavior_item">HDMI OUTPUT</Ref>
@@ -616,6 +684,7 @@ export function FeatureCatalog() {
       <h3>When something goes wrong</h3>
       <div class="catalog-grid">
         <article class="catalog-tile">
+          <TileVideo card="bug_report_shortcut" />
           <h4>
             <Icon name="bug" />
             <span>Bug Reports</span>
@@ -624,6 +693,7 @@ export function FeatureCatalog() {
             Hold the side Fn button and press DISP/BACK to save a diagnostic report to the memory
             card and display a QR code.
           </p>
+          <div class="catalog-where">SET-UP › FUJIMOD DEVTOOLS › BUG REPORT SHORTCUT</div>
         </article>
       </div>
       <div
