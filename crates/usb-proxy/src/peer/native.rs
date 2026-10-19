@@ -145,9 +145,7 @@ impl PeerSocket {
         }
         // The I/O thread has exited; its reason is queued for the receiver.
         while let Ok(item) = self.receive.try_recv() {
-            if let Err(reason) = item {
-                return Err(reason);
-            }
+            item?;
         }
         Err(error("WebRTC connection closed"))
     }
@@ -210,31 +208,31 @@ async fn run(
         } else {
             format!("{name}:3478")
         };
-        if let Ok(addresses) = name.to_socket_addrs() {
-            if let Some(server) = addresses.into_iter().find(SocketAddr::is_ipv4) {
-                let mut client = stunclient::StunClient::new(server);
-                client.set_timeout(Duration::from_secs(2));
-                let route = std::net::UdpSocket::bind("0.0.0.0:0").map_err(error)?;
-                route.connect(server).map_err(error)?;
-                let ip = route.local_addr().map_err(error)?.ip();
-                let Some(socket) = sockets
-                    .iter()
-                    .find(|socket| socket.local_addr().is_ok_and(|addr| addr.ip() == ip))
-                else {
-                    continue;
-                };
-                let found = client.query_external_address(socket);
-                progress(&match &found {
-                    Ok(external) => format!("STUN {server}: external address {external}"),
-                    Err(e) => format!("STUN {server}: no reply ({e})"),
-                });
-                if let Ok(external) = found {
-                    let base = socket.local_addr().map_err(error)?;
-                    rtc.add_local_candidate(
-                        Candidate::server_reflexive(external, base, "udp").map_err(error)?,
-                    );
-                    drain_setup(&mut rtc)?;
-                }
+        if let Ok(addresses) = name.to_socket_addrs()
+            && let Some(server) = addresses.into_iter().find(SocketAddr::is_ipv4)
+        {
+            let mut client = stunclient::StunClient::new(server);
+            client.set_timeout(Duration::from_secs(2));
+            let route = std::net::UdpSocket::bind("0.0.0.0:0").map_err(error)?;
+            route.connect(server).map_err(error)?;
+            let ip = route.local_addr().map_err(error)?.ip();
+            let Some(socket) = sockets
+                .iter()
+                .find(|socket| socket.local_addr().is_ok_and(|addr| addr.ip() == ip))
+            else {
+                continue;
+            };
+            let found = client.query_external_address(socket);
+            progress(&match &found {
+                Ok(external) => format!("STUN {server}: external address {external}"),
+                Err(e) => format!("STUN {server}: no reply ({e})"),
+            });
+            if let Ok(external) = found {
+                let base = socket.local_addr().map_err(error)?;
+                rtc.add_local_candidate(
+                    Candidate::server_reflexive(external, base, "udp").map_err(error)?,
+                );
+                drain_setup(&mut rtc)?;
             }
         }
     }
@@ -314,12 +312,13 @@ async fn run(
                         .send(packet.source, packet.destination, &packet.contents)
                         .await
                     {
-                        let unreachable = matches!(
-                            failure.kind(),
-                            std::io::ErrorKind::HostUnreachable
-                                | std::io::ErrorKind::NetworkUnreachable
-                                | std::io::ErrorKind::AddrNotAvailable
-                        ) || matches!(failure.raw_os_error(), Some(49 | 50 | 51 | 65));
+                        let unreachable =
+                            matches!(
+                                failure.kind(),
+                                std::io::ErrorKind::HostUnreachable
+                                    | std::io::ErrorKind::NetworkUnreachable
+                                    | std::io::ErrorKind::AddrNotAvailable
+                            ) || matches!(failure.raw_os_error(), Some(49 | 50 | 51 | 65));
                         if !unreachable {
                             return Err(error(failure));
                         }
@@ -361,12 +360,11 @@ async fn run(
                 },
             }
         };
-        if let Some(since) = closing {
-            if (packets.is_empty() && since.elapsed() > Duration::from_millis(200))
-                || since.elapsed() > Duration::from_secs(1)
-            {
-                return Ok(());
-            }
+        if let Some(since) = closing
+            && ((packets.is_empty() && since.elapsed() > Duration::from_millis(200))
+                || since.elapsed() > Duration::from_secs(1))
+        {
+            return Ok(());
         }
         if !rtc.is_alive() || (channel.is_none() && started.elapsed() > Duration::from_secs(20)) {
             return Err(error("direct WebRTC connection unavailable"));
@@ -395,6 +393,7 @@ async fn run(
                 }
                 continue; // Drain the complete RTC output after every mutation.
             }
+            continue; // Drain the complete RTC output after every mutation.
         }
         enum Wake {
             Out(std::result::Result<Vec<u8>, async_channel::RecvError>),

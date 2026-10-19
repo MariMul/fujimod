@@ -20,8 +20,8 @@ export default function Document(props: { children: JSX.Element }) {
               : setup
                 ? 'Put your camera in service mode and connect it over USB, step by step.'
                 : tools
-                ? 'FujiMod USB console and protocol logs.'
-                : 'Try your camera firmware in the browser and build Fujimod SD boot files.'
+                  ? 'FujiMod USB console and protocol logs.'
+                  : 'Try your camera firmware in the browser and build Fujimod SD boot files.'
           }
         />
         <meta name="referrer" content="no-referrer" />

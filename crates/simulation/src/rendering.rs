@@ -7,7 +7,7 @@ use bevy::{
     anti_alias::fxaa::Fxaa,
     asset::RenderAssetUsages,
     camera::{RenderTarget, primitives::Aabb, visibility::RenderLayers},
-    ecs::system::SystemState,
+    ecs::system::{SystemParam, SystemState},
     gltf::{GltfLoaderSettings, convert_coordinates::GltfConvertCoordinates},
     image::{ImageSampler, ImageSamplerDescriptor},
     mesh::VertexAttributeValues,
@@ -615,13 +615,12 @@ fn process_commands(world: &mut World) {
                 position,
                 immediate,
             } => {
-                if position.is_finite() {
-                    if let Some(e) = world.resource::<ViewerState>().rotaries.get(&id).copied() {
-                        if let Some(mut part) = world.get_mut::<Rotary>(e) {
-                            part.target = position * std::f32::consts::PI / 12.;
-                            part.immediate = immediate;
-                        }
-                    }
+                if position.is_finite()
+                    && let Some(e) = world.resource::<ViewerState>().rotaries.get(&id).copied()
+                    && let Some(mut part) = world.get_mut::<Rotary>(e)
+                {
+                    part.target = position * std::f32::consts::PI / 12.;
+                    part.immediate = immediate;
                 }
             }
             Command::Pick {
@@ -714,14 +713,24 @@ fn advance_step(world: &mut World, seconds: f32) {
     world.resource_mut::<ViewerState>().grounded |= ground.is_some();
 }
 
+type BodyTransforms<'w, 's> = Query<'w, 's, &'static mut Transform, With<CameraBody>>;
+type ObserverTransforms<'w, 's> =
+    Query<'w, 's, (&'static mut Transform, &'static Projection), With<Observer>>;
+type SensorTransforms<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static mut Transform,
+        &'static mut Camera,
+        &'static mut Projection,
+    ),
+    With<Sensor>,
+>;
+
 fn update_poses(
     s: Res<Simulation>,
     state: Res<ViewerState>,
-    mut transforms: ParamSet<(
-        Query<&mut Transform, With<CameraBody>>,
-        Query<(&mut Transform, &Projection), With<Observer>>,
-        Query<(&mut Transform, &mut Camera, &mut Projection), With<Sensor>>,
-    )>,
+    mut transforms: ParamSet<(BodyTransforms, ObserverTransforms, SensorTransforms)>,
 ) {
     for mut t in &mut transforms.p0() {
         *t = s.camera_pose();
@@ -783,35 +792,46 @@ fn update_lcd(host: Res<Host>, textures: Res<Textures>, mut images: ResMut<Asset
     }
     image.data = Some(rgba);
 }
+type ChangedSensorMeshes<'w, 's> = Query<
+    'w,
+    's,
+    Option<&'static RenderLayers>,
+    (With<Mesh3d>, Without<CameraMesh>, Changed<GlobalTransform>),
+>;
+
+#[derive(SystemParam)]
+struct SensorScene<'w, 's> {
+    simulation: Res<'w, Simulation>,
+    presentation: Res<'w, PresentationSettings>,
+    changed_world: ChangedSensorMeshes<'w, 's>,
+}
+
 fn request_sensor(
     mut commands: Commands,
     time: Res<Time<Real>>,
-    simulation: Res<Simulation>,
     textures: Res<Textures>,
     mut state: ResMut<ViewerState>,
     host: Res<Host>,
-    presentation: Res<PresentationSettings>,
-    changed_world: Query<
-        Option<&RenderLayers>,
-        (With<Mesh3d>, Without<CameraMesh>, Changed<GlobalTransform>),
-    >,
+    scene: SensorScene,
 ) {
-    let mut key = simulation
+    let mut key = scene
+        .simulation
         .camera_pose()
         .to_matrix()
         .to_cols_array()
         .to_vec();
     key.extend([
-        simulation.optics.focus_distance,
-        simulation.optics.aperture,
-        simulation.optics.focal_length,
-        simulation.optics.sensor_height,
+        scene.simulation.optics.focus_distance,
+        scene.simulation.optics.aperture,
+        scene.simulation.optics.focal_length,
+        scene.simulation.optics.sensor_height,
     ]);
     state.sensor_dirty |= key != state.last_sensor_key
-        || changed_world
+        || scene
+            .changed_world
             .iter()
             .any(|layers| layers.is_none_or(|layers| layers.intersects(&RenderLayers::layer(0))));
-    if matches!(presentation.0, Presentation::Observer) && !state.sensor_dirty {
+    if matches!(scene.presentation.0, Presentation::Observer) && !state.sensor_dirty {
         return;
     }
     state.readback_elapsed += time.delta_secs();
@@ -828,8 +848,8 @@ fn request_sensor(
     state.readback_pending = true;
     state.sequence += 1;
     let sequence = state.sequence;
-    let world_seconds = simulation.elapsed;
-    let pose = simulation.camera_pose();
+    let world_seconds = scene.simulation.elapsed;
+    let pose = scene.simulation.camera_pose();
     let bridge = host.0.clone();
     commands
         .spawn(ReadbackOnce::texture(textures.sensor.clone()))
@@ -839,7 +859,7 @@ fn request_sensor(
                 let stride = row_bytes.div_ceil(256) * 256;
                 let mut rgb = Vec::with_capacity((SENSOR_WIDTH * SENSOR_HEIGHT * 3) as usize);
                 for row in event.data.chunks(stride).take(SENSOR_HEIGHT as usize) {
-                    for pixel in row[..row_bytes].chunks_exact(4) {
+                    for pixel in row[..row_bytes].as_chunks::<4>().0 {
                         rgb.extend_from_slice(&pixel[..3]);
                     }
                 }
@@ -1069,7 +1089,7 @@ fn build_navigation(world: &World, root: Entity) -> Navigation {
             if let Some(VertexAttributeValues::Float32x3(positions)) =
                 mesh.attribute(Mesh::ATTRIBUTE_POSITION)
             {
-                for triangle in positions.chunks_exact(3) {
+                for triangle in positions.as_chunks::<3>().0 {
                     navigation.insert(Triangle3d::new(
                         transform.transform_point(Vec3::from_array(triangle[0])),
                         transform.transform_point(Vec3::from_array(triangle[1])),
@@ -1084,13 +1104,12 @@ fn build_navigation(world: &World, root: Entity) -> Navigation {
 fn prepare_environment(world: &mut World, root: Entity) {
     let unlit = world.get::<EnvironmentRoot>(root).unwrap().unlit;
     for e in descendants(world, root) {
-        if let Some(material) = world.get::<MeshMaterial3d<StandardMaterial>>(e).cloned() {
-            if let Some(mut m) = world
+        if let Some(material) = world.get::<MeshMaterial3d<StandardMaterial>>(e).cloned()
+            && let Some(mut m) = world
                 .resource_mut::<Assets<StandardMaterial>>()
                 .get_mut(&material.0)
-            {
-                m.unlit = unlit;
-            }
+        {
+            m.unlit = unlit;
         }
     }
     world.entity_mut(root).remove::<Prepared>();
@@ -1251,70 +1270,69 @@ fn pick(world: &mut World, x: f32, y: f32, radius: f32) -> Value {
     let hit = hits
         .iter()
         .find(|(e, _)| world.get::<CameraMesh>(*e).is_some());
-    if let Some((e, h)) = hit {
-        if let Some(c) = world.get::<ControlMesh>(*e).cloned() {
-            let mut id = c.ids[0].clone();
-            if !world.resource::<ViewerState>().button_ids.contains(&id)
-                && !c.ids.iter().any(|id| id == "lcd_touch")
-            {
-                let nearby =
-                    nearby_button(world, &camera, &transform, Vec2::new(x, y), radius, scale);
-                if !nearby.is_null() {
-                    return nearby;
-                }
+    if let Some((e, h)) = hit
+        && let Some(c) = world.get::<ControlMesh>(*e).cloned()
+    {
+        let mut id = c.ids[0].clone();
+        if !world.resource::<ViewerState>().button_ids.contains(&id)
+            && !c.ids.iter().any(|id| id == "lcd_touch")
+        {
+            let nearby = nearby_button(world, &camera, &transform, Vec2::new(x, y), radius, scale);
+            if !nearby.is_null() {
+                return nearby;
             }
-            let mut point = h.uv.map(|uv| json!({"x":uv.x,"y":uv.y}));
-            if let Some((min, max)) = local_bounds(world, c.node) {
-                let p = world
-                    .get::<GlobalTransform>(c.node)
-                    .unwrap()
-                    .affine()
-                    .inverse()
-                    .transform_point3(h.point);
-                let local = (p - min) / (max - min).max(Vec3::splat(0.000001));
-                if let Some(regions) = world
-                    .resource::<ViewerState>()
-                    .model
-                    .as_ref()
-                    .and_then(|d| d.regions.get(&c.name))
-                {
-                    let d = Vec2::new(local.x, local.y) - Vec2::splat(0.5);
-                    let region = if d.abs().max_element() <= 0.22 {
-                        "center"
-                    } else if d.x.abs() > d.y.abs() {
-                        if d.x < 0. { "left" } else { "right" }
-                    } else if d.y < 0. {
-                        "down"
-                    } else {
-                        "up"
-                    };
-                    if let Some(mapped) = regions.get(region) {
-                        id = mapped.clone();
-                        point = None;
-                    }
-                }
-            }
-            let direction = world
-                .resource::<ViewerState>()
-                .rotaries
-                .get(&id)
-                .and_then(|e| {
-                    let t = world.get::<GlobalTransform>(*e)?;
-                    let axis = t
-                        .affine()
-                        .transform_vector3(world.get::<Rotary>(*e)?.axis)
-                        .normalize();
-                    let tangent = axis.cross(h.point - t.translation());
-                    let start = camera.world_to_viewport(&transform, h.point).ok()? / scale;
-                    let end = camera
-                        .world_to_viewport(&transform, h.point + tangent)
-                        .ok()?
-                        / scale;
-                    let d = (end - start).try_normalize().unwrap_or(Vec2::X);
-                    Some(json!({"x":d.x,"y":d.y}))
-                });
-            return json!({"id":id,"point":point,"surfacePoint":h.point.to_array(),"direction":direction});
         }
+        let mut point = h.uv.map(|uv| json!({"x":uv.x,"y":uv.y}));
+        if let Some((min, max)) = local_bounds(world, c.node) {
+            let p = world
+                .get::<GlobalTransform>(c.node)
+                .unwrap()
+                .affine()
+                .inverse()
+                .transform_point3(h.point);
+            let local = (p - min) / (max - min).max(Vec3::splat(0.000001));
+            if let Some(regions) = world
+                .resource::<ViewerState>()
+                .model
+                .as_ref()
+                .and_then(|d| d.regions.get(&c.name))
+            {
+                let d = Vec2::new(local.x, local.y) - Vec2::splat(0.5);
+                let region = if d.abs().max_element() <= 0.22 {
+                    "center"
+                } else if d.x.abs() > d.y.abs() {
+                    if d.x < 0. { "left" } else { "right" }
+                } else if d.y < 0. {
+                    "down"
+                } else {
+                    "up"
+                };
+                if let Some(mapped) = regions.get(region) {
+                    id = mapped.clone();
+                    point = None;
+                }
+            }
+        }
+        let direction = world
+            .resource::<ViewerState>()
+            .rotaries
+            .get(&id)
+            .and_then(|e| {
+                let t = world.get::<GlobalTransform>(*e)?;
+                let axis = t
+                    .affine()
+                    .transform_vector3(world.get::<Rotary>(*e)?.axis)
+                    .normalize();
+                let tangent = axis.cross(h.point - t.translation());
+                let start = camera.world_to_viewport(&transform, h.point).ok()? / scale;
+                let end = camera
+                    .world_to_viewport(&transform, h.point + tangent)
+                    .ok()?
+                    / scale;
+                let d = (end - start).try_normalize().unwrap_or(Vec2::X);
+                Some(json!({"x":d.x,"y":d.y}))
+            });
+        return json!({"id":id,"point":point,"surfacePoint":h.point.to_array(),"direction":direction});
     }
     nearby_button(world, &camera, &transform, Vec2::new(x, y), radius, scale)
 }
@@ -1337,7 +1355,7 @@ fn nearby_button(
             let Some(p) = target_point(world, e, &id) else {
                 continue;
             };
-            let Ok(screen) = camera.world_to_viewport(&transform, p) else {
+            let Ok(screen) = camera.world_to_viewport(transform, p) else {
                 continue;
             };
             let distance = (screen / scale).distance(Vec2::new(x, y));
@@ -1519,20 +1537,19 @@ fn publish(world: &mut World) {
     }
     if key != world.resource::<ViewerState>().projection_key {
         let mut points = BTreeMap::new();
-        if world.resource::<Simulation>().mode == InteractionMode::Inspect {
-            if let Some((camera, transform)) = camera {
-                let targets = world.resource::<ViewerState>().targets.clone();
-                for (id, node) in targets {
-                    if let Some(p) = target_point(world, node, &id) {
-                        if let Ok(screen) = camera.world_to_viewport(&transform, p) {
-                            let visible = target_visible(world, node, p, transform.translation());
-                            let logical = camera.logical_viewport_size().unwrap_or(Vec2::ONE);
-                            let viewport =
-                                world.resource::<ViewerState>().viewport.unwrap_or(logical);
-                            let screen = screen * viewport / logical;
-                            points.insert(id, json!({"x":screen.x,"y":screen.y,"visible":visible}));
-                        }
-                    }
+        if world.resource::<Simulation>().mode == InteractionMode::Inspect
+            && let Some((camera, transform)) = camera
+        {
+            let targets = world.resource::<ViewerState>().targets.clone();
+            for (id, node) in targets {
+                if let Some(p) = target_point(world, node, &id)
+                    && let Ok(screen) = camera.world_to_viewport(&transform, p)
+                {
+                    let visible = target_visible(world, node, p, transform.translation());
+                    let logical = camera.logical_viewport_size().unwrap_or(Vec2::ONE);
+                    let viewport = world.resource::<ViewerState>().viewport.unwrap_or(logical);
+                    let screen = screen * viewport / logical;
+                    points.insert(id, json!({"x":screen.x,"y":screen.y,"visible":visible}));
                 }
             }
         }

@@ -53,4 +53,3 @@ An illustrated, animated walkthrough that takes a camera owner through:
   chooser as a dialog at the top centre of the page (owner's screenshot, 2026-10-19).
 - **Not built yet:** arming the exit guard and turning on debug mode from the
   browser. The page says so; both need reviewed camera operations in the Rust core.
-

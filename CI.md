@@ -23,7 +23,7 @@ the repository's branch rules to enforce it on merges.
   stubs or typed protocols; disabling import diagnostics would conceal gaps.
 - Ruff also checks Pyflakes, pycodestyle's syntax/error groups, pyupgrade,
   bugbear, simplify, import sorting and stub hygiene. Ruff formats Python.
-  The package's declared minimum is Python 3.10, so static checks target 3.10;
+  The package's minimum is Python 3.14, including template-string support;
   repository tooling and native tests run on the Python 3.14 pinned in Mise.
 - JavaScript/TypeScript uses [Vite+](https://viteplus.dev/guide/lint) with its
   Oxlint correctness rules, type-aware rules, full TypeScript checking and
@@ -35,8 +35,12 @@ the repository's branch rules to enforce it on merges.
   Pedantic/restriction lints are not enabled wholesale.
 
 No violation baselines, changed-lines-only filters or test-file typing exemptions
-are used. Adding CI does not make existing source satisfy these rules: failures
-remain visible until the source is corrected.
+are used. `python-typecheck` builds the JavaScript binding and generates Python
+protocols from its checked TypeScript declarations, then generates service value
+declarations from Rust. Generated types stay in `target/python-types`. The
+`typescript-api` dependency provides the TypeScript compiler API; TypeScript 7
+checks maintained source. `typing_contract.py` checks quantity boundaries, enum
+groups, immutable properties and asynchronous return types.
 
 ## Run locally
 
@@ -82,7 +86,7 @@ production build, prerender checks, developer-tools browser checks and Worker
 build validation. Pyodide also needs its pure Python wheel:
 
 ```sh
-uv run --locked python bindings/python/scripts/build_web_wheel.py --output target/web-wheels
+uv run --locked python bindings/python/scripts/build_web_wheel.py --out target/web-wheels
 npm --prefix apps/web exec -- playwright install --with-deps chromium webkit
 mise run javascript-browser-test
 npm --prefix bindings/javascript run test:pyodide:browser

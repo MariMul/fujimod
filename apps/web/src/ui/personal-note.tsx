@@ -95,12 +95,9 @@ export function PersonalNote(props: { cameras: CameraSupport[] }) {
         <span id="other-films">
           <IconList names={films} />
         </span>{' '}
-        🤷) and{' '}
-        <a href="#features">
-          more
-        </a>
-        . Although it currently supports <span id="supported-models">{supported()}</span>, we have a
-        plan to eventually support all <span id="camera-count">{cameraCount}</span> camera models.
+        🤷) and <a href="#features">more</a>. Although it currently supports{' '}
+        <span id="supported-models">{supported()}</span>, we have a plan to eventually support all{' '}
+        <span id="camera-count">{cameraCount}</span> camera models.
       </p>
       <p>
         FujiMod is <mark>not ready</mark> for your camera. It is too new and changing too quickly.

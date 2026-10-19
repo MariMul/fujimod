@@ -44,7 +44,10 @@ export interface CameraArt {
   };
   /** USB port on the right-hand side, as a fraction of the height. */
   usb: { y: number };
-  bottom: { battery: { u: number; v: number; w: number; d: number }; tripod: { u: number; v: number } };
+  bottom: {
+    battery: { u: number; v: number; w: number; d: number };
+    tripod: { u: number; v: number };
+  };
 }
 export interface Camera {
   id: 'x70' | 'xm1' | 'xe2s';

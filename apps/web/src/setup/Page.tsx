@@ -91,7 +91,8 @@ export default function Setup() {
       timeline?.seek(ms, true);
     };
     w.setupRig = () => ({ ...rig });
-    (w as Window & { setupChooser?: () => void }).setupChooser = () => setLink({ state: 'choosing' });
+    (w as Window & { setupChooser?: () => void }).setupChooser = () =>
+      setLink({ state: 'choosing' });
     return () => {
       cancelAnimationFrame(frame);
       timeline?.pause();
@@ -101,22 +102,26 @@ export default function Setup() {
   const current = () => steps[step()];
   const guard = () =>
     ({
-      known: 'Exit protection: known for this camera, and the page will arm it as soon as the camera connects.',
-      candidate: 'Exit protection: a candidate exists for this camera but is not reviewed, so the page leaves it off.',
+      known:
+        'Exit protection: known for this camera, and the page will arm it as soon as the camera connects.',
+      candidate:
+        'Exit protection: a candidate exists for this camera but is not reviewed, so the page leaves it off.',
       none: 'Exit protection: none is known for this camera. The battery exit in step 4 is the way out.',
     })[camera().guard];
 
   return (
     <main class="setup">
       <header class="setup-head">
-        <a href="../" class="setup-back">FujiMod</a>
+        <a href="../" class="setup-back">
+          FujiMod
+        </a>
         <h1>Set up USB access</h1>
         <div class="setup-cameras" role="radiogroup" aria-label="Camera">
           <For each={cameras}>
             {(c) => (
               <button
                 role="radio"
-                aria-checked={camera().id === c.id ? "true" : "false"}
+                aria-checked={camera().id === c.id ? 'true' : 'false'}
                 class={{ on: camera().id === c.id }}
                 onClick={() => pick(c)}
               >
@@ -128,7 +133,9 @@ export default function Setup() {
       </header>
 
       <Show when={!camera().entry.reviewed}>
-        <p class="setup-note">Provisional for the {camera().name}. {camera().entry.note}</p>
+        <p class="setup-note">
+          Provisional for the {camera().name}. {camera().entry.note}
+        </p>
       </Show>
 
       <ol class="setup-steps">
@@ -144,8 +151,13 @@ export default function Setup() {
         </For>
       </ol>
 
-       <div class="setup-stage" ref={(element) => (stage = element)}>
-        <svg ref={(element) => (svg = element)} class="setup-art" role="img" aria-label={current().beats[beat()]} />
+      <div class="setup-stage" ref={(element) => (stage = element)}>
+        <svg
+          ref={(element) => (svg = element)}
+          class="setup-art"
+          role="img"
+          aria-label={current().beats[beat()]}
+        />
       </div>
 
       <section class="setup-panel">
@@ -165,12 +177,20 @@ export default function Setup() {
         <Show when={current().id === 'connect'}>
           <Show
             when={supported}
-            fallback={<p class="setup-detail warn">This needs Chrome or Edge on a computer: other browsers can't talk to USB devices.</p>}
+            fallback={
+              <p class="setup-detail warn">
+                This needs Chrome or Edge on a computer: other browsers can't talk to USB devices.
+              </p>
+            }
           >
             <Show
               when={link().state === 'connected'}
               fallback={
-                <button class="setup-primary" disabled={link().state === 'choosing'} onClick={connect}>
+                <button
+                  class="setup-primary"
+                  disabled={link().state === 'choosing'}
+                  onClick={connect}
+                >
                   Connect camera over USB
                 </button>
               }
@@ -182,19 +202,31 @@ export default function Setup() {
             </Show>
             <p class="setup-detail">{guard()}</p>
             <Show when={camera().guard === 'known'}>
-              <p class="setup-detail dim">That part is not built yet, so for now nothing is armed. The battery exit in step 4 works without it.</p>
+              <p class="setup-detail dim">
+                That part is not built yet, so for now nothing is armed. The battery exit in step 4
+                works without it.
+              </p>
             </Show>
           </Show>
         </Show>
 
         <Show when={current().id === 'debug'}>
-          <p class="setup-detail dim">Turning on debug mode from the browser is not built yet. This step will do it over the same connection.</p>
+          <p class="setup-detail dim">
+            Turning on debug mode from the browser is not built yet. This step will do it over the
+            same connection.
+          </p>
         </Show>
 
         <div class="setup-nav">
-          <button onClick={() => show(step() - 1)} disabled={step() === 0}>Back</button>
+          <button onClick={() => show(step() - 1)} disabled={step() === 0}>
+            Back
+          </button>
           <button onClick={() => play()}>Replay</button>
-          <button class="setup-primary" onClick={() => show(step() + 1)} disabled={step() === steps.length - 1}>
+          <button
+            class="setup-primary"
+            onClick={() => show(step() + 1)}
+            disabled={step() === steps.length - 1}
+          >
             Next
           </button>
         </div>

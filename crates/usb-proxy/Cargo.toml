@@ -34,7 +34,14 @@ if-addrs = "0.15"
 stunclient = "0.4"
 async-tungstenite = { version = "0.34", features = ["smol-runtime", "smol-native-tls"] }
 axum = { version = "0.8", features = ["ws"], optional = true }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "time", "signal"], optional = true }
+tokio = { version = "1", features = [
+  "macros",
+  "rt-multi-thread",
+  "net",
+  "sync",
+  "time",
+  "signal",
+], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen.workspace = true

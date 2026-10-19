@@ -88,7 +88,10 @@ pub async fn read_range(
         .min(session.info().advertised_packet_bytes.get())
         .min(budget.saturating_sub(36));
     if maximum == 0 {
-        return Err(Error::LengthLimit { requested: 37, limit: budget });
+        return Err(Error::LengthLimit {
+            requested: 37,
+            limit: budget,
+        });
     }
     let mut commands = Vec::new();
     let mut offset = 0;

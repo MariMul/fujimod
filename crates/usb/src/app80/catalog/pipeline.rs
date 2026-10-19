@@ -311,11 +311,7 @@ mod tests {
         )
     }
 
-    fn prepared(
-        catalog: &Catalog,
-        modes: ServiceModes,
-        action: PipelineAction,
-    ) -> PreparedCommand {
+    fn prepared(catalog: &Catalog, modes: ServiceModes, action: PipelineAction) -> PreparedCommand {
         catalog
             .prepare(modes, Command::Pipeline { action })
             .unwrap()

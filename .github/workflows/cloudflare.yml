@@ -43,6 +43,7 @@ jobs:
           rustup default 1.99.1
           npm ci
           npm --prefix bindings/javascript ci
+          npm --prefix crates/simulation/tools ci
           npm --prefix bindings/javascript run setup:tooling
       - run: npm ci
       - run: npm run check

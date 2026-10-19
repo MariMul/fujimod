@@ -3,10 +3,14 @@ use super::*;
 
 #[pymethods]
 impl AsyncSession {
-    async fn execute_sequence(&self, sequence: super::sequence::CommandSequence) -> PyResult<Vec<Py<PyBytes>>> {
+    async fn execute_sequence(
+        &self,
+        sequence: super::sequence::CommandSequence,
+    ) -> PyResult<Vec<Py<PyBytes>>> {
         let limits = self.limits.memory;
         self.with(move |s| Box::pin(s.sequence(sequence.commands, limits)))
-            .await.map(|replies| replies.into_iter().map(bytes).collect())
+            .await
+            .map(|replies| replies.into_iter().map(bytes).collect())
     }
     #[staticmethod]
     #[pyo3(signature=(device,interface,limits,*,timeout_ms=5000,max_reply_bytes=8388608,trace=None))]
@@ -104,33 +108,40 @@ impl AsyncSession {
     }
     /// Neutral tool progress in the owner's Dev Tools log.
     async fn owner_status(&self, message: String) -> PyResult<()> {
-        self.with(move |s| Box::pin(async move { s.owner_status(&message).await })).await
+        self.with(move |s| Box::pin(async move { s.owner_status(&message).await }))
+            .await
     }
     /// Returns only after the owner's ten-second countdown finishes.
     async fn owner_attention(&self, message: String) -> PyResult<()> {
-        self.with(move |s| Box::pin(async move { s.owner_attention(&message).await })).await
+        self.with(move |s| Box::pin(async move { s.owner_attention(&message).await }))
+            .await
     }
     /// What the tool is doing now, above the owner's log footer ('' clears).
     async fn owner_activity(&self, title: String) -> PyResult<()> {
-        self.with(move |s| Box::pin(async move { s.owner_activity(&title).await })).await
+        self.with(move |s| Box::pin(async move { s.owner_activity(&title).await }))
+            .await
     }
     /// Start a progress bar of `total` units under the owner's log.
     async fn owner_progress_start(&self, label: String, total: u64) -> PyResult<()> {
-        self.with(move |s| Box::pin(async move { s.owner_progress_start(&label, total).await })).await
+        self.with(move |s| Box::pin(async move { s.owner_progress_start(&label, total).await }))
+            .await
     }
     async fn owner_progress_update(&self, done: u64) -> PyResult<()> {
-        self.with(move |s| Box::pin(async move { s.owner_progress_update(done).await })).await
+        self.with(move |s| Box::pin(async move { s.owner_progress_update(done).await }))
+            .await
     }
     async fn owner_progress_done(&self) -> PyResult<()> {
         self.with(|s| Box::pin(s.owner_progress_done())).await
     }
     /// Tell a share owner the camera's battery level; a no-op unless shared.
     async fn report_battery(&self, level: String) -> PyResult<()> {
-        self.with(move |s| Box::pin(async move { s.report_battery(&level).await })).await
+        self.with(move |s| Box::pin(async move { s.report_battery(&level).await }))
+            .await
     }
     /// Ask a share owner's user to fix a problem; a no-op unless shared.
     async fn request_attention(&self, message: String) -> PyResult<()> {
-        self.with(move |s| Box::pin(async move { s.request_attention(&message).await })).await
+        self.with(move |s| Box::pin(async move { s.request_attention(&message).await }))
+            .await
     }
     async fn device_info(&self, selector: InfoSelector) -> PyResult<String> {
         self.with(move |s| Box::pin(s.device_info(selector.into())))

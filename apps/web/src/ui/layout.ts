@@ -1,20 +1,12 @@
-import type { DetentSound } from "../feedback/detent-sound";
-import type { BootInput } from "../engine/api";
+import type { DetentSound } from '../feedback/detent-sound';
+import type { BootInput } from '../engine/api';
 export interface ControlNode {
-  kind:
-    | "control"
-    | "grid"
-    | "row"
-    | "column"
-    | "divider"
-    | "space"
-    | "command"
-    | "dpad";
+  kind: 'control' | 'grid' | 'row' | 'column' | 'divider' | 'space' | 'command' | 'dpad';
   className?: string;
   id?: string;
-  variant?: "dial" | "ticks" | "segment" | "shutter" | "key" | "record";
+  variant?: 'dial' | 'ticks' | 'segment' | 'shutter' | 'key' | 'record';
   caption?: string;
-  operation?: "power";
+  operation?: 'power';
   face?: string[];
   hint?: string;
   icon?: string;

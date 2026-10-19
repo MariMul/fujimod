@@ -68,7 +68,11 @@ window.panel.render(
     },
     { id: 'control_ring', label: 'Command', kind: 'dial', supported: true, relative: true },
   ],
-  { setPosition: async (id: string, value: string) => { window.requests.push({ id, value }); } } as unknown as Engine,
+  {
+    setPosition: async (id: string, value: string) => {
+      window.requests.push({ id, value });
+    },
+  } as unknown as Engine,
   {
     detentSounds: panelData.detentSounds as Record<string, DetentSound>,
     layout: [
@@ -79,6 +83,9 @@ window.panel.render(
     combos: [],
   },
 );
-render(() => createComponent(Controls, { session: window.panel }), document.querySelector('#controls')!);
+render(
+  () => createComponent(Controls, { session: window.panel }),
+  document.querySelector('#controls')!,
+);
 flush();
 window.fixtureReady = true;

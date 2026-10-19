@@ -480,8 +480,14 @@ pub(crate) enum Operation {
         fujimod_mod_install::UploadDestination,
         usb::ff80::commands::memory::DebugMemoryLimits,
     ),
-    VerifyOwned(fujimod_mod_install::OwnedUpload, usb::operations::data::DataWindow),
-    Sequence(Vec<usb::ff80::sequence::SequenceCommand>, usb::ff80::commands::memory::DebugMemoryLimits),
+    VerifyOwned(
+        fujimod_mod_install::OwnedUpload,
+        usb::operations::data::DataWindow,
+    ),
+    Sequence(
+        Vec<usb::ff80::sequence::SequenceCommand>,
+        usb::ff80::commands::memory::DebugMemoryLimits,
+    ),
     Ping,
     Close,
     Info(InfoSelector),
@@ -536,12 +542,16 @@ impl Operation {
                 .upload(s, destination, limits)
                 .await
                 .map(|inner| UploadReply { inner }.into()),
-            Self::VerifyOwned(image, window) => image
-                .verify(s, window)
-                .await
-                .map(|_| JsValue::UNDEFINED),
-            Self::Sequence(commands, limits) => s.sequence(commands, limits).await
-                .map(|replies| replies.into_iter().map(bytes).collect::<js_sys::Array>().into()),
+            Self::VerifyOwned(image, window) => {
+                image.verify(s, window).await.map(|_| JsValue::UNDEFINED)
+            }
+            Self::Sequence(commands, limits) => s.sequence(commands, limits).await.map(|replies| {
+                replies
+                    .into_iter()
+                    .map(bytes)
+                    .collect::<js_sys::Array>()
+                    .into()
+            }),
             Self::Ping => s.ping().await.map(bytes),
             Self::Close => unreachable!(),
             Self::Info(selector) => s
@@ -673,8 +683,14 @@ pub fn execute_app80(
 #[wasm_bindgen]
 impl Session {
     #[wasm_bindgen(js_name=executeSequence,unchecked_return_type="Promise<Uint8Array[]>")]
-    pub fn execute_sequence(&self, sequence: &crate::sequence::CommandSequence) -> Result<js_sys::Promise, JsValue> {
-        self.call(Operation::Sequence(sequence.commands.clone(), self.limits.memory))
+    pub fn execute_sequence(
+        &self,
+        sequence: &crate::sequence::CommandSequence,
+    ) -> Result<js_sys::Promise, JsValue> {
+        self.call(Operation::Sequence(
+            sequence.commands.clone(),
+            self.limits.memory,
+        ))
     }
 }
 #[wasm_bindgen(js_name=readMemoryRange,unchecked_return_type="Promise<Uint8Array>")]

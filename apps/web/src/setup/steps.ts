@@ -69,7 +69,11 @@ export function stepTimeline(step: StepId, camera: Camera, rig: Rig): Timeline {
   const body = { cx: W / 2 + 4, cy: H / 2 - D * 0.42, zoom: W + 80 };
   // the shutter, as drawn on the top plate at full tilt (scene.ts DEPTH_X/DEPTH_Y)
   const topPlate = { cx: sh.u + sh.v * 0.42 - 4, cy: -sh.v * 0.72 + 1, zoom: 78 };
-  const holdView = { cx: (sh.u + dp.x) / 2 - 6, cy: (dp.y - sh.v * 0.72 * 0.85) / 2, zoom: W * 0.95 };
+  const holdView = {
+    cx: (sh.u + dp.x) / 2 - 6,
+    cy: (dp.y - sh.v * 0.72 * 0.85) / 2,
+    zoom: W * 0.95,
+  };
   const bt = a.bottom.battery;
   const baseView = { cx: bt.u - 10, cy: H + D * 0.45, zoom: W * 1.05 };
   const at = (i: number, t: number | string) => {
@@ -78,7 +82,22 @@ export function stepTimeline(step: StepId, camera: Camera, rig: Rig): Timeline {
   };
 
   if (step === 'enter') {
-    tl.add(rig, { lever: 0, lcd: 1, led: 0, cable: 0, plug: 0, arrowAlpha: 0, holdUp: 0, holdShutter: 0, battery: 0, door: 0, latch: 0, check: 0, data: 0, duration: 1 });
+    tl.add(rig, {
+      lever: 0,
+      lcd: 1,
+      led: 0,
+      cable: 0,
+      plug: 0,
+      arrowAlpha: 0,
+      holdUp: 0,
+      holdShutter: 0,
+      battery: 0,
+      door: 0,
+      latch: 0,
+      check: 0,
+      data: 0,
+      duration: 1,
+    });
     at(0, 0);
     tl.add(rig, { ...overview, tilt: 0.35, laptop: 1, duration: 1100 })
       .add(rig, { cable: 1, duration: 1300, ease: 'inOutSine' }, '-=300')
@@ -108,15 +127,49 @@ export function stepTimeline(step: StepId, camera: Camera, rig: Rig): Timeline {
       .add(rig, { cx: overview.cx, duration: 2400 });
   } else if (step === 'connect') {
     at(0, 0);
-    tl.add(rig, { ...overview, tilt: 0.3, laptop: 1, cable: 1, plug: 1, lever: 0, lcd: 0, led: 1, arrowAlpha: 0, holdUp: 0, holdShutter: 0, battery: 0, door: 0, latch: 0, check: 0, duration: 1200 });
+    tl.add(rig, {
+      ...overview,
+      tilt: 0.3,
+      laptop: 1,
+      cable: 1,
+      plug: 1,
+      lever: 0,
+      lcd: 0,
+      led: 1,
+      arrowAlpha: 0,
+      holdUp: 0,
+      holdShutter: 0,
+      battery: 0,
+      door: 0,
+      latch: 0,
+      check: 0,
+      duration: 1200,
+    });
   } else if (step === 'debug') {
     at(0, 0);
     tl.add(rig, { ...overview, tilt: 0.3, laptop: 1, cable: 1, plug: 1, data: 1, duration: 1000 });
   } else {
-    tl.add(rig, { lever: 0, lcd: 0, led: 1, laptop: 1, cable: 1, plug: 1, battery: 0, door: 0, latch: 0, check: 0, data: 0, arrowAlpha: 0, duration: 1 });
+    tl.add(rig, {
+      lever: 0,
+      lcd: 0,
+      led: 1,
+      laptop: 1,
+      cable: 1,
+      plug: 1,
+      battery: 0,
+      door: 0,
+      latch: 0,
+      check: 0,
+      data: 0,
+      arrowAlpha: 0,
+      duration: 1,
+    });
     at(0, 0);
-    tl.add(rig, { ...baseView, tilt: -1, laptop: 0.25, duration: 1400 })
-      .add(rig, { latch: 1, duration: 500, ease: 'inOutQuad' }, '+=200');
+    tl.add(rig, { ...baseView, tilt: -1, laptop: 0.25, duration: 1400 }).add(
+      rig,
+      { latch: 1, duration: 500, ease: 'inOutQuad' },
+      '+=200',
+    );
     at(1, '+=500');
     tl.add(rig, { door: 1, duration: 800, ease: 'outCubic' })
       .add(rig, { battery: 1, duration: 900, ease: 'inQuad' }, '+=150')

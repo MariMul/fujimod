@@ -1,5 +1,17 @@
 [workspace]
-members = ["crates/corpus", "crates/firmware", "crates/usb-proxy", "crates/simulation", "crates/defs", "crates/fujimod", "crates/usb", "crates/mod-install", "bindings/python", "bindings/javascript", "bindings/generator"]
+members = [
+  "crates/corpus",
+  "crates/firmware",
+  "crates/usb-proxy",
+  "crates/simulation",
+  "crates/defs",
+  "crates/fujimod",
+  "crates/usb",
+  "crates/mod-install",
+  "bindings/python",
+  "bindings/javascript",
+  "bindings/generator",
+]
 resolver = "3"
 
 [workspace.package]

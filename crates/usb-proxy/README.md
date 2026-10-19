@@ -71,7 +71,8 @@ Native Python and Pyodide use the same async interface:
 from fujimod import usb
 
 devices = await usb.discover_proxy(
-    "wss://your-host.ts.net:8795/usb-proxy/ws", token,
+    "wss://your-host.ts.net:8795/usb-proxy/ws",
+    token,
     usb.DeviceFilter.Diagnostic,
 )
 choices = await usb.interfaces(devices[0])

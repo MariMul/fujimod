@@ -1,6 +1,6 @@
 pub mod commands;
 pub mod framing;
-mod session;
 pub mod sequence;
+mod session;
 
 pub use session::{Session, SessionInfo, SessionState};

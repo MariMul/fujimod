@@ -6,6 +6,13 @@ use crate::{Error, Result, connection::Io, error::TransferStage, ff80::framing::
 use fujimod_usb_proxy::{Client, Message, Operation, Outcome, Recipient, RequestType, Setup};
 use std::time::Duration;
 
+pub(crate) struct FramedCommand {
+    pub write: [u8; 12],
+    pub bytes: Vec<u8>,
+    pub read: [u8; 12],
+    pub reply: usize,
+}
+
 pub(crate) struct CheckedExchange {
     pub write: [u8; 12],
     pub bytes: Vec<u8>,
@@ -39,7 +46,12 @@ fn vendor_setup() -> Setup {
     }
 }
 /// Map an exporter's failure text to the transfer error the engine reports.
-fn transfer_error(stage: TransferStage, error: &str, transferred: usize, partial: Vec<u8>) -> Error {
+fn transfer_error(
+    stage: TransferStage,
+    error: &str,
+    transferred: usize,
+    partial: Vec<u8>,
+) -> Error {
     Error::Transfer {
         stage,
         source: match error {
@@ -58,7 +70,10 @@ impl ProxyIo {
     }
     pub(crate) async fn owner_message(&mut self, operation: Operation) -> Result<()> {
         self.sync().await?;
-        let completion = self.client.request(&self.device, operation, Duration::from_secs(30)).await?;
+        let completion = self
+            .client
+            .request(&self.device, operation, Duration::from_secs(30))
+            .await?;
         if let Some(error) = completion.error {
             return Err(fujimod_usb_proxy::Error(error).into());
         }
@@ -67,10 +82,15 @@ impl ProxyIo {
     /// Send one USB step now; its result is checked at the next sync.
     async fn step(&mut self, operation: Operation, stage: TransferStage) -> Result<()> {
         let expected = match &operation {
-            Operation::ControlOut { data, .. } | Operation::TransferOut { data, .. } => Some(data.len()),
+            Operation::ControlOut { data, .. } | Operation::TransferOut { data, .. } => {
+                Some(data.len())
+            }
             _ => None,
         };
-        let seq = self.client.submit(&self.device, operation, self.timeout).await?;
+        let seq = self
+            .client
+            .submit(&self.device, operation, self.timeout)
+            .await?;
         self.unsynced.push((seq, stage, expected));
         Ok(())
     }
@@ -92,14 +112,25 @@ impl ProxyIo {
                 return Err(fujimod_usb_proxy::Error("USB step not run".into()).into());
             };
             if seq != done {
-                return Err(fujimod_usb_proxy::Error("inconsistent pipeline outcome".into()).into());
+                return Err(
+                    fujimod_usb_proxy::Error("inconsistent pipeline outcome".into()).into(),
+                );
             }
             if let Some(error) = &completion.error {
-                return Err(transfer_error(stage, error, completion.transferred, completion.data));
+                return Err(transfer_error(
+                    stage,
+                    error,
+                    completion.transferred,
+                    completion.data,
+                ));
             }
             match expected {
                 Some(length) if completion.transferred != length => {
-                    return Err(Error::ShortTransfer { stage, expected: length, actual: completion.transferred });
+                    return Err(Error::ShortTransfer {
+                        stage,
+                        expected: length,
+                        actual: completion.transferred,
+                    });
                 }
                 Some(_) => (),
                 None => replies.push(completion.data),
@@ -109,55 +140,144 @@ impl ProxyIo {
     }
     /// Several framed commands streamed with one wait: each is control(write
     /// envelope), its bytes, control(read envelope), then its reply.
-    pub(crate) async fn commands(
-        &mut self,
-        commands: Vec<([u8; 12], Vec<u8>, [u8; 12], usize)>,
-    ) -> Result<Vec<Vec<u8>>> {
+    pub(crate) async fn commands(&mut self, commands: Vec<FramedCommand>) -> Result<Vec<Vec<u8>>> {
         let earlier = self.unsynced.len();
-        for (write, bytes, read, reply) in commands {
+        for FramedCommand {
+            write,
+            bytes,
+            read,
+            reply,
+        } in commands
+        {
             let length = self.read_length(reply)?;
-            self.step(Operation::ControlOut { setup: vendor_setup(), data: write.to_vec() },
-                      TransferStage::Control(RequestKind::WriteCommand)).await?;
-            self.step(Operation::TransferOut { endpoint: self.output, data: bytes }, TransferStage::BulkOut).await?;
-            self.step(Operation::ControlOut { setup: vendor_setup(), data: read.to_vec() },
-                      TransferStage::Control(RequestKind::ReadCommand)).await?;
-            self.step(Operation::TransferIn { endpoint: self.input, length }, TransferStage::BulkIn).await?;
+            self.step(
+                Operation::ControlOut {
+                    setup: vendor_setup(),
+                    data: write.to_vec(),
+                },
+                TransferStage::Control(RequestKind::WriteCommand),
+            )
+            .await?;
+            self.step(
+                Operation::TransferOut {
+                    endpoint: self.output,
+                    data: bytes,
+                },
+                TransferStage::BulkOut,
+            )
+            .await?;
+            self.step(
+                Operation::ControlOut {
+                    setup: vendor_setup(),
+                    data: read.to_vec(),
+                },
+                TransferStage::Control(RequestKind::ReadCommand),
+            )
+            .await?;
+            self.step(
+                Operation::TransferIn {
+                    endpoint: self.input,
+                    length,
+                },
+                TransferStage::BulkIn,
+            )
+            .await?;
         }
-        let earlier_replies = self.unsynced[..earlier].iter().filter(|s| s.2.is_none()).count();
+        let earlier_replies = self.unsynced[..earlier]
+            .iter()
+            .filter(|s| s.2.is_none())
+            .count();
         let mut replies = self.sync().await?;
         Ok(replies.split_off(earlier_replies))
     }
     /// Exporter-side reply guards stop a dependent sequence before its next
     /// USB command. This owns a separate pipeline, with no outstanding steps.
-    pub(crate) async fn checked_commands(&mut self,
-        commands: Vec<CheckedExchange>) -> Result<Vec<Vec<u8>>> {
+    pub(crate) async fn checked_commands(
+        &mut self,
+        commands: Vec<CheckedExchange>,
+    ) -> Result<Vec<Vec<u8>>> {
         self.sync().await?;
         let mut steps = Vec::new();
-        for CheckedExchange { write, bytes, read, reply, mut expected } in commands {
+        for CheckedExchange {
+            write,
+            bytes,
+            read,
+            reply,
+            mut expected,
+        } in commands
+        {
             let length = self.read_length(reply)?;
-            for op in [Operation::ControlOut { setup: vendor_setup(), data: write.to_vec() },
-                       Operation::TransferOut { endpoint: self.output, data: bytes },
-                       Operation::ControlOut { setup: vendor_setup(), data: read.to_vec() }] {
-                let count = match &op { Operation::ControlOut { data, .. } | Operation::TransferOut { data, .. } => data.len(), _ => unreachable!() };
+            for op in [
+                Operation::ControlOut {
+                    setup: vendor_setup(),
+                    data: write.to_vec(),
+                },
+                Operation::TransferOut {
+                    endpoint: self.output,
+                    data: bytes,
+                },
+                Operation::ControlOut {
+                    setup: vendor_setup(),
+                    data: read.to_vec(),
+                },
+            ] {
+                let count = match &op {
+                    Operation::ControlOut { data, .. } | Operation::TransferOut { data, .. } => {
+                        data.len()
+                    }
+                    _ => unreachable!(),
+                };
                 let seq = self.client.submit(&self.device, op, self.timeout).await?;
                 steps.push((seq, CheckedStep::Out(count)));
             }
-            let seq = self.client.submit(&self.device, Operation::TransferIn { endpoint: self.input, length }, self.timeout).await?;
+            let seq = self
+                .client
+                .submit(
+                    &self.device,
+                    Operation::TransferIn {
+                        endpoint: self.input,
+                        length,
+                    },
+                    self.timeout,
+                )
+                .await?;
             steps.push((seq, CheckedStep::Reply));
             let first = expected.remove(0);
-            let seq = self.client.expect(seq, 0, first, None, Some(reply as u32), expected).await?;
+            let seq = self
+                .client
+                .expect(seq, 0, first, None, Some(reply as u32), expected)
+                .await?;
             steps.push((seq, CheckedStep::Guard));
         }
         let outcomes = self.client.sync().await?;
-        if outcomes.len() != steps.len() { return Err(fujimod_usb_proxy::Error("inconsistent checked pipeline outcome".into()).into()); }
+        if outcomes.len() != steps.len() {
+            return Err(
+                fujimod_usb_proxy::Error("inconsistent checked pipeline outcome".into()).into(),
+            );
+        }
         let mut replies = Vec::new();
-        for (index, ((seq, expected), (done, outcome))) in steps.into_iter().zip(outcomes).enumerate() {
-            if seq != done { return Err(fujimod_usb_proxy::Error("inconsistent checked pipeline sequence".into()).into()); }
+        for (index, ((seq, expected), (done, outcome))) in
+            steps.into_iter().zip(outcomes).enumerate()
+        {
+            if seq != done {
+                return Err(fujimod_usb_proxy::Error(
+                    "inconsistent checked pipeline sequence".into(),
+                )
+                .into());
+            }
             match (expected, outcome) {
                 (CheckedStep::Guard, Outcome::Held) => (),
-                (CheckedStep::Reply, Outcome::Completed(c)) if c.error.is_none() => replies.push(c.data),
-                (CheckedStep::Out(n), Outcome::Completed(c)) if c.error.is_none() && c.transferred == n => (),
-                _ => return Err(fujimod_usb_proxy::Error(format!("checked command {} stopped at step {} (sequence {seq}); completion unknown", index / 5, index % 5)).into()),
+                (CheckedStep::Reply, Outcome::Completed(c)) if c.error.is_none() => {
+                    replies.push(c.data)
+                }
+                (CheckedStep::Out(n), Outcome::Completed(c))
+                    if c.error.is_none() && c.transferred == n => {}
+                _ => return Err(fujimod_usb_proxy::Error(format!(
+                    "checked command {} stopped at step {} (sequence {seq}); completion unknown",
+                    index / 5,
+                    index % 5
+                ))
+                .into()),
             }
         }
         Ok(replies)
@@ -189,19 +309,44 @@ impl Io for ProxyIo {
         })
     }
     async fn control(&mut self, kind: RequestKind, envelope: [u8; 12]) -> Result<()> {
-        self.step(Operation::ControlOut { setup: vendor_setup(), data: envelope.to_vec() }, TransferStage::Control(kind))
-            .await
+        self.step(
+            Operation::ControlOut {
+                setup: vendor_setup(),
+                data: envelope.to_vec(),
+            },
+            TransferStage::Control(kind),
+        )
+        .await
     }
     async fn write(&mut self, bytes: &[u8]) -> Result<()> {
-        self.step(Operation::TransferOut { endpoint: self.output, data: bytes.to_vec() }, TransferStage::BulkOut)
-            .await
+        self.step(
+            Operation::TransferOut {
+                endpoint: self.output,
+                data: bytes.to_vec(),
+            },
+            TransferStage::BulkOut,
+        )
+        .await
     }
     async fn read(&mut self, maximum: usize) -> Result<Vec<u8>> {
         let length = self.read_length(maximum)?;
-        self.step(Operation::TransferIn { endpoint: self.input, length }, TransferStage::BulkIn).await?;
-        let data = self.sync().await?.pop().ok_or_else(|| fujimod_usb_proxy::Error("missing IN reply".into()))?;
+        self.step(
+            Operation::TransferIn {
+                endpoint: self.input,
+                length,
+            },
+            TransferStage::BulkIn,
+        )
+        .await?;
+        let data = self
+            .sync()
+            .await?
+            .pop()
+            .ok_or_else(|| fujimod_usb_proxy::Error("missing IN reply".into()))?;
         if data.len() > length {
-            return Err(fujimod_usb_proxy::Error("inconsistent USB completion length".into()).into());
+            return Err(
+                fujimod_usb_proxy::Error("inconsistent USB completion length".into()).into(),
+            );
         }
         Ok(data)
     }

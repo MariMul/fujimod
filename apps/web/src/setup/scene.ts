@@ -89,7 +89,11 @@ export function buildScene(svg: SVGSVGElement, camera: Camera) {
     H = a.height,
     D = a.depth;
   const defs = el('defs', {}, svg);
-  const glow = el('filter', { id: 'glow', x: '-50%', y: '-50%', width: '200%', height: '200%' }, defs);
+  const glow = el(
+    'filter',
+    { id: 'glow', x: '-50%', y: '-50%', width: '200%', height: '200%' },
+    defs,
+  );
   el('feGaussianBlur', { stdDeviation: 1.2 }, glow);
   const grad = el('linearGradient', { id: 'lcd-on', x1: 0, y1: 0, x2: 1, y2: 1 }, defs);
   el('stop', { offset: 0, 'stop-color': '#3d5a73' }, grad);
@@ -114,66 +118,207 @@ export function buildScene(svg: SVGSVGElement, camera: Camera) {
   const topFace = el('path', { class: 'c-face c-top' }, top);
   const topParts = el('g', {}, top);
   const lensT = a.lens;
-  el('rect', { x: lensT.u - lensT.w / 2, y: D - 1, width: lensT.w, height: lensT.length + 1, rx: 3, class: 'c-lens' }, topParts);
-  el('rect', { x: lensT.u - lensT.w / 2 + 3, y: D + lensT.length - 3, width: lensT.w - 6, height: 3, rx: 1, class: 'c-lens-ring' }, topParts);
-  el('rect', { x: a.top.shoe.u - a.top.shoe.w / 2, y: 8, width: a.top.shoe.w, height: 18, rx: 1.5, class: 'c-shoe' }, topParts);
+  el(
+    'rect',
+    {
+      x: lensT.u - lensT.w / 2,
+      y: D - 1,
+      width: lensT.w,
+      height: lensT.length + 1,
+      rx: 3,
+      class: 'c-lens',
+    },
+    topParts,
+  );
+  el(
+    'rect',
+    {
+      x: lensT.u - lensT.w / 2 + 3,
+      y: D + lensT.length - 3,
+      width: lensT.w - 6,
+      height: 3,
+      rx: 1,
+      class: 'c-lens-ring',
+    },
+    topParts,
+  );
+  el(
+    'rect',
+    {
+      x: a.top.shoe.u - a.top.shoe.w / 2,
+      y: 8,
+      width: a.top.shoe.w,
+      height: 18,
+      rx: 1.5,
+      class: 'c-shoe',
+    },
+    topParts,
+  );
   if (a.top.flash)
-    el('rect', { x: a.top.flash.u - a.top.flash.w / 2, y: 10, width: a.top.flash.w, height: 22, rx: 2, class: 'c-shoe' }, topParts);
+    el(
+      'rect',
+      {
+        x: a.top.flash.u - a.top.flash.w / 2,
+        y: 10,
+        width: a.top.flash.w,
+        height: 22,
+        rx: 2,
+        class: 'c-shoe',
+      },
+      topParts,
+    );
   for (const d of a.top.dials) {
     el('circle', { cx: d.u, cy: d.v, r: d.r, class: 'c-dial' }, topParts);
     if (d.label) {
-      const t = el('text', { x: 0, y: 1.1, class: 'c-dial-label', transform: `translate(${d.u} ${d.v}) scale(1 -1)` }, topParts);
+      const t = el(
+        'text',
+        { x: 0, y: 1.1, class: 'c-dial-label', transform: `translate(${d.u} ${d.v}) scale(1 -1)` },
+        topParts,
+      );
       t.textContent = d.label;
     }
   }
   const sh = a.top.shutter,
     lv = a.top.lever;
-  const leverRing = el('circle', { cx: sh.u, cy: sh.v, r: lv.r - 2, class: 'c-lever-ring' }, topParts);
+  const leverRing = el(
+    'circle',
+    { cx: sh.u, cy: sh.v, r: lv.r - 2, class: 'c-lever-ring' },
+    topParts,
+  );
   void leverRing;
   const leverTab = el('path', { class: 'c-lever-tab' }, topParts);
-  for (const [label, angle] of [['ON', lv.on], ['OFF', lv.off]] as const) {
+  for (const [label, angle] of [
+    ['ON', lv.on],
+    ['OFF', lv.off],
+  ] as const) {
     const p = polar(sh.u, sh.v, lv.r + 5.5, angle);
-    const t = el('text', { x: 0, y: 1, class: 'c-lever-label', transform: `translate(${p.x} ${p.y}) scale(1 -1)` }, topParts);
+    const t = el(
+      'text',
+      { x: 0, y: 1, class: 'c-lever-label', transform: `translate(${p.x} ${p.y}) scale(1 -1)` },
+      topParts,
+    );
     t.textContent = label;
   }
-  const shutterKey = el('circle', { cx: sh.u, cy: sh.v, r: sh.r, class: 'c-key c-shutter' }, topParts);
+  const shutterKey = el(
+    'circle',
+    { cx: sh.u, cy: sh.v, r: sh.r, class: 'c-key c-shutter' },
+    topParts,
+  );
   const arrowPath = el('path', { class: 'c-arrow', pathLength: 1 }, topParts);
   const arrowHead = el('path', { d: 'M0 -2.4 L4.2 0 L0 2.4 z', class: 'c-arrow-head' }, topParts);
 
   const base = el('g', {}, svg);
   const baseFace = el('path', { class: 'c-face c-bottom' }, base);
   const baseParts = el('g', {}, base);
-  el('rect', { x: lensT.u - lensT.w / 2, y: D - 1, width: lensT.w, height: lensT.length + 1, rx: 3, class: 'c-lens' }, baseParts);
+  el(
+    'rect',
+    {
+      x: lensT.u - lensT.w / 2,
+      y: D - 1,
+      width: lensT.w,
+      height: lensT.length + 1,
+      rx: 3,
+      class: 'c-lens',
+    },
+    baseParts,
+  );
   const bt = a.bottom.battery;
-  el('circle', { cx: a.bottom.tripod.u, cy: a.bottom.tripod.v, r: 3, class: 'c-tripod' }, baseParts);
+  el(
+    'circle',
+    { cx: a.bottom.tripod.u, cy: a.bottom.tripod.v, r: 3, class: 'c-tripod' },
+    baseParts,
+  );
   const latch = el('rect', { width: 6, height: 2.4, rx: 1, class: 'c-latch' }, baseParts);
-  el('rect', { x: bt.u - bt.w / 2 + 1, y: bt.v + 1, width: bt.w - 2, height: bt.d - 2, rx: 1.5, class: 'c-cavity' }, baseParts);
-  const batteryCell = el('rect', { x: bt.u - bt.w / 2 + 2, y: bt.v + 2, width: bt.w - 4, height: bt.d - 4, rx: 1.5, class: 'c-battery' }, baseParts);
-  const batteryLabel = el('text', { x: bt.u, y: bt.v + bt.d / 2 + 1.5, class: 'c-battery-label' }, baseParts);
+  el(
+    'rect',
+    {
+      x: bt.u - bt.w / 2 + 1,
+      y: bt.v + 1,
+      width: bt.w - 2,
+      height: bt.d - 2,
+      rx: 1.5,
+      class: 'c-cavity',
+    },
+    baseParts,
+  );
+  const batteryCell = el(
+    'rect',
+    {
+      x: bt.u - bt.w / 2 + 2,
+      y: bt.v + 2,
+      width: bt.w - 4,
+      height: bt.d - 4,
+      rx: 1.5,
+      class: 'c-battery',
+    },
+    baseParts,
+  );
+  const batteryLabel = el(
+    'text',
+    { x: bt.u, y: bt.v + bt.d / 2 + 1.5, class: 'c-battery-label' },
+    baseParts,
+  );
   batteryLabel.textContent = 'NP-95';
   const door = el('path', { class: 'c-door' }, baseParts);
 
   // ---- back of the camera ----
   const rear = el('g', {}, svg);
   el('rect', { x: 0, y: 0, width: W, height: H, rx: 4, class: 'c-face c-rear' }, rear);
-  if (a.rear.grip) el('rect', { x: a.rear.grip.x, y: 2, width: a.rear.grip.w - 2, height: H - 4, rx: 3, class: 'c-grip' }, rear);
+  if (a.rear.grip)
+    el(
+      'rect',
+      { x: a.rear.grip.x, y: 2, width: a.rear.grip.w - 2, height: H - 4, rx: 3, class: 'c-grip' },
+      rear,
+    );
   const r = a.rear;
-  if (r.evf) el('rect', { x: r.evf.x, y: r.evf.y, width: r.evf.w, height: r.evf.h, rx: 2, class: 'c-evf' }, rear);
-  const lcd = el('rect', { x: r.lcd.x, y: r.lcd.y, width: r.lcd.w, height: r.lcd.h, rx: 1.5, class: 'c-lcd' }, rear);
-  const lcdImage = el('rect', { x: r.lcd.x + 1.5, y: r.lcd.y + 1.5, width: r.lcd.w - 3, height: r.lcd.h - 3, fill: 'url(#lcd-on)' }, rear);
+  if (r.evf)
+    el(
+      'rect',
+      { x: r.evf.x, y: r.evf.y, width: r.evf.w, height: r.evf.h, rx: 2, class: 'c-evf' },
+      rear,
+    );
+  const lcd = el(
+    'rect',
+    { x: r.lcd.x, y: r.lcd.y, width: r.lcd.w, height: r.lcd.h, rx: 1.5, class: 'c-lcd' },
+    rear,
+  );
+  const lcdImage = el(
+    'rect',
+    {
+      x: r.lcd.x + 1.5,
+      y: r.lcd.y + 1.5,
+      width: r.lcd.w - 3,
+      height: r.lcd.h - 3,
+      fill: 'url(#lcd-on)',
+    },
+    rear,
+  );
   void lcd;
   for (const k of r.keys) {
     el('rect', { x: k.x, y: k.y, width: k.w, height: k.h, rx: 1.2, class: 'c-key' }, rear);
     if (k.label) {
-      const t = el('text', { x: k.x + k.w / 2, y: k.y + k.h / 2 + 1.1, class: 'c-key-label' }, rear);
+      const t = el(
+        'text',
+        { x: k.x + k.w / 2, y: k.y + k.h / 2 + 1.1, class: 'c-key-label' },
+        rear,
+      );
       t.textContent = k.label;
     }
   }
   const dp = r.dpad;
   el('circle', { cx: dp.x, cy: dp.y, r: dp.r, class: 'c-dpad' }, rear);
   el('circle', { cx: dp.x, cy: dp.y, r: dp.r * 0.42, class: 'c-key' }, rear);
-  const upKey = el('path', { d: arc(dp.x, dp.y, dp.r - 0.6, dp.r * 0.5, -135, -45), class: 'c-key c-up' }, rear);
-  for (const [s, e] of [[-45, 45], [45, 135], [135, 225]]) el('path', { d: arc(dp.x, dp.y, dp.r - 0.6, dp.r * 0.5, s, e), class: 'c-key c-seg' }, rear);
+  const upKey = el(
+    'path',
+    { d: arc(dp.x, dp.y, dp.r - 0.6, dp.r * 0.5, -135, -45), class: 'c-key c-up' },
+    rear,
+  );
+  for (const [s, e] of [
+    [-45, 45],
+    [45, 135],
+    [135, 225],
+  ])
+    el('path', { d: arc(dp.x, dp.y, dp.r - 0.6, dp.r * 0.5, s, e), class: 'c-key c-seg' }, rear);
   const upLabel = el('text', { x: dp.x, y: dp.y - dp.r * 0.62, class: 'c-key-label' }, rear);
   upLabel.textContent = '▲';
   const led = el('circle', { cx: r.led.x, cy: r.led.y, r: 1.3, class: 'c-led' }, rear);
@@ -238,7 +383,10 @@ export function buildScene(svg: SVGSVGElement, camera: Camera) {
     const tip = mix(from, to, clamp(s.arrow));
     const tp = polar(sh.u, sh.v, ar, tip);
     const heading = tip + (to > from ? 90 : -90);
-    set(arrowHead, { transform: `translate(${tp.x} ${tp.y}) rotate(${heading})`, opacity: s.arrowAlpha * (s.arrow > 0.02 ? 1 : 0) });
+    set(arrowHead, {
+      transform: `translate(${tp.x} ${tp.y}) rotate(${heading})`,
+      opacity: s.arrowAlpha * (s.arrow > 0.02 ? 1 : 0),
+    });
     shutterKey.classList.toggle('c-held', s.holdShutter > 0.5);
     upKey.classList.toggle('c-held', s.holdUp > 0.5);
 
@@ -247,7 +395,10 @@ export function buildScene(svg: SVGSVGElement, camera: Camera) {
     const open = clamp(s.door);
     const hinge = bt.v,
       far = bt.v + bt.d * Math.cos(open * Math.PI * 0.95);
-    set(door, { d: `M${bt.u - bt.w / 2} ${hinge} H${bt.u + bt.w / 2} V${far} H${bt.u - bt.w / 2} Z`, opacity: open > 0.5 ? 0.85 : 1 });
+    set(door, {
+      d: `M${bt.u - bt.w / 2} ${hinge} H${bt.u + bt.w / 2} V${far} H${bt.u - bt.w / 2} Z`,
+      opacity: open > 0.5 ? 0.85 : 1,
+    });
     // the battery slides out past the front of the base, ending beside the camera
     const drop = clamp(s.battery) * (bt.d * 1.15);
     const shown = open > 0.55 || s.battery > 0.01 ? 1 : 0;
@@ -273,10 +424,19 @@ export function buildScene(svg: SVGSVGElement, camera: Camera) {
     const upAt = toRear(dp.x, dp.y - dp.r * 0.72),
       shAt = toTop(sh.u, sh.v);
     const ring = (s.phase % 1) * 1;
-    for (const [c, at, k] of [[pulseUp, upAt, s.holdUp], [pulseShutter, shAt, s.holdShutter]] as const)
+    for (const [c, at, k] of [
+      [pulseUp, upAt, s.holdUp],
+      [pulseShutter, shAt, s.holdShutter],
+    ] as const)
       set(c, { cx: at.x, cy: at.y, r: 3 + ring * 7, opacity: clamp(k) * (1 - ring) });
-    set(labelUp, { transform: `translate(${upAt.x - 22} ${upAt.y + 2})`, opacity: clamp(s.holdUp) });
-    set(labelShutter, { transform: `translate(${shAt.x - 40} ${shAt.y - 4})`, opacity: clamp(s.holdShutter) });
+    set(labelUp, {
+      transform: `translate(${upAt.x - 22} ${upAt.y + 2})`,
+      opacity: clamp(s.holdUp),
+    });
+    set(labelShutter, {
+      transform: `translate(${shAt.x - 40} ${shAt.y - 4})`,
+      opacity: clamp(s.holdShutter),
+    });
 
     // data moving along the cable (debug step)
     const L = cable.getTotalLength();
@@ -285,7 +445,10 @@ export function buildScene(svg: SVGSVGElement, camera: Camera) {
       const p = cable.getPointAtLength(L * f);
       set(d, { cx: p.x, cy: p.y, opacity: clamp(s.data) * Math.sin(f * Math.PI) });
     });
-    set(check, { transform: `translate(${W / 2} ${H / 2}) scale(${0.6 + 0.4 * clamp(s.check)})`, opacity: clamp(s.check) });
+    set(check, {
+      transform: `translate(${W / 2} ${H / 2}) scale(${0.6 + 0.4 * clamp(s.check)})`,
+      opacity: clamp(s.check),
+    });
   };
 }
 

@@ -14,7 +14,21 @@ webgl2 = ["bevy/webgl2"]
 webgpu = ["bevy/webgpu"]
 
 [dependencies]
-bevy = { workspace = true, features = ["std", "async_executor", "bevy_asset", "bevy_log", "reflect_auto_register", "bevy_pbr", "bevy_gltf", "bevy_anti_alias", "bevy_mikktspace", "scene", "png", "jpeg", "mesh_picking"] }
+bevy = { workspace = true, features = [
+  "std",
+  "async_executor",
+  "bevy_asset",
+  "bevy_log",
+  "reflect_auto_register",
+  "bevy_pbr",
+  "bevy_gltf",
+  "bevy_anti_alias",
+  "bevy_mikktspace",
+  "scene",
+  "png",
+  "jpeg",
+  "mesh_picking",
+] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 
@@ -22,7 +36,14 @@ serde_json.workspace = true
 bevy = { workspace = true, features = ["bevy_winit"] }
 wasm-bindgen.workspace = true
 js-sys.workspace = true
-web-sys = { version = "0.3", features = ["Window", "Document", "HtmlCanvasElement", "console", "CustomEvent", "CustomEventInit"] }
+web-sys = { version = "0.3", features = [
+  "Window",
+  "Document",
+  "HtmlCanvasElement",
+  "console",
+  "CustomEvent",
+  "CustomEventInit",
+] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 bevy = { workspace = true, features = ["bevy_post_process"] }

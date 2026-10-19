@@ -8,7 +8,12 @@ publish.workspace = true
 description = "Address-free ARM function families and locator queries"
 
 [dependencies]
-capstone = { version = "0.14", default-features = false, features = ["std", "full", "arch_arm", "arch_arm64"] }
+capstone = { version = "0.14", default-features = false, features = [
+  "std",
+  "full",
+  "arch_arm",
+  "arch_arm64",
+] }
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json.workspace = true
 thiserror.workspace = true

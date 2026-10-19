@@ -282,18 +282,34 @@ async fn controller(relay: Relay, mut socket: WebSocket, owner: String) {
         .collect();
     let mut seq = u64::MAX / 2;
     for device in owned {
-        let Some((_, local)) = device.split_once('/') else { continue };
+        let Some((_, local)) = device.split_once('/') else {
+            continue;
+        };
         // A sync first ends any failed pipeline's discarding.
         seq += 2;
-        let close = Message::Execute { seq, device: local.into(), timeout_ms: 5000, op: Operation::Close };
-        if bound.sender.send((stream, Message::Sync { seq: seq - 1 })).await.is_err()
+        let close = Message::Execute {
+            seq,
+            device: local.into(),
+            timeout_ms: 5000,
+            op: Operation::Close,
+        };
+        if bound
+            .sender
+            .send((stream, Message::Sync { seq: seq - 1 }))
+            .await
+            .is_err()
             || bound.sender.send((stream, close)).await.is_err()
         {
             break;
         }
         let closed = tokio::time::timeout(Duration::from_secs(10), async {
             while let Some(message) = inbound.recv().await {
-                if let Message::Result { seq: done, completion } = message && done == seq {
+                if let Message::Result {
+                    seq: done,
+                    completion,
+                } = message
+                    && done == seq
+                {
                     return completion.error.is_none();
                 }
             }
@@ -304,7 +320,15 @@ async fn controller(relay: Relay, mut socket: WebSocket, owner: String) {
             relay.inner.lock().await.leases.remove(&device);
         }
     }
-    let _ = bound.sender.send((stream, Message::Goodbye { reason: "controller ended".into() })).await;
+    let _ = bound
+        .sender
+        .send((
+            stream,
+            Message::Goodbye {
+                reason: "controller ended".into(),
+            },
+        ))
+        .await;
     if let Some(peer) = relay.inner.lock().await.exporters.get_mut(&bound.exporter) {
         peer.streams.remove(&stream);
     }
@@ -332,7 +356,10 @@ async fn admit(
         Some(_) => (),
         None => {
             peer.streams.insert(stream, results.clone());
-            *bound = Some(Bound { exporter: exporter.into(), sender: peer.sender.clone() });
+            *bound = Some(Bound {
+                exporter: exporter.into(),
+                sender: peer.sender.clone(),
+            });
         }
     }
     // Echo through the exporter, without requiring a USB lease.
@@ -341,14 +368,18 @@ async fn admit(
     }
     let exists = peer.devices.iter().any(|d| d.id == device);
     let allowed = if matches!(op, Operation::Open { .. }) {
-        exists && inner.leases.insert(device.into(), owner.into()).is_none_or(|previous| {
-            // Keep another controller's lease.
-            let mine = previous == owner;
-            if !mine {
-                inner.leases.insert(device.into(), previous);
-            }
-            mine
-        })
+        exists
+            && inner
+                .leases
+                .insert(device.into(), owner.into())
+                .is_none_or(|previous| {
+                    // Keep another controller's lease.
+                    let mine = previous == owner;
+                    if !mine {
+                        inner.leases.insert(device.into(), previous);
+                    }
+                    mine
+                })
     } else {
         inner.leases.get(device).map(String::as_str) == Some(owner)
     };
@@ -446,7 +477,8 @@ mod tests {
         });
         let task = tokio::spawn(async move {
             let _tasks = (AbortOnDrop(reader), AbortOnDrop(writer));
-            let (mut failed, mut discarded) = (HashMap::<u64, bool>::new(), HashMap::<u64, u64>::new());
+            let (mut failed, mut discarded) =
+                (HashMap::<u64, bool>::new(), HashMap::<u64, u64>::new());
             let mut results: HashMap<(u64, u64), Vec<u8>> = HashMap::new();
             while let Some((at, message)) = arrivals.recv().await {
                 tokio::time::sleep_until(at).await;
@@ -454,11 +486,18 @@ mod tests {
                     continue;
                 };
                 let reply = match *message {
-                    Message::Execute { .. } | Message::Expect { .. } if failed.get(&stream) == Some(&true) => {
+                    Message::Execute { .. } | Message::Expect { .. }
+                        if failed.get(&stream) == Some(&true) =>
+                    {
                         *discarded.entry(stream).or_default() += 1;
                         None
                     }
-                    Message::Execute { seq, op, timeout_ms, .. } => {
+                    Message::Execute {
+                        seq,
+                        op,
+                        timeout_ms,
+                        ..
+                    } => {
                         if matches!(op, Operation::TransferIn { length: 10, .. }) {
                             // The USB budget must not be inflated with network time.
                             assert_eq!(timeout_ms, 10);
@@ -483,11 +522,19 @@ mod tests {
                                 }
                             }
                             Operation::TransferIn { length, .. } => {
-                                let data: Vec<u8> = (0..length).map(|i| (seq as usize + i) as u8).collect();
+                                let data: Vec<u8> =
+                                    (0..length).map(|i| (seq as usize + i) as u8).collect();
                                 results.insert((stream, seq), data.clone());
-                                Completion { transferred: data.len(), data, ..Completion::default() }
+                                Completion {
+                                    transferred: data.len(),
+                                    data,
+                                    ..Completion::default()
+                                }
                             }
-                            Operation::TransferOut { data, .. } => Completion { transferred: data.len(), ..Completion::default() },
+                            Operation::TransferOut { data, .. } => Completion {
+                                transferred: data.len(),
+                                ..Completion::default()
+                            },
                             _ => Completion::default(),
                         };
                         if completion.error.is_some() {
@@ -495,27 +542,51 @@ mod tests {
                         }
                         Some(Message::Result { seq, completion })
                     }
-                    Message::Expect { seq, of, offset, bytes, mask, length, alternatives } => {
+                    Message::Expect {
+                        seq,
+                        of,
+                        offset,
+                        bytes,
+                        mask,
+                        length,
+                        alternatives,
+                    } => {
                         let data = results.get(&(stream, of)).cloned().unwrap_or_default();
                         let mask = mask.as_deref().map(|m| m.as_slice());
-                        if length.is_none_or(|n| data.len() == n as usize) && (expectation_holds(&data, offset as usize, &bytes, mask)
-                            || alternatives.iter().any(|a| expectation_holds(&data, offset as usize, a, mask))) {
+                        if length.is_none_or(|n| data.len() == n as usize)
+                            && (expectation_holds(&data, offset as usize, &bytes, mask)
+                                || alternatives
+                                    .iter()
+                                    .any(|a| expectation_holds(&data, offset as usize, a, mask)))
+                        {
                             None
                         } else {
                             failed.insert(stream, true);
                             let end = (offset as usize + bytes.len()).min(data.len());
-                            Some(Message::ExpectFailed { seq, actual: data.get(offset as usize..end).unwrap_or_default().to_vec() })
+                            Some(Message::ExpectFailed {
+                                seq,
+                                actual: data.get(offset as usize..end).unwrap_or_default().to_vec(),
+                            })
                         }
                     }
                     Message::Sync { seq } => {
                         failed.insert(stream, false);
-                        Some(Message::Synced { seq, discarded: discarded.remove(&stream).unwrap_or(0) })
+                        Some(Message::Synced {
+                            seq,
+                            discarded: discarded.remove(&stream).unwrap_or(0),
+                        })
                     }
                     _ => None,
                 };
                 if let Some(reply) = reply
                     && depart
-                        .send((tokio::time::Instant::now() + rtt / 2, Message::Routed { stream, message: Box::new(reply) }))
+                        .send((
+                            tokio::time::Instant::now() + rtt / 2,
+                            Message::Routed {
+                                stream,
+                                message: Box::new(reply),
+                            },
+                        ))
                         .is_err()
                 {
                     break;
@@ -542,7 +613,10 @@ mod tests {
         }
     }
     fn read(length: usize) -> Operation {
-        Operation::TransferIn { endpoint: 0x82, length }
+        Operation::TransferIn {
+            endpoint: 0x82,
+            length,
+        }
     }
     #[tokio::test]
     async fn authentication_and_version_are_required() {
@@ -567,16 +641,41 @@ mod tests {
         let (route, exporter, mut events) = fixture(&url, Duration::ZERO).await;
         let mut first = available(&url).await;
         let mut second = Client::connect(&url, TOKEN).await.unwrap();
-        assert!(first.request(&route, open(), Duration::from_secs(1)).await.unwrap().error.is_none());
+        assert!(
+            first
+                .request(&route, open(), Duration::from_secs(1))
+                .await
+                .unwrap()
+                .error
+                .is_none()
+        );
         assert!(matches!(events.recv().await, Some(Operation::Open { .. })));
-        assert!(second.request(&route, open(), Duration::from_secs(1)).await.unwrap().error.is_some());
+        assert!(
+            second
+                .request(&route, open(), Duration::from_secs(1))
+                .await
+                .unwrap()
+                .error
+                .is_some()
+        );
         assert!(events.try_recv().is_err());
-        let partial = first.request(&route, read(7), Duration::from_secs(1)).await.unwrap();
+        let partial = first
+            .request(&route, read(7), Duration::from_secs(1))
+            .await
+            .unwrap();
         assert_eq!(partial.error.as_deref(), Some("stall"));
         assert_eq!(partial.data, [1, 2, 3]);
         assert_eq!(partial.transferred, 3);
-        assert!(first.request(&route, Operation::Close, Duration::from_secs(1)).await.is_err());
-        assert!(matches!(events.recv().await, Some(Operation::TransferIn { .. })));
+        assert!(
+            first
+                .request(&route, Operation::Close, Duration::from_secs(1))
+                .await
+                .is_err()
+        );
+        assert!(matches!(
+            events.recv().await,
+            Some(Operation::TransferIn { .. })
+        ));
         // The relay's own cleanup releases the host claim.
         assert!(matches!(events.recv().await, Some(Operation::Close)));
         exporter.abort();
@@ -588,34 +687,90 @@ mod tests {
         let (url, server) = server().await;
         let (route, exporter, mut events) = fixture(&url, rtt).await;
         let mut client = available(&url).await;
-        client.request(&route, open(), Duration::from_secs(1)).await.unwrap();
+        client
+            .request(&route, open(), Duration::from_secs(1))
+            .await
+            .unwrap();
         // 64 operations in one round trip, not 64.
         let started = std::time::Instant::now();
         let mut reads = Vec::new();
         for _ in 0..32 {
-            client.submit(&route, Operation::TransferOut { endpoint: 1, data: vec![1; 12] }, Duration::from_secs(1)).await.unwrap();
-            reads.push(client.submit(&route, read(16), Duration::from_secs(1)).await.unwrap());
+            client
+                .submit(
+                    &route,
+                    Operation::TransferOut {
+                        endpoint: 1,
+                        data: vec![1; 12],
+                    },
+                    Duration::from_secs(1),
+                )
+                .await
+                .unwrap();
+            reads.push(
+                client
+                    .submit(&route, read(16), Duration::from_secs(1))
+                    .await
+                    .unwrap(),
+            );
         }
         let outcomes = client.sync().await.unwrap();
         assert!(started.elapsed() < rtt * 4, "{:?}", started.elapsed());
         assert_eq!(outcomes.len(), 64);
-        let Outcome::Completed(first) = &outcomes[1].1 else { panic!() };
+        let Outcome::Completed(first) = &outcomes[1].1 else {
+            panic!()
+        };
         assert_eq!(first.data[0], reads[0] as u8);
         // An expectation that holds lets the rest run; one that fails discards
         // everything after it, without touching USB, until the sync.
-        let of = client.submit(&route, read(4), Duration::from_secs(1)).await.unwrap();
-        let held = client.expect(of, 1, vec![of as u8 + 1], None, None, vec![]).await.unwrap();
-        let failed = client.expect(of, 0, vec![0xee, 0xff], Some(vec![0xff, 0x0f]), None, vec![]).await.unwrap();
-        let skipped = client.submit(&route, Operation::TransferOut { endpoint: 1, data: vec![2] }, Duration::from_secs(1)).await.unwrap();
+        let of = client
+            .submit(&route, read(4), Duration::from_secs(1))
+            .await
+            .unwrap();
+        let held = client
+            .expect(of, 1, vec![of as u8 + 1], None, None, vec![])
+            .await
+            .unwrap();
+        let failed = client
+            .expect(
+                of,
+                0,
+                vec![0xee, 0xff],
+                Some(vec![0xff, 0x0f]),
+                None,
+                vec![],
+            )
+            .await
+            .unwrap();
+        let skipped = client
+            .submit(
+                &route,
+                Operation::TransferOut {
+                    endpoint: 1,
+                    data: vec![2],
+                },
+                Duration::from_secs(1),
+            )
+            .await
+            .unwrap();
         let outcomes: HashMap<u64, Outcome> = client.sync().await.unwrap().into_iter().collect();
         assert_eq!(outcomes[&held], Outcome::Held);
-        assert_eq!(outcomes[&failed], Outcome::Failed(vec![of as u8, of as u8 + 1]));
+        assert_eq!(
+            outcomes[&failed],
+            Outcome::Failed(vec![of as u8, of as u8 + 1])
+        );
         assert_eq!(outcomes[&skipped], Outcome::Discarded);
         while let Ok(op) = events.try_recv() {
             assert!(!matches!(op, Operation::TransferOut { ref data, .. } if data == &[2]));
         }
         // The pipeline runs again after the sync.
-        assert!(client.request(&route, read(4), Duration::from_secs(1)).await.unwrap().error.is_none());
+        assert!(
+            client
+                .request(&route, read(4), Duration::from_secs(1))
+                .await
+                .unwrap()
+                .error
+                .is_none()
+        );
         exporter.abort();
         server.abort();
     }
@@ -624,12 +779,24 @@ mod tests {
         let (url, server) = server().await;
         let (route, exporter, mut events) = fixture(&url, Duration::from_millis(150)).await;
         let mut client = available(&url).await;
-        client.request(&route, open(), Duration::from_millis(10)).await.unwrap();
+        client
+            .request(&route, open(), Duration::from_millis(10))
+            .await
+            .unwrap();
         assert!(matches!(events.recv().await, Some(Operation::Open { .. })));
-        let completion = client.request(&route, read(10), Duration::from_millis(10)).await.unwrap();
+        let completion = client
+            .request(&route, read(10), Duration::from_millis(10))
+            .await
+            .unwrap();
         assert!(completion.error.is_none(), "{:?}", completion.error);
-        assert!(matches!(events.recv().await, Some(Operation::TransferIn { length: 10, .. })));
-        client.request(&route, Operation::Close, Duration::from_millis(10)).await.unwrap();
+        assert!(matches!(
+            events.recv().await,
+            Some(Operation::TransferIn { length: 10, .. })
+        ));
+        client
+            .request(&route, Operation::Close, Duration::from_millis(10))
+            .await
+            .unwrap();
         assert!(matches!(events.recv().await, Some(Operation::Close)));
         assert!(events.try_recv().is_err());
         exporter.abort();
@@ -641,11 +808,17 @@ mod tests {
         let (route, exporter, mut events) = fixture(&url, Duration::from_millis(150)).await;
         let mut client = available(&url).await;
         assert!(
-            tokio::time::timeout(Duration::from_millis(20), client.request(&route, open(), Duration::from_millis(10)))
-                .await
-                .is_err()
+            tokio::time::timeout(
+                Duration::from_millis(20),
+                client.request(&route, open(), Duration::from_millis(10))
+            )
+            .await
+            .is_err()
         );
-        let error = client.request(&route, open(), Duration::from_secs(1)).await.unwrap_err();
+        let error = client
+            .request(&route, open(), Duration::from_secs(1))
+            .await
+            .unwrap_err();
         assert!(error.to_string().contains("canceled"), "{error}");
         assert!(matches!(events.recv().await, Some(Operation::Open { .. })));
         assert!(events.try_recv().is_err());
@@ -657,12 +830,26 @@ mod tests {
         let (url, server) = server().await;
         let (route, exporter, mut events) = fixture(&url, Duration::ZERO).await;
         let mut client = available(&url).await;
-        client.request(&route, open(), Duration::from_secs(1)).await.unwrap();
+        client
+            .request(&route, open(), Duration::from_secs(1))
+            .await
+            .unwrap();
         events.recv().await;
-        let expired = client.request(&route, read(9), Duration::from_millis(30)).await.unwrap();
+        let expired = client
+            .request(&route, read(9), Duration::from_millis(30))
+            .await
+            .unwrap();
         assert!(expired.error.unwrap().contains("completion unknown"));
-        assert!(matches!(events.recv().await, Some(Operation::TransferIn { length: 9, .. })));
-        assert!(client.request(&route, Operation::Close, Duration::from_secs(1)).await.is_err());
+        assert!(matches!(
+            events.recv().await,
+            Some(Operation::TransferIn { length: 9, .. })
+        ));
+        assert!(
+            client
+                .request(&route, Operation::Close, Duration::from_secs(1))
+                .await
+                .is_err()
+        );
         // Only the relay's host-only release follows; the transfer is not replayed.
         assert!(matches!(events.recv().await, Some(Operation::Close)));
         assert!(events.try_recv().is_err());

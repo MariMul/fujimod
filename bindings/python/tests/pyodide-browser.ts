@@ -25,6 +25,7 @@ const assets = new Map<string, [string, string]>([
   ['/pkg/service-values.js', ['../../javascript/pkg/service-values.js', 'text/javascript']],
   ['/pkg/fujimod_bg.wasm', ['../../javascript/pkg/fujimod_bg.wasm', 'application/wasm']],
   ['/fixture.mjs', ['../../javascript/tests/webusb-fixture.ts', 'text/javascript']],
+  ['/contract-assertions.py', ['./contract_assertions.py', 'text/plain']],
   ['/contract.py', ['./webusb_contract.py', 'text/plain']],
   ['/media-contract.py', ['./media_contract.py', 'text/plain']],
   ['/exposure-contract.py', ['./exposure_contract.py', 'text/plain']],
@@ -119,27 +120,28 @@ try {
       await py.runPythonAsync(
         `import micropip;await micropip.install(${JSON.stringify('emfs:/' + wheelName)})`,
       );
+      for (const name of [
+        'exposure',
+        'extended',
+        'adjustment',
+        'lens',
+        'configuration',
+        'transfer',
+        'peripheral',
+        'media',
+        'network',
+      ]) {
+        py.FS.writeFile(
+          `${py.FS.cwd()}/${name}_contract.py`,
+          await (await fetch(`/${name}-contract.py`)).text(),
+        );
+      }
+      py.FS.writeFile(
+        `${py.FS.cwd()}/contract_assertions.py`,
+        await (await fetch('/contract-assertions.py')).text(),
+      );
       const passed = await py.runPythonAsync(
-        (await (await fetch('/exposure-contract.py')).text()) +
-          '\n' +
-          (await (await fetch('/extended-contract.py')).text()) +
-          '\n' +
-          (await (await fetch('/adjustment-contract.py')).text()) +
-          '\n' +
-          (await (await fetch('/lens-contract.py')).text()) +
-          '\n' +
-          (await (await fetch('/configuration-contract.py')).text()) +
-          '\n' +
-          (await (await fetch('/transfer-contract.py')).text()) +
-          '\n' +
-          (await (await fetch('/peripheral-contract.py')).text()) +
-          '\n' +
-          (await (await fetch('/media-contract.py')).text()) +
-          '\n' +
-          (await (await fetch('/network-contract.py')).text()) +
-          '\n' +
-          (await (await fetch('/contract.py')).text()) +
-          '\nawait run()',
+        (await (await fetch('/contract.py')).text()) + '\nawait run()',
       );
       return { passed, secure: isSecureContext, realWindow: window instanceof Window };
     } finally {

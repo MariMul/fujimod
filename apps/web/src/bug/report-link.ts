@@ -26,7 +26,9 @@ export function parseReportLink(hash: string): ReportLink {
   const encoded = new URLSearchParams(hash.replace(/^#\??/, '')).get('report');
   if (!encoded || encoded.length > MAX_REPORT_BYTES * 2)
     throw Error('This link has no valid camera report.');
-  const wire = JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(decode64(encoded)));
+  const wire = JSON.parse(
+    new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(decode64(encoded)),
+  );
   if (
     !wire ||
     typeof wire !== 'object' ||

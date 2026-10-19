@@ -47,7 +47,8 @@ if (assets.some((asset) => asset.name === 'docs-media.json')) {
   );
   await mkdir(`${dest}/docs`, { recursive: true });
   for (const file of media.files) {
-    if (!/^[0-9a-f]{24}\.(mp4|webp)$/.test(file.path)) throw new Error(`Invalid media ${file.path}`);
+    if (!/^[0-9a-f]{24}\.(mp4|webp)$/.test(file.path))
+      throw new Error(`Invalid media ${file.path}`);
     gh(['release', 'download', tag, '--repo', repo, '--pattern', file.asset, '--dir', dest]);
     const data = await readFile(`${dest}/${file.asset}`);
     if (createHash('sha256').update(data).digest('hex') !== file.sha256)
