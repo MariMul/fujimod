@@ -231,8 +231,8 @@ const CARDS: Record<string, Card> = {
     manual: null,
     changes: null,
     media: {
-      video: '19f720b7c6ddb0b29729302b.mp4',
-      still: '05c772863c343af831174d4a.webp',
+      video: '1edc1e4e681d88a36e679750.mp4',
+      still: '63476910acf767285c6a83c5.webp',
       clips: {},
     },
   },
