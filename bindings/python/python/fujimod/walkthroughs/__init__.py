@@ -12,7 +12,7 @@ import json
 import math
 from pathlib import Path
 import sys
-from .text import MenuReference, encode, plain, ref
+from .text import MenuReference, OptionReference, encode, option, plain, ref
 
 SCHEMA = 3
 
@@ -23,17 +23,19 @@ SCHEMA = 3
 #   alternate  another way to do the same task, listed collapsed
 #   tour       visits every option; source of option cards (contact sheet)
 #   test       behaviour checks, hidden from owner documentation
-#   hero       a short clip made for a feature's card (e.g. turning through
-#              every aspect ratio), not a route to follow
+#   hero       the clip and still for one card (e.g. turning through every
+#              aspect ratio), not a route to follow; hero= names the menu
+#              rows or options it illustrates
 ROLES = ('guide', 'alternate', 'tour', 'test', 'hero')
 
 
-def walkthrough(title, *, start_from=None, role=None, feature=None):
+def walkthrough(title, *, start_from=None, role=None, feature=None, hero=()):
     """Mark a two-argument (camera, guide) function for discovery.
 
     role is one of ROLES; feature names the owner task the walkthrough
     documents (e.g. 'aspect_ratio'), shared by its guide and alternates.
-    Walkthroughs without a role are untriaged."""
+    Walkthroughs without a role are untriaged. A hero walkthrough names the
+    cards it illustrates: menu references or option() references."""
     if not isinstance(title, str) or not title.strip():
         raise ValueError('A walkthrough needs a title')
     if start_from is not None and not hasattr(start_from, 'walkthrough_title'):
@@ -42,8 +44,14 @@ def walkthrough(title, *, start_from=None, role=None, feature=None):
         raise ValueError(f'Walkthrough role must be one of {ROLES}')
     if feature is not None and (not isinstance(feature, str) or not feature.isidentifier()):
         raise ValueError('A walkthrough feature is an identifier, e.g. aspect_ratio')
+    hero = (hero,) if isinstance(hero, (MenuReference, OptionReference)) else tuple(hero)
+    if not all(isinstance(target, (MenuReference, OptionReference)) for target in hero):
+        raise ValueError('hero names menu references or option() references')
+    if (role == 'hero') != bool(hero):
+        raise ValueError("A hero walkthrough (role='hero') names its cards with hero=, and only it does")
     def decorate(function):
         function.walkthrough_title = title
+        function.walkthrough_hero = hero
         function.walkthrough_start_from = start_from
         function.walkthrough_role = role
         function.walkthrough_feature = feature
@@ -51,12 +59,12 @@ def walkthrough(title, *, start_from=None, role=None, feature=None):
     return decorate
 
 
-def open_menu(item, *, title, start_from=None, role=None, feature=None):
+def open_menu(item, *, title, start_from=None, role=None, feature=None, hero=()):
     """Illustrate the highlighted menu destination before opening its page."""
     item = ref(menu=item) if isinstance(item, str) else item
     if not isinstance(item, MenuReference):
         raise ValueError('A menu starter needs a menu reference or item name')
-    @walkthrough(title, start_from=start_from, role=role, feature=feature)
+    @walkthrough(title, start_from=start_from, role=role, feature=feature, hero=hero)
     def visit(camera, guide):
         with guide.step(t'Choose {item.path()}'):
             camera.select_menu_item(item)
@@ -87,6 +95,10 @@ class Walkthrough:
     @property
     def feature(self):
         return getattr(self.function, 'walkthrough_feature', None)
+
+    @property
+    def hero(self):
+        return getattr(self.function, 'walkthrough_hero', ())
 
 
 class _FreshSourceLoader(importlib.machinery.SourceFileLoader):
@@ -152,7 +164,7 @@ class Guide:
     observes all adapter input paths; it must not infer coverage from prose.
     The factory is called once per run and must provide a fresh camera.
     """
-    def __init__(self, camera, output, *, identity, title, role=None, feature=None, fps=15,
+    def __init__(self, camera, output, *, identity, title, role=None, feature=None, hero=(), fps=15,
                  navigation_hold=.12, action_hold=.45):
         if not __debug__:
             raise RuntimeError('Walkthroughs require Python assertions')
@@ -169,6 +181,7 @@ class Guide:
         self._used = False
         self._failures = []
         self._preparing = False
+        self._hero = hero
 
     def save(self):
         temporary = self.output / '.guide.json.tmp'
@@ -300,6 +313,12 @@ class Guide:
             self._recording = True
             self.report['stage'] = 'execution'
             self.camera.begin_segment()
+            # Hero targets by the identity steps use, so documentation joins
+            # a card to its clip without re-resolving labels.
+            self.report['hero'] = [
+                dict(menu=self.camera.menu_reference(t if isinstance(t, MenuReference) else t.item).identity,
+                     option=None if isinstance(t, MenuReference) else t.label)
+                for t in self._hero]
             function(self.camera, self)
             if self._failures:
                 raise self._failures[0]

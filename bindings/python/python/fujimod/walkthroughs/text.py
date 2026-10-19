@@ -50,6 +50,24 @@ def ref(*, menu, key=None, via=None):
 
 
 @dataclass(frozen=True)
+class OptionReference:
+    """One option of a menu row, by the label the camera shows."""
+    item: MenuReference
+    label: str
+
+    def __post_init__(self):
+        if not isinstance(self.item, MenuReference):
+            raise TypeError('An option belongs to a menu reference')
+        if not isinstance(self.label, str) or not self.label:
+            raise ValueError('An option needs its label')
+
+
+def option(item, label):
+    """Reference one option of a menu row, e.g. option(ref(menu=...), '65:24')."""
+    return OptionReference(item, label)
+
+
+@dataclass(frozen=True)
 class MenuPath:
     item: MenuReference
     relative_to: MenuReference | None = None
