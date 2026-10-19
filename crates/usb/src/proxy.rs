@@ -62,9 +62,15 @@ impl ProxyIo {
             .collect();
         let stages: Vec<TransferStage> = steps.iter().map(|(_, stage)| *stage).collect();
         let count = steps.len() as u32;
+        let replies = steps
+            .iter()
+            .filter(|(step, _)| matches!(step, Operation::TransferIn { .. } | Operation::ControlIn { .. }))
+            .count() as u32;
         let operation = Operation::batch(steps.into_iter().map(|(step, _)| step).collect());
-        // Each step keeps its own deadline budget at the exporter's pace.
-        let timeout = (self.timeout + Duration::from_millis(20) * count).min(Duration::from_secs(120));
+        // A reply read may wait its whole deadline while the device works, as
+        // one unbatched transfer could; OUT steps add the exporter's pace.
+        let timeout = (self.timeout * replies.max(1) + Duration::from_millis(20) * count)
+            .min(Duration::from_secs(120));
         let completion = self.client.request(&self.device, operation, timeout).await?;
         if completion.steps.len() > stages.len() || (completion.error.is_none() && completion.steps.len() != stages.len()) {
             return Err(fujimod_usb_proxy::Error("inconsistent batch completion".into()).into());

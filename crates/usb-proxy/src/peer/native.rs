@@ -137,7 +137,16 @@ impl PeerSocket {
         }
     }
     pub async fn send(&mut self, bytes: Vec<u8>) -> Result<()> {
-        self.send.send(bytes).await.map_err(error)
+        if self.send.send(bytes).await.is_ok() {
+            return Ok(());
+        }
+        // The I/O thread has exited; its reason is queued for the receiver.
+        while let Ok(item) = self.receive.try_recv() {
+            if let Err(reason) = item {
+                return Err(reason);
+            }
+        }
+        Err(error("WebRTC connection closed"))
     }
     pub async fn receive(&mut self) -> Result<Vec<u8>> {
         self.receive
