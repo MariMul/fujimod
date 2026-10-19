@@ -3,6 +3,7 @@ import { CameraTarget } from './camera';
 import { ConnectionState, ConsoleState, type DevToolsController } from './controller';
 import { Level } from './log';
 import type { ShareSession } from './share-session';
+import { holdReloadsDuringCameraSessions } from './reload-hold';
 
 /**
  * Loaded only by local development pages. Shares a connected camera
@@ -11,6 +12,7 @@ import type { ShareSession } from './share-session';
  * socket owns the registry entry.
  */
 export function startDevShare(tools: DevToolsController, share: ShareSession): () => void {
+  holdReloadsDuringCameraSessions(tools, share);
   let socket: WebSocket | undefined;
   // Stop sharing turns automatic sharing off until the camera is reconnected.
   let suspended = false;
