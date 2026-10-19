@@ -25,6 +25,7 @@ str0m = { version = "0.24", default-features = false, features = ["rust-crypto"]
 async-net = "2"
 async-io = "2"
 async-channel = "2"
+socket2 = "0.6"
 aes-gcm = "0.10"
 rand = "0.9"
 if-addrs = "0.15"

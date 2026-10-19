@@ -1,5 +1,6 @@
 //! str0m is driven by one owned I/O task. It works under native Python, Tokio,
 //! smol or a plain block_on; no caller runtime or callbacks are required.
+use super::datagram::{Datagram, DatagramIo};
 use crate::{Error, Result, protocol::MAX_MESSAGE, share::Ticket};
 use aes_gcm::{
     Aes256Gcm, KeyInit, Nonce,
@@ -176,20 +177,27 @@ async fn run(
     ready: Sender<std::result::Result<(), String>>,
     progress: crate::Progress,
 ) -> Result<()> {
-    let std_socket = std::net::UdpSocket::bind("0.0.0.0:0").map_err(error)?;
-    let port = std_socket.local_addr().map_err(error)?.port();
-    let mut rtc = Rtc::new(Instant::now());
+    // str0m counts unacknowledged bytes against this bound. Its 128 KiB
+    // default limits a bulk sender to 128 KiB per RTT (6.6 MB/s at 20 ms).
+    // Reserve a bounded bulk window rather than the interactive default.
+    let mut rtc = Rtc::builder()
+        .set_sctp_max_buffered_amount(512 * 1024)
+        .build(Instant::now());
     let mut local = Vec::new();
     for iface in if_addrs::get_if_addrs().map_err(error)? {
         if iface.ip().is_ipv4() {
-            local.push(SocketAddr::new(iface.ip(), port));
+            local.push(iface.ip());
         }
     }
     local.sort();
     local.dedup();
-    for addr in &local {
-        rtc.add_local_candidate(Candidate::host(*addr, "udp").map_err(error)?);
+    let mut sockets = Vec::new();
+    for ip in &local {
+        let socket = std::net::UdpSocket::bind(SocketAddr::new(*ip, 0)).map_err(error)?;
+        let addr = socket.local_addr().map_err(error)?;
+        rtc.add_local_candidate(Candidate::host(addr, "udp").map_err(error)?);
         drain_setup(&mut rtc)?;
+        sockets.push(socket);
     }
     progress(&format!("local candidates: {}", local.len()));
     // An optional STUN lookup uses the same socket as ICE, without a TURN path.
@@ -204,15 +212,22 @@ async fn run(
             if let Some(server) = addresses.into_iter().find(SocketAddr::is_ipv4) {
                 let mut client = stunclient::StunClient::new(server);
                 client.set_timeout(Duration::from_secs(2));
-                let found = client.query_external_address(&std_socket);
+                let route = std::net::UdpSocket::bind("0.0.0.0:0").map_err(error)?;
+                route.connect(server).map_err(error)?;
+                let ip = route.local_addr().map_err(error)?.ip();
+                let Some(socket) = sockets
+                    .iter()
+                    .find(|socket| socket.local_addr().is_ok_and(|addr| addr.ip() == ip))
+                else {
+                    continue;
+                };
+                let found = client.query_external_address(socket);
                 progress(&match &found {
                     Ok(external) => format!("STUN {server}: external address {external}"),
                     Err(e) => format!("STUN {server}: no reply ({e})"),
                 });
                 if let Ok(external) = found {
-                    let route = std::net::UdpSocket::bind("0.0.0.0:0").map_err(error)?;
-                    route.connect(server).map_err(error)?;
-                    let base = SocketAddr::new(route.local_addr().map_err(error)?.ip(), port);
+                    let base = socket.local_addr().map_err(error)?;
                     rtc.add_local_candidate(
                         Candidate::server_reflexive(external, base, "udp").map_err(error)?,
                     );
@@ -221,8 +236,7 @@ async fn run(
             }
         }
     }
-    std_socket.set_nonblocking(true).map_err(error)?;
-    let udp = async_net::UdpSocket::from(async_io::Async::new(std_socket).map_err(error)?);
+    let mut udp = DatagramIo::new(sockets).map_err(error)?;
     let mut signal_url = url::Url::parse(&ticket.signal).map_err(error)?;
     signal_url
         .query_pairs_mut()
@@ -281,7 +295,6 @@ async fn run(
     let mut channel: Option<ChannelId> = None;
     let mut assembled = Vec::new();
     let mut packets: VecDeque<Vec<u8>> = VecDeque::new();
-    let mut buffer = vec![0u8; 65536];
     let mut writable = true;
     let mut signal_alive = true;
     let started = Instant::now();
@@ -292,7 +305,7 @@ async fn run(
             match rtc.poll_output().map_err(error)? {
                 Output::Timeout(at) => break at,
                 Output::Transmit(packet) => {
-                    udp.send_to(&packet.contents, packet.destination)
+                    udp.send(packet.source, packet.destination, &packet.contents)
                         .await
                         .map_err(error)?;
                 }
@@ -342,7 +355,17 @@ async fn run(
         if !rtc.is_alive() || (channel.is_none() && started.elapsed() > Duration::from_secs(20)) {
             return Err(error("direct WebRTC connection unavailable"));
         }
-        if writable {
+        if timeout <= Instant::now() {
+            rtc.handle_input(Input::Timeout(Instant::now()))
+                .map_err(error)?;
+            writable = true;
+            continue;
+        }
+        // Consume ready packets before filling SCTP again. ACKs free its
+        // congestion/receive windows; letting them sit behind an entire bulk
+        // frame produces bursts, loss and expensive retransmission scans.
+        let received = futures_lite::future::poll_once(udp.receive()).await;
+        if received.is_none() && writable {
             if let (Some(id), Some(packet)) = (channel, packets.front()) {
                 let accepted = rtc
                     .channel(id)
@@ -359,40 +382,44 @@ async fn run(
         }
         enum Wake {
             Out(std::result::Result<Vec<u8>, async_channel::RecvError>),
-            Udp(std::io::Result<(usize, SocketAddr)>),
+            Udp(std::io::Result<Datagram>),
             Tick,
             Signal(Result<Value>),
         }
-        let wake = futures_lite::future::or(
-            async {
-                if closing.is_some() {
-                    std::future::pending::<()>().await;
-                }
-                Wake::Out(outbound.recv().await)
-            },
+        let wake = if let Some(received) = received {
+            Wake::Udp(received)
+        } else {
             futures_lite::future::or(
-                async { Wake::Udp(udp.recv_from(&mut buffer).await) },
+                async {
+                    if closing.is_some() {
+                        std::future::pending::<()>().await;
+                    }
+                    Wake::Out(outbound.recv().await)
+                },
                 futures_lite::future::or(
-                    async {
-                        let wait = timeout.saturating_duration_since(Instant::now());
-                        let wait = if closing.is_some() {
-                            wait.min(Duration::from_millis(20))
-                        } else {
-                            wait
-                        };
-                        futures_timer::Delay::new(wait).await;
-                        Wake::Tick
-                    },
-                    async {
-                        if !signal_alive {
-                            std::future::pending::<()>().await;
-                        }
-                        Wake::Signal(read(&mut signal).await)
-                    },
+                    async { Wake::Udp(udp.receive().await) },
+                    futures_lite::future::or(
+                        async {
+                            let wait = timeout.saturating_duration_since(Instant::now());
+                            let wait = if closing.is_some() {
+                                wait.min(Duration::from_millis(20))
+                            } else {
+                                wait
+                            };
+                            futures_timer::Delay::new(wait).await;
+                            Wake::Tick
+                        },
+                        async {
+                            if !signal_alive {
+                                std::future::pending::<()>().await;
+                            }
+                            Wake::Signal(read(&mut signal).await)
+                        },
+                    ),
                 ),
-            ),
-        )
-        .await;
+            )
+            .await
+        };
         match wake {
             Wake::Out(Ok(bytes)) => {
                 if bytes.len() > MAX_MESSAGE {
@@ -406,17 +433,18 @@ async fn run(
             }
             Wake::Out(Err(_)) => closing = Some(Instant::now()),
             Wake::Udp(result) => {
-                let (size, source) = result.map_err(error)?;
-                let route = std::net::UdpSocket::bind("0.0.0.0:0").map_err(error)?;
-                route.connect(source).map_err(error)?;
-                let destination = SocketAddr::new(route.local_addr().map_err(error)?.ip(), port);
+                let packet = result.map_err(error)?;
                 writable = true;
-                if let Ok(receive) =
-                    Receive::new(Protocol::Udp, source, destination, &buffer[..size])
-                {
+                if let Ok(receive) = Receive::new(
+                    Protocol::Udp,
+                    packet.remote,
+                    packet.local,
+                    &packet.bytes[..packet.size],
+                ) {
                     rtc.handle_input(Input::Receive(Instant::now(), receive))
                         .map_err(error)?;
                 }
+                udp.rearm(packet);
             }
             Wake::Tick => {
                 rtc.handle_input(Input::Timeout(Instant::now()))

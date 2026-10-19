@@ -17,6 +17,7 @@ walkthroughs = [
 ]
 
 [tool.maturin]
+profile = "release"
 module-name = "fujimod._native"
 python-source = "python"
 
