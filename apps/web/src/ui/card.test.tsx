@@ -2,11 +2,22 @@ import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
 import { CardBrowser } from './card';
-import type { Engine, CardState } from '../engine/api';
+import type { Engine, CardEntry, CardState } from '../engine/api';
+import { flags } from '../flags';
+import { downloadBlob } from './download';
+import { zipFiles } from '../archive';
+vi.mock('./download', () => ({ downloadBlob: vi.fn() }));
+vi.mock('../archive', { spy: true });
+vi.mock('../flags', () => ({
+  flags: { allowFpUpdateDownload: false, allowSdCardBootDownload: false },
+}));
 let dispose: (() => void) | undefined;
 afterEach(() => {
   dispose?.();
   document.body.replaceChildren();
+  flags.allowFpUpdateDownload = false;
+  flags.allowSdCardBootDownload = false;
+  vi.clearAllMocks();
 });
 const state: CardState = {
   supported: true,
@@ -199,4 +210,145 @@ test('repeated observations of the same revision retain an in-flight listing', a
   await Promise.resolve();
   flush();
   expect(document.querySelector('#card-files')?.textContent).toContain('photo.JPG');
+});
+
+test.each([
+  { allowFpUpdateDownload: false, allowSdCardBootDownload: false },
+  { allowFpUpdateDownload: true, allowSdCardBootDownload: false },
+  { allowFpUpdateDownload: false, allowSdCardBootDownload: true },
+  { allowFpUpdateDownload: true, allowSdCardBootDownload: true },
+])('card firmware downloads follow the SD release gate: %j', async (gates) => {
+  Object.assign(flags, gates);
+  let publish!: (state: CardState) => void;
+  const bootFiles: CardEntry[] = [
+    {
+      kind: 'file',
+      name: 'FFBoot.BIN',
+      path: '/FFBoot.BIN',
+      bytes: gates.allowSdCardBootDownload ? 2 : 64 * 1024 ** 2,
+    },
+    {
+      kind: 'file',
+      name: 'ffsys.bin',
+      path: '/ffsys.bin',
+      bytes: gates.allowSdCardBootDownload ? 2 : 64 * 1024 ** 2,
+    },
+  ];
+  const nestedBoot: CardEntry = {
+    kind: 'file',
+    name: 'FFSYS.BIN',
+    path: '/DCIM/FFSYS.BIN',
+    bytes: 2,
+  };
+  const photo: CardEntry = {
+    kind: 'file',
+    name: 'photo.JPG',
+    path: '/DCIM/photo.JPG',
+    bytes: 2,
+  };
+  const backup: CardEntry = {
+    kind: 'file',
+    name: 'ffboot.bin.bak',
+    path: '/ffboot.bin.bak',
+    bytes: 2,
+  };
+  const readCardFile = vi.fn<Engine['readCardFile']>(async () => new Uint8Array([1, 2]));
+  const engine = {
+    cardChanges: (listener: typeof publish) => {
+      publish = listener;
+      return () => {};
+    },
+    cardTree: async () => ({
+      revision: 1,
+      entries: [
+        ...bootFiles,
+        { kind: 'directory', name: 'DCIM', path: '/DCIM', bytes: 0, children: [nestedBoot, photo] },
+        backup,
+      ],
+    }),
+    readCardFile,
+  } as unknown as Engine;
+  dispose = render(
+    () => (
+      <CardBrowser
+        engine={engine}
+        present={() => Promise.resolve()}
+        format={() => Promise.resolve()}
+      />
+    ),
+    document.body,
+  );
+  flush();
+  publish(state);
+  await Promise.resolve();
+  flush();
+  const allowed = gates.allowSdCardBootDownload
+    ? [...bootFiles, nestedBoot, photo, backup]
+    : [photo, backup];
+  expect(
+    [...document.querySelectorAll('#card-files .dl')].map((button) =>
+      button.getAttribute('aria-label'),
+    ),
+  ).toEqual(allowed.map((entry) => `Download ${entry.name}`));
+  for (const entry of allowed) {
+    document
+      .querySelector<HTMLButtonElement>(`button[aria-label="Download ${entry.name}"]`)!
+      .click();
+    await vi.waitFor(() =>
+      expect(downloadBlob).toHaveBeenLastCalledWith(expect.any(Blob), entry.name),
+    );
+    expect(readCardFile).toHaveBeenLastCalledWith(entry.path, { revision: 1 });
+  }
+  readCardFile.mockClear();
+  document.querySelector<HTMLButtonElement>('#card-download')!.click();
+  await vi.waitFor(() =>
+    expect(downloadBlob).toHaveBeenLastCalledWith(expect.any(Blob), 'sd-card.zip'),
+  );
+  expect(readCardFile.mock.calls.map((call) => call[0])).toEqual(
+    allowed.map((entry) => entry.path),
+  );
+  expect(zipFiles).toHaveBeenLastCalledWith(
+    allowed.map((entry) => [entry.path.slice(1), new Uint8Array([1, 2])]),
+  );
+});
+
+test('a card containing only gated firmware files has no downloads', async () => {
+  let publish!: (state: CardState) => void;
+  const readCardFile = vi.fn();
+  const engine = {
+    cardChanges: (listener: typeof publish) => {
+      publish = listener;
+      return () => {};
+    },
+    cardTree: async () => ({
+      revision: 1,
+      entries: ['ffboot.bin', 'ffsys.bin'].map((name) => ({
+        kind: 'file',
+        name,
+        path: `/${name}`,
+        bytes: 64 * 1024 ** 2,
+      })),
+    }),
+    readCardFile,
+  } as unknown as Engine;
+  dispose = render(
+    () => (
+      <CardBrowser
+        engine={engine}
+        present={() => Promise.resolve()}
+        format={() => Promise.resolve()}
+      />
+    ),
+    document.body,
+  );
+  flush();
+  publish(state);
+  await Promise.resolve();
+  flush();
+  expect(document.querySelector('#card-files')?.textContent).toBe('');
+  const all = document.querySelector<HTMLButtonElement>('#card-download')!;
+  expect(all.disabled).toBe(true);
+  all.click();
+  expect(readCardFile).not.toHaveBeenCalled();
+  expect(downloadBlob).not.toHaveBeenCalled();
 });
