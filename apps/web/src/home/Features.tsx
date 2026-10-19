@@ -670,8 +670,8 @@ export function FeatureCatalog() {
             <span>Unlocked Controls</span>
           </h4>
           <p>
-            Assign ISO, white balance, film simulation, ASPECT RATIO, SELECT RECIPE or other
-            settings to the exposure compensation dial, command control or control ring.
+            Customize any button, dial, or lever. Use the EV dial to set aspect ratio. Use the
+            AUTO/MANUAL lever to switch between picture and movie mode.
           </p>
         </FeatureTile>
         <FeatureTile media={CARDS['hdmi_rec_behavior_item'].media}>
