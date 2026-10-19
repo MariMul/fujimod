@@ -16,7 +16,7 @@ fn err(e: impl std::fmt::Display) -> Error {
     Error(e.to_string())
 }
 enum Socket {
-    Web(WebSocket),
+    Web(Box<WebSocket>),
     Peer(crate::peer::PeerSocket),
 }
 async fn send(socket: &mut Socket, message: &Message) -> Result<()> {
@@ -176,7 +176,7 @@ impl Client {
                     #[cfg(target_arch = "wasm32")]
                     let socket = WebSocket::open(url).map_err(err)?;
                     progress("relay WebSocket connected");
-                    Socket::Web(socket)
+                    Socket::Web(Box::new(socket))
                 };
                 send(
                     &mut socket,
@@ -263,8 +263,14 @@ impl Client {
                 timeout_ms: timeout.as_millis() as u32,
                 op,
             };
-            send(&mut self.socket, &message).await.map_err(|e| self.fence(e))?;
-            self.in_flight.push_back(InFlight { seq, payload, timeout });
+            send(&mut self.socket, &message)
+                .await
+                .map_err(|e| self.fence(e))?;
+            self.in_flight.push_back(InFlight {
+                seq,
+                payload,
+                timeout,
+            });
             self.in_flight_bytes += payload;
         }
         self.busy = false;
@@ -274,7 +280,15 @@ impl Client {
     /// Fail the pipeline at the exporter unless bytes `offset..` of IN result
     /// `of` equal `bytes` (both ANDed with `mask` when given). Later operations
     /// then run only if it held, without a round trip.
-    pub async fn expect(&mut self, of: u64, offset: usize, bytes: Vec<u8>, mask: Option<Vec<u8>>, length: Option<u32>, alternatives: Vec<Vec<u8>>) -> Result<u64> {
+    pub async fn expect(
+        &mut self,
+        of: u64,
+        offset: usize,
+        bytes: Vec<u8>,
+        mask: Option<Vec<u8>>,
+        length: Option<u32>,
+        alternatives: Vec<Vec<u8>>,
+    ) -> Result<u64> {
         let message = Message::Expect {
             seq: self.next_seq + 1,
             of,
@@ -282,13 +296,18 @@ impl Client {
             bytes,
             mask: mask.map(serde_bytes::ByteBuf::from),
             length,
-            alternatives: alternatives.into_iter().map(serde_bytes::ByteBuf::from).collect(),
+            alternatives: alternatives
+                .into_iter()
+                .map(serde_bytes::ByteBuf::from)
+                .collect(),
         };
         message.validate()?;
         self.begin()?;
         self.next_seq += 1;
         if self.failed.is_none() {
-            send(&mut self.socket, &message).await.map_err(|e| self.fence(e))?;
+            send(&mut self.socket, &message)
+                .await
+                .map_err(|e| self.fence(e))?;
         }
         self.busy = false;
         self.unsynced.push((self.next_seq, true));
@@ -393,7 +412,12 @@ impl Client {
         self.in_flight_bytes = self.in_flight.iter().map(|f| f.payload).sum();
     }
     /// One operation in its own pipeline.
-    pub async fn request(&mut self, device: &str, op: Operation, timeout: Duration) -> Result<Completion> {
+    pub async fn request(
+        &mut self,
+        device: &str,
+        op: Operation,
+        timeout: Duration,
+    ) -> Result<Completion> {
         let seq = self.submit(device, op, timeout).await?;
         match self.sync().await?.into_iter().find(|(s, _)| *s == seq) {
             Some((_, Outcome::Completed(completion))) => Ok(completion),
@@ -404,12 +428,16 @@ impl Client {
     /// the exporter has finished every earlier operation.
     pub async fn notify_owner(&mut self, message: Message) -> Result<()> {
         if !message.is_notice() {
-            return Err(err("only status, attention, activity and progress messages are notices"));
+            return Err(err(
+                "only status, attention, activity and progress messages are notices",
+            ));
         }
         self.begin()?;
         // A USB failure has ended the connection; the notice has no reader.
         if self.usable {
-            send(&mut self.socket, &message).await.map_err(|e| self.fence(e))?;
+            send(&mut self.socket, &message)
+                .await
+                .map_err(|e| self.fence(e))?;
         }
         self.busy = false;
         Ok(())

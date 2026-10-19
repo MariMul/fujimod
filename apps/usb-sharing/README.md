@@ -63,13 +63,13 @@ Worker does not add WebSocket USB fallback or resend USB commands.
 
 Configuration defaults:
 
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `TURN_TTL_SECONDS` | 86400 | Maximum share-room lifetime and temporary credential TTL, 60–86400 seconds |
-| `TURN_DAILY_ISSUE_LIMIT` | 50 | Global credential issuance reservations per UTC day; failures count |
-| `CONNECTIONS` rate limit | 60/minute/IP | WebSocket upgrade requests |
-| Room sockets | 17 | One owner and up to 16 controllers, including pending handshakes |
-| Signaling frames | 60/minute/socket | Bounded encrypted connection setup, maximum 64 KiB |
+| Setting                  | Default          | Meaning                                                                    |
+| ------------------------ | ---------------- | -------------------------------------------------------------------------- |
+| `TURN_TTL_SECONDS`       | 86400            | Maximum share-room lifetime and temporary credential TTL, 60–86400 seconds |
+| `TURN_DAILY_ISSUE_LIMIT` | 50               | Global credential issuance reservations per UTC day; failures count        |
+| `CONNECTIONS` rate limit | 60/minute/IP     | WebSocket upgrade requests                                                 |
+| Room sockets             | 17               | One owner and up to 16 controllers, including pending handshakes           |
+| Signaling frames         | 60/minute/socket | Bounded encrypted connection setup, maximum 64 KiB                         |
 
 The issuance quota is **not a bandwidth or billing cap**. Public clients receive
 temporary relay access, so configure the quota for the intended audience and

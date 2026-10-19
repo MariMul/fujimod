@@ -754,5 +754,7 @@ fn javascript_codec(c: &Choice) -> String {
     out
 }
 
+mod typing;
+
 #[cfg(test)]
 mod tests;

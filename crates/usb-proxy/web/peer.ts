@@ -535,7 +535,12 @@ export class ShareHost {
         const pipeline = new Pipeline((message) =>
           observeRequest(
             frame.from,
-            { id: message.seq, device: message.device, operation: message.op, timeout_ms: message.timeout_ms },
+            {
+              id: message.seq,
+              device: message.device,
+              operation: message.op,
+              timeout_ms: message.timeout_ms,
+            },
             () => this.run(frame.from, peer, message),
             this.callbacks.traffic,
           ),

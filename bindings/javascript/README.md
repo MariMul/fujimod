@@ -281,7 +281,6 @@ Service enums, checked quantities, command/action factories, structured replies
 and public registrations come from the [shared Rust generator](../generator/README.md).
 Builds regenerate them automatically; validation remains in the core.
 
-
 WPS and station controls use `Command.wps(WpsAction.start(target))` and
 `Command.station(StationAction.startStored())`. WPS targets are
 `WpsTarget.broadcast()` or `WpsTarget.peer(new WpsPeerAddress(bytes))`; exact

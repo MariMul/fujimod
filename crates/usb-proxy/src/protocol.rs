@@ -96,9 +96,13 @@ pub enum Operation {
     Probe,
     List,
     /// A neutral progress line for the device owner's log; never touches USB.
-    OwnerStatus { message: String },
+    OwnerStatus {
+        message: String,
+    },
     /// Owner banner and spoken ten-second countdown; completes only after it ends.
-    OwnerAttention { message: String },
+    OwnerAttention {
+        message: String,
+    },
     Open {
         configuration: u8,
         interface: u8,
@@ -281,15 +285,29 @@ impl Message {
                 }
                 op.validate()
             }
-            Self::Expect { bytes, mask, length, alternatives, .. } => {
-                if bytes.len() > MAX_TRANSFER || mask.as_ref().is_some_and(|m| m.len() != bytes.len()) {
-                    return Err(crate::Error("an expectation's mask must match its bytes".into()));
+            Self::Expect {
+                bytes,
+                mask,
+                length,
+                alternatives,
+                ..
+            } => {
+                if bytes.len() > MAX_TRANSFER
+                    || mask.as_ref().is_some_and(|m| m.len() != bytes.len())
+                {
+                    return Err(crate::Error(
+                        "an expectation's mask must match its bytes".into(),
+                    ));
                 }
                 if length.is_some_and(|n| n as usize > MAX_TRANSFER) {
-                    return Err(crate::Error("expectation length exceeds transfer limit".into()));
+                    return Err(crate::Error(
+                        "expectation length exceeds transfer limit".into(),
+                    ));
                 }
                 if alternatives.len() > 8 || alternatives.iter().any(|a| a.len() != bytes.len()) {
-                    return Err(crate::Error("expectation alternatives must have equal lengths (at most eight)".into()));
+                    return Err(crate::Error(
+                        "expectation alternatives must have equal lengths (at most eight)".into(),
+                    ));
                 }
                 Ok(())
             }
@@ -388,7 +406,11 @@ pub(crate) fn vectors() -> Vec<(&'static str, Message)> {
             configuration: 1,
             interface: 0,
             alternate: 0,
-            endpoints: vec![Endpoint { address: 0x81, kind: "bulk".into(), packet_size: 512 }],
+            endpoints: vec![Endpoint {
+                address: 0x81,
+                kind: "bulk".into(),
+                packet_size: 512,
+            }],
         }],
         status: Some(DeviceStatus {
             online: true,
@@ -397,39 +419,231 @@ pub(crate) fn vectors() -> Vec<(&'static str, Message)> {
             battery_age_ms: Some(300),
         }),
     };
-    let execute = |seq, op| Message::Execute { seq, device: "camera".into(), timeout_ms: 5000, op };
+    let execute = |seq, op| Message::Execute {
+        seq,
+        device: "camera".into(),
+        timeout_ms: 5000,
+        op,
+    };
     vec![
-        ("hello", Message::Hello { version: VERSION, role: "controller".into(), token: "t".into(), reason: Some("install".into()) }),
-        ("hello_without_reason", Message::Hello { version: VERSION, role: "exporter".into(), token: "t".into(), reason: None }),
-        ("ready", Message::Ready { version: VERSION, id: "7".into() }),
-        ("goodbye", Message::Goodbye { reason: "done".into() }),
-        ("status", Message::Status { battery: "full".into() }),
-        ("attention", Message::Attention { message: "Camera stopped answering".into() }),
-        ("activity", Message::Activity { title: "Uploading".into() }),
-        ("progress_start", Message::ProgressStart { label: "Uploading".into(), total: 93056 }),
+        (
+            "hello",
+            Message::Hello {
+                version: VERSION,
+                role: "controller".into(),
+                token: "t".into(),
+                reason: Some("install".into()),
+            },
+        ),
+        (
+            "hello_without_reason",
+            Message::Hello {
+                version: VERSION,
+                role: "exporter".into(),
+                token: "t".into(),
+                reason: None,
+            },
+        ),
+        (
+            "ready",
+            Message::Ready {
+                version: VERSION,
+                id: "7".into(),
+            },
+        ),
+        (
+            "goodbye",
+            Message::Goodbye {
+                reason: "done".into(),
+            },
+        ),
+        (
+            "status",
+            Message::Status {
+                battery: "full".into(),
+            },
+        ),
+        (
+            "attention",
+            Message::Attention {
+                message: "Camera stopped answering".into(),
+            },
+        ),
+        (
+            "activity",
+            Message::Activity {
+                title: "Uploading".into(),
+            },
+        ),
+        (
+            "progress_start",
+            Message::ProgressStart {
+                label: "Uploading".into(),
+                total: 93056,
+            },
+        ),
         ("progress_update", Message::ProgressUpdate { done: 16384 }),
         ("progress_done", Message::ProgressDone),
-        ("inventory", Message::Inventory { devices: vec![device.clone()] }),
+        (
+            "inventory",
+            Message::Inventory {
+                devices: vec![device.clone()],
+            },
+        ),
         ("probe", execute(1, Operation::Probe)),
         ("list", execute(2, Operation::List)),
-        ("owner_status", execute(3, Operation::OwnerStatus { message: "stopped".into() })),
-        ("owner_attention", execute(4, Operation::OwnerAttention { message: "Film it".into() })),
-        ("open", execute(5, Operation::Open { configuration: 1, interface: 0, alternate: 0 })),
+        (
+            "owner_status",
+            execute(
+                3,
+                Operation::OwnerStatus {
+                    message: "stopped".into(),
+                },
+            ),
+        ),
+        (
+            "owner_attention",
+            execute(
+                4,
+                Operation::OwnerAttention {
+                    message: "Film it".into(),
+                },
+            ),
+        ),
+        (
+            "open",
+            execute(
+                5,
+                Operation::Open {
+                    configuration: 1,
+                    interface: 0,
+                    alternate: 0,
+                },
+            ),
+        ),
         ("close", execute(6, Operation::Close)),
-        ("control_in", execute(7, Operation::ControlIn { setup: setup.clone(), length: 64 })),
-        ("control_out", execute(8, Operation::ControlOut { setup, data: vec![1, 2, 3] })),
-        ("transfer_in", execute(9, Operation::TransferIn { endpoint: 0x82, length: 16384 })),
-        ("transfer_out", execute(300, Operation::TransferOut { endpoint: 1, data: vec![0, 255] })),
-        ("clear_halt", execute(11, Operation::ClearHalt { endpoint: 0x82 })),
-        ("expect", Message::Expect { seq: 12, of: 9, offset: 4, bytes: vec![0xaa, 0xbb], mask: None, length: Some(8), alternatives: vec![vec![0xcc, 0xdd].into()] }),
-        ("expect_masked", Message::Expect { seq: 13, of: 9, offset: 0, bytes: vec![0x10], mask: Some(serde_bytes::ByteBuf::from(vec![0xf0])), length: None, alternatives: vec![] }),
+        (
+            "control_in",
+            execute(
+                7,
+                Operation::ControlIn {
+                    setup: setup.clone(),
+                    length: 64,
+                },
+            ),
+        ),
+        (
+            "control_out",
+            execute(
+                8,
+                Operation::ControlOut {
+                    setup,
+                    data: vec![1, 2, 3],
+                },
+            ),
+        ),
+        (
+            "transfer_in",
+            execute(
+                9,
+                Operation::TransferIn {
+                    endpoint: 0x82,
+                    length: 16384,
+                },
+            ),
+        ),
+        (
+            "transfer_out",
+            execute(
+                300,
+                Operation::TransferOut {
+                    endpoint: 1,
+                    data: vec![0, 255],
+                },
+            ),
+        ),
+        (
+            "clear_halt",
+            execute(11, Operation::ClearHalt { endpoint: 0x82 }),
+        ),
+        (
+            "expect",
+            Message::Expect {
+                seq: 12,
+                of: 9,
+                offset: 4,
+                bytes: vec![0xaa, 0xbb],
+                mask: None,
+                length: Some(8),
+                alternatives: vec![vec![0xcc, 0xdd].into()],
+            },
+        ),
+        (
+            "expect_masked",
+            Message::Expect {
+                seq: 13,
+                of: 9,
+                offset: 0,
+                bytes: vec![0x10],
+                mask: Some(serde_bytes::ByteBuf::from(vec![0xf0])),
+                length: None,
+                alternatives: vec![],
+            },
+        ),
         ("sync", Message::Sync { seq: 14 }),
-        ("result", Message::Result { seq: 9, completion: Completion { devices: vec![], data: vec![9, 8, 7], transferred: 3, error: None } }),
-        ("result_error", Message::Result { seq: 10, completion: Completion { error: Some("stall".into()), ..Completion::default() } }),
-        ("result_devices", Message::Result { seq: 2, completion: Completion { devices: vec![device], ..Completion::default() } }),
-        ("expect_failed", Message::ExpectFailed { seq: 12, actual: vec![0xaa, 0xbc] }),
-        ("synced", Message::Synced { seq: 14, discarded: 2 }),
-        ("routed", Message::Routed { stream: 3, message: Box::new(Message::Sync { seq: 1 }) }),
+        (
+            "result",
+            Message::Result {
+                seq: 9,
+                completion: Completion {
+                    devices: vec![],
+                    data: vec![9, 8, 7],
+                    transferred: 3,
+                    error: None,
+                },
+            },
+        ),
+        (
+            "result_error",
+            Message::Result {
+                seq: 10,
+                completion: Completion {
+                    error: Some("stall".into()),
+                    ..Completion::default()
+                },
+            },
+        ),
+        (
+            "result_devices",
+            Message::Result {
+                seq: 2,
+                completion: Completion {
+                    devices: vec![device],
+                    ..Completion::default()
+                },
+            },
+        ),
+        (
+            "expect_failed",
+            Message::ExpectFailed {
+                seq: 12,
+                actual: vec![0xaa, 0xbc],
+            },
+        ),
+        (
+            "synced",
+            Message::Synced {
+                seq: 14,
+                discarded: 2,
+            },
+        ),
+        (
+            "routed",
+            Message::Routed {
+                stream: 3,
+                message: Box::new(Message::Sync { seq: 1 }),
+            },
+        ),
     ]
 }
 
@@ -453,7 +667,10 @@ mod tests {
         let all = vectors();
         for (index, (name, message)) in all.iter().enumerate() {
             let comma = if index + 1 == all.len() { "" } else { "," };
-            text += &format!("  \"{name}\": \"{}\"{comma}\n", hex(&message.encode().unwrap()));
+            text += &format!(
+                "  \"{name}\": \"{}\"{comma}\n",
+                hex(&message.encode().unwrap())
+            );
         }
         text += "}\n";
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/web/vectors.json");
@@ -472,7 +689,10 @@ mod tests {
             seq: 300,
             device: "camera".into(),
             timeout_ms: 5000,
-            op: Operation::TransferIn { endpoint: 0x82, length: 16384 },
+            op: Operation::TransferIn {
+                endpoint: 0x82,
+                length: 16384,
+            },
         };
         // tag, seq varint, device string, timeout varint, op tag, endpoint, length varint.
         assert_eq!(read.encode().unwrap().len(), 1 + 2 + 7 + 2 + 1 + 1 + 3);
@@ -481,7 +701,10 @@ mod tests {
             seq: 1,
             device: "camera".into(),
             timeout_ms: 5000,
-            op: Operation::TransferOut { endpoint: 1, data: data.clone() },
+            op: Operation::TransferOut {
+                endpoint: 1,
+                data: data.clone(),
+            },
         };
         let bytes = write.encode().unwrap();
         assert!(bytes.ends_with(&data));
@@ -490,7 +713,13 @@ mod tests {
     #[test]
     fn owner_requests_bound_their_text() {
         for message in [String::new(), "é".repeat(257)] {
-            assert!(Operation::OwnerStatus { message: message.clone() }.validate().is_err());
+            assert!(
+                Operation::OwnerStatus {
+                    message: message.clone()
+                }
+                .validate()
+                .is_err()
+            );
             assert!(Operation::OwnerAttention { message }.validate().is_err());
         }
         let long = "é".repeat(MAX_REASON);
@@ -506,7 +735,15 @@ mod tests {
         assert!(!expectation_holds(&data, usize::MAX, &[1], None));
         assert!(expectation_holds(&data, 3, &[0x14], Some(&[0x0f])));
         assert!(!expectation_holds(&data, 3, &[0x14], Some(&[0xf0])));
-        let bad = Message::Expect { seq: 1, of: 0, offset: 0, bytes: vec![1, 2], mask: Some(vec![1].into()), length: None, alternatives: vec![] };
+        let bad = Message::Expect {
+            seq: 1,
+            of: 0,
+            offset: 0,
+            bytes: vec![1, 2],
+            mask: Some(vec![1].into()),
+            length: None,
+            alternatives: vec![],
+        };
         assert!(bad.validate().is_err());
     }
     #[test]
@@ -519,18 +756,53 @@ mod tests {
         assert!(Message::decode(b"FU\x03\0\x02\0\0\0{}").is_err());
         let huge = Message::Result {
             seq: 1,
-            completion: Completion { data: vec![0; MAX_MESSAGE], ..Completion::default() },
+            completion: Completion {
+                data: vec![0; MAX_MESSAGE],
+                ..Completion::default()
+            },
         };
         assert!(huge.encode().is_err());
-        let execute = |timeout_ms, op| Message::Execute { seq: 1, device: String::new(), timeout_ms, op };
+        let execute = |timeout_ms, op| Message::Execute {
+            seq: 1,
+            device: String::new(),
+            timeout_ms,
+            op,
+        };
         assert!(execute(0, Operation::Probe).validate().is_err());
         assert!(execute(120001, Operation::Probe).validate().is_err());
-        assert!(execute(10, Operation::TransferIn { endpoint: 2, length: 1 }).validate().is_err());
-        assert!(execute(10, Operation::TransferOut { endpoint: 0x82, data: vec![] }).validate().is_err());
-        assert!(execute(10, Operation::ClearHalt { endpoint: 0x10 }).validate().is_err());
+        assert!(
+            execute(
+                10,
+                Operation::TransferIn {
+                    endpoint: 2,
+                    length: 1
+                }
+            )
+            .validate()
+            .is_err()
+        );
+        assert!(
+            execute(
+                10,
+                Operation::TransferOut {
+                    endpoint: 0x82,
+                    data: vec![]
+                }
+            )
+            .validate()
+            .is_err()
+        );
+        assert!(
+            execute(10, Operation::ClearHalt { endpoint: 0x10 })
+                .validate()
+                .is_err()
+        );
         let nested = Message::Routed {
             stream: 1,
-            message: Box::new(Message::Routed { stream: 2, message: Box::new(Message::ProgressDone) }),
+            message: Box::new(Message::Routed {
+                stream: 2,
+                message: Box::new(Message::ProgressDone),
+            }),
         };
         assert!(nested.validate().is_err());
     }

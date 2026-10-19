@@ -31,7 +31,10 @@ function fixture() {
     serial: null,
     interfaces: [
       {
-        configuration: 1, interface: 2, alternate: 3, endpoints: [
+        configuration: 1,
+        interface: 2,
+        alternate: 3,
+        endpoints: [
           { packet_size: 64, address: 1, kind: 'bulk' },
           { packet_size: 64, address: 0x82, kind: 'bulk' },
           { packet_size: 64, address: 0x83, kind: 'interrupt' },

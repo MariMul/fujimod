@@ -6,12 +6,12 @@ use wasm_bindgen::prelude::*;
 mod connection;
 mod defs;
 mod error;
+mod install;
 mod range;
 mod requests;
+mod sequence;
 mod service;
 mod session;
-mod sequence;
-mod install;
 #[cfg(feature = "testing")]
 mod testing;
 mod tracing;

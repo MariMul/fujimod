@@ -29,10 +29,7 @@ export class CameraPace {
   }
 }
 export class RequestTimings {
-  readonly actions: Record<
-    string,
-    { calls: number; seconds: number; maxSeconds: number }
-  > = {};
+  readonly actions: Record<string, { calls: number; seconds: number; maxSeconds: number }> = {};
   measure<T>(action: string, operation: () => T): T {
     const started = performance.now();
     try {

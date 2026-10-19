@@ -34,33 +34,14 @@
     {
       "name": "X-Processor 4",
       "years": "2018–2021",
-      "models": [
-        "X-T3",
-        "X-T30",
-        "X-Pro3",
-        "X100V",
-        "X-T4",
-        "X-S10",
-        "X-E4",
-        "X-T30 II"
-      ]
+      "models": ["X-T3", "X-T30", "X-Pro3", "X100V", "X-T4", "X-S10", "X-E4", "X-T30 II"]
     }
   ],
   [
     {
       "name": "X-Processor 5",
       "years": "2022–",
-      "models": [
-        "X-H2S",
-        "X-H2",
-        "X-T5",
-        "X-S20",
-        "X100VI",
-        "X-T50",
-        "X-M5",
-        "X-E5",
-        "X-T30 III"
-      ]
+      "models": ["X-H2S", "X-H2", "X-T5", "X-S20", "X100VI", "X-T50", "X-M5", "X-E5", "X-T30 III"]
     }
   ]
 ]

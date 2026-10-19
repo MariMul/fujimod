@@ -303,7 +303,7 @@ function validateExpect(m: Extract<Message, { type: 'expect' }>) {
     throw Error('Expectation mask must match its bytes');
   if (m.length != null && (!Number.isInteger(m.length) || m.length < 0 || m.length > MAX_TRANSFER))
     throw Error('Expectation length exceeds transfer limit');
-  if ((m.alternatives?.length ?? 0) > 8 || m.alternatives?.some(a => a.length !== m.bytes.length))
+  if ((m.alternatives?.length ?? 0) > 8 || m.alternatives?.some((a) => a.length !== m.bytes.length))
     throw Error('Expectation alternatives must have equal lengths (at most eight)');
 }
 function readCompletion(r: Reader): Completion {
@@ -393,7 +393,13 @@ function read(r: Reader, nested = false): Message {
   const type = r.tag(MESSAGES);
   switch (type) {
     case 'hello':
-      return { type, version: r.varint(), role: r.string(), token: r.string(), reason: r.option(() => r.string()) };
+      return {
+        type,
+        version: r.varint(),
+        role: r.string(),
+        token: r.string(),
+        reason: r.option(() => r.string()),
+      };
     case 'ready':
       return { type, version: r.varint(), id: r.string() };
     case 'goodbye':
@@ -413,9 +419,24 @@ function read(r: Reader, nested = false): Message {
     case 'inventory':
       return { type, devices: r.sequence(() => readDevice(r)) };
     case 'execute':
-      return { type, seq: r.varint(), device: r.string(), timeout_ms: r.varint(), op: readOperation(r) };
+      return {
+        type,
+        seq: r.varint(),
+        device: r.string(),
+        timeout_ms: r.varint(),
+        op: readOperation(r),
+      };
     case 'expect': {
-      const message = { type, seq: r.varint(), of: r.varint(), offset: r.varint(), bytes: r.raw(), mask: r.option(() => r.raw()), length: r.option(() => r.varint()), alternatives: r.sequence(() => r.raw()) };
+      const message = {
+        type,
+        seq: r.varint(),
+        of: r.varint(),
+        offset: r.varint(),
+        bytes: r.raw(),
+        mask: r.option(() => r.raw()),
+        length: r.option(() => r.varint()),
+        alternatives: r.sequence(() => r.raw()),
+      };
       validateExpect(message);
       return message;
     }

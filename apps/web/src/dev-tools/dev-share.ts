@@ -71,7 +71,13 @@ export function startDevShare(tools: DevToolsController, share: ShareSession): (
         if (sharing) return;
         // Only physical cameras: a simulator registered here would receive camera jobs.
         const physical = tools.target() === CameraTarget.Usb;
-        if (state === ConnectionState.Connected && physical && tools.canShare() && idle && !suspended) {
+        if (
+          state === ConnectionState.Connected &&
+          physical &&
+          tools.canShare() &&
+          idle &&
+          !suspended
+        ) {
           void share.share().catch((error: unknown) => {
             tools.connectionMessage(String(error), Level.Error);
           });

@@ -20,7 +20,7 @@
     "predev": "npm run build:usb",
     "prebuild": "npm run build:usb",
     "prebuild:local-preview": "npm run build:usb",
-    "pretest": "npm run build:usb",
+    "pretest": "npm run build:usb && node ../../crates/simulation/build-web.ts",
     "precheck": "npm run build:usb",
     "test:dev-tools:browser": "node src/dev-tools/browser.ts",
     "test:prerender": "node scripts/test-prerender.ts"

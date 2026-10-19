@@ -41,7 +41,15 @@ impl CheckedCommand {
                     }
                     prefix.extend_from_slice(bytes);
                 }
-                (read.encode(), range.length().get().checked_add(36).ok_or(Error::InvalidLength)?, vec![prefix])
+                (
+                    read.encode(),
+                    range
+                        .length()
+                        .get()
+                        .checked_add(36)
+                        .ok_or(Error::InvalidLength)?,
+                    vec![prefix],
+                )
             }
             SequenceCommand::Write { address, bytes } => {
                 let request = WriteMemory::new(*address, bytes.clone(), limits)?.encode();

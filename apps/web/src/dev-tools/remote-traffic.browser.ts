@@ -89,7 +89,9 @@ try {
       let seq = 0,
         device = '';
       const request = async (op: import('../../../../crates/usb-proxy/web/peer.ts').Operation) => {
-        await peer.send(encodeMessage({ type: 'execute', seq: ++seq, device, op, timeout_ms: 5000 }));
+        await peer.send(
+          encodeMessage({ type: 'execute', seq: ++seq, device, op, timeout_ms: 5000 }),
+        );
         const reply = decodeMessage(await peer.receive());
         if (reply.type !== 'result' || reply.seq !== seq) throw Error('Wrong request correlation');
         return reply.completion;

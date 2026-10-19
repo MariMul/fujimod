@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { WorkerEngine } from './worker-engine';
 import { WorkerRecovery } from './recovery-worker';
 function setup() {
-  Object.assign(globalThis, {document: { baseURI: 'https://example.invalid/' }});
-  Object.assign(globalThis, {window: { setTimeout: () => 0 }});
+  Object.assign(globalThis, { document: { baseURI: 'https://example.invalid/' } });
+  Object.assign(globalThis, { window: { setTimeout: () => 0 } });
   globalThis.fetch = async () =>
     new Response(
       JSON.stringify({
@@ -21,8 +21,13 @@ function setup() {
   const sent: TestMessage[] = [],
     errors: Error[] = [];
   const worker = {
-    onmessage: (_event: {data: unknown}) => {},
-    onerror: (_event: {message: string; filename?: string; lineno?: number; colno?: number}) => {},
+    onmessage: (_event: { data: unknown }) => {},
+    onerror: (_event: {
+      message: string;
+      filename?: string;
+      lineno?: number;
+      colno?: number;
+    }) => {},
     terminated: false,
     postMessage(data: TestMessage) {
       sent.push(data);
@@ -82,7 +87,7 @@ test('owned identity reaches boot; restored OFF defers scene input and powers on
 });
 test('quota failure rejects an explicit save and publishes its status without stopping execution', async () => {
   const { engine, worker, sent, errors } = setup();
-  const events: {savedAt?: number; revision?: number; error?: string}[] = [],
+  const events: { savedAt?: number; revision?: number; error?: string }[] = [],
     stop = engine.cameraSaves((event) => events.push(event));
   try {
     await engine.boot(new ArrayBuffer(1), config, () => {});

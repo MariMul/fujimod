@@ -114,7 +114,10 @@ async function fixture(observer?: (event: ShareTrafficEvent) => void) {
       calls.push(op.op);
       return op.op === 'transfer_in'
         ? { data: Uint8Array.of(1, 2, 3), transferred: 3 }
-        : { transferred: op.op === 'transfer_out' || op.op === 'control_out' ? (op.data?.length ?? 0) : 12 };
+        : {
+            transferred:
+              op.op === 'transfer_out' || op.op === 'control_out' ? (op.data?.length ?? 0) : 12,
+          };
     },
     close: async () => {},
   };
@@ -221,8 +224,20 @@ await test('ShareHost passes notices through in pipeline order and answers a pip
     await f.request(1, { op: 'open' });
     f.channel.input({ type: 'activity', title: 'Uploading' });
     f.channel.input({ type: 'progress_start', label: 'Uploading', total: 93056 });
-    f.channel.input({ type: 'execute', seq: 2, device: 'camera', timeout_ms: 5000, op: { op: 'transfer_out', endpoint: 1, data: Uint8Array.of(1, 2) } });
-    f.channel.input({ type: 'execute', seq: 3, device: 'camera', timeout_ms: 5000, op: { op: 'transfer_in', endpoint: 0x82, length: 64 } });
+    f.channel.input({
+      type: 'execute',
+      seq: 2,
+      device: 'camera',
+      timeout_ms: 5000,
+      op: { op: 'transfer_out', endpoint: 1, data: Uint8Array.of(1, 2) },
+    });
+    f.channel.input({
+      type: 'execute',
+      seq: 3,
+      device: 'camera',
+      timeout_ms: 5000,
+      op: { op: 'transfer_in', endpoint: 0x82, length: 64 },
+    });
     f.channel.input({ type: 'expect', seq: 4, of: 3, offset: 1, bytes: Uint8Array.of(2, 3) });
     f.channel.input({ type: 'progress_update', done: 16384 });
     f.channel.input({ type: 'sync', seq: 5 });
@@ -230,7 +245,12 @@ await test('ShareHost passes notices through in pipeline order and answers a pip
     await until(() => f.channel.sent.some((m) => m.type === 'synced'));
     assert.deepEqual(
       f.channel.sent.filter((m) => m.type !== 'ready').map((m) => [m.type, 'seq' in m ? m.seq : 0]),
-      [['result', 1], ['result', 2], ['result', 3], ['synced', 5]],
+      [
+        ['result', 1],
+        ['result', 2],
+        ['result', 3],
+        ['synced', 5],
+      ],
     );
     assert.deepEqual(f.calls, ['open', 'transfer_out', 'transfer_in']);
     assert.equal(f.channel.readyState, 'open');

@@ -28,5 +28,4 @@ run(process.env.WASM_BINDGEN ?? join(root, 'target/tooling/bin/wasm-bindgen'), [
   'fujimod',
 ]);
 
-
 run('cargo', ['run', '-p', 'fujimod-bindgen', '--', '--out', pkg]);

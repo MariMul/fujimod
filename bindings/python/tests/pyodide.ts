@@ -29,27 +29,28 @@ try {
   await py.runPythonAsync(
     `import micropip;await micropip.install(${JSON.stringify('emfs:/' + manifest.wheel)})`,
   );
+  for (const name of [
+    'exposure',
+    'extended',
+    'adjustment',
+    'lens',
+    'configuration',
+    'transfer',
+    'peripheral',
+    'media',
+    'network',
+  ]) {
+    py.FS.writeFile(
+      `${py.FS.cwd()}/${name}_contract.py`,
+      await readFile(new URL(`./${name}_contract.py`, import.meta.url), 'utf8'),
+    );
+  }
+  py.FS.writeFile(
+    `${py.FS.cwd()}/contract_assertions.py`,
+    await readFile(new URL('./contract_assertions.py', import.meta.url), 'utf8'),
+  );
   const result = await py.runPythonAsync(
-    (await readFile(new URL('./exposure_contract.py', import.meta.url), 'utf8')) +
-      '\n' +
-      (await readFile(new URL('./extended_contract.py', import.meta.url), 'utf8')) +
-      '\n' +
-      (await readFile(new URL('./adjustment_contract.py', import.meta.url), 'utf8')) +
-      '\n' +
-      (await readFile(new URL('./lens_contract.py', import.meta.url), 'utf8')) +
-      '\n' +
-      (await readFile(new URL('./configuration_contract.py', import.meta.url), 'utf8')) +
-      '\n' +
-      (await readFile(new URL('./transfer_contract.py', import.meta.url), 'utf8')) +
-      '\n' +
-      (await readFile(new URL('./peripheral_contract.py', import.meta.url), 'utf8')) +
-      '\n' +
-      (await readFile(new URL('./media_contract.py', import.meta.url), 'utf8')) +
-      '\n' +
-      (await readFile(new URL('./network_contract.py', import.meta.url), 'utf8')) +
-      '\n' +
-      (await readFile(new URL('./webusb_contract.py', import.meta.url), 'utf8')) +
-      '\nawait run()',
+    (await readFile(new URL('./webusb_contract.py', import.meta.url), 'utf8')) + '\nawait run()',
   );
   assert.equal(result, true);
   console.log(

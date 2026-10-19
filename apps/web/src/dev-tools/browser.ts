@@ -118,13 +118,35 @@ try {
       });
       assert.deepEqual(capture.sent, [...new TextEncoder().encode('help\n')]);
       assert.equal(capture.overflow, false);
-      assert.equal(capture.scrollable, true);
+      assert.equal(capture.scrollable, mobile);
       assert.equal(capture.whiteSpace, 'pre');
       assert.equal(capture.panes, 1);
       assert.ok(capture.logTop < 100, 'log begins directly below compact controls');
       assert.ok(capture.logFraction > 0.75, 'log gets most of the viewport');
       assert.ok(capture.rowHeight <= 22, 'single-line log rows remain dense');
       assert.ok(capture.pageHeight <= capture.screenHeight, 'composer stays on screen');
+      // Collapsed messages are capped at 120ch; expand the actual long response
+      // before requiring the log viewport to scroll horizontally on desktop.
+      const longResponse = page
+        .locator('.is-console .dt-row')
+        .filter({ hasText: '0123456789abcdef' })
+        .first();
+      await longResponse.click();
+      await page.locator('.is-console .dt-detail pre').first().waitFor();
+      const expectedOutput = new TextEncoder().encode(
+        'Fuji console ready\n' + '0123456789abcdef '.repeat(28) + '\n',
+      );
+      assert.equal(
+        await page.locator('.is-console .dt-detail pre').first().textContent(),
+        Array.from(expectedOutput, (byte) => byte.toString(16).padStart(2, '0')).join(' '),
+      );
+      assert.equal(
+        await page
+          .locator('.dt-viewport')
+          .evaluate((viewport) => viewport.scrollWidth > viewport.clientWidth),
+        true,
+      );
+      await longResponse.click();
       await page.getByRole('button', { name: 'USB', exact: true }).click();
       await page.getByText('Control Open submitted', { exact: false }).first().waitFor();
       await page.screenshot({

@@ -37,7 +37,13 @@ const empty = new Uint8Array();
 // The same values as `vectors()` in src/protocol.rs.
 const messages: Record<string, Message> = {
   hello: { type: 'hello', version: VERSION, role: 'controller', token: 't', reason: 'install' },
-  hello_without_reason: { type: 'hello', version: VERSION, role: 'exporter', token: 't', reason: null },
+  hello_without_reason: {
+    type: 'hello',
+    version: VERSION,
+    role: 'exporter',
+    token: 't',
+    reason: null,
+  },
   ready: { type: 'ready', version: VERSION, id: '7' },
   goodbye: { type: 'goodbye', reason: 'done' },
   status: { type: 'status', battery: 'full' },
@@ -58,12 +64,42 @@ const messages: Record<string, Message> = {
   transfer_in: execute(9, { op: 'transfer_in', endpoint: 0x82, length: 16384 }),
   transfer_out: execute(300, { op: 'transfer_out', endpoint: 1, data: Uint8Array.of(0, 255) }),
   clear_halt: execute(11, { op: 'clear_halt', endpoint: 0x82 }),
-  expect: { type: 'expect', seq: 12, of: 9, offset: 4, bytes: Uint8Array.of(0xaa, 0xbb), mask: null, length: 8, alternatives: [Uint8Array.of(0xcc, 0xdd)] },
-  expect_masked: { type: 'expect', seq: 13, of: 9, offset: 0, bytes: Uint8Array.of(0x10), mask: Uint8Array.of(0xf0), length: null, alternatives: [] },
+  expect: {
+    type: 'expect',
+    seq: 12,
+    of: 9,
+    offset: 4,
+    bytes: Uint8Array.of(0xaa, 0xbb),
+    mask: null,
+    length: 8,
+    alternatives: [Uint8Array.of(0xcc, 0xdd)],
+  },
+  expect_masked: {
+    type: 'expect',
+    seq: 13,
+    of: 9,
+    offset: 0,
+    bytes: Uint8Array.of(0x10),
+    mask: Uint8Array.of(0xf0),
+    length: null,
+    alternatives: [],
+  },
   sync: { type: 'sync', seq: 14 },
-  result: { type: 'result', seq: 9, completion: { devices: [], data: Uint8Array.of(9, 8, 7), transferred: 3, error: null } },
-  result_error: { type: 'result', seq: 10, completion: { devices: [], data: empty, transferred: 0, error: 'stall' } },
-  result_devices: { type: 'result', seq: 2, completion: { devices: [device], data: empty, transferred: 0, error: null } },
+  result: {
+    type: 'result',
+    seq: 9,
+    completion: { devices: [], data: Uint8Array.of(9, 8, 7), transferred: 3, error: null },
+  },
+  result_error: {
+    type: 'result',
+    seq: 10,
+    completion: { devices: [], data: empty, transferred: 0, error: 'stall' },
+  },
+  result_devices: {
+    type: 'result',
+    seq: 2,
+    completion: { devices: [device], data: empty, transferred: 0, error: null },
+  },
   expect_failed: { type: 'expect_failed', seq: 12, actual: Uint8Array.of(0xaa, 0xbc) },
   synced: { type: 'synced', seq: 14, discarded: 2 },
   routed: { type: 'routed', stream: 3, message: { type: 'sync', seq: 1 } },
@@ -72,7 +108,11 @@ await test('every message matches the bytes the Rust types produce, both ways', 
   assert.deepEqual(Object.keys(messages).sort(), Object.keys(vectors).sort());
   for (const [name, message] of Object.entries(messages)) {
     assert.equal(hex(encodeMessage(message)), vectors[name], name);
-    assert.deepEqual(decodeMessage(Uint8Array.from(Buffer.from(vectors[name], 'hex'))), message, name);
+    assert.deepEqual(
+      decodeMessage(Uint8Array.from(Buffer.from(vectors[name], 'hex'))),
+      message,
+      name,
+    );
   }
 });
 await test('payloads are length-prefixed bytes, decoded as views without copies, up to the transfer limit', () => {
@@ -85,7 +125,11 @@ await test('payloads are length-prefixed bytes, decoded as views without copies,
     assert.deepEqual(decoded.op.data, data);
     assert.equal(decoded.op.data!.buffer, wire.buffer);
   }
-  assert.throws(() => encodeMessage(execute(1, { op: 'transfer_out', endpoint: 1, data: new Uint8Array(MAX_TRANSFER + 1) })));
+  assert.throws(() =>
+    encodeMessage(
+      execute(1, { op: 'transfer_out', endpoint: 1, data: new Uint8Array(MAX_TRANSFER + 1) }),
+    ),
+  );
 });
 await test('truncated, trailing, unknown, nested and version 3 messages are rejected', () => {
   const wire = encodeMessage(messages.transfer_out);
@@ -95,7 +139,11 @@ await test('truncated, trailing, unknown, nested and version 3 messages are reje
   assert.throws(() => decodeMessage(Uint8Array.of(99)), /variant/);
   assert.throws(() => decodeMessage(Uint8Array.of(16, 1, 16, 1, 12, 1)), /Nested/);
   assert.throws(() => decodeMessage(Buffer.from('FU\x03\0\x02\0\0\0{}', 'latin1')));
-  assert.throws(() => encodeMessage(execute(1, { op: 'transfer_out', endpoint: 1, data: 'AQID' as unknown as Uint8Array })));
+  assert.throws(() =>
+    encodeMessage(
+      execute(1, { op: 'transfer_out', endpoint: 1, data: 'AQID' as unknown as Uint8Array }),
+    ),
+  );
   assert.throws(() => encodeMessage(execute(1, { op: 'batch' })), /Unknown variant/);
 });
 await test('expectations compare bytes under an optional mask', () => {

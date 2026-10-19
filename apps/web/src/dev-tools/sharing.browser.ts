@@ -31,7 +31,7 @@ try {
       errors.push(String(e));
       console.error('Owner error:', String(e));
     });
-    const url = new URL('dev-tools/', base);
+    const url: URL = new URL('dev-tools/', base);
     url.searchParams.set('target', 'simulator');
     url.searchParams.set('firmware', 'x70-110');
     url.searchParams.set('connect', '1');

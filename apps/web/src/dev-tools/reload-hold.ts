@@ -15,15 +15,18 @@ export function holdReloadsDuringCameraSessions(tools: DevToolsController, share
     const connection = tools.connection();
     return (
       share.active() ||
-      ![ConnectionState.Disconnected, ConnectionState.Unsupported, ConnectionState.Loading].includes(
-        connection,
-      )
+      ![
+        ConnectionState.Disconnected,
+        ConnectionState.Unsupported,
+        ConnectionState.Loading,
+      ].includes(connection)
     );
   };
   let held = false;
   hot.on('vite:beforeFullReload', async () => {
     if (!busy()) return;
-    if (!held) tools.connectionMessage('Page update waiting until the camera disconnects', Level.Info);
+    if (!held)
+      tools.connectionMessage('Page update waiting until the camera disconnects', Level.Info);
     held = true;
     while (busy()) await new Promise((resolve) => setTimeout(resolve, 500));
   });
