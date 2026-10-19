@@ -78,7 +78,8 @@ const leverLayers = A.lever.flatMap((step, k) => {
 });
 
 // ---------- overlays ----------
-const ARROW_W = 16;
+const ARROW_W = 20;
+const HALO = 9; // white keyline either side, so arrows read over line art
 /** Bold arrow along points: round-capped shaft, rounded head, drawn on over [t0, t1]. */
 function arrow(nm: string, pts: Pt[], colour: string, [t0, t1]: readonly number[], [o0, o1]: readonly number[]): Layer {
   const n = pts.length, [x1, y1] = pts[n - 1], [xp, yp] = pts[n - 2];
@@ -86,10 +87,15 @@ function arrow(nm: string, pts: Pt[], colour: string, [t0, t1]: readonly number[
   const bx = x1 - Math.cos(ang) * hl, by = y1 - Math.sin(ang) * hl, nx = -Math.sin(ang) * hw, ny = Math.cos(ang) * hw;
   const shaft = [...pts.slice(0, -1), [bx + Math.cos(ang) * ARROW_W * 0.4, by + Math.sin(ang) * ARROW_W * 0.4]];
   const smooth = catmull(shaft);
-  const c = rgb(colour);
+  const c = rgb(colour), white = rgb('#ffffff');
+  const head = path(`M ${x1} ${y1} L ${bx + nx} ${by + ny} L ${bx - nx} ${by - ny} Z`);
+  const headO = an([[0, 0, 'hold'], [t1 - 8, 0, 'linear'], [t1 - 2, 100]]);
+  const drawOn = () => trim(0, an([[t0, 0, DRAW], [t1, 100]]));
   return layer(nm, [
-    group('head', [...path(`M ${x1} ${y1} L ${bx + nx} ${by + ny} L ${bx - nx} ${by - ny} Z`), { ...stroke(c, ARROW_W * 0.55), lj: 2 }, fill(c)], { o: an([[0, 0, 'hold'], [t1 - 8, 0, 'linear'], [t1 - 2, 100]]) }),
-    group('shaft', [...path(smooth), { ...stroke(c, ARROW_W), lc: 2 }, trim(0, an([[t0, 0, DRAW], [t1, 100]]))]),
+    group('head', [...head, { ...stroke(c, ARROW_W * 0.5), lj: 2 }, fill(c)], { o: headO }),
+    group('head-halo', [...head, { ...stroke(white, ARROW_W * 0.5 + HALO * 2), lj: 2 }], { o: headO }),
+    group('shaft', [...path(smooth), { ...stroke(c, ARROW_W), lc: 2 }, drawOn()]),
+    group('shaft-halo', [...path(smooth), { ...stroke(white, ARROW_W + HALO * 2), lc: 2 }, drawOn()]),
   ], { ...P, ip: t0 + 2, op: o1 + 1, ks: { o: an([[t0 + 2, 0, 'linear'], [t0 + 6, 100, 'hold'], [o0, 100, 'exit'], [o1, 0]]) } });
 }
 /** Smooth path through points (Catmull-Rom as cubic Beziers). */
@@ -108,11 +114,11 @@ const L0 = A.anchors.lever[0], L1 = A.anchors.lever[A.anchors.lever.length - 1];
 function collarArc(fromEnd: boolean): Pt[] {
   // fit the ellipse through the lever path: centre PIVOT, axes from the sampled positions
   const ang = (p: number[]) => Math.atan2((p[1] - PIVOT[1]) / 0.42, p[0] - PIVOT[0]);
-  const a0 = ang(L0), a1 = ang(L1), r = Math.hypot(L0[0] - PIVOT[0], (L0[1] - PIVOT[1]) / 0.42) * 1.9;
-  const span = a1 - a0, start = a0 - span * 0.9, end = a1 + span * 0.9;
+  const a0 = ang(L0), a1 = ang(L1), r = Math.hypot(L0[0] - PIVOT[0], (L0[1] - PIVOT[1]) / 0.42) * 2.6;
+  const span = a1 - a0, start = a0 - span * 1.6, end = a1 + span * 1.6;
   const pts: Pt[] = Array.from({ length: 9 }, (_, i) => {
     const t = start + ((end - start) * i) / 8;
-    return [PIVOT[0] + r * Math.cos(t), PIVOT[1] + 0.42 * r * Math.sin(t)];
+    return [PIVOT[0] + r * Math.cos(t), PIVOT[1] - 70 + 0.42 * r * Math.sin(t)];
   });
   return fromEnd ? pts.reverse() : pts;
 }
@@ -121,12 +127,13 @@ const onArrow = arrow('arrow-on', collarArc(true), RED, T.arrowOn, T.arrowOnOut)
 
 // blue: press and hold — arrow onto the key, ring around it, then a gentle breathing ring
 function hold(nm: string, [cx, cy]: Pt, rx: number, ry: number, from: Pt[], [t0, t1]: readonly number[]): Layer[] {
-  const a = arrow(nm + '-arrow', [...from, [cx + rx * 0.7, cy - ry * 0.7]], BLUE, [t0, t1], T.release);
-  a.op = T.release[1] + 1;
+  // the arrow points the key out, then leaves the ring to show it is held
+  const a = arrow(nm + '-arrow', [...from, [cx + rx * 0.7, cy - ry * 0.7]], BLUE, [t0, t1], [t1 + 46, t1 + 66]);
   const draw = trim(0, an([[t1 - 6, 0, DRAW], [t1 + 22, 100]]));
   const beats = [0, 1, 2, 3].map((n) => t1 + 22 + n * 60);
   const ring = layer(nm + '-ring', [
-    group('ring', [ellipse(cx, cy, rx * 2, ry * 2), { ...stroke(rgb(BLUE), 7), lc: 2 }, draw]),
+    group('ring', [ellipse(cx, cy, rx * 2, ry * 2), { ...stroke(rgb(BLUE), 9), lc: 2 }, draw]),
+    group('ring-halo', [ellipse(cx, cy, rx * 2, ry * 2), { ...stroke(rgb('#ffffff'), 9 + 2 * HALO), lc: 2 }, trim(0, an([[t1 - 6, 0, DRAW], [t1 + 22, 100]]))]),
     group('breathe', [ellipse(cx, cy, rx * 2, ry * 2), stroke(rgb(BLUE), 4)], {
       a: [cx, cy], p: [cx, cy],
       s: an(beats.flatMap((b, i): Step[] => [[b, [100, 100], 'linear'], [b + 59, [130, 130], i === beats.length - 1 ? 'linear' : 'hold']])),
@@ -135,8 +142,8 @@ function hold(nm: string, [cx, cy]: Pt, rx: number, ry: number, from: Pt[], [t0,
   ], { ...P, ip: t1 - 7, op: T.release[1] + 1, ks: { o: an([[T.release[0], 100, 'exit'], [T.release[1], 0]]) } });
   return [a, ring];
 }
-const holdShutter = hold('hold-shutter', SHUTTER, 34, 19, [[SHUTTER[0] + 260, SHUTTER[1] - 190], [SHUTTER[0] + 150, SHUTTER[1] - 120]], T.ringShutter);
-const holdUp = hold('hold-up', UP, 30, 20, [[UP[0] + 330, UP[1] - 10], [UP[0] + 160, UP[1] - 40]], T.ringUp);
+const holdShutter = hold('hold-shutter', SHUTTER, 34, 19, [[SHUTTER[0] + 70, SHUTTER[1] - 190], [SHUTTER[0] + 40, SHUTTER[1] - 110]], T.ringShutter);
+const holdUp = hold('hold-up', UP, 30, 20, [[UP[0] + 230, UP[1] - 60], [UP[0] + 130, UP[1] - 40]], T.ringUp);
 
 // the screen is lit until the camera switches off
 const [s0, s1, s2, s3] = A.anchors.screen;
