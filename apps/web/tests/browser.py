@@ -1,4 +1,4 @@
-"""Real local DAT boot, physical-input acknowledgement and download browser checks.
+"""Real local DAT boot, physical-input acknowledgment and download browser checks.
 
 Requires Playwright's Python package and browsers. Output is caller-selected,
 fresh and outside source; no hardware access. WebKit emulates iPhone 13 on macOS.

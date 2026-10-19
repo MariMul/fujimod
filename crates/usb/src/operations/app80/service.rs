@@ -1,11 +1,11 @@
 //! Bind the selected firmware's codecs to its declared ff80 mailbox.
 use super::*;
-use crate::app80::catalogue::{Catalogue, Command, CommandError, CommandReply, PreparedCommand};
+use crate::app80::catalog::{Catalog, Command, CommandError, CommandReply, PreparedCommand};
 use fujimod_defs::service::{Definition, ServiceModes};
 
 #[derive(Clone, Debug)]
 pub struct Service {
-    catalogue: Catalogue,
+    catalog: Catalog,
     mailbox: Mailbox,
 }
 impl Service {
@@ -17,12 +17,12 @@ impl Service {
             location.configuration_limit(),
         )?;
         Ok(Self {
-            catalogue: Catalogue::new(definition),
+            catalog: Catalog::new(definition),
             mailbox,
         })
     }
-    pub fn catalogue(&self) -> &Catalogue {
-        &self.catalogue
+    pub fn catalog(&self) -> &Catalog {
+        &self.catalog
     }
     pub fn prepare(
         &self,
@@ -30,7 +30,7 @@ impl Service {
         command: Command,
     ) -> std::result::Result<Invocation, CommandError> {
         Ok(Invocation {
-            command: self.catalogue.prepare(modes, command)?,
+            command: self.catalog.prepare(modes, command)?,
             mailbox: self.mailbox,
         })
     }
@@ -41,7 +41,7 @@ impl Service {
         command: Command,
     ) -> std::result::Result<Invocation, CommandError> {
         Ok(Invocation {
-            command: self.catalogue.prepare_code(code, modes, command)?,
+            command: self.catalog.prepare_code(code, modes, command)?,
             mailbox: self.mailbox,
         })
     }
@@ -52,7 +52,7 @@ impl Service {
         arguments: &[u8],
     ) -> std::result::Result<Invocation, CommandError> {
         Ok(Invocation {
-            command: self.catalogue.prepare_research(code, modes, arguments)?,
+            command: self.catalog.prepare_research(code, modes, arguments)?,
             mailbox: self.mailbox,
         })
     }

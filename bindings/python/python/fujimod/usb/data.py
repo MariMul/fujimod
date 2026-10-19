@@ -17,7 +17,7 @@ from .._bridge import (
 @dataclass(frozen=True)
 class UploadReply:
     setup: DiagnosticReply
-    acknowledgement: bytes
+    acknowledgment: bytes
     bytes_written: int
 
     @classmethod
@@ -26,7 +26,7 @@ class UploadReply:
             value,
             lambda v: cls(
                 DiagnosticReply._from_js(v.setup),
-                buffer_out(v.acknowledgement),
+                buffer_out(v.acknowledgment),
                 v.bytesWritten,
             ),
         )

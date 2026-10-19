@@ -273,7 +273,7 @@ export function installWebUsb() {
       },
       async requestDevice(options: { filters: unknown }) {
         log.push(['picker', options.filters]);
-        if (state.cancelPicker) throw new DOMException('Cancelled', 'NotFoundError');
+        if (state.cancelPicker) throw new DOMException('Canceled', 'NotFoundError');
         return device;
       },
     },

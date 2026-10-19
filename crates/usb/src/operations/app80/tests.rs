@@ -244,7 +244,7 @@ mod replay {
         assert_eq!(script.remaining(), 0);
     }
     #[test]
-    fn cancelling_publish_completion_leaves_session_fenced() {
+    fn canceling_publish_completion_leaves_session_fenced() {
         let command = Request::new(CommandCode(2), &[]).unwrap();
         let mut steps = write(0x81, command.arguments());
         let mut publish = write(0x80, &command.encode());
@@ -321,7 +321,7 @@ mod replay {
     }
     #[test]
     fn typed_save_awaits_publish_and_returns_status_one_without_polling() {
-        use crate::app80::catalogue::{Command, ReplyValue, SaveStatus};
+        use crate::app80::catalog::{Command, ReplyValue, SaveStatus};
         use fujimod_defs::service::ServiceModes;
         let invocation = selected_service()
             .prepare(ServiceModes::new(1).unwrap(), Command::FlushConfiguration)
@@ -350,7 +350,7 @@ mod replay {
     }
     #[test]
     fn foreign_nested_reply_fences_the_session_after_completed_ff80_read() {
-        use crate::app80::catalogue::Command;
+        use crate::app80::catalog::Command;
         use fujimod_defs::service::ServiceModes;
         let invocation = selected_service()
             .prepare(ServiceModes::new(1).unwrap(), Command::FlushConfiguration)

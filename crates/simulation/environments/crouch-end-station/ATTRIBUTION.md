@@ -19,5 +19,5 @@ Modifications: texture-aware mesh simplification to 347,393 triangles, atlas
 resizing from 8192 to 2048 px, JPEG re-encoding at quality 85, and packaging as
 one unlit GLB. The photographic lighting is retained. All targets use this same
 asset. The environment manifest records output SHA-256, placement and spawn.
-Source units are treated as metres; scale has not been surveyed. The capture's
+Source units are treated as meters; scale has not been surveyed. The capture's
 missing geometry and incomplete coverage remain visible.

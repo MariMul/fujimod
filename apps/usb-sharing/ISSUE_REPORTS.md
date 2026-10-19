@@ -13,7 +13,7 @@ bound initial abuse; monitor the budget before increasing it.
 
 The client keeps a random idempotency key across retries. R2 receives
 `<id>/report.tar` and `<id>/metadata.json` before GitHub is contacted. A successful
-response is a durable storage acknowledgement, so the browser can then request
+response is a durable storage acknowledgment, so the browser can then request
 camera deletion. An ambiguous GitHub response returns 202 with the report ID,
 retains the archive and never automatically repeats the GitHub request. Retrieve
 that ID from the private bucket to reconcile it manually. There is no public

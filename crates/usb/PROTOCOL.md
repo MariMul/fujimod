@@ -1,4 +1,4 @@
-# Service/debug command catalogue
+# Service/debug command catalog
 
 The host core speaks the reverse-engineered ff80 protocol. These are command
 mechanisms, not a universal list of supported body features. Firmware definitions
@@ -17,7 +17,7 @@ supply limits, memory maps, App80 codes and the meaning of unclassified fields.
 | E8 | `empty_response` | Four opaque bytes; no inference about camera execution or readiness. |
 
 No command retries, reset requests or service-mode transitions are sent as
-transport cleanup. A failed, cancelled or malformed exchange fences its session.
+transport cleanup. A failed, canceled or malformed exchange fences its session.
 A validated device error is a completed exchange, independently of application
 work the camera may have started.
 
@@ -51,7 +51,7 @@ command-specific fields still need firmware-specific validation; successful USB
 completion cannot establish ownership or application completion.
 
 Some statically identified operations remain deliberately unclassified: `1a0000` returns an
-empty acknowledgement; `1a0001` returns a status byte whose
+empty acknowledgment; `1a0001` returns a status byte whose
 meaning needs a firmware definition; `200001` function 4 uses the log handler; `660002` prepares firmware download buffers but its complete
 update lifecycle is not implemented. They can be inspected through the explicit
 research API. No firmware-update workflow or universal calibration/reset codes
@@ -76,7 +76,7 @@ The upstream protocol reference is
 The retained [MIT notice](LICENSE.fffw) accompanies that reference. Experimental
 upstream names, such as `get_timeouts`, do not establish field semantics.
 
-Firmware-qualified App80 catalogues use the shared `fujimod-defs` data schema.
+Firmware-qualified App80 catalogs use the shared `fujimod-defs` data schema.
 The command codec layer accepts enum inputs and resolves the selected table's
 command byte and argument slots. Its mode rules preserve firmware order,
 including duplicate identifiers and unreviewed entries. The ff80 `Service`

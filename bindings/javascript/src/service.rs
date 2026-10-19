@@ -2,7 +2,7 @@
 use super::*;
 use defs::{ServiceCodec, ServiceDefinition, ServiceModes};
 use error::{integer, property, record};
-use usb::app80::catalogue as core;
+use usb::app80::catalog as core;
 mod values {
     include!(concat!(env!("OUT_DIR"), "/service_values_javascript.rs"));
 }

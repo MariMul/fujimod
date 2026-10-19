@@ -55,7 +55,7 @@ async def check():
     result = await data.upload(
         session, memoryview(mutable), piece_bytes=2, mode=usb.DataWriteMode.Preserve
     )
-    assert result.bytes_written == 3 and result.acknowledgement == b"\x01\x02\x03\x04"
+    assert result.bytes_written == 3 and result.acknowledgment == b"\x01\x02\x03\x04"
     assert result.setup.status == usb.CommandStatus.Success
     assert result.setup.fields == [0, 0, 0, 0]
     assert await session.close() == b"\xaa\xbb"
@@ -98,7 +98,7 @@ async def check():
     except usb.CompletionUnknownError:
         pass
     else:
-        raise AssertionError("cancelled exchange allowed cleanup")
+        raise AssertionError("canceled exchange allowed cleanup")
     second.abandon()
     assert second.state == usb.SessionState.Abandoned
     assert sum(entry[0] == "control" and entry[1] == 0xC4 for entry in log) == 1
@@ -239,7 +239,7 @@ async def run():
     await check_install_helpers()
     await check_pending_reader()
     await check_commands()
-    await check_service_catalogue()
+    await check_service_catalog()
     assert check_peripheral_values()
     assert check_media_values()
     assert check_network_values()
@@ -290,7 +290,7 @@ async def check_install_helpers():
     assert await session.close() == b"\xaa\xbb"
 
 
-async def check_service_catalogue():
+async def check_service_catalog():
     import importlib
     import json
     from js import Promise

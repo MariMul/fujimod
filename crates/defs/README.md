@@ -13,7 +13,7 @@ Each entry preserves its command byte, label, callback-kind word, handler and
 parameter-table addresses, mode availability and table-declared transition.
 Duplicate command bytes remain separate rows in firmware order. A mode rule
 can be reviewed, disabled, or explicitly unreviewed. Unreviewed rows are visible
-but cannot be selected for execution through this catalogue.
+but cannot be selected for execution through this catalog.
 
 `Codec` selects an implemented argument/result layout. Its slot array gives
 zero-based positions within the 32-byte argument mailbox; invalid, overlapping

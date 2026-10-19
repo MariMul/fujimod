@@ -32,10 +32,10 @@ fn document(second: bool) -> serde_json::Value {
     }
     serde_json::json!({"schema":1,"firmware":{"id":if second{"body-b-v2"}else{"body-a-v1"},"model":"Synthetic","version":"test","sha256":"ab".repeat(32)},"mailbox":{"page":0,"offset":if second{384}else{128},"configuration_limit":256},"entries":entries})
 }
-fn catalogue(second: bool) -> Catalogue {
+fn catalog(second: bool) -> Catalog {
     let d = document(second);
     let id = d["firmware"]["id"].as_str().unwrap();
-    Catalogue::new(
+    Catalog::new(
         Definition::from_json(
             &d.to_string(),
             &FirmwareIdentity::new(id, &"ab".repeat(32)).unwrap(),
@@ -56,7 +56,7 @@ fn response(prepared: &PreparedCommand, fields: &[(usize, u8)]) -> Reply {
 #[test]
 fn separate_firmwares_select_their_own_codes_and_argument_positions() {
     for second in [false, true] {
-        let c = catalogue(second);
+        let c = catalog(second);
         let p = c
             .prepare(
                 modes(),
@@ -96,7 +96,7 @@ fn separate_firmwares_select_their_own_codes_and_argument_positions() {
 }
 #[test]
 fn profile_actions_are_variants_and_read_results_are_not_host_dispositions() {
-    let c = catalogue(false);
+    let c = catalog(false);
     for (bank, opcode) in [(ProfileBank::First, 1), (ProfileBank::Second, 2)] {
         let p = c
             .prepare(
@@ -142,7 +142,7 @@ fn profile_actions_are_variants_and_read_results_are_not_host_dispositions() {
 }
 #[test]
 fn unknown_save_and_download_results_are_retained_as_data() {
-    let c = catalogue(false);
+    let c = catalog(false);
     let p = c.prepare(modes(), Command::FlushConfiguration).unwrap();
     for (byte, result) in [
         (0, SaveStatus::Success),
@@ -165,7 +165,7 @@ fn unknown_save_and_download_results_are_retained_as_data() {
 }
 #[test]
 fn service_word_bytes_are_big_endian_and_addresses_are_checked_before_use() {
-    let c = catalogue(false);
+    let c = catalog(false);
     let address = WordAddress::new(Address(0x40001234)).unwrap();
     let p = c
         .prepare(
@@ -217,7 +217,7 @@ fn service_word_bytes_are_big_endian_and_addresses_are_checked_before_use() {
 }
 #[test]
 fn missing_ambiguous_and_shadowed_commands_never_fall_back() {
-    let c = catalogue(false);
+    let c = catalog(false);
     assert!(
         c.prepare(
             ServiceModes::new(4).unwrap(),
@@ -230,7 +230,7 @@ fn missing_ambiguous_and_shadowed_commands_never_fall_back() {
     duplicate["code"] = serde_json::json!(99);
     d["entries"].as_array_mut().unwrap().push(duplicate);
     let id = FirmwareIdentity::new("body-a-v1", &"ab".repeat(32)).unwrap();
-    let c = Catalogue::new(Definition::from_json(&d.to_string(), &id).unwrap());
+    let c = Catalog::new(Definition::from_json(&d.to_string(), &id).unwrap());
     assert!(matches!(
         c.prepare(modes(), Command::ReadPins { bank: bank(0) }),
         Err(CommandError::Ambiguous(_))
@@ -240,7 +240,7 @@ fn missing_ambiguous_and_shadowed_commands_never_fall_back() {
     shadow["codec"] = serde_json::json!("research");
     shadow["slots"] = serde_json::json!([]);
     d["entries"].as_array_mut().unwrap().insert(0, shadow);
-    let c = Catalogue::new(Definition::from_json(&d.to_string(), &id).unwrap());
+    let c = Catalog::new(Definition::from_json(&d.to_string(), &id).unwrap());
     assert!(matches!(
         c.prepare(modes(), Command::ReadPins { bank: bank(0) }),
         Err(CommandError::Unsupported(_))

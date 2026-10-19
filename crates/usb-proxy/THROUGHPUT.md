@@ -35,7 +35,7 @@ The benchmark never automatically retries a failed transfer or speed check.
 Native WebRTC binds a socket to each advertised interface address and sends
 from the source chosen by ICE. A received packet's socket supplies its actual
 destination; no socket is created to guess a route for each incoming datagram.
-Receive buffers are reused across cancellable waits. Ready network input and
+Receive buffers are reused across cancelable waits. Ready network input and
 due RTC timers run before additional application writes.
 Each host UDP socket requests a 4 MiB receive queue, covering SCTP's 1 MiB
 receive window plus DTLS overhead and scheduling bursts. The OS may clamp that

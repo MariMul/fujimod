@@ -103,7 +103,7 @@ test('inline report lists real entries locally and uploads only on explicit acti
     dispose();
   }
 });
-test('failed upload retains USB report; retry reuses ID and deletes only after durable acknowledgement', async () => {
+test('failed upload retains USB report; retry reuses ID and deletes only after durable acknowledgment', async () => {
   const remove = vi.fn(async () => {}),
     devTools = vi.fn(() => ({}));
   const upload = vi.fn().mockRejectedValueOnce(Error('Offline')).mockResolvedValue(receipt);

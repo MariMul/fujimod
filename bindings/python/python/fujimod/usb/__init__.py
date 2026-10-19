@@ -165,7 +165,7 @@ class Session(Handle):
                 unwrap(limits, FirmwareLimits),
                 options,
             )
-            # The owner exists only once C0 completes. Consume a cancelled
+            # The owner exists only once C0 completes. Consume a canceled
             # open's outcome and abandon it without any cleanup request.
             import asyncio
             from .._bridge import begin, wait_pending, Success

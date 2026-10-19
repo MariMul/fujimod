@@ -74,16 +74,16 @@ async fn exchange(
 #[pyfunction]
 async fn execute(
     session: AsyncSession,
-    invocation: app80::catalogue::Invocation,
-) -> PyResult<app80::catalogue::CommandReply> {
-    app80::catalogue::check_limit(
+    invocation: app80::catalog::Invocation,
+) -> PyResult<app80::catalog::CommandReply> {
+    app80::catalog::check_limit(
         &session.limits,
         invocation.inner.command().request().encoded_len(),
     )?;
     session
         .with(move |s| Box::pin(async move { invocation.inner.execute(s).await }))
         .await
-        .map(|inner| app80::catalogue::CommandReply { inner })
+        .map(|inner| app80::catalog::CommandReply { inner })
 }
 pub(super) fn register(
     py: Python<'_>,

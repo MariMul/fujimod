@@ -44,9 +44,9 @@ paths or device addresses, so those metadata properties are `None`.
 
 The adapter supports async commands, compositions, owned chunk iterators and
 bounded trace snapshots. Use `async with` around a reader when stopping early.
-Cancelling a command or pending chunk requests host cancellation in Rust and
+Canceling a command or pending chunk requests host cancellation in Rust and
 awaits its outcome before returning ownership. An incomplete exchange leaves
-`CompletionUnknown`; it does not send C4 or recovery. Cancelling an open waits
+`CompletionUnknown`; it does not send C4 or recovery. Canceling an open waits
 for the open outcome, then abandons a session if one was created. Explicit
 abandonment remains terminal and cannot stop camera execution.
 

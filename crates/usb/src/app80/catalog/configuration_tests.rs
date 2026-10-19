@@ -1,13 +1,13 @@
 use super::*;
 use fujimod_defs::service::FirmwareIdentity;
-fn catalogue(reverse: bool) -> Catalogue {
+fn catalog(reverse: bool) -> Catalog {
     let entries: Vec<_> = [("configuration_flags",11),("configuration_mode",2),("configuration_pack_options",4),("configuration_read_options",4),("adjustment_configuration",5),("select_adjustment_mode",1)]
         .into_iter().enumerate().map(|(n,(codec,count))| {
             let slots: Vec<_> = (0..count).map(|i| if reverse {31-i} else {i}).collect();
             serde_json::json!({"code":200+n,"codec":codec,"label":codec,"slots":slots,"enabled_modes":4,"next_mode":0,"firmware_kind":1,"handler":0,"parameter_table":0})
         }).collect();
     let doc = serde_json::json!({"schema":1,"firmware":{"id":"config-b","model":"Synthetic","version":"2","sha256":"ab".repeat(32)},"mailbox":{"page":3,"offset":576,"configuration_limit":512},"entries":entries});
-    Catalogue::new(
+    Catalog::new(
         Definition::from_json(
             &doc.to_string(),
             &FirmwareIdentity::new("config-b", &"ab".repeat(32)).unwrap(),
@@ -15,7 +15,7 @@ fn catalogue(reverse: bool) -> Catalogue {
         .unwrap(),
     )
 }
-fn prepare(c: &Catalogue, command: Command) -> PreparedCommand {
+fn prepare(c: &Catalog, command: Command) -> PreparedCommand {
     c.prepare(ServiceModes::new(4).unwrap(), command).unwrap()
 }
 fn logical(p: &PreparedCommand) -> Vec<u8> {
@@ -27,7 +27,7 @@ fn logical(p: &PreparedCommand) -> Vec<u8> {
 #[test]
 fn flags_selectors_are_distinct_and_apply_exposes_no_output() {
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         for (bank, b) in [(ConfigurationBank::Bank0, 0), (ConfigurationBank::Bank1, 1)] {
             for (option, o) in [(Toggle::Disabled, 0), (Toggle::Enabled, 1)] {
                 let read = prepare(&c, Command::ReadConfigurationFlags { bank, option });
@@ -55,7 +55,7 @@ fn flags_selectors_are_distinct_and_apply_exposes_no_output() {
 #[test]
 fn mode_and_packed_fields_are_forwarded_without_host_interpretation() {
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         for (flag, f) in [(Toggle::Disabled, 0), (Toggle::Enabled, 1)] {
             for (mode, m) in [
                 (ConfigurationMode::Mode0, 0),
@@ -98,7 +98,7 @@ fn mode_and_packed_fields_are_forwarded_without_host_interpretation() {
 #[test]
 fn raw_configuration_snapshots_preserve_order_and_do_not_infer_validity() {
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         let p = prepare(
             &c,
             Command::ReadConfigurationFlags {
@@ -141,7 +141,7 @@ fn adjustment_duration_profile_and_mode_choices_keep_valid_wire_states() {
         ));
     }
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         for (profile, selector) in [
             (AdjustmentProfile::Profile0, 0),
             (AdjustmentProfile::Profile1, 1),

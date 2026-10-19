@@ -76,7 +76,7 @@ chunks already returned successfully.
 `operations::data::upload` owns the complete setup/E0/E8 sequence. Supply the
 setup mode and E0 piece size explicitly. It checks the final receive budget
 before setup, stops on a framed setup error, and sends each piece and E8 once.
-Its `UploadReply` preserves the raw setup fields and complete acknowledgement (4 or 32 bytes).
+Its `UploadReply` preserves the raw setup fields and complete acknowledgment (4 or 32 bytes).
 Padding, destination-buffer ownership and readback/retry policy stay above this
 composition. The debug memory packet limit does not constrain E0 data pieces.
 
@@ -116,7 +116,7 @@ stages 32 argument bytes, publishes the 33-byte request, awaits that write's
 ff80 reply, then reads the mailbox once. The complete operation's host budget
 is checked before the first write. Firmware asynchronous completion is handled
 by the ff80 exchange; there is no invented mailbox busy bit, automatic poll,
-retry, reset or cleanup. A failed or cancelled USB exchange fences the session.
+retry, reset or cleanup. A failed or canceled USB exchange fences the session.
 Command-specific result decoding and named body APIs belong above this carrier.
 
 `trace::Trace` optionally records the ff80 USB transfers beginning with session
@@ -141,7 +141,7 @@ without treating the table as host timeouts or inferring firmware-specific
 record meanings. A nonzero device status is a completed `DeviceStatus` error;
 a malformed header fences the session.
 
-The [service command catalogue](PROTOCOL.md) lists direct APIs, their effects,
+The [service command catalog](PROTOCOL.md) lists direct APIs, their effects,
 and unclassified operations. `firmware_download_status()` reads state once;
 `clear_firmware_download_status()` explicitly mutates it. Both retain text and
 raw bytes alongside a `FirmwareDownloadState` enum. Writing is application
@@ -186,7 +186,7 @@ and `apps/web`. See their README for the static-host build and mock-WebUSB tests
 ## Firmware-qualified App80 controls
 
 `fujimod::defs::service::Definition` loads the selected firmware's service data.
-`app80::catalogue::Catalogue` resolves its ordered mode rules and typed codecs;
+`app80::catalog::Catalog` resolves its ordered mode rules and typed codecs;
 `operations::app80::Service` binds those codecs to that definition's ff80
 mailbox. The resulting `Invocation` keeps its request and carrier together.
 Preparation does no I/O and never changes the camera's service mode.
@@ -222,10 +222,10 @@ known alignment/address windows before I/O. Research replies stay opaque.
 A wrong command echo in a typed nested reply fences the session, preventing
 further requests or implicit close. No polling, retry or cleanup is added.
 
-Run the read-only catalogue inspector with an explicit identity:
+Run the read-only catalog inspector with an explicit identity:
 
 ```sh
-cargo run -p fujimod-usb --example service_catalogue -- definition.json firmware-id SHA256
+cargo run -p fujimod-usb --example service_catalog -- definition.json firmware-id SHA256
 ```
 
 It prints metadata and performs no USB discovery. The native
@@ -233,7 +233,7 @@ It prints metadata and performs no USB discovery. The native
 expose these definitions, enum commands and typed replies through async and
 awaitable adapters. The [JavaScript package](../../bindings/javascript/README.md#firmware-selected-service-controls)
 exposes the same core through typed factories and discriminated reply unions.
-Pyodide exposes the same Python catalogue interface through that JavaScript
+Pyodide exposes the same Python catalog interface through that JavaScript
 module, retaining Rust's selection, request/reply codecs and session ownership.
 
 I²C uses checked `I2cLength`/`I2cPayload` values of 1–10 bytes and enum ports.

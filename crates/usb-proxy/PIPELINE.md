@@ -84,7 +84,7 @@ own deadline at the exporter; an expired deadline still fences the device
 `Client::sync` waits and returns every outcome since the last sync, in order:
 `Completed`, `Discarded`, `Held` or `Failed(actual)`. `Client::request` is one
 operation and its sync. Flow control waits for results only when the window is
-full. A cancelled call fences the connection.
+full. A canceled call fences the connection.
 
 FujiMod sessions stream through this without new calls: every USB step is
 submitted as the ff80 engine issues it, and only a read, whose reply the engine

@@ -43,8 +43,8 @@ async def exchange(session, mailbox, request):
     )
 
 
-# The catalogue uses CommandCode; finish the wire types before importing it.
-from ._catalogue import (  # noqa: E402
+# The catalog uses CommandCode; finish the wire types before importing it.
+from ._catalog import (  # noqa: E402
     CommandError,
     CommandFailure,
     CommandReply,

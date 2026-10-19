@@ -20,7 +20,7 @@ pub enum DefinitionError {
     InvalidMailbox,
     #[error("command {code:#x} has an invalid {codec:?} argument layout")]
     InvalidLayout { code: u8, codec: Codec },
-    #[error("source record count differs from catalogue entries")]
+    #[error("source record count differs from catalog entries")]
     SourceCount,
     #[error("command labels must be nonempty")]
     EmptyLabel,

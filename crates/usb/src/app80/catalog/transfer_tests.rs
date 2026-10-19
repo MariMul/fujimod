@@ -1,6 +1,6 @@
 use super::*;
 use fujimod_defs::service::FirmwareIdentity;
-fn catalogue(reverse: bool) -> Catalogue {
+fn catalog(reverse: bool) -> Catalog {
     let layouts = [
         ("transfer_prepare", 1),
         ("transfer_select_operation", 2),
@@ -24,7 +24,7 @@ fn catalogue(reverse: bool) -> Catalogue {
         serde_json::json!({"code":180+n,"codec":codec,"label":codec,"slots":slots,"enabled_modes":4,"next_mode":0,"firmware_kind":1,"handler":0,"parameter_table":0})
     }).collect();
     let json = serde_json::json!({"schema":1,"firmware":{"id":"transfer-b","model":"Synthetic","version":"2","sha256":"ab".repeat(32)},"mailbox":{"page":3,"offset":576,"configuration_limit":512},"entries":entries});
-    Catalogue::new(
+    Catalog::new(
         Definition::from_json(
             &json.to_string(),
             &FirmwareIdentity::new("transfer-b", &"ab".repeat(32)).unwrap(),
@@ -35,7 +35,7 @@ fn catalogue(reverse: bool) -> Catalogue {
 #[test]
 fn canonical_transfer_selectors_and_outputs_are_firmware_selected() {
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         for (command, code, expected, index) in [
             (Command::TransferPrepare, 180, vec![255], 0),
             (Command::TransferReady, 182, vec![255], 0),
@@ -148,7 +148,7 @@ fn canonical_transfer_selectors_and_outputs_are_firmware_selected() {
     }
 }
 
-fn prepare(c: &Catalogue, command: Command) -> PreparedCommand {
+fn prepare(c: &Catalog, command: Command) -> PreparedCommand {
     c.prepare(ServiceModes::new(4).unwrap(), command).unwrap()
 }
 fn logical(p: &PreparedCommand) -> Vec<u8> {
@@ -170,7 +170,7 @@ fn transfer_word_space_is_bounded_and_results_do_not_accept_failed_payloads() {
         assert!(TransferWordAddress::new(address).is_err());
     }
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         for address in [0, 0xfffc] {
             let address = TransferWordAddress::new(address).unwrap();
             let read = prepare(&c, Command::TransferReadWord { address });
@@ -227,7 +227,7 @@ fn transfer_word_space_is_bounded_and_results_do_not_accept_failed_payloads() {
 fn pair_bounds_masks_and_opaque_reply_bytes_stay_separate() {
     assert!(TransferPairFirst::new(512).is_err());
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         let p = prepare(
             &c,
             Command::TransferPair {
@@ -279,7 +279,7 @@ fn pair_bounds_masks_and_opaque_reply_bytes_stay_separate() {
 #[test]
 fn halfword_options_and_selected_words_preserve_full_quantity_widths() {
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         let address = TransferHalfwordAddress::new(u32::MAX);
         let p = prepare(&c, Command::TransferReadHalfword { address });
         assert_eq!(logical(&p), [0, 255, 255, 255, 255, 255, 255]);

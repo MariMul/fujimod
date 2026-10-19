@@ -54,7 +54,7 @@ def convert_error(value):
         error.reason = _failure(value.reason)
         return error
     if kind == kinds.ServiceCommand:
-        from .usb._catalogue import CommandError, _command_failure
+        from .usb._catalog import CommandError, _command_failure
 
         error = CommandError(str(getattr(value, "message", value)))
         error.reason = _command_failure(value.reason)
@@ -78,7 +78,7 @@ def convert_error(value):
         kinds.Busy: SessionBusyError,
         kinds.Closed: ClosedSessionError,
         kinds.Abandoned: ClosedSessionError,
-        kinds.Cancelled: ClosedSessionError,
+        kinds.Canceled: ClosedSessionError,
     }.get(kind, UsbError)
     error = cls(str(getattr(value, "message", value)))
     for name in (
@@ -119,7 +119,7 @@ def call(function, *args):
 
 
 async def settled(future):
-    """Finish cancellation cleanup even when the caller is cancelled again."""
+    """Finish cancellation cleanup even when the caller is canceled again."""
     while not future.done():
         try:
             await asyncio.shield(future)

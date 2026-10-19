@@ -11,7 +11,7 @@ There are no device-specific quality variants.
 
 The player is 1.75 m tall, with eyes at 1.64 m, and holds the physical camera
 at 1.45 m, 0.40 m forward and 0.055 m to the right when looking level.
-The head glances down in Walk mode to frame the camera slightly right of centre,
+The head glances down in Walk mode to frame the camera slightly right of center,
 with its bottom about 5% above the viewport edge. Framing follows the viewport
 aspect ratio and remains stable while looking up/down or turning. The camera
 is a physical world object; entering Inspect moves only the observer.
@@ -55,7 +55,7 @@ Crouch End Station is installed for standalone rendering. The same
 GLB is used on every device and by native scenarios. It contains 347,393 faces,
 512,089 vertices and a 2048 px photographic atlas (20,055,032 bytes). The scan has
 incomplete geometry outside its captured coverage; walking stops at floor gaps.
-Source units are treated as metres, with explicit placement and a reviewed
+Source units are treated as meters, with explicit placement and a reviewed
 street spawn. This is not a surveyed physical calibration.
 
 To prepare a fresh authorized Sketchfab download, extract its glTF archive and

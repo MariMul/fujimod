@@ -79,7 +79,7 @@ test('one pane shows console responses and independently filters layers and seve
     host.remove();
   }
 });
-test('simulator target is available without physical WebUSB and a pending boot can be cancelled', async () => {
+test('simulator target is available without physical WebUSB and a pending boot can be canceled', async () => {
   const host = document.createElement('div');
   document.body.append(host);
   let finish!: (choice: { name: string; interfaces: { id: number; label: string }[] }) => void;

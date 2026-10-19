@@ -59,7 +59,7 @@ def test_native_coroutines_work_with_create_task_and_multiple_event_loops():
     run(test)
 
 
-def test_cancelling_actual_transfer_restores_fenced_owner_and_trace():
+def test_canceling_actual_transfer_restores_fenced_owner_and_trace():
     async def test():
         trace = tracing.Trace(64, 4096)
         s, script = await opened([E.control(control(0xc2, 2)), E.pending_read(2)], trace=trace)
@@ -76,7 +76,7 @@ def test_cancelling_actual_transfer_restores_fenced_owner_and_trace():
             await s.ping()
         with pytest.raises(usb.CompletionUnknownError):
             await s.close()
-        assert any(e.phase == tracing.Phase.Cancelled for e in trace.drain().events)
+        assert any(e.phase == tracing.Phase.Canceled for e in trace.drain().events)
         assert script.remaining == 0
     run(test)
 
@@ -260,7 +260,7 @@ def test_diagnostic_and_upload_dtos_are_shared_across_async_and_blocking():
         assert isinstance(result,usb.data.UploadReply) and isinstance(result,usb.data.UploadReply)
         assert result.setup.status == usb.CommandStatus.Success
         assert result.setup.fields == [9,8,7,6]
-        assert (result.bytes_written,result.acknowledgement) == (3,b'\xff\x01\x80\x7f')
+        assert (result.bytes_written,result.acknowledgment) == (3,b'\xff\x01\x80\x7f')
         assert s.state == usb.SessionState.Ready and script.remaining == 0
     run(test)
 

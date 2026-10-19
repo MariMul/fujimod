@@ -210,8 +210,8 @@ impl UploadReply {
         }
     }
     #[wasm_bindgen(getter, unchecked_return_type = "Uint8Array")]
-    pub fn acknowledgement(&self) -> JsValue {
-        bytes(&self.inner.acknowledgement)
+    pub fn acknowledgment(&self) -> JsValue {
+        bytes(&self.inner.acknowledgment)
     }
     #[wasm_bindgen(getter,js_name=bytesWritten)]
     pub fn bytes_written(&self) -> u32 {

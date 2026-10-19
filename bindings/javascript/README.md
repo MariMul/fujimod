@@ -115,7 +115,7 @@ Higher-level operations live in their own groups:
 - `usb.data.readChunks(session, window, address, length)` streams E1 ranges;
   `DataWindow` requires an explicit base, aperture, capacity and offset mode.
 - `usb.data.upload(session, bytes, pieceBytes, mode)` owns setup, E0 pieces and
-  E8 as one operation, preserving raw setup fields and final acknowledgement.
+  E8 as one operation, preserving raw setup fields and final acknowledgment.
 - `usb.app80` supplies distinct one-byte command IDs, requests and an explicit
   mailbox carrier. Codes and result meanings come from the selected firmware.
 - `usb.research` supplies distinct ff80 command IDs and unclassified request
@@ -138,7 +138,7 @@ Completed chunks stay with the caller on failure. A failed bulk command's valid
 partial data remains in `error.partial`. A currently pending pull must finish
 before `close()`; explicitly abandon its session to stop host processing.
 
-The [command catalogue](../../crates/usb/PROTOCOL.md) defines effects and the
+The [command catalog](../../crates/usb/PROTOCOL.md) defines effects and the
 boundary between direct mechanisms, nested protocols and compositions. Debug
 activation, safe exit, callbacks, allocation, persistent settings and mod
 installation belong in firmware-qualified application code.
@@ -186,8 +186,8 @@ Python in Pyodide can use this same initialized module. Call
 [`bindings/python`](../python/PYODIDE.md). `session.cancelPending()` and chunk
 iterators' `cancelPending()` cancel host work without abandoning the session.
 Await the pending Promise before reusing ownership; the session is fenced if
-an exchange was incomplete. Cancelling before dispatch leaves it ready. Host
-cancellation rejects with `ErrorKind.Cancelled`; it never stops camera code.
+an exchange was incomplete. Canceling before dispatch leaves it ready. Host
+cancellation rejects with `ErrorKind.Canceled`; it never stops camera code.
 `abandon()` remains the distinct terminal action.
 
 ## Firmware-selected service controls
@@ -274,7 +274,7 @@ requests a control-line action whose enable path also increments a counter.
 `Command.radioControl`. `Command.signalStrength(new PeerAddress(bytes))` owns
 six bytes and returns opaque `rawValue`, which can include unchanged or
 uninitialized firmware output. `Command.iperf()` uses stored configuration text
-and returns opaque `rawResult`; firmware service acknowledgement can precede
+and returns opaque `rawResult`; firmware service acknowledgment can precede
 running the test. Neither result starts a host poll or certifies a measurement.
 
 Service enums, checked quantities, command/action factories, structured replies

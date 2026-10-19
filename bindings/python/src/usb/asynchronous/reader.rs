@@ -40,7 +40,7 @@ enum ReaderSlot {
         cancel: oneshot::Sender<()>,
         waiters: Vec<oneshot::Sender<()>>,
     },
-    Cancelling {
+    Canceling {
         waiters: Vec<oneshot::Sender<()>>,
     },
     Closed,
@@ -103,16 +103,16 @@ fn begin_close(state: &Mutex<State>) -> PyResult<Close> {
             } => {
                 let (tx, done) = oneshot::channel();
                 waiters.push(tx);
-                state.slot = ReaderSlot::Cancelling { waiters };
+                state.slot = ReaderSlot::Canceling { waiters };
                 Close::Waiting {
                     cancel: Some(cancel),
                     done,
                 }
             }
-            ReaderSlot::Cancelling { mut waiters } => {
+            ReaderSlot::Canceling { mut waiters } => {
                 let (tx, done) = oneshot::channel();
                 waiters.push(tx);
-                state.slot = ReaderSlot::Cancelling { waiters };
+                state.slot = ReaderSlot::Canceling { waiters };
                 Close::Waiting { cancel: None, done }
             }
             ReaderSlot::Closed => Close::Done,
@@ -172,7 +172,7 @@ impl Drop for ChunkLease {
             }
             previous => {
                 let waiters = match previous {
-                    ReaderSlot::InFlight { waiters, .. } | ReaderSlot::Cancelling { waiters } => {
+                    ReaderSlot::InFlight { waiters, .. } | ReaderSlot::Canceling { waiters } => {
                         waiters
                     }
                     _ => vec![],
@@ -204,7 +204,7 @@ impl Reader {
                 ReaderSlot::Closed => {
                     return Err(pyo3::exceptions::PyStopAsyncIteration::new_err(()));
                 }
-                ReaderSlot::InFlight { .. } | ReaderSlot::Cancelling { .. } => {
+                ReaderSlot::InFlight { .. } | ReaderSlot::Canceling { .. } => {
                     return Err(binding_error(BindingError::Busy));
                 }
                 ReaderSlot::Idle(_) => (),

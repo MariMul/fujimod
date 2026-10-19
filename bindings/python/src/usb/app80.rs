@@ -1,6 +1,6 @@
 //! App80 wire types for the awaitable ff80 mailbox operation.
 use super::*;
-pub(super) mod catalogue;
+pub(super) mod catalog;
 
 #[pyclass(frozen, eq, hash, from_py_object, module = "fujimod.usb.app80")]
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
@@ -61,6 +61,6 @@ pub(super) fn types_module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     module.add_class::<CommandCode>()?;
     module.add_class::<Request>()?;
     module.add_class::<Mailbox>()?;
-    catalogue::register(py, &module)?;
+    catalog::register(py, &module)?;
     Ok(module)
 }

@@ -1,7 +1,7 @@
-//! Enum conversion and session adapters for the Rust service catalogue.
+//! Enum conversion and session adapters for the Rust service catalog.
 use super::*;
 use crate::defs::{Codec, Definition, ServiceModes};
-use usb::app80::catalogue as core;
+use usb::app80::catalog as core;
 mod values {
     include!(concat!(env!("OUT_DIR"), "/service_values_python.rs"));
 }

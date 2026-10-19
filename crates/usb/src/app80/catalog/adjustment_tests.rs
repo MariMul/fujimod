@@ -1,6 +1,6 @@
 use super::*;
 use fujimod_defs::service::FirmwareIdentity;
-fn catalogue(reverse: bool) -> Catalogue {
+fn catalog(reverse: bool) -> Catalog {
     let layouts = [
         ("lens_operation6", 0),
         ("publish_lens_completion_parameter", 2),
@@ -17,7 +17,7 @@ fn catalogue(reverse: bool) -> Catalogue {
         serde_json::json!({"code":180+n,"codec":codec,"label":codec,"slots":slots,"enabled_modes":4,"next_mode":0,"firmware_kind":1,"handler":0,"parameter_table":0})
     }).collect();
     let doc = serde_json::json!({"schema":1,"firmware":{"id":"adjustment-b","model":"Synthetic","version":"2","sha256":"ab".repeat(32)},"mailbox":{"page":3,"offset":576,"configuration_limit":512},"entries":entries});
-    Catalogue::new(
+    Catalog::new(
         Definition::from_json(
             &doc.to_string(),
             &FirmwareIdentity::new("adjustment-b", &"ab".repeat(32)).unwrap(),
@@ -25,7 +25,7 @@ fn catalogue(reverse: bool) -> Catalogue {
         .unwrap(),
     )
 }
-fn prepare(c: &Catalogue, command: Command) -> PreparedCommand {
+fn prepare(c: &Catalog, command: Command) -> PreparedCommand {
     c.prepare(ServiceModes::new(4).unwrap(), command).unwrap()
 }
 fn logical(p: &PreparedCommand) -> Vec<u8> {
@@ -44,7 +44,7 @@ fn decode(p: &PreparedCommand, values: &[u8]) -> CommandReply {
 #[test]
 fn request_preparation_and_lens6_have_no_payload_or_hidden_host_parameters() {
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         for command in [
             Command::LensOperation6,
             Command::PrepareAdjustmentOutput,
@@ -60,7 +60,7 @@ fn request_preparation_and_lens6_have_no_payload_or_hidden_host_parameters() {
 #[test]
 fn completion_publisher_and_bounded_position_keep_flags_separate_from_completion() {
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         let completion = prepare(&c, Command::PublishLensCompletionParameter);
         assert_eq!(logical(&completion), [255, 255]);
         for raw in 0..=255 {
@@ -97,7 +97,7 @@ fn completion_publisher_and_bounded_position_keep_flags_separate_from_completion
 #[test]
 fn callback_and_option_snapshots_preserve_raw_bytes_including_reported_failures() {
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         let p = prepare(&c, Command::LensFixedPosition);
         assert_eq!(logical(&p), [255]);
         assert_eq!(

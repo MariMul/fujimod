@@ -249,12 +249,12 @@ impl PipelineAction {
 #[cfg(test)]
 mod tests {
     use super::super::{
-        Catalogue, Command, CommandCode, CommandError, PreparedCommand, Reply, ReplyValue,
+        Catalog, Command, CommandCode, CommandError, PreparedCommand, Reply, ReplyValue,
     };
     use super::*;
     use fujimod_defs::service::{Definition, FirmwareIdentity, ServiceModes};
 
-    fn catalogue(reverse: bool) -> Catalogue {
+    fn catalog(reverse: bool) -> Catalog {
         let layouts = [
             ("pipeline_initialize", 0xa0, 1, 5, 8),
             ("pipeline_start_output", 0xa1, 0, 24, 1),
@@ -302,7 +302,7 @@ mod tests {
             "mailbox": {"page": 3, "offset": 576, "configuration_limit": 512},
             "entries": entries
         });
-        Catalogue::new(
+        Catalog::new(
             Definition::from_json(
                 &doc.to_string(),
                 &FirmwareIdentity::new("pipeline-test", &"ab".repeat(32)).unwrap(),
@@ -312,11 +312,11 @@ mod tests {
     }
 
     fn prepared(
-        catalogue: &Catalogue,
+        catalog: &Catalog,
         modes: ServiceModes,
         action: PipelineAction,
     ) -> PreparedCommand {
-        catalogue
+        catalog
             .prepare(modes, Command::Pipeline { action })
             .unwrap()
     }
@@ -340,7 +340,7 @@ mod tests {
     #[test]
     fn direct_pipeline_requests_use_only_the_firmware_parameter_slots() {
         for reverse in [false, true] {
-            let catalogue = catalogue(reverse);
+            let catalog = catalog(reverse);
             let cases = [
                 (
                     PipelineAction::InitializePipeline {
@@ -426,7 +426,7 @@ mod tests {
                 ),
             ];
             for (action, code, mode, expected) in cases {
-                let prepared = prepared(&catalogue, ServiceModes::new(mode).unwrap(), action);
+                let prepared = prepared(&catalog, ServiceModes::new(mode).unwrap(), action);
                 assert_eq!(prepared.request.code(), CommandCode(code));
                 assert_eq!(logical(&prepared), expected);
                 assert_eq!(decoded(&prepared), ReplyValue::NoPayload);
@@ -436,15 +436,15 @@ mod tests {
 
     #[test]
     fn duplicate_request_wait_rows_need_explicit_code_selection() {
-        let catalogue = catalogue(false);
+        let catalog = catalog(false);
         let modes = ServiceModes::new(16).unwrap();
         let action = PipelineAction::RunRequestAndWait;
         assert!(matches!(
-            catalogue.prepare(modes, Command::Pipeline { action }),
+            catalog.prepare(modes, Command::Pipeline { action }),
             Err(CommandError::Ambiguous(Codec::PipelineRequestWait))
         ));
         for code in [0xa5, 0xa7, 0xa9] {
-            let prepared = catalogue
+            let prepared = catalog
                 .prepare_code(CommandCode(code), modes, Command::Pipeline { action })
                 .unwrap();
             assert_eq!(prepared.request.code(), CommandCode(code));
@@ -452,7 +452,7 @@ mod tests {
             assert_eq!(decoded(&prepared), ReplyValue::NoPayload);
         }
         assert!(matches!(
-            catalogue.prepare_code(
+            catalog.prepare_code(
                 CommandCode(0xa5),
                 ServiceModes::new(8).unwrap(),
                 Command::Pipeline { action },

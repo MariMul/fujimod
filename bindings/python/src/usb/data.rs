@@ -47,8 +47,8 @@ impl UploadReply {
         }
     }
     #[getter]
-    fn acknowledgement<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.inner.acknowledgement)
+    fn acknowledgment<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.inner.acknowledgment)
     }
     #[getter]
     fn bytes_written(&self) -> u32 {

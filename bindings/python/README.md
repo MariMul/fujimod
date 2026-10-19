@@ -69,7 +69,7 @@ A pending operation reports `InFlight`, and another operation fails with
 the fenced session. `aclose()` can cancel a pending chunk and awaits release of
 ownership; `session.abandon()` cancels pending host work and leaves `Abandoned`.
 Neither operation can stop camera execution. Creating an unawaited coroutine
-sends nothing; discarding or cancelling it before dispatch leaves the session
+sends nothing; discarding or canceling it before dispatch leaves the session
 available.
 
 The native binding uses PyO3's `experimental-async` coroutine support and nusb's
@@ -172,11 +172,11 @@ call Python callbacks.
 
 `await usb.data.upload(session, data, piece_bytes=..., mode=usb.DataWriteMode.Preserve)`
 holds exclusive session ownership across the setup, every E0 piece and final E8. It returns
-an immutable `UploadReply` with `setup`, `acknowledgement` and `bytes_written`.
+an immutable `UploadReply` with `setup`, `acknowledgment` and `bytes_written`.
 Mode and piece size are required inputs. The operation sends data unchanged,
 without padding, readback, retries or destination-buffer policy. A refused setup
 is a structured `DeviceCommandError`; a failed exchange fences the session.
-A four-byte acknowledgement remains opaque. A 32-byte reply is validated against
+A four-byte acknowledgment remains opaque. A 32-byte reply is validated against
 the upload setup command and status fields. Neither certifies application completion.
 
 `session.prepare_capabilities()` returns immutable `usb.CapabilitiesReply`
@@ -197,7 +197,7 @@ header and needs at least 16 bytes. The reply exposes typed status, primary and
 secondary values, a distinct command identifier, body and raw bytes. Only the
 common header is validated; the selected firmware supplies other semantics.
 There is no implicit padding, polling, data transfer, retry or cleanup. The
-[command catalogue](../../crates/usb/PROTOCOL.md) describes effects and limits.
+[command catalog](../../crates/usb/PROTOCOL.md) describes effects and limits.
 
 ## Firmware-selected service controls
 

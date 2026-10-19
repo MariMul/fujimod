@@ -1,12 +1,12 @@
 use super::*;
 use fujimod_defs::service::FirmwareIdentity;
-fn catalogue(reverse: bool) -> Catalogue {
+fn catalog(reverse: bool) -> Catalog {
     let entries:Vec<_>=[("display_option",4),("display_mode",1),("sound",3),("hdmi",19),("parameter_service",1),("charge_control",3),("charge_status",2),("audio_capture",3),("audio_playback",2),("erase_storage",2),("storage_status",1),("format_storage",0),("display_setup",0)].into_iter().enumerate().map(|(index,(codec,count))|{
   let slots:Vec<_>=(0..count).map(|slot|if reverse {31-slot}else{slot}).collect();
   serde_json::json!({"code":210+index,"label":codec,"codec":codec,"slots":slots,"enabled_modes":4,"next_mode":0,"firmware_kind":1,"handler":0,"parameter_table":0})
  }).collect();
     let json = serde_json::json!({"schema":1,"firmware":{"id":"media-v2","model":"Synthetic","version":"2","sha256":"ab".repeat(32)},"mailbox":{"page":3,"offset":576,"configuration_limit":512},"entries":entries});
-    Catalogue::new(
+    Catalog::new(
         Definition::from_json(
             &json.to_string(),
             &FirmwareIdentity::new("media-v2", &"ab".repeat(32)).unwrap(),
@@ -14,7 +14,7 @@ fn catalogue(reverse: bool) -> Catalogue {
         .unwrap(),
     )
 }
-fn prepare(c: &Catalogue, command: Command) -> PreparedCommand {
+fn prepare(c: &Catalog, command: Command) -> PreparedCommand {
     c.prepare(ServiceModes::new(4).unwrap(), command).unwrap()
 }
 fn logical(p: &PreparedCommand) -> Vec<u8> {
@@ -31,7 +31,7 @@ fn response(p: &PreparedCommand, index: usize, value: u8) -> Reply {
 #[test]
 fn display_forwarding_modes_and_parameter_boolean_have_distinct_typed_choices() {
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         for (command, expected) in [
             (
                 Command::DisplayOption {
@@ -88,7 +88,7 @@ fn display_forwarding_modes_and_parameter_boolean_have_distinct_typed_choices() 
 fn sound_clip_and_track_variants_choose_canonical_codes_and_formats() {
     assert!(SoundClip::new(23).is_err());
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         for (format, wire) in [
             (SoundFormat::Format1, 0),
             (SoundFormat::Format2, 1),
@@ -154,7 +154,7 @@ fn hdmi_packet_is_owned_reversed_and_exactly_sixteen_bytes_with_checked_triplets
     original.fill(255);
     assert_eq!(packet.data()[0], 0);
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         let p = prepare(
             &c,
             Command::Hdmi {
@@ -190,7 +190,7 @@ fn hdmi_packet_is_owned_reversed_and_exactly_sixteen_bytes_with_checked_triplets
 #[test]
 fn charge_results_are_application_enums_and_absent_output_stays_unknown() {
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         for (action, expected) in [
             (
                 ChargeAction::Control {
@@ -279,7 +279,7 @@ fn audio_storage_requests_and_results_use_remapped_slots_without_completion_inst
     assert!(AudioCount::new(11).is_err());
     assert!(AudioCount::new(255).is_err());
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         for count in [0, 10] {
             for (route, wire) in [(AudioRoute::Request82, 0), (AudioRoute::Request81, 1)] {
                 let p = prepare(

@@ -22,7 +22,7 @@ SCHEMA = 3
 #   guide      the feature's main how-to, shown expanded (one per feature)
 #   alternate  another way to do the same task, listed collapsed
 #   tour       visits every option; source of option cards (contact sheet)
-#   test       behaviour checks, hidden from owner documentation
+#   test       behavior checks, hidden from owner documentation
 #   hero       the clip and still for one card (e.g. turning through every
 #              aspect ratio), not a route to follow; hero= names the menu
 #              rows or options it illustrates

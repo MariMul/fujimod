@@ -36,12 +36,12 @@ fn script(extra: Vec<E>) -> Script {
 }
 
 #[wasm_bindgen_test]
-fn selected_catalogue_and_typed_replies_execute_in_wasm() {
+fn selected_catalog_and_typed_replies_execute_in_wasm() {
     use fujimod_defs::service::{Definition, FirmwareIdentity, ServiceModes};
     use fujimod_usb::{
         app80::{
             Reply,
-            catalogue::{Command, ReplyValue, SaveStatus},
+            catalog::{Command, ReplyValue, SaveStatus},
         },
         operations::app80::Service,
     };
@@ -140,6 +140,6 @@ async fn dropped_future_fences_the_session_and_records_cancellation() {
             .drain()
             .events
             .iter()
-            .any(|event| matches!(event.action, Action::Cancelled))
+            .any(|event| matches!(event.action, Action::Canceled))
     );
 }

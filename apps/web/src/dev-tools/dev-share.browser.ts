@@ -75,11 +75,11 @@ try {
     errors.push(String(error));
     console.error(String(error));
   });
-  let acknowledgements = 0;
+  let acknowledgments = 0;
   owner.on('websocket', (socket) => {
     if (new URL(socket.url()).pathname === '/usb-proxy/dev-share')
       socket.on('framereceived', ({ payload }) => {
-        if (JSON.parse(String(payload)).type === 'registered') acknowledgements++;
+        if (JSON.parse(String(payload)).type === 'registered') acknowledgments++;
       });
   });
   await owner.goto(url.href);
@@ -117,7 +117,7 @@ try {
   await count(1);
   await owner.close();
   await count(0);
-  assert.equal(acknowledgements, 3);
+  assert.equal(acknowledgments, 3);
   assert.deepEqual(errors, []);
   await writeFile(
     new URL('result.json', output),
@@ -125,7 +125,7 @@ try {
       {
         passed: true,
         url: url.href,
-        acknowledgements,
+        acknowledgments,
         otherShares,
         registryCounts: observedCounts,
         privateFiles: true,

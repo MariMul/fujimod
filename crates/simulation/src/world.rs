@@ -132,8 +132,8 @@ impl Simulation {
         let eye = self.eye_position();
         let held = self.rotation().inverse() * (physical.translation - eye);
         let tangent = (vertical_fov * 0.5).tan();
-        // The head glances down at the held body. Keep its centre slightly
-        // right of centre and its nearest bottom corner 5% above the edge.
+        // The head glances down at the held body. Keep its center slightly
+        // right of center and its nearest bottom corner 5% above the edge.
         // Both views still observe the very same physical camera in the world.
         let head_yaw = (0.2 * tangent * aspect).atan() - held.x.atan2(-held.z);
         let bottom = Quat::from_rotation_y(-head_yaw)
@@ -179,10 +179,10 @@ mod tests {
                         0.5 - p.y / (-p.z * (fov * 0.5).tan()) * 0.5,
                     )
                 };
-                let centre = project(Vec3::ZERO);
+                let center = project(Vec3::ZERO);
                 assert!(
-                    (0.53..0.66).contains(&centre.x),
-                    "centre: {centre:?}, aspect: {aspect}"
+                    (0.53..0.66).contains(&center.x),
+                    "center: {center:?}, aspect: {aspect}"
                 );
                 let mut bottom = 0_f32;
                 for x in [-0.0565, 0.0565] {

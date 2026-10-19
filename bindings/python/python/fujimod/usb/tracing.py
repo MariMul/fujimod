@@ -20,7 +20,7 @@ class Phase(Enum):
     Submitted = auto()
     Completed = auto()
     Failed = auto()
-    Cancelled = auto()
+    Canceled = auto()
 
 
 class RequestKind(Enum):

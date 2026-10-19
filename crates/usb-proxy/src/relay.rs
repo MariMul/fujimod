@@ -636,7 +636,7 @@ mod tests {
         server.abort();
     }
     #[tokio::test]
-    async fn cancelled_request_fences_before_more_usb() {
+    async fn canceled_request_fences_before_more_usb() {
         let (url, server) = server().await;
         let (route, exporter, mut events) = fixture(&url, Duration::from_millis(150)).await;
         let mut client = available(&url).await;
@@ -646,7 +646,7 @@ mod tests {
                 .is_err()
         );
         let error = client.request(&route, open(), Duration::from_secs(1)).await.unwrap_err();
-        assert!(error.to_string().contains("cancelled"), "{error}");
+        assert!(error.to_string().contains("canceled"), "{error}");
         assert!(matches!(events.recv().await, Some(Operation::Open { .. })));
         assert!(events.try_recv().is_err());
         exporter.abort();

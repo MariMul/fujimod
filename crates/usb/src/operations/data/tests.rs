@@ -173,7 +173,7 @@ mod replay {
 
 #[cfg(feature = "testing")]
 #[test]
-fn cancelling_final_upload_acknowledgement_fences_the_session() {
+fn canceling_final_upload_acknowledgment_fences_the_session() {
     use crate::{
         ff80::{
             SessionState,
@@ -220,7 +220,7 @@ fn cancelling_final_upload_acknowledgement_fences_the_session() {
 
 #[cfg(feature = "testing")]
 #[test]
-fn captured_long_upload_acknowledgement_checks_echo_reserved_and_status() {
+fn captured_long_upload_acknowledgment_checks_echo_reserved_and_status() {
     use crate::{
         ff80::{
             SessionState,
@@ -270,7 +270,7 @@ fn captured_long_upload_acknowledgement_checks_echo_reserved_and_status() {
         assert_eq!(result.is_ok(), success);
         if success {
             let result = result.unwrap();
-            assert_eq!(result.acknowledgement, reply);
+            assert_eq!(result.acknowledgment, reply);
             assert_eq!(result.bytes_written, 3);
         } else if ready {
             assert!(matches!(

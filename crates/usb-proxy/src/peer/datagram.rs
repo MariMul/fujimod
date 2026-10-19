@@ -1,5 +1,5 @@
 //! Bound interface sockets preserve the actual ICE source/destination tuple.
-//! Receive buffers stay with their socket across cancellable waits.
+//! Receive buffers stay with their socket across cancelable waits.
 use futures_util::{FutureExt, StreamExt, future::BoxFuture, stream::FuturesUnordered};
 use std::{
     collections::HashMap,
@@ -127,7 +127,7 @@ impl DatagramIo {
 mod tests {
     use super::*;
     #[test]
-    fn interface_tuples_buffers_and_cancelled_waits() {
+    fn interface_tuples_buffers_and_canceled_waits() {
         futures_lite::future::block_on(async {
             let first = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
             let second = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();

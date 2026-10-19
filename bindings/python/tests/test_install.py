@@ -119,7 +119,7 @@ def test_owned_upload_padding_restore_and_full_bulk_readback() -> None:
     run(test)
 
 
-def test_cancelled_upload_retains_unknown_destination_without_restoration() -> None:
+def test_canceled_upload_retains_unknown_destination_without_restoration() -> None:
     async def test() -> None:
         before, after = pointer_steps()
         steps = upload_steps()

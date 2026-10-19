@@ -1,7 +1,7 @@
 use super::*;
 use fujimod_defs::service::FirmwareIdentity;
 
-fn catalogue(reverse: bool) -> Catalogue {
+fn catalog(reverse: bool) -> Catalog {
     let entries: Vec<_>=[("register_control",7),("i2c",14),("accumulator",7),("peripheral_report",8),("battery_control",2),("initialize_display",1),("display_pattern",5)]
         .into_iter().enumerate().map(|(index,(codec,count))| {
             let slots:Vec<_>=(0..count).map(|slot| if reverse {31-slot} else {slot}).collect();
@@ -10,7 +10,7 @@ fn catalogue(reverse: bool) -> Catalogue {
         }).collect();
     let json = serde_json::json!({"schema":1,"firmware":{"id":"synthetic-v2","model":"Synthetic","version":"2","sha256":"ab".repeat(32)},
         "mailbox":{"page":3,"offset":576,"configuration_limit":512},"entries":entries});
-    Catalogue::new(
+    Catalog::new(
         Definition::from_json(
             &json.to_string(),
             &FirmwareIdentity::new("synthetic-v2", &"ab".repeat(32)).unwrap(),
@@ -18,7 +18,7 @@ fn catalogue(reverse: bool) -> Catalogue {
         .unwrap(),
     )
 }
-fn prepare(c: &Catalogue, command: Command) -> PreparedCommand {
+fn prepare(c: &Catalog, command: Command) -> PreparedCommand {
     c.prepare(ServiceModes::new(4).unwrap(), command).unwrap()
 }
 fn logical(p: &PreparedCommand) -> Vec<u8> {
@@ -37,7 +37,7 @@ fn response(p: &PreparedCommand, values: &[u8]) -> Reply {
 #[test]
 fn register_variants_encode_scattered_fields_without_claiming_stub_read_values() {
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         let cases = [
             (
                 RegisterAction::AudioValue { value: 0x56 },
@@ -101,7 +101,7 @@ fn i2c_requires_bounded_owned_data_and_has_a_distinct_single_write_contract() {
         assert!(I2cPayload::new(&vec![0; n]).is_err());
     }
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         for (port, selector) in [
             (I2cPort::Port0, 0),
             (I2cPort::Port1, 1),
@@ -168,7 +168,7 @@ fn i2c_requires_bounded_owned_data_and_has_a_distinct_single_write_contract() {
 #[test]
 fn accumulator_stop_returns_low_halfwords_and_status_report_stays_opaque() {
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         let start = prepare(
             &c,
             Command::Accumulator {
@@ -207,7 +207,7 @@ fn accumulator_stop_returns_low_halfwords_and_status_report_stays_opaque() {
 #[test]
 fn battery_actions_are_not_measurements_and_initialize_uses_canonical_selector() {
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         for (action, selector) in [
             (BatteryAction::ResetPending, 0),
             (BatteryAction::CallbackWait, 1),
@@ -234,7 +234,7 @@ fn battery_actions_are_not_measurements_and_initialize_uses_canonical_selector()
 #[test]
 fn display_pattern_preserves_unused_slot_and_packed_color_field_order() {
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         for (action, expected) in [
             (DisplayPatternAction::ResetPreset, [0, 0, 0, 0, 0]),
             (DisplayPatternAction::Bars, [1, 0, 0, 0, 0]),

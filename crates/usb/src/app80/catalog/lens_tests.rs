@@ -1,6 +1,6 @@
 use super::*;
 use fujimod_defs::service::FirmwareIdentity;
-fn catalogue(reverse: bool) -> Catalogue {
+fn catalog(reverse: bool) -> Catalog {
     let layouts = [
         ("lens_select", 5),
         ("lens_operation2", 1),
@@ -13,7 +13,7 @@ fn catalogue(reverse: bool) -> Catalogue {
         serde_json::json!({"code":180+n,"codec":codec,"label":codec,"slots":slots,"enabled_modes":4,"next_mode":0,"firmware_kind":1,"handler":0,"parameter_table":0})
     }).collect();
     let doc = serde_json::json!({"schema":1,"firmware":{"id":"lens-b","model":"Synthetic","version":"2","sha256":"ab".repeat(32)},"mailbox":{"page":3,"offset":576,"configuration_limit":512},"entries":entries});
-    Catalogue::new(
+    Catalog::new(
         Definition::from_json(
             &doc.to_string(),
             &FirmwareIdentity::new("lens-b", &"ab".repeat(32)).unwrap(),
@@ -21,7 +21,7 @@ fn catalogue(reverse: bool) -> Catalogue {
         .unwrap(),
     )
 }
-fn prepare(c: &Catalogue, command: Command) -> PreparedCommand {
+fn prepare(c: &Catalog, command: Command) -> PreparedCommand {
     c.prepare(ServiceModes::new(4).unwrap(), command).unwrap()
 }
 fn logical(p: &PreparedCommand) -> Vec<u8> {
@@ -39,7 +39,7 @@ fn lens_selection_indices_cannot_alias_initialization_or_overflow() {
         ));
     }
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         for (target, selector) in [
             (LensTarget::Initialize, 0),
             (
@@ -92,7 +92,7 @@ fn lens_selection_indices_cannot_alias_initialization_or_overflow() {
 #[test]
 fn lens_operation_outputs_remain_snapshots_without_inferred_callback_success() {
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         for command in [Command::LensOperation2, Command::LensOperation3] {
             let p = prepare(&c, command);
             assert_eq!(logical(&p), [255]);

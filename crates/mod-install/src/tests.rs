@@ -344,7 +344,7 @@ fn short_capacity_is_rejected_before_borrowing() {
     assert_eq!(session.state(), SessionState::Ready);
 }
 #[test]
-fn cancelling_upload_never_restores_or_frees_an_uncertain_destination() {
+fn canceling_upload_never_restores_or_frees_an_uncertain_destination() {
     let mut steps = begin();
     let mut sending = transfer();
     sending.pop();

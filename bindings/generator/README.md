@@ -5,7 +5,7 @@ declarations. It is a member of the root Cargo workspace and a build dependency
 of both binding crates. The implementation crates stay independent of PyO3 and
 wasm-bindgen.
 
-The current generator reads `crates/usb/src/app80/catalogue.rs`, its value
+The current generator reads `crates/usb/src/app80/catalog.rs`, its value
 modules, and the definition crate's `Codec` enum. It generates:
 
 - Native Python and Wasm enum definitions and conversions.

@@ -31,7 +31,7 @@ fn event_and_payload_bounds_report_every_discard_without_truncating() {
 fn zero_payload_records_are_still_bounded() {
     let trace = Trace::new(nz(2), nz(4));
     for i in 0..5 {
-        trace.record(i, TransferStage::BulkIn, None, 0, || Action::Cancelled);
+        trace.record(i, TransferStage::BulkIn, None, 0, || Action::Canceled);
     }
     let batch = trace.drain();
     assert_eq!(batch.events.len(), 2);
@@ -127,7 +127,7 @@ mod replay {
         assert_eq!(session.state(), SessionState::CompletionUnknown);
         assert!(matches!(
             trace.drain().events.last().unwrap().action,
-            Action::Cancelled
+            Action::Canceled
         ));
         assert_eq!(script.remaining(), 0);
     }
@@ -162,6 +162,6 @@ fn protocol_and_usb_share_one_budget_and_cancellation_is_observed() {
     assert_eq!(batch.dropped_bytes, 2);
     assert_eq!(batch.events.len(), 1);
     assert_eq!(batch.protocol_events.len(), 1);
-    assert!(matches!(batch.protocol_events[0].action, Action::Cancelled));
+    assert!(matches!(batch.protocol_events[0].action, Action::Canceled));
     assert!(batch.events[0].sequence < batch.protocol_events[0].sequence);
 }

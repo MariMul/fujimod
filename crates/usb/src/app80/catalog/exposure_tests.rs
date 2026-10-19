@@ -1,5 +1,5 @@
 use super::super::{
-    ArgumentKind, Catalogue, Command, CommandCode, CommandError, CommandReply, PreparedCommand,
+    ArgumentKind, Catalog, Command, CommandCode, CommandError, CommandReply, PreparedCommand,
     Reply, ReplyValue,
 };
 use super::{
@@ -10,7 +10,7 @@ use super::{
 };
 use fujimod_defs::service::{Definition, FirmwareIdentity, ServiceModes};
 
-fn catalogue(reverse: bool) -> Catalogue {
+fn catalog(reverse: bool) -> Catalog {
     let entries: Vec<_> = [
         ("adjustment_status_option", 1),
         ("adjustment_exposure", 4),
@@ -48,7 +48,7 @@ fn catalogue(reverse: bool) -> Catalogue {
         "mailbox": {"page": 3, "offset": 576, "configuration_limit": 512},
         "entries": entries
     });
-    Catalogue::new(
+    Catalog::new(
         Definition::from_json(
             &doc.to_string(),
             &FirmwareIdentity::new("exposure-b", &"ab".repeat(32)).unwrap(),
@@ -57,8 +57,8 @@ fn catalogue(reverse: bool) -> Catalogue {
     )
 }
 
-fn prepare(catalogue: &Catalogue, command: Command) -> PreparedCommand {
-    catalogue
+fn prepare(catalog: &Catalog, command: Command) -> PreparedCommand {
+    catalog
         .prepare(ServiceModes::new(4).unwrap(), command)
         .unwrap()
 }
@@ -83,8 +83,8 @@ fn decode(prepared: &PreparedCommand, logical_reply: &[u8]) -> CommandReply {
 #[test]
 fn status_and_ready_option_reads_use_one_output_slot_and_preserve_raw_values() {
     for reverse in [false, true] {
-        let catalogue = catalogue(reverse);
-        let status = prepare(&catalogue, Command::ReadAdjustmentStatusOption);
+        let catalog = catalog(reverse);
+        let status = prepare(&catalog, Command::ReadAdjustmentStatusOption);
         assert_eq!(status.request.code(), CommandCode(0x90));
         assert_eq!(logical(&status), [u8::MAX]);
         for raw in 0..=255 {
@@ -99,7 +99,7 @@ fn status_and_ready_option_reads_use_one_output_slot_and_preserve_raw_values() {
             );
         }
 
-        let ready = prepare(&catalogue, Command::ReadAdjustmentReadyOption);
+        let ready = prepare(&catalog, Command::ReadAdjustmentReadyOption);
         assert_eq!(ready.request.code(), CommandCode(0x93));
         assert_eq!(logical(&ready), [u8::MAX]);
         for raw in 0..=255 {
@@ -119,7 +119,7 @@ fn status_and_ready_option_reads_use_one_output_slot_and_preserve_raw_values() {
 #[test]
 fn exposure_request_splits_duration_in_firmware_byte_order_without_host_wait_semantics() {
     for reverse in [false, true] {
-        let catalogue = catalogue(reverse);
+        let catalog = catalog(reverse);
         for (mode, mode_byte) in [
             (ExposureModeOption::Default, 0),
             (ExposureModeOption::Mode1, 1),
@@ -132,7 +132,7 @@ fn exposure_request_splits_duration_in_firmware_byte_order_without_host_wait_sem
                     let duration = ExposureDuration::new(duration_value);
                     assert_eq!(duration.value(), duration_value);
                     let prepared = prepare(
-                        &catalogue,
+                        &catalog,
                         Command::RequestExposure {
                             mode,
                             duration,
@@ -162,7 +162,7 @@ fn exposure_request_splits_duration_in_firmware_byte_order_without_host_wait_sem
 #[test]
 fn configuration_packet_writes_use_exact_payload_lengths_and_reads_decode_published_bytes() {
     for reverse in [false, true] {
-        let catalogue = catalogue(reverse);
+        let catalog = catalog(reverse);
         let writes = [
             (
                 AdjustmentPacketWrite::Kind0 {
@@ -203,7 +203,7 @@ fn configuration_packet_writes_use_exact_payload_lengths_and_reads_decode_publis
         ];
         for (packet, kind, data, length) in writes {
             let prepared = prepare(
-                &catalogue,
+                &catalog,
                 Command::AdjustmentPacket {
                     action: AdjustmentPacketAction::Write { packet },
                 },
@@ -251,7 +251,7 @@ fn configuration_packet_writes_use_exact_payload_lengths_and_reads_decode_publis
         ];
         for (action, kind, output, data) in reads {
             let prepared = prepare(
-                &catalogue,
+                &catalog,
                 Command::AdjustmentPacket {
                     action: AdjustmentPacketAction::Read { kind: action },
                 },
@@ -291,8 +291,8 @@ fn configuration_packet_payload_wrappers_require_exact_lengths() {
 #[test]
 fn report_success_has_no_arguments_and_no_implicit_result_policy() {
     for reverse in [false, true] {
-        let catalogue = catalogue(reverse);
-        let prepared = prepare(&catalogue, Command::ReportServiceSuccess);
+        let catalog = catalog(reverse);
+        let prepared = prepare(&catalog, Command::ReportServiceSuccess);
         assert_eq!(prepared.request.code(), CommandCode(0x94));
         assert!(prepared.slots.is_empty());
         assert_eq!(prepared.request.arguments(), &[0; 32]);

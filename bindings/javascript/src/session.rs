@@ -24,8 +24,8 @@ impl Cancellation {
     pub(crate) fn error(self) -> JsValue {
         match self {
             Self::Interrupted => fail(
-                ErrorKind::Cancelled,
-                "host operation was cancelled; inspect session state before further I/O",
+                ErrorKind::Canceled,
+                "host operation was canceled; inspect session state before further I/O",
             ),
             Self::Abandoned => fail(
                 ErrorKind::Abandoned,
@@ -37,7 +37,7 @@ impl Cancellation {
 pub(crate) enum Slot {
     Open(ff80::Session),
     InFlight(oneshot::Sender<Cancellation>),
-    Cancelling,
+    Canceling,
     Range(Weak<RefCell<range::ReaderState>>),
     Closed,
     CompletionUnknown,
@@ -46,7 +46,7 @@ pub(crate) enum Slot {
 impl Slot {
     fn unavailable(&self) -> JsValue {
         match self {
-            Self::InFlight(_) | Self::Cancelling | Self::Range(_) => {
+            Self::InFlight(_) | Self::Canceling | Self::Range(_) => {
                 fail(ErrorKind::Busy, "session is owned by an active operation")
             }
             Self::Open(_) | Self::CompletionUnknown => {
@@ -105,7 +105,7 @@ impl Drop for Lease {
     fn drop(&mut self) {
         let mut slot = self.owner.borrow_mut();
         let resource = std::mem::replace(&mut self.resource, LeasedSession::Closing);
-        if matches!(*slot, Slot::InFlight(_) | Slot::Cancelling) {
+        if matches!(*slot, Slot::InFlight(_) | Slot::Canceling) {
             *slot = match resource {
                 LeasedSession::Open(native) => Slot::Open(native),
                 LeasedSession::Closed => Slot::Closed,
@@ -133,7 +133,7 @@ impl Session {
         }
     }
     pub(crate) fn call(&self, operation: Operation) -> Result<js_sys::Promise, JsValue> {
-        let (cancel, mut cancelled) = oneshot::channel();
+        let (cancel, mut canceled) = oneshot::channel();
         let native = take_native(
             &self.owner,
             Slot::InFlight(cancel),
@@ -148,7 +148,7 @@ impl Session {
             // cancellation state. Abandoning sends no firmware cleanup.
             futures_lite::future::or(
                 async {
-                    Err((&mut cancelled)
+                    Err((&mut canceled)
                         .await
                         .unwrap_or(Cancellation::Abandoned)
                         .error())
@@ -192,7 +192,7 @@ impl Session {
                 ff80::SessionState::Ready => SessionState::Ready,
                 ff80::SessionState::CompletionUnknown => SessionState::CompletionUnknown,
             },
-            Slot::InFlight(_) | Slot::Cancelling => SessionState::InFlight,
+            Slot::InFlight(_) | Slot::Canceling => SessionState::InFlight,
             Slot::Range(_) => SessionState::ReadingRange,
             Slot::Closed => SessionState::Closed,
             Slot::CompletionUnknown => SessionState::CompletionUnknown,
@@ -223,7 +223,7 @@ impl Session {
     pub fn cancel_pending(&self) {
         let mut slot = self.owner.borrow_mut();
         if matches!(*slot, Slot::InFlight(_)) {
-            let Slot::InFlight(cancel) = std::mem::replace(&mut *slot, Slot::Cancelling) else {
+            let Slot::InFlight(cancel) = std::mem::replace(&mut *slot, Slot::Canceling) else {
                 unreachable!()
             };
             let _ = cancel.send(Cancellation::Interrupted);

@@ -1,6 +1,6 @@
 use super::*;
 use fujimod_defs::service::FirmwareIdentity;
-fn catalogue(reverse: bool) -> Catalogue {
+fn catalog(reverse: bool) -> Catalog {
     let layouts = [
         ("nand_read_blocks", 3),
         ("option41", 1),
@@ -17,7 +17,7 @@ fn catalogue(reverse: bool) -> Catalogue {
   serde_json::json!({"code":200+n,"codec":codec,"label":codec,"slots":slots,"enabled_modes":4,"next_mode":0,"firmware_kind":1,"handler":0,"parameter_table":0})
  }).collect();
     let json = serde_json::json!({"schema":1,"firmware":{"id":"radio-b","model":"Synthetic","version":"2","sha256":"ab".repeat(32)},"mailbox":{"page":3,"offset":576,"configuration_limit":512},"entries":entries});
-    Catalogue::new(
+    Catalog::new(
         Definition::from_json(
             &json.to_string(),
             &FirmwareIdentity::new("radio-b", &"ab".repeat(32)).unwrap(),
@@ -25,7 +25,7 @@ fn catalogue(reverse: bool) -> Catalogue {
         .unwrap(),
     )
 }
-fn prepare(c: &Catalogue, command: Command) -> PreparedCommand {
+fn prepare(c: &Catalog, command: Command) -> PreparedCommand {
     c.prepare(ServiceModes::new(4).unwrap(), command).unwrap()
 }
 fn logical(p: &PreparedCommand) -> Vec<u8> {
@@ -44,7 +44,7 @@ fn radio_fields_remain_distinct_checked_and_firmware_selected() {
     assert!(RadioChannel::new(15).is_err());
     assert!(RadioPower::new(128).is_err());
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         for (mode, m) in [(RadioMode::Mode0, 0), (RadioMode::Mode1, 1)] {
             for channel in [0, 14] {
                 for power in [0, 11, 12, 127] {
@@ -93,7 +93,7 @@ fn radio_fields_remain_distinct_checked_and_firmware_selected() {
 #[test]
 fn nand_and_option_results_are_data_not_callback_dispositions() {
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         for (spare, wire) in [(NandSpare::Omit, 0), (NandSpare::Include, 1)] {
             for block_group in [0, 255] {
                 let p = prepare(&c, Command::NandReadBlocks { spare, block_group });
@@ -137,7 +137,7 @@ fn peer_address_is_owned_and_opaque_observations_preserve_every_byte() {
     input.fill(0);
     assert_eq!(peer.data(), &[1, 2, 3, 4, 5, 6]);
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         let p = prepare(&c, Command::SignalStrength { address: peer });
         assert_eq!(logical(&p), [1, 2, 3, 4, 5, 6, 255]);
         let iperf = prepare(&c, Command::Iperf);
@@ -161,7 +161,7 @@ fn wps_targets_are_exact_and_callback_snapshots_never_instruct_host_polling() {
         assert!(WpsPeerAddress::new(&data).is_err());
     }
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         let peer = WpsPeerAddress::new(&[2, 1, 2, 3, 4, 5]).unwrap();
         for (target, expected) in [
             (WpsTarget::Broadcast, [1, 0, 0, 0, 0, 0, 0, 255]),
@@ -237,7 +237,7 @@ fn wps_targets_are_exact_and_callback_snapshots_never_instruct_host_polling() {
 #[test]
 fn station_controls_preserve_opaque_callback_and_scan_count_snapshots() {
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         let stop = prepare(
             &c,
             Command::Station {
@@ -291,7 +291,7 @@ fn access_point_requests_keep_country_bytes_channel_and_security_separate() {
     }
     let country = CountryBytes::new(b"US").unwrap();
     for reverse in [false, true] {
-        let c = catalogue(reverse);
+        let c = catalog(reverse);
         let stop = prepare(
             &c,
             Command::NetworkReconfigure {

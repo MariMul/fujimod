@@ -107,7 +107,7 @@ fn choice(item: &syn::ItemEnum) -> Option<Choice> {
 impl Api {
     pub fn read(root: &Path) -> Result<Self, String> {
         let mut sources = Vec::new();
-        let file = root.join("crates/usb/src/app80/catalogue.rs");
+        let file = root.join("crates/usb/src/app80/catalog.rs");
         sources.push((
             file.clone(),
             fs::read_to_string(&file).map_err(|e| e.to_string())?,

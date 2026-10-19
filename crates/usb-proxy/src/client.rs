@@ -121,7 +121,7 @@ pub struct Client {
     socket: Socket,
     next_seq: u64,
     usable: bool,
-    /// Set while a call waits; still set at the next call if it was cancelled.
+    /// Set while a call waits; still set at the next call if it was canceled.
     busy: bool,
     /// Operations sent since the last sync, in order; `true` for expectations.
     unsynced: Vec<(u64, bool)>,
@@ -218,11 +218,11 @@ impl Client {
         self.failure.get_or_insert_with(|| error.0.clone());
         error
     }
-    /// Start a call. A call still marked busy was cancelled mid-wait, so
+    /// Start a call. A call still marked busy was canceled mid-wait, so
     /// what it sent may or may not have run: fence.
     fn begin(&mut self) -> Result<()> {
         if self.busy {
-            return Err(self.fence(err("an earlier call was cancelled; completion unknown")));
+            return Err(self.fence(err("an earlier call was canceled; completion unknown")));
         }
         // After a USB failure, calls up to the sync only record discards.
         if self.failed.is_none() {
@@ -301,7 +301,7 @@ impl Client {
             return Ok(Vec::new());
         }
         if self.busy {
-            return Err(self.fence(err("an earlier call was cancelled; completion unknown")));
+            return Err(self.fence(err("an earlier call was canceled; completion unknown")));
         }
         let mut synced = false;
         if self.usable {

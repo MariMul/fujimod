@@ -682,7 +682,7 @@ export class WorkerEngine implements Engine {
     this.recentInputs = this.recentInputs.slice(-256);
     if (!this.alive)
       return Promise.reject(new EngineError(this.fault ?? faultFrom('Camera is paused.')));
-    // Serialize gestures, including quick pointerup before press acknowledgement.
+    // Serialize gestures, including quick pointerup before press acknowledgment.
     const task = this.queue.then(async () => {
       if (!this.alive) throw new EngineError(this.fault ?? faultFrom('Camera is paused.'));
       await this.request(action, options);

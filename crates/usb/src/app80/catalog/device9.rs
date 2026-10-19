@@ -84,7 +84,7 @@ impl Device9Action {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app80::catalogue::{Catalogue, Command, ReplyValue};
+    use crate::app80::catalog::{Catalog, Command, ReplyValue};
     use fujimod_defs::service::{Definition, FirmwareIdentity, ServiceModes};
     #[test]
     fn exchanges_keep_twenty_ninth_byte_and_reject_thirty_before_io() {
@@ -93,7 +93,7 @@ mod tests {
         for reverse in [false, true] {
             let slots: Vec<_> = (0..33).map(|i| if reverse { 32 - i } else { i }).collect();
             let doc = serde_json::json!({"schema":1,"firmware":{"id":"device9","model":"Synthetic","version":"1","sha256":"ab".repeat(32)},"mailbox":{"page":3,"offset":128,"configuration_limit":512},"entries":[{"code":229,"codec":"device9_exchange","label":"device9","slots":slots,"enabled_modes":4,"next_mode":0,"firmware_kind":1,"handler":0,"parameter_table":0}]});
-            let c = Catalogue::new(
+            let c = Catalog::new(
                 Definition::from_json(
                     &doc.to_string(),
                     &FirmwareIdentity::new("device9", &"ab".repeat(32)).unwrap(),

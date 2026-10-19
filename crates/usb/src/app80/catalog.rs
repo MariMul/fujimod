@@ -1147,10 +1147,10 @@ impl PreparedCommand {
     }
 }
 #[derive(Clone, Debug)]
-pub struct Catalogue {
+pub struct Catalog {
     definition: Definition,
 }
-impl Catalogue {
+impl Catalog {
     pub fn new(definition: Definition) -> Self {
         Self { definition }
     }
@@ -1605,5 +1605,5 @@ mod lens_tests;
 mod adjustment_tests;
 
 #[cfg(test)]
-#[path = "catalogue/position_tests.rs"]
+#[path = "catalog/position_tests.rs"]
 mod position_tests;

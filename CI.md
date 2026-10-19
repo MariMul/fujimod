@@ -3,7 +3,7 @@
 [CI](.github/workflows/ci.yml) runs on every push and pull request, without path
 filters. Its five jobs check Python, JavaScript/TypeScript and Rust independently
 and run the native and browser suites. `CI required` fails if any job fails,
-is cancelled or is skipped. Select **CI required** as a required status check in
+is canceled or is skipped. Select **CI required** as a required status check in
 the repository's branch rules to enforce it on merges.
 
 ## Language policy

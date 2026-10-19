@@ -13,7 +13,7 @@ pub enum ErrorKind {
     Busy,
     Closed,
     Abandoned,
-    Cancelled,
+    Canceled,
     Definition,
     ServiceCommand,
 }
@@ -35,7 +35,7 @@ pub enum ProtocolFailureKind {
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TransferFailureKind {
-    Cancelled,
+    Canceled,
     Stall,
     Disconnected,
     Fault,
@@ -61,7 +61,7 @@ fn stage(value: &JsValue, stage: usb::error::TransferStage) {
 pub(crate) fn transfer_failure(source: nusb::transfer::TransferError) -> TransferFailureKind {
     use nusb::transfer::TransferError;
     match source {
-        TransferError::Cancelled => TransferFailureKind::Cancelled,
+        TransferError::Cancelled => TransferFailureKind::Canceled,
         TransferError::Stall => TransferFailureKind::Stall,
         TransferError::Disconnected => TransferFailureKind::Disconnected,
         TransferError::Fault => TransferFailureKind::Fault,

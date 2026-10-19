@@ -18,7 +18,7 @@ enum Phase {
     Submitted,
     Completed,
     Failed,
-    Cancelled,
+    Canceled,
 }
 #[pyclass(frozen, eq, hash, from_py_object, module = "fujimod.usb.tracing")]
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
@@ -102,7 +102,7 @@ impl Event {
             Action::Submitted { .. } => Phase::Submitted,
             Action::Completed { .. } => Phase::Completed,
             Action::Failed { .. } => Phase::Failed,
-            Action::Cancelled => Phase::Cancelled,
+            Action::Canceled => Phase::Canceled,
         }
     }
     #[getter]
@@ -189,7 +189,7 @@ impl ProtocolEvent {
             Action::Submitted { .. } => Phase::Submitted,
             Action::Completed { .. } => Phase::Completed,
             Action::Failed { .. } => Phase::Failed,
-            Action::Cancelled => Phase::Cancelled,
+            Action::Canceled => Phase::Canceled,
         }
     }
     #[getter]

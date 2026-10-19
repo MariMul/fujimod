@@ -189,7 +189,7 @@ test('a matching checkpoint resumes without building initial card files', async 
   engine.dispose();
 });
 
-test('sensor transfer completion waits for the worker acknowledgement', async () => {
+test('sensor transfer completion waits for the worker acknowledgment', async () => {
   const { engine, worker, messages } = setup();
   await engine.boot(new ArrayBuffer(3), config, () => {});
   const rgb = new Uint8Array([1, 2, 3]);

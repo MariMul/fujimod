@@ -41,7 +41,7 @@ pub enum Action {
         failure: Failure,
     },
     /// The host dropped the transfer future. Camera execution may continue.
-    Cancelled,
+    Canceled,
 }
 impl Action {
     pub fn data(&self) -> &[u8] {
@@ -49,7 +49,7 @@ impl Action {
             Self::Submitted { data, .. }
             | Self::Completed { data, .. }
             | Self::Failed { data, .. } => data,
-            Self::Cancelled => &[],
+            Self::Canceled => &[],
         }
     }
 }
@@ -279,7 +279,7 @@ impl ProtocolSpan {
 impl Drop for ProtocolSpan {
     fn drop(&mut self) {
         if !self.finished {
-            self.record(0, || Action::Cancelled);
+            self.record(0, || Action::Canceled);
         }
     }
 }
@@ -345,7 +345,7 @@ impl Drop for Span {
         if !self.finished {
             self.trace
                 .record(self.transfer, self.stage, self.endpoint, 0, || {
-                    Action::Cancelled
+                    Action::Canceled
                 });
         }
     }

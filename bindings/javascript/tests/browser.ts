@@ -110,7 +110,7 @@ try {
       const typedSaveFailed =
         serviceValue.kind === usb.app80.ReplyKind.ConfigurationSaved &&
         serviceValue.status.kind === usb.app80.SaveStatusKind.Failed;
-      const acknowledgement = [...(await session.close())];
+      const acknowledgment = [...(await session.close())];
       const closed = session.state === usb.SessionState.Closed;
       const traceEndpoints = trace.drain().events.map((e) => e.endpoint);
       const second = await usb.Session.open(
@@ -137,7 +137,7 @@ try {
         typedSaveFailed,
         product,
         data,
-        acknowledgement,
+        acknowledgment,
         closed,
         traceEndpoints,
         timeout,
@@ -153,7 +153,7 @@ try {
   assert.equal(result.realWindow, true);
   assert.equal(result.product, 'SYNTHETIC');
   assert.deepEqual(result.data, [123, 124, 125, 126, 127]);
-  assert.deepEqual(result.acknowledgement, [0xaa, 0xbb]);
+  assert.deepEqual(result.acknowledgment, [0xaa, 0xbb]);
   assert.equal(result.closed, true);
   assert.ok(result.traceEndpoints.includes(0x82));
   assert.ok(result.traceEndpoints.includes(1));

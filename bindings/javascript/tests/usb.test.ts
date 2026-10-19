@@ -100,7 +100,7 @@ await test('quantities reject negative, fractional, overflowing and nonfinite va
   );
 });
 
-await test('one direct read, immutable metadata and raw close acknowledgement', async () => {
+await test('one direct read, immutable metadata and raw close acknowledgment', async () => {
   const trace = new usb.tracing.Trace(64, 1024),
     expected = new Uint8Array([1, 2, 3, 4]);
   const { session, script } = await opened([...readMemory(0x12345678, expected), ...closeSteps()], {
@@ -188,7 +188,7 @@ await test('abandon a dispatched operation prevents all further transfers', asyn
   await rejected;
   assert.equal(session.state, usb.SessionState.Abandoned);
   assert.throws(() => session.close(), kind(usb.ErrorKind.Abandoned));
-  assert.ok(trace.drain().events.some((e) => e.phase === usb.tracing.Phase.Cancelled));
+  assert.ok(trace.drain().events.some((e) => e.phase === usb.tracing.Phase.Canceled));
 });
 
 await test('abandon before dispatch emits no operation transfer', async () => {
@@ -284,7 +284,7 @@ await test('upload holds ownership through setup, every piece and opaque E8', as
   assert.throws(() => session.ping(), kind(usb.ErrorKind.Busy));
   const result = await pending;
   assert.equal(result.bytesWritten, 3);
-  assert.deepEqual(result.acknowledgement, new Uint8Array([4, 5, 6, 7]));
+  assert.deepEqual(result.acknowledgment, new Uint8Array([4, 5, 6, 7]));
   assert.deepEqual(result.setup.fields, new Uint32Array([9, 8, 7, 6]));
   assert.equal(script.remaining, 0);
   session.abandon();
@@ -351,12 +351,12 @@ await test('cancelPending preserves Ready before dispatch and fences dispatched 
   const early = await opened([]);
   const never = early.session.ping();
   early.session.cancelPending();
-  await assert.rejects(never, kind(usb.ErrorKind.Cancelled));
+  await assert.rejects(never, kind(usb.ErrorKind.Canceled));
   assert.equal(early.session.state, usb.SessionState.Ready);
   assert.equal(early.script.remaining, 0);
   const { session, script } = await opened([E.control(env(0xc2, 2)), E.pendingRead(2)]);
   const pending = session.ping(),
-    rejected = assert.rejects(pending, kind(usb.ErrorKind.Cancelled));
+    rejected = assert.rejects(pending, kind(usb.ErrorKind.Canceled));
   await until(() => script.remaining === 0);
   session.cancelPending();
   session.cancelPending();
@@ -375,7 +375,7 @@ await test('cancelPending on a pending chunk closes the reader and restores fenc
     8,
   );
   const pending = reader.next(),
-    rejected = assert.rejects(pending, kind(usb.ErrorKind.Cancelled));
+    rejected = assert.rejects(pending, kind(usb.ErrorKind.Canceled));
   await until(() => script.remaining === 0);
   reader.cancelPending();
   await rejected;
@@ -722,7 +722,7 @@ await test('typed foreign reply and interrupted publication fence session owners
   steps[7] = E.pendingRead(36);
   const { session, script } = await opened(steps),
     pending = usb.app80.execute(session, invocation),
-    rejected = assert.rejects(pending, kind(usb.ErrorKind.Cancelled));
+    rejected = assert.rejects(pending, kind(usb.ErrorKind.Canceled));
   await until(() => script.remaining === 0);
   session.cancelPending();
   await rejected;

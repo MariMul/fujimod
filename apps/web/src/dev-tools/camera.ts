@@ -129,7 +129,7 @@ abstract class SessionCamera implements CameraBackend {
         try {
           const submitted = event.phase === usb.tracing.Phase.Submitted;
           const failed =
-            event.phase === usb.tracing.Phase.Failed || event.phase === usb.tracing.Phase.Cancelled;
+            event.phase === usb.tracing.Phase.Failed || event.phase === usb.tracing.Phase.Canceled;
           const direction = event.stage === usb.tracing.Stage.BulkIn ? Direction.In : Direction.Out;
           const stage =
             event.stage === usb.tracing.Stage.Control
@@ -142,12 +142,12 @@ abstract class SessionCamera implements CameraBackend {
               layer: Layer.Usb,
               level: failed ? Level.Error : Level.Trace,
               direction,
-              message: `${stage} ${submitted ? 'submitted' : event.phase === usb.tracing.Phase.Completed ? 'completed' : event.phase === usb.tracing.Phase.Cancelled ? 'cancelled' : 'failed'}${event.endpoint === undefined ? '' : ` · ep 0x${event.endpoint.toString(16).padStart(2, '0')}`}`,
+              message: `${stage} ${submitted ? 'submitted' : event.phase === usb.tracing.Phase.Completed ? 'completed' : event.phase === usb.tracing.Phase.Canceled ? 'canceled' : 'failed'}${event.endpoint === undefined ? '' : ` · ep 0x${event.endpoint.toString(16).padStart(2, '0')}`}`,
               data: event.data,
               detail:
                 event.failureMessage ??
-                (event.phase === usb.tracing.Phase.Cancelled
-                  ? 'Host wait cancelled; camera execution may continue.'
+                (event.phase === usb.tracing.Phase.Canceled
+                  ? 'Host wait canceled; camera execution may continue.'
                   : `${event.requested ?? event.transferred ?? 0} bytes`),
               correlation: `USB ${event.transfer}`,
             },
@@ -160,7 +160,7 @@ abstract class SessionCamera implements CameraBackend {
         try {
           const out = event.phase === usb.tracing.Phase.Submitted;
           const failed =
-            event.phase === usb.tracing.Phase.Failed || event.phase === usb.tracing.Phase.Cancelled;
+            event.phase === usb.tracing.Phase.Failed || event.phase === usb.tracing.Phase.Canceled;
           const data = event.data;
           const layer = event.layer === usb.tracing.Layer.App80 ? Layer.App80 : Layer.Ff80;
           records.push({
@@ -170,7 +170,7 @@ abstract class SessionCamera implements CameraBackend {
               layer,
               level: failed ? Level.Error : Level.Debug,
               direction: out ? Direction.Out : Direction.In,
-              message: `${layer === Layer.App80 ? `Command 0x${event.command.toString(16)}` : describeCommand(data, event.command)}${event.phase === usb.tracing.Phase.Cancelled ? ' · cancelled' : failed ? ' · failed' : ''}`,
+              message: `${layer === Layer.App80 ? `Command 0x${event.command.toString(16)}` : describeCommand(data, event.command)}${event.phase === usb.tracing.Phase.Canceled ? ' · canceled' : failed ? ' · failed' : ''}`,
               data,
               detail: event.failureMessage,
               correlation: `${layer} ${event.exchange}`,

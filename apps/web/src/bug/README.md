@@ -18,7 +18,7 @@ and reconciliation are documented in `apps/usb-sharing/ISSUE_REPORTS.md`.
 **Download a copy** remains available independently (local gzip/ZIP).
 
 **Delete from camera after uploading** is checked by default and enabled only
-for a live USB-acquired report. A matching durable storage acknowledgement must
+for a live USB-acquired report. A matching durable storage acknowledgment must
 arrive before deletion. Failed uploads retain the file; repeated upload attempts
 reuse the same idempotency key. Pending GitHub creation still has a durable
 archive receipt and report ID.
