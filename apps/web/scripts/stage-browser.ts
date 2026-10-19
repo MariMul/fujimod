@@ -6,6 +6,15 @@ interface BrowserManifest {
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { validateCatalog, type Catalog } from '../src/catalog.ts';
+
+export function requireBrowserRelease(assets: { name: string }[]) {
+  if (!assets.some((asset) => asset.name === 'browser.json'))
+    throw Error(
+      'The release has no browser runtime inventory (browser.json). Publish emulator artifacts before deploying the website.',
+    );
+}
+
 /** Inventory-only distribution: no extraction of unchecked archive paths. */
 export async function stageBrowser(
   manifest: BrowserManifest,
@@ -32,6 +41,25 @@ export async function stageBrowser(
     )
       throw Error('Invalid browser artifact entry.');
     seen.add(entry.path);
+  }
+  const catalog = validateCatalog(manifest.catalog as Catalog);
+  for (const firmware of catalog.firmwares) {
+    const config = firmware.emulate;
+    if (!config) continue;
+    for (const path of [
+      config.inputs,
+      ...[
+        'sources.zip',
+        '_native.so',
+        'firmware-inputs.zip',
+        'pyodide/pyodide.mjs',
+        'pyodide/pyodide.asm.mjs',
+        'pyodide/pyodide.asm.wasm',
+        'pyodide/pyodide-lock.json',
+        'pyodide/python_stdlib.zip',
+      ].map((name) => config.bundle + name),
+    ])
+      if (!seen.has(path)) throw Error(`Missing installed emulator artifact: ${path}`);
   }
   await rm('public/runtime', { recursive: true, force: true });
   for (const entry of manifest.files) {

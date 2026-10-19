@@ -1,4 +1,5 @@
 import type { EngineConfig } from './engine/api';
+import type { DevicePanel } from './ui/layout';
 export interface UsbEmulator {
   bundle: string;
   module: string;
@@ -8,12 +9,22 @@ export interface Firmware {
   id: string;
   body?: string;
   model: string;
+  processor?: string;
   version: string;
   sha256: string;
   bytes: number;
   download_url: string;
   release_date: string;
-  emulate?: Omit<EngineConfig, 'firmwareId'> & { adapter: string; usb?: UsbEmulator };
+  emulate?: Omit<EngineConfig, 'firmwareId'> & {
+    adapter: string;
+    maturity?: 'early' | 'supported';
+    usb?: UsbEmulator;
+  };
+  device?: {
+    panel: DevicePanel;
+    initialPositions: Record<string, string>;
+    sdBoot?: boolean;
+  };
   model_asset?: string;
 }
 export interface Catalog {
@@ -47,6 +58,8 @@ export function validateCatalog(value: Catalog): Catalog {
       if (path && (!/^[a-zA-Z0-9_./-]+$/.test(path) || path.includes('..') || path.startsWith('/')))
         throw Error('Invalid emulator artifact path.');
     const usb = entry.emulate?.usb;
+    if (entry.emulate?.maturity && !['early', 'supported'].includes(entry.emulate.maturity))
+      throw Error('Invalid emulation maturity.');
     if (
       usb &&
       (!/^[a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*$/.test(usb.module) ||

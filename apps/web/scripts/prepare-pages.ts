@@ -3,12 +3,17 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { validateIndex, verifyPatch } from '../src/patch/catalog.ts';
+import { stageBrowser, requireBrowserRelease } from './stage-browser.ts';
 const repo = process.env.GITHUB_REPOSITORY || 'justjake/fujimod';
 const gh = (args: string[]) => execFileSync('gh', args, { encoding: 'utf8' }).trim();
 const tag =
   process.env.RELEASE_TAG ||
   gh(['api', `repos/${repo}/releases`, '--jq', '[.[] | select(.draft == false)][0].tag_name']);
 if (!tag || tag === 'null') throw new Error('No published patch release.');
+const assets: { name: string }[] = JSON.parse(
+  gh(['release', 'view', tag, '--repo', repo, '--json', 'assets']),
+).assets;
+requireBrowserRelease(assets);
 const dest = 'public/artifacts';
 await rm(dest, { recursive: true, force: true });
 await mkdir(dest, { recursive: true });
@@ -20,25 +25,12 @@ for (const entry of index.firmwares) {
   gh(['release', 'download', tag, '--repo', repo, '--pattern', name, '--dir', dest]);
   await verifyPatch(index, entry, new Uint8Array(await readFile(`${dest}/${name}`)));
 }
-// Optional browser artifacts use an inventory of hashes and a root directory,
-// never firmware or boot ROM. Existing patch-only releases still work.
-const assets: { name: string }[] = JSON.parse(
-  gh(['release', 'view', tag, '--repo', repo, '--json', 'assets']),
-).assets;
-if (assets.some((asset) => asset.name === 'browser.json')) {
-  gh(['release', 'download', tag, '--repo', repo, '--pattern', 'browser.json', '--dir', dest]);
-  const { stageBrowser } = await import('./stage-browser.ts');
-  await stageBrowser(JSON.parse(await readFile(`${dest}/browser.json`, 'utf8')), async (name) => {
-    gh(['release', 'download', tag, '--repo', repo, '--pattern', name, '--dir', dest]);
-    return new Uint8Array(await readFile(`${dest}/${name}`));
-  });
-} else {
-  // The catalog describes installed capabilities, including patch-only releases.
-  const catalog = JSON.parse(await readFile('public/catalog.json', 'utf8'));
-  for (const entry of catalog.firmwares) delete entry.emulate;
-  await mkdir('public/runtime', { recursive: true });
-  await writeFile('public/runtime/catalog.json', JSON.stringify(catalog));
-}
+// The website requires runnable emulation artifacts in every published build.
+gh(['release', 'download', tag, '--repo', repo, '--pattern', 'browser.json', '--dir', dest]);
+await stageBrowser(JSON.parse(await readFile(`${dest}/browser.json`, 'utf8')), async (name) => {
+  gh(['release', 'download', tag, '--repo', repo, '--pattern', name, '--dir', dest]);
+  return new Uint8Array(await readFile(`${dest}/${name}`));
+});
 // Optional features-catalog media: preview clips and stills, verified by hash.
 if (assets.some((asset) => asset.name === 'docs-media.json')) {
   gh(['release', 'download', tag, '--repo', repo, '--pattern', 'docs-media.json', '--dir', dest]);

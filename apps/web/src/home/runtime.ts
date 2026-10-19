@@ -395,7 +395,7 @@ export function startHome(
         modFirmwareHash = hash;
         modEnabled = true;
       }
-      const device = entry.body ? await loadDevice(entry.body) : undefined;
+      const device = entry.device ?? (entry.body ? await loadDevice(entry.body) : undefined);
       if (current !== generation) return;
       if (!restart && !reload && !camera) {
         const patchEntry = release?.firmwares.find((item) => item.sha256 === hash);

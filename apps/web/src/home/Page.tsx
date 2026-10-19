@@ -70,6 +70,7 @@ export default function Home() {
             <PersonalNote />
             <FeatureCatalog />
           </Show>
+          <h2 class="section-heading" id="emulator-heading">Emulator</h2>
           <CameraLibrary
             cameras={state.savedCameras}
             active={state.activeCamera}
@@ -84,7 +85,7 @@ export default function Home() {
             }}
             upload={() => file.click()}
           />
-          <section ref={workspace} class={['stage', { idle: state.idle }]} id="workspace">
+          <section ref={workspace} class={['stage', { idle: state.idle }]} id="workspace" aria-labelledby="emulator-heading">
             <div
               ref={viewer}
               class={['viewer lcd-mode', { dragging: dragging() }]}

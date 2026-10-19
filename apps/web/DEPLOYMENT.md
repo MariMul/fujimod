@@ -21,8 +21,13 @@ credentials; the existing issuance quota is not a spending cap.
 
 Every deployment stages the newest published release's assets, including the
 homepage's feature media (`docs-media.json`). A release without that inventory
-deploys a homepage without preview clips, so build each release with
-`tools/build_patch_release.py --docs-media`.
+deploys a homepage without preview clips, so include every referenced clip and
+image in the release inventory.
+
+Every website release must include `browser.json` and its hash-verified runtime
+files. Publication fails when the runtime inventory is missing or an advertised
+camera lacks its executable artifacts. The catalog supplies the camera list,
+launch controls, and early/supported emulation badges.
 
 ## Releases
 

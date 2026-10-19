@@ -21,7 +21,25 @@ function Chips(props: { camera: CameraSupport }) {
           </span>
         )}
       </For>
-      <For each={props.camera.emu ? [true] : []}>{() => <span class="chip emu">EMU</span>}</For>
+      <For each={props.camera.emu ? [true] : []}>
+        {() => (
+          <span
+            class={['chip emu', { early: props.camera.firmware.emulate?.maturity === 'early' }]}
+            aria-label={
+              props.camera.firmware.emulate?.maturity === 'early'
+                ? 'Early emulation support'
+                : 'Emulation supported'
+            }
+            title={
+              props.camera.firmware.emulate?.maturity === 'early'
+                ? 'Early emulation support'
+                : 'Emulation supported'
+            }
+          >
+            EMU
+          </span>
+        )}
+      </For>
     </>
   );
 }
@@ -73,7 +91,11 @@ function GenerationGroup(props: {
   emulate: (firmware: Firmware) => void;
 }) {
   const supported = () =>
-    props.cameras.filter((camera) => props.group.models.includes(camera.firmware.model));
+    props.cameras.filter(
+      (camera) =>
+        props.group.models.includes(camera.firmware.model) ||
+        camera.firmware.processor === props.group.name,
+    );
   const remaining = () =>
     props.group.models.filter(
       (name) => !supported().some((camera) => camera.firmware.model === name),
@@ -88,11 +110,11 @@ function GenerationGroup(props: {
         {(camera) => (
           <div class="cam">
             <div class="n">
-              {camera.firmware.model}
+              <span>{camera.firmware.model}</span>
               <Chips camera={camera} />
+              <FirmwareLink camera={camera} />
+              <EmulateButton camera={camera} emulate={props.emulate} />
             </div>
-            <FirmwareLink camera={camera} />{' '}
-            <EmulateButton camera={camera} emulate={props.emulate} />
           </div>
         )}
       </For>
@@ -112,8 +134,20 @@ export function CameraTable(props: {
   cameras: CameraSupport[];
   emulate: (firmware: Firmware) => void;
 }) {
+  const unlisted = () =>
+    props.cameras.filter(
+      (camera) =>
+        !props.columns
+          .flat()
+          .some(
+            (group) =>
+              group.models.includes(camera.firmware.model) ||
+              camera.firmware.processor === group.name,
+          ),
+    );
   return (
-    <section class="gens" id="camera-table" aria-label="Cameras">
+    <section class="gens" id="camera-table" aria-labelledby="cameras-heading">
+      <h2 class="section-heading" id="cameras-heading">Cameras</h2>
       <For each={props.columns}>
         {(groups) => (
           <div class="col">
@@ -122,6 +156,27 @@ export function CameraTable(props: {
                 <GenerationGroup group={group} cameras={props.cameras} emulate={props.emulate} />
               )}
             </For>
+          </div>
+        )}
+      </For>
+      <For
+        each={[
+          ...new Set(unlisted().map((camera) => camera.firmware.processor || 'Other cameras')),
+        ]}
+      >
+        {(processor) => (
+          <div class="col">
+            <GenerationGroup
+              group={{
+                name: processor,
+                years: '',
+                models: unlisted()
+                  .filter((camera) => (camera.firmware.processor || 'Other cameras') === processor)
+                  .map((camera) => camera.firmware.model),
+              }}
+              cameras={unlisted()}
+              emulate={props.emulate}
+            />
           </div>
         )}
       </For>
