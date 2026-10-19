@@ -8,7 +8,6 @@
     "build": "vp check --no-fmt && vp build && node scripts/prerender.ts dist",
     "preview": "vp preview --host 127.0.0.1",
     "test": "vp test run",
-    "prepare:release": "node scripts/prepare-pages.ts",
     "build:local-preview": "vp check --no-fmt && vp build --mode local-preview && node scripts/prerender.ts dist-local-preview",
     "test:watch": "vp test",
     "check": "vp check --no-fmt",
@@ -23,7 +22,8 @@
     "pretest": "npm run build:usb && node ../../crates/simulation/build-web.ts",
     "precheck": "npm run build:usb",
     "test:dev-tools:browser": "node src/dev-tools/browser.ts",
-    "test:prerender": "node scripts/test-prerender.ts"
+    "test:prerender": "node scripts/test-prerender.ts",
+    "deploy": "node scripts/deploy.ts"
   },
   "dependencies": {
     "@solidjs/web": "2.0.0-rc.15",

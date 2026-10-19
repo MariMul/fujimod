@@ -9,3 +9,6 @@ build/
 
 # Local simulator captures retained independently of build cleanup.
 browser-bug-reports/
+
+public/site-assets.json
+.site-assets-*/

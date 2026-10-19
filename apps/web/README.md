@@ -324,22 +324,21 @@ Restart and error reports remain available when no save point exists.
 Check early faults and repeated Undo against a Vite development
 server with `python tests/undo.py --url http://127.0.0.1:5191/ --output /fresh/ignored/undo-proof`.
 
-### Release artifacts and deployment
+### Website assets and deployment
 
 The Web checks workflow runs lint, type checks, tests and the public build on
-web changes in pull requests and on main. It does not deploy. The release
-workflow repeats those checks before publishing Pages.
+web changes in pull requests and on main. It does not deploy.
 
-`npm run prepare:release` fetches a release index and verifies patches. Optional
-`browser.json` supplies a hash/size inventory of generated runtime artifacts and
-a capability catalog. `scripts/stage-browser.ts` verifies each artifact before
-staging it under ignored `public/runtime/`. A patch-only release removes the
-emulation capability from the installed catalog. `npm run build` then bundles the web app into `dist/`.
-The static-host browser gate rejects packaged 3D models, environments and simulation modules. Neither a firmware update nor a boot ROM is a build
-input.
+`npm run deploy -- --runtime DIRECTORY --patches DIRECTORY --media DIRECTORY`
+validates locally generated assets, runs checks and tests, builds the website,
+and uploads it directly to Cloudflare. Runtime bundles and feature media remain
+in ignored generated directories. GitHub Releases contain mod patches and their
+index; publishing a mod does not deploy the website.
 
-The Pages workflow runs only from main or a release targeting main. Review
-branches never deploy.
+`scripts/stage-site.ts` requires a complete qualified runtime for every advertised
+emulator, verifies mod patches, and records asset hashes. A failed preparation
+preserves installed assets. See [DEPLOYMENT.md](DEPLOYMENT.md) for the full command.
+Neither a firmware DAT nor a boot ROM is a website build input.
 
 ## JavaScript API
 
