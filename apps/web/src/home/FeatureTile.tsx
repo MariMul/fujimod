@@ -1,5 +1,6 @@
 import { Show, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
+import { fadeLoop } from './fade-loop';
 import { watchFeaturePreview } from './feature-preview';
 
 /** Mounted only while this tile owns the catalog's single playback slot. */
@@ -14,9 +15,11 @@ function PreviewVideo(props: { src: string; failed: () => void }) {
     const element = video!;
     // Set the property as well as the attribute for mobile autoplay policies.
     element.muted = true;
+    const loop = fadeLoop(element);
     void element.play().catch(failed);
     return () => {
       disposed = true;
+      loop.dispose();
       element.pause();
       element.removeAttribute('src');
       element.load();
@@ -30,7 +33,6 @@ function PreviewVideo(props: { src: string; failed: () => void }) {
       class={['catalog-tile-video', { playing: playing() }]}
       src={props.src}
       muted
-      loop
       playsinline
       preload="none"
       aria-hidden="true"

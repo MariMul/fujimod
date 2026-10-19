@@ -5,6 +5,7 @@ import { For, Show, createSignal, onCleanup, untrack } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import featureIcons from '../ui/assets/feature-icons.svg?url';
 import { FeatureTile } from './FeatureTile';
+import { fadeLoop } from './fade-loop';
 import './features.css';
 
 type Card = {
@@ -355,18 +356,20 @@ function CardVideo(props: { media: Media; choice?: string }) {
   // Read once: the card's own range, still valid while its video is closing.
   const range = untrack(() => (props.choice ? props.media.clips[props.choice] : undefined));
   const clip = () => range;
+  let loop: ReturnType<typeof fadeLoop> | undefined;
+  onCleanup(() => loop?.dispose());
   return (
     <Show when={!failed()}>
       <video
         ref={(element) => {
           video = element;
+          loop = fadeLoop(element, () => clip()?.[0] ?? 0);
         }}
         class="catalog-card-video"
         src={MEDIA + props.media.video}
         poster={MEDIA + props.media.still}
         muted
         autoplay
-        loop
         playsinline
         preload="metadata"
         onLoadedMetadata={() => {
@@ -375,7 +378,7 @@ function CardVideo(props: { media: Media; choice?: string }) {
         }}
         onTimeUpdate={() => {
           const range = clip();
-          if (video && range && video.currentTime >= range[1]) video.currentTime = range[0];
+          if (video && range && video.currentTime >= range[1]) loop?.restart();
         }}
         onError={() => setFailed(true)}
       />
