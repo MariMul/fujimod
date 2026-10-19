@@ -23,6 +23,11 @@ type Target = { card: string; choice?: string; anchor: HTMLElement };
 
 const MANUAL = 'https://fujifilm-dsc.com/en/manual/x70/';
 const MEDIA = '/artifacts/docs/';
+/** An X70 manual page, optionally with an anchor ("menu_setup/screen_set-up#framing_guidline"). */
+const manualUrl = (manual: string) => {
+  const [page, anchor] = manual.split('#');
+  return `${MANUAL}${page}/index.html${anchor ? `#${anchor}` : ''}`;
+};
 const CARDS: Record<string, Card> = {
   shape_aspect_item: {
     title: 'ASPECT RATIO',
@@ -116,6 +121,25 @@ const CARDS: Record<string, Card> = {
       clips: {},
     },
   },
+  c: {
+    title: 'FRAMING GUIDELINE',
+    path: ['SET-UP', 'SCREEN SET-UP'],
+    summary: null,
+    choices: {
+      'GOLDEN RATIO': 'Lines that divide the frame at the golden ratio.',
+    },
+    related: [],
+    manual: 'menu_setup/screen_set-up#framing_guidline',
+    changes:
+      'Adds GOLDEN RATIO, which divides the frame at the golden ratio. Guides follow the chosen aspect ratio.',
+    media: {
+      video: 'a16bcfc714c15f7b7d15904b.mp4',
+      still: '55e64c975294de3fe1a29ddf.webp',
+      clips: {
+        'GOLDEN RATIO': [0.0, 3.0],
+      },
+    },
+  },
   image_size: {
     title: 'IMAGE SIZE',
     path: ['SHOOTING MENU'],
@@ -206,8 +230,8 @@ const CARDS: Record<string, Card> = {
     manual: null,
     changes: null,
     media: {
-      video: '1edc1e4e681d88a36e679750.mp4',
-      still: '63476910acf767285c6a83c5.webp',
+      video: '19f720b7c6ddb0b29729302b.mp4',
+      still: '05c772863c343af831174d4a.webp',
       clips: {},
     },
   },
@@ -392,7 +416,7 @@ function CardBody(props: { target: Target }) {
         fallback={
           <Show when={card().changes} fallback={<p>{card().summary}</p>}>
             <p>In FujiMod: {card().changes}</p>
-            <a href={`${MANUAL}${card().manual}/index.html`} target="_blank" rel="noreferrer">
+            <a href={manualUrl(card().manual!)} target="_blank" rel="noreferrer">
               X70 manual
             </a>
           </Show>
@@ -603,6 +627,23 @@ export function FeatureCatalog() {
             </div>
           </div>
           <div class="catalog-where">{'SHOOTING MENU › SHAPE & ASPECT'}</div>
+        </article>
+        <article class="catalog-tile">
+          <TileVideo card="c" />
+          <h4>
+            <Icon name="golden-ratio" />
+            <Ref card="c">FRAMING GUIDELINE</Ref>
+          </h4>
+          <p>Choose a guide to display in the shooting view, including the golden ratio.</p>
+          <div class="catalog-chips">
+            <span class="catalog-chip stock">GRID 9</span>
+            <span class="catalog-chip stock">GRID 24</span>
+            <span class="catalog-chip stock">HD FRAMING</span>
+            <Ref card="c" choice="GOLDEN RATIO" class="catalog-chip">
+              GOLDEN RATIO
+            </Ref>
+          </div>
+          <div class="catalog-where">SET-UP › SCREEN SET-UP</div>
         </article>
         <article class="catalog-tile">
           <TileVideo card="shape_desqueeze_item" />
