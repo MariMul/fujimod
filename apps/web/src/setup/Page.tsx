@@ -203,12 +203,11 @@ export default function Setup() {
       <Show when={link().state === 'choosing'}>
         <div class="chooser-dim" />
         <div class="chooser-hint" role="note">
-          <svg viewBox="0 0 60 60" class="chooser-arrow" aria-hidden="true">
-            <path d="M52 56 C 46 30, 30 14, 10 8" />
-            <path d="M10 8 L 22 6 M10 8 L 16 19" />
+          <svg viewBox="0 0 44 56" class="chooser-arrow" aria-hidden="true">
+            <path d="M22 52 V6 M8 20 L22 6 L36 20" />
           </svg>
           <p>
-            <b>Select your camera here.</b> It will not be modified until you approve.
+            <b>Select your camera above.</b> It will not be modified until you approve.
           </p>
         </div>
       </Show>

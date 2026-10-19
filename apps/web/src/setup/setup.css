@@ -173,8 +173,9 @@
   cursor: default;
 }
 
-/* Chrome shows its USB chooser just below the address bar, near the site-info icon
-   at the left; the page dims so the hint reads against it. */
+/* Chrome shows its USB chooser as a dialog at the top centre of the page (owner's
+   screenshot, 2026-10-19); the hint sits centred below it, pointing up, and the page
+   dims so it reads against the dialog. */
 .chooser-dim {
   position: fixed;
   inset: 0;
@@ -184,28 +185,32 @@
 }
 .chooser-hint {
   position: fixed;
-  top: 4px;
-  left: 24px;
+  top: min(360px, 52vh);
+  left: 50%;
+  translate: -50% 0;
   z-index: 10;
   display: flex;
-  align-items: flex-start;
-  gap: 4px;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   pointer-events: none;
   animation: chooser-in 0.4s ease-out both;
 }
 .chooser-arrow {
-  width: 70px;
-  height: 70px;
+  width: 44px;
+  height: 56px;
   fill: none;
   stroke: var(--blue);
-  stroke-width: 3.5;
+  stroke-width: 4;
   stroke-linecap: round;
+  stroke-linejoin: round;
   animation: chooser-nudge 1.2s ease-in-out infinite;
 }
 .chooser-hint p {
-  margin: 34px 0 0;
-  max-width: 260px;
-  padding: 10px 12px;
+  margin: 0;
+  max-width: 300px;
+  text-align: center;
+  padding: 10px 14px;
   border-radius: 10px;
   background: var(--blue);
   color: #fff;
@@ -220,7 +225,7 @@
 }
 @keyframes chooser-nudge {
   50% {
-    transform: translate(-5px, -5px);
+    transform: translateY(-8px);
   }
 }
 

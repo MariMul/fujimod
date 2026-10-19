@@ -49,7 +49,8 @@ An illustrated, animated walkthrough that takes a camera owner through:
   to OFF, battery back, switch on without holding buttons. Unplugging first is
   avoided because USB removal is itself a service-mode event on these bodies.
 - **Connect:** the USB package loads when the step opens, so the button goes
-  straight to Chrome's chooser; a dimmed overlay points to where Chrome shows it.
+  straight to Chrome's chooser; a dimmed overlay points up at it. Chrome shows the
+  chooser as a dialog at the top centre of the page (owner's screenshot, 2026-10-19).
 - **Not built yet:** arming the exit guard and turning on debug mode from the
   browser. The page says so; both need reviewed camera operations in the Rust core.
 
