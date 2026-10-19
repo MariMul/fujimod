@@ -28,6 +28,15 @@
   border-radius: 14px;
   padding: 14px 16px 12px;
 }
+.catalog-tile-video {
+  display: block;
+  width: calc(100% + 32px);
+  margin: -14px -16px 12px;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  background: #000;
+  border-radius: 13px 13px 0 0;
+}
 .catalog-tile h4 {
   display: flex;
   align-items: center;

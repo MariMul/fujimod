@@ -302,6 +302,27 @@ function CardVideo(props: { media: Media; choice?: string }) {
   );
 }
 
+/** A tile's preview: plays inline wherever the tile is visible, no hover needed. */
+function TileVideo(props: { card: string }) {
+  const media = () => CARDS[props.card].media!;
+  const [failed, setFailed] = createSignal(false);
+  return (
+    <Show when={!failed()}>
+      <video
+        class="catalog-tile-video"
+        src={MEDIA + media().video}
+        poster={MEDIA + media().still}
+        muted
+        autoplay
+        loop
+        playsinline
+        preload="metadata"
+        onError={() => setFailed(true)}
+      />
+    </Show>
+  );
+}
+
 function CardBody(props: { target: Target }) {
   const card = () => CARDS[props.target.card];
   const choice = () => props.target.choice;
@@ -446,6 +467,7 @@ export function FeatureCatalog() {
           <div class="catalog-where">SHOOTING MENU › EDIT/SAVE CUSTOM SETTING</div>
         </article>
         <article class="catalog-tile">
+          <TileVideo card="shape_aspect_item" />
           <h4>
             <Icon name="aspect" />
             <Ref card="shape_aspect_item">ASPECT RATIO</Ref>
@@ -508,6 +530,7 @@ export function FeatureCatalog() {
           <div class="catalog-where">{'SHOOTING MENU › SHAPE & ASPECT'}</div>
         </article>
         <article class="catalog-tile">
+          <TileVideo card="shape_desqueeze_item" />
           <h4>
             <Icon name="anamorphic" />
             <span>Anamorphic Lenses</span>
@@ -552,6 +575,7 @@ export function FeatureCatalog() {
       <h3>Handling and display</h3>
       <div class="catalog-grid">
         <article class="catalog-tile">
+          <TileVideo card="bindings_row_command_dial" />
           <h4>
             <Icon name="controls" />
             <span>Unlocked Controls</span>
@@ -570,6 +594,7 @@ export function FeatureCatalog() {
           <div class="catalog-where">SET-UP</div>
         </article>
         <article class="catalog-tile">
+          <TileVideo card="menu_theme_item" />
           <h4>
             <Icon name="theme" />
             <Ref card="menu_theme_item">MENU THEME</Ref>
