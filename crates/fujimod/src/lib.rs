@@ -4,3 +4,6 @@ pub use fujimod_usb as usb;
 
 #[cfg(feature = "defs")]
 pub use fujimod_defs as defs;
+
+#[cfg(feature = "simulation")]
+pub use fujimod_simulation as simulation;

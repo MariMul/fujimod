@@ -1,7 +1,7 @@
 import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
-import { DevTools } from './Page';
+import DevTools from './Page';
 import { Progress, type CameraBackend } from './camera';
 import { Direction, Layer, Level } from './log';
 test('one pane shows console responses and independently filters layers and severity', async () => {

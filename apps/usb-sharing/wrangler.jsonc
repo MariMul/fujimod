@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "fujimod-usb-sharing",
   "account_id": "1edee8e500839ee3dbf7338f44503075",
-  "main": "worker.mjs",
+  "main": "worker.ts",
   "compatibility_date": "2026-10-17",
   "workers_dev": false,
   "routes": [{ "pattern": "share.fujimod.com", "custom_domain": true }],

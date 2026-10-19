@@ -2,6 +2,7 @@
 import argparse
 import asyncio
 import json
+import subprocess
 from pathlib import Path
 from urllib.parse import urljoin
 
@@ -12,10 +13,16 @@ async def check(playwright, args, name):
     browser = await getattr(playwright, name).launch(headless=False)
     try:
         context = await browser.new_context()
-        module = urljoin(args.url, 'checkpoint-store.js')
+        module = urljoin(args.url, 'checkpoint-store.ts')
+        source = Path(__file__).resolve().parents[1] / 'src/engine/checkpoint-store.ts'
+        compiled = subprocess.check_output([
+            'node', '--input-type=module', '-e',
+            "import {readFileSync} from 'node:fs';import {stripTypeScriptTypes} from 'node:module';"
+            "process.stdout.write(stripTypeScriptTypes(readFileSync(process.argv[1],'utf8')));",
+            str(source),
+        ], text=True)
         await context.route(module, lambda route: route.fulfill(
-            path=str(Path(__file__).resolve().parents[1] / 'src/engine/checkpoint-store.js'),
-            content_type='text/javascript'))
+            body=compiled, content_type='text/javascript'))
         await context.route(args.url, lambda route: route.fulfill(
             body='<html><body>Worker persistence check</body></html>', content_type='text/html'))
         page = await context.new_page()

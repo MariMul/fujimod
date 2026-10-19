@@ -1,13 +1,13 @@
 /** FJMODP01 interpreter. No camera/model maps, network access or dependencies. */
 export const MAGIC = 'FJMODP01';
-export const names = ['ffboot', 'ffsys'] as const;
+export const names = ['ffboot', 'ffsys', 'fpupdate'] as const;
 export type OutputName = typeof names[number];
 export type BinaryInput = Uint8Array | ArrayBuffer | { arrayBuffer(): Promise<ArrayBuffer> };
 export interface FileIdentity { bytes: number; sha256: string }
 export interface PatchMetadata {
   schema: number;
   source: FileIdentity;
-  outputs: Record<OutputName, FileIdentity>;
+  outputs: Record<'ffboot' | 'ffsys', FileIdentity> & { fpupdate?: FileIdentity };
   commands: number;
   program_sha256: string;
   firmware?: string;
@@ -15,10 +15,10 @@ export interface PatchMetadata {
   mods?: string[];
 }
 export interface PatchFiles { ffboot: Uint8Array<ArrayBuffer>; ffsys: Uint8Array<ArrayBuffer> }
-export interface PatchResult extends PatchFiles { metadata: PatchMetadata }
+export interface PatchResult extends PatchFiles { fpupdate?: Uint8Array<ArrayBuffer>; metadata: PatchMetadata }
 const fail = (message: string): never => { throw new Error(message); };
 const hashPattern = /^[0-9a-f]{64}$/;
-const integer = (value: number, max: number) => Number.isInteger(value) && value > 0 && value <= max;
+const integer = (value: unknown, max: number) => typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= max;
 export async function bytes(value: BinaryInput): Promise<Uint8Array<ArrayBuffer>> {
   if (value instanceof Uint8Array) return value.buffer instanceof ArrayBuffer
     ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength) : Uint8Array.from(value);
@@ -40,10 +40,11 @@ export function inspectPatch(input: Uint8Array) {
   const meta: PatchMetadata = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(data.subarray(12, 12 + length)));
   if (meta.schema !== 1 || !integer(meta.source?.bytes, 256 * 1024 * 1024) || !hashPattern.test(meta.source.sha256) ||
       !integer(meta.commands, 1000000) || !hashPattern.test(meta.program_sha256)) return fail('Invalid patch metadata.');
-  for (const name of names)
-    if (!integer(meta.outputs?.[name]?.bytes, 128 * 1024 * 1024) || !hashPattern.test(meta.outputs[name].sha256))
+  const outputNames = names.filter(name => name !== 'fpupdate' || meta.outputs?.fpupdate !== undefined);
+  for (const name of outputNames)
+    if (!integer(meta.outputs?.[name]?.bytes, 128 * 1024 * 1024) || !hashPattern.test(meta.outputs[name]!.sha256))
       return fail('Invalid patch output metadata.');
-  return { meta, program: data.subarray(12 + length) };
+  return { meta, outputNames, program: data.subarray(12 + length) };
 }
 function decodeLZ(data: Uint8Array, length: number): Uint8Array<ArrayBuffer> {
   if (data.length < 20) return fail('Truncated LZ header.');
@@ -70,14 +71,14 @@ function decodeLZ(data: Uint8Array, length: number): Uint8Array<ArrayBuffer> {
   if (written !== length) return fail('LZ output length mismatch.');
   return output;
 }
-/** async patch(baseStockDatFile, compiledPatch) -> {ffboot, ffsys, metadata}. */
+/** async patch(baseStockDatFile, compiledPatch) -> {ffboot, ffsys, fpupdate?, metadata}. */
 export async function patch(baseStockDatFile: BinaryInput, compiledPatch: BinaryInput): Promise<PatchResult> {
   const [base, data] = await Promise.all([bytes(baseStockDatFile), bytes(compiledPatch)]);
-  const { meta, program } = inspectPatch(data);
+  const { meta, outputNames, program } = inspectPatch(data);
   if (base.length !== meta.source.bytes || await sha256(base) !== meta.source.sha256)
     return fail('Stock DAT SHA-256 does not match this patch.');
   if (await sha256(program) !== meta.program_sha256) return fail('Patch program hash mismatch.');
-  const outputs = names.map(name => new Uint8Array(meta.outputs[name].bytes));
+  const outputs = outputNames.map(name => new Uint8Array(meta.outputs[name]!.bytes));
   const view = new DataView(program.buffer, program.byteOffset, program.byteLength);
   let cursor = 0;
   for (let n = 0; n < meta.commands; n++) {
@@ -86,7 +87,7 @@ export async function patch(baseStockDatFile: BinaryInput, compiledPatch: Binary
     const dest = view.getUint32(cursor + 4, true), length = view.getUint32(cursor + 8, true);
     const source = view.getUint32(cursor + 12, true), packed = view.getUint32(cursor + 16, true);
     cursor += 20;
-    if (target > 1 || flags > 1 || reserved || !length || dest + length > outputs[target].length)
+    if (target >= outputs.length || flags > 1 || reserved || !length || dest + length > outputs[target].length)
       return fail('Invalid patch command bounds or flags.');
     let chunk;
     if (op === 1 || op === 2) {
@@ -101,7 +102,7 @@ export async function patch(baseStockDatFile: BinaryInput, compiledPatch: Binary
     outputs[target].set(chunk, dest);
   }
   if (cursor !== program.length) return fail('Trailing patch bytes.');
-  for (let n = 0; n < names.length; n++)
-    if (await sha256(outputs[n]) !== meta.outputs[names[n]].sha256) return fail('Patch output hash mismatch.');
-  return { ffboot: outputs[0], ffsys: outputs[1], metadata: meta };
+  for (let n = 0; n < outputNames.length; n++)
+    if (await sha256(outputs[n]) !== meta.outputs[outputNames[n]]!.sha256) return fail('Patch output hash mismatch.');
+  return { ffboot: outputs[0], ffsys: outputs[1], fpupdate: outputs[2], metadata: meta };
 }

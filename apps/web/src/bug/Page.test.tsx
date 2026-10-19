@@ -2,13 +2,13 @@ import { Blob as NodeBlob } from 'node:buffer';
 import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
 import { expect, test, vi } from 'vite-plus/test';
-import { BugReport } from './Page';
+import BugReport from './Page';
 import { base64url } from './report-link';
 import { tar, link, hash } from './fixtures.test-helper';
 import type { UploadReport } from './upload';
 import type { ReportConnection } from './usb';
 vi.mock('../dev-tools/Page', () => ({
-  DevTools: (props: { connectOnMount: boolean }) => (
+  default: (props: { connectOnMount: boolean }) => (
     <p>Dev Tools {props.connectOnMount ? 'connected' : ''}</p>
   ),
 }));

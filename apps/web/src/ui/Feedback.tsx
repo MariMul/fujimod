@@ -1,7 +1,7 @@
-import { createSignal } from 'solid-js';
+import { createSignal, onSettled } from 'solid-js';
 import { simulatorIssue, type SimulatorIssueContext } from './simulator-feedback';
 import { LocalReports, type ReportCapture } from './local-reports';
-import { downloadBlob } from './card';
+import { downloadBlob } from './download';
 import { deliverReport, storePendingReport } from './report-delivery';
 import type { ReportSubmission } from '../engine/report';
 import './feedback.css';
@@ -17,6 +17,10 @@ export function Feedback(props: {
   let capture: Promise<{ blob: Blob } | { error: unknown }>;
   const [busy, setBusy] = createSignal(false),
     [status, setStatus] = createSignal('');
+  const [local, setLocal] = createSignal(false);
+  onSettled(() => {
+    setLocal(props.local.available());
+  });
   function open() {
     context = props.context();
     description.value = '';
@@ -102,7 +106,7 @@ export function Feedback(props: {
               Close
             </button>
             <button class="pill primary" value="report" disabled={busy()}>
-              {props.local.available() ? 'Save report' : 'Download and report'}
+              {local() ? 'Save report' : 'Download and report'}
             </button>
           </div>
         </form>

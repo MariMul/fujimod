@@ -88,7 +88,7 @@ mise run javascript-browser-test
 npm --prefix bindings/javascript run test:pyodide:browser
 mise run web-coverage
 mise run web-build
-node scripts/ci/package-tests.mjs apps/web
+node scripts/ci/package-tests.ts apps/web
 ```
 
 The web integration runner executes every declared `test:*` package script

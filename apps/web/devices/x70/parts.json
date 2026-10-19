@@ -180,5 +180,34 @@
     "url": "https://sketchfab.com/3d-models/camera-fujifilm-x70-5fd32c3c004f4fe4aecaaab8e2b89783",
     "authorUrl": "https://sketchfab.com/McCLOUD2101",
     "license": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "materials": {
+    "grip_47": {
+      "color": [
+        0.018,
+        0.018,
+        0.02
+      ],
+      "metallic": 0,
+      "roughness": 0.9
+    }
+  },
+  "physical_width": 0.113,
+  "optics": {
+    "focus_distance": 3.0,
+    "aperture": 2.8,
+    "focal_length": 0.0185,
+    "sensor_height": 0.01573
+  },
+  "rotaries": {
+    "shutter_speed": [
+      "LBL_shutter_speed_4"
+    ],
+    "exposure_compensation": [
+      "LBL_xposure_1"
+    ],
+    "aperture": [
+      "LBL_aperture_12"
+    ]
   }
 }

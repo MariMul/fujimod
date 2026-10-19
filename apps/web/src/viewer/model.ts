@@ -1,350 +1,567 @@
-import { badgeStyle, inputIcon, showInputBadge } from "../feedback/input";
-import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import type { Frame, Input } from "../engine/api";
-import type { DetentSound } from "../feedback/detent-sound";
-import { DetentFeedback } from "../feedback/detent";
-import { RotaryDrag } from "./rotary-drag";
-import { RotaryPart } from "./rotary-part";
+import { createStore, reconcile } from 'solid-js';
+import { rendererBackend, rendererURL } from './renderer';
+import { badgeStyle } from '../feedback/input';
+import type { Frame, Input, Scene } from '../engine/api';
+import type { DetentSound } from '../feedback/detent-sound';
+import { DetentFeedback } from '../feedback/detent';
+import { RotaryDrag } from './rotary-drag';
 
 export interface ModelData {
   url: string;
+  materials?: Record<string, { color: number[]; metallic: number; roughness: number }>;
+  rotaries?: Record<string, string[]>;
   yaw: number;
+  physical_width: number;
+  optics: { focus_distance: number; aperture: number; focal_length: number; sensor_height: number };
   hidden: string[];
   screen: string;
   inputs: Record<string, string[] | { nodes: string[]; split?: string }>;
   regions: Record<string, Record<string, string>>;
   order: string[];
-  credit: {
-    title: string;
-    author: string;
-    url: string;
-    authorUrl: string;
-    license: string;
-  };
+  credit: { title: string; author: string; url: string; authorUrl: string; license: string };
 }
 export interface ModelHit {
+  direction?: { x: number; y: number };
   id: string;
   point?: { x: number; y: number };
-  surfacePoint?: THREE.Vector3;
+  surfacePoint?: [number, number, number];
 }
+interface Target {
+  x: number;
+  y: number;
+  visible: boolean;
+}
+interface Snapshot {
+  renderer?: string;
+  version?: string;
+  ready?: boolean;
+  environmentReady?: boolean;
+  mode?: 'walk' | 'inspect';
+  worldSeconds?: number;
+  cameraPosition?: number[];
+  cameraRotation?: number[];
+  observerPosition?: number[];
+  sensorSequence?: number;
+  targets?: Record<string, Target>;
+  error?: string;
+}
+interface Rotary {
+  id: string;
+  negative: string;
+  positive: string;
+  position: number;
+}
+type SimulationModule = Pick<
+  typeof import('fujimod/simulation/webgl2'),
+  'start' | 'backend' | 'command' | 'snapshot' | 'response' | 'lcd' | 'take_sensor'
+> & {
+  default(): Promise<{ memory: WebAssembly.Memory }>;
+};
 
-/** Rendering, picking and LCD texture placement; no firmware knowledge. */
+/** Browser input and DOM overlays. Bevy owns meshes, picking, poses and rendering. */
 export class ModelViewer {
-  private phoneViewport = matchMedia("(max-width: 760px)").matches;
-  readonly renderer = new THREE.WebGLRenderer({
-    antialias: !this.phoneViewport,
-    alpha: true,
-  });
-  private scene = new THREE.Scene();
-  private camera = new THREE.PerspectiveCamera(35, 1, 0.05, 100);
-  private orbit: OrbitControls;
-  private root = new THREE.Group();
-  private targets = new Map<string, THREE.Object3D>();
-  private lcd = document.createElement("canvas");
+  readonly canvas: HTMLCanvasElement;
+  private lcd: HTMLCanvasElement;
+  readonly ui;
+  private setUi;
+  private disposed = false;
+  private cleanups: (() => void)[] = [];
   private lcdImage?: ImageData;
-  private texture = new THREE.CanvasTexture(this.lcd);
-  private ray = new THREE.Raycaster();
-  private pointer = new THREE.Vector2();
-  private data?: ModelData;
-  private generation = 0;
-  private home = new THREE.Vector3();
-  private homeTarget = new THREE.Vector3();
-  private leaderSignature = "";
-  private highlightId: string | null = null;
-  private buttonInputs = new Set<string>();
-  private inputMarker = document.createElement("div");
-  private inputFeedback = document.createElement("div");
-  private feedbackId?: string;
-  private feedbackUntil = 0;
-  private feedbackPoint?: THREE.Vector3;
+  private bootPercent?: number;
   private faulted = false;
+  private viewMode: '3d' | 'lcd' = '3d';
   private faultStart?: number;
   private faultImage?: ImageData;
-  private orientation?: {
-    start: number;
-    from: THREE.Vector3;
-    to: THREE.Vector3;
-    target: THREE.Vector3;
-  };
-  private rotary = new Map<
-    string,
-    { part: RotaryPart; negative: string; positive: string }
+  private data?: ModelData;
+  private generation = 0;
+  private state: Snapshot = {};
+  private pendingMode?: 'walk' | 'inspect';
+  private get mode() {
+    return this.pendingMode ?? this.state.mode ?? 'inspect';
+  }
+  private simulation!: SimulationModule;
+  private started = false;
+  private rendererFailed = false;
+  private pendingPicks = new Map<
+    number,
+    { points: { x: number; y: number }[]; cancelled: boolean }
   >();
-  private rotaryParts = new Set<RotaryPart>();
-  private rotaryStep?: (id: string, direction: number) => boolean;
+  private worldProgress = { seconds: -1, at: performance.now() };
+  private wasmMemory?: WebAssembly.Memory;
+  private ready: Promise<void>;
+  private environment?: Record<string, unknown>;
+  private requestID = 0;
+  private requests = new Map<number, (hit: ModelHit | null) => void>();
+  private held = new Set<number>();
+  private orbitPointer?: { id: number; x: number; y: number };
+  private orbitEnabled = true;
+  private keys = new Set<string>();
+  private rotary = new Map<string, Rotary>();
+  private rotaryEnabled = true;
   private rotaryDrag: RotaryDrag;
+  private rotaryStep?: (id: string, direction: number) => boolean;
   private detent = new DetentFeedback();
   private detentSounds: Record<string, DetentSound> = {};
-  private dirty = true;
-  private leadersDirty = true;
+  private highlightIDs: string[] = [];
+  private feedbackID?: string;
+  private feedbackUntil = 0;
+  private touchMove?: { id: number; x: number; y: number };
+  private sceneConsumer?: (scene: Scene) => Promise<void>;
+  private publishingScene = false;
   onPointerDown?: (hit: ModelHit, event: PointerEvent) => void;
+  onPointerEnd?: (pointer: number) => void;
   onHover?: (id: string | null) => void;
+  onRotaryPreview?: (id: string, fraction: number) => number;
+
   constructor(
     private host: HTMLElement,
-    private lines: SVGSVGElement,
+    canvas: HTMLCanvasElement,
+    lcd: HTMLCanvasElement,
+    private controls: HTMLElement,
     private workspace: HTMLElement,
   ) {
-    this.renderer.setPixelRatio(
-      Math.min(devicePixelRatio, this.phoneViewport ? 1.5 : 2),
-    );
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    host.prepend(this.renderer.domElement);
-    this.inputMarker.className = "model-input-marker";
-    this.inputFeedback.className = "model-input-feedback";
-    this.inputFeedback.setAttribute("role", "status");
-    this.inputFeedback.setAttribute("aria-live", "polite");
-    this.inputMarker.hidden = this.inputFeedback.hidden = true;
-    host.append(this.inputMarker, this.inputFeedback);
-    this.camera.position.set(0, 0.6, 6);
-    this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
-    // No residual orbit velocity may move the camera during a dial gesture.
-    this.orbit.enableDamping = false;
-    this.rotaryDrag = new RotaryDrag(this.renderer.domElement, (enabled) =>
-      this.setOrbit(enabled),
-    );
-    this.orbit.addEventListener("change", () => {
-      this.dirty = this.leadersDirty = true;
+    this.canvas = canvas;
+    this.lcd = lcd;
+    const [ui, setUi] = createStore({
+      mode: 'inspect' as 'walk' | 'inspect',
+      error: '',
+      badge: undefined as string | undefined,
+      marker: undefined as { id: string; x: number; y: number; pressed: boolean } | undefined,
+      paths: [] as { id: string; x: number; y: number; d: string; active: boolean }[],
+      viewBox: '0 0 1 1',
+      credit: undefined as { source: string; title: string; author: string } | undefined,
+      stick: '',
     });
-    window.addEventListener(
-      "scroll",
-      () => {
-        this.leadersDirty = true;
-      },
-      true,
-    );
-    this.orbit.minDistance = 2;
-    this.orbit.maxDistance = 10;
-    // Broad studio reflections illuminate metal as well as diffuse body panels.
-    const environment = new RoomEnvironment();
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(environment).texture;
-    this.scene.environmentIntensity = 1.4;
-    environment.dispose();
-    pmrem.dispose();
-    this.scene.add(new THREE.HemisphereLight(0xe8edf5, 0x888078, 3));
-    const fill = new THREE.DirectionalLight(0xffffff, 2.5);
-    this.camera.add(fill);
-    this.scene.add(this.camera);
-    const key = new THREE.DirectionalLight(0xffffff, 3.4);
-    key.position.set(-3, 5, 5);
-    this.scene.add(key);
-    const rim = new THREE.DirectionalLight(0x8899bb, 2.2);
-    rim.position.set(3, 2, -4);
-    this.scene.add(rim);
-    this.scene.add(this.root);
-    this.lcd.id = "lcd-source";
-    this.lcd.hidden = true;
-    host.append(this.lcd);
-    this.lcd.width = 720;
-    this.lcd.height = 480;
-    this.renderer.domElement.classList.add("model-canvas");
-    this.texture.colorSpace = THREE.SRGBColorSpace;
-    this.texture.generateMipmaps = false;
-    this.texture.minFilter = THREE.LinearFilter;
-    this.placeholder();
-    new ResizeObserver(() => this.resize()).observe(host);
-    new MutationObserver(() => {
-      this.leadersDirty = true;
-      this.leaderSignature = "";
-    }).observe(document.getElementById("controls")!, { childList: true });
-    // Capture runs before OrbitControls' bubble handler, preventing control drags from orbiting.
-    this.renderer.domElement.addEventListener(
-      "pointerdown",
-      (event) => {
-        const hit = this.pick(event);
-        if (this.faulted) return;
-        const rotary = hit && this.rotary.get(hit.id);
-        const turn = rotary
-          ? (direction: number) => {
-              const id = direction < 0 ? rotary.negative : rotary.positive;
-              if (
-                !this.rotaryStep?.(
-                  id,
-                  rotary.negative === rotary.positive ? direction : 1,
-                )
-              )
-                return;
-              if (rotary.negative !== rotary.positive) rotary.part.turn(direction);
-              this.detent.step(this.detentSounds[id]);
-              this.dirty = this.leadersDirty = true;
-              this.highlight(id);
-              this.onHover?.(id);
-              this.leaderSignature = "";
-            }
-          : undefined;
-        const gesture = rotary && turn ? {
-          direction: this.rotaryDirection(rotary.part, hit!.surfacePoint),
-          step: turn,
-          preview: (fraction: number) => {
-            const visual = this.onRotaryPreview?.(hit!.id, fraction) ?? fraction;
-            rotary.part.preview(visual);
-            this.dirty = this.leadersDirty = true;
-          },
-          finish: () => {
-            this.onRotaryPreview?.(hit!.id, 0);
-            rotary.part.settle();
-            this.dirty = this.leadersDirty = true;
-          },
-        } : undefined;
-        if (this.rotaryDrag.begin(event, gesture)) {
-          if (rotary) {
-            this.detent.beginGesture(event);
-            this.onHover?.(hit!.id);
-          }
-          return;
-        }
-        if (hit) this.onPointerDown?.(hit, event);
-      },
-      { capture: true },
-    );
-    this.renderer.domElement.addEventListener("pointermove", (event) => {
-      if (event.pointerType !== "touch" && !event.buttons && !this.rotaryDrag.dragging)
-        this.onHover?.(this.pick(event)?.id ?? null);
+    this.ui = ui;
+    this.setUi = setUi;
+    this.rotaryDrag = new RotaryDrag(this.canvas, (enabled) => this.setOrbit(enabled));
+    this.bindInput();
+    this.listen(this.canvas, 'webglcontextlost', () => {
+      this.showRendererError('3D graphics context was lost. LCD mode is still available.');
     });
-    this.renderer.domElement.addEventListener("pointerleave", () =>
-      this.onHover?.(null),
-    );
-    this.renderer.setAnimationLoop((now) => {
-      if (this.faulted && this.faultStart !== undefined) this.paintFault(now);
-      if (this.feedbackId && now >= this.feedbackUntil) {
-        this.feedbackId = undefined;
-        this.inputFeedback.hidden = true;
-        this.leadersDirty = true;
-      }
-      if (this.orientation) {
-        const a = this.orientation,
-          t = Math.min(1, (now - a.start) / 350),
-          ease = t * t * (3 - 2 * t);
-        this.camera.position.lerpVectors(a.from, a.to, ease);
-        this.orbit.target.copy(a.target);
-        this.dirty = this.leadersDirty = true;
-        if (t === 1) this.orientation = undefined;
-      }
-      this.orbit.update();
-      for (const part of this.rotaryParts) {
-        if (part.advance(now)) this.dirty = this.leadersDirty = true;
-      }
-      if (this.dirty) {
-        this.renderer.render(this.scene, this.camera);
-        this.dirty = false;
-        this.host.dataset.renderFrames = String(
-          this.renderer.info.render.frame,
-        );
-      }
-      if (this.leadersDirty) {
-        this.projectInputMarker();
-        this.projectLeaders();
-        this.leadersDirty = false;
-      }
+    this.listen(this.canvas, 'webglcontextcreationerror', (event) => {
+      this.showRendererError(
+        (event as WebGLContextEvent).statusMessage || 'Unable to create the 3D graphics context.',
+      );
+    });
+    this.listen(window, 'simulationerror', (event) => {
+      this.showRendererError((event as CustomEvent<string>).detail);
+    });
+    this.ready = this.start();
+    void this.ready.catch((error) => this.showRendererError(error));
+  }
+  showRendererError(error: unknown) {
+    if (this.disposed) return;
+    this.rendererFailed = true;
+    this.pendingPicks.clear();
+    for (const resolve of this.requests.values()) resolve(null);
+    this.requests.clear();
+    console.error(error);
+    this.host.dataset.rendererError = String(error);
+    this.host.dataset.rendererStage = 'failed';
+    this.setUi((s) => {
+      s.error = String(error);
     });
   }
-  private disposeRoot() {
-    this.rotaryDrag.cancel();
-    this.rotary.clear();
-    this.rotaryParts.clear();
-    this.rotaryStep = undefined;
-    this.targets.clear();
-    this.buttonInputs.clear();
-    this.highlightId = null;
-    this.feedbackId = undefined;
-    this.inputMarker.hidden = this.inputFeedback.hidden = true;
-    this.root.traverse((object) => {
-      if (object instanceof THREE.Mesh) {
-        object.geometry.dispose();
-        for (const material of Array.isArray(object.material)
-          ? object.material
-          : [object.material])
-          material.dispose();
-      }
-    });
-    this.dirty = this.leadersDirty = true;
-    this.root.clear();
-    this.root.rotation.set(0, 0, 0);
+  private async start() {
+    this.host.dataset.rendererStage = 'adapter';
+    const backend = rendererBackend(location.search);
+    this.host.dataset.rendererBackend = backend;
+    if (backend === 'webgpu') {
+      const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
+      if (!gpu || !(await gpu.requestAdapter()))
+        throw Error('WebGPU is unavailable in this browser.');
+    } else if (!window.WebGL2RenderingContext) throw Error('3D view requires WebGL 2.');
+    this.host.dataset.rendererStage = 'wasm';
+    this.simulation =
+      backend === 'webgpu'
+        ? await import('fujimod/simulation/webgpu')
+        : await import('fujimod/simulation/webgl2');
+    this.wasmMemory = (await this.simulation.default()).memory;
+    if (this.disposed) return;
+    if (this.simulation.backend() !== backend) throw Error('Simulation renderer build mismatch.');
+    this.host.dataset.rendererStage = 'engine';
+    this.simulation.start('#simulation-canvas', new URL('.', document.baseURI).href);
+    this.host.dataset.rendererStage = 'running';
+    this.started = true;
+    if (new URLSearchParams(location.search).get('mode') === 'walk') {
+      this.pendingMode = 'walk';
+      this.send({ type: 'toggle_inspect' });
+    }
+    const resize = () => {
+      const rect = this.canvas.getBoundingClientRect();
+      this.send({
+        type: 'viewport',
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      });
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(this.canvas);
+    this.cleanups.push(() => observer.disconnect());
+    resize();
+    this.host.dataset.renderer = 'bevy';
+    this.host.dataset.rendererVersion = '0.20.0';
+    requestAnimationFrame(() => this.poll());
+    const environment =
+      new URLSearchParams(location.search).get('environment') ?? 'crouch-end-station';
+    if (environment && /^[a-z0-9-]+$/.test(environment)) {
+      const result = await fetch(
+        new URL(`environments/${environment}/environment.json`, document.baseURI),
+      );
+      if (!result.ok) throw Error(`Environment unavailable: ${environment}`);
+      const data = await result.json();
+      this.environment = data;
+      this.setUi((s) => {
+        s.credit = { source: data.source, title: data.title, author: data.author };
+      });
+    }
   }
-  placeholder() {
-    this.generation++;
-    this.data = undefined;
-    this.disposeRoot();
-    const material = new THREE.MeshStandardMaterial({
-      color: 0x050609,
-      roughness: 0.85,
-      metalness: 0.1,
-    });
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(2.7, 1.55, 0.55),
-      material,
-    );
-    this.root.add(body);
-    const lens = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.57, 0.57, 0.4, 48),
-      material,
-    );
-    lens.rotation.x = Math.PI / 2;
-    lens.position.z = 0.4;
-    this.root.add(lens);
-    const rim = new THREE.Mesh(
-      new THREE.TorusGeometry(0.48, 0.025, 8, 64),
-      new THREE.MeshBasicMaterial({ color: 0x252832 }),
-    );
-    rim.position.z = 0.61;
-    this.root.add(rim);
-    const top = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.2, 0.5), material);
-    top.position.y = 0.85;
-    this.root.add(top);
-    this.fit();
+  private send(command: Record<string, unknown>) {
+    if (this.rendererFailed || this.disposed) return;
+    if (this.started) this.simulation.command(JSON.stringify(command));
+    else
+      void this.ready
+        .then(() => {
+          if (!this.disposed) this.simulation.command(JSON.stringify(command));
+        })
+        .catch(() => {
+          // Startup failure is already displayed by showRendererError.
+        });
   }
   async load(data: ModelData) {
-    this.data = data;
     const generation = ++this.generation;
-    const gltf = await new GLTFLoader().loadAsync(
-      new URL(data.url, document.baseURI).href,
-    );
+    await this.ready;
     if (generation !== this.generation) return;
-    this.disposeRoot();
-    const model = gltf.scene;
-    const bounds = new THREE.Box3().setFromObject(model);
-    const size = bounds.getSize(new THREE.Vector3());
-    const scale = 2.9 / Math.max(size.x, size.y, size.z);
-    model.scale.setScalar(scale);
-    model.position
-      .copy(bounds.getCenter(new THREE.Vector3()))
-      .multiplyScalar(-scale);
-    model.traverse((object) => {
-      if (data.hidden.includes(object.name)) object.visible = false;
-      if (object instanceof THREE.Mesh)
-        object.material = Array.isArray(object.material)
-          ? object.material.map((material) => material.clone())
-          : object.material.clone();
+    this.data = data;
+    this.rotary.clear();
+    this.send({ type: 'model', data });
+    // The scene-ready event includes all glTF dependencies, followed by rig/material setup.
+    const started = performance.now();
+    await new Promise<void>((resolve, reject) => {
+      const check = () => {
+        if (generation !== this.generation) {
+          resolve();
+          return;
+        }
+        if (this.state.error) {
+          reject(Error(this.state.error));
+          return;
+        }
+        if (this.state.ready && performance.now() > started + 50) {
+          resolve();
+          return;
+        }
+        if (performance.now() - started > 60000) {
+          reject(Error('Bevy camera model did not finish loading.'));
+          return;
+        }
+        requestAnimationFrame(check);
+      };
+      this.state.ready = false;
+      requestAnimationFrame(check);
     });
-    this.root.add(model);
-    this.root.rotation.y = data.yaw;
-    const screen = model.getObjectByName(data.screen);
-    screen?.traverse((object) => {
-      if (!(object instanceof THREE.Mesh)) return;
-      this.screenUvs(object.geometry);
-      object.material = new THREE.MeshBasicMaterial({
-        map: this.texture,
-        side: THREE.DoubleSide,
-        toneMapped: false,
-      });
+    // Decode/upload one GLB at a time. Wasm heaps cannot shrink after a
+    // simultaneous camera + scan + photographic texture decode peak.
+    if (generation === this.generation && this.environment) {
+      this.send({ type: 'environment', data: this.environment });
+      this.environment = undefined;
+    }
+  }
+  private poll() {
+    if (this.rendererFailed || this.disposed) return;
+    try {
+      this.pollFrame();
+    } catch (error) {
+      this.showRendererError(error);
+    }
+  }
+  private pollFrame() {
+    this.host.dataset.wasmMemoryBytes = String(this.wasmMemory?.buffer.byteLength ?? 0);
+    const json = this.simulation.snapshot();
+    this.state = JSON.parse(json) ?? {};
+    const now = performance.now();
+    if (
+      document.hidden ||
+      !this.state.ready ||
+      this.state.worldSeconds !== this.worldProgress.seconds
+    ) {
+      this.worldProgress = { seconds: this.state.worldSeconds ?? -1, at: now };
+    } else if (now - this.worldProgress.at > 15000) {
+      throw Error('3D renderer stopped responding. Select WebGL2 or LCD.');
+    }
+    if (this.state.mode === this.pendingMode) this.pendingMode = undefined;
+    this.host.dataset.simulation = json;
+    this.host.dataset.mode = this.state.mode ?? 'inspect';
+    this.host.dataset.renderFrames = String(Number(this.host.dataset.renderFrames ?? 0) + 1);
+    this.setUi((s) => {
+      s.mode = this.mode;
     });
-    for (const [id, mapping] of Object.entries(data.inputs)) {
-      for (const name of Array.isArray(mapping) ? mapping : mapping.nodes) {
-        const node = model.getObjectByName(name);
-        if (!node) continue;
-        if (!this.targets.has(id)) this.targets.set(id, node);
-        node.userData.inputIds ||= [];
-        node.userData.inputIds.push(id);
+    for (const [id, resolve] of this.requests) {
+      const result = this.simulation.response(id);
+      if (result !== undefined) {
+        this.requests.delete(id);
+        resolve(JSON.parse(result));
       }
     }
-    this.root.updateMatrixWorld(true);
-    this.fit();
+    if (this.faulted && this.faultStart !== undefined) this.paintFault();
+    if (this.feedbackID && performance.now() >= this.feedbackUntil) {
+      this.feedbackID = undefined;
+      this.setUi((s) => {
+        s.badge = undefined;
+      });
+    }
+    this.projectOverlays();
+    if (this.sceneConsumer && !this.publishingScene && this.state.environmentReady) {
+      const rgb = this.simulation.take_sensor();
+      if (rgb) {
+        this.publishingScene = true;
+        void this.sceneConsumer({ rgb, width: 768, height: 512 })
+          .catch((error) => {
+            this.host.dataset.sceneError = String(error);
+          })
+          .finally(() => {
+            this.publishingScene = false;
+          });
+      }
+    }
+    requestAnimationFrame(() => this.poll());
   }
-  /** The panel supplies input policy; all detents use its engine API path. */
+  /** Adapt to an emulator image input; rendering and world state remain together in Rust. */
+  setSceneConsumer(consumer?: (scene: Scene) => Promise<void>) {
+    this.sceneConsumer = consumer;
+    this.send({ type: 'sensor', enabled: !!consumer });
+  }
+  private bindInput() {
+    this.listen(this.canvas, 'contextmenu', (event) => {
+      event.preventDefault();
+      this.toggleMode();
+    });
+    this.listen(this.canvas, 'pointerdown', (event) => {
+      if (event.button !== 0) return;
+      this.canvas.focus({ preventScroll: true });
+      this.held.add(event.pointerId);
+      if (this.mode === 'walk') {
+        this.orbitPointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
+        this.canvas.setPointerCapture(event.pointerId);
+        if (event.pointerType === 'mouse') this.captureMouse();
+        return;
+      }
+      event.preventDefault();
+      this.canvas.setPointerCapture(event.pointerId);
+      const pending = { points: [] as { x: number; y: number }[], cancelled: false };
+      this.pendingPicks.set(event.pointerId, pending);
+      void this.pick(event).then((hit) => {
+        if (this.pendingPicks.get(event.pointerId) !== pending) return;
+        this.pendingPicks.delete(event.pointerId);
+        if (pending.cancelled) return;
+        if (hit && !this.faulted) {
+          const part = this.rotary.get(hit.id);
+          if (part) {
+            const gesture = {
+              direction: hit.direction,
+              step: (direction: number) => {
+                const id = direction < 0 ? part.negative : part.positive;
+                if (
+                  !this.rotaryEnabled ||
+                  !this.rotaryStep?.(id, part.negative === part.positive ? direction : 1)
+                )
+                  return;
+                if (part.negative !== part.positive) this.turnRotary(part.id, direction);
+                this.detent.step(this.detentSounds[id]);
+                this.highlight(id);
+                this.onHover?.(id);
+              },
+              preview: (fraction: number) =>
+                this.previewRotary(
+                  part.id,
+                  this.onRotaryPreview?.(hit.id, fraction) ?? fraction,
+                  true,
+                ),
+              finish: () => {
+                this.onRotaryPreview?.(hit.id, 0);
+                this.previewRotary(part.id, 0, false);
+              },
+            };
+            this.detent.beginGesture(event);
+            if (!this.held.has(event.pointerId)) {
+              this.rotaryDrag.replay(event, gesture, pending.points);
+              return;
+            }
+            if (this.rotaryDrag.begin(event, gesture, pending.points)) return;
+          }
+          this.onPointerDown?.(hit, event);
+          if (!this.held.has(event.pointerId)) this.onPointerEnd?.(event.pointerId);
+        }
+        if (this.orbitEnabled && !this.rotaryDrag.dragging) {
+          let x = event.clientX,
+            y = event.clientY;
+          for (const point of pending.points) {
+            this.send({ type: 'orbit', x: point.x - x, y: point.y - y });
+            x = point.x;
+            y = point.y;
+          }
+          if (this.held.has(event.pointerId)) this.orbitPointer = { id: event.pointerId, x, y };
+        }
+      });
+    });
+    this.listen(this.canvas, 'pointermove', (event) => {
+      this.pendingPicks.get(event.pointerId)?.points.push({ x: event.clientX, y: event.clientY });
+      if (document.pointerLockElement === this.canvas) {
+        return;
+      }
+      const drag = this.orbitPointer;
+      if (drag?.id === event.pointerId && this.orbitEnabled && !this.rotaryDrag.dragging) {
+        this.send({
+          type: this.mode === 'walk' ? 'look' : 'orbit',
+          x: event.clientX - drag.x,
+          y: event.clientY - drag.y,
+        });
+        drag.x = event.clientX;
+        drag.y = event.clientY;
+      } else if (!event.buttons && event.pointerType !== 'touch' && this.mode === 'inspect') {
+        void this.pick(event).then((hit) => this.onHover?.(hit?.id ?? null));
+      }
+    });
+    const end = (event: PointerEvent) => {
+      const pending = this.pendingPicks.get(event.pointerId);
+      if (pending) {
+        if (event.type === 'pointerup') pending.points.push({ x: event.clientX, y: event.clientY });
+        else if (event.type === 'pointercancel' || this.held.has(event.pointerId))
+          pending.cancelled = true;
+      }
+      this.held.delete(event.pointerId);
+      if (this.orbitPointer?.id === event.pointerId) this.orbitPointer = undefined;
+    };
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'])
+      this.listen(window, type, (event) => end(event as PointerEvent));
+    this.listen(this.canvas, 'pointerleave', () => this.onHover?.(null));
+    this.listen(
+      this.canvas,
+      'wheel',
+      (event) => {
+        if (this.mode !== 'inspect') return;
+        event.preventDefault();
+        this.send({ type: 'zoom', amount: event.deltaY });
+      },
+      { passive: false },
+    );
+    this.listen(document, 'mousemove', (event) => {
+      // Pointer-lock mousemove remains available when no pointer events are delivered.
+      if (document.pointerLockElement === this.canvas && !(event instanceof PointerEvent))
+        this.send({ type: 'look', x: event.movementX, y: event.movementY });
+    });
+    for (const type of ['keydown', 'keyup'] as const)
+      this.listen(
+        window,
+        type,
+        (event) => {
+          if (this.mode !== 'walk' || !['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code))
+            return;
+          if (
+            event.target instanceof HTMLElement &&
+            event.target.closest('input,textarea,select,[contenteditable=true]')
+          )
+            return;
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          if (type === 'keydown') this.keys.add(event.code);
+          else this.keys.delete(event.code);
+          this.movement();
+        },
+        { capture: true },
+      );
+    const pause = () => {
+      this.keys.clear();
+      this.held.clear();
+      this.pendingPicks.clear();
+      this.orbitPointer = undefined;
+      this.touchMove = undefined;
+      this.send({ type: 'pause_input' });
+      this.rotaryDrag.cancel();
+    };
+    this.listen(window, 'blur', pause);
+    this.listen(document, 'visibilitychange', () => {
+      if (document.hidden) pause();
+    });
+    this.listen(document, 'pointerlockchange', () => {
+      if (document.pointerLockElement !== this.canvas) {
+        this.keys.clear();
+        this.movement();
+      }
+    });
+    this.touchControls();
+  }
+  private movement() {
+    this.send({
+      type: 'move',
+      right: Number(this.keys.has('KeyD')) - Number(this.keys.has('KeyA')),
+      forward: Number(this.keys.has('KeyW')) - Number(this.keys.has('KeyS')),
+    });
+  }
+  toggleMode() {
+    const wasWalking = this.mode === 'walk';
+    this.pendingMode = wasWalking ? 'inspect' : 'walk';
+    this.keys.clear();
+    this.movement();
+    this.rotaryDrag.cancel();
+    this.orbitPointer = undefined;
+    this.pendingPicks.clear();
+    this.send({ type: 'toggle_inspect' });
+    if (wasWalking) document.exitPointerLock?.();
+    else if (matchMedia('(pointer:fine)').matches) this.captureMouse();
+  }
+  private async captureMouse() {
+    try {
+      await this.canvas.requestPointerLock();
+    } catch {
+      this.canvas.dataset.pointerLock = 'unavailable';
+    }
+  }
+
+  private touchControls() {
+    const stick = this.host.querySelector<HTMLElement>('.simulation-stick')!;
+    const move = (event: PointerEvent) => {
+      if (this.touchMove?.id !== event.pointerId) return;
+      const x = Math.max(-1, Math.min(1, (event.clientX - this.touchMove.x) / 36));
+      const y = Math.max(-1, Math.min(1, (event.clientY - this.touchMove.y) / 36));
+      this.setUi((s) => {
+        s.stick = `translate(${x * 24}px,${y * 24}px)`;
+      });
+      this.send({ type: 'move', right: x, forward: -y });
+    };
+    this.listen(stick, 'pointerdown', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.touchMove = { id: event.pointerId, x: event.clientX, y: event.clientY };
+      stick.setPointerCapture(event.pointerId);
+    });
+    this.listen(stick, 'pointermove', move);
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'])
+      this.listen(stick, type, () => {
+        this.touchMove = undefined;
+        this.setUi((s) => {
+          s.stick = '';
+        });
+        this.send({ type: 'pause_input' });
+      });
+  }
+  isPointerHeld(pointer: number) {
+    return this.held.has(pointer);
+  }
+  private pick(event: PointerEvent): Promise<ModelHit | null> {
+    if (!this.data || !this.started) return Promise.resolve(null);
+    const rect = this.canvas.getBoundingClientRect(),
+      id = ++this.requestID;
+    this.send({
+      type: 'pick',
+      request: id,
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+      radius: event.pointerType === 'touch' ? 28 : 8,
+    });
+    return new Promise((resolve) => this.requests.set(id, resolve));
+  }
   configureRotary(
     inputs: Input[],
     onStep: (id: string, direction: number) => boolean,
@@ -354,143 +571,191 @@ export class ModelViewer {
     this.rotaryStep = onStep;
     this.detentSounds = sounds;
     const supported = new Map(
-      inputs
-        .filter((input) => input.supported)
-        .map((input) => [input.id, input]),
+      inputs.filter((input) => input.supported).map((input) => [input.id, input]),
     );
-    this.buttonInputs = new Set([...supported.values()]
-      .filter(input => input.kind.includes("button")).map(input => input.id));
-    for (const input of supported.values()) {
-      if (input.kind !== "dial" && input.kind !== "ring") continue;
-      this.addRotary(input.id, input.id, input.id);
-    }
-    // A two-direction control with a center press shares one mesh. The part
-    // graph distinguishes this from a four-way selector without camera IDs.
-    for (const [name, regions] of Object.entries(this.data?.regions ?? {})) {
+    this.send({
+      type: 'buttons',
+      ids: inputs
+        .filter((input) => input.supported && input.kind !== 'dial' && input.kind !== 'ring')
+        .map((input) => input.id),
+    });
+    const add = (id: string, negative: string, positive: string) => {
+      if (this.rotary.has(id)) return;
+      const part = { id, negative, positive, position: 0 };
+      for (const alias of [id, negative, positive]) this.rotary.set(alias, part);
+      this.send({ type: 'define_rotary', id, aliases: [negative, positive] });
+    };
+    for (const input of supported.values())
+      if (input.kind === 'dial' || input.kind === 'ring') add(input.id, input.id, input.id);
+    for (const regions of Object.values(this.data?.regions ?? {})) {
       if (
-        regions.up !== regions.center ||
-        regions.down !== regions.center ||
-        regions.left === regions.right
+        regions.up === regions.center &&
+        regions.down === regions.center &&
+        regions.left !== regions.right &&
+        supported.has(regions.left) &&
+        supported.has(regions.right)
       )
-        continue;
-      if (!supported.has(regions.left) || !supported.has(regions.right))
-        continue;
-      if (this.targets.get(regions.left)?.name !== name) continue;
-      this.addRotary(regions.center, regions.left, regions.right);
+        add(regions.center, regions.left, regions.right);
     }
     this.setRotaryEnabled(true);
   }
-  onRotaryPreview?: (id: string, fraction: number) => number;
   setRotaryPosition(id: string, index: number) {
-    this.rotary.get(id)?.part.setPosition(index);
-    this.dirty = this.leadersDirty = true;
+    const part = this.rotary.get(id);
+    if (!part) return;
+    part.position = index;
+    this.send({ type: 'rotary', id, position: index, immediate: true });
   }
   turnRotary(id: string, direction: number) {
-    this.rotary.get(id)?.part.turn(direction);
-    this.dirty = this.leadersDirty = true;
+    const part = this.rotary.get(id);
+    if (!part) return;
+    part.position += direction;
+    this.send({ type: 'rotary', id, position: part.position, immediate: false });
   }
   previewRotary(id: string, fraction: number, held: boolean) {
-    const part = this.rotary.get(id)?.part;
-    if (held) part?.preview(fraction);
-    else part?.settle();
-    this.dirty = this.leadersDirty = true;
+    const part = this.rotary.get(id);
+    if (!part) return;
+    this.send({
+      type: 'rotary',
+      id,
+      position: part.position + (held ? fraction : 0),
+      immediate: held,
+    });
   }
   setRotaryEnabled(enabled: boolean) {
+    this.rotaryEnabled = enabled;
     this.rotaryDrag.setEnabled(enabled);
   }
-  private rotaryDirection(part: RotaryPart, surfacePoint?: THREE.Vector3) {
-    // Different sides of a dial move in opposite screen directions. Project
-    // the positive rotational tangent at the actual grab point, then keep it
-    // fixed until release so crossing the centre cannot reverse the gesture.
-    const pivot = part.pivot;
-    pivot.updateWorldMatrix(true, false);
-    const center = pivot.getWorldPosition(new THREE.Vector3());
-    const point = surfacePoint
-      ? this.root.localToWorld(surfacePoint.clone())
-      : center.clone();
-    const axis = part.axis.clone().transformDirection(pivot.matrixWorld);
-    const tangent = axis.cross(point.clone().sub(center));
-    const start = this.projectPoint(point);
-    const end = this.projectPoint(point.clone().add(tangent));
-    const x = end.x - start.x, y = end.y - start.y;
-    const length = Math.hypot(x, y);
-    return length > 0.5 ? { x: x / length, y: y / length } : { x: 1, y: 0 };
+  setOrbit(enabled: boolean) {
+    this.orbitEnabled = enabled;
+    if (!enabled) this.orbitPointer = undefined;
   }
-  private addRotary(id: string, negative: string, positive: string) {
-    if (this.rotary.has(id)) return;
-    const target = this.targets.get(id) ?? this.targets.get(negative);
-    if (!target?.parent) return;
-    const bounds = this.localBounds(target),
-      size = bounds.getSize(new THREE.Vector3());
-    const extents = size.toArray();
-    // Transparent textured decals may be exported as sibling nodes. Move
-    // contained decals with their part, leaving solid guides and switches fixed.
-    const labels = target.parent.children.filter((node) => {
-      if (node === target || !this.visible(node) || node.userData.inputIds)
-        return false;
-      const box = this.localBounds(node)
-        .applyMatrix4(node.matrix)
-        .applyMatrix4(target.matrix.clone().invert());
-      let decal = false,
-        solid = false;
-      node.traverse((object) => {
-        if (!(object instanceof THREE.Mesh)) return;
-        for (const material of Array.isArray(object.material)
-          ? object.material
-          : [object.material]) {
-          if (material.transparent && "map" in material && material.map)
-            decal = true;
-          else solid = true;
-        }
-      });
-      if (box.isEmpty() || !decal || solid) return false;
-      const expanded = bounds
-        .clone()
-        .expandByScalar(Math.max(...extents) * 0.025);
-      return expanded.containsBox(box);
+  faceScreen() {
+    this.send({ type: 'face', lens: false });
+    document.exitPointerLock?.();
+  }
+  faceLens() {
+    this.send({ type: 'face', lens: true });
+    document.exitPointerLock?.();
+  }
+  highlight(value: string | string[] | null) {
+    this.highlightIDs = typeof value === 'string' ? [value] : (value ?? []);
+    this.send({ type: 'highlight', ids: this.highlightIDs });
+  }
+  pressFeedback(id: string, _surfacePoint?: [number, number, number]) {
+    this.feedbackID = id;
+    this.feedbackUntil = performance.now() + badgeStyle.press_ms;
+    this.setUi((s) => {
+      s.badge = id;
     });
-    for (const label of labels) label.userData.inputIds = [id];
-    const rotary = {
-      part: new RotaryPart(target, bounds, labels),
-      negative,
-      positive,
-    };
-    this.rotaryParts.add(rotary.part);
-    for (const alias of [id, negative, positive])
-      this.rotary.set(alias, rotary);
   }
-  private screenUvs(geometry: THREE.BufferGeometry) {
-    geometry.computeBoundingBox();
-    const bounds = geometry.boundingBox!;
-    const extent = bounds.getSize(new THREE.Vector3()).toArray();
-    const axes = [0, 1, 2].sort((a, b) => extent[b] - extent[a]);
-    const uv = new Float32Array(geometry.attributes.position.count * 2);
-    const point = new THREE.Vector3();
-    for (let i = 0; i < geometry.attributes.position.count; i++) {
-      point.fromBufferAttribute(geometry.attributes.position, i);
-      uv[i * 2] =
-        1 -
-        (point.getComponent(axes[0]) - bounds.min.getComponent(axes[0])) /
-          extent[axes[0]];
-      uv[i * 2 + 1] =
-        (point.getComponent(axes[1]) - bounds.min.getComponent(axes[1])) /
-        extent[axes[1]];
+  private projectOverlays() {
+    const id = this.feedbackID ?? this.highlightIDs[0],
+      point = id && this.state.targets?.[id];
+    const paths: typeof this.ui.paths = [];
+    this.setUi((s) => {
+      if (point && point.visible && id && this.viewMode !== 'lcd') {
+        if (s.marker) {
+          s.marker.id = id;
+          s.marker.x = point.x;
+          s.marker.y = point.y;
+          s.marker.pressed = !!this.feedbackID;
+        } else s.marker = { id, x: point.x, y: point.y, pressed: !!this.feedbackID };
+      } else s.marker = undefined;
+    });
+    if (matchMedia('(max-width:760px)').matches || this.mode !== 'inspect') {
+      if (this.ui.paths.length)
+        this.setUi((s) => {
+          s.paths = [];
+        });
+      return;
     }
-    geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+    const wr = this.workspace.getBoundingClientRect(),
+      vr = this.canvas.getBoundingClientRect();
+    this.setUi((s) => {
+      s.viewBox = `0 0 ${wr.width} ${wr.height}`;
+    });
+    const list = this.controls.getBoundingClientRect();
+    for (const [id, point] of Object.entries(this.state.targets ?? {})) {
+      if (!point.visible) continue;
+      const row = this.controls.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"]`);
+      if (!row) continue;
+      const rr = row.getBoundingClientRect();
+      if (rr.top < list.top || rr.bottom > list.bottom || rr.bottom > innerHeight) continue;
+      const x = vr.left - wr.left + point.x,
+        y = vr.top - wr.top + point.y,
+        endX = rr.left - wr.left,
+        endY = rr.top + rr.height / 2 - wr.top;
+      paths.push({
+        id,
+        x,
+        y,
+        d: `M${x},${y} L${endX - 18},${endY} L${endX},${endY}`,
+        active: row.classList.contains('active'),
+      });
+    }
+    if (JSON.stringify(paths) !== JSON.stringify(this.ui.paths))
+      this.setUi((s) => {
+        reconcile(paths, 'id')(s.paths);
+      });
+  }
+  private uploadLCD(image?: ImageData) {
+    if (!this.started || this.rendererFailed || this.viewMode === 'lcd') return;
+    this.simulation.lcd(
+      this.lcd.width,
+      this.lcd.height,
+      new Uint8Array(
+        (image ?? this.lcd.getContext('2d')!.getImageData(0, 0, this.lcd.width, this.lcd.height))
+          .data.buffer,
+      ),
+    );
+  }
+  view(mode: '3d' | 'lcd') {
+    this.viewMode = mode;
+    this.send({ type: 'observe', enabled: mode === '3d' });
+    if (mode === '3d') this.uploadLCD();
+    if (mode === 'lcd') document.exitPointerLock?.();
+  }
+  captureView(): string {
+    return (this.viewMode === 'lcd' ? this.lcd : this.canvas).toDataURL('image/png');
+  }
+  bootProgress(percent?: number) {
+    this.bootPercent = percent;
+    const context = this.lcd.getContext('2d')!;
+    if (percent === undefined) {
+      if (this.lcdImage) context.putImageData(this.lcdImage, 0, 0);
+      else context.clearRect(0, 0, this.lcd.width, this.lcd.height);
+    } else {
+      const w = this.lcd.width,
+        h = this.lcd.height;
+      context.fillStyle = '#101012';
+      context.fillRect(0, 0, w, h);
+      context.fillStyle = '#d4d4d8';
+      context.font = `${w / 30}px system-ui, sans-serif`;
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText('It takes a bit to boot a camera', w / 2, h * 0.43);
+      context.fillText('in the browser.', w / 2, h * 0.5);
+      context.fillStyle = '#343438';
+      context.fillRect(w * 0.16, h * 0.59, w * 0.68, h * 0.025);
+      context.fillStyle = '#d4d4d8';
+      context.fillRect(
+        w * 0.16,
+        h * 0.59,
+        (w * 0.68 * Math.min(100, Math.max(0, percent))) / 100,
+        h * 0.025,
+      );
+    }
+    this.uploadLCD();
   }
   frame(frame: Frame) {
-    if (frame.rgb.length !== frame.width * frame.height * 3)
-      throw Error("Invalid LCD frame size.");
+    if (frame.rgb.length !== frame.width * frame.height * 3) throw Error('Invalid LCD frame size.');
     if (this.lcd.width !== frame.width || this.lcd.height !== frame.height) {
       this.lcd.width = frame.width;
       this.lcd.height = frame.height;
       this.lcdImage = undefined;
     }
-    const context = this.lcd.getContext("2d")!;
-    const image = (this.lcdImage ??= context.createImageData(
-      frame.width,
-      frame.height,
-    ));
+    const context = this.lcd.getContext('2d')!;
+    const image = (this.lcdImage ??= context.createImageData(frame.width, frame.height));
     for (let s = 0, t = 0; s < frame.rgb.length; s += 3, t += 4) {
       image.data[t] = frame.rgb[s];
       image.data[t + 1] = frame.rgb[s + 1];
@@ -498,268 +763,41 @@ export class ModelViewer {
       image.data[t + 3] = 255;
     }
     context.putImageData(image, 0, 0);
-    this.texture.needsUpdate = true;
-    this.dirty = true;
+    this.uploadLCD(image);
+
+    if (this.bootPercent !== undefined) this.bootProgress(this.bootPercent);
     if (this.faulted) this.paintFault();
     this.host.dataset.frames = String(frame.sequence);
   }
-  private localBounds(target: THREE.Object3D) {
-    target.updateWorldMatrix(true, true);
-    const inverse = target.matrixWorld.clone().invert();
-    const box = new THREE.Box3();
-    target.traverse((object) => {
-      if (!(object instanceof THREE.Mesh)) return;
-      object.geometry.computeBoundingBox();
-      const b = object.geometry.boundingBox!;
-      const transform = inverse.clone().multiply(object.matrixWorld);
-      for (let c = 0; c < 8; c++)
-        box.expandByPoint(
-          new THREE.Vector3(
-            c & 1 ? b.max.x : b.min.x,
-            c & 2 ? b.max.y : b.min.y,
-            c & 4 ? b.max.z : b.min.z,
-          ).applyMatrix4(transform),
-        );
-    });
-    return box;
-  }
-  private pick(event: PointerEvent): ModelHit | null {
-    if (!this.data) return null;
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    this.pointer.set(
-      ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      (-(event.clientY - rect.top) / rect.height) * 2 + 1,
-    );
-    this.ray.setFromCamera(this.pointer, this.camera);
-    const hit = this.ray
-      .intersectObjects(this.root.children, true)
-      .find((hit) => this.visible(hit.object));
-    let node: THREE.Object3D | null = hit?.object ?? null;
-    while (node && !node.userData.inputIds) node = node.parent;
-    // Decals and the body can cover a button's edge. On touch, also consider
-    // nearby visible button centers; never reach through the camera body.
-    if (!this.faulted && (!node || node.name !== this.data.screen
-      && !node.userData.inputIds.some((id: string) => this.buttonInputs.has(id)))) {
-      const nearby = this.nearbyButton(event);
-      if (nearby) return nearby;
-    }
-    if (!node || !hit) return null;
-    const bounds = this.localBounds(node);
-    const local = node.worldToLocal(hit.point.clone());
-    const x =
-      (local.x - bounds.min.x) / Math.max(1e-6, bounds.max.x - bounds.min.x);
-    const y =
-      (local.y - bounds.min.y) / Math.max(1e-6, bounds.max.y - bounds.min.y);
-    const region = this.data.regions[node.name];
-    if (region) {
-      const dx = x - 0.5,
-        dy = y - 0.5;
-      const direction =
-        Math.max(Math.abs(dx), Math.abs(dy)) <= 0.22
-          ? "center"
-          : Math.abs(dx) > Math.abs(dy)
-            ? dx < 0
-              ? "left"
-              : "right"
-            : dy < 0
-              ? "down"
-              : "up";
-      return { id: region[direction] };
-    }
-    return {
-      id: node.userData.inputIds[0],
-      point: hit.uv ? { x: hit.uv.x, y: 1 - hit.uv.y } : undefined,
-      surfacePoint: this.root.worldToLocal(hit.point.clone()),
-    };
-  }
-  private regionPoint(target: THREE.Object3D, id?: string) {
-    const bounds = this.localBounds(target), size = bounds.getSize(new THREE.Vector3());
-    const region = Object.entries(this.data?.regions[target.name] ?? {}).find(([, value]) => value === id)?.[0];
-    const offsets: Record<string, [number, number]> = {
-      up: [.5, .81], down: [.5, .19], left: [.19, .5], right: [.81, .5], center: [.5, .5],
-    };
-    const [x, y] = offsets[region ?? "center"] ?? offsets.center;
-    return target.localToWorld(new THREE.Vector3(bounds.min.x + size.x * x,
-      bounds.min.y + size.y * y, bounds.min.z + size.z * .08));
-  }
-  private projectPoint(point: THREE.Vector3) {
-    const rect = this.renderer.domElement.getBoundingClientRect(), p = point.clone().project(this.camera);
-    return { x: rect.left + (p.x * .5 + .5) * rect.width,
-      y: rect.top + (-p.y * .5 + .5) * rect.height, z: p.z };
-  }
-  private targetVisible(target: THREE.Object3D, point: THREE.Vector3) {
-    const origin = this.camera.getWorldPosition(new THREE.Vector3());
-    this.ray.set(origin, point.clone().sub(origin).normalize());
-    const hits = this.ray.intersectObjects(this.root.children, true)
-      .filter(hit => this.visible(hit.object));
-    const own = hits.find(hit => {
-      for (let node: THREE.Object3D | null = hit.object; node; node = node.parent)
-        if (node === target) return true;
-      return false;
-    });
-    // Permit a thin label on the same button, but not an intervening body panel.
-    return Boolean(own && own.distance <= hits[0].distance + .012);
-  }
-  private nearbyButton(event: PointerEvent): ModelHit | null {
-    let best: { target: THREE.Object3D; id: string; distance: number } | undefined;
-    const visited = new Set<THREE.Object3D>();
-    for (const id of this.buttonInputs) {
-      const target = this.targets.get(id);
-      if (!target || visited.has(target) || !this.visible(target)) continue;
-      visited.add(target);
-      const point = this.regionPoint(target), center = this.projectPoint(point);
-      if (center.z < -1 || center.z > 1) continue;
-      const distance = Math.hypot(event.clientX - center.x, event.clientY - center.y);
-      const radius = event.pointerType === "touch"
-        ? this.data?.regions[target.name] ? 32 : 22
-        : 8;
-      if (distance > radius || best && distance >= best.distance) continue;
-      if (!this.targetVisible(target, point)) continue;
-      best = { target, id, distance };
-    }
-    if (!best) return null;
-    const regions = this.data?.regions[best.target.name];
-    if (!regions) return { id: best.id };
-    // Use the projected axes so regions follow the camera while it is orbited.
-    const center = this.projectPoint(this.regionPoint(best.target));
-    const right = this.projectPoint(this.regionPoint(best.target, regions.right));
-    const up = this.projectPoint(this.regionPoint(best.target, regions.up));
-    const rx = right.x - center.x, ry = right.y - center.y,
-      ux = up.x - center.x, uy = up.y - center.y,
-      dx = event.clientX - center.x, dy = event.clientY - center.y,
-      determinant = rx * uy - ry * ux;
-    if (Math.abs(determinant) < .01) return { id: regions.center };
-    const x = (dx * uy - dy * ux) / determinant, y = (rx * dy - ry * dx) / determinant;
-    const direction = Math.max(Math.abs(x), Math.abs(y)) <= .7 ? "center"
-      : Math.abs(x) > Math.abs(y) ? x < 0 ? "left" : "right" : y < 0 ? "down" : "up";
-    return { id: regions[direction] };
-  }
-  /** Immediate acknowledgment, retained after release so a finger cannot hide it. */
-  pressFeedback(id: string, surfacePoint?: THREE.Vector3) {
-    this.feedbackPoint = surfacePoint?.clone();
-    this.feedbackId = id;
-    this.feedbackUntil = performance.now() + badgeStyle.press_ms;
-    showInputBadge(this.inputFeedback, id);
-    this.inputFeedback.dataset.input = id;
-    this.inputFeedback.hidden = false;
-    this.leadersDirty = true;
-  }
-  private projectInputMarker() {
-    const id = this.feedbackId ?? this.highlightId?.split("|")[0], target = id && this.targets.get(id);
-    this.inputMarker.hidden = !target || this.host.classList.contains("lcd-mode");
-    if (!target || !id) return;
-    const touch = Boolean(this.feedbackId && this.feedbackPoint);
-    if (target.name === this.data?.screen && !touch) {
-      this.inputMarker.hidden = true;
-      return;
-    }
-    const world = touch
-      ? this.root.localToWorld(this.feedbackPoint!.clone())
-      : this.regionPoint(target, id);
-    const point = this.projectPoint(world);
-    if (point.z < -1 || point.z > 1 || !this.targetVisible(target, world)) {
-      this.inputMarker.hidden = true;
-      return;
-    }
-    const rect = this.host.getBoundingClientRect();
-    this.inputMarker.style.left = `${point.x - rect.left}px`;
-    this.inputMarker.style.top = `${point.y - rect.top}px`;
-    this.inputMarker.dataset.input = id;
-    const arrow = !touch && ["up", "down", "left", "right"].includes(id) ? inputIcon(id) : undefined;
-    this.inputMarker.replaceChildren(...(arrow ? [arrow] : []));
-    this.inputMarker.classList.toggle("touch-crosshair", touch);
-    this.inputMarker.classList.toggle("pressed", Boolean(this.feedbackId));
-  }
-  private visible(node: THREE.Object3D) {
-    for (let n: THREE.Object3D | null = node; n; n = n.parent)
-      if (!n.visible) return false;
-    return true;
-  }
-  highlight(value: string | string[] | null) {
-    const ids = typeof value === "string" ? [value] : (value ?? []);
-    const id = ids.join("|") || null;
-    if (this.highlightId === id) return;
-    this.dirty = this.leadersDirty = true;
-    this.highlightId = id;
-    this.root.traverse((object) => {
-      if (!(object instanceof THREE.Mesh)) return;
-      const materials = Array.isArray(object.material)
-        ? object.material
-        : [object.material];
-      for (const material of materials)
-        if (material instanceof THREE.MeshStandardMaterial) {
-          if (!material.userData.baseEmissive)
-            material.userData.baseEmissive = material.emissive.clone();
-          const targets = ids.map((id) => this.targets.get(id))
-            .filter(target => target && !this.data?.regions[target.name]);
-          let selected = false;
-          for (let n: THREE.Object3D | null = object; n; n = n.parent)
-            if (targets.includes(n)) selected = true;
-          material.emissive.copy(
-            selected
-              ? new THREE.Color(0x777777)
-              : material.userData.baseEmissive,
-          );
-        }
-    });
-  }
-  setOrbit(enabled: boolean) {
-    this.orbit.enabled = enabled && !this.rotaryDrag?.dragging;
-  }
-  faceScreen() {
-    this.orient(this.home.clone());
-  }
-  faceLens() {
-    const position = this.home.clone();
-    position.z = this.homeTarget.z - (this.home.z - this.homeTarget.z);
-    this.orient(position);
-  }
-  private orient(to: THREE.Vector3) {
-    this.orientation = {
-      start: performance.now(),
-      from: this.camera.position.clone(),
-      to,
-      target: this.homeTarget.clone(),
-    };
-  }
-  captureView(): string {
-    if (this.host.classList.contains("lcd-mode")) return this.lcd.toDataURL("image/png");
-    this.renderer.render(this.scene, this.camera);
-    return this.renderer.domElement.toDataURL("image/png");
-  }
-  view(mode: "3d" | "lcd") {
-    this.host.classList.toggle("lcd-mode", mode === "lcd");
-    this.lcd.hidden = mode !== "lcd";
-    this.lcd.classList.toggle("flat", mode === "lcd");
-    this.dirty = true;
-  }
   fault(active: boolean) {
     if (active === this.faulted) return;
-    const context = this.lcd.getContext("2d")!;
+    const context = this.lcd.getContext('2d')!;
     this.faulted = active;
     if (active) {
-      this.faultImage = this.lcdImage ?? context.getImageData(0, 0, this.lcd.width, this.lcd.height);
-      this.faultStart = matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? undefined : performance.now();
+      this.faultImage =
+        this.lcdImage ?? context.getImageData(0, 0, this.lcd.width, this.lcd.height);
+      this.faultStart = matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? undefined
+        : performance.now();
       this.paintFault();
     } else {
       const image = this.lcdImage ?? this.faultImage;
       if (image) context.putImageData(image, 0, 0);
       this.faultImage = undefined;
       this.faultStart = undefined;
-      this.host.dataset.faultAnimation = "none";
+      this.host.dataset.faultAnimation = 'none';
     }
-    this.texture.needsUpdate = true;
-    this.dirty = true;
+    this.uploadLCD();
   }
   private paintFault(now = performance.now()) {
-    const c = this.lcd.getContext("2d")!,
+    const c = this.lcd.getContext('2d')!,
       w = this.lcd.width,
       h = this.lcd.height,
       scale = (w * 0.8) / 278,
       x = (w - 270 * scale) / 2,
       y = (h - 80 * scale) / 2;
-    const progress = this.faultStart === undefined ? 1 : Math.min(1, Math.max(0, (now - this.faultStart) / 260)),
+    const progress =
+        this.faultStart === undefined ? 1 : Math.min(1, Math.max(0, (now - this.faultStart) / 260)),
       ease = 1 - (1 - progress) ** 3,
       dialogScale = 0.96 + 0.04 * ease,
       image = this.lcdImage ?? this.faultImage;
@@ -769,19 +807,19 @@ export class ModelViewer {
     c.fillStyle = `rgba(0, 0, 0, ${0.32 * ease})`;
     c.fillRect(0, 0, w, h);
     c.globalAlpha = ease;
-    c.translate(w / 2, h / 2 + (8 * w / 720) * (1 - ease));
+    c.translate(w / 2, h / 2 + ((8 * w) / 720) * (1 - ease));
     c.scale(dialogScale, dialogScale);
     c.translate(-w / 2, -h / 2);
     c.translate(x, y);
     c.scale(scale, scale);
-    c.fillStyle = "#000";
+    c.fillStyle = '#000';
     c.fillRect(-4, -4, 278, 88);
-    c.fillStyle = "#fff";
+    c.fillStyle = '#fff';
     c.fillRect(-3, -3, 276, 86);
-    c.strokeStyle = "#000";
+    c.strokeStyle = '#000';
     c.lineWidth = 1;
     c.strokeRect(0.5, 0.5, 269, 79);
-    c.fillStyle = "#000";
+    c.fillStyle = '#000';
     c.beginPath();
     c.arc(32, 43, 17, 0, Math.PI * 2);
     c.fill();
@@ -795,135 +833,50 @@ export class ModelViewer {
     c.quadraticCurveTo(53, 12, 62, 16);
     c.lineWidth = 2;
     c.stroke();
-    c.fillStyle = "#fff";
+    c.fillStyle = '#fff';
     c.beginPath();
     c.arc(25, 36, 4, 0, Math.PI * 2);
     c.fill();
-    c.fillStyle = "#000";
-    c.font = "600 16px system-ui";
-    c.fillText("Sorry, the emulator", 65, 31);
-    c.fillText("stopped.", 65, 51);
+    c.fillStyle = '#000';
+    c.font = '600 16px system-ui';
+    c.fillText('Sorry, the emulator', 65, 31);
+    c.fillText('stopped.', 65, 51);
     c.restore();
-    this.host.dataset.faultAnimation = progress < 1 ? "entering" : "settled";
+    this.host.dataset.faultAnimation = progress < 1 ? 'entering' : 'settled';
     if (progress === 1) this.faultStart = undefined;
-    this.texture.needsUpdate = true;
-    this.dirty = true;
+    this.uploadLCD();
   }
-  private fit() {
-    this.dirty = this.leadersDirty = true;
-    this.root.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(this.root),
-      size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3()),
-      tangent = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-    const distance =
-      (Math.max(
-        size.y / (2 * tangent),
-        size.x / (2 * tangent * this.camera.aspect),
-      ) +
-        size.z / 2) /
-      0.78;
-    this.orbit.target.copy(center);
-    this.camera.position.copy(center).add(new THREE.Vector3(0, 0, distance));
-    this.home.copy(this.camera.position);
-    this.homeTarget.copy(center);
-    this.orbit.update();
+  private listen<K extends keyof WindowEventMap>(
+    target: EventTarget,
+    type: K,
+    handler: (event: WindowEventMap[K]) => void,
+    options?: AddEventListenerOptions | boolean,
+  ): void;
+  private listen(
+    target: EventTarget,
+    type: string,
+    handler: (event: any) => void,
+    options?: AddEventListenerOptions | boolean,
+  ): void;
+  private listen(
+    target: EventTarget,
+    type: string,
+    handler: EventListenerOrEventListenerObject,
+    options?: AddEventListenerOptions | boolean,
+  ) {
+    target.addEventListener(type, handler, options);
+    this.cleanups.push(() => target.removeEventListener(type, handler, options));
   }
-  private resize() {
-    const rect = this.host.getBoundingClientRect();
-    const height = Math.max(1, rect.height);
-    this.renderer.setSize(rect.width, height, false);
-    this.camera.aspect = rect.width / height;
-    this.camera.updateProjectionMatrix();
-    this.fit();
-  }
-  private projectLeaders() {
-    const signature = [
-      this.camera.position.toArray(),
-      this.camera.quaternion.toArray(),
-      this.host.clientWidth,
-      this.host.clientHeight,
-      document.querySelector("#panel")?.scrollTop,
-      window.scrollY,
-      this.highlightId,
-      this.generation,
-    ].join("|");
-    if (signature === this.leaderSignature) return;
-    this.leaderSignature = signature;
-    this.lines.replaceChildren();
-    if (matchMedia("(max-width: 760px)").matches || !this.data) return;
-    const wr = this.workspace.getBoundingClientRect(),
-      vr = this.host.getBoundingClientRect();
-    this.lines.setAttribute("viewBox", `0 0 ${wr.width} ${wr.height}`);
-    const origin = this.camera.getWorldPosition(new THREE.Vector3());
-    const list = document.querySelector("#controls")!.getBoundingClientRect();
-    for (const [id, target] of this.targets) {
-      const row = document.querySelector<HTMLElement>(
-        `.control-row[data-id="${CSS.escape(id)}"]`,
-      );
-      if (!row) continue;
-      const rr = row.getBoundingClientRect();
-      if (
-        rr.top < list.top ||
-        rr.bottom > list.bottom ||
-        rr.bottom > innerHeight
-      )
-        continue;
-      let p = new THREE.Box3()
-        .setFromObject(target)
-        .getCenter(new THREE.Vector3());
-      const regions = this.data.regions[target.name];
-      if (regions) {
-        const region =
-          Object.entries(regions).find(([, input]) => input === id)?.[0] ??
-          "center";
-        const offsets: Record<string, [number, number]> = {
-          up: [0.5, 0.81],
-          down: [0.5, 0.19],
-          left: [0.19, 0.5],
-          right: [0.81, 0.5],
-          center: [0.5, 0.5],
-        };
-        const [x, y] = offsets[region] ?? offsets.center;
-        const box = this.localBounds(target),
-          size = box.getSize(new THREE.Vector3());
-        p = target.localToWorld(
-          new THREE.Vector3(
-            box.min.x + size.x * x,
-            box.min.y + size.y * y,
-            box.min.z + size.z * 0.08,
-          ),
-        );
-      }
-      const delta = p.clone().sub(origin);
-      this.ray.set(origin, delta.clone().normalize());
-      this.ray.far = delta.length() + 0.02;
-      const hit = this.ray
-        .intersectObjects(this.root.children, true)
-        .find((hit) => this.visible(hit.object));
-      this.ray.far = Infinity;
-      let belongs = false;
-      for (let n: THREE.Object3D | null = hit?.object ?? null; n; n = n.parent)
-        if (n === target) belongs = true;
-      if (!belongs) continue;
-      p.project(this.camera);
-      const x = vr.left - wr.left + (p.x * 0.5 + 0.5) * vr.width,
-        y = vr.top - wr.top + (-p.y * 0.5 + 0.5) * vr.height;
-      const endX = rr.left - wr.left,
-        endY = rr.top + rr.height / 2 - wr.top;
-      const path = document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        "path",
-      );
-      path.dataset.input = id;
-      path.dataset.x = String(x);
-      path.dataset.y = String(y);
-      path.setAttribute(
-        "d",
-        `M${x},${y} L${endX - 18},${endY} L${endX},${endY}`,
-      );
-      if (row.classList.contains("active")) path.classList.add("active");
-      this.lines.append(path);
-    }
+  dispose() {
+    this.send({ type: 'pause_input' });
+    this.send({ type: 'sensor', enabled: false });
+    this.send({ type: 'observe', enabled: false });
+    this.disposed = true;
+    ++this.generation;
+    this.rotaryDrag.dispose();
+    for (const cleanup of this.cleanups.splice(0)) cleanup();
+    for (const resolve of this.requests.values()) resolve(null);
+    this.requests.clear();
+    if (document.pointerLockElement === this.canvas) document.exitPointerLock?.();
   }
 }

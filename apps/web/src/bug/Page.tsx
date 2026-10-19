@@ -1,7 +1,7 @@
 import { Show, For, createSignal, onSettled, untrack } from 'solid-js';
-import { DevTools } from '../dev-tools/Page';
+import DevTools from '../dev-tools/Page';
 import type { CameraBackend, CameraChoice } from '../dev-tools/camera';
-import { downloadBlob } from '../ui/card';
+import { downloadBlob } from '../ui/download';
 import { uploadReport, type UploadReport, type UploadReceipt } from './upload';
 import { reportPlatform, type ReportPlatform } from './file-guide';
 import {
@@ -17,7 +17,7 @@ import { prepareDownload } from './download';
 import { ReportUsb, type ReportConnection } from './usb';
 import '../style.css';
 import './style.css';
-export function BugReport(props: {
+export default function BugReport(props: {
   connection?: ReportConnection;
   hash?: string;
   supported?: boolean;

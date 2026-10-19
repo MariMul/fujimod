@@ -1,7 +1,7 @@
 import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
 import { expect, test, vi } from 'vite-plus/test';
-import { DevTools } from '../dev-tools/Page';
+import DevTools from '../dev-tools/Page';
 import { Progress, type CameraBackend } from '../dev-tools/camera';
 test('Dev Tools automatically attaches the already selected backend on handoff', async () => {
   const open = vi.fn(async () => ({

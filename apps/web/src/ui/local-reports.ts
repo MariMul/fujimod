@@ -14,7 +14,10 @@ export class LocalReports {
     private capture: ReportCapture,
   ) {}
   available() {
-    return Boolean(document.querySelector('meta[name="fujimod-local-reports"]'));
+    return (
+      typeof document !== 'undefined' &&
+      Boolean(document.querySelector('meta[name="fujimod-local-reports"]'))
+    );
   }
   async submit(
     submission: ReportSubmission,

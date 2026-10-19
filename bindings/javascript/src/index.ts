@@ -58,7 +58,7 @@ export const defs = Object.freeze({
   DefinitionFailureKind: native.DefinitionFailureKind,
   isError: isDefinitionError,
   service: Object.freeze({
-    Definition: Object.freeze({ fromJson: native.ServiceDefinition.fromJson }),
+    Definition: Object.freeze({ fromJson: native.ServiceDefinition.fromJson.bind(native.ServiceDefinition) }),
     ServiceModes: native.ServiceModes,
     ...definitionValues,
     ModeAvailabilityKind: native.ModeAvailabilityKind,

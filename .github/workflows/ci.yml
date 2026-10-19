@@ -45,7 +45,7 @@ jobs:
         run: mise run rust-check
 
   javascript-quality:
-    name: JavaScript and TypeScript lint, format and types
+    name: TypeScript lint, format and types
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -55,6 +55,8 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           javascript: 'true'
+      - run: npm run check:typescript-policy
+      - run: npm run check:types
       - run: npm --prefix bindings/javascript run build
       - run: mise run javascript-lint
       - if: ${{ !cancelled() }}
@@ -145,7 +147,7 @@ jobs:
         run: mise run web-build
       - name: All declared web integration test scripts
         if: ${{ !cancelled() }}
-        run: node scripts/ci/package-tests.mjs apps/web
+        run: node scripts/ci/package-tests.ts apps/web
       - if: ${{ !cancelled() }}
         run: npm --prefix apps/usb-sharing run check
       - name: Coverage summary

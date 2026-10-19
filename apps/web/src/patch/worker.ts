@@ -16,6 +16,6 @@ worker.onmessage = async ({ data: { file, index, artifactBase } }: MessageEvent<
     const compiled = new Uint8Array(await response.arrayBuffer());
     await verifyPatch(index, firmware, compiled);
     const result = await patch(base, compiled);
-    worker.postMessage({ result, firmware }, [result.ffboot.buffer, result.ffsys.buffer]);
+    worker.postMessage({ result, firmware }, [result.ffboot.buffer, result.ffsys.buffer, ...(result.fpupdate ? [result.fpupdate.buffer] : [])]);
   } catch (error) { worker.postMessage({ error: error instanceof Error ? error.message : String(error) }); }
 };

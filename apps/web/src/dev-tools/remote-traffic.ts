@@ -1,5 +1,5 @@
 import type { Descriptor, Operation } from './usb-sharing';
-import type { ShareTrafficEvent } from '../../../../crates/usb-proxy/web/share-traffic.js';
+import type { ShareTrafficEvent } from '../../../../crates/usb-proxy/web/share-traffic.ts';
 import { Direction, Layer, Level, describeCommand, type NewEntry } from './log';
 
 const CAPTURE = 4096;

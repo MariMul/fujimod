@@ -87,4 +87,4 @@ run = "cargo llvm-cov --workspace --all-features --locked --no-report"
 
 [tasks.web-coverage]
 dir = "{{config_root}}/apps/web"
-run = "npm test -- --coverage --coverage.reportOnFailure --coverage.provider=v8 --coverage.reporter=text --coverage.reporter=lcov --coverage.reporter=html --coverage.reporter=json-summary --coverage.reportsDirectory=../../target/coverage/web --coverage.include='src/**/*.{ts,tsx,mjs}' --coverage.include='devices/**/*.ts' --coverage.include='scripts/**/*.mjs' --coverage.exclude='**/*.test.*' --coverage.exclude='**/*.d.ts' --coverage.exclude='**/*.fixture.*'"
+run = "npm test -- --coverage --coverage.reportOnFailure --coverage.provider=v8 --coverage.reporter=text --coverage.reporter=lcov --coverage.reporter=html --coverage.reporter=json-summary --coverage.reportsDirectory=../../target/coverage/web --coverage.include='src/**/*.{ts,tsx}' --coverage.include='devices/**/*.ts' --coverage.include='scripts/**/*.ts' --coverage.exclude='**/*.test.*' --coverage.exclude='**/*.d.ts' --coverage.exclude='**/*.fixture.*'"

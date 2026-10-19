@@ -90,7 +90,7 @@ The browser integration uses the built JS and native Python bindings and a named
 HTTPS development preview. From this directory:
 
 ```sh
-FUJIMOD_WEB_URL=<named HTTPS URL> PYTHON=<Python with FujiMod installed> node peer.browser.mjs
+FUJIMOD_WEB_URL=<named HTTPS URL> PYTHON=<Python with FujiMod installed> node peer.browser.ts
 ```
 
 It runs a local Workers runtime, exports a scripted WebUSB device, transfers 2 MiB in

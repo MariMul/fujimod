@@ -1,0 +1,151 @@
+declare global {
+  interface Window {
+    __hydrationDOM: Element | null;
+  }
+}
+import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { resolve, sep, extname } from 'node:path';
+import { chromium, webkit } from 'playwright';
+import assert from 'node:assert/strict';
+const root = resolve(process.argv[2] || 'dist/client');
+const server = createServer(async (req, res) => {
+  const url = new URL(req.url ?? '/', 'http://test');
+  const path = resolve(
+    root,
+    '.' + decodeURIComponent(url.pathname),
+    url.pathname.endsWith('/') ? 'index.html' : '',
+  );
+  if (!path.startsWith(root + sep)) {
+    res.writeHead(403).end();
+    return;
+  }
+  try {
+    const bytes = await readFile(path);
+    res.setHeader(
+      'Content-Type',
+      {
+        '.html': 'text/html',
+        '.js': 'text/javascript',
+        '.css': 'text/css',
+        '.json': 'application/json',
+        '.wasm': 'application/wasm',
+        '.svg': 'image/svg+xml',
+        '.png': 'image/png',
+      }[extname(path)] || 'application/octet-stream',
+    );
+    res.end(bytes);
+  } catch {
+    res.writeHead(404).end();
+  }
+});
+await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+const base = `http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}`;
+try {
+  for (const type of [chromium, webkit]) {
+    const browser = await type.launch({ headless: true });
+    try {
+      const noJs = await browser.newContext({ javaScriptEnabled: false });
+      for (const [route, text] of [
+        ['/', 'Drop a firmware DAT'],
+        ['/dev-tools/', 'Dev Tools'],
+        ['/bug/', undefined],
+      ]) {
+        const page = await noJs.newPage();
+        const response = await page.goto(base + route);
+        assert.equal(response!.status(), 200);
+        if (text)
+          assert.ok(
+            (await page.locator('body').innerText()).includes(text),
+            `${type.name()} ${route}: static content`,
+          );
+        else {
+          assert.equal(await page.locator('main.bug-report').count(), 1);
+          assert.equal(await page.getByRole('img', { name: 'FujiMod', exact: true }).count(), 1);
+        }
+        if (route === '/') {
+          assert.equal(await page.locator('#workspace').count(), 1);
+          assert.equal(await page.locator('#idle-cameras').count(), 0);
+          assert.equal(await page.getByRole('button', { name: 'New camera', exact: true }).count(), 0);
+          assert.ok((await page.locator('#camera-table .gen').count()) > 0);
+        }
+        await page.close();
+      }
+      await noJs.close();
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      const errors: string[] = [],
+        diagnostics: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      page.on('console', (msg) => {
+        if (/hydration|unclaimed|\[[A-Z_]+\]/i.test(msg.text())) diagnostics.push(msg.text());
+      });
+      // The static-host test exercises hydration/UI; renderer execution has its own real-runtime gate.
+      await page.addInitScript(() => {
+        window.__hydrationDOM = null;
+        document.addEventListener('DOMContentLoaded', () => {
+          window.__hydrationDOM = document.querySelector('#workspace');
+        });
+      });
+      await page.goto(base + '/');
+      try {
+        await page.locator('#viewer-tools[data-ready="true"]').waitFor();
+      } catch (error) {
+        console.log(type.name(), { errors, diagnostics });
+        console.log(
+          await page.evaluate(() => ({
+            body: document.body.innerText,
+            scripts: [...document.scripts].map((script) => ({
+              src: script.src,
+              type: script.type,
+            })),
+            feedback: document.querySelector('#feedback-open')?.outerHTML,
+          })),
+        );
+        throw error;
+      }
+      assert.equal(await page.locator('#workspace').count(), 1);
+      assert.ok(
+        await page.evaluate(() => window.__hydrationDOM === document.querySelector('#workspace')),
+        'hydrate existing homepage nodes',
+      );
+      await page.locator('a[href="#features"]').click();
+      assert.equal(new URL(page.url()).hash, '#features');
+      await page.locator('#features .catalog-ref').first().focus();
+      assert.equal(await page.locator('.catalog-card.on').count(), 1);
+      await page.locator('#viewer-settings-toggle').click();
+      await page.locator('#feedback-open').click();
+      assert.equal(
+        await page.locator('#feedback-dialog').evaluate((node) => (node as HTMLDialogElement).open),
+        true,
+      );
+      await page.locator('#feedback-description').fill('Static hydration check');
+      await page.locator('#feedback-dialog button[value="cancel"]').click();
+      assert.equal(
+        await page.locator('#feedback-dialog').evaluate((node) => (node as HTMLDialogElement).open),
+        false,
+      );
+      await page.goto(base + '/dev-tools/');
+      await page
+        .locator('.dt-status')
+        .filter({ hasText: /Disconnected|WebUSB unavailable/ })
+        .waitFor();
+      await page.goto(base + '/bug/');
+      await page
+        .getByRole('alert')
+        .filter({ hasText: 'This link has no valid camera report.' })
+        .waitFor();
+      assert.equal(await page.locator('meta[name="fujimod-local-reports"]').count(), 0);
+      assert.deepEqual(errors, [], `${type.name()} page errors`);
+      assert.deepEqual(diagnostics, [], `${type.name()} hydration/reactivity diagnostics`);
+      await context.close();
+      console.log(
+        `${type.name()}: three static pages, existing-node hydration, features and feedback passed`,
+      );
+    } finally {
+      await browser.close();
+    }
+  }
+} finally {
+  await new Promise<void>((done) => server.close(() => done()));
+}

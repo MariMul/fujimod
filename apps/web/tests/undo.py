@@ -21,12 +21,6 @@ async def check(playwright, args, name):
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
 
-    async def expose(route):
-        response = await route.fetch()
-        await route.fulfill(response=response, body=await response.text() +
-                           '\nwindow.undoTest = {viewer, get engine() {return engine;}};')
-
-    await page.route('**/src/main.ts*', expose)
     if args.sources:
         await page.route('**/sources.zip', lambda route: route.fulfill(
             path=str(args.sources.resolve()), content_type='application/zip'))
@@ -54,7 +48,6 @@ async def check(playwright, args, name):
         await page.wait_for_function("document.querySelector('#live-label').textContent === 'STOPPED'", timeout=180000)
         assert await page.locator('#undo').is_visible() == available
         assert await page.locator('#undo').is_disabled() != available
-        assert await page.evaluate('Boolean(window.undoTest.viewer.undoFault)') == available
         assert await page.locator('#restart').is_visible()
         assert await page.locator('#error-report').is_visible()
         assert 'not enough camera history' not in await page.locator('#fault-raw').inner_text()

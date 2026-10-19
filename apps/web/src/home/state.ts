@@ -1,0 +1,72 @@
+import type { CameraRecord } from '../cameras/store';
+import { createStore } from 'solid-js';
+import { validateCatalog, type Catalog, type Firmware } from '../catalog';
+import { validateIndex } from '../patch/catalog';
+import type { Connection } from '../engine/api';
+import type { EngineFault } from '../engine/fault';
+import type { FaultContext } from '../ui/fault';
+import type { ModelData } from '../viewer/model';
+import type { CameraSupport } from '../ui/cameras';
+export type Release = ReturnType<typeof validateIndex>;
+declare const __FUJIMOD_INITIAL_CATALOG__: Catalog;
+declare const __FUJIMOD_INITIAL_RELEASE__: unknown;
+export function supportedCameras(catalog: Catalog, release?: Release): CameraSupport[] {
+  const entries = [...catalog.firmwares];
+  for (const entry of release?.firmwares ?? [])
+    if (!entries.some((known) => known.sha256 === entry.sha256)) entries.push(entry);
+  return entries
+    .filter((entry) => entry.emulate || release?.patches[entry.sha256])
+    .map((firmware) => ({
+      firmware,
+      mod: !!release?.patches[firmware.sha256],
+      emu: !!firmware.emulate,
+    }));
+}
+export function createHomeState() {
+  const catalog = validateCatalog(__FUJIMOD_INITIAL_CATALOG__);
+  const release = __FUJIMOD_INITIAL_RELEASE__
+    ? validateIndex(__FUJIMOD_INITIAL_RELEASE__)
+    : undefined;
+  return createStore({
+    catalog,
+    release,
+    cameras: supportedCameras(catalog, release),
+    savedCameras: [] as CameraRecord[],
+    activeCamera: undefined as CameraRecord | undefined,
+    cameraBusy: false,
+    storageMessage: '',
+    storageError: false,
+    message: '',
+    error: false,
+    live: '',
+    progress: undefined as number | undefined,
+    firmware: undefined as Firmware | undefined,
+    speed: undefined as number | undefined,
+    fault: undefined as EngineFault | undefined,
+    faultContext: { build: 'Development' } as FaultContext,
+    canUndo: false,
+    undoBusy: false,
+    canRestart: false,
+    idle: true,
+    panelVisible: false,
+    toolbarVisible: false,
+    promptVisible: true,
+    camerasVisible: true,
+    modSupported: false,
+    modDisabled: true,
+    modEnabled: true,
+    hasModel: true,
+    view: '3d' as '3d' | 'lcd',
+    creditVisible: true,
+    credit: undefined as ModelData['credit'] | undefined,
+    bodyPreview: '',
+    connections: [] as Connection[],
+    buildLabel: import.meta.env.DEV || !release ? 'Development' : `Build ${release.release}`,
+    buildURL:
+      import.meta.env.DEV || !release
+        ? 'https://github.com/justjake/fujimod'
+        : `https://github.com/justjake/fujimod/releases/tag/${encodeURIComponent(release.release)}`,
+  });
+}
+export type HomeState = ReturnType<typeof createHomeState>[0];
+export type HomeSetter = ReturnType<typeof createHomeState>[1];

@@ -8,6 +8,7 @@ on:
       - 'bindings/generator/**'
       - 'crates/usb/**'
       - 'crates/defs/**'
+      - 'crates/simulation/**'
       - 'Cargo.*'
       - 'bindings/python/python/fujimod/presentation/controls.json'
       - '.github/workflows/web.yml'
@@ -18,6 +19,7 @@ on:
       - 'bindings/generator/**'
       - 'crates/usb/**'
       - 'crates/defs/**'
+      - 'crates/simulation/**'
       - 'Cargo.*'
       - 'bindings/python/python/fujimod/presentation/controls.json'
       - '.github/workflows/web.yml'
@@ -46,6 +48,7 @@ jobs:
         run: |
           rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-unknown
           rustup default 1.99.1
+          npm ci
           npm --prefix bindings/javascript ci
           npm --prefix bindings/javascript run setup:tooling
       - run: npm ci
@@ -53,8 +56,12 @@ jobs:
       - name: Check USB protocol core
         working-directory: .
         run: cargo test -p fujimod-usb --features testing
+      - name: Check shared simulation
+        working-directory: .
+        run: cargo test -p fujimod-simulation --lib
       - run: npm test
       - run: npm run build
       - name: Install browser test runtimes
         run: npx playwright install --with-deps chromium webkit
+      - run: npm run test:prerender
       - run: npm run test:dev-tools:browser

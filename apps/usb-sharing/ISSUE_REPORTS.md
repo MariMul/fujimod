@@ -43,5 +43,5 @@ Maintainers can retrieve a report with their Cloudflare credentials:
 npx wrangler r2 object get fujimod-issue-reports/REPORT_ID/report.tar --remote --file report.tar
 ```
 
-Run `node --test worker.test.mjs issue-reports.test.mjs`. Tests use a real local
+Run `node --test worker.test.ts issue-reports.test.ts`. Tests use a real local
 Worker/R2/Durable Object runtime and intercept GitHub; no actual issues are posted.

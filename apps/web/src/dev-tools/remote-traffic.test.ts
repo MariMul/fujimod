@@ -1,5 +1,5 @@
 import { expect, test } from 'vite-plus/test';
-import { observeRequest } from '../../../../crates/usb-proxy/web/share-traffic.js';
+import { observeRequest } from '../../../../crates/usb-proxy/web/share-traffic.ts';
 import { RemoteTrafficLog } from './remote-traffic';
 import { Direction, Layer, Level } from './log';
 import type { Completion, Operation } from './usb-sharing';
@@ -31,10 +31,10 @@ function fixture() {
     serial: null,
     interfaces: [
       {
-        endpoints: [
-          { address: 1, kind: 'bulk' },
-          { address: 0x82, kind: 'bulk' },
-          { address: 0x83, kind: 'interrupt' },
+        configuration: 1, interface: 2, alternate: 3, endpoints: [
+          { packet_size: 64, address: 1, kind: 'bulk' },
+          { packet_size: 64, address: 0x82, kind: 'bulk' },
+          { packet_size: 64, address: 0x83, kind: 'interrupt' },
         ],
       },
     ],

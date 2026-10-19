@@ -1,5 +1,5 @@
 import { RemoteTrafficLog } from './remote-traffic';
-import type { ShareTrafficEvent } from '../../../../crates/usb-proxy/web/share-traffic.js';
+import type { ShareTrafficEvent } from '../../../../crates/usb-proxy/web/share-traffic.ts';
 import { errorReportZip, type ReportSubmission } from '../engine/report';
 import { createSignal } from 'solid-js';
 import {

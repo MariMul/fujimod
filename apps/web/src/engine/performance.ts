@@ -13,6 +13,9 @@ export class CameraPace {
     this.started = performance.now();
     this.ticks = ticks;
   }
+  rebase(ticks: number) {
+    this.ticks = ticks;
+  }
   sample(ticks: number, runtime?: Record<string, unknown>): CameraPerformance {
     const wallSeconds = (performance.now() - this.started) / 1000;
     const virtualSeconds = (ticks - this.ticks) / 12_000_000;

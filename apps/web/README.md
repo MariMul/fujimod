@@ -7,6 +7,31 @@ Try camera firmware and build SD boot files in your browser. Firmware is
 identified by its complete SHA-256 and never uploaded. The web app is developed
 on review branches; the Pages workflow deploys approved main builds only.
 
+## Rendering and static hosting
+
+`@solidjs/vite-plugin` runs in native start mode with `ssr: true`. The plugin
+owns client/server entries and hydration; `src/App.tsx` selects the three pages
+and `src/Document.tsx` owns their HTML document and metadata. Development
+source updates reload the document because Bevy owns a single renderer per page. Browser-only
+emulator, USB and graphics work starts after hydration. Engine/input protocols
+remain separate from the Solid components that display their state.
+
+`npm run build` renders `/`, `/dev-tools/` and `/bug/` through start mode's
+production request handler. Deploy **`dist/client/`**, which contains the full
+page HTML, CSS and browser assets; static hosting needs no running SSR server.
+`dist/server/` is a build-time renderer. `npm run build:local-preview` uses
+`dist-local-preview/{client,server}`. Both build commands fail if a page cannot
+be prerendered. The initial camera catalog and release metadata enter the build
+from the installed public artifacts; the browser refreshes them after mounting.
+Firmware selection and execution remain browser operations.
+
+`npm run test:prerender` checks the production static files in Chromium and
+WebKit, with and without JavaScript. It asserts page content, hydration of the
+existing homepage nodes, Features and Feedback, and the report page's
+absence of development reporting hooks. The web workflow runs this after build.
+For local development, the generated document loads simulator reporting and
+browser diagnostics only on the homepage and Dev Tools; `/bug/` stays local.
+
 ## Dev Tools
 
 `/dev-tools/` is a Solid 2 USB console using the public `fujimod` JavaScript/Wasm
@@ -25,8 +50,8 @@ DATs can be used directly; otherwise Connect simulator opens a DAT chooser.
 Commands are printable ASCII with a selectable line ending. Responses and
 connection events share one log pane. Pending responses are polled for up to
 ten seconds, then wait for an explicit Read response. Unknown progress or a
-failed transfer blocks further commands. Disconnect releases host ownership
-without sending a camera close, reset or mode transition.
+failed transfer blocks further commands. Disconnect closes a healthy idle session. During an interrupted or pending
+operation it abandons host ownership without issuing a camera close or mode request.
 
 Layer filters (Console, App80, FF80, USB) and severity filters affect display,
 including previously captured entries. Rust records protocol boundaries and raw
@@ -48,20 +73,32 @@ The firmware integration check uses that same simulator connection, with physica
 USB forbidden in the page. It cold-boots firmware and checks the stock console:
 
 ```sh
-FUJIMOD_WEB_URL=https://your-host.ts.net/ node src/dev-tools/browser-emulator.mjs
+FUJIMOD_WEB_URL=https://your-host.ts.net/ node src/dev-tools/browser-emulator.ts
 ```
 
 ## Camera viewer
 
-The TypeScript web app uses SolidJS 2 for new UI and three.js for the camera viewer.
+The TypeScript web app uses SolidJS 2 for new UI and Bevy 0.20.0 (Rust/Wasm/WebGPU) for the camera viewer.
 Vite Plus provides the development server, builds, Oxlint, Oxfmt and Vitest.
-The existing imperative UI will move to Solid components incrementally. Drop a
+Solid components own the homepage, camera controls, SD browser, viewer overlays, dialogs and status displays. Drop a
 DAT anywhere on the viewer, or choose it there. The whole-file SHA-256 selects
 `public/catalog.json`: firmware ID, body, model, optional engine artifact and
 optional 3D model. Unrecognized files stay on the neutral camera silhouette;
 recognized bodies without installed capabilities show unsupported. Patching
 and emulation are independent capabilities. Release-only patch entries also
 work without a web app source change.
+
+The homepage opens **Your cameras** without booting a session. Uploading or
+dropping a supported DAT creates a separate virtual camera, including when the
+same file is used twice. Its firmware, SD card and committed internal storage
+stay in this browser's IndexedDB. Choose a saved camera to reopen it, or use
+**Cameras** to save the current session and return to the library.
+
+Power-off saves durable storage; running cameras also save about every 30 seconds.
+A compatible live snapshot resumes execution. Otherwise the camera cold-boots
+from its saved storage. A camera saved OFF reopens OFF. Save failures appear
+beside the library and keep the previous successful save. See the
+[camera library](src/cameras/README.md) for lifecycle and browser tests.
 
 `src/engine/api.ts` is the web app's emulator boundary: boot, frames,
 press/release, setPosition, setScene and power. The shared Pyodide WorkerEngine adapter
@@ -78,8 +115,9 @@ only an arrow, with a separate accessible name. Panel faces and captions describ
 the printed arrangement of the controls.
 The catalog selects the shared Pyodide engine and supplies its Python boot
 protocol. Device directories contain model, panel and initial-position data;
-adding a body does not add conditionals to the worker or viewer. `src/viewer/model.ts` ports LCD UV mapping,
-picking, orbiting and LCD projection from the research viewer. The panel is
+adding a body does not add conditionals to the worker or viewer. `src/viewer/model.ts` translates browser input and projects DOM overlays;
+`crates/simulation` owns glTF loading, LCD UV mapping, picking, orbiting and
+physical/observer camera poses. The panel is
 rendered from body data by shared dial, key, shutter and segmented controls.
 The SD tree shows actual FAT files, offers downloads and format, and retains
 media through power cycles. Generated patch files seed the initial card.
@@ -105,8 +143,8 @@ the glTF itself is unchanged. The page repeats attribution when loaded.
 Model taps show the selected button name and a marker that remains briefly after
 release. Touch picking accepts nearby visible buttons while preserving direct
 LCD contacts; the four-way selector marks one direction without lighting its
-entire shared mesh. `tests/model_touch.py` checks real WebKit touch delivery on
-the model against a Vite development server, without a DAT or emulator runtime.
+entire shared mesh. `tests/simulation_browser.py` checks the real Bevy viewer and firmware runtime,
+including movement, inspection and model control picking.
 
 X-M1 1.50 uses the same Wasm runtime with its checked REC graph, native LCD
 and calibrated menu/sub-command controls. It has no 3D model, host RGB scene,
@@ -159,7 +197,7 @@ PLAYWRIGHT_BROWSERS_PATH=/path/to/browsers python tests/browser.py \
 `npm run test:watch` runs tests interactively. Tests stay alongside their
 implementation; use `.test.tsx` for Solid DOM tests, and import test APIs from
 `vite-plus/test`. The components project uses jsdom and the browser runtime;
-the unit project runs `.test.ts` and `.test.mjs` in isolated Node processes.
+the unit project runs `.test.ts` in isolated Node processes.
 Solid 2 batches updates: call `flush()` before asserting rendered changes.
 The existing Python browser checks remain integration gates.
 
@@ -215,8 +253,8 @@ npm run preview -- --mode local-preview --port 5190 --strictPort
 ```
 
 This serves `dist-local-preview/` and enables automatic boot using `FUJIMOD_DAT` in
-ignored `.env.local`. The preview binds only `127.0.0.1` and permits the
-`cozycat.tail2b5ca.ts.net` Host header for `tailscale serve`. The ordinary public
+ignored `.env.local`. The preview binds only `127.0.0.1` and permits `*.ts.net`
+Host headers for `tailscale serve`. The ordinary public
 `npm run build` writes `dist/`, excludes automatic boot, and cannot overwrite
 the local preview. Restart the preview server after changing its environment.
 
@@ -290,7 +328,7 @@ workflow repeats those checks before publishing Pages.
 
 `npm run prepare:release` fetches a release index and verifies patches. Optional
 `browser.json` supplies a hash/size inventory of generated runtime artifacts and
-a capability catalog. `scripts/stage-browser.mjs` verifies each artifact before
+a capability catalog. `scripts/stage-browser.ts` verifies each artifact before
 staging it under ignored `public/runtime/`. A patch-only release removes the
 emulation capability from the installed catalog. `npm run build` then bundles
 this repository into `dist/` and verifies every GLB is a real glTF 2 binary with
@@ -324,16 +362,16 @@ It also identifies the firmware, release and included mods.
 
 Each command has a 20-byte header:
 
-| Byte | Field |
-| --- | --- |
-| 0 | Opcode: 1 COPY, 2 FUJI_LZ, 3 WRITE |
-| 1 | Output: 0 ffboot, 1 ffsys |
-| 2 | Flags: bit 0 XOR source with 0xff; all other bits zero |
-| 3 | Reserved, zero |
-| 4 | Destination offset, u32 |
-| 8 | Output byte count, u32 |
-| 12 | DAT source offset, u32 (zero for WRITE) |
-| 16 | DAT source byte count, u32 (zero for WRITE) |
+| Byte | Field                                                  |
+| ---- | ------------------------------------------------------ |
+| 0    | Opcode: 1 COPY, 2 FUJI_LZ, 3 WRITE                     |
+| 1    | Output: 0 ffboot, 1 ffsys                              |
+| 2    | Flags: bit 0 XOR source with 0xff; all other bits zero |
+| 3    | Reserved, zero                                         |
+| 4    | Destination offset, u32                                |
+| 8    | Output byte count, u32                                 |
+| 12   | DAT source offset, u32 (zero for WRITE)                |
+| 16   | DAT source byte count, u32 (zero for WRITE)            |
 
 COPY reads DAT bytes, optionally XOR-decoding them. FUJI_LZ uses Fuji's
 method-4 stream (not the LZ4 codec): a five-u32 header then literal runs and
@@ -371,6 +409,9 @@ python tests/feedback.py --url 'https://your-host.ts.net:port/?scenario=x70-movi
   --output build/fresh-feedback-proof
 ```
 
+See [the simulation crate](../../crates/simulation/README.md) for environment
+assets, native scenario rendering, input semantics and the current runtime boundary.
+
 ## Browser bug reports during development
 
 The development server saves feedback and detected simulator, worker and JavaScript
@@ -388,5 +429,5 @@ automatic fault reports and submitted feedback with:
 
 ```sh
 FUJIMOD_WEB_URL=https://your-host.ts.net:port/ FUJIMOD_BROWSER=webkit \
-  node src/dev-tools/browser-reports.mjs
+  node src/dev-tools/browser-reports.ts
 ```

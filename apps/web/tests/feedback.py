@@ -6,7 +6,6 @@ the current tab, matching the embedded-browser behavior under test.
 import argparse
 import asyncio
 import json
-import re
 import hashlib
 import zipfile
 from urllib.parse import urlparse, parse_qsl
@@ -26,16 +25,11 @@ async def check(args):
               window.open = url => { location.assign(url); return null; };
             ''')
             page = await context.new_page()
-            # Exercise published download/navigation behavior against the local runtime.
-            async def published_page(route):
-                response = await route.fetch()
-                if 'text/html' not in response.headers.get('content-type', ''):
-                    return await route.fulfill(response=response)
-                source = re.sub(r'<meta[^>]*name="fujimod-local-reports"[^>]*>', '', await response.text())
-                source = re.sub(r'<script[^>]*src="/__simulator-reports.js"[^>]*></script>', '', source)
-                await route.fulfill(response=response, body=source)
-            await page.route(args.url.split('?')[0] + '*', published_page)
+            # Preserve start-mode hydration, then disable development delivery
+            # before real execution reaches the fault under test.
             await page.goto(args.url)
+            await page.wait_for_function("document.documentElement.dataset.reportsReady === 'true'")
+            await page.locator('meta[name="fujimod-local-reports"]').evaluate('node => node.remove()')
             await page.wait_for_function("document.querySelector('#live-label').textContent === 'STOPPED'", timeout=240000)
             assert 'Runtime did not initialize' not in await page.locator('#fault-raw').inner_text()
             await page.locator('#error-report').click()
@@ -50,6 +44,8 @@ async def check(args):
             print(f'{name}: one-click delivery attempted; same-tab navigation reached GitHub', flush=True)
             # A full reload must recover the saved bytes without regenerating them.
             await page.goto(args.url.split('?')[0])
+            await page.locator('#viewer-tools[data-ready="true"]').wait_for()
+            await page.locator('#viewer-settings-toggle').click()
             await page.locator('#feedback-recover').wait_for(state='visible', timeout=30000)
             stored_hash = await page.evaluate('''async () => {
               const db = await new Promise((resolve,reject) => {

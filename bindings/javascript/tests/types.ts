@@ -16,9 +16,9 @@ function errors(value: unknown): void {
   if(usb.isError(value)){const error: UsbError=value;const kind=error.kind;void kind;}
 }
 // @ts-expect-error Each choice group has its own enum type.
-session.deviceInfo(usb.DataReadMode.Echo);
+void session.deviceInfo(usb.DataReadMode.Echo);
 // @ts-expect-error Protocol choices are enums, not strings.
-session.readConfiguration('Ram',0,0,1);
+void session.readConfiguration('Ram',0,0,1);
 // @ts-expect-error Sessions come from explicit opens.
 new usb.Session();
 // @ts-expect-error Observational state cannot be assigned.
@@ -36,7 +36,7 @@ async function serviceValues(): Promise<void> {
   if (value.kind === usb.app80.ReplyKind.Pins) {
     const levels: number = value.levels;
     // @ts-expect-error Pin replies do not contain save status.
-    value.status;
+    void value.status;
     // @ts-expect-error Result variants are immutable.
     value.levels = 3;
     void levels;
@@ -49,7 +49,7 @@ function serviceErrors(error: unknown): void {
   if (usb.app80.isError(error) && error.reason.kind === usb.app80.CommandFailureKind.Unsupported) {
     const codec = error.reason.codec; void codec;
     // @ts-expect-error Unsupported has a codec, not an argument.
-    error.reason.argument;
+    void error.reason.argument;
   }
   if (defs.isError(error) && error.reason.kind === defs.DefinitionFailureKind.InvalidLayout) {
     const code: number = error.reason.code; void code;
@@ -67,7 +67,7 @@ void serviceValues; void serviceErrors;
 
 const peripheral = usb.app80.Command.i2c(usb.app80.I2cAction.read(usb.app80.I2cPort.Port0, 0xa5, new usb.app80.I2cLength(3)));
 // @ts-expect-error The write-only single-byte route is not a read port.
-usb.app80.I2cPort.Port3;
+void usb.app80.I2cPort.Port3;
 // @ts-expect-error The length is a checked value, not an unchecked number.
 usb.app80.I2cAction.read(usb.app80.I2cPort.Port0, 1, 3);
 // @ts-expect-error Port enum groups remain distinct from other choices.
@@ -85,7 +85,7 @@ async function chargeValues(): Promise<void> {
   if(value.kind===usb.app80.ReplyKind.ChargePresence){
     if(value.status.kind===usb.app80.ChargePresenceKind.Unknown){const raw:number=value.status.rawStatus;void raw;}
     // @ts-expect-error Presence results do not have a numeric state value field.
-    value.status.value;
+    void value.status.value;
   }
 }
 void chargeValues;

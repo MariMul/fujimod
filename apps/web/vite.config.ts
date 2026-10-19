@@ -1,10 +1,12 @@
 import { defineConfig } from 'vite-plus';
 import { loadEnv, type Plugin, type Connect } from 'vite';
 import solid from '@solidjs/vite-plugin';
-import { simulatorReports } from './scripts/local-reports.mjs';
-import { bugReportRoute } from './src/bug/route.mjs';
+import { simulatorReports } from './scripts/local-reports.ts';
+import { bugReportRoute } from './src/bug/route.ts';
+import { simulationAssets } from './scripts/simulation-assets.ts';
+import { browserDiagnostics } from './scripts/browser-diagnostics.ts';
 import { execFileSync } from 'node:child_process';
-import { createReadStream, existsSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync } from 'node:fs';
 import { createGzip } from 'node:zlib';
 import { stat } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
@@ -98,12 +100,26 @@ function localArtifacts(env: Record<string, string>): Plugin {
   };
 }
 export default defineConfig(({ mode, command }) => ({
-  base: './',
+  base: '/',
+  // Solid's server build consumes the manifest produced by its client build.
+  builder: { sharedPlugins: true },
   define: {
+    __FUJIMOD_BUILD_DAY__: JSON.stringify(new Date().toISOString().slice(0, 10)),
+    __FUJIMOD_INITIAL_CATALOG__: readFileSync(
+      existsSync('public/runtime/catalog.json')
+        ? 'public/runtime/catalog.json'
+        : 'public/catalog.json',
+      'utf8',
+    ),
+    __FUJIMOD_INITIAL_RELEASE__: existsSync('public/artifacts/patches.json')
+      ? readFileSync('public/artifacts/patches.json', 'utf8')
+      : 'null',
     __FUJIMOD_SIMULATOR_BUILD__: JSON.stringify(
       `${execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], { encoding: 'utf8' }).trim()} / ${new Date().toISOString()}`,
     ),
-    __FUJIMOD_SIGNAL_URL__: JSON.stringify(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_SIGNAL_URL || ''),
+    __FUJIMOD_SIGNAL_URL__: JSON.stringify(
+      loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_SIGNAL_URL || '',
+    ),
     __FUJIMOD_LOCAL_DAT__:
       (command === 'serve' || mode === 'local-preview') &&
       Boolean(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_DAT),
@@ -111,7 +127,28 @@ export default defineConfig(({ mode, command }) => ({
       existsSync('public/runtime/catalog.json') ? 'runtime/catalog.json' : 'catalog.json',
     ),
   },
-  plugins: [solid(), bugReportRoute(), simulatorReports(), localArtifacts(loadEnv(mode, process.cwd(), 'FUJIMOD_'))],
+  plugins: [
+    solid({ start: true, ssr: true }),
+    bugReportRoute(),
+    simulatorReports(),
+    simulationAssets(),
+    browserDiagnostics(),
+    localArtifacts(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
+    {
+      name: 'web-output-directories',
+      enforce: 'post',
+      config() {
+        const output = mode === 'local-preview' ? 'dist-local-preview' : 'dist';
+        return {
+          build: { outDir: `${output}/client` },
+          environments: {
+            client: { build: { outDir: `${output}/client` } },
+            ssr: { build: { outDir: `${output}/server` } },
+          },
+        };
+      },
+    },
+  ],
   lint: {
     jsPlugins: ['eslint-plugin-solid'],
     settings: { solid: { version: 2 } },
@@ -158,7 +195,7 @@ export default defineConfig(({ mode, command }) => ({
         test: {
           name: 'unit',
           environment: 'node',
-          include: ['src/**/*.test.{ts,mjs}', 'tests/**/*.test.mjs'],
+          include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
         },
       },
       {
@@ -171,14 +208,24 @@ export default defineConfig(({ mode, command }) => ({
       },
     ],
   },
-  server: { proxy: { '/usb-proxy': { target: 'http://127.0.0.1:5202', ws: true } }, host: '127.0.0.1', fs: { strict: true, allow: [resolve('../..')] } },
-  preview: { proxy: { '/usb-proxy': { target: 'http://127.0.0.1:5202', ws: true } }, host: '127.0.0.1', allowedHosts: ['cozycat.tail2b5ca.ts.net'] },
-  build: {
-    target: 'es2022',
-    outDir: mode === 'local-preview' ? 'dist-local-preview' : 'dist',
-    rolldownOptions: {
-      input: { main: resolve('index.html'), devTools: resolve('dev-tools/index.html'), bug: resolve('bug/index.html') },
+  server: {
+    watch: {
+      ignored: [
+        '**/build/**',
+        '**/dist/**',
+        '**/dist-local-preview/**',
+        '**/browser-bug-reports/**',
+      ],
     },
+    proxy: { '/usb-proxy': { target: 'http://127.0.0.1:5202', ws: true } },
+    host: '127.0.0.1',
+    fs: { strict: true, allow: [resolve('../..')] },
   },
+  preview: {
+    proxy: { '/usb-proxy': { target: 'http://127.0.0.1:5202', ws: true } },
+    host: '127.0.0.1',
+    allowedHosts: ['.ts.net'],
+  },
+  build: { target: 'es2022' },
   worker: { format: 'es' },
 }));

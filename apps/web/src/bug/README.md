@@ -63,7 +63,7 @@ intercepted and its exact TAR digest is checked. No outgoing write is allowed
 before the explicit upload click; no real issue is submitted. Set `FUJIMOD_BROWSER=webkit` for the Safari engine.
 
 ```sh
-FUJIMOD_WEB_URL=https://your-host.ts.net/ node src/bug/browser.mjs PATH_TO_GUIDE
+FUJIMOD_WEB_URL=https://your-host.ts.net/ node src/bug/browser.ts PATH_TO_GUIDE
 ```
 
 Screenshots and results are written to ignored `apps/web/build/bug-report/`.

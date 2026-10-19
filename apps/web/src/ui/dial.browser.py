@@ -12,43 +12,7 @@ from playwright.async_api import async_playwright
 
 FIXTURE = '''<!doctype html><link rel="stylesheet" href="/src/style.css">
 <div id="controls" style="width:240px;padding:20px"></div>
-<script type="module">
-import { InputPanel } from '/src/ui/controls.ts';
-import panelData from '/devices/x70/panel.json';
-window.requests = [];
-window.clicks = 0; window.clickTimbres = []; window.vibrations = []; window.haptics = false;
-Object.defineProperty(navigator, 'vibrate', {configurable:true, value: duration => {
-  window.vibrations.push(duration); return window.haptics;
-}});
-const createBufferSource = AudioContext.prototype.createBufferSource;
-const buffers = new Map();
-AudioContext.prototype.createBufferSource = function (...args) {
-  const source = createBufferSource.apply(this, args), start = source.start.bind(source);
-  source.start = (...args) => {
-    if (!buffers.has(source.buffer)) buffers.set(source.buffer, buffers.size);
-    window.clicks++; window.clickTimbres.push(buffers.get(source.buffer)); start(...args);
-  };
-  return source;
-};
-const viewer = new Proxy({
-  configureRotary(_inputs, _step, sounds) { window.modelSounds = sounds; },
-}, {get: (target, key) => target[key] ?? (() => {})});
-window.panel = new InputPanel(document.querySelector('#controls'), viewer,
-  error => { throw error; }, async () => {});
-panel.render([
-  {id:'aperture', label:'Aperture', kind:'ring', supported:true,
-    positions:['2.8','4','5.6','8','11','16'].map(id => ({id, label:id})), initial:'5.6'},
-  {id:'shutter_speed', label:'Speed', kind:'dial', supported:true,
-    positions:['30','60','125','250','500','1000'].map(id => ({id, label:id})), initial:'125'},
-  {id:'command', label:'Command', kind:'dial', supported:true, relative:true},
-], {setPosition: async (id, value) => requests.push({id,value})}, {
-  detentSounds:panelData.detentSounds,
-  layout:[{kind:'control',id:'aperture',variant:'dial'},
-    {kind:'control',id:'shutter_speed',variant:'dial'},
-    {kind:'control',id:'command',variant:'ticks'}], combos:[]
-});
-window.fixtureReady = true;
-</script>'''
+<script type="module" src="/src/ui/dial.fixture.tsx"></script>'''
 
 
 async def paint(page):
@@ -87,7 +51,7 @@ async def check(browser_type, url, output):
     browser = await browser_type.launch()
     page = await browser.new_page(viewport=dict(width=480, height=400), has_touch=True)
     errors = []
-    page.on('pageerror', lambda error: errors.append(str(error)))
+    page.on('pageerror', lambda error: (errors.append(str(error)), print(str(error), flush=True)))
     await page.route('**/dial-test.html', lambda route: route.fulfill(body=FIXTURE, content_type='text/html'))
     await page.goto(url.rstrip('/') + '/dial-test.html')
     await page.wait_for_function('window.fixtureReady')
@@ -174,7 +138,7 @@ async def check(browser_type, url, output):
     assert results['aperture']['timbre'] != results['shutter_speed']['timbre']
     assert await page.evaluate('modelSounds.aperture !== modelSounds.shutter_speed')
     # Relative tick strips retain their position across gestures and snap too.
-    ticks = page.locator('.dial[data-id="command"]')
+    ticks = page.locator('.dial[data-id="control_ring"]')
     box = await ticks.bounding_box()
     x, y = box['x']+box['width']/2, box['y']+box['height']/2
     for end in [16,32]:

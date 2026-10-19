@@ -1,7 +1,7 @@
 import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
 import { expect, test, vi } from 'vite-plus/test';
-import { DevTools } from './Page';
+import DevTools from './Page';
 import { Progress, type CameraBackend } from './camera';
 import type { Callbacks } from '../../../../crates/usb-proxy/web/peer.js';
 vi.mock('./dev-share', () => ({ startDevShare: () => () => {} }));

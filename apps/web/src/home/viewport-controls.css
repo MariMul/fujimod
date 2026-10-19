@@ -1,0 +1,191 @@
+.viewport-status {
+  position: absolute;
+  top: 0;
+  inset-inline: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 48px;
+  padding: 0 18px;
+  border-bottom: 1px solid rgb(255 255 255 / 6%);
+  background: rgb(12 14 16 / 80%);
+  color: #dedee0;
+  font-size: 12px;
+  pointer-events: none;
+}
+.viewport-tools {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  padding: 6px;
+  border: 1px solid #414349;
+  border-radius: 14px;
+  background: rgb(18 20 23 / 96%);
+  box-shadow:
+    0 8px 28px rgb(0 0 0 / 28%),
+    inset 0 1px rgb(255 255 255 / 4%);
+  color: #d3d3d7;
+}
+.viewport-tools-idle {
+  left: auto;
+  right: 16px;
+  transform: none;
+  bottom: 16px;
+}
+.viewport-tools button,
+.viewport-tools summary {
+  font:
+    500 11px/1.1 system-ui,
+    sans-serif;
+  color: inherit;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  min-height: 44px;
+}
+.viewport-tools button:hover:not(:disabled),
+.viewport-tools summary:hover,
+.viewport-settings[open] summary {
+  background: #2b2d31;
+  color: #fff;
+}
+.viewport-tools :is(button, summary):focus-visible {
+  outline: 2px solid #e8e8ed;
+  outline-offset: 3px;
+}
+.viewport-tools button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.viewport-tool-group {
+  display: flex;
+  gap: 2px;
+}
+.viewport-tool-group + .viewport-tool-group {
+  border-left: 1px solid #3a3b40;
+  padding-left: 8px;
+}
+.viewport-tool-group button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 52px;
+  padding: 5px 9px;
+}
+.viewport-tools button.selected {
+  color: #17181b;
+  background: #d1d1d5;
+  border-color: #e1e1e5;
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 50%),
+    0 1px 3px rgb(0 0 0 / 25%);
+}
+.viewport-tools button.selected:hover {
+  background: #e1e1e5;
+  color: #17181b;
+}
+.viewport-settings {
+  position: relative;
+  flex: none;
+}
+.viewport-settings summary {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  list-style: none;
+}
+.viewport-settings summary::-webkit-details-marker {
+  display: none;
+}
+.viewport-settings-panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 18px);
+  width: 258px;
+  max-width: calc(100vw - 48px);
+  border: 1px solid #414349;
+  border-radius: 14px;
+  padding: 14px;
+  background: #17191dfc;
+  box-shadow: 0 16px 48px rgb(0 0 0 / 50%);
+}
+.viewport-setting {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 14px;
+}
+.viewport-setting + .viewport-setting {
+  padding-top: 12px;
+  border-top: 1px solid #33353a;
+}
+.viewport-setting-label {
+  color: #b5b6bc;
+  font-size: 11px;
+}
+.viewport-setting-options {
+  display: flex;
+  gap: 2px;
+  border: 1px solid #3a3c42;
+  border-radius: 9px;
+  padding: 2px;
+  background: #101215;
+}
+.viewport-setting-options button {
+  min-height: 34px;
+  flex: 1;
+}
+.viewport-menu-actions {
+  display: grid;
+  gap: 4px;
+}
+.viewport-setting + .viewport-menu-actions {
+  border-top: 1px solid #33353a;
+  padding-top: 10px;
+}
+.viewport-menu-actions button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 8px;
+}
+.viewport-menu-actions button .i {
+  flex: none;
+}
+@media (max-width: 520px) {
+  .viewport-tools {
+    gap: 4px;
+    padding: 5px;
+    bottom: 12px;
+  }
+  .viewport-tool-group + .viewport-tool-group {
+    padding-left: 4px;
+  }
+  .viewport-tool-group button {
+    min-width: 38px;
+    padding: 5px;
+    font-size: 10px;
+  }
+  .viewport-settings summary {
+    width: 36px;
+  }
+  .viewport-status {
+    padding-inline: 12px;
+  }
+}
+@media (max-width: 350px) {
+  .viewport-tool-group button {
+    min-width: 33px;
+    padding-inline: 3px;
+  }
+}

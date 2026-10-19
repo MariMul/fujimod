@@ -1,5 +1,5 @@
 import { createEffect, createRoot, createSignal } from 'solid-js';
-import type { ShareStatus } from '../../../../crates/usb-proxy/web/peer.js';
+import type { ShareStatus } from '../../../../crates/usb-proxy/web/peer.ts';
 import { CameraTarget } from './camera';
 import { ConnectionState, type DevToolsController } from './controller';
 import { Level } from './log';
@@ -113,6 +113,11 @@ export function createShareSession(tools: DevToolsController, environment = brow
     const [status, setStatus] = createSignal<ShareStatus>();
     const [problem, setProblem] = createSignal<Problem>();
     const [countdown, setCountdown] = createSignal<Countdown>();
+    /** What remote tools are doing, by controller: an activity title and a progress bar. */
+    const [activities, setActivities] = createSignal<ReadonlyMap<string, string>>(new Map());
+    const [progresses, setProgresses] = createSignal<
+      ReadonlyMap<string, { label: string; done: number; total: number }>
+    >(new Map());
     const ownerCountdown = createOwnerCountdown(setCountdown);
     let countdownController: string | undefined;
     const [registration, setRegistration] = createSignal<Registration>();
@@ -185,6 +190,20 @@ export function createShareSession(tools: DevToolsController, environment = brow
           },
           traffic: (event) => tools.shareTraffic(event),
           toolStatus: (_id, message) => tools.connectionMessage(message, Level.Info),
+          activity: (id, title) =>
+            setActivities((map) => {
+              const next = new Map(map);
+              if (title) next.set(id, title);
+              else next.delete(id);
+              return next;
+            }),
+          progress: (id, value) =>
+            setProgresses((map) => {
+              const next = new Map(map);
+              if (value) next.set(id, value);
+              else next.delete(id);
+              return next;
+            }),
           countdown: async (id, message) => {
             tools.connectionMessage(message, Level.Info);
             countdownController = id;
@@ -329,6 +348,9 @@ export function createShareSession(tools: DevToolsController, environment = brow
       status,
       problem,
       countdown,
+      /** The latest activity title and progress bar of any remote tool. */
+      activity: () => [...activities().values()].at(-1),
+      progress: () => [...progresses().values()].at(-1),
       registration,
       sharing: () => url() !== '',
       /** Whether a share exists now, for operation guards (not batched). */

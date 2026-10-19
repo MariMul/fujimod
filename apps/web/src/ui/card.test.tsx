@@ -1,0 +1,202 @@
+import { render } from '@solidjs/web';
+import { createSignal, flush } from 'solid-js';
+import { afterEach, expect, test, vi } from 'vite-plus/test';
+import { CardBrowser } from './card';
+import type { Engine, CardState } from '../engine/api';
+let dispose: (() => void) | undefined;
+afterEach(() => {
+  dispose?.();
+  document.body.replaceChildren();
+});
+const state: CardState = {
+  supported: true,
+  present: true,
+  busy: false,
+  revision: 1,
+  capacity_bytes: 1024 ** 3,
+};
+test('card observations follow engine replacement, busy/insertion state and fresh revisions', async () => {
+  let publish!: (state: CardState) => void;
+  const stop = vi.fn(),
+    cardTree = vi.fn(async () => ({
+      revision: 1,
+      entries: [
+        {
+          kind: 'directory',
+          name: 'DCIM',
+          path: '/DCIM',
+          bytes: 0,
+          children: [{ kind: 'file', name: 'photo.JPG', path: '/DCIM/photo.JPG', bytes: 2048 }],
+        },
+      ],
+    }));
+  const engine = {
+    cardChanges: (listener: typeof publish) => {
+      publish = listener;
+      return stop;
+    },
+    cardTree,
+  } as unknown as Engine;
+  const [active, setActive] = createSignal<Engine>();
+  const present = vi.fn(async () => {}),
+    format = vi.fn(async () => {});
+  dispose = render(
+    () => <CardBrowser engine={active()} present={present} format={format} />,
+    document.body,
+  );
+  flush();
+  setActive(engine);
+  flush();
+  publish(state);
+  await Promise.resolve();
+  flush();
+  expect(document.querySelector('#card-capacity')?.textContent).toBe('FAT32 · 1 GB');
+  expect(document.querySelector('#card-files')?.textContent).toContain('photo.JPG');
+  const folder = document.querySelector('.folder button') as HTMLButtonElement;
+  folder.click();
+  flush();
+  expect(folder.getAttribute('aria-expanded')).toBe('false');
+  folder.click();
+  flush();
+  expect(folder.getAttribute('aria-expanded')).toBe('true');
+  publish({ ...state, busy: true });
+  flush();
+  expect(
+    (document.querySelector('[data-card-present="false"]') as HTMLButtonElement).disabled,
+  ).toBe(true);
+  publish({ ...state, busy: false });
+  flush();
+  for (const value of [false, true]) {
+    (document.querySelector(`[data-card-present="${value}"]`) as HTMLButtonElement).click();
+    expect(present).toHaveBeenLastCalledWith(value);
+    publish({ ...state, present: value });
+    flush();
+    expect(
+      document.querySelector(`[data-card-present="${value}"]`)?.getAttribute('aria-pressed'),
+    ).toBe('true');
+  }
+  setActive(undefined);
+  flush();
+  expect(stop).toHaveBeenCalledOnce();
+  expect(document.querySelector('#card-files')?.textContent).toBe('');
+  expect((document.querySelector('#card-format') as HTMLButtonElement).disabled).toBe(true);
+});
+test('late reads cannot repopulate an ejected card', async () => {
+  let publish!: (state: CardState) => void, finish!: (value: unknown) => void;
+  const engine = {
+    cardChanges: (listener: typeof publish) => {
+      publish = listener;
+      return () => {};
+    },
+    cardTree: () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  } as unknown as Engine;
+  dispose = render(
+    () => (
+      <CardBrowser
+        engine={engine}
+        present={() => Promise.resolve()}
+        format={() => Promise.resolve()}
+      />
+    ),
+    document.body,
+  );
+  flush();
+  publish(state);
+  publish({ ...state, present: false });
+  finish({ revision: 1, entries: [{ kind: 'file', path: '/stale', name: 'stale', bytes: 1 }] });
+  await Promise.resolve();
+  flush();
+  expect(document.querySelector('#card-files')?.textContent).toBe('');
+});
+
+test('fresh SD listings preserve unchanged rows and collapsed folders across revisions', async () => {
+  let publish!: (state: CardState) => void;
+  const engine = {
+    cardChanges: (listener: typeof publish) => {
+      publish = listener;
+      return () => {};
+    },
+    cardTree: async (revision: number) => ({
+      revision,
+      entries: [
+        {
+          kind: 'directory',
+          name: 'DCIM',
+          path: '/DCIM',
+          bytes: 0,
+          children: (revision === 1
+            ? ['a.JPG', 'b.JPG', 'c.JPG']
+            : ['a.JPG', 'b.JPG', 'c.JPG', 'd.JPG']
+          ).map((name) => ({ kind: 'file', name, path: `/DCIM/${name}`, bytes: 1024 })),
+        },
+      ],
+    }),
+  } as unknown as Engine;
+  dispose = render(
+    () => (
+      <CardBrowser
+        engine={engine}
+        present={() => Promise.resolve()}
+        format={() => Promise.resolve()}
+      />
+    ),
+    document.body,
+  );
+  flush();
+  publish(state);
+  await Promise.resolve();
+  flush();
+  const folder = document.querySelector<HTMLButtonElement>('.folder button')!;
+  const photo = document.querySelector('button[aria-label="Download a.JPG"]');
+  folder.click();
+  flush();
+  publish({ ...state, revision: 2 });
+  await Promise.resolve();
+  flush();
+  expect(document.querySelector('.folder button')).toBe(folder);
+  expect(folder.getAttribute('aria-expanded')).toBe('false');
+  expect(document.querySelector('button[aria-label="Download a.JPG"]')).toBe(photo);
+  expect(document.querySelector('#card-files')?.textContent).toContain('d.JPG');
+});
+
+test('repeated observations of the same revision retain an in-flight listing', async () => {
+  let publish!: (state: CardState) => void, finish!: (value: unknown) => void;
+  const listing = vi.fn(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const engine = {
+    cardChanges: (listener: typeof publish) => {
+      publish = listener;
+      return () => {};
+    },
+    cardTree: listing,
+  } as unknown as Engine;
+  dispose = render(
+    () => (
+      <CardBrowser
+        engine={engine}
+        present={() => Promise.resolve()}
+        format={() => Promise.resolve()}
+      />
+    ),
+    document.body,
+  );
+  flush();
+  publish(state);
+  publish({ ...state });
+  publish({ ...state });
+  expect(listing).toHaveBeenCalledOnce();
+  finish({
+    revision: 1,
+    entries: [{ kind: 'file', name: 'photo.JPG', path: '/photo.JPG', bytes: 1 }],
+  });
+  await Promise.resolve();
+  flush();
+  expect(document.querySelector('#card-files')?.textContent).toContain('photo.JPG');
+});

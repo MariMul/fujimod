@@ -1,4 +1,4 @@
-"""Executed in real Pyodide by pyodide.mjs; USB is replaced before import."""
+"""Executed in real Pyodide by pyodide.ts; USB is replaced before import."""
 
 import asyncio
 from fujimod import usb

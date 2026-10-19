@@ -6,6 +6,7 @@ import { remoteControlUrl, useShareSheet, sharingConfigured } from './sharing';
 import { createShareSession } from './share-session';
 import { pageState } from './page-state';
 import { ProblemAlert, RemoteUseStrip, SharingChip } from './SharingStatus';
+import { ToolActivity } from './ToolActivity';
 import './sharing.css';
 import { scenarios } from './scenarios';
 import { LocalReports } from '../ui/local-reports';
@@ -81,7 +82,11 @@ function LogRow(props: { entry: LogEntry }) {
     </div>
   );
 }
-export function DevTools(props: { backend?: CameraBackend; supported?: boolean; connectOnMount?: boolean }) {
+export default function DevTools(props: {
+  backend?: CameraBackend;
+  supported?: boolean;
+  connectOnMount?: boolean;
+}) {
   // Tests pass their own backend and get their own instances; the page keeps one
   // camera connection and share for its lifetime, across component hot swaps.
   const owned = untrack(() => props.backend) !== undefined;
@@ -90,7 +95,8 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
     page?.tools ??
     createDevTools(
       untrack(() => props.backend) ?? new CameraSources(),
-      untrack(() => props.supported) ?? (isSecureContext && 'usb' in navigator),
+      untrack(() => props.supported) ??
+        (typeof window !== 'undefined' && isSecureContext && 'usb' in navigator),
       (error) => reports.crash(error),
     );
   const share = page?.share ?? createShareSession(tools);
@@ -108,11 +114,7 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
     new Set([Layer.Console, Layer.App80, Layer.Ff80]),
   );
   const [activeLevels, setActiveLevels] = createSignal<ReadonlySet<Level>>(new Set(levels));
-  const [target, setTarget] = createSignal(
-    new URLSearchParams(location.search).get('target') === CameraTarget.Emulator
-      ? CameraTarget.Emulator
-      : CameraTarget.Usb,
-  );
+  const [target, setTarget] = createSignal(CameraTarget.Usb);
   const sharedUrl = share.url;
   const [sharingBusy, setSharingBusy] = createSignal(false);
   const [toast, setToast] = createSignal('');
@@ -178,6 +180,8 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
       tools.consoleState() === ConsoleState.Idle,
   );
   onSettled(() => {
+    if (new URLSearchParams(location.search).get('target') === CameraTarget.Emulator)
+      setTarget(CameraTarget.Emulator);
     const unlisten = reports.listen();
     let disposed = false;
     let stopDevShare: (() => void) | undefined;
@@ -191,7 +195,10 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
     if (page?.started) return () => cleanup();
     if (page) page.started = true;
     void tools.start().then(async () => {
-      if (props.connectOnMount) { await tools.connect(CameraTarget.Usb); return; }
+      if (props.connectOnMount) {
+        await tools.connect(CameraTarget.Usb);
+        return;
+      }
       try {
         if (remoteControlUrl(location.href)) {
           setTarget(CameraTarget.Remote);
@@ -337,8 +344,7 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
           </select>
           <span class="dt-status" role="status">
             <i class={tools.connection() === ConnectionState.Connected ? 'online' : ''} />
-            {tools.connection() === ConnectionState.Unsupported &&
-            target() !== CameraTarget.Usb
+            {tools.connection() === ConnectionState.Unsupported && target() !== CameraTarget.Usb
               ? 'Disconnected'
               : tools.connection() === ConnectionState.Choosing &&
                   target() === CameraTarget.Emulator
@@ -348,8 +354,7 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
           <Show
             when={
               tools.connection() === ConnectionState.Disconnected ||
-              (tools.connection() === ConnectionState.Unsupported &&
-                target() !== CameraTarget.Usb)
+              (tools.connection() === ConnectionState.Unsupported && target() !== CameraTarget.Usb)
             }
             fallback={
               <Show
@@ -561,6 +566,7 @@ export function DevTools(props: { backend?: CameraBackend; supported?: boolean; 
               </div>
             </Show>
           </div>
+          <ToolActivity session={share} />
           <div class="dt-log-footer">
             <span>
               {entries().length.toLocaleString()} / {tools.entries().length.toLocaleString()}{' '}

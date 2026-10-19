@@ -14,6 +14,8 @@ export interface Pyodide {
   loadPackage(packages: string[]): Promise<void>;
   unpackArchive(data: ArrayBuffer, format: string, options: { extractDir: string }): void;
   FS: {
+    readFile(path: string): Uint8Array<ArrayBuffer>;
+    unlink(path: string): void;
     mkdirTree(path: string): void;
     writeFile(path: string, data: Uint8Array, options: { canOwn: boolean }): void;
   };
