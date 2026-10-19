@@ -17,9 +17,17 @@ scenes.forEach(([name, json], i) => {
   const text = JSON.stringify(json);
   writeFileSync(resolve(out, `${name}.json`), text);
   if (preview) {
+    // the preview player loads images as files next to the scene, not embedded data
     const dir = resolve(preview, `public/projects/fujimod-setup/scene-${i + 1}`);
     mkdirSync(dir, { recursive: true });
-    writeFileSync(resolve(dir, 'lottie.json'), JSON.stringify(json, null, 1));
+    const copy = JSON.parse(text) as { assets?: { id: string; p: string; u: string; e: number }[] };
+    for (const asset of copy.assets ?? []) {
+      const m = /^data:image\/png;base64,(.*)$/.exec(asset.p);
+      if (!m) continue;
+      writeFileSync(resolve(dir, `${asset.id}.png`), Buffer.from(m[1], 'base64'));
+      Object.assign(asset, { p: `${asset.id}.png`, u: '', e: 0 });
+    }
+    writeFileSync(resolve(dir, 'lottie.json'), JSON.stringify(copy));
   }
   console.log(`${name}: ${json.layers.length} layers, ${json.op} frames, ${(text.length / 1024).toFixed(1)} KB`);
 });
