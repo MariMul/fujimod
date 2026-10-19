@@ -4,6 +4,7 @@
 import { For, Show, createSignal, onCleanup, untrack } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import featureIcons from '../ui/assets/feature-icons.svg?url';
+import { FeatureTile } from './FeatureTile';
 import './features.css';
 
 type Card = {
@@ -382,27 +383,6 @@ function CardVideo(props: { media: Media; choice?: string }) {
   );
 }
 
-/** A tile's preview: plays inline wherever the tile is visible, no hover needed. */
-function TileVideo(props: { card: string }) {
-  const media = () => CARDS[props.card].media!;
-  const [failed, setFailed] = createSignal(false);
-  return (
-    <Show when={!failed()}>
-      <video
-        class="catalog-tile-video"
-        src={MEDIA + media().video}
-        poster={MEDIA + media().still}
-        muted
-        autoplay
-        loop
-        playsinline
-        preload="metadata"
-        onError={() => setFailed(true)}
-      />
-    </Show>
-  );
-}
-
 function CardBody(props: { target: Target }) {
   const card = () => CARDS[props.target.card];
   const choice = () => props.target.choice;
@@ -496,8 +476,7 @@ export function FeatureCatalog() {
       <h2 id="catalog-heading">Features</h2>
       <h3>Making pictures</h3>
       <div class="catalog-grid">
-        <article class="catalog-tile">
-          <TileVideo card="film_simulation" />
+        <FeatureTile media={CARDS['film_simulation'].media}>
           <h4>
             <Icon name="film" />
             <Ref card="film_simulation">FILM SIMULATION</Ref>
@@ -530,9 +509,8 @@ export function FeatureCatalog() {
             <span class="catalog-chip">Neutral</span>
           </div>
           <div class="catalog-where">SHOOTING MENU</div>
-        </article>
-        <article class="catalog-tile">
-          <TileVideo card="photometry" />
+        </FeatureTile>
+        <FeatureTile media={CARDS['photometry'].media}>
           <h4>
             <Icon name="highlight" />
             <Ref card="photometry">PHOTOMETRY</Ref>
@@ -547,9 +525,8 @@ export function FeatureCatalog() {
             </Ref>
           </div>
           <div class="catalog-where">SHOOTING MENU</div>
-        </article>
-        <article class="catalog-tile">
-          <TileVideo card="edit_save_custom_setting" />
+        </FeatureTile>
+        <FeatureTile media={CARDS['edit_save_custom_setting'].media}>
           <h4>
             <Icon name="recipes" />
             <span>Unlimited Recipes</span>
@@ -564,9 +541,8 @@ export function FeatureCatalog() {
             <span class="catalog-chip action">CHOOSE FROM SD CARD</span>
           </div>
           <div class="catalog-where">SHOOTING MENU › EDIT/SAVE CUSTOM SETTING</div>
-        </article>
-        <article class="catalog-tile">
-          <TileVideo card="shape_aspect_item" />
+        </FeatureTile>
+        <FeatureTile media={CARDS['shape_aspect_item'].media}>
           <h4>
             <Icon name="aspect" />
             <Ref card="shape_aspect_item">ASPECT RATIO</Ref>
@@ -627,9 +603,8 @@ export function FeatureCatalog() {
             </div>
           </div>
           <div class="catalog-where">{'SHOOTING MENU › SHAPE & ASPECT'}</div>
-        </article>
-        <article class="catalog-tile">
-          <TileVideo card="c" />
+        </FeatureTile>
+        <FeatureTile media={CARDS['c'].media}>
           <h4>
             <Icon name="golden-ratio" />
             <Ref card="c">FRAMING GUIDELINE</Ref>
@@ -644,9 +619,8 @@ export function FeatureCatalog() {
             </Ref>
           </div>
           <div class="catalog-where">SET-UP › SCREEN SET-UP</div>
-        </article>
-        <article class="catalog-tile">
-          <TileVideo card="shape_desqueeze_item" />
+        </FeatureTile>
+        <FeatureTile media={CARDS['shape_desqueeze_item'].media}>
           <h4>
             <Icon name="anamorphic" />
             <span>Anamorphic Lenses</span>
@@ -678,21 +652,19 @@ export function FeatureCatalog() {
             </div>
           </div>
           <div class="catalog-where">{'SHOOTING MENU › SHAPE & ASPECT'}</div>
-        </article>
-        <article class="catalog-tile">
-          <TileVideo card="snap_menu_item" />
+        </FeatureTile>
+        <FeatureTile media={CARDS['snap_menu_item'].media}>
           <h4>
             <Icon name="snap" />
             <Ref card="snap_menu_item">MF SNAP FOCUS</Ref>
           </h4>
           <p>In manual focus mode, press AE/AF-L to focus at a preset distance.</p>
           <div class="catalog-where">SHOOTING MENU</div>
-        </article>
+        </FeatureTile>
       </div>
       <h3>Handling and display</h3>
       <div class="catalog-grid">
-        <article class="catalog-tile">
-          <TileVideo card="bindings_row_exposure_dial" />
+        <FeatureTile media={CARDS['bindings_row_exposure_dial'].media}>
           <h4>
             <Icon name="controls" />
             <span>Unlocked Controls</span>
@@ -701,26 +673,24 @@ export function FeatureCatalog() {
             Assign ISO, white balance, film simulation, ASPECT RATIO, SELECT RECIPE or other
             settings to the exposure compensation dial, command control or control ring.
           </p>
-        </article>
-        <article class="catalog-tile">
-          <TileVideo card="hdmi_rec_behavior_item" />
+        </FeatureTile>
+        <FeatureTile media={CARDS['hdmi_rec_behavior_item'].media}>
           <h4>
             <Icon name="hdmi" />
             <Ref card="hdmi_rec_behavior_item">HDMI OUTPUT</Ref>
           </h4>
           <p>Display the shooting view on an HDMI device.</p>
           <div class="catalog-where">SET-UP</div>
-        </article>
-        <article class="catalog-tile">
-          <TileVideo card="menu_theme_item" />
+        </FeatureTile>
+        <FeatureTile media={CARDS['menu_theme_item'].media}>
           <h4>
             <Icon name="theme" />
             <Ref card="menu_theme_item">MENU THEME</Ref>
           </h4>
           <p>Choose the appearance of the menus.</p>
           <div class="catalog-where">SET-UP</div>
-        </article>
-        <article class="catalog-tile">
+        </FeatureTile>
+        <FeatureTile>
           <h4>
             <Icon name="autofocus" />
             <span>Autofocus</span>
@@ -729,12 +699,11 @@ export function FeatureCatalog() {
             In AF-S mode, when phase detection fails, the camera estimates focus and measures again
             before using contrast detection.
           </p>
-        </article>
+        </FeatureTile>
       </div>
       <h3>When something goes wrong</h3>
       <div class="catalog-grid">
-        <article class="catalog-tile">
-          <TileVideo card="bug_report_shortcut" />
+        <FeatureTile media={CARDS['bug_report_shortcut'].media}>
           <h4>
             <Icon name="bug" />
             <span>Bug Reports</span>
@@ -744,7 +713,7 @@ export function FeatureCatalog() {
             card and display a QR code.
           </p>
           <div class="catalog-where">SET-UP › FUJIMOD DEVTOOLS › BUG REPORT SHORTCUT</div>
-        </article>
+        </FeatureTile>
       </div>
       <div
         ref={(element) => {
