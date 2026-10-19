@@ -70,17 +70,38 @@ fn chunk(range: MemoryRange, offset: u32, maximum: u32) -> Option<MemoryRange> {
     )
 }
 
-/// Collect a range through the pull reader. Streaming users should keep the
-/// reader instead, so completed chunks stay in their own sink on interruption.
+/// Commands per batch for whole-range reads and writes: over a device share
+/// each batch is one network round trip (256 × 256 bytes = 64 KiB).
+const BATCH_COMMANDS: usize = 256;
+
+/// Collect a range, a batch of bounded commands at a time.
 pub async fn read_range(
     session: &mut Session,
     range: MemoryRange,
     limits: DebugMemoryLimits,
 ) -> Result<Vec<u8>> {
-    let mut reader = MemoryReader::new(session, range, limits);
-    let mut data = Vec::new();
-    while let Some(chunk) = reader.next_chunk().await? {
-        data.extend_from_slice(&chunk);
+    let budget = session.max_reply_bytes().get();
+    let maximum = limits
+        .read
+        .get()
+        .min(session.info().advertised_packet_bytes.get())
+        .min(budget.saturating_sub(36));
+    if maximum == 0 {
+        return Err(Error::LengthLimit { requested: 37, limit: budget });
+    }
+    let mut commands = Vec::new();
+    let mut offset = 0;
+    while let Some(part) = chunk(range, offset, maximum) {
+        commands.push(ReadMemory::new(part, limits)?);
+        offset += part.length().get();
+    }
+    let mut data = Vec::with_capacity(range.length().get() as usize);
+    let mut commands = commands.into_iter().peekable();
+    while commands.peek().is_some() {
+        let group: Vec<ReadMemory> = commands.by_ref().take(BATCH_COMMANDS).collect();
+        for part in session.read_memory_many(group).await? {
+            data.extend_from_slice(&part);
+        }
     }
     Ok(data)
 }
@@ -102,11 +123,15 @@ pub async fn write_range(
         .write
         .get()
         .min(session.info().advertised_packet_bytes.get()) as usize;
+    let mut commands = Vec::new();
     for (offset, part) in bytes.chunks(maximum).enumerate() {
         let at = address.0 + u32::try_from(offset * maximum).map_err(|_| Error::AddressOverflow)?;
-        session
-            .write_memory(WriteMemory::new(Address(at), part.to_vec(), limits)?)
-            .await?;
+        commands.push(WriteMemory::new(Address(at), part.to_vec(), limits)?);
+    }
+    let mut commands = commands.into_iter().peekable();
+    while commands.peek().is_some() {
+        let group: Vec<WriteMemory> = commands.by_ref().take(BATCH_COMMANDS).collect();
+        session.write_memory_many(group).await?;
     }
     Ok(())
 }

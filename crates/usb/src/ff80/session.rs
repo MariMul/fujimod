@@ -102,6 +102,75 @@ impl Session {
     pub async fn write_memory(&mut self, command: WriteMemory) -> Result<()> {
         self.core.write_memory(command).await
     }
+    /// Several reads; over a device share they travel as one round trip.
+    pub async fn read_memory_many(&mut self, commands: Vec<ReadMemory>) -> Result<Vec<Vec<u8>>> {
+        let mut framed = Vec::with_capacity(commands.len());
+        for command in &commands {
+            let size = command.range().length().get();
+            check_limit(size, self.core.info.advertised_packet_bytes.get())?;
+            framed.push((command.encode(), size.checked_add(36).ok_or(Error::InvalidLength)?));
+        }
+        let replies = self.many(framed).await?;
+        self.decode_many(commands.into_iter().zip(replies).map(|(c, r)| move || c.decode(r)))
+    }
+    /// Several writes; over a device share they travel as one round trip.
+    pub async fn write_memory_many(&mut self, commands: Vec<WriteMemory>) -> Result<()> {
+        let mut framed = Vec::with_capacity(commands.len());
+        for command in &commands {
+            check_limit(command.range().length().get(), self.core.info.advertised_packet_bytes.get())?;
+            framed.push((command.encode(), 36));
+        }
+        let replies = self.many(framed).await?;
+        self.decode_many(commands.into_iter().zip(replies).map(|(c, r)| move || c.decode(r)))?;
+        Ok(())
+    }
+    /// Raw replies for framed commands: one batch through a share, else one
+    /// command at a time. A failure leaves the session's completion unknown.
+    async fn many(&mut self, commands: Vec<(Vec<u8>, u32)>) -> Result<Vec<Vec<u8>>> {
+        if !matches!(self.core.io.inner_mut(), Backend::Proxy(_)) {
+            let mut replies = Vec::with_capacity(commands.len());
+            for (bytes, size) in commands {
+                replies.push(self.core.command(bytes, size, Ok).await?);
+            }
+            return Ok(replies);
+        }
+        let id = self.core.info.id;
+        let max_reply = self.core.max_reply_bytes;
+        let mut framed = Vec::with_capacity(commands.len());
+        for (bytes, size) in commands {
+            check_limit(size, max_reply)?;
+            let length = u32::try_from(bytes.len()).map_err(|_| Error::InvalidLength)?;
+            framed.push((
+                envelope(RequestKind::WriteCommand, length, id),
+                bytes,
+                envelope(RequestKind::ReadCommand, size, id),
+                size as usize,
+            ));
+        }
+        let sizes: Vec<usize> = framed.iter().map(|f| f.3).collect();
+        self.core.start()?;
+        let Backend::Proxy(io) = self.core.io.inner_mut() else { unreachable!() };
+        let replies = io.commands(framed).await?;
+        for (reply, size) in replies.iter().zip(&sizes) {
+            if reply.len() > *size {
+                return Err(ProtocolError::ReplyLength { expected: *size, actual: reply.len() }.into());
+            }
+        }
+        Ok(replies)
+    }
+    /// Decode replies in order; device status errors still leave a usable session.
+    fn decode_many<T>(&mut self, decoders: impl Iterator<Item = impl FnOnce() -> Result<T>>) -> Result<Vec<T>> {
+        let mut values = Vec::new();
+        for decode in decoders {
+            let result = decode();
+            if result.is_ok() || matches!(result, Err(Error::DeviceStatus { .. })) {
+                self.core.state = SessionState::Ready;
+            }
+            values.push(result?);
+        }
+        self.core.state = SessionState::Ready;
+        Ok(values)
+    }
     /// A neutral progress line in the share owner's log. No-op for local USB.
     pub async fn owner_status(&mut self, message: &str) -> Result<()> {
         match self.core.io.inner_mut() {
