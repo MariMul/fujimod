@@ -1,4 +1,4 @@
-import { createRoot } from 'solid-js';
+import { createRoot, runWithOwner } from 'solid-js';
 import { createDevTools, type DevToolsController } from './controller';
 import { createShareSession, type ShareSession } from './share-session';
 import { CameraSources } from './sources';
@@ -21,7 +21,9 @@ let state: PageState | undefined = pinned.__fujimodDevToolsPage ?? import.meta.h
  */
 export function pageState(): PageState {
   if (state) return state;
-  state = createRoot(() => {
+  // Detached from the rendering component: a child root would take a
+  // hydration id in the browser that the server (state kept) never takes.
+  state = runWithOwner(null, () => createRoot(() => {
     const created = { crash: () => {}, started: false } as unknown as PageState;
     created.tools = createDevTools(
       new CameraSources(),
@@ -30,7 +32,7 @@ export function pageState(): PageState {
     );
     created.share = createShareSession(created.tools);
     return created;
-  });
+  }));
   pinned.__fujimodDevToolsPage = state;
   if (
     typeof window !== 'undefined' &&
