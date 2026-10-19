@@ -140,7 +140,11 @@ const CARDS: Record<string, Card> = {
     manual: 'menu_shooting/film_simulation',
     changes:
       'Adds ETERNA, Neutral and approximations of four film simulations from newer cameras, and films saved on the memory card. Approximations are marked (approx.) in the camera.',
-    media: null,
+    media: {
+      video: 'e144c7f61367a8ac9ae8ec87.mp4',
+      still: '82a20c7ea43ac8224478d2e0.webp',
+      clips: {},
+    },
   },
   film_editor_item: {
     title: 'FILM EDITOR',
@@ -150,7 +154,11 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    media: null,
+    media: {
+      video: '2606e857d463afd72ae889b6.mp4',
+      still: 'f96885559d7ea08b8b14940c.webp',
+      clips: {},
+    },
   },
   photometry: {
     title: 'PHOTOMETRY',
@@ -465,6 +473,7 @@ export function FeatureCatalog() {
       <h3>Making pictures</h3>
       <div class="catalog-grid">
         <article class="catalog-tile">
+          <TileVideo card="film_simulation" />
           <h4>
             <Icon name="film" />
             <Ref card="film_simulation">FILM SIMULATION</Ref>
