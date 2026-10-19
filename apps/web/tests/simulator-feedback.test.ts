@@ -12,7 +12,7 @@ test('crashes require a ZIP upload; general feedback requires a ZIP upload', () 
   for (const event of ['feedback', 'crash'] as const) {
     const form = template(event);
     assert.match(form, /type: upload\n    id: simulator-report/);
-    assert.match(form, /accept: ".zip"/);
+    assert.match(form, /accept: (['"])\.zip\1/);
     assert.match(form, new RegExp(`required: true\\n      accept:`));
     assert(form.includes('Drag and drop the downloaded simulator report ZIP'));
     assert.match(form, /id: mod-build/);
