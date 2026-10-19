@@ -18,6 +18,7 @@ function localArtifacts(env: Record<string, string>): Plugin {
       throw Error('FUJIMOD_LOCAL_FIRMWARES must map firmware IDs to local DAT paths');
     const mounts = [
       ['/runtime/', env.FUJIMOD_RUNTIME],
+      ['/artifacts/docs/', env.FUJIMOD_MEDIA],
       ['/artifacts/', env.FUJIMOD_PATCHES],
       ['/local/firmware.dat', env.FUJIMOD_DAT],
       ...firmwares.map(([id, path]) => [`/local/firmware/${id}.dat`, path as string]),
@@ -126,6 +127,13 @@ export default defineConfig(({ mode, command }) => ({
     __FUJIMOD_BUILD_DAY__: JSON.stringify(new Date().toISOString().slice(0, 10)),
     __FUJIMOD_INITIAL_CATALOG__: readFileSync(
       existsSync('public/runtime/catalog.json')
+// Feature media rendered for the catalog: an opt-in local directory, else the staged site assets.
+function featureMedia(env: Record<string, string>) {
+  const path = env.FUJIMOD_MEDIA
+    ? resolve(env.FUJIMOD_MEDIA, 'media.json')
+    : 'public/artifacts/docs/media.json';
+  return existsSync(path) ? readFileSync(path, 'utf8') : 'null';
+}
         ? 'public/runtime/catalog.json'
         : 'public/catalog.json',
       'utf8',
@@ -138,6 +146,7 @@ export default defineConfig(({ mode, command }) => ({
     ),
     __FUJIMOD_SIGNAL_URL__: JSON.stringify(
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_SIGNAL_URL || '',
+    __FUJIMOD_FEATURE_MEDIA__: featureMedia(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
     ),
     __FUJIMOD_LOCAL_DAT__:
       (command === 'serve' || mode === 'local-preview') &&

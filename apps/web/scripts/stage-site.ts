@@ -1,15 +1,29 @@
 /** Stage generated website assets locally before their direct Cloudflare upload. */
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { validateCatalog, type Catalog } from '../src/catalog.ts';
 import { validateIndex, verifyPatch } from '../src/patch/catalog.ts';
+import { validateFeatureMedia, type FeatureMedia } from '../src/home/feature-media.ts';
 
 export interface SiteInputs {
   runtime: string;
   patches: string;
   media: string;
 }
+/** Files of media rendered for exactly the catalog text being deployed. */
+export function featureMediaFiles(media: FeatureMedia, featureSource: string) {
+  const catalog = /featureMedia\(\s*['"]([0-9a-f]{24})['"]\s*\)/.exec(featureSource)?.[1];
+  if (media.catalog !== catalog)
+    throw Error(`Feature media was rendered for catalog ${media.catalog}, not ${catalog}.`);
+  const cards = Object.keys(media.cards);
+  if (!cards.length) throw Error('Feature media is missing.');
+  for (const card of cards)
+    if (!featureSource.includes(`'${card}'`) && !featureSource.includes(`"${card}"`))
+      throw Error(`Unknown feature media card: ${card}`);
+  return new Set(cards.flatMap((card) => [media.cards[card].video, media.cards[card].still]));
+}
+
 export async function stageSite(inputs: SiteInputs, destination = 'public') {
   const catalog = validateCatalog(
     JSON.parse(await readFile(join(inputs.runtime, 'catalog.json'), 'utf8')) as Catalog,
@@ -118,21 +132,15 @@ export async function stageSite(inputs: SiteInputs, destination = 'public') {
       );
       await copy(join(inputs.patches, name), 'artifacts/' + name);
     }
-    for (const name of await readdir(inputs.media)) {
-      if (!/^[0-9a-f]{24}\.(mp4|webp)$/.test(name))
-        throw Error(`Unexpected feature media: ${name}`);
-      await copy(join(inputs.media, name), 'artifacts/docs/' + name);
-    }
-    const featureSource = await readFile(
-      new URL('../src/home/Features.tsx', import.meta.url),
-      'utf8',
+    const media = validateFeatureMedia(
+      JSON.parse(await readFile(join(inputs.media, 'media.json'), 'utf8')),
     );
-    const installedMedia = new Set(files.map((file) => file.path));
-    for (const match of featureSource.matchAll(/['"]([0-9a-f]{24}\.(?:mp4|webp))['"]/g))
-      if (!installedMedia.has('artifacts/docs/' + match[1]))
-        throw Error(`Missing feature media: ${match[1]}`);
-    if (!files.some((file) => file.path.startsWith('artifacts/docs/')))
-      throw Error('Feature media is missing.');
+    const names = featureMediaFiles(
+      media,
+      await readFile(new URL('../src/home/Features.tsx', import.meta.url), 'utf8'),
+    );
+    for (const name of names) await copy(join(inputs.media, name), 'artifacts/docs/' + name);
+    await copy(join(inputs.media, 'media.json'), 'artifacts/docs/media.json');
     await mkdir(target, { recursive: true });
     for (const directory of ['runtime', 'artifacts']) {
       await rm(join(target, directory), { recursive: true, force: true });
