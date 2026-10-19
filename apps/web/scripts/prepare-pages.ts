@@ -1,5 +1,6 @@
 /** Stage verified released artifacts for Vite. Source comes only from this repo. */
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { validateIndex, verifyPatch } from '../src/patch/catalog.ts';
 const repo = process.env.GITHUB_REPOSITORY || 'justjake/fujimod';
@@ -37,5 +38,22 @@ if (assets.some((asset) => asset.name === 'browser.json')) {
   for (const entry of catalog.firmwares) delete entry.emulate;
   await mkdir('public/runtime', { recursive: true });
   await writeFile('public/runtime/catalog.json', JSON.stringify(catalog));
+}
+// Optional features-catalog media: preview clips and stills, verified by hash.
+if (assets.some((asset) => asset.name === 'docs-media.json')) {
+  gh(['release', 'download', tag, '--repo', repo, '--pattern', 'docs-media.json', '--dir', dest]);
+  const media: { files: { path: string; asset: string; sha256: string }[] } = JSON.parse(
+    await readFile(`${dest}/docs-media.json`, 'utf8'),
+  );
+  await mkdir(`${dest}/docs`, { recursive: true });
+  for (const file of media.files) {
+    if (!/^[0-9a-f]{24}\.(mp4|webp)$/.test(file.path)) throw new Error(`Invalid media ${file.path}`);
+    gh(['release', 'download', tag, '--repo', repo, '--pattern', file.asset, '--dir', dest]);
+    const data = await readFile(`${dest}/${file.asset}`);
+    if (createHash('sha256').update(data).digest('hex') !== file.sha256)
+      throw new Error(`Media hash differs: ${file.path}`);
+    await writeFile(`${dest}/docs/${file.path}`, data);
+    await rm(`${dest}/${file.asset}`);
+  }
 }
 console.log(`Prepared ${tag}: ${index.firmwares.length} supported patch(es).`);

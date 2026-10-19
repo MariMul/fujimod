@@ -237,7 +237,7 @@ class Guide:
             self._recording = previous
 
     @contextmanager
-    def step(self, title, text='', *, hold=1.5):
+    def step(self, title, text='', *, hold=1.5, still=False):
         if self._inside_step:
             raise ValueError('Guide steps cannot nest')
         resolve = lambda reference: self.camera.menu_reference(reference)
@@ -265,6 +265,11 @@ class Guide:
                 number=number, title=title, text=text, screenshot=name,
                 screenshot_sha256=hashlib.sha256(png).hexdigest(),
                 video_start=start, video_end=self.video.seconds, hold=hold))
+            if still:
+                # The documentation card's still image (one per walkthrough).
+                if 'still' in self.report:
+                    raise ValueError('A walkthrough marks one still step')
+                self.report['still'] = number
             self.save()
         except BaseException as error:
             self._failures.append(error)
