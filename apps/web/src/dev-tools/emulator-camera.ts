@@ -1,3 +1,4 @@
+import type { InspectionReply } from './inspection';
 import { validateCatalog, type Catalog, type Firmware } from '../catalog';
 import type {
   CameraBackend,
@@ -67,6 +68,7 @@ export class EmulatorCamera implements CameraBackend {
       | Omit<Extract<EmulatorRequest, { call: EmulatorCall.Boot }>, 'id'>
       | Omit<Extract<EmulatorRequest, { call: EmulatorCall.Open }>, 'id'>
       | Omit<Extract<EmulatorRequest, { call: EmulatorCall.Submit }>, 'id'>
+      | Omit<Extract<EmulatorRequest, { call: EmulatorCall.Inspect }>, 'id'>
       | Omit<
           Extract<
             EmulatorRequest,
@@ -170,6 +172,8 @@ export class EmulatorCamera implements CameraBackend {
   async open(id: number): Promise<CameraLink> {
     await this.request({ call: EmulatorCall.Open, interface: id });
     return {
+      inspect: async (request) =>
+        (await this.request({ call: EmulatorCall.Inspect, request })) as InspectionReply,
       submit: async (data) => {
         await this.request({ call: EmulatorCall.Submit, data });
       },

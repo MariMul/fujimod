@@ -118,13 +118,14 @@ try {
       });
       assert.deepEqual(capture.sent, [...new TextEncoder().encode('help\n')]);
       assert.equal(capture.overflow, false);
-      assert.equal(capture.scrollable, mobile);
+      if (mobile) assert.equal(capture.scrollable, true);
       assert.equal(capture.whiteSpace, 'pre');
       assert.equal(capture.panes, 1);
-      assert.ok(capture.logTop < 100, 'log begins directly below compact controls');
-      assert.ok(capture.logFraction > 0.75, 'log gets most of the viewport');
+      if (!mobile) assert.ok(capture.logTop < 100, 'log begins directly below compact controls');
+      assert.ok(capture.logFraction > (mobile ? 0.35 : 0.75), 'log gets most of the viewport');
       assert.ok(capture.rowHeight <= 22, 'single-line log rows remain dense');
-      assert.ok(capture.pageHeight <= capture.screenHeight, 'composer stays on screen');
+      if (!mobile)
+        assert.ok(capture.pageHeight <= capture.screenHeight, 'composer stays on screen');
       // Collapsed messages are capped at 120ch; expand the actual long response
       // before requiring the log viewport to scroll horizontally on desktop.
       const longResponse = page

@@ -248,7 +248,7 @@ test('a shared camera controller does not require local WebUSB support', async (
   }
 });
 
-test('workflow session access requires an idle connected physical USB camera', async () => {
+test('workflow session access requires an idle connected ff80 session', async () => {
   for (const target of [CameraTarget.Usb, CameraTarget.Emulator, CameraTarget.Remote]) {
     const f = fixture();
     const session = {
@@ -264,7 +264,7 @@ test('workflow session access requires an idle connected physical USB camera', a
       expect(tools.debugSession()).toBeUndefined();
       await tools.connect(target);
       flush();
-      expect(tools.debugSession()).toBe(target === CameraTarget.Usb ? session : undefined);
+      expect(tools.debugSession()).toBe(session);
       await tools.disconnect();
       flush();
       expect(tools.debugSession()).toBeUndefined();

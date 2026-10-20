@@ -1,3 +1,4 @@
+import type { InspectorRead } from './inspection';
 import { RemoteTrafficLog } from './remote-traffic';
 import type { ShareTrafficEvent } from '../../../../crates/usb-proxy/web/share-traffic.ts';
 import { errorReportZip, type ReportSubmission } from '../engine/report';
@@ -43,6 +44,8 @@ export function createDevTools(
   const [consoleState, publishConsoleState] = createSignal(ConsoleState.Idle);
   // Application policy advances synchronously; Solid commits the displayed state
   // in a batch. Never use an uncommitted UI signal as an operation guard.
+  let inspecting = false;
+  const [inspectionBusy, setInspectionBusy] = createSignal(false);
   let state = ConnectionState.Loading;
   let attempt = 0;
   let commandState = ConsoleState.Idle;
@@ -232,7 +235,12 @@ export function createDevTools(
   }
   async function send(text: string, ending: LineEnding): Promise<boolean> {
     const current = link;
-    if (!current || state !== ConnectionState.Connected || commandState !== ConsoleState.Idle)
+    if (
+      !current ||
+      state !== ConnectionState.Connected ||
+      commandState !== ConsoleState.Idle ||
+      inspecting
+    )
       return false;
     if (!text.trim() || /[^\x20-\x7e]/.test(text)) {
       message('Enter one ASCII console command.', Level.Error);
@@ -304,10 +312,68 @@ export function createDevTools(
     connection,
     consoleState,
     camera,
+    inspectionBusy,
+    async readInspection<T>(action: (read: InspectorRead) => Promise<T>): Promise<T> {
+      const current = link;
+      if (
+        !current?.inspect ||
+        !current.usable() ||
+        state !== ConnectionState.Connected ||
+        commandState !== ConsoleState.Idle ||
+        inspecting
+      )
+        throw Error('No idle ff80 session can form inspection commands.');
+      inspecting = true;
+      setInspectionBusy(true);
+      try {
+        return await action(async (request) => {
+          if (link !== current || !current.usable())
+            throw Error('Camera disconnected during inspection.');
+          const label =
+            request.kind === 'identity'
+              ? `Identity · ${request.selector}`
+              : request.kind === 'memory'
+                ? `Memory · 0x${request.address.toString(16)} · ${request.length} bytes`
+                : request.kind === 'configuration'
+                  ? `Configuration · 0x${request.offset.toString(16)} · ${request.length} bytes`
+                  : 'Configuration geometry';
+          message(label);
+          const reply = await current.inspect!(request);
+          if (link !== current || !current.usable())
+            throw Error('Camera disconnected during inspection.');
+          if (
+            (request.kind === 'memory' || request.kind === 'configuration') &&
+            reply.data.length !== request.length
+          )
+            throw Error(
+              `Read length mismatch: expected ${request.length}, received ${reply.data.length}.`,
+            );
+          drain();
+          log([
+            {
+              layer: Layer.Connection,
+              level: Level.Info,
+              direction: Direction.In,
+              message: `${label}${reply.text === undefined ? '' : ` · ${reply.text}`}`,
+              data: reply.data,
+              detail: JSON.stringify({ ...reply, data: undefined }),
+            },
+          ]);
+          return reply;
+        });
+      } catch (error) {
+        fail(error);
+        throw error;
+      } finally {
+        inspecting = false;
+        setInspectionBusy(false);
+        drain();
+      }
+    },
     debugSession: () =>
       connection() === ConnectionState.Connected &&
       consoleState() === ConsoleState.Idle &&
-      connectedTarget === CameraTarget.Usb
+      !inspectionBusy()
         ? link?.debugSession
         : undefined,
     target: () => connectedTarget,
@@ -321,6 +387,7 @@ export function createDevTools(
       if (
         state !== ConnectionState.Connected ||
         commandState !== ConsoleState.Idle ||
+        inspecting ||
         !backend.exportUsb
       )
         throw Error('Camera is not available for sharing');

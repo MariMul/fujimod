@@ -11,7 +11,13 @@ import {
 import { CameraStore, type CameraRecord } from '../../cameras/store';
 import { CameraTarget } from '../camera';
 import { ConnectionState, type DevToolsController } from '../controller';
-import { procedureFor, procedures, unsupportedReason, type DebugModeProcedure } from './procedures';
+import {
+  procedureFor,
+  procedures,
+  serviceModeEntry,
+  unsupportedReason,
+  type DebugModeProcedure,
+} from './procedures';
 import './wizard.css';
 
 /** Firmware-selected workflows on the connected USB session. */
@@ -66,6 +72,7 @@ async function choices(): Promise<Choice[]> {
   );
 }
 export function DebugModeWizard(props: {
+  purpose?: 'service' | 'debug';
   tools: DevToolsController;
   operations?: DebugModeOperations;
   onClose: () => void;
@@ -106,7 +113,7 @@ export function DebugModeWizard(props: {
   }
   createEffect(
     () =>
-      step() === Step.Connect && props.operations
+      props.purpose !== 'service' && step() === Step.Connect && props.operations
         ? { operations: props.operations, firmwareId: procedure()?.firmwareId }
         : undefined,
     (request) => {
@@ -141,7 +148,13 @@ export function DebugModeWizard(props: {
         </button>
         <Show when={step() !== Step.Overview}>
           <ol class="dm-rail" aria-label="Steps">
-            <For each={rail}>
+            <For
+              each={
+                props.purpose === 'service'
+                  ? rail.filter(([id]) => id === Step.ServiceMode || id === Step.Connect)
+                  : rail
+              }
+            >
               {([id, label], index) => (
                 <li
                   class={{ done: step() > id, current: step() === id }}
@@ -159,28 +172,39 @@ export function DebugModeWizard(props: {
         <Match when={step() === Step.Overview}>
           <div class="dm-panel">
             <h1 id="dm-title" class="dm-title">
-              Enter debug mode
+              {props.purpose === 'service' ? 'Enter service mode' : 'Enter debug mode'}
             </h1>
-            <p class="dm-lead">
-              In debug mode your camera works normally, but its USB connection can also inspect and
-              control the camera’s software. Ordinary file transfer needs USB plugged in twice.
-            </p>
-            <ol class="dm-plan">
-              <li>
-                <span>01</span>Restart the camera into service mode.
-              </li>
-              <li>
-                <span>02</span>Connect it here and turn on the hidden Debug Mode setting.
-              </li>
-              <li>
-                <span>03</span>Remove the battery to restart normally.
-              </li>
-            </ol>
+            <Show
+              when={props.purpose !== 'service'}
+              fallback={
+                <p class="dm-lead">Service mode exposes the camera’s ff80 USB connection.</p>
+              }
+            >
+              <p class="dm-lead">
+                In debug mode your camera works normally, but its USB connection can also inspect
+                and control the camera’s software. Ordinary file transfer needs USB plugged in
+                twice.
+              </p>
+              <ol class="dm-plan">
+                <li>
+                  <span>01</span>Restart the camera into service mode.
+                </li>
+                <li>
+                  <span>02</span>Connect it here and turn on the hidden Debug Mode setting.
+                </li>
+                <li>
+                  <span>03</span>Remove the battery to restart normally.
+                </li>
+              </ol>
+            </Show>
             <p class="dm-caution">
               Service mode restores factory settings when the camera is switched off. Removing the
               battery avoids that. You need a USB cable and about five minutes.
             </p>
-            <button class="dm-button dm-next" onClick={() => setStep(Step.Camera)}>
+            <button
+              class="dm-button dm-next"
+              onClick={() => setStep(props.purpose === 'service' ? Step.ServiceMode : Step.Camera)}
+            >
               Begin
             </button>
           </div>
@@ -227,7 +251,11 @@ export function DebugModeWizard(props: {
               Restart into service mode
             </h1>
             <ol class="dm-entry">
-              <For each={procedure()?.entry ?? []}>{(line) => <li>{line}</li>}</For>
+              <For
+                each={procedure()?.entry ?? (props.purpose === 'service' ? serviceModeEntry : [])}
+              >
+                {(line) => <li>{line}</li>}
+              </For>
             </ol>
             <div class="dm-warning" role="note">
               <strong>In service mode, do not use the OFF switch.</strong>
@@ -243,7 +271,10 @@ export function DebugModeWizard(props: {
               <span>I’m in service mode, the green lamp is on, and USB is connected.</span>
             </label>
             <div class="dm-actions">
-              <button class="dm-button dm-secondary" onClick={() => setStep(Step.Camera)}>
+              <button
+                class="dm-button dm-secondary"
+                onClick={() => setStep(props.purpose === 'service' ? Step.Overview : Step.Camera)}
+              >
                 Back
               </button>
               <button
@@ -271,10 +302,12 @@ export function DebugModeWizard(props: {
                 <p class="dm-lead dm-ok">Camera connected.</p>
                 <button
                   class="dm-button dm-next"
-                  disabled={!guardReady() || running()}
-                  onClick={() => setStep(Step.Enter)}
+                  disabled={props.purpose !== 'service' && (!guardReady() || running())}
+                  onClick={() =>
+                    props.purpose === 'service' ? props.onClose() : setStep(Step.Enter)
+                  }
                 >
-                  Continue
+                  {props.purpose === 'service' ? 'Open workbench' : 'Continue'}
                 </button>
               </Match>
               <Match

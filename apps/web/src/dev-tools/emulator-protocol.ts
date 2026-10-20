@@ -1,3 +1,4 @@
+import type { InspectionRequest, InspectionReply } from './inspection';
 import type { Firmware } from '../catalog';
 import type { CameraChoice, ConsoleOutput, CameraDiagnostics } from './camera';
 import type { Descriptor, Operation, Completion } from './usb-sharing';
@@ -7,6 +8,7 @@ export enum EmulatorCall {
   Open = 'Open',
   Submit = 'Submit',
   Poll = 'Poll',
+  Inspect = 'Inspect',
   Abandon = 'Abandon',
   Diagnostics = 'Diagnostics',
   ExportUsb = 'ExportUsb',
@@ -18,6 +20,7 @@ export type EmulatorRequest =
   | { id: number; call: EmulatorCall.Boot; firmware: Firmware; dat: ArrayBuffer; baseUrl: string }
   | { id: number; call: EmulatorCall.Open; interface: number }
   | { id: number; call: EmulatorCall.Submit; data: Uint8Array }
+  | { id: number; call: EmulatorCall.Inspect; request: InspectionRequest }
   | { id: number; call: EmulatorCall.Usb; operation: Operation; timeout: number }
   | {
       id: number;
@@ -33,7 +36,13 @@ export type EmulatorReply =
   | {
       type: 'result';
       id: number;
-      result?: CameraChoice | ConsoleOutput | CameraDiagnostics | Descriptor | Completion;
+      result?:
+        | InspectionReply
+        | CameraChoice
+        | ConsoleOutput
+        | CameraDiagnostics
+        | Descriptor
+        | Completion;
       usable: boolean;
     }
   | { type: 'error'; id: number; message: string; usable: boolean }

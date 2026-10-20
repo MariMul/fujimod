@@ -220,6 +220,7 @@ async function handle(request: EmulatorRequest) {
     trigger = {
       call: request.call,
       data: request.call === EmulatorCall.Submit ? Array.from(request.data) : undefined,
+      inspection: request.call === EmulatorCall.Inspect ? request.request : undefined,
       guest_ticks:
         py &&
         py.runPython<unknown>(
@@ -240,6 +241,10 @@ async function handle(request: EmulatorRequest) {
       case EmulatorCall.Submit:
         if (!link) throw Error('USB session is not open.');
         await link.submit(request.data);
+        break;
+      case EmulatorCall.Inspect:
+        if (!link?.inspect) throw Error('USB session cannot form inspection commands.');
+        result = await link.inspect(request.request);
         break;
       case EmulatorCall.Poll:
         if (!link) throw Error('USB session is not open.');

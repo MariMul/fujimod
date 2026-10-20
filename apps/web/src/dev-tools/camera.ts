@@ -1,3 +1,4 @@
+import type { InspectorRead } from './inspection';
 import { initialize, usb, type Device, type Session } from 'fujimod';
 import { exportUsbDevice, type SharedDevice, type BrowserUsbDevice } from './usb-sharing';
 import { Direction, Layer, Level, describeCommand, type NewEntry } from './log';
@@ -29,6 +30,7 @@ export interface CameraChoice {
 export type DebugModeSession = Pick<Session, 'armResetGuard' | 'enterDebugMode' | 'leaveDebugMode'>;
 export interface CameraLink {
   debugSession?: DebugModeSession;
+  inspect?: InspectorRead;
   submit(data: Uint8Array): Promise<void>;
   poll(): Promise<ConsoleOutput>;
   usable(): boolean;
@@ -51,6 +53,45 @@ export interface CameraBackend {
   onDisconnect(callback: () => void): () => void;
   cancelPending?(): void;
   dispose(): void;
+}
+/** Give Inspector only the session's read operations. */
+export function sessionInspectorRead(
+  session: Pick<
+    Session,
+    'deviceInfo' | 'configurationGeometry' | 'readConfiguration' | 'readMemory'
+  >,
+): InspectorRead {
+  return async (request) => {
+    switch (request.kind) {
+      case 'identity': {
+        const reply = await session.deviceInfo(usb.InfoSelector[request.selector]);
+        try {
+          return { text: reply.text, data: reply.raw };
+        } finally {
+          reply.free();
+        }
+      }
+      case 'geometry': {
+        const reply = await session.configurationGeometry(usb.ConfigurationView.Ram);
+        try {
+          return { capacity: reply.capacity, pageBytes: reply.pageBytes, data: reply.raw };
+        } finally {
+          reply.free();
+        }
+      }
+      case 'configuration':
+        return {
+          data: await session.readConfiguration(
+            usb.ConfigurationView.Ram,
+            0,
+            request.offset,
+            request.length,
+          ),
+        };
+      case 'memory':
+        return { data: await session.readMemory(request.address, request.length) };
+    }
+  };
 }
 const CONSOLE_BYTES = 4096;
 abstract class SessionCamera implements CameraBackend {
@@ -81,6 +122,7 @@ abstract class SessionCamera implements CameraBackend {
     let live = true;
     const link: CameraLink = {
       debugSession: session,
+      inspect: sessionInspectorRead(session),
       async submit(data) {
         await session.submitConsole(data);
       },
