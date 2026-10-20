@@ -17,6 +17,7 @@
       "pattern": "^[a-fA-F0-9]{64}$"
     },
     "normal_usb": {
+      "description": "Optional native OS descriptor recognition; not required for service reads.",
       "anyOf": [
         {
           "$ref": "#/$defs/usb_ids"
@@ -83,6 +84,7 @@
       ]
     },
     "ram": {
+      "description": "Explicit finite read range. A slow probe may test unknown readability; this is not a claim about physical RAM size.",
       "anyOf": [
         {
           "$ref": "#/$defs/region"
@@ -113,7 +115,6 @@
     "format_version",
     "firmware_id",
     "firmware_sha256",
-    "normal_usb",
     "service_usb",
     "product",
     "internal_version",
