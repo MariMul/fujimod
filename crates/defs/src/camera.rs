@@ -183,7 +183,7 @@ struct RawCamera {
 }
 
 fn bytes(hex: &str) -> Result<Vec<u8>, CameraError> {
-    if hex.len() % 2 != 0 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+    if !hex.len().is_multiple_of(2) || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err(CameraError::Bytes);
     }
     (0..hex.len())

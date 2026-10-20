@@ -3346,6 +3346,7 @@ dependencies = [
  "js-sys",
  "nusb",
  "serde_json",
+ "sha2",
  "thiserror 2.0.21",
  "wasm-bindgen-test",
 ]
@@ -3386,8 +3387,10 @@ dependencies = [
 name = "fujimod-workflows"
 version = "0.1.0"
 dependencies = [
+ "fujimod-defs",
  "fujimod-usb",
  "futures-lite",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

@@ -5,10 +5,12 @@ edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
-description = "Camera workflows composed from fujimod-usb operations: mod install"
+description = "Camera workflows composed from fujimod-usb operations: service mode, mod install"
 
 [dependencies]
+fujimod-defs.workspace = true
 fujimod-usb.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 fujimod-usb = { workspace = true, features = ["testing"] }

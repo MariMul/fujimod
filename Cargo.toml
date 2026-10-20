@@ -30,6 +30,7 @@ serde_json = "1"
 fujimod-usb = { path = "crates/usb", version = "0.1.0" }
 fujimod-workflows = { path = "crates/workflows", version = "0.1.0" }
 nusb = "0.2.8"
+sha2 = "0.10"
 thiserror = "2"
 futures-lite = "2"
 futures-timer = { version = "3", features = ["wasm-bindgen"] }

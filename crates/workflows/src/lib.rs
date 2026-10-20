@@ -7,3 +7,4 @@
 #![doc = include_str!("../README.md")]
 
 pub mod install;
+pub mod service_mode;
