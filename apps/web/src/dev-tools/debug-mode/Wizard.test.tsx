@@ -37,17 +37,17 @@ function page(debugSession?: DebugModeSession) {
   return { host, pick, button, dispose, disconnect: () => disconnect() };
 }
 
-test('Dev Tools opens on the tool deck with debug-only tools locked', async () => {
+test('Dev Tools opens on the service-mode deck with disconnected tools locked', async () => {
   const { host, button, dispose } = page();
   try {
     await vi.waitFor(() => {
       flush();
       expect(host.textContent).toContain('Enter debug mode');
     });
-    expect(host.querySelector('input[aria-label="Console command"]')).toBeNull();
+    expect(host.querySelector('.dt-console')!.hasAttribute('hidden')).toBe(true);
     const card = (title: string) => button(title)!;
-    expect(card('Leave debug mode').textContent).toContain('Needs a camera in debug mode');
-    expect(card('Share camera').textContent).toContain('Needs a camera in debug mode');
+    expect(card('Leave debug mode').textContent).toContain('Connect a camera');
+    expect(card('Share camera').textContent).toContain('Connect a camera');
     expect(card('Leave debug mode').disabled).toBe(true);
     expect(card('Share camera').disabled).toBe(true);
     expect(button('Show instructions')).toBeTruthy();
@@ -85,7 +85,7 @@ test('the wizard explains the procedure, then connects only after the service-mo
       flush();
       expect(button('Show instructions')).toBeTruthy();
     });
-    button('Show instructions')!.click();
+    button('Enter debug mode')!.click();
     flush();
     expect(host.textContent).toContain('Restart the camera into service mode.');
     expect(host.textContent).toContain('Remove the battery to restart normally.');
@@ -168,7 +168,7 @@ async function connectWizard(p: ReturnType<typeof page>) {
     flush();
     expect(p.button('Show instructions')).toBeTruthy();
   });
-  p.button('Show instructions')!.click();
+  p.button('Enter debug mode')!.click();
   flush();
   p.button('Begin')!.click();
   await vi.waitFor(() => {
@@ -208,8 +208,8 @@ test('USB workflows arm the guard before enabling Enter, then enable Leave and s
     expect(p.host.textContent).toContain('Reset guard armed');
     p.button('Continue')!.click();
     flush();
-    expect(p.button('Enter debug mode')!.disabled).toBe(false);
-    p.button('Enter debug mode')!.click();
+    expect(p.host.querySelector<HTMLButtonElement>('.dm-huge')!.disabled).toBe(false);
+    p.host.querySelector<HTMLButtonElement>('.dm-huge')!.click();
     await vi.waitFor(() => {
       flush();
       expect(p.button('Done')).toBeTruthy();
@@ -294,9 +294,42 @@ test('the wizard preview URL opens directly to its instructions', async () => {
       flush();
       expect(p.button('Begin')).toBeTruthy();
     });
-    expect(p.button('Show instructions')).toBeUndefined();
+    expect(p.host.querySelector('.td-enter')).toBeNull();
   } finally {
     p.dispose();
     history.replaceState({}, '', previous);
+  }
+});
+
+test('the universal service guide connects without selecting firmware or invoking a debug write', async () => {
+  const { session } = workflowSession();
+  const p = page(session);
+  try {
+    await vi.waitFor(() => {
+      flush();
+      expect(p.button('Show instructions')).toBeTruthy();
+    });
+    p.button('Show instructions')!.click();
+    flush();
+    p.button('Begin')!.click();
+    flush();
+    expect(p.host.querySelector('.dm-camera')).toBeNull();
+    expect(p.host.textContent).toContain('Hold UP');
+    expect(p.host.textContent).toContain('do not use the OFF switch');
+    p.host.querySelector<HTMLInputElement>('.dm-check input')!.click();
+    flush();
+    p.button('Allow camera access')!.click();
+    await vi.waitFor(() => {
+      flush();
+      expect(p.button('Open workbench')).toBeTruthy();
+    });
+    p.button('Open workbench')!.click();
+    flush();
+    expect(p.host.querySelector('.dt-console')!.hasAttribute('hidden')).toBe(false);
+    expect(session.armResetGuard).not.toHaveBeenCalled();
+    expect(session.enterDebugMode).not.toHaveBeenCalled();
+    expect(session.leaveDebugMode).not.toHaveBeenCalled();
+  } finally {
+    p.dispose();
   }
 });

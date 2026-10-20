@@ -188,13 +188,13 @@ test('invalid console text is rejected locally before any submission', async () 
     tools.dispose();
   }
 });
-test('simulator can connect without physical WebUSB; physical USB remains unavailable', async () => {
+test('a remote share can connect without physical WebUSB; physical USB remains unavailable', async () => {
   const f = fixture(),
     tools = createDevTools(f.backend, false);
   const picked: unknown[] = [];
   f.backend.pick = async (target) => {
     picked.push(target);
-    return { name: 'Emulated firmware', interfaces: [{ id: 7, label: 'USB' }] };
+    return { name: 'Shared camera', interfaces: [{ id: 7, label: 'USB' }] };
   };
   try {
     await tools.start();

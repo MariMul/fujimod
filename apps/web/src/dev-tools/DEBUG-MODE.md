@@ -8,21 +8,32 @@ in a Rust workflow crate beside `fujimod-usb`, shared by every caller.
 
 ## Start screen: the tool deck
 
-Most visitors arrive without a camera in debug mode, so Dev Tools opens on a
-deck of tool cards, not on the console.
+Dev Tools opens on a service-mode entry guide, a grouped camera/simulator
+connection box, and tool cards. Open simulator navigates to the native runtime
+workspace; it does not create an ff80 Dev Tools connection. Service mode and debug mode both expose the
+ff80 connection; neither a model list nor the Debug Mode setting gates a
+connection. Inspector reads use a usable ff80 session. Persistent debug-mode
+workflows require the idle local USB session.
 
-- **Enter Debug Mode** is the large primary card: title, one-line summary
-  ("In debug mode the camera works normally, but USB can inspect and control
-  its software. Plug USB in twice for ordinary file transfer. Required for
-  other Dev Tools."), and **Show Instructions**.
-- Tools that need a debug-mode camera stay visible, locked, with the reason
-  ("Needs a camera in debug mode"): Console, Share Camera, **Leave Debug
-  Mode**, and later tools.
-- Always available: Try It in the Emulator (saved firmware), Bug Reports.
-- When a debug-mode camera connects, the deck collapses to a top rail and the
-  console takes the space.
-- Every new tool is a card in one of three states: available, locked (with its
-  reason) or connected.
+The service-mode guide covers the power-on chord, the OFF-switch warning and
+battery-removal exit. It stops at connecting and never changes a setting.
+The separate Enter Debug Mode wizard retains the verified persistent workflow.
+
+Once connection activity starts, a 350px tool column sits beside the persistent
+console, layer/level filters and command composer. Console, Inspector, Enter/Leave
+Debug Mode, Share Camera, Bug Report and a back-to-deck link live on the left.
+The log remains visible through tool changes and sharing. On phones the log
+stacks below the tools.
+
+Inspector exposes only identity selectors, configuration geometry and reads,
+and bounded memory reads. Configuration reads use the camera's reported RAM
+capacity and read size, with a 64 MiB host allocation budget and 16 KiB transfer
+budget. The diagnostic JSON bundle retains successful reads, raw reply bytes,
+and failed requests. No Inspector operation writes memory or configuration.
+
+Every tool forms its command from the information it has and verifies the
+camera's reply. It refuses when the command cannot be formed or verified.
+Connection does not establish that a particular operation will succeed.
 
 ## Enter Debug Mode wizard
 
@@ -36,7 +47,7 @@ Steps, on a numbered rail that fills as each completes:
 
 1. **Camera.** Saved emulator cameras as tiles, X70 1.10 first. Other bodies
    are listed as "Not supported yet": their service-mode entry and reset guard
-   are untraced (`research/debug-mode-generations`).
+   are untraced.
 2. **Service mode.** Connect USB, switch off, then hold UP and press the
    shutter fully while switching ON; the green LED lights (X70: the USB, UP and
    full-shutter key states are read at power-on; see `../../SETUP-WIZARD.md`). A fixed warning: in service mode
@@ -44,13 +55,12 @@ Steps, on a numbered rail that fills as each completes:
    restart by removing the battery. A large checkbox ("I'm in service mode,
    the green LED is on, and USB is connected") enables **Allow Camera Access**.
 3. **Connect.** WebUSB chooser; the page points up to where the chooser opens
-   (top centre, under the address bar) and names the device to pick (the
+   (top center, under the address bar) and names the device to pick (the
    unknown FUJIFILM device, `04cb:ff80`; a screenshot from the owner will
    follow). After access: confirm service mode (UI 12, system 7), then arm the
-   RAM reset guard `a3=1` at once, as `tools/x70_service_exit.py --execute`
-   does, so an accidental OFF does not reset the camera.
+   RAM reset guard `a3=1` at once so an accidental OFF does not reset the camera.
 4. **Enter Debug Mode.** One large button: persist `f7=1` with the range save
-   that leaves stored `a3` at 0 (`research/persistent-debug-save`), then read
+   that leaves stored `a3` at 0, then read
    it back. A terminal-style log shows the real steps at their real pace.
 5. **Restart.** Only after the readback confirms the save: remove the battery,
    reinsert it and switch on normally. Then: the camera works as usual; plug USB
@@ -61,7 +71,7 @@ reset path; it has not yet been exercised on a camera.
 
 ## Leave Debug Mode
 
-A separate tool, locked unless a camera in debug mode is connected. It
+A separate tool available with a connected ff80 session. It
 restores stored `f7=0`. The rollback has not been validated on hardware.
 
 ## Look and motion

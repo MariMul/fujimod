@@ -63,10 +63,10 @@ test('one pane shows console responses and independently filters layers and seve
       expect(host.textContent).toContain('camera response');
     });
     expect(host.querySelectorAll('[aria-label="Connection log"]')).toHaveLength(1);
-    button('Console').click();
+    host.querySelector<HTMLButtonElement>('.dt-filters button')!.click();
     flush();
     expect(host.textContent).not.toContain('camera response');
-    button('Console').click();
+    host.querySelector<HTMLButtonElement>('.dt-filters button')!.click();
     flush();
     expect(host.textContent).toContain('camera response');
     const trace = [...host.querySelectorAll('.dt-levels label')]

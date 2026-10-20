@@ -4,7 +4,9 @@ import './tool-deck.css';
 
 export enum DeckTool {
   EnterDebugMode = 'enter-debug-mode',
-  ConnectDebugCamera = 'connect-debug-camera',
+  EnterServiceMode = 'enter-service-mode',
+  ConnectCamera = 'connect-camera',
+  Inspector = 'inspector',
   Console = 'console',
   Share = 'share',
   LeaveDebugMode = 'leave-debug-mode',
@@ -58,15 +60,15 @@ function Tile(props: {
     </Show>
   );
 }
-/** Dev Tools start screen: debug-mode instructions, connections, and tools. */
+/** Dev Tools start screen: service-mode instructions, connections, and tools. */
 export function ToolDeck(props: {
-  debugCamera: boolean;
+  connected: boolean;
   busy?: boolean;
   usbSupported?: boolean;
   shareLocked?: string;
   onOpen: (tool: DeckTool) => void;
 }) {
-  const needsDebug = 'Needs a camera in debug mode';
+  const needsConnection = 'Connect a camera';
   return (
     <section class="td" aria-labelledby="td-title">
       <h1 id="td-title" class="td-heading">
@@ -74,14 +76,9 @@ export function ToolDeck(props: {
       </h1>
       <div class="td-hero">
         <article class="td-tile td-enter">
-          <h2>Enter debug mode</h2>
-          <p>
-            In debug mode, the camera operates normally, except its USB connection can be used to
-            inspect and control the camera’s internal software. USB must be plugged in twice for
-            regular file transfer.
-          </p>
-          <p class="td-note">Required for other Dev Tools.</p>
-          <button class="td-cta" onClick={() => props.onOpen(DeckTool.EnterDebugMode)}>
+          <h2>Enter service mode</h2>
+          <p>Connect over USB to inspect and control the camera’s internal software.</p>
+          <button class="td-cta" onClick={() => props.onOpen(DeckTool.EnterServiceMode)}>
             Show instructions
           </button>
         </article>
@@ -97,9 +94,9 @@ export function ToolDeck(props: {
                   : 'This browser can’t connect to USB. Use Chrome or Edge.'
               }
               busy={props.busy}
-              onOpen={() => props.onOpen(DeckTool.ConnectDebugCamera)}
+              onOpen={() => props.onOpen(DeckTool.ConnectCamera)}
             >
-              A camera already in debug mode, over USB.
+              A camera in service mode or debug mode, over USB.
             </Tile>
             <Tile hero title="Open simulator" href="../?scenario=x70-lcd#workspace" />
           </div>
@@ -110,15 +107,21 @@ export function ToolDeck(props: {
           Send commands to a connected camera.
         </Tile>
         <Tile
+          title="Inspector"
+          locked={props.connected ? undefined : needsConnection}
+          onOpen={() => props.onOpen(DeckTool.Inspector)}
+        />
+        <Tile title="Enter debug mode" onOpen={() => props.onOpen(DeckTool.EnterDebugMode)} />
+        <Tile
           title="Share camera"
-          locked={props.debugCamera ? props.shareLocked : needsDebug}
+          locked={props.connected ? props.shareLocked : needsConnection}
           onOpen={() => props.onOpen(DeckTool.Share)}
         >
           Let someone else control your connected camera.
         </Tile>
         <Tile
           title="Leave debug mode"
-          locked={props.debugCamera ? undefined : needsDebug}
+          locked={props.connected ? undefined : needsConnection}
           onOpen={() => props.onOpen(DeckTool.LeaveDebugMode)}
         >
           Turn the Debug Mode setting off again.

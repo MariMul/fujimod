@@ -6,18 +6,17 @@ import { DeckTool, ToolDeck } from './ToolDeck';
 test('the whole tile invokes its named action and debug instructions stay separate', () => {
   const host = document.createElement('div');
   const onOpen = vi.fn();
-  const dispose = render(() => <ToolDeck debugCamera usbSupported onOpen={onOpen} />, host);
+  const dispose = render(() => <ToolDeck connected usbSupported onOpen={onOpen} />, host);
   try {
     flush();
-    expect(host.querySelector('.td-enter p')!.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-      'In debug mode, the camera operates normally, except its USB connection can be used to inspect and control the camera’s internal software. USB must be plugged in twice for regular file transfer.',
-    );
-    expect(host.querySelector('.td-note')!.textContent).toBe('Required for other Dev Tools.');
+    expect(host.querySelector('.td-enter h2')!.textContent).toBe('Enter service mode');
     host.querySelector<HTMLButtonElement>('.td-enter button')!.click();
-    expect(onOpen).toHaveBeenLastCalledWith(DeckTool.EnterDebugMode);
+    expect(onOpen).toHaveBeenLastCalledWith(DeckTool.EnterServiceMode);
     for (const [title, tool] of [
-      ['Connect camera', DeckTool.ConnectDebugCamera],
+      ['Connect camera', DeckTool.ConnectCamera],
       ['Console', DeckTool.Console],
+      ['Inspector', DeckTool.Inspector],
+      ['Enter debug mode', DeckTool.EnterDebugMode],
       ['Share camera', DeckTool.Share],
       ['Leave debug mode', DeckTool.LeaveDebugMode],
     ] as const) {
@@ -37,7 +36,7 @@ test('the whole tile invokes its named action and debug instructions stay separa
     expect(simulator.getAttribute('href')).toBe('../?scenario=x70-lcd#workspace');
     expect(simulator.classList.contains('td-tile')).toBe(true);
     expect(host.querySelectorAll('.td-connects > button')).toHaveLength(1);
-    expect(host.querySelectorAll('.td-grid > .td-action')).toHaveLength(4);
+    expect(host.querySelectorAll('.td-grid > .td-action')).toHaveLength(6);
   } finally {
     dispose();
   }
@@ -46,12 +45,12 @@ test('the whole tile invokes its named action and debug instructions stay separa
 test('locked and busy tiles are disabled, display the reason, and cannot invoke actions', () => {
   const host = document.createElement('div');
   const onOpen = vi.fn();
-  const [debugCamera, setDebugCamera] = createSignal(false);
+  const [connected, setConnected] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
   const dispose = render(
     () => (
       <ToolDeck
-        debugCamera={debugCamera()}
+        connected={connected()}
         busy={busy()}
         usbSupported={false}
         shareLocked="Sharing isn’t available here"
@@ -70,11 +69,11 @@ test('locked and busy tiles are disabled, display the reason, and cannot invoke 
     );
     for (const title of ['Share camera', 'Leave debug mode']) {
       expect(tile(title).disabled).toBe(true);
-      expect(tile(title).textContent).toContain('Needs a camera in debug mode');
+      expect(tile(title).textContent).toContain('Connect a camera');
       tile(title).click();
     }
     tile('Connect camera').click();
-    setDebugCamera(true);
+    setConnected(true);
     setBusy(true);
     flush();
     expect(tile('Share camera').disabled).toBe(true);
