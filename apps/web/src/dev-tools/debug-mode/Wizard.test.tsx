@@ -50,6 +50,26 @@ test('Dev Tools opens on the tool deck with debug-only tools locked', async () =
     expect(card('Share camera').textContent).toContain('Needs a camera in debug mode');
     expect(card('Leave debug mode').querySelector('button')).toBeNull();
     expect(button('Show instructions')).toBeTruthy();
+    expect(button('Connect camera')).toBeTruthy();
+    expect(button('Connect simulator')).toBeTruthy();
+  } finally {
+    dispose();
+  }
+});
+
+test('the hero Connect camera CTA starts a USB connection', async () => {
+  const { pick, button, dispose } = page();
+  try {
+    await vi.waitFor(() => {
+      flush();
+      expect(button('Connect camera')).toBeTruthy();
+    });
+    expect(pick).not.toHaveBeenCalled();
+    button('Connect camera')!.click();
+    await vi.waitFor(() => {
+      flush();
+      expect(pick).toHaveBeenCalledTimes(1);
+    });
   } finally {
     dispose();
   }

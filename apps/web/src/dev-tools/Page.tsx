@@ -548,6 +548,10 @@ export default function DevTools(props: {
           <Match when={view() === View.Deck}>
             <ToolDeck
               debugCamera={debugCamera()}
+              busy={[ConnectionState.Choosing, ConnectionState.Opening].includes(
+                tools.connection(),
+              )}
+              usbSupported={tools.connection() !== ConnectionState.Unsupported}
               shareLocked={
                 sharingConfigured() && tools.canShare() ? undefined : 'Sharing isn’t available here'
               }
@@ -555,7 +559,12 @@ export default function DevTools(props: {
                 if (tool === DeckTool.EnterDebugMode) setView(View.EnterDebugMode);
                 else if (tool === DeckTool.LeaveDebugMode) setView(View.LeaveDebugMode);
                 else if (tool === DeckTool.Share) shareDialog.showModal();
-                else setView(View.Console);
+                else if (tool === DeckTool.ConnectDebugCamera) {
+                  share.unlockAudio();
+                  void tools.connect(CameraTarget.Usb);
+                } else if (tool === DeckTool.ConnectSimulator) {
+                  void tools.connect(CameraTarget.Emulator);
+                } else setView(View.Console);
               }}
             />
           </Match>
