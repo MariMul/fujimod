@@ -20,12 +20,12 @@ export interface Connection {
   support: 'modeled' | 'partial' | 'unmodeled';
   limits: string;
 }
-export interface Frame {
-  rgb: Uint8Array;
+/** Frames are borrowed only during the synchronous listener call. */
+export type Frame = {
   width: number;
   height: number;
   sequence: number;
-}
+} & ({ rgb: Uint8Array } | { rgba: Uint8ClampedArray } | { bitmap: ImageBitmap });
 export interface Scene {
   rgb: Uint8Array;
   width: number;

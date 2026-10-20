@@ -24,16 +24,17 @@ export function faultFrom(value: unknown): EngineFault {
   const text = [details.type, details.error_type, details.error, details.message, details.exception]
     .filter(Boolean)
     .join(' ');
-  const kind = /Unsupported(?:Device|Scanout)|unsupported device/i.test(text)
-    ? 'unsupported-device'
-    : value instanceof WebAssembly.RuntimeError ||
-        /RuntimeError:.*(?:unreachable|out of bounds)|wasm trap/i.test(text)
-      ? 'wasm-trap'
-      : 'cpu' in details ||
-          'pc' in details ||
-          /guest|mmio|unmapped|instruction|cpu|abort|fault/i.test(text)
-        ? 'guest-fault'
-        : 'exception';
+  const kind =
+    /Unsupported(?:Device|Scanout)|unsupported device|requires unavailable adapter/i.test(text)
+      ? 'unsupported-device'
+      : value instanceof WebAssembly.RuntimeError ||
+          /RuntimeError:.*(?:unreachable|out of bounds)|wasm trap/i.test(text)
+        ? 'wasm-trap'
+        : 'cpu' in details ||
+            'pc' in details ||
+            /guest|mmio|unmapped|instruction|cpu|abort|fault/i.test(text)
+          ? 'guest-fault'
+          : 'exception';
   if (kind === 'unsupported-device') {
     for (const name of ['device', 'operation', 'address', 'size', 'value', 'cpu', 'pc'])
       details[name] ??= null;
