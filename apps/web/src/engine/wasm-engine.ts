@@ -9,6 +9,7 @@ import type {
   Engine,
   EngineConfig,
   Checkpoint,
+  TouchPhase,
   ReplayLog,
   EngineFingerprint,
   Frame,
@@ -318,13 +319,19 @@ export class WasmEngine implements Engine {
   readCardFile(path: string, options?: CardReadOptions) {
     return this.rpc<Uint8Array>({ action: 'card_read', path, options });
   }
-  press(id: string, stage?: string, point?: { x: number; y: number }) {
-    return this.rpc({ action: 'press', id, stage, point });
+  press(id: string, stage?: string) {
+    return this.rpc({ action: 'press', id, stage });
   }
   release(id: string) {
     return this.rpc({ action: 'release', id });
   }
-  setPosition(id: string, position: string | number) {
+  rotate(id: string, steps: number) {
+    return this.rpc({ action: 'rotate', id, steps });
+  }
+  touch(id: string, phase: TouchPhase, x: number, y: number) {
+    return this.rpc({ action: 'touch', id, phase, x, y });
+  }
+  setPosition(id: string, position: string) {
     return this.rpc({ action: 'set_position', id, position });
   }
   async setScene(scene: Scene | null) {

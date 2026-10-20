@@ -11,6 +11,8 @@ export interface Input {
   positions?: { id: string; label: string }[];
   initial?: string;
   relative?: boolean;
+  width?: number;
+  height?: number;
   stages?: { id: string; label: string }[];
 }
 export interface Connection {
@@ -65,9 +67,12 @@ export interface BootInput {
   stage?: string;
   position?: string;
 }
+export type TouchPhase = 'press' | 'drag' | 'release' | 'tap';
 export type ReplayStep =
   | { action: 'press' | 'release'; id: string; stage?: string }
   | { action: 'set_position'; id: string; position: string }
+  | { action: 'rotate'; id: string; steps: number }
+  | { action: 'touch'; id: string; phase: TouchPhase; x: number; y: number }
   | { action: 'advance'; ticks: number };
 export interface EngineConfig {
   camera?: { id: string; revision: number; modEnabled: boolean };
@@ -139,9 +144,11 @@ export interface Engine {
   /** Media changes, including busy transitions; refresh the tree after writes settle. */
   cardChanges(listener: (state: CardState) => void): () => void;
   frames(listener: (frame: Frame) => void): () => void;
-  press(id: string, stage?: string, point?: { x: number; y: number }): Promise<void>;
+  press(id: string, stage?: string): Promise<void>;
   release(id: string): Promise<void>;
-  setPosition(id: string, position: string | number): Promise<void>;
+  rotate(id: string, steps: number): Promise<void>;
+  touch(id: string, phase: TouchPhase, x: number, y: number): Promise<void>;
+  setPosition(id: string, position: string): Promise<void>;
   setScene(scene: Scene | null): Promise<void>;
   power(on: boolean): Promise<void>;
   powerChanges(listener: (on: boolean) => void): () => void;

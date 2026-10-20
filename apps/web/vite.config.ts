@@ -1,3 +1,4 @@
+import { contentSecurityPolicy } from './src/security';
 import { defineConfig } from 'vite-plus';
 import { loadEnv, type Plugin, type Connect } from 'vite';
 import solid from '@solidjs/vite-plugin';
@@ -163,7 +164,7 @@ export default defineConfig(({ mode, command }) => ({
     ),
   },
   plugins: [
-    solid({ start: true, ssr: true }),
+    solid({ start: { middleware: './src/middleware.ts' }, ssr: true }),
     bugReportRoute(),
     wasmProofRoute(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
     simulatorReports(),
@@ -244,6 +245,9 @@ export default defineConfig(({ mode, command }) => ({
     ],
   },
   server: {
+    headers: {
+      'Content-Security-Policy': contentSecurityPolicy,
+    },
     allowedHosts: ['.ts.net'],
     watch: {
       ignored: [
@@ -258,6 +262,9 @@ export default defineConfig(({ mode, command }) => ({
     fs: { strict: true, allow: [resolve('../..')] },
   },
   preview: {
+    headers: {
+      'Content-Security-Policy': contentSecurityPolicy,
+    },
     proxy: { '/usb-proxy': { target: 'http://127.0.0.1:5202', ws: true } },
     host: '127.0.0.1',
     allowedHosts: ['.ts.net'],

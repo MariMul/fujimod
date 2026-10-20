@@ -71,9 +71,17 @@ test('worker routes physical inputs, scene, card operations, restart, power, pro
   });
   assert.equal(boot.type, 'reply');
   const requests: WasmRequest[] = [
-    { action: 'press', id: 'menu', stage: 'half', point: { x: 0.2, y: 0.5 } },
+    { action: 'press', id: 'menu', stage: 'half' },
     { action: 'release', id: 'menu' },
-    { action: 'set_position', id: 'dial', position: -1 },
+    { action: 'set_position', id: 'dial', position: 'A' },
+    { action: 'rotate', id: 'ring', steps: -1 },
+    ...(['press', 'drag', 'release', 'tap'] as const).map((phase) => ({
+      action: 'touch' as const,
+      id: 'touchscreen',
+      phase,
+      x: 100,
+      y: 200,
+    })),
     { action: 'scene', scene: { width: 1, height: 1, rgb: new Uint8Array([2, 3, 4]) } },
     { action: 'power', on: false },
     { action: 'power_cycle', inputs: [{ id: 'menu' }] },

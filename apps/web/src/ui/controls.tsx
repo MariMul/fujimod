@@ -72,7 +72,7 @@ export class ControlSession {
       for (const node of nodes) {
         if (node.operation === 'power') {
           this.powerID = node.id;
-          if (node.id) this.positions.set(node.id, this.powered ? 'on' : 'off');
+          if (node.id) this.positions.set(node.id, this.powered ? 'ON' : 'OFF');
         }
         if (node.variant === 'segment' && node.id && !this.positions.has(node.id)) {
           const first =
@@ -200,13 +200,17 @@ export class ControlSession {
     this.feedback([id]);
     const engine = this.engine!;
     if (id === this.powerID) {
-      this.powered = value === 'on';
+      this.powered = value === 'ON';
       if (this.powered) this.ready = false;
       this.availability();
     }
-    void (id === this.powerID ? engine.power(value === 'on') : engine.setPosition(id, value))
+    void (
+      id === this.powerID
+        ? engine.setPosition(id, value).then(() => engine.power(value === 'ON'))
+        : engine.setPosition(id, value)
+    )
       .then(() => {
-        if (this.engine === engine && id === this.powerID && value === 'on') {
+        if (this.engine === engine && id === this.powerID && value === 'ON') {
           this.ready = true;
           this.availability();
         }
@@ -221,7 +225,7 @@ export class ControlSession {
     if (input.relative) {
       this.relativeSteps.set(id, (this.relativeSteps.get(id) ?? 0) + Math.sign(direction));
       this.changed();
-      void this.engine!.setPosition(id, Math.sign(direction)).catch(this.error);
+      void this.engine!.rotate(id, Math.sign(direction)).catch(this.error);
       return true;
     }
     if (input.positions?.length) {
@@ -250,7 +254,7 @@ export class ControlSession {
     });
     return task;
   }
-  press(id: string, pointer: number | string, stage?: string, point?: { x: number; y: number }) {
+  press(id: string, pointer: number | string, stage?: string) {
     if (
       !this.ready ||
       !this.powered ||
@@ -261,7 +265,7 @@ export class ControlSession {
     this.holds.set(pointer, id);
     this.feedback([id]);
     this.viewer.pressFeedback(id, this.inputs.get(id)!.label);
-    void this.engine!.press(id, stage, point).catch(this.error);
+    void this.engine!.press(id, stage).catch(this.error);
   }
   release(pointer: number | string) {
     const id = this.holds.get(pointer);
@@ -286,7 +290,7 @@ export class ControlSession {
     this.glowing = glow;
     this.changed();
   }
-  rotate(id: string, dial: HTMLElement, event: PointerEvent) {
+  beginDialDrag(id: string, dial: HTMLElement, event: PointerEvent) {
     if (event.button !== 0 || !this.ready || !this.powered || !this.inputs.get(id)?.supported)
       return;
     if (this.stopRotation) return;
@@ -393,7 +397,7 @@ export class ControlSession {
     this.ready = true;
     this.powered = true;
     if (this.powerID) {
-      this.positions.set(this.powerID, 'on');
+      this.positions.set(this.powerID, 'ON');
       this.changed();
       this.renders.get(this.powerID)?.();
     }
@@ -401,7 +405,7 @@ export class ControlSession {
   }
   setPowered(on: boolean) {
     this.powered = on;
-    if (this.powerID) this.positions.set(this.powerID, on ? 'on' : 'off');
+    if (this.powerID) this.positions.set(this.powerID, on ? 'ON' : 'OFF');
     this.changed();
   }
   synchronize(positions: Record<string, string>) {
@@ -410,7 +414,7 @@ export class ControlSession {
       this.changed();
       this.renders.get(id)?.();
     }
-    if (this.powerID && positions[this.powerID]) this.powered = positions[this.powerID] === 'on';
+    if (this.powerID && positions[this.powerID]) this.powered = positions[this.powerID] === 'ON';
     this.availability();
   }
   clear() {
@@ -562,7 +566,7 @@ function Dial(props: { session: ControlSession; id: string; node: ControlNode })
   }, update);
   onSettled(() => {
     props.session.renders.set(props.id, update);
-    const down = (event: PointerEvent) => props.session.rotate(props.id, dial, event);
+    const down = (event: PointerEvent) => props.session.beginDialDrag(props.id, dial, event);
     dial.addEventListener('pointerdown', down);
     const observer = new ResizeObserver(update);
     observer.observe(dial);
@@ -620,12 +624,7 @@ function Node(props: { session: ControlSession; node: ControlNode }) {
     id = node.id ?? '';
   const input = untrack(() => props.session.inputs.get(id));
   const positions =
-    node.operation === 'power'
-      ? [
-          { id: 'off', label: 'OFF' },
-          { id: 'on', label: 'ON' },
-        ]
-      : (input?.positions ?? Object.keys(node.labels ?? {}).map((id) => ({ id, label: id })));
+    input?.positions ?? Object.keys(node.labels ?? {}).map((id) => ({ id, label: id }));
   const keys =
     node.kind === 'command'
       ? [
