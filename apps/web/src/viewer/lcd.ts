@@ -37,21 +37,38 @@ export class LCDViewer {
     }, badgeStyle.press_ms);
   }
   frame(frame: Frame) {
-    if (frame.rgb.length !== frame.width * frame.height * 3) throw Error('Invalid LCD frame size.');
     if (this.lcd.width !== frame.width || this.lcd.height !== frame.height) {
       this.lcd.width = frame.width;
       this.lcd.height = frame.height;
       this.lcdImage = undefined;
     }
     const context = this.lcd.getContext('2d')!;
-    const image = (this.lcdImage ??= context.createImageData(frame.width, frame.height));
-    for (let s = 0, t = 0; s < frame.rgb.length; s += 3, t += 4) {
-      image.data[t] = frame.rgb[s];
-      image.data[t + 1] = frame.rgb[s + 1];
-      image.data[t + 2] = frame.rgb[s + 2];
-      image.data[t + 3] = 255;
+    if ('bitmap' in frame) {
+      context.save();
+      context.globalCompositeOperation = 'copy';
+      context.drawImage(frame.bitmap, 0, 0);
+      context.restore();
+      this.lcdImage = undefined;
+      if (this.faulted) this.faultImage = context.getImageData(0, 0, frame.width, frame.height);
+    } else {
+      const image = (this.lcdImage ??= context.createImageData(frame.width, frame.height));
+      if ('rgba' in frame) {
+        if (frame.rgba.length !== frame.width * frame.height * 4)
+          throw Error('Invalid LCD frame size.');
+        // Canvas presentation owns its buffer; the engine's Wasm view stays borrowed.
+        image.data.set(frame.rgba);
+      } else {
+        if (frame.rgb.length !== frame.width * frame.height * 3)
+          throw Error('Invalid LCD frame size.');
+        for (let s = 0, t = 0; s < frame.rgb.length; s += 3, t += 4) {
+          image.data[t] = frame.rgb[s];
+          image.data[t + 1] = frame.rgb[s + 1];
+          image.data[t + 2] = frame.rgb[s + 2];
+          image.data[t + 3] = 255;
+        }
+      }
+      context.putImageData(image, 0, 0);
     }
-    context.putImageData(image, 0, 0);
 
     if (this.faulted) this.paintFault();
     this.host.dataset.frames = String(frame.sequence);
