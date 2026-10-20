@@ -31,7 +31,9 @@ test('one pane shows console responses and independently filters layers and seve
   };
   const dispose = render(() => <DevTools backend={backend} supported={true} />, host);
   const button = (name: string) =>
-    [...host.querySelectorAll('button')].find((node) => node.textContent === name)!;
+    [...host.querySelectorAll('button')].find(
+      (node) => (node.getAttribute('aria-label') ?? node.textContent) === name,
+    )!;
   try {
     await vi.waitFor(() => {
       flush();
@@ -102,7 +104,9 @@ test('simulator target is available without physical WebUSB and a pending boot c
   };
   const dispose = render(() => <DevTools backend={backend} supported={false} />, host);
   const button = (name: string) =>
-    [...host.querySelectorAll('button')].find((node) => node.textContent === name)!;
+    [...host.querySelectorAll('button')].find(
+      (node) => (node.getAttribute('aria-label') ?? node.textContent) === name,
+    )!;
   try {
     await vi.waitFor(() => {
       flush();
@@ -207,7 +211,9 @@ async function mount() {
   document.body.append(host);
   const dispose = render(() => <DevTools backend={backend} supported={true} />, host);
   const button = (name: string) =>
-    [...host.querySelectorAll('button')].find((b) => b.textContent === name)!;
+    [...host.querySelectorAll('button')].find(
+      (b) => (b.getAttribute('aria-label') ?? b.textContent) === name,
+    )!;
   await vi.waitFor(() => {
     flush();
     expect(button('Connect camera')).toBeTruthy();

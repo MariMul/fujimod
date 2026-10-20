@@ -31,7 +31,9 @@ function page(debugSession?: DebugModeSession) {
   };
   const dispose = render(() => <DevTools backend={backend} supported={true} />, host);
   const button = (name: string) =>
-    [...host.querySelectorAll('button')].find((node) => node.textContent?.trim() === name);
+    [...host.querySelectorAll('button')].find(
+      (node) => (node.getAttribute('aria-label') ?? node.textContent?.trim()) === name,
+    );
   return { host, pick, button, dispose, disconnect: () => disconnect() };
 }
 
@@ -43,12 +45,11 @@ test('Dev Tools opens on the tool deck with debug-only tools locked', async () =
       expect(host.textContent).toContain('Enter debug mode');
     });
     expect(host.querySelector('input[aria-label="Console command"]')).toBeNull();
-    const cards = [...host.querySelectorAll('.td-card')];
-    const card = (title: string) =>
-      cards.find((node) => node.querySelector('h2')?.textContent === title)!;
+    const card = (title: string) => button(title)!;
     expect(card('Leave debug mode').textContent).toContain('Needs a camera in debug mode');
     expect(card('Share camera').textContent).toContain('Needs a camera in debug mode');
-    expect(card('Leave debug mode').querySelector('button')).toBeNull();
+    expect(card('Leave debug mode').disabled).toBe(true);
+    expect(card('Share camera').disabled).toBe(true);
     expect(button('Show instructions')).toBeTruthy();
     expect(button('Connect camera')).toBeTruthy();
     expect(button('Connect simulator')).toBeTruthy();
@@ -215,10 +216,8 @@ test('USB workflows arm the guard before enabling Enter, then enable Leave and s
     expect(session.enterDebugMode).toHaveBeenCalledWith(table, 'x70-110', 'a'.repeat(64));
     p.button('Done')!.click();
     flush();
-    [...p.host.querySelectorAll('.td-card')]
-      .find((card) => card.querySelector('h2')?.textContent === 'Leave debug mode')!
-      .querySelector<HTMLButtonElement>('button')!
-      .click();
+    expect(p.button('Leave debug mode')!.disabled).toBe(false);
+    p.button('Leave debug mode')!.click();
     flush();
     expect(p.host.querySelector<HTMLButtonElement>('.dm-huge')!.disabled).toBe(false);
     p.host.querySelector<HTMLButtonElement>('.dm-huge')!.click();
