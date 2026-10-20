@@ -118,10 +118,15 @@ for (const type of [chromium, webkit].filter(
         height: canvas.height * scale,
       };
     });
-    await page.mouse.move(
-      rect.x + (rect.width * 300.5) / 720,
-      rect.y + (rect.height * 200.5) / 480,
-    );
+    const pointer = {
+      x: Math.round(rect.x + (rect.width * 300) / 720),
+      y: Math.round(rect.y + (rect.height * 200) / 480),
+    };
+    const expectedTouch = {
+      x: Math.floor(((pointer.x - rect.x) * 720) / rect.width),
+      y: Math.floor(((pointer.y - rect.y) * 480) / rect.height),
+    };
+    await page.mouse.move(pointer.x, pointer.y);
     await page.mouse.down();
     await page.waitForTimeout(100);
     await page.mouse.move(rect.x + (rect.width * 420) / 720, rect.y + (rect.height * 260) / 480, {
@@ -143,8 +148,15 @@ for (const type of [chromium, webkit].filter(
       [...new Set(touches.map((r) => r.phase))],
       ['press', 'drag', 'release', 'tap'],
     );
-    assert.equal(touches[0].x, 300);
-    assert.equal(touches[0].y, 200);
+    assert.equal(touches[0].x, expectedTouch.x);
+    assert.equal(touches[0].y, expectedTouch.y);
+    assert.deepEqual(touches.at(-1), {
+      action: 'touch',
+      id: 'touchscreen',
+      phase: 'tap',
+      x: 300,
+      y: 200,
+    });
     assert.deepEqual(
       admitted.flatMap((r) =>
         r.action === 'set_position' && r.id === 'power_switch' ? [r.position] : [],
