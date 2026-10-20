@@ -453,7 +453,10 @@ impl Plan {
         )
         .await?;
         let capacity = word(&source[4..]);
-        if word(&source[..4]) != bulk.base || !bulk.capacities.contains(&capacity) {
+        if word(&source[..4]) != bulk.base
+            || !bulk.capacities.contains(&capacity)
+            || query.fields[3] != capacity
+        {
             return Err(Error::Verification("diagnostic source/capacity"));
         }
         let window = DataWindow::new(

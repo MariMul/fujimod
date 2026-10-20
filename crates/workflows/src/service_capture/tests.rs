@@ -175,16 +175,16 @@ fn executable_facts() -> Facts {
     f.bulk.as_mut().unwrap().mapped_probe.sha256 = hash;
     f
 }
-#[test]
-fn complete_bulk_capture_uses_one_volatile_write_and_no_exit_commands() {
-    let plan = executable_facts().validate().unwrap();
+fn bulk_setup(reply_capacity: u32) -> Vec<E> {
     let mut steps = qualified_setup(false);
     steps.extend(memory(0x1010, &0x1014u32.to_le_bytes()));
     steps.extend(memory(0x1018, &0x2000u32.to_le_bytes()));
     let mut request = vec![0; 32];
     request[..4].copy_from_slice(&0x450006u32.to_le_bytes());
     request[16..20].copy_from_slice(&7u32.to_le_bytes());
-    steps.extend(exchange(request.clone(), request));
+    let mut reply = request.clone();
+    reply[28..32].copy_from_slice(&reply_capacity.to_le_bytes());
+    steps.extend(exchange(request, reply));
     steps.extend(memory(
         0x1020,
         &[0x1000u32, 64]
@@ -192,6 +192,12 @@ fn complete_bulk_capture_uses_one_volatile_write_and_no_exit_commands() {
             .flat_map(u32::to_le_bytes)
             .collect::<Vec<_>>(),
     ));
+    steps
+}
+#[test]
+fn complete_bulk_capture_uses_one_volatile_write_and_no_exit_commands() {
+    let plan = executable_facts().validate().unwrap();
+    let mut steps = bulk_setup(64);
     steps.extend(memory(0x1000, b"abcd"));
     steps.extend(data(0, b"abcd"));
     steps.extend(data(0, b"abcdefgh"));
@@ -210,6 +216,22 @@ fn complete_bulk_capture_uses_one_volatile_write_and_no_exit_commands() {
     assert_eq!(block_on(reader.next_chunk()).unwrap().unwrap(), [b'Y'; 32]);
     assert!(block_on(reader.next_chunk()).unwrap().is_none());
     assert_eq!(reader.bytes_completed(), 64);
+    assert_eq!(script.remaining(), 0);
+}
+#[test]
+fn contradictory_query_capacity_stops_before_any_bulk_read() {
+    let plan = executable_facts().validate().unwrap();
+    let (mut session, script) = opened(bulk_setup(63));
+    assert!(matches!(
+        block_on(plan.prepare(
+            &mut session,
+            &UsbIds {
+                vendor_id: 17,
+                product_id: 42
+            }
+        )),
+        Err(Error::Verification("diagnostic source/capacity"))
+    ));
     assert_eq!(script.remaining(), 0);
 }
 #[test]
