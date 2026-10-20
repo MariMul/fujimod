@@ -9,6 +9,11 @@ use crate::{
 };
 use sha2::{Digest, Sha256};
 
+/// Hash bytes already received through a qualified transport.
+pub fn sha256_bytes(bytes: &[u8]) -> [u8; 32] {
+    Sha256::digest(bytes).into()
+}
+
 /// SHA-256 of the bytes currently in `range`.
 pub async fn region_sha256(
     session: &mut Session,

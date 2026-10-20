@@ -66,3 +66,38 @@ Firmware and allocation policy stays with the caller in each language.
 Run `cargo test -p fujimod-workflows` for range, padding, packet/batch bounds,
 pointer guards, bulk completion, cancellation and full readback checks through
 the ff80 core. These checks do not measure physical camera throughput.
+
+## Optional `service-capture` capability
+
+Enable the `service-capture` Cargo feature for `service_capture`. Supply a
+facts document following [its JSON Schema](schema/service-capture.schema.json).
+`Facts::review` prints the plan and every missing requirement; `validate`
+refuses incomplete facts. The offline example performs no device discovery:
+
+```sh
+cargo run -p fujimod-workflows --features service-capture \
+  --example service_capture_plan -- /path/to/facts.json
+cargo test -p fujimod-workflows --features service-capture
+```
+
+`Plan::recognize_normal` checks the supplied USB descriptor and returns the
+located physical boot inputs. The operator enters service mode and reconnects.
+On that service session, `prepare` checks descriptor IDs, exact product and
+internal firmware version before changing configuration RAM. It enables only
+the located read-gate byte if its current value is zero, then checks stock code.
+Bulk mode additionally checks the stock callback, source and positive capacity,
+compares small bulk/slow reads, and hashes a larger mapped-code probe. Zero
+capacity is refused. Slow mode is explicit and uses the debug memory reader.
+There is no automatic fallback between them.
+
+The returned `CaptureReader` borrows the session throughout the streaming read
+and retains delivered-byte progress. Callers write each returned chunk to their
+chosen output. Facts must supply the readable RAM range separately from the
+transfer capacity. This crate contains no model table, density assumption,
+storage save, callback replacement or physical-input simulation.
+
+After success, failure or cancellation, remove the battery, disconnect USB,
+then reinsert the battery before normal startup. The workflow issues no shutdown,
+reset or cleanup command and leaves the volatile read gate for battery removal
+to discard. A protocol error retains the USB core's completion fence; no transfer
+or write is retried. Live use requires caller authorization and qualified facts.

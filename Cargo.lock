@@ -3390,6 +3390,8 @@ dependencies = [
  "fujimod-defs",
  "fujimod-usb",
  "futures-lite",
+ "serde",
+ "serde_json",
  "thiserror 2.0.21",
 ]
 
