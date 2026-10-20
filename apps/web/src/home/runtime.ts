@@ -712,7 +712,9 @@ export function startHome(
       // A configured development DAT must not create a camera on page load.
       // Only an explicit replay URL starts firmware without a user selection.
       const localDat =
-        replayScenario && __FUJIMOD_LOCAL_DAT__ ? cachedFetch('/local/firmware.dat') : undefined;
+        replayScenario && __FUJIMOD_LOCAL_DAT__
+          ? cachedFetch(replayScenario.firmwarePath)
+          : undefined;
       const first = cameras.find((camera) => camera.firmware.model_asset);
       if (first?.firmware.model_asset) {
         const device = await loadDevice(first.firmware.model_asset);
@@ -729,7 +731,7 @@ export function startHome(
           // The local preview can reread its verified DAT on Restart. Retaining a
           // synthetic File here would keep another entire DAT in browser memory.
           const reload = async () => {
-            const response = await cachedFetch('/local/firmware.dat');
+            const response = await cachedFetch(replayScenario!.firmwarePath);
             if (!response.ok) throw Error('The local firmware could not be read.');
             return new File([await response.arrayBuffer()], 'FPUPDATE.DAT');
           };

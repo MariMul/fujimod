@@ -55,7 +55,7 @@ for (const type of [chromium, webkit].filter(
       ),
       [],
     );
-    console.log(`${type.name()}: every phase reached at least 1.0x.`);
+    console.log(`${type.name()}: every warm operating phase reached at least 1.0x.`);
   } catch (error) {
     failures.push(`${type.name()}: ${String(error)}`);
   } finally {

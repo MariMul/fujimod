@@ -8,6 +8,7 @@ export interface Input {
   label: string;
   kind: string;
   supported: boolean;
+  unavailable?: string;
   positions?: { id: string; label: string }[];
   initial?: string;
   relative?: boolean;

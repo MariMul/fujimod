@@ -8,8 +8,9 @@ canvas.id = 'lcd-source';
 canvas.style.cssText = 'width:720px;height:480px;display:block;image-rendering:pixelated';
 document.body.append(canvas, output);
 const viewer = new LCDViewer(document.body, canvas);
-const result: Record<string, unknown> = { phases: [] };
+const result: Record<string, unknown> = { phases: [], firstUse: [] };
 const phases = result.phases as Record<string, unknown>[];
+const firstUse = result.firstUse as Record<string, unknown>[];
 const errors: string[] = [];
 const engine = createEngine((error) => errors.push(String(error)));
 window.cameraEngine = engine;
@@ -54,7 +55,12 @@ async function until(test: (p: Profile) => boolean | Promise<boolean>, maximum =
     await advance();
   }
 }
-async function phase(name: string, operation: () => Promise<void>, cold = false) {
+async function phase(
+  name: string,
+  operation: () => Promise<void>,
+  stage: 'cold' | 'first' | 'warm',
+) {
+  const cold = stage === 'cold';
   const before = cold ? undefined : await profile();
   const wall = performance.now();
   let error: string | undefined;
@@ -66,8 +72,9 @@ async function phase(name: string, operation: () => Promise<void>, cold = false)
   const end = performance.now(),
     after = await profile();
   const guestSeconds = Number(BigInt(after.ticks) - BigInt(before?.ticks ?? '0')) / 12_000_000;
-  phases.push({
+  const measurement = {
     name,
+    stage,
     guestSeconds,
     wallSeconds: (end - wall) / 1000,
     speed: guestSeconds / ((end - wall) / 1000),
@@ -75,11 +82,15 @@ async function phase(name: string, operation: () => Promise<void>, cold = false)
     error,
     before,
     after,
-  });
-  console.log(
-    JSON.stringify({ phase: name, ...phases.at(-1), before: undefined, after: undefined }),
-  );
+  };
+  if (cold) result.coldBoot = measurement;
+  else (stage === 'warm' ? phases : firstUse).push(measurement);
+  console.log(JSON.stringify({ phase: name, ...measurement, before: undefined, after: undefined }));
   show();
+}
+async function repeated(name: string, operation: () => Promise<void>) {
+  await phase(name, operation, 'first');
+  await phase(name, operation, 'warm');
 }
 function quality(expected: Uint8ClampedArray, actual: Uint8ClampedArray) {
   const sums = Array.from({ length: 3 }, () => [0, 0, 0, 0, 0, 0]);
@@ -127,16 +138,16 @@ try {
       await until(ready);
       check(canvas.width === 720 && canvas.height === 480, 'REC LCD was not delivered.');
     },
-    true,
+    'cold',
   );
-  await phase('REC live view', async () => {
+  await repeated('REC live view', async () => {
     const frames = delivered;
     await advance(120_000_000);
     result.recDeliveredFrames = delivered - frames;
     check(delivered - frames >= 100, 'REC lost LCD presentation frames.');
     check(ready(await profile()), 'REC readiness differs.');
   });
-  await phase('MENU navigation', async () => {
+  await repeated('MENU navigation', async () => {
     const rec = await header();
     await tap('menu_ok_button');
     await until(async () => (await header()) !== rec, 60_000_000);
@@ -148,26 +159,33 @@ try {
   // This phase requires the stock AF completion notification or a stable REC21=8.
   await engine.setPosition('focus_mode_selector', 'S');
   await advance(6_000_000);
-  await phase('AF-S half-press', async () => {
-    let last = u32((await profile()).observations.afUI!),
-      changed = false,
-      stable: bigint | undefined;
-    await engine.press('shutter_button', 'half');
-    await until((p) => {
-      const notification = u32(p.observations.afUI!);
-      changed ||= notification !== last;
-      last = notification;
-      if (changed && [0x816, 0x829].includes(notification)) return true;
-      const machine = new DataView(Uint8Array.from(p.observations.rec21!).buffer).getUint16(
-        0,
-        true,
-      );
-      if (machine !== 8) stable = undefined;
-      else if (stable === undefined) stable = BigInt(p.ticks);
-      return stable !== undefined && BigInt(p.ticks) - stable >= 1_200_000n;
-    });
-  });
-  await engine.release('shutter_button');
+  for (const stage of ['first', 'warm'] as const) {
+    await phase(
+      'AF-S half-press',
+      async () => {
+        let last = u32((await profile()).observations.afUI!),
+          changed = false,
+          stable: bigint | undefined;
+        await engine.press('shutter_button', 'half');
+        await until((p) => {
+          const notification = u32(p.observations.afUI!);
+          changed ||= notification !== last;
+          last = notification;
+          if (changed && [0x816, 0x829].includes(notification)) return true;
+          const machine = new DataView(Uint8Array.from(p.observations.rec21!).buffer).getUint16(
+            0,
+            true,
+          );
+          if (machine !== 8) stable = undefined;
+          else if (stable === undefined) stable = BigInt(p.ticks);
+          return stable !== undefined && BigInt(p.ticks) - stable >= 1_200_000n;
+        });
+      },
+      stage,
+    );
+    await engine.release('shutter_button');
+    await advance(6_000_000);
+  }
   // An incomplete AF phase must not poison the independent capture/Playback measurements.
   await engine.powerCycle([], () => {});
   check(ready(await profile()), 'Capture cold-start prerequisite failed.');
@@ -175,10 +193,10 @@ try {
   await engine.setPosition('focus_mode_selector', 'M');
   await engine.setPosition('shutter_speed_dial', '125');
   await advance(6_000_000);
+  await engine.setScene(null);
   let jpeg: Uint8Array<ArrayBuffer> | undefined;
-  await phase('capture to closed JPEG', async () => {
+  const capture = async () => {
     const seen = new Set(files((await engine.cardTree()).entries).map((f) => f.path));
-    await engine.setScene(null);
     await engine.press('shutter_button', 'half');
     await engine.press('shutter_button', 'full');
     await until(async () => {
@@ -203,10 +221,12 @@ try {
       }
     }, 180_000_000);
     result.jpeg = { bytes: jpeg!.length, sha256: await hash(jpeg!.slice().buffer), focus: 'M' };
-  });
-  await engine.release('shutter_button');
-  await advance(6_000_000);
-  await phase('Playback', async () => {
+  };
+  const releaseCapture = async () => {
+    await engine.release('shutter_button');
+    await advance(6_000_000);
+  };
+  const playback = async () => {
     check(jpeg, 'Capture prerequisite failed.');
     const image = await createImageBitmap(new Blob([jpeg!.slice().buffer]));
     const reference = new OffscreenCanvas(720, 480).getContext('2d')!;
@@ -220,7 +240,20 @@ try {
       result.playbackQuality = q;
       return Math.max(...q.mae) <= 3 && Math.min(...q.correlation) >= 0.98;
     }, 240_000_000);
-  });
+  };
+  // Keep the same native machine and JIT between each first-use/warm pair.
+  // First Playback is exercised before the second capture, so both operating
+  // phases are repeated without a power cycle discarding their compiled code.
+  await phase('capture to closed JPEG', capture, 'first');
+  await releaseCapture();
+  await phase('Playback', playback, 'first');
+  await engine.press('shutter_button', 'half');
+  await until(ready, 60_000_000);
+  await engine.release('shutter_button');
+  await advance(6_000_000);
+  await phase('capture to closed JPEG', capture, 'warm');
+  await releaseCapture();
+  await phase('Playback', playback, 'warm');
   const jit = (await profile()).jit as {
     enabled: boolean;
     compiledExecutions: string;
@@ -233,7 +266,7 @@ try {
   );
   result.errors = errors;
   result.passed =
-    phases.length === 6 &&
+    phases.length === 5 &&
     phases.every((p) => p.completed && Number(p.speed) >= 1) &&
     !errors.length;
   document.body.dataset.proof = result.passed ? 'passed' : 'failed';
