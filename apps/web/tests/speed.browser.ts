@@ -23,7 +23,7 @@ const { values } = parseArgs({
     engine: { type: 'string', default: 'chromium' },
     seconds: { type: 'string', default: '30' },
     'warmup-guest-seconds': { type: 'string', default: '25' },
-    'minimum-speed': { type: 'string', default: '0.8' },
+    'minimum-speed': { type: 'string', default: '1.0' },
   },
 });
 assert.ok(values.url && values.output, 'Supply --url and a fresh --output directory.');

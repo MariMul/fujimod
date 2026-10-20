@@ -1,3 +1,4 @@
+import { HostTimings } from './host-timings';
 import type {
   BootInput,
   BootMedia,
@@ -39,6 +40,7 @@ class Listeners<T> {
 }
 /** Main-thread transport only; guest execution and pacing belong to the worker. */
 export class WasmEngine implements Engine {
+  private timings = new HostTimings();
   private worker: Worker;
   private serial = 0;
   private pending = new Map<
@@ -70,7 +72,8 @@ export class WasmEngine implements Engine {
       new Worker(new URL('./wasm-worker.ts', import.meta.url), { type: 'module' }),
   ) {
     this.worker = createWorker();
-    this.worker.onmessage = (event: MessageEvent<WasmWorkerEvent>) => this.receive(event.data);
+    this.worker.onmessage = (event: MessageEvent<WasmWorkerEvent>) =>
+      this.timings.measure(event.data.type, () => this.receive(event.data));
     this.worker.onerror = (event) => this.transportError(event.message || 'Wasm worker failed.');
     this.worker.onmessageerror = () =>
       this.transportError('Wasm worker message could not be decoded.');
@@ -261,8 +264,9 @@ export class WasmEngine implements Engine {
   replay(steps: readonly ReplayStep[]) {
     return this.rpc({ action: 'replay', steps });
   }
-  profile(limit?: number) {
-    return this.rpc<Record<string, unknown>>({ action: 'profile', limit });
+  async profile(limit?: number) {
+    const result = await this.rpc<Record<string, unknown>>({ action: 'profile', limit });
+    return { ...result, mainTimings: this.timings.snapshot() };
   }
   async rollback(seconds: number) {
     const positions = await this.rpc<Record<string, string>>({ action: 'rollback', seconds });
