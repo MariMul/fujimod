@@ -2,7 +2,7 @@ import type { ReplayStep } from './engine/api';
 
 export interface ReplayScenario {
   firmwareId: string;
-  clockSeconds2000: number;
+  clockSeconds2000?: number;
   interactive: boolean;
   steps: readonly ReplayStep[];
 }
@@ -28,7 +28,13 @@ const scenarios: Record<string, ReplayScenario> = {
 };
 
 export function scenarioFromUrl(search: string): ReplayScenario {
-  const id = new URLSearchParams(search).get('scenario') ?? '';
+  const params = new URLSearchParams(search);
+  const id = params.get('scenario') ?? '';
+  if (id === 'camera-rec') {
+    const firmwareId = params.get('firmware') ?? '';
+    if (!/^[a-z0-9]+-[0-9]+$/.test(firmwareId)) throw Error('Invalid simulator firmware ID.');
+    return { firmwareId, interactive: true, steps: [] };
+  }
   if (!Object.hasOwn(scenarios, id)) throw Error('Unknown simulator scenario: ' + id);
   return scenarios[id];
 }

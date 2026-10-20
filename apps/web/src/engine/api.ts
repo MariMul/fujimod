@@ -84,7 +84,7 @@ export interface EngineConfig {
   /** Physical contacts held before the first instruction of a cold boot. */
   bootInputs?: BootInput[];
   /** Cold boot with a fixed RTC; replay mode advances only through replay(). */
-  execution?: { mode: 'live' | 'replay'; clockSeconds2000: number };
+  execution?: { mode: 'live' | 'replay'; clockSeconds2000?: number };
 }
 export interface Checkpoint {
   id: string;

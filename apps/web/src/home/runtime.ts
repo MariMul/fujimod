@@ -1,3 +1,4 @@
+import { inputPanel } from '../ui/input-panel';
 import { CameraStore, type CameraRecord } from '../cameras/store';
 import { createSignal, reconcile } from 'solid-js';
 import '../style.css';
@@ -228,7 +229,7 @@ export function startHome(
   }
   async function loadDevice(body: string) {
     const load = adapters[`../../devices/${body}/index.ts`];
-    if (!load) return;
+    if (!load) return { panel: { layout: [], combos: [] } as DevicePanel };
     const device = await load();
     return device;
   }
@@ -559,7 +560,12 @@ export function startHome(
       const positions = Object.fromEntries(
         inputs.filter((input) => input.initial).map((input) => [input.id, input.initial!]),
       );
-      panel.render(inputs, active, device.panel, positions);
+      panel.render(
+        inputs,
+        active,
+        device.panel.layout.length ? device.panel : inputPanel(inputs),
+        positions,
+      );
       viewer.configureTouch(inputs, active, (error) => {
         if (current === generation) showFault(faultFrom(error));
       });

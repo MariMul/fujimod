@@ -40,7 +40,7 @@ function localArtifacts(env: Record<string, string>): Plugin {
       }
       if (
         prefix === '/runtime/' &&
-        !/^(catalog\.json|[a-zA-Z0-9_-]+\/(wasm\.json|camera\.mjs|camera\.wasm|runtime-NOTICES\.txt))$/.test(
+        !/^(catalog\.json|[a-zA-Z0-9_-]+\/(wasm\.json|(?:bundle\/)?camera\.mjs|(?:bundle\/)?camera\.wasm|runtime-NOTICES\.txt))$/.test(
           relative,
         )
       ) {
@@ -60,7 +60,7 @@ function localArtifacts(env: Record<string, string>): Plugin {
         const gzip =
           /\bgzip\b/.test(` ${req.headers['accept-encoding'] || ''}`) &&
           info.size > 65536 &&
-          /\.(dat|so|wasm|mjs|js)$/i.test(path);
+          /\.(dat|so|wasm|mjs|js|json)$/i.test(path);
         const etag = `"${info.size.toString(16)}-${info.mtimeMs.toString(16)}${gzip ? '-gzip' : ''}"`;
         res.setHeader('Vary', 'Accept-Encoding');
         res.setHeader('Cache-Control', 'no-cache');
@@ -131,6 +131,14 @@ function featureMedia(env: Record<string, string>) {
   return existsSync(path) ? readFileSync(path, 'utf8') : 'null';
 }
 
+function catalogPath(env: Record<string, string>) {
+  return env.FUJIMOD_RUNTIME
+    ? resolve(env.FUJIMOD_RUNTIME, 'catalog.json')
+    : existsSync('public/runtime/catalog.json')
+      ? 'public/runtime/catalog.json'
+      : 'public/catalog.json';
+}
+
 export default defineConfig(({ mode, command }) => ({
   base: '/',
   // Solid's server build consumes the manifest produced by its client build.
@@ -138,9 +146,7 @@ export default defineConfig(({ mode, command }) => ({
   define: {
     __FUJIMOD_BUILD_DAY__: JSON.stringify(new Date().toISOString().slice(0, 10)),
     __FUJIMOD_INITIAL_CATALOG__: readFileSync(
-      existsSync('public/runtime/catalog.json')
-        ? 'public/runtime/catalog.json'
-        : 'public/catalog.json',
+      catalogPath(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
       'utf8',
     ),
     __FUJIMOD_INITIAL_RELEASE__: existsSync('public/artifacts/patches.json')
@@ -157,7 +163,10 @@ export default defineConfig(({ mode, command }) => ({
       (command === 'serve' || mode === 'local-preview') &&
       Boolean(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_DAT),
     __FUJIMOD_CATALOG__: JSON.stringify(
-      existsSync('public/runtime/catalog.json') ? 'runtime/catalog.json' : 'catalog.json',
+      catalogPath(loadEnv(mode, process.cwd(), 'FUJIMOD_')).endsWith('runtime/catalog.json') ||
+        loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_RUNTIME
+        ? 'runtime/catalog.json'
+        : 'catalog.json',
     ),
   },
   plugins: [
