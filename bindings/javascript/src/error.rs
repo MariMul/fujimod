@@ -16,6 +16,7 @@ pub enum ErrorKind {
     Canceled,
     Definition,
     ServiceCommand,
+    Workflow,
 }
 
 #[wasm_bindgen]

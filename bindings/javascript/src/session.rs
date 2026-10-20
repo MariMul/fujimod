@@ -475,6 +475,7 @@ impl Session {
     }
 }
 pub(crate) enum Operation {
+    Workflow(crate::workflows::Workflow),
     UploadOwned(
         fujimod_workflows::install::OwnedUpload,
         fujimod_workflows::install::UploadDestination,
@@ -538,6 +539,7 @@ impl Operation {
             unreachable!("ordinary operation owns its native session")
         };
         match self {
+            Self::Workflow(workflow) => return workflow.run(s).await,
             Self::UploadOwned(image, destination, limits) => image
                 .upload(s, destination, limits)
                 .await

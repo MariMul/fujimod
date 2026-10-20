@@ -4,6 +4,8 @@ import * as native from '../pkg/fujimod.js';
 export { default as initialize } from '../pkg/fujimod.js';
 export type {
   Session,
+  ResetGuardResult,
+  DebugModeResult,
   Device,
   InfoReply,
   ConfigurationGeometry,

@@ -16,5 +16,6 @@ mod session;
 mod testing;
 mod tracing;
 mod types;
+mod workflows;
 use error::{ErrorKind, error, fail};
 use types::*;

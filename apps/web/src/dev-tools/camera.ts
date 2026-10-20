@@ -26,7 +26,9 @@ export interface CameraChoice {
   name: string;
   interfaces: InterfaceChoice[];
 }
+export type DebugModeSession = Pick<Session, 'armResetGuard' | 'enterDebugMode' | 'leaveDebugMode'>;
 export interface CameraLink {
+  debugSession?: DebugModeSession;
   submit(data: Uint8Array): Promise<void>;
   poll(): Promise<ConsoleOutput>;
   usable(): boolean;
@@ -65,9 +67,9 @@ abstract class SessionCamera implements CameraBackend {
     this.trace?.free();
     this.trace = new usb.tracing.Trace(4096, 8 * 1024 * 1024);
     const options = new usb.TransferOptions(5000, 65536);
-    // Only console APIs are exposed by this adapter. These are host budgets,
-    // not claims about a particular body's firmware or memory capabilities.
-    const limits = new usb.FirmwareLimits(1, 1, 1, CONSOLE_BYTES);
+    // Host budgets; workflows validate the selected firmware's camera table
+    // and instruction bytes before making any camera changes.
+    const limits = new usb.FirmwareLimits(16384, 16384, 256, CONSOLE_BYTES);
     options.setTrace(this.trace);
     let session: Session;
     try {
@@ -78,6 +80,7 @@ abstract class SessionCamera implements CameraBackend {
     }
     let live = true;
     const link: CameraLink = {
+      debugSession: session,
       async submit(data) {
         await session.submitConsole(data);
       },

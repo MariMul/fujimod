@@ -1,13 +1,23 @@
-import { For, Match, Show, Switch, createMemo, createSignal, onSettled } from 'solid-js';
+import {
+  For,
+  Match,
+  Show,
+  Switch,
+  createEffect,
+  createMemo,
+  createSignal,
+  onSettled,
+} from 'solid-js';
 import { CameraStore, type CameraRecord } from '../../cameras/store';
 import { CameraTarget } from '../camera';
 import { ConnectionState, type DevToolsController } from '../controller';
 import { procedureFor, procedures, unsupportedReason, type DebugModeProcedure } from './procedures';
 import './wizard.css';
 
-/** Camera operations the final steps run. Absent until the workflow crate provides them. */
+/** Firmware-selected workflows on the connected USB session. */
 export interface DebugModeOperations {
-  enter(progress: (line: string) => void): Promise<void>;
+  armResetGuard(firmwareId: string, progress: (line: string) => void): Promise<void>;
+  enter(firmwareId: string, progress: (line: string) => void): Promise<void>;
 }
 enum Step {
   Overview,
@@ -70,21 +80,52 @@ export function DebugModeWizard(props: {
   onSettled(() => {
     void choices().then(setCameras);
   });
-  const connection = props.tools.connection;
+  const connection = () => props.tools.connection();
   const connected = createMemo(
     () => connection() === ConnectionState.Connected && props.tools.target() === CameraTarget.Usb,
+  );
+  const [guarded, setGuarded] = createSignal<DebugModeOperations>();
+  const guardReady = () =>
+    Boolean(props.operations) && guarded() === props.operations && connected();
+  async function armGuard(operations: DebugModeOperations, firmwareId: string | undefined) {
+    if (!firmwareId) return;
+    setRunning(true);
+    setFailure('');
+    setLines([]);
+    try {
+      await operations.armResetGuard(firmwareId, (line) =>
+        setLines((previous) => [...previous, line]),
+      );
+      if (props.operations === operations) setGuarded(operations);
+    } catch (error) {
+      if (props.operations === operations)
+        setFailure(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRunning(false);
+    }
+  }
+  createEffect(
+    () =>
+      step() === Step.Connect && props.operations
+        ? { operations: props.operations, firmwareId: procedure()?.firmwareId }
+        : undefined,
+    (request) => {
+      if (request) void armGuard(request.operations, request.firmwareId);
+    },
   );
   function allowAccess() {
     setStep(Step.Connect);
     void props.tools.connect(CameraTarget.Usb);
   }
   async function enter() {
-    if (!props.operations || running()) return;
+    if (!props.operations || !guardReady() || running()) return;
     setRunning(true);
     setFailure('');
     setLines([]);
     try {
-      await props.operations.enter((line) => setLines((previous) => [...previous, line]));
+      await props.operations.enter(procedure()!.firmwareId, (line) =>
+        setLines((previous) => [...previous, line]),
+      );
       setStep(Step.Restart);
     } catch (error) {
       setFailure(error instanceof Error ? error.message : String(error));
@@ -228,7 +269,11 @@ export function DebugModeWizard(props: {
             <Switch>
               <Match when={connected()}>
                 <p class="dm-lead dm-ok">Camera connected.</p>
-                <button class="dm-button dm-next" onClick={() => setStep(Step.Enter)}>
+                <button
+                  class="dm-button dm-next"
+                  disabled={!guardReady() || running()}
+                  onClick={() => setStep(Step.Enter)}
+                >
                   Continue
                 </button>
               </Match>
@@ -265,6 +310,25 @@ export function DebugModeWizard(props: {
                 </div>
               </Match>
             </Switch>
+            <Show when={lines().length}>
+              <pre class="dm-log" aria-live="polite">
+                <For each={lines()}>{(line) => <span>{`> ${line}\n`}</span>}</For>
+              </pre>
+            </Show>
+            <Show when={failure()}>
+              <p class="dm-error" role="alert">
+                {failure()}
+              </p>
+              <button
+                class="dm-button"
+                disabled={running() || !props.operations}
+                onClick={() => {
+                  if (props.operations) void armGuard(props.operations, procedure()?.firmwareId);
+                }}
+              >
+                Try again
+              </button>
+            </Show>
           </div>
         </Match>
         <Match when={step() === Step.Enter}>
@@ -276,19 +340,13 @@ export function DebugModeWizard(props: {
               class={{
                 'dm-button': true,
                 'dm-huge': true,
-                'dm-next': Boolean(props.operations) && connected() && !running(),
+                'dm-next': guardReady() && !running(),
               }}
-              disabled={!props.operations || !connected() || running()}
+              disabled={!guardReady() || running()}
               onClick={() => void enter()}
             >
               Enter debug mode
             </button>
-            <Show when={!props.operations}>
-              <p class="dm-caution">
-                Changing the setting from the browser isn’t available yet. The camera has not been
-                changed. Remove the battery to leave service mode.
-              </p>
-            </Show>
             <Show when={!connected() && props.operations}>
               <p class="dm-caution">The camera disconnected. Go back and connect it again.</p>
             </Show>
