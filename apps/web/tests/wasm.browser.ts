@@ -35,7 +35,12 @@ for (const type of types) {
     };
     assert(result.passed);
     assert.ok(result.frames.length >= 2);
-    assert.ok(result.frames.some(frame => JSON.stringify(frame.pixels) === JSON.stringify(Array(4).fill([0, 1, 35, 255]).flat())));
+    assert.ok(
+      result.frames.some(
+        (frame) =>
+          JSON.stringify(frame.pixels) === JSON.stringify(Array(4).fill([0, 1, 35, 255]).flat()),
+      ),
+    );
     assert.deepEqual(result.frames.at(-1)!.pixels, Array(4).fill([0, 4, 86, 255]).flat());
     assert.equal(result.metrics.guestTicks, 7500000);
     assert.equal(result.metrics.runtime.instructions, '7500000');
@@ -43,7 +48,15 @@ for (const type of types) {
     assert.equal(result.card.supported, false);
     assert.deepEqual(result.session.scenes, [0, 1, 2]);
     assert.equal(result.session.profile.ticks, 20);
-    assert.equal(Object.keys(result.session.refusals).length, 8);
+    assert.deepEqual(Object.keys(result.session.refusals), [
+      'press',
+      'release',
+      'set_position',
+      'power',
+      'power_cycle',
+      'restart_card',
+      'save',
+    ]);
     assert(workers.length >= 3 && workers.every((worker) => worker.includes('wasm-worker')));
     assert.deepEqual(
       requests.filter((request) =>
