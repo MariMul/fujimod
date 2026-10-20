@@ -156,7 +156,10 @@ export default defineConfig(({ mode, command }) => ({
       (command === 'serve' || mode === 'local-preview') &&
       Boolean(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_DAT),
     __FUJIMOD_CATALOG__: JSON.stringify(
-      existsSync('public/runtime/catalog.json') ? 'runtime/catalog.json' : 'catalog.json',
+      loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_RUNTIME ||
+        existsSync('public/runtime/catalog.json')
+        ? 'runtime/catalog.json'
+        : 'catalog.json',
     ),
   },
   plugins: [
