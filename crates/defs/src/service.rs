@@ -41,6 +41,9 @@ impl Digest {
         }
         Ok(Self(bytes))
     }
+    pub fn bytes(self) -> [u8; 32] {
+        self.0
+    }
     pub fn hex(self) -> String {
         self.0.iter().map(|byte| format!("{byte:02x}")).collect()
     }
