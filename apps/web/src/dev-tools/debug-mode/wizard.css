@@ -12,9 +12,6 @@
   flex-direction: column;
   align-items: center;
   padding: 12px 16px 48px;
-  background:
-    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px),
-    radial-gradient(ellipse at 50% 0%, rgba(95, 227, 154, 0.07), transparent 60%);
 }
 .dm-top {
   width: 100%;
@@ -229,40 +226,40 @@
   min-height: 56px;
   padding: 0 28px;
   border: 2px solid var(--phosphor);
-  border-radius: 2px;
-  background: var(--phosphor);
-  color: #04130a;
+  border-radius: 0;
+  background: var(--key);
+  color: var(--phosphor);
+  box-shadow: 4px 4px 0 0 var(--phosphor);
   font: 800 18px/1 var(--mono);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   cursor: pointer;
-  clip-path: polygon(
-    0 0,
-    calc(100% - 12px) 0,
-    100% 12px,
-    100% 100%,
-    12px 100%,
-    0 calc(100% - 12px)
-  );
   transition:
-    filter 150ms,
-    transform 150ms;
+    transform 80ms steps(2),
+    box-shadow 80ms steps(2);
 }
 .dm-button:hover:not(:disabled) {
-  filter: brightness(1.12);
+  background: var(--phosphor);
+  color: #04130a;
 }
 .dm-button:active:not(:disabled) {
-  transform: translateY(1px);
+  transform: translate(4px, 4px);
+  box-shadow: 0 0 0 0 var(--phosphor);
 }
 .dm-button:disabled {
   border-color: var(--edge);
-  background: var(--key2);
   color: var(--faint);
+  box-shadow: 4px 4px 0 0 var(--edge);
   cursor: not-allowed;
 }
 .dm-secondary {
-  background: transparent;
-  color: var(--phosphor);
+  border-color: var(--dim);
+  color: #e8e8ea;
+  box-shadow: 4px 4px 0 0 var(--dim);
+}
+.dm-secondary:hover:not(:disabled) {
+  background: var(--dim);
+  color: #000;
 }
 .dm-huge {
   min-height: 88px;
@@ -274,7 +271,6 @@
 @keyframes dm-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 rgba(95, 227, 154, 0);
     filter: none;
   }
   50% {

@@ -67,46 +67,42 @@ export function ToolDeck(props: {
             Set up a camera that isn’t in debug mode yet. In debug mode the camera works normally,
             except its USB connection can inspect and control the camera’s software.
           </p>
-          <button
-            class="td-cta td-cta-outline"
-            onClick={() => props.onOpen(DeckTool.EnterDebugMode)}
-          >
+          <button class="td-cta" onClick={() => props.onOpen(DeckTool.EnterDebugMode)}>
             Show instructions
           </button>
         </article>
-        <article class="td-tile td-connect">
-          <h2>Connect a debug-mode camera</h2>
-          <p>
-            Already set up? Connect a camera that’s in debug mode over USB to unlock the tools
-            below.
-          </p>
-          <Show
-            when={props.usbSupported}
-            fallback={<p class="td-lock">This browser can’t connect to USB. Use Chrome or Edge.</p>}
-          >
-            <button
-              class="td-cta td-cta-fill"
-              disabled={props.busy}
-              onClick={() => props.onOpen(DeckTool.ConnectDebugCamera)}
+        <div class="td-connects">
+          <article class="td-tile">
+            <h2>Connect camera</h2>
+            <p>A camera already in debug mode, over USB.</p>
+            <Show
+              when={props.usbSupported}
+              fallback={
+                <p class="td-lock">This browser can’t connect to USB. Use Chrome or Edge.</p>
+              }
             >
-              {busyLabel('Connect camera')}
+              <button
+                class="td-cta"
+                disabled={props.busy}
+                onClick={() => props.onOpen(DeckTool.ConnectDebugCamera)}
+              >
+                {busyLabel('Connect camera')}
+              </button>
+            </Show>
+          </article>
+          <article class="td-tile">
+            <h2>Connect simulator</h2>
+            <p>Your saved firmware in the browser. Every tool works with it.</p>
+            <button
+              class="td-cta"
+              disabled={props.busy}
+              onClick={() => props.onOpen(DeckTool.ConnectSimulator)}
+            >
+              {busyLabel('Connect simulator')}
             </button>
-          </Show>
-        </article>
-      </div>
-      <article class="td-sim">
-        <div>
-          <h2>Connect a simulated camera</h2>
-          <p>Run any Dev Tool against your saved firmware in the browser — no camera needed.</p>
+          </article>
         </div>
-        <button
-          class="td-cta td-cta-outline"
-          disabled={props.busy}
-          onClick={() => props.onOpen(DeckTool.ConnectSimulator)}
-        >
-          {busyLabel('Connect simulator')}
-        </button>
-      </article>
+      </div>
       <div class="td-grid">
         <Card title="Console" onOpen={() => props.onOpen(DeckTool.Console)}>
           <p>Send commands to a connected camera or the simulator.</p>
