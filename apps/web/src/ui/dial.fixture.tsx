@@ -51,7 +51,7 @@ window.panel = new ControlSession(
 window.panel.render(
   [
     {
-      id: 'aperture',
+      id: 'aperture_ring',
       label: 'Aperture',
       kind: 'ring',
       supported: true,
@@ -59,7 +59,7 @@ window.panel.render(
       initial: '5.6',
     },
     {
-      id: 'shutter_speed',
+      id: 'shutter_speed_dial',
       label: 'Speed',
       kind: 'dial',
       supported: true,
@@ -76,8 +76,8 @@ window.panel.render(
   {
     detentSounds: panelData.detentSounds as Record<string, DetentSound>,
     layout: [
-      { kind: 'control', id: 'aperture', variant: 'dial' },
-      { kind: 'control', id: 'shutter_speed', variant: 'dial' },
+      { kind: 'control', id: 'aperture_ring', variant: 'dial' },
+      { kind: 'control', id: 'shutter_speed_dial', variant: 'dial' },
       { kind: 'control', id: 'control_ring', variant: 'ticks' },
     ],
     combos: [],

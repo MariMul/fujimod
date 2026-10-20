@@ -84,8 +84,8 @@ async def check(browser_type: BrowserType, url: str, output: Path) -> None:
     await page.wait_for_function("window.fixtureReady")
     results = {}
     for identifier, initial_value, preceding in [
-        ("aperture", "5.6", "4"),
-        ("shutter_speed", "125", "60"),
+        ("aperture_ring", "5.6", "4"),
+        ("shutter_speed_dial", "125", "60"),
     ]:
         dial = page.locator(f'.dial[data-id="{identifier}"]')
         await paint(page)
@@ -184,7 +184,7 @@ async def check(browser_type: BrowserType, url: str, output: Path) -> None:
         results[identifier] = dict(
             initial=initial, samples=samples, released=released, timbre=timbres[0]
         )
-    assert results["aperture"]["timbre"] != results["shutter_speed"]["timbre"]
+    assert results["aperture_ring"]["timbre"] != results["shutter_speed_dial"]["timbre"]
     # Relative tick strips retain their position across gestures and snap too.
     ticks = page.locator('.dial[data-id="control_ring"]')
     box = await ticks.bounding_box()
@@ -209,7 +209,7 @@ async def check(browser_type: BrowserType, url: str, output: Path) -> None:
     )
     # Touch selects vibration when available; sub-detent movement and hard stops
     # must not produce an extra pulse. These mocks verify requests, not hardware.
-    aperture = page.locator('.dial[data-id="aperture"]')
+    aperture = page.locator('.dial[data-id="aperture_ring"]')
 
     async def touch_move(distance: float) -> None:
         await aperture.evaluate(

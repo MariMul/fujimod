@@ -58,13 +58,7 @@ test('a failed local asset preparation preserves the installed website assets', 
       JSON.stringify({ sha256: '1'.repeat(64), passed: true }),
     );
     await assert.rejects(stageSite(inputs, destination), /camera.wasm/);
-    for (const name of [
-      'camera.wasm',
-      'camera.mjs',
-      'wasm.json',
-      'controls.json',
-      'runtime-NOTICES.txt',
-    ])
+    for (const name of ['camera.wasm', 'camera.mjs', 'wasm.json', 'runtime-NOTICES.txt'])
       await writeFile(join(runtime, 'test-100', name), 'test');
     await assert.rejects(stageSite(inputs, destination), /patches.json/);
     assert.equal(await readFile(join(destination, 'runtime/catalog.json'), 'utf8'), 'installed');

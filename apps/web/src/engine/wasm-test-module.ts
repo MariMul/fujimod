@@ -106,6 +106,10 @@ export function testCameraModule(shared = false) {
           result = {};
           binary = new Uint8Array([4, 5, 6]);
           break;
+        case 'preview':
+        case 'preview_state':
+          result = { ticksPerSecond: '12000000', state: { frames: Number(ticks / 1200000n) } };
+          break;
         case 'checkpoint':
           result = { id: String(ticks), tick: String(ticks), instructions: [String(ticks * 2n)] };
           break;
