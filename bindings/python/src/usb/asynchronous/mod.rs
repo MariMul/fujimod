@@ -13,6 +13,7 @@ mod install;
 mod operations;
 mod reader;
 mod sequence;
+mod workflows;
 
 /// Poll native USB without holding Python's interpreter lock. PyO3 supplies the
 /// asyncio coroutine/waker; nusb supplies native I/O wakeups. No worker runtime.

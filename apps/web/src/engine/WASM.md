@@ -27,9 +27,16 @@ restarts merge into existing media; formatting replaces its filesystem.
 
 Development proof routes are opt-in. `/__wasm-proof` runs generated ARM fixtures.
 `/__wasm-camera` reads explicitly configured local artifacts. `/__wasm-lifecycle`
-executes the owned save/reload, shutter/Playback and cold media workflow. These routes
-adds firmware to the production site. The ordinary app supports deterministic
+executes the owned save/reload, shutter/Playback and cold media workflow.
+These routes are development-only. The ordinary app supports deterministic
 development scenarios through `?scenario=x70-lcd` with a configured local DAT.
 
 Downloadable reports identify large buffers by hash and a bounded preview while
 retaining small register arrays and scalar diagnostics.
+
+The camera browser check requires `FUJIMOD_WASM_EXPECT_EXECUTION`, a JSON
+execution receipt for the identical manifest, DAT, boot tick and LCD output,
+and `FUJIMOD_WASM_DAT_SHA256`. It compares per-processor counts and every
+initial displayed pixel before testing controls, scene, media and history.
+The receipt carries `created`, `error`, `status.ticks`, `status.cores`,
+`status.failed`, and the frame's `width`, `height` and RGBA `sha256`.

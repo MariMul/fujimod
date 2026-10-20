@@ -1,6 +1,7 @@
 import { initialize, usb, type Device, type Session } from 'fujimod';
 import {
   Progress,
+  sessionInspectorRead,
   type CameraBackend,
   type CameraChoice,
   type CameraLink,
@@ -42,7 +43,7 @@ export class ReportUsb implements ReportConnection {
   }
   async read(id: number, link: ReportLink, progress: (bytes: number) => void) {
     if (!this.device || !this.interfaces[id]) throw Error('Choose a camera interface.');
-    const limits = new usb.FirmwareLimits(16384, 32, 1, 4096),
+    const limits = new usb.FirmwareLimits(16384, 32, 16384, 4096),
       options = new usb.TransferOptions(5000, 65536);
     try {
       this.session = await usb.Session.open(this.device, this.interfaces[id], limits, options);
@@ -96,6 +97,7 @@ export class ReportUsb implements ReportConnection {
     if (!session || !choice) throw Error('The camera is disconnected.');
     let live = true;
     const link: CameraLink = {
+      inspect: sessionInspectorRead(session),
       async submit(data) {
         await session.submitConsole(data);
       },

@@ -1,18 +1,18 @@
 use super::sequence::CommandSequence;
 use super::*;
-use fujimod_mod_install as install;
+use fujimod_workflows::install;
 
 #[pyclass(name = "InstallQueries", from_py_object, module = "fujimod.usb")]
 #[derive(Clone)]
 pub(super) struct InstallQueries {
-    inner: install::BorrowedQueries,
+    inner: usb::operations::borrowed::BorrowedQueries,
 }
 #[pymethods]
 impl InstallQueries {
     #[new]
     fn new(callback: u32, stock: u32, output: u32, original: Vec<u8>) -> PyResult<Self> {
         Ok(Self {
-            inner: install::BorrowedQueries::new(
+            inner: usb::operations::borrowed::BorrowedQueries::new(
                 Address(callback),
                 Address(stock),
                 Address(output),
@@ -98,7 +98,7 @@ impl CommandSequence {
         limits: FirmwareLimits,
         packet_bytes: u32,
     ) -> PyResult<Vec<Self>> {
-        install::verified_writes(Address(address), &data, limits.memory, nz(packet_bytes)?)
+        usb::operations::verified::verified_writes(Address(address), &data, limits.memory, nz(packet_bytes)?)
             .map(|batches| {
                 batches
                     .into_iter()

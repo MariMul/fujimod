@@ -14,7 +14,7 @@ testing = ["fujimod-usb/testing"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 fujimod-usb.workspace = true
-fujimod-mod-install.workspace = true
+fujimod-workflows.workspace = true
 fujimod-defs.workspace = true
 nusb.workspace = true
 js-sys.workspace = true

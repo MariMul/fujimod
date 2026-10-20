@@ -1,4 +1,5 @@
-use fujimod_usb::{
+//! Planned write/readback pairs for authorized memory ranges.
+use crate::{
     Error, Result,
     ff80::{
         commands::memory::{Address, DebugMemoryLimits, MemoryRange},
@@ -50,4 +51,42 @@ pub fn verified_writes(
         batches.push(batch);
     }
     Ok(batches)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn nz(n: u32) -> NonZeroU32 {
+        NonZeroU32::new(n).unwrap()
+    }
+    fn limits() -> DebugMemoryLimits {
+        DebugMemoryLimits {
+            read: nz(256),
+            write: nz(256),
+        }
+    }
+    #[test]
+    fn verified_writes_preserve_tails_and_sequence_bounds() {
+        let bytes = vec![0x5a; 256 * 300 + 3];
+        let batches = verified_writes(Address(0x10000), &bytes, limits(), nz(256)).unwrap();
+        assert_eq!(batches.iter().map(Vec::len).collect::<Vec<_>>(), [512, 90]);
+        let SequenceCommand::Read { range, expected } = batches[1].last().unwrap() else {
+            panic!()
+        };
+        assert_eq!(range.length().get(), 3);
+        assert_eq!(expected.as_ref().unwrap(), &[0x5a; 3]);
+        assert!(verified_writes(Address(u32::MAX), b"xx", limits(), nz(256)).is_err());
+        assert!(verified_writes(Address(u32::MAX), b"x", limits(), nz(256)).is_ok());
+        let small = verified_writes(
+            Address(0),
+            b"12345",
+            DebugMemoryLimits {
+                read: nz(2),
+                write: nz(3),
+            },
+            nz(4),
+        )
+        .unwrap();
+        assert_eq!(small[0].len(), 6);
+    }
 }

@@ -13,7 +13,7 @@ const config: EngineConfig = {
   firmwareId: 'x70-110',
   bundle: '/__wasm-camera/',
   sceneInput: false,
-  execution: { mode: 'replay', clockSeconds2000: 845000000 },
+  execution: { mode: 'replay', clockSeconds2000: 0 },
 };
 const errors: string[] = [];
 const engine = createEngine((error) => errors.push(String(error)));
@@ -33,16 +33,35 @@ async function advance(ticks = 6_000_000) {
   await engine.replay([{ action: 'advance', ticks }]);
 }
 try {
+  const manifestResponse = await fetch('/__wasm-camera/wasm.json');
+  check(manifestResponse.ok, 'Camera manifest unavailable.');
+  const manifest = (await manifestResponse.json()) as {
+    session: { firmwareId: string; clockSeconds2000: number };
+  };
+  config.firmwareId = manifest.session.firmwareId;
+  config.execution = { mode: 'replay', clockSeconds2000: manifest.session.clockSeconds2000 };
   const response = await fetch('/__wasm-camera/firmware.dat');
   check(response.ok, 'DAT unavailable.');
   const started = performance.now();
-  const inputs = await engine.boot(await response.arrayBuffer(), config, (message) => {
+  const dat = await response.arrayBuffer();
+  result.datBytes = dat.byteLength;
+  result.datSha256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', dat))]
+    .map((n) => n.toString(16).padStart(2, '0'))
+    .join('');
+  const inputs = await engine.boot(dat, config, (message) => {
     output.textContent = message;
   });
   result.bootSeconds = (performance.now() - started) / 1000;
-  result.inputs = inputs;
+  result.controls = {
+    supported: inputs.filter((input) => input.supported).length,
+    unavailable: inputs.filter((input) => !input.supported).map((input) => input.id),
+  };
   check(canvas.width === 720 && canvas.height === 480, 'LCD dimensions differ.');
   result.rec = await pixels();
+  result.execution = {
+    profile: await engine.profile(0),
+    frame: { width: canvas.width, height: canvas.height, sha256: result.rec },
+  };
   check(
     inputs.some((input) => input.id === 'menu_ok_button' && input.supported),
     'Generated native controls are unavailable.',

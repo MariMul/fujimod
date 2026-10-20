@@ -2,7 +2,7 @@ use super::*;
 use crate::requests::DataWindow;
 use crate::sequence::CommandSequence;
 use crate::session::{Operation, Session};
-use fujimod_mod_install as install;
+use fujimod_workflows::install;
 use usb::ff80::commands::{
     diagnostic::DiagnosticTag,
     memory::{Address, MemoryRange},
@@ -10,7 +10,7 @@ use usb::ff80::commands::{
 
 #[wasm_bindgen]
 pub struct InstallQueries {
-    inner: install::BorrowedQueries,
+    inner: usb::operations::borrowed::BorrowedQueries,
 }
 #[wasm_bindgen]
 impl InstallQueries {
@@ -22,7 +22,7 @@ impl InstallQueries {
         #[wasm_bindgen(unchecked_param_type = "Uint8Array")] original: JsValue,
     ) -> Result<Self, JsValue> {
         Ok(Self {
-            inner: install::BorrowedQueries::new(
+            inner: usb::operations::borrowed::BorrowedQueries::new(
                 Address(error::integer(callback, u32::MAX)?),
                 Address(error::integer(stock, u32::MAX)?),
                 Address(error::integer(output, u32::MAX)?),
@@ -119,7 +119,7 @@ impl CommandSequence {
         limits: &FirmwareLimits,
         #[wasm_bindgen(unchecked_param_type = "number")] packet_bytes: JsValue,
     ) -> Result<js_sys::Array, JsValue> {
-        install::verified_writes(
+        usb::operations::verified::verified_writes(
             Address(error::integer(address, u32::MAX)?),
             &error::buffer(data)?,
             limits.memory,

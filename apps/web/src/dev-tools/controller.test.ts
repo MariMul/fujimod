@@ -188,13 +188,13 @@ test('invalid console text is rejected locally before any submission', async () 
     tools.dispose();
   }
 });
-test('simulator can connect without physical WebUSB; physical USB remains unavailable', async () => {
+test('a remote share can connect without physical WebUSB; physical USB remains unavailable', async () => {
   const f = fixture(),
     tools = createDevTools(f.backend, false);
   const picked: unknown[] = [];
   f.backend.pick = async (target) => {
     picked.push(target);
-    return { name: 'Emulated firmware', interfaces: [{ id: 7, label: 'USB' }] };
+    return { name: 'Shared camera', interfaces: [{ id: 7, label: 'USB' }] };
   };
   try {
     await tools.start();
@@ -245,5 +245,31 @@ test('a shared camera controller does not require local WebUSB support', async (
     expect(tools.connection()).toBe(ConnectionState.Connected);
   } finally {
     tools.dispose();
+  }
+});
+
+test('workflow session access requires an idle connected physical USB camera', async () => {
+  for (const target of [CameraTarget.Usb, CameraTarget.Remote]) {
+    const f = fixture();
+    const session = {
+      armResetGuard: async () => ({ guardWasSet: false, debugFlagBefore: 0, progress: [] }),
+      enterDebugMode: async () => ({ alreadyPersisted: false, progress: [] }),
+      leaveDebugMode: async () => ({ alreadyPersisted: false, progress: [] }),
+    };
+    f.link.debugSession = session;
+    const tools = createDevTools(f.backend, true);
+    try {
+      await tools.start();
+      flush();
+      expect(tools.debugSession()).toBeUndefined();
+      await tools.connect(target);
+      flush();
+      expect(tools.debugSession()).toBe(target === CameraTarget.Usb ? session : undefined);
+      await tools.disconnect();
+      flush();
+      expect(tools.debugSession()).toBeUndefined();
+    } finally {
+      tools.dispose();
+    }
   }
 });

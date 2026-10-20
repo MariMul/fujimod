@@ -186,3 +186,6 @@ impl OwnedUpload {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;

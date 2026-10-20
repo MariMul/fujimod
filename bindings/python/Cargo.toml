@@ -19,7 +19,7 @@ testing = ["fujimod-usb/testing"]
 fujimod-firmware = { path = "../../crates/firmware" }
 pyo3 = { workspace = true, features = ["experimental-async", "multiple-pymethods"] }
 fujimod-usb.workspace = true
-fujimod-mod-install.workspace = true
+fujimod-workflows.workspace = true
 fujimod-defs.workspace = true
 fujimod-corpus = { path = "../../crates/corpus" }
 serde_json.workspace = true

@@ -475,13 +475,14 @@ impl Session {
     }
 }
 pub(crate) enum Operation {
+    Workflow(crate::workflows::Workflow),
     UploadOwned(
-        fujimod_mod_install::OwnedUpload,
-        fujimod_mod_install::UploadDestination,
+        fujimod_workflows::install::OwnedUpload,
+        fujimod_workflows::install::UploadDestination,
         usb::ff80::commands::memory::DebugMemoryLimits,
     ),
     VerifyOwned(
-        fujimod_mod_install::OwnedUpload,
+        fujimod_workflows::install::OwnedUpload,
         usb::operations::data::DataWindow,
     ),
     Sequence(
@@ -538,6 +539,7 @@ impl Operation {
             unreachable!("ordinary operation owns its native session")
         };
         match self {
+            Self::Workflow(workflow) => return workflow.run(s).await,
             Self::UploadOwned(image, destination, limits) => image
                 .upload(s, destination, limits)
                 .await

@@ -31,7 +31,9 @@ test('one pane shows console responses and independently filters layers and seve
   };
   const dispose = render(() => <DevTools backend={backend} supported={true} />, host);
   const button = (name: string) =>
-    [...host.querySelectorAll('button')].find((node) => node.textContent === name)!;
+    [...host.querySelectorAll('button')].find(
+      (node) => (node.getAttribute('aria-label') ?? node.textContent) === name,
+    )!;
   try {
     await vi.waitFor(() => {
       flush();
@@ -61,10 +63,10 @@ test('one pane shows console responses and independently filters layers and seve
       expect(host.textContent).toContain('camera response');
     });
     expect(host.querySelectorAll('[aria-label="Connection log"]')).toHaveLength(1);
-    button('Console').click();
+    host.querySelector<HTMLButtonElement>('.dt-filters button')!.click();
     flush();
     expect(host.textContent).not.toContain('camera response');
-    button('Console').click();
+    host.querySelector<HTMLButtonElement>('.dt-filters button')!.click();
     flush();
     expect(host.textContent).toContain('camera response');
     const trace = [...host.querySelectorAll('.dt-levels label')]
@@ -157,7 +159,9 @@ async function mount() {
   document.body.append(host);
   const dispose = render(() => <DevTools backend={backend} supported={true} />, host);
   const button = (name: string) =>
-    [...host.querySelectorAll('button')].find((b) => b.textContent === name)!;
+    [...host.querySelectorAll('button')].find(
+      (b) => (b.getAttribute('aria-label') ?? b.textContent) === name,
+    )!;
   await vi.waitFor(() => {
     flush();
     expect(button('Connect camera')).toBeTruthy();
@@ -330,5 +334,50 @@ test('automatic sharing displays remote traffic and collapses bulk request/compl
     ).toHaveLength(1);
   } finally {
     f.dispose();
+  }
+});
+test('the console composer appears only for the Console tool; other tools show a status bar', async () => {
+  const host = document.createElement('div');
+  document.body.append(host);
+  const backend: CameraBackend = {
+    initialize: async () => {},
+    pick: async () => ({ name: 'Body C', interfaces: [{ id: 0, label: 'USB' }] }),
+    open: async () => ({
+      submit: async () => {},
+      poll: async () => ({ progress: Progress.Complete, status: 0, output: new Uint8Array() }),
+      usable: () => true,
+      close: async () => {},
+      abandon: () => {},
+    }),
+    drain: () => [],
+    onDisconnect: () => () => {},
+    dispose: () => {},
+  };
+  const dispose = render(() => <DevTools backend={backend} supported={true} />, host);
+  const button = (name: string) =>
+    [...host.querySelectorAll('button')].find(
+      (node) => (node.getAttribute('aria-label') ?? node.textContent) === name,
+    )!;
+  try {
+    await vi.waitFor(() => {
+      flush();
+      expect(button('Connect camera')).toBeTruthy();
+    });
+    button('Connect camera').click();
+    await vi.waitFor(() => {
+      flush();
+      expect(host.querySelector('.dt-composer')).toBeTruthy();
+    });
+    button('Inspector').click();
+    flush();
+    expect(host.querySelector('.dt-composer')).toBeNull();
+    expect(host.querySelector('.dt-bartool')!.textContent).toBe('Inspector');
+    button('Console').click();
+    flush();
+    expect(host.querySelector('.dt-composer')).toBeTruthy();
+    expect(host.querySelector('.dt-bartool')).toBeNull();
+  } finally {
+    dispose();
+    host.remove();
   }
 });

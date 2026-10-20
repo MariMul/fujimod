@@ -21,6 +21,7 @@
     "prebuild:local-preview": "npm run build:usb",
     "pretest": "npm run build:usb && node ../../crates/simulation/build-web.ts",
     "precheck": "npm run build:usb",
+    "test:debug-mode:browser": "node src/dev-tools/debug-mode/browser.ts",
     "test:dev-tools:browser": "node src/dev-tools/browser.ts",
     "test:prerender": "node scripts/test-prerender.ts",
     "deploy": "node scripts/deploy.ts"

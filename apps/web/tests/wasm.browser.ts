@@ -49,7 +49,7 @@ for (const type of types) {
     assert.equal(result.card.supported, false);
     assert.deepEqual(result.session.scenes, [0, 1, 2]);
     assert.equal(result.session.profile.ticks, 0);
-    assert.equal(Object.keys(result.session.refusals).length, 3);
+    assert.deepEqual(Object.keys(result.session.refusals), ['press', 'release', 'set_position']);
     assert(workers.length >= 3 && workers.every((worker) => worker.includes('wasm-worker')));
     assert.deepEqual(
       requests.filter((request) =>
