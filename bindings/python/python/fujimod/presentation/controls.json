@@ -88,6 +88,14 @@
       "label": "AE-L / AF-L",
       "text": "AE-L/AF-L"
     },
+    "ae_lock": {
+      "label": "AE-L",
+      "text": "AE-L"
+    },
+    "af_lock": {
+      "label": "AF-L",
+      "text": "AF-L"
+    },
     "play": {
       "label": "Playback",
       "icon": "play"

@@ -8,6 +8,14 @@ from PIL import Image, ImageChops, ImageFont
 
 
 class InputPresentationTests(unittest.TestCase):
+    def test_separate_exposure_and_focus_lock_buttons_have_distinct_badges(self) -> None:
+        blank = Image.new("RGBA", (320, 240), "white")
+        self.assertEqual(control("ae_lock")["label"], "AE-L")
+        self.assertEqual(control("af_lock")["label"], "AF-L")
+        exposure = draw_badges(blank, [("ae_lock", 255)])
+        focus = draw_badges(blank, [("af_lock", 255)])
+        self.assertIsNotNone(ImageChops.difference(exposure, focus).convert("RGB").getbbox())
+
     def test_direction_icons_and_accessible_names(self) -> None:
         for name in ("up", "down", "left", "right"):
             item = control(name)
