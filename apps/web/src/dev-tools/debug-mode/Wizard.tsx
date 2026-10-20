@@ -70,7 +70,7 @@ export function DebugModeWizard(props: {
   onSettled(() => {
     void choices().then(setCameras);
   });
-  const connection = props.tools.connection;
+  const connection = () => props.tools.connection();
   const connected = createMemo(
     () => connection() === ConnectionState.Connected && props.tools.target() === CameraTarget.Usb,
   );

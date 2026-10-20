@@ -2,21 +2,10 @@ import { test } from 'vite-plus/test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const read = (path: string) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
-test('Model, panels and recordings share complete control presentations', () => {
-  const parts = read('../devices/x70/parts.json');
+test('X70 panel presentation uses semantic body-control IDs', () => {
   const panel = read('../devices/x70/panel.json');
-  const { controls, icons } = read(
-    '../../../bindings/python/python/fujimod/presentation/controls.json',
-  );
-  assert.equal(
-    Object.hasOwn(panel, 'inputLabels'),
-    false,
-    'Names belong only in shared presentation',
-  );
-  assert.equal(Object.hasOwn(parts, 'labels'), false, 'Names belong only in shared presentation');
-  const ids = new Set([...Object.keys(parts.inputs), ...parts.order]);
-  for (const regions of Object.values(parts.regions))
-    for (const id of Object.values(regions as Record<string, string>)) ids.add(id);
+  const { controls, icons } = read('../src/feedback/presentation.json');
+  const ids = new Set<string>();
   const visit = (nodes: import('../src/ui/layout').ControlNode[]) => {
     for (const node of nodes) {
       if (node.id) ids.add(node.id);
@@ -25,12 +14,10 @@ test('Model, panels and recordings share complete control presentations', () => 
     }
   };
   visit(panel.layout);
-  visit(read('../devices/xm1/panel.json').layout);
-  for (const id of ids) assert.ok(controls[id]?.label.trim(), `Missing name for ${id}`);
-  assert.equal(controls.fn7.label, 'Side Fn');
-  for (const id of ['up', 'down', 'left', 'right']) {
-    assert.equal(controls[id].icon, id);
-    assert.equal(Object.hasOwn(controls[id], 'text'), false);
-    assert.ok(icons[id].lines.length);
+  for (const id of ids) assert.ok(controls[id]?.label.trim(), `Missing presentation for ${id}`);
+  assert.equal(controls.control_ring_options_button.label, 'Side Fn');
+  for (const direction of ['up', 'down', 'left', 'right']) {
+    assert.equal(controls[`selector_function_buttons.${direction}`].icon, direction);
+    assert.ok(icons[direction].lines.length);
   }
 });

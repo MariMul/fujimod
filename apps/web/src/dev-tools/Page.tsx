@@ -21,9 +21,7 @@ import { DeckTool, ToolDeck } from './ToolDeck';
 import { DebugModeWizard } from './debug-mode/Wizard';
 import { LeaveDebugMode } from './debug-mode/LeaveDebugMode';
 import './sharing.css';
-import { scenarios } from './scenarios';
 import { LocalReports } from '../ui/local-reports';
-import { Feedback } from '../ui/Feedback';
 import { CameraSources } from './sources';
 import '../style.css';
 import './style.css';
@@ -36,14 +34,11 @@ enum View {
   EnterDebugMode,
   LeaveDebugMode,
 }
-/** Console-first entries (a simulator link, a shared camera) skip the tool deck. */
+/** Shared camera connections skip the tool deck. */
 function initialView(connectOnMount: boolean | undefined): View {
   if (connectOnMount || typeof window === 'undefined')
     return connectOnMount ? View.Console : View.Deck;
-  const search = new URLSearchParams(location.search);
-  return search.get('target') === CameraTarget.Emulator || remoteControlUrl(location.href)
-    ? View.Console
-    : View.Deck;
+  return remoteControlUrl(location.href) ? View.Console : View.Deck;
 }
 const connectionNames: Record<ConnectionState, string> = {
   [ConnectionState.Loading]: 'Loading USB',
@@ -223,8 +218,6 @@ export default function DevTools(props: {
       tools.consoleState() === ConsoleState.Idle,
   );
   onSettled(() => {
-    if (new URLSearchParams(location.search).get('target') === CameraTarget.Emulator)
-      setTarget(CameraTarget.Emulator);
     const unlisten = reports.listen();
     let disposed = false;
     let stopDevShare: (() => void) | undefined;
@@ -254,19 +247,6 @@ export default function DevTools(props: {
           Level.Error,
         );
         return;
-      }
-      if (
-        import.meta.env.DEV &&
-        new URLSearchParams(location.search).get('target') === CameraTarget.Emulator &&
-        new URLSearchParams(location.search).get('connect') === '1'
-      ) {
-        await tools.connect(CameraTarget.Emulator);
-        const scenario = scenarios[new URLSearchParams(location.search).get('scenario') ?? ''];
-        if (scenario && tools.camera()?.firmware?.id === scenario.firmware) {
-          for (const command of scenario.commands) {
-            if (!(await tools.send(command, LineEnding.Lf))) break;
-          }
-        }
       }
     });
     function cleanup() {
@@ -352,9 +332,6 @@ export default function DevTools(props: {
             Dev Tools
           </a>
         </nav>
-        <Show when={target() === CameraTarget.Emulator}>
-          <Feedback context={context} capture={tools.errorReport} local={reports} />
-        </Show>
         <div class="dt-connection">
           <SharingChip session={share} onOpen={() => shareDialog.showModal()} />
           <button
@@ -380,7 +357,6 @@ export default function DevTools(props: {
             onChange={(event) => setTarget(event.currentTarget.value as CameraTarget)}
           >
             <option value={CameraTarget.Usb}>Camera · USB</option>
-            <option value={CameraTarget.Emulator}>Simulator</option>
             <Show when={target() === CameraTarget.Remote}>
               <option value={CameraTarget.Remote}>Shared camera</option>
             </Show>
@@ -389,10 +365,7 @@ export default function DevTools(props: {
             <i class={tools.connection() === ConnectionState.Connected ? 'online' : ''} />
             {tools.connection() === ConnectionState.Unsupported && target() !== CameraTarget.Usb
               ? 'Disconnected'
-              : tools.connection() === ConnectionState.Choosing &&
-                  target() === CameraTarget.Emulator
-                ? 'Starting simulator'
-                : connectionNames[tools.connection()]}
+              : connectionNames[tools.connection()]}
           </span>
           <Show
             when={
@@ -431,11 +404,7 @@ export default function DevTools(props: {
                 void tools.connect(target());
               }}
             >
-              {target() === CameraTarget.Remote
-                ? 'Reconnect shared camera'
-                : target() === CameraTarget.Emulator
-                  ? 'Connect simulator'
-                  : 'Connect camera'}
+              {target() === CameraTarget.Remote ? 'Reconnect shared camera' : 'Connect camera'}
             </button>
           </Show>
         </div>

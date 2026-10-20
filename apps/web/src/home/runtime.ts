@@ -279,9 +279,10 @@ export function startHome(
   async function makeEngine(config: NonNullable<Firmware['emulate']> & { firmwareId: string }) {
     const { createEngine } = await import('../engine');
     let value: Engine;
-    value = createEngine(config, (error) => {
+    value = createEngine((error) => {
       if (engine === value) showFault(faultFrom(error));
     });
+    if (import.meta.env.DEV) window.cameraEngine = value;
     return value;
   }
   function bootMedia(file: File): BootMedia {
@@ -393,7 +394,7 @@ export function startHome(
       selectedFirmware = entry;
       if (modFirmwareHash !== hash) {
         modFirmwareHash = hash;
-        modEnabled = true;
+        modEnabled = !replayScenario;
       }
       const device = entry.device ?? (entry.body ? await loadDevice(entry.body) : undefined);
       if (current !== generation) return;
@@ -533,7 +534,6 @@ export function startHome(
         {
           ...entry.emulate,
           firmwareId: entry.id,
-          initialPositions: device.initialPositions,
           restart,
           camera: activeCamera && {
             id: activeCamera.id,

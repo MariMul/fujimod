@@ -33,7 +33,7 @@ for (const type of [chromium, webkit].filter(
         automaticFirmware.push(request.url());
     });
     page.on('worker', (worker) => {
-      if (worker.url().includes('pyodide-worker')) engines.push(worker.url());
+      if (worker.url().includes('wasm-worker')) engines.push(worker.url());
     });
     async function records() {
       return page.evaluate(async () => {

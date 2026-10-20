@@ -29,7 +29,7 @@ await context.addInitScript(() => {
   window.Worker = class extends Original {
     constructor(...args: ConstructorParameters<typeof Worker>) {
       super(...args);
-      if (!String(args[0]).includes('pyodide-worker')) return;
+      if (!String(args[0]).includes('wasm-worker')) return;
       this.addEventListener('message', ({ data }) => {
         if (data.state) window.__cameraState = { ...window.__cameraState, ...data.state };
         if (data.type === 'camera_saved') window.__cameraSaved = data;

@@ -3,7 +3,6 @@ import { exportUsbDevice, type SharedDevice, type BrowserUsbDevice } from './usb
 import { Direction, Layer, Level, describeCommand, type NewEntry } from './log';
 export enum CameraTarget {
   Usb = 'usb',
-  Emulator = 'simulator',
   Remote = 'remote',
 }
 export enum Progress {

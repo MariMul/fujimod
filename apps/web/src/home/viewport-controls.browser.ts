@@ -173,7 +173,7 @@ try {
   const beforeMenu = await page
     .locator('#lcd-source')
     .evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
-  await page.locator('#controls button[data-id="menu_ok"]').click();
+  await page.locator('#controls button[data-id="menu_ok_button"]').click();
   await page.waitForFunction(
     (before) => document.querySelector<HTMLCanvasElement>('#lcd-source')!.toDataURL() !== before,
     beforeMenu,

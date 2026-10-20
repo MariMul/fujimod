@@ -1,5 +1,4 @@
 import { For, Show, Switch, Match, createSignal, createEffect, onSettled, untrack } from 'solid-js';
-import { inputName } from '../feedback/input';
 import type { Engine, Input } from '../engine/api';
 import type { LCDViewer } from '../viewer/lcd';
 import type { ControlNode, DevicePanel, PowerCombo } from './layout';
@@ -65,9 +64,7 @@ export class ControlSession {
     this.engine = engine;
     this.detentSounds = data.detentSounds ?? {};
     this.ready = true;
-    this.inputs = new Map(
-      inputs.map((input) => [input.id, { ...input, label: inputName(input.id) }]),
-    );
+    this.inputs = new Map(inputs.map((input) => [input.id, input]));
     for (const input of inputs)
       if (input.positions?.length)
         this.positions.set(input.id, initial[input.id] ?? input.initial ?? input.positions[0].id);
@@ -240,7 +237,7 @@ export class ControlSession {
     const engine = this.engine!,
       task = this.pulseQueue
         .then(() => {
-          this.viewer.pressFeedback(id);
+          this.viewer.pressFeedback(id, this.inputs.get(id)!.label);
           return engine.press(id);
         })
         .then(() => engine.release(id));
@@ -259,7 +256,7 @@ export class ControlSession {
       return;
     this.holds.set(pointer, id);
     this.feedback([id]);
-    this.viewer.pressFeedback(id);
+    this.viewer.pressFeedback(id, this.inputs.get(id)!.label);
     void this.engine!.press(id, stage, point).catch(this.error);
   }
   release(pointer: number | string) {

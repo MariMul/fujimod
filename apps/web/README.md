@@ -183,8 +183,8 @@ FUJIMOD_DAT=/path/to/local/FPUPDATE.DAT
 ```
 
 The staged runtime directory contains `catalog.json` and firmware-ID folders
-with `_native.so`, `sources.zip`, `inputs.json`, `pyodide/` and
-`firmware-inputs.zip`. A release preparation stages this tree into
+with `camera.wasm`, `camera.mjs`, `wasm.json`, `controls.json` and
+`runtime-NOTICES.txt`. A release preparation stages this tree into
 `public/runtime/`, which Vite also serves directly without a mount. These mounts exist only in
 the dev and preview servers. Setting `FUJIMOD_DAT` enables automatic local boot; without it,
 the viewer remains a DAT drop target. Public builds omit the automatic DAT fetch. The local DAT is served from its

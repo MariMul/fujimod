@@ -69,7 +69,7 @@ mise run javascript-format-check
 
 `mise run python-test` builds the native binding with its `testing` feature,
 then runs pytest discovery throughout the repository. This includes Python
-bindings, source-archive tests, simulation asset preparation and CI tooling.
+bindings, Wasm transport tests, simulation asset preparation and CI tooling.
 Install ffmpeg to exercise walkthrough media tests. Tests use scripted USB
 transcripts and peers, not physical cameras.
 

@@ -21,7 +21,7 @@ const scenarios: Record<string, ReplayScenario> = {
   },
   'x70-lcd': {
     firmwareId: 'x70-110',
-    clockSeconds2000: 845510400,
+    clockSeconds2000: 0,
     interactive: true,
     steps: [],
   },

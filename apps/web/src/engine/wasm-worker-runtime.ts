@@ -1,6 +1,6 @@
-import type { CardFile, EngineConfig, Input, ReplayStep, Scene } from './api';
+import type { CardFile, EngineConfig, Input, ReplayStep, Scene, Checkpoint } from './api';
 import { CameraStore } from '../cameras/store';
-import { digest } from './checkpoint-store';
+import { digest } from './identity';
 import { faultFrom } from './fault';
 import {
   GuestExecutionError,
@@ -91,6 +91,12 @@ export class WasmWorkerRuntime {
   private started = 0;
   private startedTicks = 0n;
   private nextSave = Infinity;
+  private points: Checkpoint[] = [];
+  private nextCheckpoint = 0n;
+  private nextPresentation = 0n;
+  private nextInspection = 0n;
+  private sourceFrames?: number;
+  private sourceTicks = 0n;
   private sequence = -1n;
   private canvas?: OffscreenCanvas;
   private lease = 0;
@@ -100,7 +106,7 @@ export class WasmWorkerRuntime {
   constructor(
     private send: Send,
     private loader = loadWasm,
-    private cameras: Pick<CameraStore, 'saved' | 'save'> = new CameraStore(),
+    private cameras: Pick<CameraStore, 'save'> = new CameraStore(),
   ) {}
   receive(message: WasmWorkerRequest) {
     if (message.type === 'frame_release') {
@@ -230,19 +236,47 @@ export class WasmWorkerRuntime {
         this.publish();
         return;
       }
+      case 'checkpoint':
+        return this.captureCheckpoint();
+      case 'restore_checkpoint':
+        s.command('restore', { id: request.id });
+        this.afterRestore();
+        return;
+      case 'undo':
+        s.command('undo', {});
+        this.afterRestore();
+        return this.state?.positions ?? {};
+      case 'history': {
+        const log = s.command('history', {});
+        return { ...log.result, bytes: log.bytes };
+      }
+      case 'replay_history':
+        s.command('replay', {}, new Uint8Array(request.bytes));
+        this.afterRestore();
+        return;
+      case 'fingerprint':
+        return s.command('fingerprint', {}).result;
       case 'rollback': {
         if (!Number.isFinite(request.seconds) || request.seconds <= 0)
           throw Error('Invalid rollback duration.');
-        this.observe(s.command('rollback', { seconds: request.seconds }).result);
-        this.failed = false;
-        this.sequence = -1n;
-        this.rebase();
-        this.publish();
-        this.start();
-        return this.state!.positions;
+        const now = s.status().ticks;
+        const target = now - BigInt(Math.round(request.seconds * this.manifest!.ticksPerSecond));
+        const retained = this.points.filter((point) => BigInt(point.tick) <= target).at(-1);
+        try {
+          s.command('rollback', { tick: String(target < 0n ? 0n : target) });
+        } catch (error) {
+          if (!(error instanceof Error) || !/retained history/.test(error.message) || !retained)
+            throw error;
+          s.command('restore', { id: retained.id });
+        }
+        this.afterRestore();
+        return this.state?.positions ?? {};
       }
       case 'profile':
-        return s.command('profile', { limit: request.limit }).result;
+        return {
+          ...s.command('profile', { limit: request.limit }).result,
+          checkpoints: this.points,
+        };
       case 'error_report': {
         if (!s.created)
           return {
@@ -321,34 +355,7 @@ export class WasmWorkerRuntime {
       manifest.construction,
     );
     if (manifest.construction === 'session') {
-      const saved = config.camera && (await this.cameras.saved(config.camera.id));
-      if (saved) {
-        const snapshot =
-          !config.restart && saved.runtimeKey === this.runtimeKey ? saved.snapshot : undefined;
-        const bytes = new Uint8Array(saved.durable.byteLength + (snapshot?.byteLength ?? 0));
-        bytes.set(new Uint8Array(saved.durable));
-        if (snapshot) bytes.set(new Uint8Array(snapshot), saved.durable.byteLength);
-        this.observe(
-          session.command(
-            'restore',
-            {
-              durable: { offset: 0, length: saved.durable.byteLength },
-              positions: saved.positions,
-              poweredOn: saved.poweredOn,
-              snapshot: snapshot
-                ? { offset: saved.durable.byteLength, length: snapshot.byteLength }
-                : undefined,
-            },
-            bytes,
-          ).result,
-        );
-        if (files.length && !snapshot) {
-          const packed = packFiles(files);
-          this.observe(
-            session.command('restart_card', { files: packed.rows }, packed.bytes).result,
-          );
-        }
-      } else if (files.length) {
+      if (files.length) {
         const packed = packFiles(files);
         this.observe(session.command('restart_card', { files: packed.rows }, packed.bytes).result);
       }
@@ -366,16 +373,10 @@ export class WasmWorkerRuntime {
     this.started = this.metricWall = performance.now();
     this.startedTicks = this.metricTicks = session.status().ticks;
     this.rebase();
-    let inputs: Input[];
-    if (this.state) inputs = this.state.inputs;
-    else {
-      const response = await fetch(config.inputs);
-      if (!response.ok) throw Error('Wasm input metadata is unavailable.');
-      const table: { inputs: Input[] } = await response.json();
-      inputs = table.inputs;
-    }
+    const inputs = this.state?.inputs ?? manifest.inputs ?? [];
     if (config.camera && !this.replayMode) await this.autoSave();
-    this.publish();
+    if (manifest.construction === 'session') this.captureCheckpoint();
+    this.publish(true);
     this.start();
     return inputs;
   }
@@ -409,9 +410,16 @@ export class WasmWorkerRuntime {
             const maximum = now + BigInt(Math.max(1, Math.floor(rate / 60)));
             if (target > now && this.state?.poweredOn !== false) {
               s.run(target < maximum ? target : maximum);
-              this.observeCurrent();
+              if (
+                this.manifest!.construction === 'session' &&
+                s.status().ticks >= this.nextCheckpoint
+              )
+                this.captureCheckpoint();
               if (performance.now() >= this.nextSave) await this.autoSave();
-              this.publish();
+              if (s.status().ticks >= this.nextPresentation) {
+                this.observeCurrent();
+                this.publish();
+              }
             } else if (performance.now() >= this.nextSave) await this.autoSave();
           } catch (error) {
             this.failed = true;
@@ -424,8 +432,49 @@ export class WasmWorkerRuntime {
           }
           this.schedule();
         }),
-      16,
+      Math.max(
+        0,
+        Math.min(
+          16,
+          (Number(this.require().status().ticks - this.clockTicks) * 1000) /
+            this.manifest!.ticksPerSecond -
+            (performance.now() - this.clockWall),
+        ),
+      ),
     );
+  }
+  private captureCheckpoint(): Checkpoint {
+    const saved = this.require().command('checkpoint', {}).result;
+    this.points.push(saved);
+    this.points = this.points.slice(-8);
+    this.nextCheckpoint = BigInt(saved.tick) + BigInt(this.manifest!.ticksPerSecond * 2);
+    return saved;
+  }
+  private afterRestore() {
+    const tick = this.require().status().ticks;
+    this.points = this.points.filter((point) => BigInt(point.tick) <= tick);
+    this.nextCheckpoint = tick + BigInt(this.manifest!.ticksPerSecond * 2);
+    this.started = this.metricWall = performance.now();
+    this.startedTicks = this.metricTicks = tick;
+    this.nextInspection = tick;
+    this.nextPresentation = tick;
+    this.failed = this.require().status().failed;
+    this.sequence = -1n;
+    this.observeCurrent();
+    this.rebase();
+    this.publish(true);
+    this.start();
+  }
+  private inspectSource(tick: bigint) {
+    if (this.manifest!.construction !== 'session' || tick < this.nextInspection) return;
+    const report = this.require().command('error_report', {}).result.report;
+    const bus = report.bus as
+      | { devices?: { kind: string; state: { frames?: number } }[] }
+      | undefined;
+    const sources = bus?.devices?.filter((device) => device.kind === 'external-image-frames') ?? [];
+    this.sourceFrames = sources.length === 1 ? sources[0]!.state.frames : undefined;
+    this.sourceTicks = tick;
+    this.nextInspection = tick + BigInt(this.manifest!.ticksPerSecond);
   }
   private async replayStep(step: ReplayStep) {
     if (step.action === 'advance') {
@@ -441,16 +490,19 @@ export class WasmWorkerRuntime {
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
       }
       this.observeCurrent();
-      this.publish();
+      this.publish(true);
       // A following replay step must not mutate a shared borrowed frame.
       await this.leased;
     } else await this.dispatch(step);
   }
-  private publish() {
+  private publish(force = false) {
     const s = this.require(),
       status = s.status(),
       wall = performance.now(),
       rate = this.manifest!.ticksPerSecond;
+    if (!force && status.ticks < this.nextPresentation) return;
+    this.inspectSource(status.ticks);
+    this.nextPresentation = status.ticks + BigInt(Math.round(rate / 10));
     const elapsed = (wall - this.started) / 1000;
     this.send({
       type: 'metrics',
@@ -467,13 +519,16 @@ export class WasmWorkerRuntime {
           instructions: String(status.instructions),
           ticksPerSecond: rate,
           runtimeKey: this.runtimeKey,
+          sourceFrames: this.sourceFrames,
+          sourceTicks: String(this.sourceTicks),
+          checkpoints: this.points.map((point) => point.tick),
         },
       },
     });
     this.metricTicks = status.ticks;
     this.metricWall = wall;
     const frame = s.frame(this.manifest!.output);
-    if (!frame || frame.sequence === this.sequence) return;
+    if (!frame) return;
     this.sequence = frame.sequence;
     const { rgba, width, height } = frame,
       sequence = Number(frame.sequence);

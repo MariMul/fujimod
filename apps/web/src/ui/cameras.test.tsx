@@ -20,21 +20,9 @@ function firmware(maturity: 'early' | 'supported'): Firmware {
     release_date: '',
     download_url: 'https://example.org/firmware',
     emulate: {
-      adapter: 'pyodide',
       maturity,
       bundle: 'runtime/new-body-100/',
-      inputs: 'runtime/new-body-100/inputs.json',
-      boot: {
-        datPath: '/firmware.dat',
-        prepare: { module: 'loader', function: 'prepare', options: {} },
-        module: 'boot',
-        sessionModule: 'session',
-        limit: 100,
-        step: 10,
-        readyLimit: 10,
-        readyWhen: ['ready'],
-        sceneInput: false,
-      },
+      sceneInput: false,
     },
   };
 }

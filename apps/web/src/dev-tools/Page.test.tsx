@@ -79,56 +79,6 @@ test('one pane shows console responses and independently filters layers and seve
     host.remove();
   }
 });
-test('simulator target is available without physical WebUSB and a pending boot can be canceled', async () => {
-  const host = document.createElement('div');
-  document.body.append(host);
-  let finish!: (choice: { name: string; interfaces: { id: number; label: string }[] }) => void;
-  const pick = vi.fn(
-    () =>
-      new Promise<{ name: string; interfaces: { id: number; label: string }[] }>((resolve) => {
-        finish = resolve;
-      }),
-  );
-  const cancelPending = vi.fn(),
-    open = vi.fn();
-  const backend: CameraBackend = {
-    initialize: async () => {},
-    pick,
-    open,
-    drain: () => [],
-    onDisconnect: () => () => {},
-    cancelPending,
-    dispose: () => {},
-  };
-  const dispose = render(() => <DevTools backend={backend} supported={false} />, host);
-  const button = (name: string) =>
-    [...host.querySelectorAll('button')].find((node) => node.textContent === name)!;
-  try {
-    await vi.waitFor(() => {
-      flush();
-      expect(host.textContent).toContain('WebUSB unavailable');
-    });
-    const target = host.querySelector('[aria-label="Connection target"]') as HTMLSelectElement;
-    target.value = 'simulator';
-    target.dispatchEvent(new Event('change', { bubbles: true }));
-    flush();
-    expect(host.querySelector('.dt-status')?.textContent).toBe('Disconnected');
-    button('Connect simulator').click();
-    flush();
-    expect(pick).toHaveBeenCalledWith('simulator');
-    button('Cancel').click();
-    flush();
-    expect(cancelPending).toHaveBeenCalledOnce();
-    finish({ name: 'Late emulator', interfaces: [{ id: 0, label: 'USB' }] });
-    await Promise.resolve();
-    flush();
-    expect(open).not.toHaveBeenCalled();
-    expect(button('Connect simulator')).toBeTruthy();
-  } finally {
-    dispose();
-    host.remove();
-  }
-});
 
 const hosts = vi.hoisted(() => ({ create: vi.fn() }));
 vi.mock('./sharing', async (actual) => ({
