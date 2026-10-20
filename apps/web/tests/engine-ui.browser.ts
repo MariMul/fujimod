@@ -32,7 +32,11 @@ for (const type of [chromium, webkit].filter(
             options?: Transferable[] | StructuredSerializeOptions,
           ) => {
             const packet = message as { type: string; request?: WasmRequest };
-            if (packet.type === 'rpc' && packet.request)
+            if (
+              packet.type === 'rpc' &&
+              packet.request &&
+              ['rotate', 'touch', 'set_position'].includes(packet.request.action)
+            )
               window.qualifiedInputs.push(packet.request);
             if (Array.isArray(options)) super.postMessage(message, options);
             else super.postMessage(message, options);
