@@ -1,5 +1,5 @@
 import { HostTimings } from './host-timings';
-import { scheduleHostTask } from './host-task';
+import { HostTasks } from './host-task';
 import type { CardFile, EngineConfig, ReplayStep, Scene, Checkpoint, BootInput } from './api';
 import { CameraStore } from '../cameras/store';
 import { digest } from './identity';
@@ -107,6 +107,7 @@ function extent(bytes: Uint8Array, span: { offset: number; length: number }): Ar
 /** One serialized owner. Rendering borrows Wasm memory before any next mutation. */
 export class WasmWorkerRuntime {
   private timings = new HostTimings();
+  private hostTasks = new HostTasks();
   private loadTimings?: Loaded['loadTimings'];
   private loaded?: Promise<Loaded>;
   private bundle?: string;
@@ -529,12 +530,12 @@ export class WasmWorkerRuntime {
   private yieldToHost() {
     return this.timings.measureAsync(
       'yield',
-      () => new Promise<void>((resolve) => scheduleHostTask(resolve)),
+      () => new Promise<void>((resolve) => this.hostTasks.schedule(resolve)),
     );
   }
   private schedule() {
     if (!this.live) return;
-    this.cancelSchedule = scheduleHostTask(
+    this.cancelSchedule = this.hostTasks.schedule(
       () =>
         this.enqueue(async () => {
           if (!this.live) return;
