@@ -43,6 +43,14 @@ export interface Camera {
   uncertain: boolean;
   /** Absent while sharing is off. Remote cameras cannot be shared again. */
   sharing?: CameraSharing;
+  /** What the remote tool holding the session reports it is doing. */
+  remoteActivity?: {
+    controller: string;
+    title?: string;
+    progress?: { label: string; done: number; total: number };
+  };
+  /** The camera's latest unresolved problem, until it is dismissed or resolved. */
+  problem?: string;
 }
 
 /** One console log entry. Every entry names its camera. */
@@ -96,6 +104,12 @@ export interface CameraModel {
   ): Promise<T>;
   /** Turn sharing on or off. Never affects sessions or the connection. */
   setSharing(camera: string, on: boolean): Promise<void>;
+  /**
+   * Called when a remote tool asks for the owner's attention. The page runs the
+   * spoken countdown and resolves when it finishes; the remote tool waits.
+   */
+  onOwnerCountdown(run: (camera: string, message: string) => Promise<void>): () => void;
+  dismissProblem(camera: string): void;
   clearLog(): void;
   dispose(): void;
 }
