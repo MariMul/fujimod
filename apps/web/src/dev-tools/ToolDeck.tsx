@@ -5,7 +5,6 @@ import './tool-deck.css';
 export enum DeckTool {
   EnterDebugMode = 'enter-debug-mode',
   ConnectDebugCamera = 'connect-debug-camera',
-  ConnectSimulator = 'connect-simulator',
   Console = 'console',
   Share = 'share',
   LeaveDebugMode = 'leave-debug-mode',
@@ -95,21 +94,14 @@ export function ToolDeck(props: {
         </article>
       </div>
       <article class="td-sim">
-        <div>
-          <h2>Connect a simulated camera</h2>
-          <p>Run any Dev Tool against your saved firmware in the browser — no camera needed.</p>
-        </div>
-        <button
-          class="td-cta td-cta-outline"
-          disabled={props.busy}
-          onClick={() => props.onOpen(DeckTool.ConnectSimulator)}
-        >
-          {busyLabel('Connect simulator')}
-        </button>
+        <h2>Camera simulator</h2>
+        <a class="td-cta td-cta-outline" href="../?scenario=x70-lcd#workspace">
+          Open simulator
+        </a>
       </article>
       <div class="td-grid">
         <Card title="Console" onOpen={() => props.onOpen(DeckTool.Console)}>
-          <p>Send commands to a connected camera or the simulator.</p>
+          <p>Send commands to a connected camera.</p>
         </Card>
         <Card
           title="Share camera"

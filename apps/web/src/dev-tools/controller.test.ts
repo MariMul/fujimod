@@ -249,7 +249,7 @@ test('a shared camera controller does not require local WebUSB support', async (
 });
 
 test('workflow session access requires an idle connected physical USB camera', async () => {
-  for (const target of [CameraTarget.Usb, CameraTarget.Emulator, CameraTarget.Remote]) {
+  for (const target of [CameraTarget.Usb, CameraTarget.Remote]) {
     const f = fixture();
     const session = {
       armResetGuard: async () => ({ guardWasSet: false, debugFlagBefore: 0, progress: [] }),

@@ -47,9 +47,7 @@ function initialView(connectOnMount: boolean | undefined): View {
     if (search.get('tool') === DeckTool.EnterDebugMode) return View.EnterDebugMode;
     if (search.get('tool') === DeckTool.LeaveDebugMode) return View.LeaveDebugMode;
   }
-  return search.get('target') === CameraTarget.Emulator || remoteControlUrl(url)
-    ? View.Console
-    : View.Deck;
+  return remoteControlUrl(url) ? View.Console : View.Deck;
 }
 const connectionNames: Record<ConnectionState, string> = {
   [ConnectionState.Loading]: 'Loading USB',
@@ -534,8 +532,6 @@ export default function DevTools(props: {
                 else if (tool === DeckTool.ConnectDebugCamera) {
                   share.unlockAudio();
                   void tools.connect(CameraTarget.Usb);
-                } else if (tool === DeckTool.ConnectSimulator) {
-                  void tools.connect(CameraTarget.Emulator);
                 } else setView(View.Console);
               }}
             />

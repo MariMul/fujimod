@@ -51,7 +51,9 @@ test('Dev Tools opens on the tool deck with debug-only tools locked', async () =
     expect(card('Leave debug mode').querySelector('button')).toBeNull();
     expect(button('Show instructions')).toBeTruthy();
     expect(button('Connect camera')).toBeTruthy();
-    expect(button('Connect simulator')).toBeTruthy();
+    const simulator = host.querySelector<HTMLAnchorElement>('.td-sim a');
+    expect(simulator?.textContent?.trim()).toBe('Open simulator');
+    expect(simulator?.getAttribute('href')).toBe('../?scenario=x70-lcd#workspace');
   } finally {
     dispose();
   }
