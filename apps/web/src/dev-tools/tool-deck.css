@@ -148,8 +148,8 @@
   text-transform: uppercase;
   text-decoration: none;
   cursor: pointer;
+  /* State changes are visual only — never move or resize the tile. */
   transition:
-    transform 90ms ease-out,
     background 120ms,
     box-shadow 120ms,
     outline-color 120ms;
@@ -164,34 +164,35 @@
   color: var(--phosphor);
   text-shadow: 0 0 10px rgba(var(--phosphor-rgb), 0.9);
 }
-/* HOVER: lifts 3px, brighter fill, strong outer glow, brighter inset frame. */
-.td-cta:hover:not(:disabled),
-.td-action:hover:not(:disabled) {
-  transform: translateY(-3px);
-  outline-color: rgba(var(--phosphor-rgb), 0.6);
-  background: linear-gradient(
-    180deg,
-    rgba(var(--phosphor-rgb), 0.24),
-    rgba(var(--phosphor-rgb), 0.08)
-  );
-  color: #eafff0;
-  box-shadow:
-    0 0 26px rgba(var(--phosphor-rgb), 0.6),
-    inset 0 0 26px rgba(var(--phosphor-rgb), 0.3),
-    0 9px 18px rgba(0, 0, 0, 0.6);
+/* HOVER: brighter fill, strong outer glow, lit inset frame. No movement. */
+@media (hover: hover) {
+  .td-cta:hover:not(:disabled),
+  .td-action:hover:not(:disabled) {
+    outline-color: rgba(var(--phosphor-rgb), 0.6);
+    background: linear-gradient(
+      180deg,
+      rgba(var(--phosphor-rgb), 0.24),
+      rgba(var(--phosphor-rgb), 0.08)
+    );
+    color: #eafff0;
+    box-shadow:
+      0 0 26px rgba(var(--phosphor-rgb), 0.6),
+      inset 0 0 26px rgba(var(--phosphor-rgb), 0.3),
+      0 2px 0 rgba(0, 0, 0, 0.6);
+  }
 }
-/* PRESS: sinks below rest, glow pulled fully inward, no raised edge. */
+/* PRESS: fill floods bright, glow pulled fully inward. No movement. */
 .td-cta:active:not(:disabled),
 .td-action:active:not(:disabled) {
-  transform: translateY(2px);
   outline-color: rgba(var(--phosphor-rgb), 0.7);
   background: linear-gradient(
     180deg,
-    rgba(var(--phosphor-rgb), 0.36),
-    rgba(var(--phosphor-rgb), 0.16)
+    rgba(var(--phosphor-rgb), 0.38),
+    rgba(var(--phosphor-rgb), 0.17)
   );
+  color: #eafff0;
   box-shadow:
-    inset 0 0 36px rgba(var(--phosphor-rgb), 0.55),
+    inset 0 0 38px rgba(var(--phosphor-rgb), 0.6),
     inset 0 2px 10px rgba(0, 0, 0, 0.55);
 }
 .td-cta:disabled,
