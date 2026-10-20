@@ -34,7 +34,7 @@ function fixture() {
   return { inspect, submit, link, backend };
 }
 
-test('service-mode Inspector reads all selectors, geometry-bounded configuration and memory into the persistent log and bundle', async () => {
+test('camera reads cover all selectors, geometry-bounded configuration and memory into the persistent log and bundle', async () => {
   const f = fixture();
   const host = document.createElement('div');
   document.body.append(host);
@@ -44,9 +44,7 @@ test('service-mode Inspector reads all selectors, geometry-bounded configuration
   const complete = async () =>
     vi.waitFor(() => {
       flush();
-      expect(host.querySelector('.dt-inspector [role="status"]')!.textContent).toBe(
-        'Read complete',
-      );
+      expect(host.querySelector('.dt-reads [role="status"]')!.textContent).toBe('Read complete');
     });
   const blobUrls = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:diagnostics');
   const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
@@ -56,7 +54,6 @@ test('service-mode Inspector reads all selectors, geometry-bounded configuration
       expect(host.textContent).toContain('Connected · Service body');
     });
     const log = host.querySelector('.dt-viewport');
-    button('Inspector').click();
     flush();
     button('Read device identity').click();
     await complete();
@@ -71,7 +68,7 @@ test('service-mode Inspector reads all selectors, geometry-bounded configuration
       { kind: 'configuration', offset: 4, length: 4 },
       { kind: 'configuration', offset: 8, length: 2 },
     ]);
-    const address = host.querySelector<HTMLInputElement>('.dt-inspector input')!;
+    const address = host.querySelector<HTMLInputElement>('.dt-reads input')!;
     address.value = '0x1234';
     address.dispatchEvent(new Event('input', { bubbles: true }));
     flush();
@@ -82,7 +79,6 @@ test('service-mode Inspector reads all selectors, geometry-bounded configuration
     flush();
     expect(host.querySelector('.dt-viewport')).toBe(log);
     expect(log!.textContent).toContain('Identity · Framework · Framework');
-    button('Inspector').click();
     flush();
     button('Download diagnostic bundle').click();
     const blob = blobUrls.mock.calls[0][0] as Blob;

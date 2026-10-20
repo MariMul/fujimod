@@ -51,7 +51,6 @@ try {
     url.searchParams.set('target', 'simulator');
     url.searchParams.set('firmware', process.env.FUJIMOD_FIRMWARE ?? 'x70-110');
     url.searchParams.set('connect', '1');
-    url.searchParams.set('tool', 'inspector');
     console.log(`${size}: booting simulator`);
     await page.goto(url.href);
     await page.waitForFunction(
@@ -69,11 +68,11 @@ try {
     console.log(`${size}: simulator connected, reading identity`);
     await page.getByRole('button', { name: 'Read device identity', exact: true }).click();
     await page.waitForFunction(
-      () => document.querySelector('.dt-inspector [role="status"]')?.textContent !== 'Reading…',
+      () => document.querySelector('.dt-reads [role="status"]')?.textContent !== 'Reading…',
       null,
       { timeout: 30000 },
     );
-    assert.equal(await page.locator('.dt-inspector [role="status"]').innerText(), 'Read complete');
+    assert.equal(await page.locator('.dt-reads [role="status"]').innerText(), 'Read complete');
     const geometry = await page.evaluate(() => {
       const tools = document.querySelector('.dt-tool-column')!.getBoundingClientRect();
       const log = document.querySelector('.dt-console')!.getBoundingClientRect();
@@ -101,7 +100,7 @@ try {
       element.scrollTop = element.scrollHeight;
     });
     await page.screenshot({ path: resolve(directory, `workbench-${size}.png`), fullPage: true });
-    for (const name of ['Console', 'Enter debug mode', 'Leave debug mode', 'Inspector']) {
+    for (const name of ['Console', 'Enter debug mode', 'Leave debug mode']) {
       await page
         .getByRole('navigation', { name: 'Workbench tools' })
         .getByRole('button', { name, exact: true })
@@ -116,16 +115,19 @@ try {
       );
       if (!isConsole) assert.equal(await page.locator('.dt-bartool').innerText(), name);
     }
-    await page.getByRole('button', { name: '← Back to deck', exact: true }).click();
+    // The camera reads are always available while connected — no tool selection.
+    await page
+      .getByRole('navigation', { name: 'Workbench tools' })
+      .getByRole('button', { name: 'Console', exact: true })
+      .click();
     assert.equal(await page.getByRole('region', { name: 'Connection log' }).isVisible(), true);
-    await page.getByRole('button', { name: 'Inspector', exact: true }).click();
     await page.getByLabel('Address', { exact: true }).fill('0x008a0400');
     await page.getByLabel('Length (bytes)', { exact: true }).fill('32');
     await page.getByRole('button', { name: 'Read memory', exact: true }).click();
     await page.waitForFunction(
-      () => document.querySelector('.dt-inspector [role="status"]')?.textContent !== 'Reading…',
+      () => document.querySelector('.dt-reads [role="status"]')?.textContent !== 'Reading…',
     );
-    const memoryStatus = await page.locator('.dt-inspector [role="status"]').innerText();
+    const memoryStatus = await page.locator('.dt-reads [role="status"]').innerText();
     // A stock simulator can refuse debug-memory access. Verify either accepted
     // bytes or its real failed transfer and blocked session; never substitute data.
     if (memoryStatus !== 'Read complete') {

@@ -420,10 +420,10 @@ test('the console composer appears only for the Console tool; other tools show a
       flush();
       expect(host.querySelector('.dt-composer')).toBeTruthy();
     });
-    button('Inspector').click();
+    button('Enter debug mode').click();
     flush();
     expect(host.querySelector('.dt-composer')).toBeNull();
-    expect(host.querySelector('.dt-bartool')!.textContent).toBe('Inspector');
+    expect(host.querySelector('.dt-bartool')!.textContent).toBe('Enter debug mode');
     button('Console').click();
     flush();
     expect(host.querySelector('.dt-composer')).toBeTruthy();

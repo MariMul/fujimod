@@ -16,7 +16,6 @@ test('the whole tile invokes its named action and debug instructions stay separa
       ['Connect camera', DeckTool.ConnectCamera],
       ['Connect simulator', DeckTool.ConnectSimulator],
       ['Console', DeckTool.Console],
-      ['Inspector', DeckTool.Inspector],
       ['Enter debug mode', DeckTool.EnterDebugMode],
       ['Share camera', DeckTool.Share],
       ['Leave debug mode', DeckTool.LeaveDebugMode],
@@ -34,7 +33,7 @@ test('the whole tile invokes its named action and debug instructions stay separa
     expect(bug.classList.contains('td-action')).toBe(true);
     expect(bug.querySelector('button, a')).toBeNull();
     expect(host.querySelectorAll('.td-connects > button')).toHaveLength(2);
-    expect(host.querySelectorAll('.td-grid > .td-action')).toHaveLength(6);
+    expect(host.querySelectorAll('.td-grid > .td-action')).toHaveLength(5);
   } finally {
     dispose();
   }

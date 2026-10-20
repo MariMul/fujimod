@@ -54,7 +54,7 @@ export interface CameraBackend {
   cancelPending?(): void;
   dispose(): void;
 }
-/** Give Inspector only the session's read operations. */
+/** Give the camera reads only the session's read operations. */
 export function sessionInspectorRead(
   session: Pick<
     Session,

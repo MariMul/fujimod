@@ -18,7 +18,7 @@ import { createShareSession } from './share-session';
 import { pageState } from './page-state';
 import { ProblemAlert, RemoteUseStrip, SharingChip } from './SharingStatus';
 import { ToolActivity } from './ToolActivity';
-import { Inspector } from './Inspector';
+import { CameraReads } from './camera-reads';
 import { DeckTool, ToolDeck } from './ToolDeck';
 import { DebugModeWizard } from './debug-mode/Wizard';
 import { LeaveDebugMode } from './debug-mode/LeaveDebugMode';
@@ -37,7 +37,6 @@ enum View {
   Deck,
   Console,
   EnterServiceMode,
-  Inspector,
   EnterDebugMode,
   LeaveDebugMode,
 }
@@ -50,7 +49,6 @@ function initialView(connectOnMount: boolean | undefined): View {
   const search = new URL(url).searchParams;
   if (import.meta.env.DEV) {
     if (search.get('tool') === DeckTool.EnterServiceMode) return View.EnterServiceMode;
-    if (search.get('tool') === DeckTool.Inspector) return View.Inspector;
     if (search.get('tool') === DeckTool.EnterDebugMode) return View.EnterDebugMode;
     if (search.get('tool') === DeckTool.LeaveDebugMode) return View.LeaveDebugMode;
   }
@@ -196,7 +194,6 @@ export default function DevTools(props: {
     if (tool === DeckTool.EnterServiceMode) setView(View.EnterServiceMode);
     else if (tool === DeckTool.EnterDebugMode) setView(View.EnterDebugMode);
     else if (tool === DeckTool.LeaveDebugMode) setView(View.LeaveDebugMode);
-    else if (tool === DeckTool.Inspector) setView(View.Inspector);
     else if (tool === DeckTool.Share) shareDialog.showModal();
     else if (tool === DeckTool.ConnectCamera || tool === DeckTool.ConnectSimulator) {
       const destination =
@@ -274,8 +271,6 @@ export default function DevTools(props: {
   );
   const toolLabel = () => {
     switch (view()) {
-      case View.Inspector:
-        return 'Inspector';
       case View.EnterServiceMode:
         return 'Enter service mode';
       case View.EnterDebugMode:
@@ -604,12 +599,12 @@ export default function DevTools(props: {
               <button class="dt-tools-back" onClick={() => setView(View.Deck)}>
                 ← Back to deck
               </button>
+              <CameraReads tools={tools} />
               <nav class="dt-tool-launchers" aria-label="Workbench tools">
                 <For
                   each={
                     [
                       [DeckTool.Console, 'Console'],
-                      [DeckTool.Inspector, 'Inspector'],
                       [DeckTool.EnterDebugMode, 'Enter debug mode'],
                       [DeckTool.LeaveDebugMode, 'Leave debug mode'],
                       [DeckTool.Share, 'Share camera'],
@@ -634,9 +629,6 @@ export default function DevTools(props: {
                 </a>
               </nav>
             </Show>
-            <div hidden={view() !== View.Inspector}>
-              <Inspector tools={tools} />
-            </div>
             <Switch>
               <Match when={view() === View.Deck}>
                 <ToolDeck
