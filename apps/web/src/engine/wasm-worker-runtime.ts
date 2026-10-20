@@ -1,4 +1,5 @@
 import { HostTimings } from './host-timings';
+import { scheduleHostTask } from './host-task';
 import type { CardFile, EngineConfig, ReplayStep, Scene, Checkpoint, BootInput } from './api';
 import { CameraStore } from '../cameras/store';
 import { digest } from './identity';
@@ -115,7 +116,7 @@ export class WasmWorkerRuntime {
   private state?: SessionState;
   private scene?: Scene;
   private queue: Promise<void> = Promise.resolve();
-  private timer?: ReturnType<typeof setTimeout>;
+  private cancelSchedule?: () => void;
   private live = false;
   private failed = false;
   private replayMode = false;
@@ -498,7 +499,7 @@ export class WasmWorkerRuntime {
           if (s.status().ticks >= end)
             throw Error('Boot contacts did not release within five guest seconds.');
           s.run(s.status().ticks + BigInt(Math.max(1, Math.round(rate / 10))));
-          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          await this.yieldToHost();
         }
       }
     }
@@ -522,11 +523,18 @@ export class WasmWorkerRuntime {
   }
   private stop() {
     this.live = false;
-    clearTimeout(this.timer);
+    this.cancelSchedule?.();
+    this.cancelSchedule = undefined;
+  }
+  private yieldToHost() {
+    return this.timings.measureAsync(
+      'yield',
+      () => new Promise<void>((resolve) => scheduleHostTask(resolve)),
+    );
   }
   private schedule() {
     if (!this.live) return;
-    this.timer = setTimeout(
+    this.cancelSchedule = scheduleHostTask(
       () =>
         this.enqueue(async () => {
           if (!this.live) return;
@@ -623,7 +631,7 @@ export class WasmWorkerRuntime {
           this.publish();
           await this.leased;
         }
-        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        await this.yieldToHost();
       }
       this.observeCurrent();
       this.publish();
