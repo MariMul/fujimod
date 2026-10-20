@@ -207,8 +207,8 @@ fn decode(source: &[u8], mappings: Vec<(String, u64, u64, u64, bool, bool)>) -> 
         .map(|inner| Image { inner })
         .map_err(error)
 }
-pub(crate) fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
-    let module = PyModule::new(py, "fujimod.firmware")?;
+pub(crate) fn register(py: Python<'_>, parent: &Bound<'_, PyModule>, name: &str) -> PyResult<()> {
+    let module = PyModule::new(py, name)?;
     module.add_function(wrap_pyfunction!(invert, &module)?)?;
     module.add_function(wrap_pyfunction!(inner_header, &module)?)?;
     module.add_function(wrap_pyfunction!(decompress, &module)?)?;
@@ -222,6 +222,6 @@ pub(crate) fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult
     parent.add_submodule(&module)?;
     py.import("sys")?
         .getattr("modules")?
-        .set_item("fujimod.firmware", module)?;
+        .set_item(name, module)?;
     Ok(())
 }

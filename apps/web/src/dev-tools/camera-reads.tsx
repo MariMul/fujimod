@@ -1,7 +1,7 @@
 import type { JSX } from '@solidjs/web';
 import { createSignal, untrack } from 'solid-js';
 import type { DevToolsController } from './controller';
-import { ConnectionState, ConsoleState } from './controller';
+import { ConnectionState } from './controller';
 import {
   infoSelectors,
   inspectorReadLimit,
@@ -20,15 +20,19 @@ interface Reading {
   pageBytes?: number;
   error?: string;
 }
-export function Inspector(props: { tools: DevToolsController }): JSX.Element {
+/** The camera read actions, shown directly in the workbench rather than behind a
+ * separate tool: Dev Tools as a whole is the inspector. Each action opens an ff80
+ * session, reads, and closes; results stream to the log. */
+export function CameraReads(props: { tools: DevToolsController }): JSX.Element {
   const [address, setAddress] = createSignal('0x00000000');
   const [length, setLength] = createSignal('256');
   const [busy, setBusy] = createSignal(false);
   const [status, setStatus] = createSignal('');
   const [readings, setReadings] = createSignal<Reading[]>([]);
+  // A self-contained read needs a reachable camera and no read already in flight.
+  // It does not depend on the console tool's command state.
   const available = () =>
     props.tools.connection() === ConnectionState.Connected &&
-    props.tools.consoleState() === ConsoleState.Idle &&
     !props.tools.inspectionBusy() &&
     !busy();
   async function run(action: (read: InspectorRead) => Promise<void>) {
@@ -130,8 +134,7 @@ export function Inspector(props: { tools: DevToolsController }): JSX.Element {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   return (
-    <section class="dt-inspector" aria-labelledby="inspector-title">
-      <h2 id="inspector-title">Inspector</h2>
+    <section class="dt-reads" aria-label="Camera reads">
       <button class="td-action" disabled={!available()} onClick={identity}>
         Read device identity
       </button>
