@@ -237,12 +237,19 @@ fn contradictory_query_capacity_stops_before_any_bulk_read() {
 #[test]
 fn explicit_slow_mode_never_sends_a_diagnostic_query_or_writes_an_enabled_gate() {
     let mut f = executable_facts();
+    f.normal_usb = None;
     f.read_mode = ReadMode::Slow;
     f.bulk = None;
-    f.ram.as_mut().unwrap().size = 8;
+    // This explicit probe need not be a known whole-RAM map. Exercise both
+    // a complete command and a short tail without normal-mode recognition.
+    f.ram = Some(Region {
+        address: 0x3000,
+        size: 19,
+    });
     let plan = f.validate().unwrap();
     let mut steps = qualified_setup(true);
-    steps.extend(memory(0x1000, b"abcdefgh"));
+    steps.extend(memory(0x3000, b"0123456789abcdef"));
+    steps.extend(memory(0x3010, b"ghi"));
     let (mut session, script) = opened(steps);
     let mut reader = block_on(plan.prepare(
         &mut session,
@@ -252,7 +259,13 @@ fn explicit_slow_mode_never_sends_a_diagnostic_query_or_writes_an_enabled_gate()
         },
     ))
     .unwrap();
-    assert_eq!(block_on(reader.next_chunk()).unwrap().unwrap(), b"abcdefgh");
+    assert_eq!(
+        block_on(reader.next_chunk()).unwrap().unwrap(),
+        b"0123456789abcdef"
+    );
+    assert_eq!(reader.bytes_completed(), 16);
+    assert_eq!(block_on(reader.next_chunk()).unwrap().unwrap(), b"ghi");
+    assert_eq!(reader.bytes_completed(), 19);
     assert!(block_on(reader.next_chunk()).unwrap().is_none());
     assert_eq!(script.remaining(), 0);
 }
@@ -261,6 +274,60 @@ fn zero_capacity_is_never_treated_as_unbounded() {
     let mut f = facts();
     f.bulk.as_mut().unwrap().capacities = vec![0];
     assert!(f.validate().is_err());
+}
+#[test]
+fn unexpected_gate_value_stops_before_code_or_probe_reads() {
+    let plan = executable_facts().validate().unwrap();
+    let mut steps = info(4, "Example");
+    steps.extend(info(8, "2.5"));
+    steps.extend(configuration(2, 7));
+    let (mut session, script) = opened(steps);
+    assert!(matches!(
+        block_on(plan.prepare(
+            &mut session,
+            &UsbIds {
+                vendor_id: 17,
+                product_id: 42,
+            }
+        )),
+        Err(Error::Verification("unexpected read gate value"))
+    ));
+    assert_eq!(script.remaining(), 0);
+}
+#[test]
+fn failed_probe_preserves_only_the_completed_prefix() {
+    let mut f = executable_facts();
+    f.normal_usb = None;
+    f.read_mode = ReadMode::Slow;
+    f.ram = Some(Region {
+        address: 0x3000,
+        size: 20,
+    });
+    let plan = f.validate().unwrap();
+    let mut steps = qualified_setup(true);
+    steps.extend(memory(0x3000, b"0123456789abcdef"));
+    let mut failed = memory(0x3010, b"tail");
+    let Some(E::Read { data, .. }) = failed.last_mut() else {
+        panic!("read fixture")
+    };
+    data[28] ^= 1; // Wrong address echo: payload is not verified RAM evidence.
+    steps.extend(failed);
+    let (mut session, script) = opened(steps);
+    let mut reader = block_on(plan.prepare(
+        &mut session,
+        &UsbIds {
+            vendor_id: 17,
+            product_id: 42,
+        },
+    ))
+    .unwrap();
+    assert_eq!(
+        block_on(reader.next_chunk()).unwrap().unwrap(),
+        b"0123456789abcdef"
+    );
+    assert!(block_on(reader.next_chunk()).is_err());
+    assert_eq!(reader.bytes_completed(), 16);
+    assert_eq!(script.remaining(), 0);
 }
 #[test]
 fn bad_code_stops_after_gate_without_storage_or_cleanup_writes() {
@@ -282,9 +349,10 @@ fn bad_code_stops_after_gate_without_storage_or_cleanup_writes() {
 fn partial_facts_are_reviewable_but_cannot_execute() {
     let mut f = facts();
     f.normal_usb = None;
+    f.read_mode = ReadMode::Slow;
     f.ram = None;
     assert!(!f.review().ready);
-    assert!(f.review().blockers.contains(&"normal_usb".into()));
+    assert_eq!(f.review().blockers, ["explicit bounded read range"]);
     assert!(f.review().steps.last().unwrap().contains("Remove battery"));
     assert!(f.validate().is_err());
 }

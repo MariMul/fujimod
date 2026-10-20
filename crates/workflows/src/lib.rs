@@ -9,8 +9,8 @@
 mod access;
 pub mod debug_mode;
 pub mod install;
-pub mod service_mode;
 #[cfg(feature = "service-capture")]
 pub mod service_capture;
+pub mod service_mode;
 
 pub use access::Limits;

@@ -103,13 +103,15 @@ pub enum ReadMode {
     Slow,
 }
 
-/// Partial documents can be reviewed offline. Execution requires every field.
+/// Partial documents can be reviewed offline. Normal USB IDs are optional
+/// recognition data; service access requires an explicit finite read range.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Facts {
     pub format_version: u32,
     pub firmware_id: String,
     pub firmware_sha256: String,
+    /// Optional native OS descriptor recognition; never a service prerequisite.
     pub normal_usb: Option<UsbIds>,
     pub service_usb: Option<UsbIds>,
     pub product: Option<String>,
@@ -118,7 +120,9 @@ pub struct Facts {
     pub read_gate: Option<ReadGate>,
     pub slow_read_bytes: Option<u32>,
     pub read_mode: ReadMode,
-    /// Located readable RAM range; never inferred from a diagnostic capacity.
+    /// Explicit bounded read range. A slow probe may test an unknown extent;
+    /// only successfully returned bytes establish readability. Never infer this
+    /// range from a diagnostic capacity or assume it describes all physical RAM.
     pub ram: Option<Region>,
     pub bulk: Option<Bulk>,
     pub code_checks: Vec<CodeCheck>,
@@ -153,19 +157,11 @@ impl Facts {
                 && self.firmware_sha256.bytes().all(|b| b.is_ascii_hexdigit()),
             "firmware identity"
         );
-        for (name, ids) in [
-            ("normal_usb", &self.normal_usb),
-            ("service_usb", &self.service_usb),
-        ] {
-            require!(
-                ids.as_ref()
-                    .is_some_and(|i| i.vendor_id != 0 && i.product_id != 0),
-                name
-            );
-        }
         require!(
-            self.normal_usb != self.service_usb,
-            "distinct normal/service USB ids"
+            self.service_usb
+                .as_ref()
+                .is_some_and(|i| i.vendor_id != 0 && i.product_id != 0),
+            "service_usb"
         );
         require!(
             self.product.as_ref().is_some_and(|s| !s.is_empty()),
@@ -197,7 +193,7 @@ impl Facts {
         );
         require!(
             self.ram.as_ref().is_some_and(|r| r.range().is_ok()),
-            "located readable RAM range"
+            "explicit bounded read range"
         );
         require!(
             !self.code_checks.is_empty()
@@ -216,8 +212,7 @@ impl Facts {
                 |i| format!("{:04x}:{:04x}", i.vendor_id, i.product_id),
             )
         };
-        let mut steps = vec![format!("Recognize normal USB {}", ids(&self.normal_usb))];
-        steps.push(format!(
+        let mut steps = vec![format!(
             "Power on holding {}; USB boot condition: {}",
             self.entry
                 .as_ref()
@@ -225,9 +220,9 @@ impl Facts {
             self.entry
                 .as_ref()
                 .map_or("unlocated", |e| e.usb_condition.as_str())
-        ));
+        )];
         steps.push(format!(
-            "Re-identify service USB {}, product {}, internal version {}",
+            "Connect native service USB {}, product {}, internal version {}",
             ids(&self.service_usb),
             self.product.as_deref().unwrap_or("unlocated"),
             self.internal_version.as_deref().unwrap_or("unlocated")
@@ -250,8 +245,8 @@ impl Facts {
         steps.push(format!(
             "Stream {} through the {:?} reader",
             self.ram.as_ref().map_or_else(
-                || "unlocated RAM".into(),
-                |r| format!("RAM {:#x}+{:#x}", r.address, r.size)
+                || "an unspecified range (refused)".into(),
+                |r| format!("bounded range {:#x}+{:#x}", r.address, r.size)
             ),
             self.read_mode
         ));
@@ -390,6 +385,8 @@ impl Plan {
                 NonZeroU32::MIN,
             )
             .await?;
+        } else if before != gate.enabled_value {
+            return Err(Error::Verification("unexpected read gate value"));
         }
         let limits = DebugMemoryLimits {
             read: nonzero(facts.slow_read_bytes.expect("validated slow reader"))?,
