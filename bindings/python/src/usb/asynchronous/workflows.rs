@@ -22,7 +22,7 @@ impl AsyncSession {
         firmware_sha256: String,
     ) -> PyResult<(bool, u8, Vec<String>)> {
         let camera = definition(&camera_table, firmware_id, &firmware_sha256)?;
-        let limits = service_mode::Limits {
+        let limits = fujimod_workflows::Limits {
             memory: self.limits.memory,
             configuration: self.limits.configuration,
         };

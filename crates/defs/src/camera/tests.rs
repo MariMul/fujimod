@@ -13,6 +13,13 @@ fn json(guard_offset: &str) -> String {
           "output_state":{{"address":"0x17d548c","size":8}},
           "payloads":[{{"name":"main","address":"0xd08368","size":"0xe74"}}]}},
         "debug":{{"flag_offset":"0xf7"}},
+        "debug_mode":{{"callback":{{"address":"0x17d291c","stock":"0x10ef130"}},"output_fields":"0x17d548c",
+          "adapter":{{"address":"0x2068080","hex":"0100a0e3"}},
+          "cache":{{"clean":"0x4263c","instruction_invalidate":"0x42720","barrier":"0x43b34","instruction_barrier":"0x42624"}},
+          "code_checks":[{{"name":"configuration_range_wrapper","address":"0x945a44","size":"0x28","sha256":"{DIGEST}"}}],
+          "storage":{{"geometry":{{"address":"0x40aeab94","words":["0x28","0x3a3",null,"0x1","0x3cb"]}},
+            "banks":[{{"address":"0x439c4000","size":"0x500000"}}]}},
+          "preferences":{{"address":"0x40d08354","size":"0x4c74"}}}},
         "bulk":{{"ignored":true}}}}"#
     )
 }
@@ -40,6 +47,13 @@ fn camera_tables_load_hex_and_integer_fields_for_the_selected_firmware() {
     assert_eq!(guard.code_checks[0].range.size, 0x120);
     assert_eq!(camera.debug().unwrap().flag_offset, 0xf7);
     assert_eq!(camera.configuration.size, 0x420000);
+    let mode = camera.debug_mode().unwrap();
+    assert_eq!(mode.adapter, (0x2068080, vec![1, 0, 0xa0, 0xe3]));
+    assert_eq!(
+        mode.storage_geometry.1,
+        [Some(0x28), Some(0x3a3), None, Some(1), Some(0x3cb)]
+    );
+    assert_eq!(mode.storage_banks[0].size, 0x500000);
 }
 
 #[test]

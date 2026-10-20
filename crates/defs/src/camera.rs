@@ -105,6 +105,25 @@ pub struct Guard {
 pub struct Debug {
     pub flag_offset: u32,
 }
+/// Persistent debug mode: a temporary adapter that calls the stock one-byte
+/// configuration range writer through a borrowed diagnostic callback, the
+/// cache helpers that make it executable, and the storage it changes.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DebugMode {
+    pub callback: u32,
+    pub stock_callback: u32,
+    pub output_fields: u32,
+    pub adapter: (u32, Vec<u8>),
+    pub cache_clean: u32,
+    pub instruction_invalidate: u32,
+    pub barrier: u32,
+    pub instruction_barrier: u32,
+    pub code_checks: Vec<RegionCheck>,
+    /// Storage geometry words; `None` entries are not checked.
+    pub storage_geometry: (u32, Vec<Option<u32>>),
+    pub storage_banks: Vec<Range>,
+    pub preferences: Range,
+}
 #[derive(Clone, Debug)]
 pub struct CameraDefinition {
     identity: FirmwareIdentity,
@@ -113,6 +132,7 @@ pub struct CameraDefinition {
     pub configuration: Configuration,
     guard: Option<Guard>,
     debug: Option<Debug>,
+    debug_mode: Option<DebugMode>,
 }
 
 #[derive(Deserialize)]
@@ -171,6 +191,38 @@ struct RawIdentity {
     products: Vec<String>,
 }
 #[derive(Deserialize)]
+struct RawCallback {
+    address: RawNumber,
+    stock: RawNumber,
+}
+#[derive(Deserialize)]
+struct RawCache {
+    clean: RawNumber,
+    instruction_invalidate: RawNumber,
+    barrier: RawNumber,
+    instruction_barrier: RawNumber,
+}
+#[derive(Deserialize)]
+struct RawGeometry {
+    address: RawNumber,
+    words: Vec<Option<RawNumber>>,
+}
+#[derive(Deserialize)]
+struct RawStorage {
+    geometry: RawGeometry,
+    banks: Vec<RawRange>,
+}
+#[derive(Deserialize)]
+struct RawDebugMode {
+    callback: RawCallback,
+    output_fields: RawNumber,
+    adapter: RawBytes,
+    cache: RawCache,
+    code_checks: Vec<RawRegion>,
+    storage: RawStorage,
+    preferences: RawRange,
+}
+#[derive(Deserialize)]
 struct RawCamera {
     schema: u32,
     firmware_id: String,
@@ -180,6 +232,7 @@ struct RawCamera {
     configuration: RawConfiguration,
     guard: Option<RawGuard>,
     debug: Option<RawDebug>,
+    debug_mode: Option<RawDebugMode>,
 }
 
 fn bytes(hex: &str) -> Result<Vec<u8>, CameraError> {
@@ -290,6 +343,48 @@ impl CameraDefinition {
                 Ok(Debug { flag_offset })
             })
             .transpose()?;
+        let debug_mode = raw
+            .debug_mode
+            .map(|mode| -> Result<DebugMode, CameraError> {
+                Ok(DebugMode {
+                    callback: mode.callback.address.u32()?,
+                    stock_callback: mode.callback.stock.u32()?,
+                    output_fields: mode.output_fields.u32()?,
+                    adapter: (mode.adapter.address.u32()?, bytes(&mode.adapter.hex)?),
+                    cache_clean: mode.cache.clean.u32()?,
+                    instruction_invalidate: mode.cache.instruction_invalidate.u32()?,
+                    barrier: mode.cache.barrier.u32()?,
+                    instruction_barrier: mode.cache.instruction_barrier.u32()?,
+                    code_checks: mode
+                        .code_checks
+                        .iter()
+                        .map(|check| {
+                            Ok(RegionCheck {
+                                name: check.name.clone(),
+                                range: range(&check.address, &check.size)?,
+                                sha256: Digest::parse(&check.sha256)?,
+                            })
+                        })
+                        .collect::<Result<_, CameraError>>()?,
+                    storage_geometry: (
+                        mode.storage.geometry.address.u32()?,
+                        mode.storage
+                            .geometry
+                            .words
+                            .iter()
+                            .map(|word| word.as_ref().map(RawNumber::u32).transpose())
+                            .collect::<Result<_, _>>()?,
+                    ),
+                    storage_banks: mode
+                        .storage
+                        .banks
+                        .iter()
+                        .map(|bank| range(&bank.address, &bank.size))
+                        .collect::<Result<_, _>>()?,
+                    preferences: range(&mode.preferences.address, &mode.preferences.size)?,
+                })
+            })
+            .transpose()?;
         Ok(Self {
             identity,
             ram_alias: raw.ram_alias.u32()?,
@@ -297,6 +392,7 @@ impl CameraDefinition {
             configuration,
             guard,
             debug,
+            debug_mode,
         })
     }
     pub fn identity(&self) -> &FirmwareIdentity {
@@ -307,6 +403,11 @@ impl CameraDefinition {
     }
     pub fn debug(&self) -> Result<Debug, CameraError> {
         self.debug.ok_or(CameraError::Missing("debug"))
+    }
+    pub fn debug_mode(&self) -> Result<&DebugMode, CameraError> {
+        self.debug_mode
+            .as_ref()
+            .ok_or(CameraError::Missing("debug_mode"))
     }
 }
 

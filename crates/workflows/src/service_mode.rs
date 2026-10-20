@@ -6,19 +6,18 @@
 //! cleared here, including after a failure. Temporary debug access (`f7`) is
 //! restored on every exit path: to 0 after success, to its original value after
 //! a failed check.
-use fujimod_defs::camera::{CameraDefinition, CameraError};
+use crate::{
+    Limits,
+    access::{Access, range},
+};
+use fujimod_defs::camera::{CameraDefinition, CameraError, Guard};
 use fujimod_usb::{
     ff80::{
         Session, SessionState,
-        commands::{
-            configuration::ConfigurationView,
-            info::InfoSelector,
-            memory::{Address, DebugMemoryLimits, MemoryRange},
-        },
+        commands::{configuration::ConfigurationView, info::InfoSelector},
     },
-    operations::{checks, configuration, memory::read_range},
+    operations::checks,
 };
-use std::num::NonZeroU32;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ServiceModeError {
@@ -47,12 +46,6 @@ pub enum ServiceModeError {
 }
 pub type Result<T> = std::result::Result<T, ServiceModeError>;
 
-/// Transfer bounds the caller qualified for this session.
-#[derive(Clone, Copy, Debug)]
-pub struct Limits {
-    pub memory: DebugMemoryLimits,
-    pub configuration: NonZeroU32,
-}
 /// What arming found and left.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GuardArmed {
@@ -60,63 +53,39 @@ pub struct GuardArmed {
     pub debug_flag_before: u8,
 }
 
-fn range(address: u32, size: u32) -> Result<MemoryRange> {
-    let size = NonZeroU32::new(size).ok_or(fujimod_usb::Error::InvalidLength)?;
-    Ok(MemoryRange::new(Address(address), size)?)
+/// The connected device names the selected camera.
+pub(crate) async fn check_product(session: &mut Session, camera: &CameraDefinition) -> Result<()> {
+    let product = session.device_info(InfoSelector::Product).await?.text;
+    let normalized = product.to_uppercase().replace('-', "");
+    if camera
+        .products
+        .iter()
+        .any(|name| normalized.contains(&name.to_uppercase().replace('-', "")))
+    {
+        Ok(())
+    } else {
+        Err(ServiceModeError::OtherCamera(product))
+    }
 }
-struct Guarded<'a> {
-    session: &'a mut Session,
-    camera: &'a CameraDefinition,
-    limits: Limits,
-}
-impl Guarded<'_> {
-    /// Uncached view of RAM, as the stock tools read it.
-    async fn read(&mut self, address: u32, size: u32) -> Result<Vec<u8>> {
-        let range = range(address | self.camera.ram_alias, size)?;
-        Ok(read_range(self.session, range, self.limits.memory).await?)
-    }
-    async fn word(&mut self, address: u32) -> Result<u32> {
-        let bytes = self.read(address, 4).await?;
-        Ok(u32::from_le_bytes(bytes.try_into().expect("four bytes")))
-    }
-    async fn byte(&mut self, offset: u32) -> Result<u8> {
-        Ok(configuration::read_byte(
-            self.session,
-            ConfigurationView::Ram,
-            offset,
-            self.limits.configuration,
-        )
-        .await?)
-    }
-    async fn set(&mut self, offset: u32, value: u8) -> Result<()> {
-        Ok(configuration::write_byte_verified(
-            self.session,
-            ConfigurationView::Ram,
-            offset,
-            value,
-            self.limits.configuration,
-        )
-        .await?)
-    }
-    /// Stock state words and callbacks; returns the USB output-state bytes.
-    async fn stock_state(&mut self) -> Result<Vec<u8>> {
-        let guard = self.camera.guard()?.clone();
-        for word in &guard.state_words {
-            let value = self.word(word.address).await?;
-            if value != word.value {
-                return Err(ServiceModeError::Unexpected {
-                    name: word.name.clone(),
-                    value,
-                });
-            }
+
+/// Stock state words and callbacks; returns the USB output-state bytes.
+pub(crate) async fn stock_state(access: &mut Access<'_>, guard: &Guard) -> Result<Vec<u8>> {
+    for word in &guard.state_words {
+        let value = access.uncached_word(word.address).await?;
+        if value != word.value {
+            return Err(ServiceModeError::Unexpected {
+                name: word.name.clone(),
+                value,
+            });
         }
-        let (address, table) = &guard.callback_table;
-        if self.read(*address, table.len() as u32).await? != *table {
-            return Err(ServiceModeError::Callbacks);
-        }
-        self.read(guard.output_state.address, guard.output_state.size)
-            .await
     }
+    let (address, table) = &guard.callback_table;
+    if access.uncached(*address, table.len() as u32).await? != *table {
+        return Err(ServiceModeError::Callbacks);
+    }
+    Ok(access
+        .uncached(guard.output_state.address, guard.output_state.size)
+        .await?)
 }
 
 /// Confirm the connected camera is the selected one in stock service mode,
@@ -130,15 +99,7 @@ pub async fn arm_reset_guard(
     let guard = camera.guard()?.clone();
     let debug = camera.debug()?;
     progress("Checking the camera");
-    let product = session.device_info(InfoSelector::Product).await?.text;
-    let normalized = product.to_uppercase().replace('-', "");
-    if !camera
-        .products
-        .iter()
-        .any(|name| normalized.contains(&name.to_uppercase().replace('-', "")))
-    {
-        return Err(ServiceModeError::OtherCamera(product));
-    }
+    check_product(session, camera).await?;
     let geometry = session
         .configuration_geometry(ConfigurationView::Ram)
         .await?;
@@ -150,13 +111,13 @@ pub async fn arm_reset_guard(
             page: geometry.page_bytes.get(),
         });
     }
-    let mut work = Guarded {
+    let mut access = Access {
         session,
         camera,
         limits,
     };
-    let flag_before = work.byte(debug.flag_offset).await?;
-    let guard_before = work.byte(guard.offset).await?;
+    let flag_before = access.byte(debug.flag_offset).await?;
+    let guard_before = access.byte(guard.offset).await?;
     for (name, value) in [("debug flag", flag_before), ("reset guard", guard_before)] {
         if value > 1 {
             return Err(ServiceModeError::Unexpected {
@@ -166,7 +127,7 @@ pub async fn arm_reset_guard(
         }
     }
     let outcome = arm(
-        &mut work,
+        &mut access,
         &guard,
         debug.flag_offset,
         flag_before,
@@ -176,10 +137,10 @@ pub async fn arm_reset_guard(
     .await;
     // Restore temporary debug access whatever happened; never undo the guard.
     let target = if outcome.is_ok() { 0 } else { flag_before };
-    if work.session.state() == SessionState::Ready {
+    if access.session.state() == SessionState::Ready {
         let cleanup = async {
-            if work.byte(debug.flag_offset).await? != target {
-                work.set(debug.flag_offset, target).await?;
+            if access.byte(debug.flag_offset).await? != target {
+                access.set(debug.flag_offset, target).await?;
             }
             Ok::<_, ServiceModeError>(())
         }
@@ -197,26 +158,24 @@ pub async fn arm_reset_guard(
 }
 
 async fn arm(
-    work: &mut Guarded<'_>,
-    guard: &fujimod_defs::camera::Guard,
+    access: &mut Access<'_>,
+    guard: &Guard,
     flag_offset: u32,
     flag_before: u8,
     guard_before: u8,
     progress: &mut (dyn FnMut(&str) + Send),
 ) -> Result<()> {
     if flag_before == 0 {
-        work.set(flag_offset, 1).await?;
+        access.set(flag_offset, 1).await?;
     }
     progress("Verifying stock camera code");
+    let alias = access.camera.ram_alias;
     for check in &guard.code_checks {
-        let range = range(
-            check.range.address | work.camera.ram_alias,
-            check.range.size,
-        )?;
+        let range = range(check.range.address | alias, check.range.size)?;
         if !checks::region_matches(
-            work.session,
+            access.session,
             range,
-            work.limits.memory,
+            access.limits.memory,
             check.sha256.bytes(),
         )
         .await?
@@ -225,27 +184,34 @@ async fn arm(
         }
     }
     progress("Confirming service mode");
-    let output_before = work.stock_state().await?;
+    let output_before = stock_state(access, guard).await?;
     let mut payloads = Vec::new();
     for payload in &guard.payloads {
-        payloads.push(work.read(payload.range.address, payload.range.size).await?);
+        payloads.push(
+            access
+                .uncached(payload.range.address, payload.range.size)
+                .await?,
+        );
     }
     progress("Arming the reset guard");
     if guard_before != guard.value {
-        work.set(guard.offset, guard.value).await?;
+        access.set(guard.offset, guard.value).await?;
     }
     for alias in &guard.aliases {
-        let bytes = read_range(work.session, range(*alias, 1)?, work.limits.memory).await?;
-        if bytes != [guard.value] {
+        if access.raw(*alias, 1).await? != [guard.value] {
             return Err(ServiceModeError::GuardUnverified);
         }
     }
     for (payload, before) in guard.payloads.iter().zip(&payloads) {
-        if work.read(payload.range.address, payload.range.size).await? != *before {
+        if access
+            .uncached(payload.range.address, payload.range.size)
+            .await?
+            != *before
+        {
             return Err(ServiceModeError::SettingsChanged);
         }
     }
-    if work.stock_state().await? != output_before {
+    if stock_state(access, guard).await? != output_before {
         return Err(ServiceModeError::OutputChanged);
     }
     Ok(())
