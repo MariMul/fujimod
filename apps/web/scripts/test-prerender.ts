@@ -90,7 +90,7 @@ try {
         workers: string[] = [];
       page.on('worker', (worker) => workers.push(worker.url()));
       page.on('request', (request) => {
-        if (/\/runtime\/(?!catalog\.json)|default-dunes|pyodide-worker/.test(request.url()))
+        if (/\/runtime\/(?!catalog\.json)|default-dunes|wasm-worker/.test(request.url()))
           runtimeRequests.push(request.url());
       });
       const errors: string[] = [],

@@ -6,21 +6,12 @@ import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
 interface ObservedState {
-  virtual_ticks: number;
-  image_frames?: number;
-  failure?: unknown;
-  execution_error?: unknown;
-  navigation?: {
-    current_menu?: { pointer?: number };
-    physical_input_queue?: { completed: number; pending: number; active: unknown };
-  };
+  inputQueue?: { completed: number; pending: number; active: unknown };
 }
 declare global {
   interface Window {
     speedTestState?: ObservedState;
     speedTestFault?: unknown;
-    speedTestHistory?: { snapshots: number[] };
-    speedTestWorker?: Worker;
   }
 }
 
@@ -56,8 +47,7 @@ await context.addInitScript(() => {
   window.Worker = class extends Original {
     constructor(...args: ConstructorParameters<typeof Worker>) {
       super(...args);
-      if (!String(args[0]).includes('pyodide-worker')) return;
-      window.speedTestWorker = this;
+      if (!String(args[0]).includes('wasm-worker')) return;
       this.addEventListener(
         'message',
         ({
@@ -67,11 +57,9 @@ await context.addInitScript(() => {
           state?: ObservedState;
           fault?: unknown;
           error?: string;
-          history?: { snapshots: number[] };
         }>) => {
           if (data.state) window.speedTestState = { ...window.speedTestState, ...data.state };
           if (data.type === 'error') window.speedTestFault = data.fault ?? data.error;
-          if (data.history) window.speedTestHistory = data.history;
         },
       );
     }
@@ -93,17 +81,19 @@ try {
     timeout: 240000,
   });
   assert.equal(await page.evaluate(() => window.speedTestFault), undefined);
-  const ready = await page.evaluate(() => window.speedTestState!.virtual_ticks);
+  const ready = await page.evaluate(() => window.cameraPerformance!.guestTicks);
   console.log('Camera ready; warming guest execution.');
   await page.waitForFunction(
-    (target) => window.speedTestFault || window.speedTestState!.virtual_ticks >= target,
+    (target) => window.speedTestFault || window.cameraPerformance!.guestTicks >= target,
     ready + warmup * 12000000,
     { timeout: 600000 },
   );
+  result.warmupFault = await page.evaluate(() => window.speedTestFault);
+  assert.equal(result.warmupFault, undefined);
   async function sample() {
     return page.evaluate(() => ({
-      ticks: window.speedTestState!.virtual_ticks,
-      frames: window.speedTestState!.image_frames ?? 0,
+      ticks: window.cameraPerformance!.guestTicks,
+      frames: Number(window.cameraPerformance!.runtime?.sourceFrames ?? 0),
       wall: performance.now(),
       presented: Number(window.cameraPerformance?.runtime?.presentedImageFrames ?? 0),
       metrics: window.cameraPerformance,
@@ -126,20 +116,20 @@ try {
     warmupGuestSeconds: warmup,
     minimumSpeed,
     errors,
+    fault: await page.evaluate(() => window.speedTestFault),
   });
+  assert.equal(await page.evaluate(() => window.speedTestFault), undefined);
   await page.locator('#viewer').scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${output}/shooting.png` });
   const oldPixels = await page
     .locator('#lcd-source')
     .evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
-  const completed = await page.evaluate(
-    () => window.speedTestState?.navigation?.physical_input_queue?.completed ?? 0,
-  );
+  const completed = await page.evaluate(() => window.speedTestState?.inputQueue?.completed ?? 0);
   const started = performance.now();
-  await page.locator('button[data-id="menu_ok"]').click();
+  await page.locator('button[data-id="menu_ok_button"]').click();
   await page.waitForFunction(
     (count) => {
-      const queue = window.speedTestState?.navigation?.physical_input_queue;
+      const queue = window.speedTestState?.inputQueue;
       return (
         window.speedTestFault ||
         (queue && queue.completed >= count + 2 && !queue.active && !queue.pending)
@@ -151,10 +141,7 @@ try {
   await page.waitForFunction(
     (old) => {
       const canvas = document.querySelector<HTMLCanvasElement>('#lcd-source');
-      return (
-        window.speedTestFault ||
-        (!!window.speedTestState?.navigation?.current_menu?.pointer && canvas?.toDataURL() !== old)
-      );
+      return window.speedTestFault || canvas?.toDataURL() !== old;
     },
     oldPixels,
     { timeout: 60000 },
@@ -162,9 +149,18 @@ try {
   result.menuSeconds = (performance.now() - started) / 1000;
   await page.locator('#viewer').scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${output}/menu.png` });
-  await page.evaluate(() => window.speedTestWorker!.postMessage({ type: 'recovery_status' }));
-  await page.waitForFunction(() => (window.speedTestHistory?.snapshots.length ?? 0) >= 2);
-  result.history = await page.evaluate(() => window.speedTestHistory);
+  const history = await page.evaluate(async () => {
+    const profile = await window.cameraEngine!.profile();
+    const log = await window.cameraEngine!.history();
+    return { checkpoints: profile.checkpoints, entries: log.entries, bytes: log.bytes.length };
+  });
+  result.history = history;
+  assert.ok(Array.isArray(history.checkpoints) && history.checkpoints.length >= 2);
+  assert.ok(history.bytes > 0);
+  const beforeUndo = await page.evaluate(() => window.cameraPerformance!.guestTicks);
+  await page.evaluate(() => window.cameraEngine!.rollback(10));
+  await page.waitForFunction((tick) => window.cameraPerformance!.guestTicks < tick, beforeUndo);
+  result.undoTicks = await page.evaluate(() => window.cameraPerformance!.guestTicks);
   assert.equal(await page.evaluate(() => window.speedTestFault), undefined);
   assert.deepEqual(errors, []);
   assert.ok(sourceFps >= 9.5, `${sourceFps} source frames per guest second`);

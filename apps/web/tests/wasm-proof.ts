@@ -17,26 +17,13 @@ const errors: string[] = [],
 const config = (fault = false): EngineConfig => ({
   firmwareId: 'generated-arm',
   bundle: `/runtime/${fault ? 'wasm-proof-fault' : 'wasm-proof'}/`,
-  inputs: '/runtime/wasm-proof/inputs.json',
   execution: { mode: 'replay', clockSeconds2000: 0 },
-  boot: {
-    datPath: '',
-    prepare: { module: '', function: '', options: {} },
-    module: '',
-    sessionModule: '',
-    limit: 0,
-    step: 0,
-    readyLimit: 0,
-    readyWhen: [],
-    sceneInput: false,
-  },
+  sceneInput: false,
 });
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw Error(message);
 }
-const engine = createEngine({ ...config(), adapter: 'wasm' }, (error) =>
-  errors.push(String(error)),
-);
+const engine = createEngine((error) => errors.push(String(error)));
 engine.frames((frame) => {
   viewer.frame(frame);
   frames.push({
@@ -79,7 +66,7 @@ try {
   assert(errors.length === 0, 'Unexpected execution fault.');
   const card = await engine.cardState();
   assert(card.supported === false, 'Resolved board unexpectedly advertises a card.');
-  const bad = createEngine({ ...config(), adapter: 'wasm' }, () => {});
+  const bad = createEngine(() => {});
   try {
     const changed = dat.slice(0);
     new Uint8Array(changed)[0] ^= 1;
@@ -93,7 +80,7 @@ try {
   } finally {
     bad.dispose();
   }
-  const failing = createEngine({ ...config(), adapter: 'wasm' }, () => {});
+  const failing = createEngine(() => {});
   failing.errors((fault) => {
     faults.push(fault);
   });

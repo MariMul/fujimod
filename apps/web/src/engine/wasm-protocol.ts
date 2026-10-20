@@ -25,6 +25,9 @@ export type WasmRequest =
   | { action: 'card_insert'; present: boolean }
   | { action: 'restart_card'; files: CardFile[] }
   | { action: 'rollback'; seconds: number }
+  | { action: 'checkpoint' | 'undo' | 'history' | 'fingerprint' }
+  | { action: 'restore_checkpoint'; id: string }
+  | { action: 'replay_history'; bytes: Uint8Array }
   | { action: 'profile'; limit?: number }
   | { action: 'replay'; steps: readonly ReplayStep[] };
 export type WasmWorkerRequest =

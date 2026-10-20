@@ -49,13 +49,8 @@ export async function stageSite(inputs: SiteInputs, destination = 'public') {
   try {
     for (const firmware of emulators) {
       const config = firmware.emulate!;
-      if (
-        config.bundle !== `runtime/${firmware.id}/` ||
-        config.inputs !== config.bundle + 'inputs.json'
-      )
+      if (config.bundle !== `runtime/${firmware.id}/`)
         throw Error(`Unexpected runtime location: ${firmware.id}`);
-      // USB uses a separate artifact inventory and is enabled only when bundled.
-      delete config.usb;
       const directory = join(inputs.runtime, firmware.id);
       const native = JSON.parse(await readFile(join(directory, 'qualification.json'), 'utf8')) as {
         firmware_sha256?: string;
@@ -81,36 +76,13 @@ export async function stageSite(inputs: SiteInputs, destination = 'public') {
       )
         throw Error(`Emulator qualification failed: ${firmware.id}`);
       for (const name of [
-        '_native.so',
-        'sources.zip',
-        'firmware-inputs.zip',
-        'inputs.json',
+        'camera.wasm',
+        'camera.mjs',
+        'wasm.json',
+        'controls.json',
         'runtime-NOTICES.txt',
       ])
         await copy(join(directory, name), config.bundle + name);
-      const pyodide = join(directory, 'pyodide');
-      const lock = JSON.parse(await readFile(join(pyodide, 'pyodide-lock.json'), 'utf8')) as {
-        packages: Record<string, { file_name: string; depends: string[] }>;
-      };
-      const packages = new Set<string>();
-      function requirePackage(name: string) {
-        const item = lock.packages[name];
-        if (!item || !/^[a-zA-Z0-9_.+-]+$/.test(item.file_name))
-          throw Error(`Invalid Pyodide package: ${name}`);
-        if (packages.has(item.file_name)) return;
-        packages.add(item.file_name);
-        item.depends.forEach(requirePackage);
-      }
-      ['numpy', 'pillow'].forEach(requirePackage);
-      for (const name of [
-        'pyodide.mjs',
-        'pyodide.asm.mjs',
-        'pyodide.asm.wasm',
-        'pyodide-lock.json',
-        'python_stdlib.zip',
-        ...packages,
-      ])
-        await copy(join(pyodide, name), config.bundle + 'pyodide/' + name);
     }
     const catalogBytes = Buffer.from(JSON.stringify(catalog));
     await writeFile(join(temporary, 'runtime/catalog.json'), catalogBytes);

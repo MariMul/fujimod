@@ -65,21 +65,6 @@ export interface BootInput {
   stage?: string;
   position?: string;
 }
-export interface BootProtocol {
-  datPath: string;
-  prepare: {
-    module: string;
-    function: string;
-    options: Record<string, unknown>;
-  };
-  module: string;
-  sessionModule: string;
-  limit: number;
-  step: number;
-  readyLimit: number;
-  readyWhen: string[];
-  sceneInput: boolean;
-}
 export type ReplayStep =
   | { action: 'press' | 'release'; id: string; stage?: string }
   | { action: 'set_position'; id: string; position: string }
@@ -88,8 +73,7 @@ export interface EngineConfig {
   camera?: { id: string; revision: number; modEnabled: boolean };
   firmwareId: string;
   bundle: string;
-  inputs: string;
-  boot: BootProtocol;
+  sceneInput: boolean;
   initialPositions?: Record<string, string>;
   restart?: boolean;
   /** Explicit SD image handoff for runtimes that start after the boot ROM. */
@@ -97,7 +81,28 @@ export interface EngineConfig {
   /** Cold boot with a fixed RTC; replay mode advances only through replay(). */
   execution?: { mode: 'live' | 'replay'; clockSeconds2000: number };
 }
+export interface Checkpoint {
+  id: string;
+  tick: string;
+  instructions: string[];
+}
+export interface ReplayLog {
+  format: 'session-input-log-cbor';
+  schema: 1;
+  entries: number;
+  bytes: Uint8Array;
+}
+export interface EngineFingerprint {
+  schema: 1;
+  sha256: string;
+}
 export interface Engine {
+  checkpoint(): Promise<Checkpoint>;
+  restoreCheckpoint(id: string): Promise<void>;
+  undo(): Promise<Record<string, string>>;
+  history(): Promise<ReplayLog>;
+  replayHistory(bytes: Uint8Array): Promise<void>;
+  fingerprint(): Promise<EngineFingerprint>;
   prepare(config: EngineConfig): void;
   saveCamera(): Promise<void>;
   cameraSaves(
@@ -140,4 +145,10 @@ export interface Engine {
   setScene(scene: Scene | null): Promise<void>;
   power(on: boolean): Promise<void>;
   dispose(): void;
+}
+
+declare global {
+  interface Window {
+    cameraEngine?: Engine;
+  }
 }

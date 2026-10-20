@@ -1,4 +1,13 @@
-import type { BootInput, CardReadOptions, CardState, CardTree, Connection, Input } from './api';
+import type {
+  BootInput,
+  CardReadOptions,
+  CardState,
+  CardTree,
+  Connection,
+  Input,
+  Checkpoint,
+  EngineFingerprint,
+} from './api';
 
 /** Export names and wasm32 layouts are versioned independently of session JSON. */
 export interface CameraModule {
@@ -48,6 +57,7 @@ export interface WasmManifest {
   ticksPerSecond: number;
   bootTicks: number;
   output: number;
+  inputs?: Input[];
 }
 export interface SessionState {
   inputs: Input[];
@@ -83,16 +93,16 @@ export interface SessionCommands {
     result: SessionState;
   };
   save: { request: Record<string, never>; result: SaveResult };
-  restore: {
-    request: {
-      durable: { offset: number; length: number };
-      snapshot?: { offset: number; length: number };
-      positions: Record<string, string>;
-      poweredOn: boolean;
-    };
-    result: SessionState;
+  checkpoint: { request: Record<string, never>; result: Checkpoint };
+  restore: { request: { id: string }; result: { tick: string; instructions: string[] } };
+  undo: { request: Record<string, never>; result: { tick: string; instructions: string[] } };
+  rollback: { request: { tick: string }; result: { tick: string; instructions: string[] } };
+  history: {
+    request: Record<string, never>;
+    result: { format: 'session-input-log-cbor'; schema: 1; entries: number };
   };
-  rollback: { request: { seconds: number }; result: SessionState };
+  replay: { request: Record<string, never>; result: { tick: string; instructions: string[] } };
+  fingerprint: { request: Record<string, never>; result: EngineFingerprint };
   profile: { request: { limit?: number }; result: Record<string, unknown> };
   error_report: {
     request: Record<string, never>;

@@ -39,7 +39,6 @@ test('main adapter transfers a DAT, selects absolute runtime paths and preserves
   const message = f.sent.at(-1)!;
   assert(message.type === 'rpc' && message.request.action === 'boot');
   assert.equal(message.request.config.bundle, 'https://example.invalid/runtime/');
-  assert.equal(message.request.config.inputs, 'https://example.invalid/inputs.json');
   f.resolve([]);
   await boot;
   const press = f.engine.press('shutter', 'half', { x: 0.1, y: 0.2 });

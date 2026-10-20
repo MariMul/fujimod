@@ -17,7 +17,9 @@ export class LCDViewer {
     private host: HTMLElement,
     private lcd: HTMLCanvasElement,
   ) {
-    const [ui, setUi] = createStore({ badge: undefined as string | undefined });
+    const [ui, setUi] = createStore({
+      badge: undefined as { id: string; label: string } | undefined,
+    });
     this.ui = ui;
     this.setUi = setUi;
     this.host.dataset.renderer = 'lcd';
@@ -25,10 +27,10 @@ export class LCDViewer {
   captureView(): string {
     return this.lcd.toDataURL('image/png');
   }
-  pressFeedback(id: string) {
+  pressFeedback(id: string, label: string) {
     clearTimeout(this.feedbackTimer);
     this.setUi((s) => {
-      s.badge = id;
+      s.badge = { id, label };
     });
     this.feedbackTimer = setTimeout(() => {
       this.setUi((s) => {

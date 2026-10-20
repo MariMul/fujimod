@@ -106,6 +106,35 @@ export function testCameraModule(shared = false) {
           result = {};
           binary = new Uint8Array([4, 5, 6]);
           break;
+        case 'checkpoint':
+          result = { id: String(ticks), tick: String(ticks), instructions: [String(ticks * 2n)] };
+          break;
+        case 'error_report':
+          result = {
+            report: {
+              bus: {
+                devices: [
+                  { kind: 'external-image-frames', state: { frames: Number(ticks / 400000n) } },
+                ],
+              },
+            },
+          };
+          break;
+        case 'restore':
+          ticks = BigInt(String(request.options.id));
+          failed = false;
+          result = { tick: String(ticks), instructions: [String(ticks * 2n)] };
+          break;
+        case 'history':
+          result = { format: 'session-input-log-cbor', schema: 1, entries: 1 };
+          binary = new Uint8Array([0x81, 0x01]);
+          break;
+        case 'replay':
+          result = { tick: String(ticks), instructions: [String(ticks * 2n)] };
+          break;
+        case 'fingerprint':
+          result = { schema: 1, sha256: 'a'.repeat(64) };
+          break;
         case 'rollback':
           failed = false;
           ticks = 10n;

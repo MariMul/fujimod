@@ -1,122 +1,27 @@
-# WebAssembly engine
+# Browser engine
 
-`createEngine({...config, adapter: 'wasm'}, onError)` selects the standalone
-WebAssembly worker. `adapter: 'pyodide'` remains available. Selection is explicit:
-the Wasm engine never falls back to Python or substitutes a simulated result for
-a missing export. The application still uses only `api.ts`.
+The web app has one engine: the standalone Rust WebAssembly module, owned by a
+module worker. `createEngine(onError)` exposes the typed Engine API. All CPU,
+device, control, card, scene and history operations cross the versioned C ABI.
+The production input table comes from the native `state.inputs` result.
 
-The bundle directory contains `wasm.json`, an Emscripten ES module loader and its
-Wasm binary. The manifest has `schema: 1`, `abi: 1`, `module`, `wasm`,
-`construction`, `session`, `ticksPerSecond`, `bootTicks` and `output`.
-`module` and `wasm` resolve relative to the bundle URL. The loader accepts
-`wasmBinary` and `locateFile`, and exposes the exports typed in `wasm-abi.ts`.
-The engine hashes the actual module bytes to bind saved execution state to the
-runtime. Firmware verification belongs to the module, before board creation.
+`wasm.json` selects the module, binary, checked graph, guest tick rate, initial
+run boundary and LCD output. The DAT is supplied separately and verified by the
+module. A failed construction or unsupported native operation is an error.
 
-`construction: 'resolved'` passes `session` directly to `camera_create` and uses
-`config.inputs` for already-resolved `Input[]` metadata. Physical key IDs pass
-directly to `camera_input`. Staged/touch input, storage, positions and power
-require the session API and refuse if it is absent.
+The worker paces bounded runs against the guest clock. It presents borrowed
+RGBA through OffscreenCanvas and transferred ImageBitmap, or leases a shared
+Wasm view until the synchronous frame listener returns. Metrics count native
+source events separately from delivered LCD frames. Host inspection never
+advances the guest.
 
-`construction: 'session'` uses `camera_session_create` and the module's own body
-input metadata. The creation envelope is `{schema:1, graph:session, firmwareId,
-bootSource, initialPositions, clockSeconds2000}`. There is no TypeScript device
-map or firmware binding parser. `bootTicks` is an additional guest-time advance
-after creation/restoration; use zero when creation already reaches its boot
-boundary. Construction currently returns an unexecuted board. `bootTicks` requests an explicit advance; zero does not imply boot readiness. Camera boot readiness and failure budgets remain session policy.
+Native history is owner-bound. The worker retains eight explicit checkpoints
+at two guest-second intervals; Undo uses native rollback, falling back to a
+retained checkpoint when the finer native history has expired. CBOR history is
+opaque to JavaScript. Checkpoints are distinct from durable camera saves;
+unsupported persistence returns the module's error.
 
-## Pixel lifetime
-
-`WasmSession.frame()` returns a borrowed RGBA8888 view onto the current heap.
-Descriptor reads reacquire the heap after memory growth. There are no pixel
-slices, RGB repacking, PNG encoding or structured clones of pixel arrays.
-
-An unshared module cannot expose its memory across a worker boundary without a
-copy. That path presents `ImageData` wrapping the borrowed heap view into an
-`OffscreenCanvas`, then transfers an `ImageBitmap`. Canvas presentation performs
-the browser's pixel upload; this is not an end-to-end zero-copy graphics claim.
-The engine closes the bitmap after synchronous frame listeners return.
-
-A shared module sends a view descriptor and a lease. The page constructs the
-RGBA view over the same shared heap. The worker waits for the matching release
-before processing another mutation. Listeners must finish reading synchronously;
-they must copy explicitly to retain pixels. Shared Wasm builds require suitable
-cross-origin isolation headers. The current unshared module does not qualify
-this shared path in a real browser; transport unit tests cover it.
-
-`setScene` accepts ordinary RGB bytes from the app, so it uploads them into the
-span returned by `camera_scene_buffer`, then calls `camera_scene_commit`.
-There is one explicit heap write, plus the browser's worker message transport.
-The engine does not detach the caller's scene buffer. A producer that writes
-directly to shared scene memory would need an additional lease contract.
-
-## Session extension
-
-The session exports are `camera_session_create`, `camera_command`,
-`camera_scene_buffer` and `camera_scene_commit`. Missing exports reject calls. Current modules expose all four; pending session actions return native refusal errors.
-`SessionCommands` in `wasm-abi.ts` is the typed JSON contract. A command receives
-one `{action, options}` request and an optional opaque binary upload, and returns
-one JSON result and an optional binary result. Binary spans used by card files,
-saves and diagnostics are copied before their borrowed lifetime ends; they are
-not frame buffers. Native inputs, card revision/busy checks, safe snapshots,
-history/rollback and power transitions belong to the session implementation.
-
-Owned saves use `CameraStore`'s transaction and optimistic revision checks.
-Durable bytes and an optional safe snapshot come from one `save` operation;
-there is no reuse of an older snapshot with newer storage. Snapshot reuse also
-requires matching runtime, firmware, construction graph, boot source, mod state
-and seed identities. Incompatible snapshots restore durable storage only;
-`restart` forces that cold path. Live sessions save at boot and every 30 seconds,
-retrying save failures after 10 seconds without stopping guest execution.
-Stopped execution cannot replace the last good save. Explicit save failures
-reject and publish a save error independently of emulator faults.
-
-Available native commands cover state, card state/tree/read/insert/format,
-profile, error reports and RGB scene publication/reset. Physical bindings,
-power/restart, durable save/restore and rollback currently refuse. Their typed
-calls remain in `SessionCommands`; the engine preserves native errors without
-turning an operation refusal into a guest execution fault. A construction
-refusal is classified as unsupported hardware and diagnostic export reports
-`created:false`, `status:null`, `frame:null`, without querying an absent CPU.
-
-## Executable browser check
-
-From `apps/web`, using the declared toolchains and a built module directory:
-
-```sh
-node scripts/prepare-wasm-proof.ts /path/to/module-directory
-node node_modules/vite-plus/bin/vp dev --host 127.0.0.1 --port 5205
-FUJIMOD_WEB_URL=http://127.0.0.1:5205 node tests/wasm.browser.ts
-```
-
-Artifacts are generated under ignored `public/runtime/wasm-proof*` and
-`build/wasm-proof`. `/__wasm-proof` exists only on the development server.
-It runs generated ARM code through the real worker, DAT decoder and modeled
-LCD/ADC devices, presents both MENU states with the ordinary LCD viewer, checks
-every pixel, rejects a modified DAT and reports a real unmapped-load fault.
-The Chromium and WebKit checks assert that no Python, NumPy or Pillow runtime is requested.
-The same page also exercises a generated ARM loop with the real SD host/FAT
-transport, revision/size refusals, eject/insert/format, RGB publication on guest
-clock edges, analytic reset, observational diagnostics and pending-operation
-refusals. It does not qualify a camera boot or missing session capabilities.
-
-`/__wasm-camera` runs construction against separately supplied camera inputs.
-Set `FUJIMOD_WASM_CAMERA` to a manifest file and `FUJIMOD_WASM_DAT` to its DAT
-in the local development environment. These explicit artifacts are served only
-by the development middleware and are never copied into a production build.
-The browser test is:
-
-```sh
-FUJIMOD_WEB_URL="$URL" \
-FUJIMOD_WASM_FIRMWARE="$FIRMWARE_ID" \
-FUJIMOD_WASM_DAT_SHA256="$DAT_SHA256" \
-FUJIMOD_WASM_EXPECT_REFUSAL="$CURRENT_REFUSAL" \
-node tests/wasm-camera.browser.ts
-```
-
-It checks both Chromium and WebKit against the exact DAT identity and current
-construction boundary. It fails if construction starts succeeding, so the
-scenario must then advance to and assert the next real guest boundary. No
-status counts or frames are invented when construction fails. The prepared
-manifest retains unsupported devices; the test supplies no replacement models.
-Receipts and screenshots remain under ignored `build/wasm-camera/`.
+Development proof routes are opt-in. `/__wasm-proof` runs generated ARM fixtures.
+`/__wasm-camera` reads explicitly configured local artifacts. Neither route
+adds firmware to the production site. The ordinary app supports deterministic
+development scenarios through `?scenario=x70-lcd` with a configured local DAT.

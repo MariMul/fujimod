@@ -1,97 +1,57 @@
 import { createEngine } from '../src/engine';
 import type { EngineConfig } from '../src/engine/api';
-import { engineReport } from './wasm-report';
+import { LCDViewer } from '../src/viewer/lcd';
 const output = document.createElement('pre');
-document.body.append(output);
-let frames = 0,
-  metrics = 0;
-const faultMessages: unknown[] = [];
-async function proveCamera() {
-  const manifestResponse = await fetch('/__wasm-camera/wasm.json');
-  if (!manifestResponse.ok) throw Error('Configure the camera construction artifacts.');
-  const manifest = (await manifestResponse.json()) as {
-    session: { firmwareId: string; clockSeconds2000: number };
-  };
-  const config: EngineConfig = {
-    firmwareId: manifest.session.firmwareId,
-    bundle: '/__wasm-camera/',
-    inputs: '/runtime/wasm-proof/inputs.json',
-    execution: { mode: 'replay', clockSeconds2000: manifest.session.clockSeconds2000 },
-    boot: {
-      datPath: '',
-      prepare: { module: '', function: '', options: {} },
-      module: '',
-      sessionModule: '',
-      limit: 0,
-      step: 0,
-      readyLimit: 0,
-      readyWhen: [],
-      sceneInput: false,
-    },
-  };
-  const engine = createEngine({ ...config, adapter: 'wasm' }, () => {});
-  engine.frames(() => {
-    frames++;
-  });
-  engine.metrics(() => {
-    metrics++;
-  });
-  engine.errors((fault) => faultMessages.push(fault));
-  try {
-    const response = await fetch('/__wasm-camera/firmware.dat');
-    if (!response.ok) throw Error('Camera DAT is unavailable.');
-    const dat = await response.arrayBuffer(),
-      datBytes = dat.byteLength;
-    const datSha256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', dat))]
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
-    const rejection = await engine
-      .boot(dat, config, (message) => {
-        output.textContent = message;
-      })
-      .then(
-        () => undefined,
-        (error) => error as Error,
-      );
-    if (!rejection)
-      throw Error(
-        'Construction now succeeds: update the browser gate to exercise guest execution.',
-      );
-    const report = await engineReport(await engine.errorReport());
-    if (
-      report.created !== false ||
-      report.status !== null ||
-      report.frame !== null ||
-      frames ||
-      metrics
-    )
-      throw Error('Construction refusal was reported as execution.');
-    output.textContent = JSON.stringify(
-      {
-        firmwareId: config.firmwareId,
-        datBytes,
-        datSha256,
-        created: false,
-        status: null,
-        frame: null,
-        frames,
-        metrics,
-        faults: faultMessages,
-        report,
-      },
-      null,
-      2,
-    );
-    document.body.dataset.proof = 'refused';
-  } catch (error) {
-    output.textContent = String(error);
-    document.body.dataset.proof = 'failed';
-    throw error;
-  } finally {
-    engine.dispose();
-  }
+const host = document.createElement('main');
+const canvas = document.createElement('canvas');
+canvas.id = 'lcd-source';
+canvas.style.cssText = 'width:720px;height:480px;display:block;image-rendering:pixelated';
+host.append(canvas, output);
+document.body.append(host);
+const viewer = new LCDViewer(host, canvas);
+const config: EngineConfig = {
+  firmwareId: 'x70-110', bundle: '/__wasm-camera/', sceneInput: false,
+  execution: { mode: 'replay', clockSeconds2000: 0 },
+};
+const errors: string[] = [];
+const engine = createEngine(error => errors.push(String(error)));
+window.cameraEngine = engine;
+engine.frames(frame => viewer.frame(frame));
+const result: Record<string,unknown> = {};
+function check(value: unknown, message: string): asserts value { if(!value) throw Error(message); }
+async function pixels() {
+ const data = canvas.getContext('2d')!.getImageData(0,0,canvas.width,canvas.height).data;
+ return [...new Uint8Array(await crypto.subtle.digest('SHA-256',data))].map(n=>n.toString(16).padStart(2,'0')).join('');
 }
-void proveCamera().catch((error) => {
-  output.textContent = String(error);
-  document.body.dataset.proof = 'failed';
-});
+async function advance(ticks=6_000_000) { await engine.replay([{action:'advance',ticks}]); }
+try {
+ const response=await fetch('/__wasm-camera/firmware.dat');
+ check(response.ok,'DAT unavailable.');
+ const started=performance.now();
+ const inputs=await engine.boot(await response.arrayBuffer(),config,message=>{output.textContent=message;});
+ result.bootSeconds=(performance.now()-started)/1000; result.inputs=inputs;
+ check(canvas.width===720 && canvas.height===480,'LCD dimensions differ.');
+ result.rec=await pixels();
+ check(inputs.some(input=>input.id==='menu_ok_button' && input.supported),'Generated native controls are unavailable.');
+ const point=await engine.checkpoint(), fingerprint=await engine.fingerprint();
+ await engine.press('menu_ok_button');await engine.release('menu_ok_button');await advance();
+ result.menu=await pixels();check(result.menu!==result.rec,'MENU did not change guest LCD pixels.');
+ await engine.restoreCheckpoint(point.id);
+ check((await engine.fingerprint()).sha256===fingerprint.sha256,'Native checkpoint fingerprint differs after restore.');
+ check(await pixels()===result.rec,'Restored LCD pixels differ.');
+ await engine.setPosition('shutter_speed_dial','500');await advance();
+ result.dial=await pixels();check(result.dial!==result.rec,'Shutter dial did not change LCD pixels.');
+ await engine.setScene({width:2,height:2,rgb:new Uint8Array(Array(4).fill([255,0,0]).flat())});
+ await advance(24_000_000);result.scene=await pixels();
+ check(result.scene!==result.dial,'Scene input did not change guest LCD pixels.');
+ result.card=await engine.cardTree();
+ check((result.card as {supported:boolean;present:boolean}).supported && (result.card as {present:boolean}).present,'Card unavailable.');
+ await engine.insertCard(false);check(!(await engine.cardState()).present,'Card eject failed.');
+ await engine.insertCard(true);check((await engine.cardState()).present,'Card insertion failed.');
+ const log=await engine.history();result.history={format:log.format,entries:log.entries,bytes:log.bytes.length};
+ check(log.entries>0 && log.bytes.length>0,'Native history is empty.');
+ await engine.rollback(1);result.undo=await engine.profile(0);
+ check(errors.length===0,errors.join('\n'));
+ result.errors=errors;document.body.dataset.proof='passed';
+} catch(error) {result.error=String(error);result.errors=errors;document.body.dataset.proof='failed';}
+output.textContent=JSON.stringify(result,null,2);

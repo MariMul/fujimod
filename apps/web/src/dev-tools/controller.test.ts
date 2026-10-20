@@ -200,7 +200,7 @@ test('simulator can connect without physical WebUSB; physical USB remains unavai
     await tools.start();
     await tools.connect();
     expect(picked).toHaveLength(0);
-    await tools.connect(CameraTarget.Emulator);
+    await tools.connect(CameraTarget.Remote);
     flush();
     expect(tools.connection()).toBe(ConnectionState.Connected);
     expect(await tools.send('help', LineEnding.Lf)).toBe(true);
@@ -221,10 +221,10 @@ test('a canceled boot failure cannot replace a newer connection', async () => {
     });
   try {
     await tools.start();
-    const old = tools.connect(CameraTarget.Emulator);
+    const old = tools.connect(CameraTarget.Remote);
     await tools.disconnect();
     f.backend.pick = async () => ({ name: 'New camera', interfaces: [{ id: 7, label: 'USB' }] });
-    const fresh = tools.connect(CameraTarget.Emulator);
+    const fresh = tools.connect(CameraTarget.Remote);
     reject(Error('Old emulator was canceled'));
     await Promise.all([old, fresh]);
     flush();

@@ -8,6 +8,9 @@ import type {
   Connection,
   Engine,
   EngineConfig,
+  Checkpoint,
+  ReplayLog,
+  EngineFingerprint,
   Frame,
   Input,
   ReplayStep,
@@ -55,6 +58,7 @@ export class WasmEngine implements Engine {
   private defaultScene?: Promise<Scene>;
   private sceneInput = false;
   private booted = false;
+  private presentedFrames = 0;
   private latestCard?: CardState;
   private latestConnections?: Connection[];
   constructor(
@@ -112,7 +116,10 @@ export class WasmEngine implements Engine {
         this.connectionListeners.emit(event.state.connections);
         return;
       case 'metrics':
-        this.metricListeners.emit(event.metrics);
+        this.metricListeners.emit({
+          ...event.metrics,
+          runtime: { ...event.metrics.runtime, presentedImageFrames: this.presentedFrames },
+        });
         return;
       case 'saved':
         this.saveListeners.emit(event);
@@ -125,6 +132,7 @@ export class WasmEngine implements Engine {
             height: event.height,
             sequence: event.sequence,
           });
+          this.presentedFrames++;
         } finally {
           event.bitmap.close();
         }
@@ -137,6 +145,7 @@ export class WasmEngine implements Engine {
             height: event.height,
             sequence: event.sequence,
           });
+          this.presentedFrames++;
         } finally {
           this.worker.postMessage({
             type: 'frame_release',
@@ -166,8 +175,25 @@ export class WasmEngine implements Engine {
     return {
       ...config,
       bundle: new URL(config.bundle, document.baseURI).href,
-      inputs: new URL(config.inputs, document.baseURI).href,
     };
+  }
+  checkpoint() {
+    return this.rpc<Checkpoint>({ action: 'checkpoint' });
+  }
+  restoreCheckpoint(id: string) {
+    return this.rpc({ action: 'restore_checkpoint', id });
+  }
+  undo() {
+    return this.rpc<Record<string, string>>({ action: 'undo' });
+  }
+  history() {
+    return this.rpc<ReplayLog>({ action: 'history' });
+  }
+  replayHistory(bytes: Uint8Array) {
+    return this.rpc({ action: 'replay_history', bytes });
+  }
+  fingerprint() {
+    return this.rpc<EngineFingerprint>({ action: 'fingerprint' });
   }
   prepare(config: EngineConfig) {
     void this.rpc({ action: 'prepare', bundle: this.absolute(config).bundle }).catch(() => {});
@@ -179,7 +205,7 @@ export class WasmEngine implements Engine {
     media?: BootMedia,
   ): Promise<Input[]> {
     this.progress = progress;
-    this.sceneInput = config.boot.sceneInput;
+    this.sceneInput = config.sceneInput;
     progress('Loading Wasm runtime…');
     const [files, seedIdentity] = await Promise.all([
       media?.load() ?? Promise.resolve([]),
