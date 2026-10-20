@@ -2,14 +2,6 @@ import { Show } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import './tool-deck.css';
 
-export enum DeckTool {
-  EnterDebugMode = 'enter-debug-mode',
-  EnterServiceMode = 'enter-service-mode',
-  ConnectCamera = 'connect-camera',
-  Console = 'console',
-  Share = 'share',
-  LeaveDebugMode = 'leave-debug-mode',
-}
 function Tile(props: {
   title: string;
   locked?: string;
@@ -61,15 +53,13 @@ function Tile(props: {
     </Show>
   );
 }
-/** Dev Tools start screen: service-mode instructions, connections, and tools. */
+/** Dev Tools start screen, shown until a camera is connected. */
 export function ToolDeck(props: {
-  connected: boolean;
   busy?: boolean;
   usbSupported?: boolean;
-  shareLocked?: string;
-  onOpen: (tool: DeckTool) => void;
+  onServiceMode: () => void;
+  onConnect: () => void;
 }) {
-  const needsConnection = 'Connect a camera';
   return (
     <section class="td" aria-labelledby="td-title">
       <h1 id="td-title" class="td-heading">
@@ -78,8 +68,12 @@ export function ToolDeck(props: {
       <div class="td-hero">
         <article class="td-tile td-enter">
           <h2>Enter service mode</h2>
-          <p>Connect over USB to inspect and control the camera’s internal software.</p>
-          <button class="td-cta" onClick={() => props.onOpen(DeckTool.EnterServiceMode)}>
+          <p>Service mode exposes the camera’s ff80 USB connection.</p>
+          <p class="td-note">
+            Switching the camera off in service mode restores factory settings. Remove the battery
+            to leave service mode.
+          </p>
+          <button class="td-cta" onClick={() => props.onServiceMode()}>
             Show instructions
           </button>
         </article>
@@ -95,7 +89,7 @@ export function ToolDeck(props: {
                   : 'This browser can’t connect to USB. Use Chrome or Edge.'
               }
               busy={props.busy}
-              onOpen={() => props.onOpen(DeckTool.ConnectCamera)}
+              onOpen={() => props.onConnect()}
             >
               A camera in service mode or debug mode, over USB.
             </Tile>
@@ -103,29 +97,9 @@ export function ToolDeck(props: {
           </div>
         </div>
       </div>
-      <div class="td-grid">
-        <Tile title="Console" onOpen={() => props.onOpen(DeckTool.Console)}>
-          Send commands to a connected camera.
-        </Tile>
-        <Tile title="Enter debug mode" onOpen={() => props.onOpen(DeckTool.EnterDebugMode)} />
-        <Tile
-          title="Share camera"
-          locked={props.connected ? props.shareLocked : needsConnection}
-          onOpen={() => props.onOpen(DeckTool.Share)}
-        >
-          Let someone else control your connected camera.
-        </Tile>
-        <Tile
-          title="Leave debug mode"
-          locked={props.connected ? undefined : needsConnection}
-          onOpen={() => props.onOpen(DeckTool.LeaveDebugMode)}
-        >
-          Turn the Debug Mode setting off again.
-        </Tile>
-        <Tile title="Bug reports" href="../bug/">
-          Send a report about FujiMod or your camera.
-        </Tile>
-      </div>
+      <a class="td-footer-link" href="../bug/">
+        Bug reports
+      </a>
     </section>
   );
 }

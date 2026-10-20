@@ -1,0 +1,201 @@
+import { render } from '@solidjs/web';
+import { flush } from 'solid-js';
+import { afterEach, expect, test, vi } from 'vite-plus/test';
+import { Workbench } from './Workbench';
+import { diagnosticBundle, emptyReadings } from './CameraTools';
+import { createTestCameraModel, testCamera } from './test-camera-model';
+import { Direction, Layer, Level } from './log';
+
+let cleanup: (() => void) | undefined;
+afterEach(() => {
+  cleanup?.();
+  cleanup = undefined;
+  document.body.innerHTML = '';
+  vi.restoreAllMocks();
+});
+function mount(model: Parameters<typeof Workbench>[0]['model']) {
+  const host = document.createElement('div');
+  document.body.append(host);
+  const dispose = render(() => <Workbench model={model} usbSupported />, host);
+  cleanup = dispose;
+  return host;
+}
+const button = (host: HTMLElement, name: string) =>
+  [...host.querySelectorAll('button')].find((node) => node.textContent?.trim() === name)!;
+
+test('the splash connects a camera and the workbench selects it', async () => {
+  const test = createTestCameraModel({ next: () => testCamera('X100V') });
+  const host = mount(test.model);
+  flush();
+  expect(host.querySelector('.td-enter h2')!.textContent).toBe('Enter service mode');
+  host.querySelector<HTMLButtonElement>('button[aria-label="Connect camera"]')!.click();
+  await vi.waitFor(() => {
+    flush();
+    expect(host.querySelector('.wb-card h2')!.textContent).toBe('X100V');
+  });
+  expect(host.querySelector('.wb-cam.selected')!.textContent).toContain('X100V');
+  expect(host.querySelector('.wb-state')!.textContent).toBe('Idle');
+});
+
+test('the camera column appears only once more than one camera is known', () => {
+  const test = createTestCameraModel({});
+  test.add(testCamera('X100V'));
+  const host = mount(test.model);
+  test.append({
+    camera: 'X100V',
+    layer: Layer.Ff80,
+    level: Level.Debug,
+    direction: Direction.In,
+    message: 'Device info · Product → X100V',
+    sizes: { sent: 32, received: 128 },
+  });
+  flush();
+  expect(host.querySelector('.cl-camera')).toBeNull();
+  expect(host.querySelector('[aria-label="Log cameras"]')).toBeNull();
+  expect(host.querySelector('.cl-size')!.textContent).toBe('32 / 128 B');
+  test.add(testCamera('X70', { name: 'X70 simulator' }));
+  flush();
+  expect(host.querySelector('.cl-camera')!.textContent).toBe('X100V');
+  const filter = [...host.querySelectorAll('[aria-label="Log cameras"] button')].find(
+    (node) => node.textContent === 'X100V',
+  ) as HTMLButtonElement;
+  filter.click();
+  flush();
+  expect(host.querySelector('.cl-empty')!.textContent).toBe('No matching entries');
+});
+
+test('the Connection layer filters like every other layer', () => {
+  const test = createTestCameraModel({});
+  test.add(testCamera('X100V'));
+  const host = mount(test.model);
+  test.append({
+    camera: 'X100V',
+    layer: Layer.Connection,
+    level: Level.Info,
+    direction: Direction.Host,
+    message: 'Sharing started',
+  });
+  flush();
+  expect(host.querySelector('.cl-message')!.textContent).toBe('Sharing started');
+  button(host, 'Connection').click();
+  flush();
+  expect(host.querySelector('.cl-message')).toBeNull();
+});
+
+test('a camera held by a remote shows who holds it and disables every tool', () => {
+  const test = createTestCameraModel({});
+  test.add(
+    testCamera('X100V', {
+      session: { kind: 'remote', controller: 'peer-1', reason: 'fujimod-capture' },
+    }),
+  );
+  const host = mount(test.model);
+  flush();
+  expect(host.querySelector('.wb-state')!.textContent).toBe('In use by fujimod-capture');
+  for (const name of ['Dump configuration', 'Read', 'Enable debug mode', 'Disable debug mode'])
+    expect(button(host, name).disabled).toBe(true);
+});
+
+test('sharing is a switch on the camera card and never disables the tools', async () => {
+  const test = createTestCameraModel({});
+  test.add(testCamera('X100V'));
+  const host = mount(test.model);
+  flush();
+  const toggle = host.querySelector<HTMLInputElement>('.wb-switch input')!;
+  toggle.click();
+  await vi.waitFor(() => {
+    flush();
+    expect(host.querySelector('.wb-tag')!.textContent).toBe('Shared · 0');
+  });
+  expect(test.sharingCalls).toEqual([['X100V', true]]);
+  expect(button(host, 'Dump configuration').disabled).toBe(false);
+});
+
+test('Dump configuration reads every page into one binary configuration file', async () => {
+  const pages: [number, number][] = [];
+  const test = createTestCameraModel({
+    session: () => ({
+      configurationGeometry: async () => ({ capacity: 10, pageBytes: 4 }),
+      readConfiguration: async (offset, length) => {
+        pages.push([offset, length]);
+        return new Uint8Array(length).fill(offset);
+      },
+    }),
+  });
+  test.add(testCamera('X100V'));
+  const host = mount(test.model);
+  flush();
+  const blobs = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:bundle');
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  button(host, 'Dump configuration').click();
+  await vi.waitFor(() => {
+    flush();
+    expect(button(host, 'Download diagnostic bundle').disabled).toBe(false);
+  });
+  expect(pages).toEqual([
+    [0, 4],
+    [4, 4],
+    [8, 2],
+  ]);
+  button(host, 'Download diagnostic bundle').click();
+  const zip = new Uint8Array(await (blobs.mock.calls[0][0] as Blob).arrayBuffer());
+  const text = new TextDecoder('latin1').decode(zip);
+  expect(text).toContain('manifest.json');
+  expect(text).toContain('configuration.bin');
+  // The bytes are stored as bytes, not as a JSON number array.
+  expect(text).not.toContain('[0,0,0,0');
+});
+
+test('the diagnostic bundle records partial configuration reads as incomplete', async () => {
+  const blob = diagnosticBundle(testCamera('X100V'), {
+    ...emptyReadings(),
+    configuration: { capacity: 10, pageBytes: 4, data: new Uint8Array(4), complete: false },
+  });
+  const text = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()));
+  expect(text).toContain('"complete": false');
+  expect(text).toContain('"bytes": 4');
+});
+
+test('Write tools open the debug-mode workflows and are unavailable for remote cameras', () => {
+  const test = createTestCameraModel({});
+  test.add(testCamera('X100V'));
+  const host = mount(test.model);
+  flush();
+  expect(host.querySelector('.wb-tool.wb-write .wb-writes')!.textContent).toBe(
+    'Changes a camera setting',
+  );
+  test.update('X100V', (camera) => ({ ...camera, transport: 'remote' }));
+  flush();
+  expect(button(host, 'Enable debug mode').disabled).toBe(true);
+  expect(button(host, 'Disable debug mode').disabled).toBe(true);
+  test.update('X100V', (camera) => ({ ...camera, transport: 'usb' }));
+  flush();
+  button(host, 'Disable debug mode').click();
+  flush();
+  expect(host.textContent).toContain('Turns the Debug Mode setting off');
+});
+
+test('a remote tool waiting for the owner shows the spoken countdown', async () => {
+  vi.useFakeTimers();
+  const speak = vi.fn();
+  vi.stubGlobal('speechSynthesis', { speak, cancel: vi.fn() });
+  vi.stubGlobal(
+    'SpeechSynthesisUtterance',
+    class {
+      constructor(public text: string) {}
+    },
+  );
+  const test = createTestCameraModel({});
+  test.add(testCamera('X100V'));
+  const host = mount(test.model);
+  flush();
+  const done = test.countdown('X100V', 'Press the shutter');
+  flush();
+  expect(host.querySelector('.wb-countdown')!.textContent).toContain('Press the shutter');
+  await vi.advanceTimersByTimeAsync(11000);
+  await done;
+  flush();
+  expect(host.querySelector('.wb-countdown')).toBeNull();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
