@@ -88,7 +88,7 @@ try {
     .first()
     .waitFor({ timeout: 240000 });
   assert.equal((await owner.locator('.dt-status').textContent())!.trim(), 'Sharing');
-  assert.equal(await owner.getByLabel('Console command', { exact: true }).isDisabled(), true);
+  assert.equal(await owner.getByLabel('Console command', { exact: true }).isDisabled(), false);
   const [file] = await count(1);
   assert.equal((await stat(new URL(file, registry))).mode & 0o777, 0o600);
   const first = JSON.parse(await readFile(new URL(file, registry), 'utf8'));

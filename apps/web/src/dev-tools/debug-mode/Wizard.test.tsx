@@ -64,6 +64,7 @@ test('the hero Connect camera CTA starts a USB connection', async () => {
     await vi.waitFor(() => {
       flush();
       expect(button('Connect camera')).toBeTruthy();
+      expect(button('Connect camera')!.disabled).toBe(false);
     });
     expect(pick).not.toHaveBeenCalled();
     button('Connect camera')!.click();

@@ -6,7 +6,7 @@ declare global {
 }
 import { chromium, webkit } from 'playwright';
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 let base = process.env.FUJIMOD_WEB_URL;
@@ -63,7 +63,12 @@ try {
         isMobile: mobile,
         hasTouch: mobile,
       });
+      await context.grantPermissions(
+        ['local-network-access', 'clipboard-read', 'clipboard-write'],
+        { origin: new URL(url).origin },
+      );
       const page = await context.newPage();
+      page.setDefaultTimeout(15000);
       const errors: string[] = [];
       page.on('pageerror', (error) => errors.push(error.message));
       await page.route('**/__test__/upstream.mjs', (route) =>
@@ -87,13 +92,35 @@ try {
           (await import('/__test__/' + 'console.mjs')) as typeof import('./usb-fixture.ts')
         ).installConsoleFixture();
       });
-      await page.getByRole('button', { name: 'Connect camera', exact: true }).click();
+      await page
+        .locator('.td-connects')
+        .getByRole('button', { name: 'Connect camera', exact: true })
+        .click();
       await page.waitForFunction(
-        () => document.querySelector('.dt-status')?.textContent === 'Connected',
+        () => document.querySelector('.dt-status')?.textContent === 'Sharing',
+        null,
+        { timeout: 10000 },
       );
+      assert.equal(
+        await page.evaluate(
+          () => window.consoleFixture.log.filter((entry) => entry[0] === 'picker').length,
+        ),
+        1,
+      );
+      console.log('Shared camera ready, sending console command');
       await page.getByLabel('Console command', { exact: true }).fill('help');
       await page.getByRole('button', { name: 'Send ↵', exact: true }).click();
-      await page.getByText('Fuji console ready', { exact: false }).first().waitFor();
+      await page
+        .getByText('Fuji console ready', { exact: false })
+        .first()
+        .waitFor({ timeout: 10000 })
+        .catch(async (error) => {
+          console.error(
+            await page.locator('body').innerText(),
+            await page.evaluate(() => window.consoleFixture.log),
+          );
+          throw error;
+        });
       const capture = await page.evaluate(() => {
         const log = window.consoleFixture.log;
         const sent = log.filter(
@@ -154,6 +181,81 @@ try {
         path: new URL(mobile ? 'mobile.png' : 'desktop.png', directory).pathname,
         fullPage: true,
       });
+      // Every local read uses a new ff80 session while the share stays online.
+      for (const name of ['Read device identity', 'Dump configuration', 'Read memory']) {
+        await page.getByRole('button', { name, exact: true }).click();
+        await page.waitForFunction(
+          () => document.querySelector('.dt-reads [role="status"]')?.textContent !== 'Reading…',
+        );
+        assert.equal(await page.locator('.dt-reads [role="status"]').innerText(), 'Read complete');
+        assert.equal(await page.locator('.dt-status').innerText(), 'Sharing');
+      }
+      console.log('Shared local reads complete');
+      const downloadEvent = page.waitForEvent('download');
+      await page.getByRole('button', { name: 'Download diagnostic bundle', exact: true }).click();
+      const path = await (await downloadEvent).path();
+      assert.ok(path);
+      const bundle = JSON.parse(await readFile(path, 'utf8'));
+      assert.equal(bundle.readings.length, 25);
+      assert.equal(bundle.readings.at(-1).data.length, 256);
+      await page.getByRole('button', { name: 'Sharing details', exact: true }).click();
+      await page.locator('.dt-share-camera').click();
+      const link = await page.evaluate(() => navigator.clipboard.readText());
+      if (await page.getByRole('button', { name: 'Close share dialog', exact: true }).isVisible())
+        await page.getByRole('button', { name: 'Close share dialog', exact: true }).click();
+      const remoteContext = await browser.newContext();
+      await remoteContext.grantPermissions(['local-network-access'], {
+        origin: new URL(url).origin,
+      });
+      await remoteContext.addInitScript(() => {
+        Object.defineProperty(navigator, 'usb', {
+          configurable: true,
+          value: Object.assign(new EventTarget(), {
+            getDevices() {
+              throw Error('Physical USB forbidden in remote test');
+            },
+            requestDevice() {
+              throw Error('Physical USB forbidden in remote test');
+            },
+          }),
+        });
+      });
+      const remote = await remoteContext.newPage();
+      await remote.goto(link);
+      await remote.waitForFunction(
+        () => document.querySelector('.dt-status')?.textContent === 'Connected',
+        null,
+        { timeout: 60000 },
+      );
+      console.log('Remote controller claimed the shared camera');
+      const transfers = await page.evaluate(() => window.consoleFixture.log.length);
+      await page.getByRole('button', { name: 'Read memory', exact: true }).click();
+      await page.waitForFunction(() =>
+        document
+          .querySelector('.dt-reads [role="status"]')
+          ?.textContent?.includes('in use by a remote controller'),
+      );
+      await page.getByLabel('Console command', { exact: true }).fill('help');
+      await page.getByLabel('Console command', { exact: true }).press('Enter');
+      await page
+        .locator('.level-error')
+        .filter({ hasText: 'in use by a remote controller' })
+        .first()
+        .waitFor();
+      assert.equal(await page.evaluate(() => window.consoleFixture.log.length), transfers);
+      await remote.getByRole('button', { name: 'Disconnect', exact: true }).click();
+      await remote.waitForFunction(
+        () => document.querySelector('.dt-status')?.textContent === 'Disconnected',
+      );
+      await page.getByRole('button', { name: 'Read memory', exact: true }).click();
+      await page.waitForFunction(
+        () => document.querySelector('.dt-reads [role="status"]')?.textContent === 'Read complete',
+      );
+      await remoteContext.close();
+      await page.screenshot({
+        path: new URL(mobile ? 'shared-mobile.png' : 'shared-desktop.png', directory).pathname,
+        fullPage: true,
+      });
       await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
       // This command completed normally: the existing controller closes a clean
       // session. Its interrupted-operation path abandons host ownership instead.
@@ -164,7 +266,7 @@ try {
         await page.evaluate(
           () => window.consoleFixture.log.filter((e) => e[0] === 'control' && e[1] === 0xc4).length,
         ),
-        1,
+        7,
       );
       assert.deepEqual(errors, []);
       console.log(

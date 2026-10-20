@@ -77,7 +77,7 @@ try {
     const link = await owner.evaluate(() => navigator.clipboard.readText());
     assert.ok(link.startsWith(url.href + '#?remotecontrol='));
     assert.equal((await owner.locator('.dt-status').textContent())!.trim(), 'Sharing');
-    assert.equal(await owner.getByLabel('Console command', { exact: true }).isDisabled(), true);
+    assert.equal(await owner.getByLabel('Console command', { exact: true }).isDisabled(), false);
     let native;
     if (controller === 'native') {
       const python = new URL('../../../../../.venv/bin/python', import.meta.url).pathname;

@@ -65,7 +65,18 @@ try {
       'Connected',
       await page.locator('.dt-workspace').innerText(),
     );
-    console.log(`${size}: simulator connected, reading identity`);
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    await page.locator('.dt-share-camera').click();
+    await page.waitForFunction(
+      () => document.querySelector('.dt-status')?.textContent === 'Sharing',
+    );
+    if (await page.getByRole('button', { name: 'Close share dialog', exact: true }).isVisible())
+      await page.getByRole('button', { name: 'Close share dialog', exact: true }).click();
+    await page.waitForFunction(
+      () => !document.querySelector<HTMLInputElement>('[aria-label="Console command"]')!.disabled,
+    );
+    assert.equal(await page.getByLabel('Console command', { exact: true }).isEnabled(), true);
+    console.log(`${size}: simulator shared, reading identity locally`);
     await page.getByRole('button', { name: 'Read device identity', exact: true }).click();
     await page.waitForFunction(
       () => document.querySelector('.dt-reads [role="status"]')?.textContent !== 'Reading…',
@@ -131,13 +142,18 @@ try {
     // A stock simulator can refuse debug-memory access. Verify either accepted
     // bytes or its real failed transfer and blocked session; never substitute data.
     if (memoryStatus !== 'Read complete') {
-      assert.match(memoryStatus, /USB transfer failed during BulkIn/);
+      assert.match(memoryStatus, /USB transfer failed during (BulkIn|Control\(WriteCommand\))/);
       assert.equal(await page.locator('.dt-status').innerText(), 'Connection interrupted');
       assert.equal(
         await page.getByRole('button', { name: 'Read memory', exact: true }).isDisabled(),
         true,
       );
       console.log(`${size}: simulator refused memory read; failure retained`);
+    }
+    const problem = page.getByRole('dialog', { name: 'Camera problem', exact: true });
+    if (await problem.isVisible()) {
+      await page.keyboard.press('Escape');
+      await problem.waitFor({ state: 'hidden' });
     }
     const downloadEvent = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Download diagnostic bundle', exact: true }).click();
