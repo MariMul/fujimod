@@ -6,7 +6,6 @@ export enum DeckTool {
   EnterDebugMode = 'enter-debug-mode',
   EnterServiceMode = 'enter-service-mode',
   ConnectCamera = 'connect-camera',
-  Inspector = 'inspector',
   Console = 'console',
   Share = 'share',
   LeaveDebugMode = 'leave-debug-mode',
@@ -108,11 +107,6 @@ export function ToolDeck(props: {
         <Tile title="Console" onOpen={() => props.onOpen(DeckTool.Console)}>
           Send commands to a connected camera.
         </Tile>
-        <Tile
-          title="Inspector"
-          locked={props.connected ? undefined : needsConnection}
-          onOpen={() => props.onOpen(DeckTool.Inspector)}
-        />
         <Tile title="Enter debug mode" onOpen={() => props.onOpen(DeckTool.EnterDebugMode)} />
         <Tile
           title="Share camera"

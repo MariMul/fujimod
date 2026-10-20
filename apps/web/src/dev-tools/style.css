@@ -505,12 +505,12 @@
   margin: 12px 0 18px;
 }
 .dt-tool-launchers .td-action,
-.dt-inspector .td-action {
+.dt-reads .td-action {
   padding: 14px 12px;
   font: 700 12px/1.4 var(--mono);
   text-align: left;
 }
-.dt-inspector {
+.dt-reads {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -518,25 +518,20 @@
   border: 1px solid var(--phosphor-mid);
   background: #0d0d0d;
 }
-.dt-inspector h2 {
-  margin: 0 0 4px;
-  font: 800 20px/1.2 var(--mono);
-  text-transform: uppercase;
-}
-.dt-inspector form,
-.dt-inspector label {
+.dt-reads form,
+.dt-reads label {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.dt-inspector form {
+.dt-reads form {
   gap: 12px;
 }
-.dt-inspector label {
+.dt-reads label {
   color: var(--dim);
   font: 12px var(--mono);
 }
-.dt-inspector input {
+.dt-reads input {
   width: 100%;
   min-width: 0;
   padding: 10px;
@@ -545,7 +540,7 @@
   color: #eafff0;
   font: 14px var(--mono);
 }
-.dt-inspector p {
+.dt-reads p {
   margin: 0;
   color: var(--dim);
   font: 12px/1.5 var(--mono);
