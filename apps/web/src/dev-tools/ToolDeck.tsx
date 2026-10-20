@@ -82,28 +82,31 @@ export function ToolDeck(props: {
             Show instructions
           </button>
         </article>
-        <div class="td-connects">
-          <Tile
-            hero
-            title="Connect camera"
-            locked={
-              props.usbSupported
-                ? undefined
-                : 'This browser can’t connect to USB. Use Chrome or Edge.'
-            }
-            busy={props.busy}
-            onOpen={() => props.onOpen(DeckTool.ConnectDebugCamera)}
-          >
-            A camera already in debug mode, over USB.
-          </Tile>
-          <Tile
-            hero
-            title="Connect simulator"
-            busy={props.busy}
-            onOpen={() => props.onOpen(DeckTool.ConnectSimulator)}
-          >
-            Your saved firmware in the browser. Every tool works with it.
-          </Tile>
+        <div class="td-connect-group">
+          <span class="td-connect-label">Connect a camera</span>
+          <div class="td-connects">
+            <Tile
+              hero
+              title="Connect camera"
+              locked={
+                props.usbSupported
+                  ? undefined
+                  : 'This browser can’t connect to USB. Use Chrome or Edge.'
+              }
+              busy={props.busy}
+              onOpen={() => props.onOpen(DeckTool.ConnectDebugCamera)}
+            >
+              A camera already in debug mode, over USB.
+            </Tile>
+            <Tile
+              hero
+              title="Connect simulator"
+              busy={props.busy}
+              onOpen={() => props.onOpen(DeckTool.ConnectSimulator)}
+            >
+              Your saved firmware in the browser. Every tool works with it.
+            </Tile>
+          </div>
         </div>
       </div>
       <div class="td-grid">

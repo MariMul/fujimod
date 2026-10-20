@@ -25,10 +25,27 @@
   grid-template-columns: 1fr 1fr;
   gap: 14px;
 }
+/* The two connection options read as one grouped unit on desktop and mobile. */
+.td-connect-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #242424;
+  background: #0d0d0d;
+}
+.td-connect-label {
+  padding: 2px 2px 0;
+  font: 800 11px/1 var(--td-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--phosphor);
+}
 .td-connects {
+  flex: 1;
   display: grid;
   grid-template-rows: 1fr 1fr;
-  gap: 14px;
+  gap: 8px;
 }
 .td-tile {
   display: flex;
