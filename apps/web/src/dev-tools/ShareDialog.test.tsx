@@ -88,6 +88,7 @@ async function mount(nativeSheet: boolean) {
   await vi.waitFor(() => {
     flush();
     expect(button('Connect camera')).toBeTruthy();
+    expect(button('Connect camera')!.disabled).toBe(false);
   });
   button('Connect camera').click();
   await vi.waitFor(() => {
@@ -131,7 +132,7 @@ test('Share popup warns, copies a capability URL and logs remote controller conn
     expect(f.host.textContent).toContain('Share link copied');
     expect(
       f.host.querySelector('input[aria-label="Console command"]')!.hasAttribute('disabled'),
-    ).toBe(true);
+    ).toBe(false);
     const event = {
       controller: 'manual-tool',
       id: 42,

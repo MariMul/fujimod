@@ -38,6 +38,7 @@ test('one pane shows console responses and independently filters layers and seve
     await vi.waitFor(() => {
       flush();
       expect(button('Connect camera')).toBeTruthy();
+      expect(button('Connect camera')!.disabled).toBe(false);
     });
     button('Connect camera').click();
     await vi.waitFor(() => {
@@ -165,6 +166,7 @@ async function mount() {
   await vi.waitFor(() => {
     flush();
     expect(button('Connect camera')).toBeTruthy();
+    expect(button('Connect camera')!.disabled).toBe(false);
   });
   return {
     host,
@@ -210,7 +212,7 @@ test('auto share registers once and keeps its link while the camera is away', as
     );
     expect(
       f.host.querySelector('input[aria-label="Console command"]')!.hasAttribute('disabled'),
-    ).toBe(true);
+    ).toBe(false);
     expect(f.exportUsb).toHaveBeenCalledOnce();
     f.disconnect();
     flush();
@@ -228,6 +230,9 @@ test('auto share registers once and keeps its link while the camera is away', as
     });
     expect(hosts.create).toHaveBeenCalledOnce();
     expect(JSON.parse(first.send.mock.calls.at(-1)![0]).status).toEqual({ online: true });
+    expect(f.host.querySelector<HTMLInputElement>('[aria-label="Console command"]')!.disabled).toBe(
+      false,
+    );
     expect(RegistrySocket.all).toHaveLength(1);
     f.dispose();
     expect(first.close).toHaveBeenCalledOnce();
@@ -362,6 +367,7 @@ test('the console composer appears only for the Console tool; other tools show a
     await vi.waitFor(() => {
       flush();
       expect(button('Connect camera')).toBeTruthy();
+      expect(button('Connect camera')!.disabled).toBe(false);
     });
     button('Connect camera').click();
     await vi.waitFor(() => {
@@ -376,6 +382,46 @@ test('the console composer appears only for the Console tool; other tools show a
     flush();
     expect(host.querySelector('.dt-composer')).toBeTruthy();
     expect(host.querySelector('.dt-bartool')).toBeNull();
+  } finally {
+    dispose();
+    host.remove();
+  }
+});
+
+test('the deck cannot discard a connect click while USB initialization is pending', async () => {
+  let ready!: () => void;
+  const pick = vi.fn(async () => undefined);
+  const backend: CameraBackend = {
+    initialize: () =>
+      new Promise<void>((resolve) => {
+        ready = resolve;
+      }),
+    pick,
+    open: vi.fn(),
+    drain: () => [],
+    onDisconnect: () => () => {},
+    dispose: () => {},
+  };
+  const host = document.createElement('div');
+  document.body.append(host);
+  const dispose = render(() => <DevTools backend={backend} supported />, host);
+  const tile = () =>
+    host.querySelector<HTMLButtonElement>('.td-connects [aria-label="Connect camera"]')!;
+  try {
+    await vi.waitFor(() => {
+      flush();
+      expect(ready).toBeTypeOf('function');
+    });
+    expect(tile().disabled).toBe(true);
+    tile().querySelector<HTMLElement>('.td-title')!.click();
+    expect(pick).not.toHaveBeenCalled();
+    ready();
+    await vi.waitFor(() => {
+      flush();
+      expect(tile().disabled).toBe(false);
+    });
+    tile().querySelector<HTMLElement>('.td-title')!.click();
+    expect(pick).toHaveBeenCalledExactlyOnceWith('usb');
   } finally {
     dispose();
     host.remove();

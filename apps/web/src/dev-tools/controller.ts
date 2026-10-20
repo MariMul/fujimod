@@ -45,6 +45,11 @@ export function createDevTools(
   // Application policy advances synchronously; Solid commits the displayed state
   // in a batch. Never use an uncommitted UI signal as an operation guard.
   let inspecting = false;
+  let interfaceId: number | undefined;
+  type LocalClaim = { release(): Promise<void>; abandon(): void };
+  let claimLocal: (() => LocalClaim) | undefined;
+  const [shareReady, setShareReady] = createSignal(false);
+  let localClaim: LocalClaim | undefined;
   const [inspectionBusy, setInspectionBusy] = createSignal(false);
   let state = ConnectionState.Loading;
   let attempt = 0;
@@ -97,8 +102,13 @@ export function createDevTools(
     const closingAttempt = ++attempt;
     stop = true;
     const old = link;
+    const shared = localClaim !== undefined;
+    localClaim?.abandon();
+    localClaim = undefined;
+    claimLocal = undefined;
     link = undefined;
-    const clean = !abandon && old?.usable() && commandState === ConsoleState.Idle;
+    const clean =
+      !abandon && !shared && !inspecting && old?.usable() && commandState === ConsoleState.Idle;
     setConsoleState(ConsoleState.Idle);
     const finish = () => {
       if (disposed || closingAttempt !== attempt) return;
@@ -137,6 +147,7 @@ export function createDevTools(
         opened.abandon();
         return;
       }
+      interfaceId = id;
       link = opened;
       drain();
       setConnection(ConnectionState.Connected);
@@ -183,6 +194,48 @@ export function createDevTools(
       }
     }
   }
+  async function localSession(): Promise<CameraLink> {
+    if (state === ConnectionState.Connected && link) return link;
+    if (state !== ConnectionState.Sharing || !claimLocal || interfaceId === undefined)
+      throw Error('No idle ff80 session can form commands.');
+    if (link) return link;
+    const claim = claimLocal();
+    localClaim = claim;
+    const mine = attempt;
+    try {
+      const opened = await backend.open(interfaceId);
+      if (disposed || mine !== attempt || state !== ConnectionState.Sharing) {
+        opened.abandon();
+        throw Error('Camera disconnected');
+      }
+      link = opened;
+      return opened;
+    } catch (error) {
+      claim.abandon();
+      if (localClaim === claim) localClaim = undefined;
+      if (!disposed && mine === attempt) setConnection(ConnectionState.Blocked);
+      throw error;
+    }
+  }
+  async function closeLocalSession(current: CameraLink) {
+    if (!localClaim || link !== current) return;
+    const claim = localClaim;
+    try {
+      if (!current.usable()) throw Error('Local session completion unknown; reconnect the camera.');
+      await current.close();
+      await claim.release();
+    } catch (error) {
+      current.abandon();
+      claim.abandon();
+      setConnection(ConnectionState.Blocked);
+      fail(error);
+      throw error;
+    } finally {
+      if (link === current) link = undefined;
+      if (localClaim === claim) localClaim = undefined;
+      drain();
+    }
+  }
   async function poll(current: CameraLink) {
     if (current !== link || commandState === ConsoleState.Polling) return;
     stop = false;
@@ -207,6 +260,7 @@ export function createDevTools(
         if (reply.status) message(`Console status 0x${reply.status.toString(16)}`, Level.Warning);
         switch (reply.progress) {
           case Progress.Complete:
+            await closeLocalSession(current);
             setConsoleState(ConsoleState.Idle);
             return;
           case Progress.Unknown:
@@ -234,10 +288,10 @@ export function createDevTools(
     }
   }
   async function send(text: string, ending: LineEnding): Promise<boolean> {
-    const current = link;
+    let current: CameraLink | undefined;
+    const sendingAttempt = attempt;
     if (
-      !current ||
-      state !== ConnectionState.Connected ||
+      ![ConnectionState.Connected, ConnectionState.Sharing].includes(state) ||
       commandState !== ConsoleState.Idle ||
       inspecting
     )
@@ -266,6 +320,8 @@ export function createDevTools(
       },
     ]);
     try {
+      current = state === ConnectionState.Connected ? link : await localSession();
+      if (!current || current !== link || disposed) return false;
       await current.submit(data);
       if (current !== link || disposed) return true;
       drain();
@@ -273,8 +329,8 @@ export function createDevTools(
       if (!stop) await poll(current);
       return true;
     } catch (error) {
-      if (current === link && !disposed) {
-        setConsoleState(ConsoleState.Unknown);
+      if (!disposed && sendingAttempt === attempt) {
+        setConsoleState(current ? ConsoleState.Unknown : ConsoleState.Idle);
         fail(error);
       }
       return false;
@@ -300,6 +356,8 @@ export function createDevTools(
     if (disposed) return;
     stop = true;
     link?.abandon();
+    localClaim?.abandon();
+    localClaim = undefined;
     link = undefined;
     if (timer) clearInterval(timer);
     unlisten?.();
@@ -313,12 +371,13 @@ export function createDevTools(
     consoleState,
     camera,
     inspectionBusy,
+    localAvailable: () =>
+      connection() === ConnectionState.Connected ||
+      (connection() === ConnectionState.Sharing && shareReady()),
     async readInspection<T>(action: (read: InspectorRead) => Promise<T>): Promise<T> {
-      const current = link;
+      let current: CameraLink | undefined;
       if (
-        !current?.inspect ||
-        !current.usable() ||
-        state !== ConnectionState.Connected ||
+        ![ConnectionState.Connected, ConnectionState.Sharing].includes(state) ||
         commandState !== ConsoleState.Idle ||
         inspecting
       )
@@ -326,8 +385,12 @@ export function createDevTools(
       inspecting = true;
       setInspectionBusy(true);
       try {
-        return await action(async (request) => {
-          if (link !== current || !current.usable())
+        current = await localSession();
+        if (!current.inspect || !current.usable())
+          throw Error('No idle ff80 session can form inspection commands.');
+        const session = current;
+        const result = await action(async (request) => {
+          if (link !== session || !session.usable())
             throw Error('Camera disconnected during inspection.');
           const label =
             request.kind === 'identity'
@@ -338,8 +401,8 @@ export function createDevTools(
                   ? `Configuration · 0x${request.offset.toString(16)} · ${request.length} bytes`
                   : 'Configuration geometry';
           message(label);
-          const reply = await current.inspect!(request);
-          if (link !== current || !current.usable())
+          const reply = await session.inspect!(request);
+          if (link !== session || !session.usable())
             throw Error('Camera disconnected during inspection.');
           if (
             (request.kind === 'memory' || request.kind === 'configuration') &&
@@ -361,8 +424,16 @@ export function createDevTools(
           ]);
           return reply;
         });
+        await closeLocalSession(current);
+        return result;
       } catch (error) {
         fail(error);
+        try {
+          if (current) await closeLocalSession(current);
+        } catch {
+          // Cleanup already fenced and reported the broken session. Preserve
+          // the operation's original failure for its status and diagnostic bundle.
+        }
         throw error;
       } finally {
         inspecting = false;
@@ -392,6 +463,7 @@ export function createDevTools(
         !backend.exportUsb
       )
         throw Error('Camera is not available for sharing');
+      setShareReady(false);
       setConnection(ConnectionState.Sharing);
       const currentAttempt = attempt;
       try {
@@ -400,6 +472,7 @@ export function createDevTools(
           await device.close();
           throw Error('Camera disconnected');
         }
+        link = undefined;
         drain();
         log(remoteTraffic.begin(device.descriptor));
         message('Camera sharing started');
@@ -412,7 +485,13 @@ export function createDevTools(
         throw error;
       }
     },
+    sharingReady(claim: () => LocalClaim) {
+      claimLocal = claim;
+      setShareReady(true);
+    },
     sharingEnded() {
+      setShareReady(false);
+      claimLocal = undefined;
       log(remoteTraffic.end());
       if (state === ConnectionState.Sharing) {
         setConnection(ConnectionState.Blocked);

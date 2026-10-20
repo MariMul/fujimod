@@ -355,7 +355,7 @@ export class ShareHost {
   battery: { level: string; at: number } | undefined;
   callbacks: Callbacks;
   peers: Map<string, { close(): void }>;
-  owner: string | undefined;
+  owner: string | symbol | undefined;
   closed: boolean;
   fenced: boolean;
   iceServers: RTCIceServer[] = [];
@@ -433,7 +433,7 @@ export class ShareHost {
     this.offline = reason;
     this.owner = undefined;
     this.fenced = false;
-    if (owner !== undefined) this.peers.get(owner)?.close();
+    if (typeof owner === 'string') this.peers.get(owner)?.close();
     void device.close().catch(() => {});
     this.callbacks.state?.(this.status());
   }
@@ -445,6 +445,39 @@ export class ShareHost {
     this.offline = undefined;
     this.fenced = false;
     this.callbacks.state?.(this.status());
+  }
+  /** Reserve the same ownership slot as a remote open, before opening locally.
+   * Release only after the local ff80 session closes. An interrupted session
+   * fences the share just like a controller disappearing with a claim. */
+  claimLocal() {
+    if (this.closed || !this.device) throw Error('Shared camera is offline');
+    if (this.fenced) throw Error('Shared camera completion unknown; reconnect on the host');
+    if (this.owner !== undefined)
+      throw Error('Camera is in use by a remote controller. Wait for it to release the device.');
+    const owner = Symbol('local session');
+    const device = this.device;
+    this.owner = owner;
+    return {
+      release: async () => {
+        if (this.owner !== owner) return;
+        // nusb drops its WebUSB claim asynchronously. Await the exporter close
+        // before allowing another session to open the physical interface.
+        try {
+          await device.close();
+        } catch (error) {
+          if (this.owner === owner) this.fenced = true;
+          throw error;
+        } finally {
+          if (this.owner === owner) this.owner = undefined;
+        }
+      },
+      abandon: () => {
+        if (this.owner !== owner) return;
+        this.fenced = true;
+        this.owner = undefined;
+        void device.close().catch((error) => this.callbacks.error?.(error));
+      },
+    };
   }
   /** One operation for controller `from`, under the share's ownership rules. */
   async run(from: string, peer: PeerChannel, message: ExecuteMessage): Promise<UsbCompletion> {

@@ -223,6 +223,7 @@ export function createShareSession(tools: DevToolsController, environment = brow
           host = undefined;
           throw Error('Camera disconnected');
         }
+        tools.sharingReady(() => host!.claimLocal());
         identity = currentIdentity();
         camera = {
           model:
@@ -277,6 +278,7 @@ export function createShareSession(tools: DevToolsController, environment = brow
         return;
       }
       host.cameraReturned(await tools.shareUsb());
+      tools.sharingReady(() => host!.claimLocal());
       publish(host.status());
       setProblem(undefined);
     }

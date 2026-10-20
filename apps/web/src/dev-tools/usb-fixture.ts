@@ -2,11 +2,32 @@
 import { installWebUsb } from '../../../../bindings/javascript/tests/webusb-fixture.ts';
 export function installConsoleFixture() {
   const fixture = installWebUsb();
+  fixture.iface.alternates[0].endpoints = [
+    { endpointNumber: 1, direction: 'out', type: 'bulk', packetSize: 64 },
+    { endpointNumber: 2, direction: 'in', type: 'bulk', packetSize: 64 },
+  ];
+  const picker = navigator.usb!.requestDevice.bind(navigator.usb);
+  navigator.usb!.requestDevice = (options) => {
+    if (!navigator.userActivation.isActive)
+      throw new DOMException('Device picker requires user activation', 'SecurityError');
+    return picker(options);
+  };
+  fixture.iface.alternate = fixture.iface.alternates[0];
   const original = fixture.device.transferOut.bind(fixture.device);
   fixture.device.transferOut = async (endpoint, data) => {
-    const result = await original(endpoint, data);
     const bytes = new Uint8Array(data),
       view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    if (fixture.state.kind === 0xd0 && bytes.length >= 20 && view.getUint32(0, true) === 0x150000) {
+      const text = 'SYNTHETIC\0';
+      const reply = new Uint8Array(16 + text.length * 2);
+      const header = new DataView(reply.buffer);
+      header.setUint32(0, 0x150000, true);
+      for (let i = 0; i < text.length; i++) header.setUint16(16 + 2 * i, text.charCodeAt(i), true);
+      fixture.state.pending = reply;
+      fixture.log.push(['out', endpoint, bytes.slice()]);
+      return { status: 'ok', bytesWritten: bytes.length };
+    }
+    const result = await original(endpoint, data);
     if (
       fixture.state.kind === 0xd0 &&
       bytes.length >= 20 &&

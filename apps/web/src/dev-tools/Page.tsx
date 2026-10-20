@@ -260,7 +260,7 @@ export default function DevTools(props: {
   );
   const canSend = createMemo(
     () =>
-      tools.connection() === ConnectionState.Connected &&
+      tools.localAvailable() &&
       tools.consoleState() === ConsoleState.Idle &&
       !tools.inspectionBusy(),
   );
@@ -602,9 +602,13 @@ export default function DevTools(props: {
               <Match when={view() === View.Deck}>
                 <ToolDeck
                   connected={connected()}
-                  busy={[ConnectionState.Choosing, ConnectionState.Opening].includes(
-                    tools.connection(),
-                  )}
+                  busy={[
+                    ConnectionState.Loading,
+                    ConnectionState.Choosing,
+                    ConnectionState.Selecting,
+                    ConnectionState.Opening,
+                    ConnectionState.Closing,
+                  ].includes(tools.connection())}
                   usbSupported={tools.connection() !== ConnectionState.Unsupported}
                   shareLocked={
                     sharingConfigured() && tools.canShare()
@@ -730,14 +734,6 @@ export default function DevTools(props: {
             </div>
             <div class="dt-consolebar">
               <Switch>
-                <Match when={share.controllers().size > 0}>
-                  <div class="dt-barnotice">
-                    <span>This camera is being controlled remotely.</span>
-                    <button class="pill" type="button" onClick={() => tools.disconnect()}>
-                      Disconnect
-                    </button>
-                  </div>
-                </Match>
                 <Match when={view() === View.Console}>
                   <form class="dt-composer" onSubmit={send}>
                     <span class="dt-prompt" aria-hidden="true">
@@ -757,7 +753,7 @@ export default function DevTools(props: {
                       onInput={(event) => setDraft(event.currentTarget.value)}
                       onKeyDown={recall}
                       disabled={
-                        tools.connection() !== ConnectionState.Connected ||
+                        !tools.localAvailable() ||
                         tools.consoleState() === ConsoleState.Unknown ||
                         tools.inspectionBusy()
                       }
@@ -795,7 +791,7 @@ export default function DevTools(props: {
                     </Show>
                     <Show
                       when={
-                        tools.connection() === ConnectionState.Connected &&
+                        connected() &&
                         (tools.consoleState() === ConsoleState.Pending ||
                           tools.consoleState() === ConsoleState.Unknown)
                       }

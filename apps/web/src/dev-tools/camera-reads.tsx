@@ -1,7 +1,6 @@
 import type { JSX } from '@solidjs/web';
 import { createSignal, untrack } from 'solid-js';
 import type { DevToolsController } from './controller';
-import { ConnectionState } from './controller';
 import {
   infoSelectors,
   inspectorReadLimit,
@@ -31,10 +30,7 @@ export function CameraReads(props: { tools: DevToolsController }): JSX.Element {
   const [readings, setReadings] = createSignal<Reading[]>([]);
   // A self-contained read needs a reachable camera and no read already in flight.
   // It does not depend on the console tool's command state.
-  const available = () =>
-    props.tools.connection() === ConnectionState.Connected &&
-    !props.tools.inspectionBusy() &&
-    !busy();
+  const available = () => props.tools.localAvailable() && !props.tools.inspectionBusy() && !busy();
   async function run(action: (read: InspectorRead) => Promise<void>) {
     if (!available()) return;
     setBusy(true);
