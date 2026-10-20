@@ -1,5 +1,4 @@
 import { For, Show, Switch, Match, createSignal, createEffect, onSettled, untrack } from 'solid-js';
-import { inputName } from '../feedback/input';
 import type { Engine, Input } from '../engine/api';
 import type { LCDViewer } from '../viewer/lcd';
 import type { ControlNode, DevicePanel, PowerCombo } from './layout';
@@ -65,15 +64,16 @@ export class ControlSession {
     this.engine = engine;
     this.detentSounds = data.detentSounds ?? {};
     this.ready = true;
-    this.inputs = new Map(
-      inputs.map((input) => [input.id, { ...input, label: inputName(input.id) }]),
-    );
+    this.inputs = new Map(inputs.map((input) => [input.id, input]));
     for (const input of inputs)
       if (input.positions?.length)
         this.positions.set(input.id, initial[input.id] ?? input.initial ?? input.positions[0].id);
     const visit = (nodes: ControlNode[]) => {
       for (const node of nodes) {
-        if (node.operation === 'power') this.powerID = node.id;
+        if (node.operation === 'power') {
+          this.powerID = node.id;
+          if (node.id) this.positions.set(node.id, this.powered ? 'ON' : 'OFF');
+        }
         if (node.variant === 'segment' && node.id && !this.positions.has(node.id)) {
           const first =
             this.inputs.get(node.id)?.positions?.[0]?.id ?? Object.keys(node.labels ?? {})[0];
@@ -94,7 +94,9 @@ export class ControlSession {
   }
   disabled(id: string) {
     this.read();
-    return !this.ready || !this.inputs.get(id)?.supported || (!this.powered && id !== this.powerID);
+    return (
+      !this.ready || (id !== this.powerID && (!this.inputs.get(id)?.supported || !this.powered))
+    );
   }
   classes(id: string) {
     this.read();
@@ -188,7 +190,7 @@ export class ControlSession {
     if (
       !this.ready ||
       (!this.powered && id !== this.powerID) ||
-      !this.inputs.get(id)?.supported ||
+      (id !== this.powerID && !this.inputs.get(id)?.supported) ||
       this.positions.get(id) === value
     )
       return;
@@ -198,14 +200,17 @@ export class ControlSession {
     this.feedback([id]);
     const engine = this.engine!;
     if (id === this.powerID) {
-      this.powered = value === 'on';
+      this.powered = value === 'ON';
       if (this.powered) this.ready = false;
       this.availability();
     }
-    void engine
-      .setPosition(id, value)
+    void (
+      id === this.powerID
+        ? engine.setPosition(id, value).then(() => engine.power(value === 'ON'))
+        : engine.setPosition(id, value)
+    )
       .then(() => {
-        if (this.engine === engine && id === this.powerID && value === 'on') {
+        if (this.engine === engine && id === this.powerID && value === 'ON') {
           this.ready = true;
           this.availability();
         }
@@ -220,7 +225,7 @@ export class ControlSession {
     if (input.relative) {
       this.relativeSteps.set(id, (this.relativeSteps.get(id) ?? 0) + Math.sign(direction));
       this.changed();
-      void this.engine!.setPosition(id, Math.sign(direction)).catch(this.error);
+      void this.engine!.rotate(id, Math.sign(direction)).catch(this.error);
       return true;
     }
     if (input.positions?.length) {
@@ -240,7 +245,7 @@ export class ControlSession {
     const engine = this.engine!,
       task = this.pulseQueue
         .then(() => {
-          this.viewer.pressFeedback(id);
+          this.viewer.pressFeedback(id, this.inputs.get(id)!.label);
           return engine.press(id);
         })
         .then(() => engine.release(id));
@@ -249,7 +254,7 @@ export class ControlSession {
     });
     return task;
   }
-  press(id: string, pointer: number | string, stage?: string, point?: { x: number; y: number }) {
+  press(id: string, pointer: number | string, stage?: string) {
     if (
       !this.ready ||
       !this.powered ||
@@ -259,8 +264,8 @@ export class ControlSession {
       return;
     this.holds.set(pointer, id);
     this.feedback([id]);
-    this.viewer.pressFeedback(id);
-    void this.engine!.press(id, stage, point).catch(this.error);
+    this.viewer.pressFeedback(id, this.inputs.get(id)!.label);
+    void this.engine!.press(id, stage).catch(this.error);
   }
   release(pointer: number | string) {
     const id = this.holds.get(pointer);
@@ -285,7 +290,7 @@ export class ControlSession {
     this.glowing = glow;
     this.changed();
   }
-  rotate(id: string, dial: HTMLElement, event: PointerEvent) {
+  beginDialDrag(id: string, dial: HTMLElement, event: PointerEvent) {
     if (event.button !== 0 || !this.ready || !this.powered || !this.inputs.get(id)?.supported)
       return;
     if (this.stopRotation) return;
@@ -392,11 +397,16 @@ export class ControlSession {
     this.ready = true;
     this.powered = true;
     if (this.powerID) {
-      this.positions.set(this.powerID, 'on');
+      this.positions.set(this.powerID, 'ON');
       this.changed();
       this.renders.get(this.powerID)?.();
     }
     this.availability();
+  }
+  setPowered(on: boolean) {
+    this.powered = on;
+    if (this.powerID) this.positions.set(this.powerID, on ? 'ON' : 'OFF');
+    this.changed();
   }
   synchronize(positions: Record<string, string>) {
     for (const [id, value] of Object.entries(positions)) {
@@ -404,7 +414,7 @@ export class ControlSession {
       this.changed();
       this.renders.get(id)?.();
     }
-    if (this.powerID && positions[this.powerID]) this.powered = positions[this.powerID] === 'on';
+    if (this.powerID && positions[this.powerID]) this.powered = positions[this.powerID] === 'ON';
     this.availability();
   }
   clear() {
@@ -556,7 +566,7 @@ function Dial(props: { session: ControlSession; id: string; node: ControlNode })
   }, update);
   onSettled(() => {
     props.session.renders.set(props.id, update);
-    const down = (event: PointerEvent) => props.session.rotate(props.id, dial, event);
+    const down = (event: PointerEvent) => props.session.beginDialDrag(props.id, dial, event);
     dial.addEventListener('pointerdown', down);
     const observer = new ResizeObserver(update);
     observer.observe(dial);

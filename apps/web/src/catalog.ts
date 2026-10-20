@@ -1,10 +1,5 @@
 import type { EngineConfig } from './engine/api';
 import type { DevicePanel } from './ui/layout';
-export interface UsbEmulator {
-  bundle: string;
-  module: string;
-  scenario: { path: string; sha256: string };
-}
 export interface Firmware {
   id: string;
   body?: string;
@@ -16,9 +11,7 @@ export interface Firmware {
   download_url: string;
   release_date: string;
   emulate?: Omit<EngineConfig, 'firmwareId'> & {
-    adapter: string;
     maturity?: 'early' | 'supported';
-    usb?: UsbEmulator;
   };
   device?: {
     panel: DevicePanel;
@@ -50,24 +43,11 @@ export function validateCatalog(value: Catalog): Catalog {
       new URL(entry.download_url).protocol !== 'https:'
     )
       throw Error('Invalid firmware entry.');
-    for (const path of [
-      entry.camera_table,
-      entry.emulate?.bundle,
-      entry.emulate?.inputs,
-      entry.emulate?.usb?.bundle,
-      entry.emulate?.usb?.scenario.path,
-    ])
+    for (const path of [entry.camera_table, entry.emulate?.bundle])
       if (path && (!/^[a-zA-Z0-9_./-]+$/.test(path) || path.includes('..') || path.startsWith('/')))
         throw Error('Invalid emulator artifact path.');
-    const usb = entry.emulate?.usb;
     if (entry.emulate?.maturity && !['early', 'supported'].includes(entry.emulate.maturity))
       throw Error('Invalid emulation maturity.');
-    if (
-      usb &&
-      (!/^[a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*$/.test(usb.module) ||
-        !/^[a-f0-9]{64}$/.test(usb.scenario.sha256))
-    )
-      throw Error('Invalid USB emulator configuration.');
     seen.add(entry.sha256);
   }
   return value;

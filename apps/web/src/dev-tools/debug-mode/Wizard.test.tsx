@@ -46,13 +46,15 @@ test('Dev Tools opens on the service-mode deck with disconnected tools locked', 
     });
     expect(host.querySelector('.dt-console')!.hasAttribute('hidden')).toBe(true);
     const card = (title: string) => button(title)!;
-    expect(card('Leave debug mode').textContent).toContain('Connect a camera or simulator');
-    expect(card('Share camera').textContent).toContain('Connect a camera or simulator');
+    expect(card('Leave debug mode').textContent).toContain('Connect a camera');
+    expect(card('Share camera').textContent).toContain('Connect a camera');
     expect(card('Leave debug mode').disabled).toBe(true);
     expect(card('Share camera').disabled).toBe(true);
     expect(button('Show instructions')).toBeTruthy();
     expect(button('Connect camera')).toBeTruthy();
-    expect(button('Connect simulator')).toBeTruthy();
+    const simulator = host.querySelector<HTMLAnchorElement>('a[aria-label="Open simulator"]');
+    expect(simulator?.textContent?.trim()).toBe('Open simulator');
+    expect(simulator?.getAttribute('href')).toBe('../?scenario=x70-lcd#workspace');
   } finally {
     dispose();
   }

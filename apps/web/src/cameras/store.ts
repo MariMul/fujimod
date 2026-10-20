@@ -1,3 +1,9 @@
+import {
+  writeDurable,
+  readDurable,
+  removeDurable,
+  type DurableReference,
+} from '../storage/durable';
 /** Owned cameras are independent of the disposable firmware boot cache. */
 export interface CameraRecord {
   id: string;
@@ -13,11 +19,14 @@ export interface CameraRecord {
 }
 export interface CameraSave {
   durable: ArrayBuffer;
-  snapshot?: ArrayBuffer;
   runtimeKey: string;
   poweredOn: boolean;
   positions: Record<string, string>;
   modEnabled: boolean;
+}
+interface StoredSave extends Omit<CameraSave, 'durable'> {
+  schema: 1;
+  durable: DurableReference;
 }
 const DB = 'fujimod-cameras';
 async function database() {
@@ -136,45 +145,69 @@ export class CameraStore {
       return new Blob([value]);
     });
   }
-  saved(id: string): Promise<CameraSave | undefined> {
-    return transaction(['saves'], 'readonly', (tx, result) => {
-      const request = tx.objectStore('saves').get(id);
-      request.onsuccess = () => result(request.result);
-    });
+  async saved(id: string): Promise<CameraSave | undefined> {
+    for (let attempt = 0; ; attempt++) {
+      const saved = await transaction<StoredSave | undefined>(
+        ['saves'],
+        'readonly',
+        (tx, result) => {
+          const request = tx.objectStore('saves').get(id);
+          request.onsuccess = () => result(request.result);
+        },
+      );
+      if (!saved) return undefined;
+      if (saved.schema !== 1) throw Error('Unknown durable camera save format.');
+      try {
+        const { schema: _, durable, ...metadata } = saved;
+        return { ...metadata, durable: await readDurable(durable) };
+      } catch (error) {
+        if (attempt === 0 && error instanceof DOMException && error.name === 'NotFoundError')
+          continue;
+        throw error;
+      }
+    }
   }
-  /** One transaction publishes storage and metadata together. Stale tabs cannot overwrite a newer save. */
-  save(id: string, revision: number, save: CameraSave): Promise<CameraRecord> {
-    return transaction<CameraRecord | undefined>(
-      ['cameras', 'saves'],
-      'readwrite',
-      (tx, result, fail) => {
-        const request = tx.objectStore('cameras').get(id);
+  /** A closed immutable file becomes current in the same optimistic metadata transaction. */
+  async save(id: string, revision: number, save: CameraSave): Promise<CameraRecord> {
+    const durable = await writeDurable(save.durable);
+    let published: { record: CameraRecord; previous?: StoredSave } | undefined;
+    try {
+      published = await transaction(['cameras', 'saves'], 'readwrite', (tx, result, fail) => {
+        const cameras = tx.objectStore('cameras'),
+          saves = tx.objectStore('saves');
+        const request = cameras.get(id);
         request.onsuccess = () => {
-          try {
-            const previous = request.result as CameraRecord | undefined;
-            if (!previous || previous.revision !== revision) {
-              result(undefined);
-              return;
-            }
-            const record = {
-              ...previous,
-              savedAt: Date.now(),
-              poweredOn: save.poweredOn,
-              modEnabled: save.modEnabled,
-              revision: revision + 1,
-            };
-            tx.objectStore('saves').put(save, id);
-            tx.objectStore('cameras').put(record);
-            result(record);
-          } catch (error) {
-            // IDB request callbacks run after transaction()'s synchronous body.
-            fail(error);
+          const previous = request.result as CameraRecord | undefined;
+          if (!previous || previous.revision !== revision) {
+            result(undefined);
+            return;
           }
+          const old = saves.get(id);
+          old.onsuccess = () => {
+            try {
+              const record = {
+                ...previous,
+                savedAt: Date.now(),
+                poweredOn: save.poweredOn,
+                modEnabled: save.modEnabled,
+                revision: revision + 1,
+              };
+              saves.put({ ...save, schema: 1, durable } satisfies StoredSave, id);
+              cameras.put(record);
+              result({ record, previous: old.result });
+            } catch (error) {
+              fail(error);
+            }
+          };
         };
-      },
-    ).then((record) => {
-      if (!record) throw Error('This camera changed in another tab. Reload it before saving.');
-      return record;
-    });
+      });
+      if (!published) throw Error('This camera changed in another tab. Reload it before saving.');
+    } catch (error) {
+      await removeDurable(durable).catch(() => {});
+      throw error;
+    }
+    if (published.previous?.schema === 1)
+      await removeDurable(published.previous.durable).catch(() => {});
+    return published.record;
   }
 }

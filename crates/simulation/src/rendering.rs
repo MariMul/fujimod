@@ -1275,7 +1275,7 @@ fn pick(world: &mut World, x: f32, y: f32, radius: f32) -> Value {
     {
         let mut id = c.ids[0].clone();
         if !world.resource::<ViewerState>().button_ids.contains(&id)
-            && !c.ids.iter().any(|id| id == "lcd_touch")
+            && !c.ids.iter().any(|id| id == "touchscreen")
         {
             let nearby = nearby_button(world, &camera, &transform, Vec2::new(x, y), radius, scale);
             if !nearby.is_null() {

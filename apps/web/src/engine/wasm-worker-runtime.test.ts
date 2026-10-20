@@ -1,0 +1,314 @@
+import { test } from 'vite-plus/test';
+import assert from 'node:assert/strict';
+import { WasmSession, type WasmManifest } from './wasm-abi';
+import { WasmWorkerRuntime } from './wasm-worker-runtime';
+import { testCameraModule } from './wasm-test-module';
+import type { WasmRequest, WasmWorkerEvent } from './wasm-protocol';
+import { testConfig } from './test-fixtures';
+import type { CameraRecord, CameraSave } from '../cameras/store';
+
+function setup(
+  options: { saved?: CameraSave; saveError?: string; shared?: boolean; preview?: boolean } = {},
+) {
+  const fake = testCameraModule(options.shared),
+    events: WasmWorkerEvent[] = [],
+    saves: CameraSave[] = [];
+  const manifest: WasmManifest = {
+    schema: 1,
+    abi: 1,
+    module: '',
+    wasm: '',
+    construction: 'session',
+    session: options.preview ? { preview: {} } : {},
+    ticksPerSecond: 12000000,
+    bootTicks: 0,
+    output: 0,
+  };
+  const runtime = new WasmWorkerRuntime(
+    (event) => {
+      events.push(event);
+      if (event.type === 'reply' || event.type === 'error') {
+        pending.get(event.serial!)?.(event);
+        pending.delete(event.serial!);
+      }
+    },
+    async () => ({ session: new WasmSession(fake.module), manifest, identity: 'test' }),
+    {
+      async saved() {
+        return options.saved;
+      },
+      async save(_id, revision, save) {
+        if (options.saveError) throw Error(options.saveError);
+        saves.push(save);
+        return { revision: revision + 1, savedAt: 123 } as CameraRecord;
+      },
+    },
+  );
+  let serial = 0;
+  const pending = new Map<number, (event: WasmWorkerEvent) => void>();
+  const send = (request: WasmRequest) =>
+    new Promise<WasmWorkerEvent>((resolve) => {
+      const id = ++serial;
+      pending.set(id, resolve);
+      runtime.receive({ type: 'rpc', serial: id, request });
+    });
+  const config = {
+    ...testConfig(),
+    bundle: 'https://example.invalid/runtime/',
+    camera: { id: 'camera', revision: 3, modEnabled: false },
+    execution: { mode: 'replay' as const, clockSeconds2000: 0 },
+  };
+  return { ...fake, runtime, events, saves, send, config };
+}
+test('worker routes physical inputs, scene, card operations, restart, power, profile and rollback through the ABI', async () => {
+  const f = setup();
+  const boot = await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  assert.equal(boot.type, 'reply');
+  const requests: WasmRequest[] = [
+    { action: 'press', id: 'menu', stage: 'half' },
+    { action: 'release', id: 'menu' },
+    { action: 'set_position', id: 'dial', position: 'A' },
+    { action: 'rotate', id: 'ring', steps: -1 },
+    ...(['press', 'drag', 'release', 'tap'] as const).map((phase) => ({
+      action: 'touch' as const,
+      id: 'touchscreen',
+      phase,
+      x: 100,
+      y: 200,
+    })),
+    { action: 'scene', scene: { width: 1, height: 1, rgb: new Uint8Array([2, 3, 4]) } },
+    { action: 'power', on: false },
+    { action: 'power_cycle', inputs: [{ id: 'menu' }] },
+    { action: 'card_state' },
+    { action: 'card_tree', revision: 1 },
+    { action: 'card_read', path: '/a', options: { revision: 1, maxBytes: 20 } },
+    { action: 'card_insert', present: false },
+    { action: 'card_format' },
+    {
+      action: 'restart_card',
+      files: [
+        { path: '/a', bytes: new Uint8Array([9, 8]) },
+        { path: '/b', bytes: new Uint8Array([7]) },
+      ],
+    },
+    { action: 'profile', limit: 5 },
+    { action: 'rollback', seconds: 10 },
+    {
+      action: 'replay',
+      steps: [
+        { action: 'advance', ticks: 100 },
+        { action: 'press', id: 'menu' },
+        { action: 'release', id: 'menu' },
+      ],
+    },
+  ];
+  for (const request of requests)
+    assert.equal((await f.send(request)).type, 'reply', request.action);
+  assert.equal(f.calls.find((c) => c.action === 'press')!.options.stage, 'half');
+  const restart = f.calls.find((c) => c.action === 'restart_card')!;
+  assert.deepEqual(restart.options.files, [
+    { path: '/a', offset: 0, length: 2 },
+    { path: '/b', offset: 2, length: 1 },
+  ]);
+  assert.deepEqual(restart.bytes, [9, 8, 7]);
+  assert.equal(f.calls.find((c) => c.action === 'card_read')!.options.revision, 1);
+  assert(
+    f.events.some((e) => e.type === 'metrics' && e.metrics.runtime?.ticksPerSecond === 12000000),
+  );
+});
+test('camera saves commit portable durable bytes with optimistic revisions', async () => {
+  const f = setup();
+  await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  assert.equal((await f.send({ action: 'save' })).type, 'reply');
+  assert.equal((await f.send({ action: 'save' })).type, 'reply');
+  assert.deepEqual([...new Uint8Array(f.saves[0]!.durable)], [1, 2]);
+  assert.deepEqual(
+    f.events.filter((e) => e.type === 'saved').map((e) => e.revision),
+    [4, 5],
+  );
+});
+test('quota rejection is an operation error, and guest execution failure supports rollback', async () => {
+  const f = setup({ saveError: 'Quota exceeded' });
+  await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  const failedSave = await f.send({ action: 'save' });
+  assert(failedSave.type === 'error' && !failedSave.fault);
+  assert(f.events.some((e) => e.type === 'saved' && e.error?.includes('Quota exceeded')));
+  f.fail();
+  const failure = await f.send({ action: 'replay', steps: [{ action: 'advance', ticks: 20 }] });
+  assert(failure.type === 'error' && failure.fault?.kind === 'guest-fault');
+  assert.equal((await f.send({ action: 'rollback', seconds: 10 })).type, 'reply');
+  assert.equal(
+    (await f.send({ action: 'replay', steps: [{ action: 'advance', ticks: 20 }] })).type,
+    'reply',
+  );
+});
+test('shared frame leases block queued guest mutations until presentation releases the view', async () => {
+  const f = setup({ shared: true });
+  f.frame();
+  await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  const frame = f.events.find((event) => event.type === 'frame_view');
+  assert(frame?.type === 'frame_view');
+  const press = f.send({ action: 'press', id: 'menu' });
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  assert.equal(
+    f.calls.some((call) => call.action === 'press'),
+    false,
+  );
+  f.runtime.receive({ type: 'frame_release', lease: frame.lease + 1 });
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  assert.equal(
+    f.calls.some((call) => call.action === 'press'),
+    false,
+  );
+  f.runtime.receive({ type: 'frame_release', lease: frame.lease });
+  assert.equal((await press).type, 'reply');
+});
+
+test('creation refusal diagnostics never ask a nonexistent board for status or frames', async () => {
+  const f = setup();
+  f.createError('device requires unavailable adapter');
+  const boot = await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  assert(boot.type === 'error' && boot.fault?.kind === 'unsupported-device');
+  f.module._camera_status = () => {
+    throw Error('No CPU exists');
+  };
+  f.module._camera_frame = () => {
+    throw Error('No display exists');
+  };
+  const reply = await f.send({ action: 'error_report' });
+  assert(reply.type === 'reply');
+  const report = reply.result as { report: { created: boolean; status: unknown; frame: unknown } };
+  assert.equal(report.report.created, false);
+  assert.equal(report.report.status, null);
+  assert.equal(report.report.frame, null);
+  assert.equal(
+    f.events.some(
+      (event) => event.type === 'metrics' || event.type === 'frame' || event.type === 'frame_view',
+    ),
+    false,
+  );
+});
+
+// History uses owner-bound native checkpoints and opaque CBOR, never host RAM snapshots.
+test('worker preserves checkpoint IDs and replay bytes across the transport', async () => {
+  const f = setup();
+  await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  await f.send({ action: 'replay', steps: [{ action: 'advance', ticks: 12000000 }] });
+  const point = await f.send({ action: 'checkpoint' });
+  assert(point.type === 'reply');
+  assert.deepEqual(point.result, { id: '12000000', tick: '12000000', instructions: ['24000000'] });
+  await f.send({ action: 'restore_checkpoint', id: '0' });
+  assert.equal(f.calls.find((c) => c.action === 'restore')!.options.id, '0');
+  const log = await f.send({ action: 'history' });
+  assert(log.type === 'reply');
+  assert.deepEqual([...(log.result as { bytes: Uint8Array }).bytes], [0x81, 1]);
+  await f.send({ action: 'replay_history', bytes: new Uint8Array([0x81, 1]) });
+  assert.deepEqual(f.calls.find((c) => c.action === 'replay')!.bytes, [0x81, 1]);
+});
+
+test('declared preview policy is applied once and source metrics use observational counters', async () => {
+  const f = setup({ preview: true });
+  const boot = await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  assert.equal(boot.type, 'reply');
+  assert.equal(f.calls.filter((c) => c.action === 'preview').length, 1);
+  assert.equal(f.calls.filter((c) => c.action === 'preview_state').length, 1);
+  assert.equal(f.calls.filter((c) => c.action === 'error_report').length, 0);
+  assert(f.events.some((e) => e.type === 'metrics' && e.metrics.runtime?.sourceFrames === 0));
+});
+
+test('a portable camera save restores media through the C ABI before boot', async () => {
+  const f = setup({
+    saved: {
+      durable: new Uint8Array([7, 8, 9]).buffer,
+      runtimeKey: 'prior-runtime',
+      positions: {},
+      poweredOn: true,
+      modEnabled: false,
+    },
+  });
+  const boot = await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  assert.equal(boot.type, 'reply');
+  assert.deepEqual(f.calls.find((c) => c.action === 'restore_durable')!.bytes, [7, 8, 9]);
+  assert.equal(f.saves.length, 0);
+});
+
+test('replay advance returns while power is OFF and does not run or spin', async () => {
+  const f = setup();
+  await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  await f.send({ action: 'power', on: false });
+  const before = f.calls.length;
+  assert.equal(
+    (await f.send({ action: 'replay', steps: [{ action: 'advance', ticks: 100 }] })).type,
+    'reply',
+  );
+  assert.equal(f.state.poweredOn, false);
+  assert.equal(f.calls.length, before);
+});
+
+test('an idempotent power request does not cold boot or advance the guest', async () => {
+  const f = setup();
+  await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  const before = f.calls.length;
+  assert.equal((await f.send({ action: 'power', on: true })).type, 'reply');
+  assert.equal(f.calls.length, before);
+});

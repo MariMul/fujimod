@@ -188,19 +188,19 @@ test('invalid console text is rejected locally before any submission', async () 
     tools.dispose();
   }
 });
-test('simulator can connect without physical WebUSB; physical USB remains unavailable', async () => {
+test('a remote share can connect without physical WebUSB; physical USB remains unavailable', async () => {
   const f = fixture(),
     tools = createDevTools(f.backend, false);
   const picked: unknown[] = [];
   f.backend.pick = async (target) => {
     picked.push(target);
-    return { name: 'Emulated firmware', interfaces: [{ id: 7, label: 'USB' }] };
+    return { name: 'Shared camera', interfaces: [{ id: 7, label: 'USB' }] };
   };
   try {
     await tools.start();
     await tools.connect();
     expect(picked).toHaveLength(0);
-    await tools.connect(CameraTarget.Emulator);
+    await tools.connect(CameraTarget.Remote);
     flush();
     expect(tools.connection()).toBe(ConnectionState.Connected);
     expect(await tools.send('help', LineEnding.Lf)).toBe(true);
@@ -221,10 +221,10 @@ test('a canceled boot failure cannot replace a newer connection', async () => {
     });
   try {
     await tools.start();
-    const old = tools.connect(CameraTarget.Emulator);
+    const old = tools.connect(CameraTarget.Remote);
     await tools.disconnect();
     f.backend.pick = async () => ({ name: 'New camera', interfaces: [{ id: 7, label: 'USB' }] });
-    const fresh = tools.connect(CameraTarget.Emulator);
+    const fresh = tools.connect(CameraTarget.Remote);
     reject(Error('Old emulator was canceled'));
     await Promise.all([old, fresh]);
     flush();
@@ -248,8 +248,8 @@ test('a shared camera controller does not require local WebUSB support', async (
   }
 });
 
-test('workflow session access requires an idle connected ff80 session', async () => {
-  for (const target of [CameraTarget.Usb, CameraTarget.Emulator, CameraTarget.Remote]) {
+test('workflow session access requires an idle connected physical USB camera', async () => {
+  for (const target of [CameraTarget.Usb, CameraTarget.Remote]) {
     const f = fixture();
     const session = {
       armResetGuard: async () => ({ guardWasSet: false, debugFlagBefore: 0, progress: [] }),
@@ -264,7 +264,7 @@ test('workflow session access requires an idle connected ff80 session', async ()
       expect(tools.debugSession()).toBeUndefined();
       await tools.connect(target);
       flush();
-      expect(tools.debugSession()).toBe(session);
+      expect(tools.debugSession()).toBe(target === CameraTarget.Usb ? session : undefined);
       await tools.disconnect();
       flush();
       expect(tools.debugSession()).toBeUndefined();

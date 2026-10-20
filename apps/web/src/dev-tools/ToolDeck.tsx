@@ -7,7 +7,6 @@ export enum DeckTool {
   EnterServiceMode = 'enter-service-mode',
   ConnectCamera = 'connect-camera',
   Inspector = 'inspector',
-  ConnectSimulator = 'connect-simulator',
   Console = 'console',
   Share = 'share',
   LeaveDebugMode = 'leave-debug-mode',
@@ -53,7 +52,11 @@ function Tile(props: {
         </button>
       }
     >
-      <a class="td-action td-card" aria-label={props.title} href={props.href}>
+      <a
+        class={{ 'td-action': true, 'td-tile': props.hero, 'td-card': !props.hero }}
+        aria-label={props.title}
+        href={props.href}
+      >
         {content()}
       </a>
     </Show>
@@ -67,7 +70,7 @@ export function ToolDeck(props: {
   shareLocked?: string;
   onOpen: (tool: DeckTool) => void;
 }) {
-  const needsConnection = 'Connect a camera or simulator';
+  const needsConnection = 'Connect a camera';
   return (
     <section class="td" aria-labelledby="td-title">
       <h1 id="td-title" class="td-heading">
@@ -97,20 +100,13 @@ export function ToolDeck(props: {
             >
               A camera in service mode or debug mode, over USB.
             </Tile>
-            <Tile
-              hero
-              title="Connect simulator"
-              busy={props.busy}
-              onOpen={() => props.onOpen(DeckTool.ConnectSimulator)}
-            >
-              Your saved firmware in the browser. Every tool works with it.
-            </Tile>
+            <Tile hero title="Open simulator" href="../?scenario=x70-lcd#workspace" />
           </div>
         </div>
       </div>
       <div class="td-grid">
         <Tile title="Console" onOpen={() => props.onOpen(DeckTool.Console)}>
-          Send commands to a connected camera or the simulator.
+          Send commands to a connected camera.
         </Tile>
         <Tile
           title="Inspector"

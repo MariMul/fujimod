@@ -1,6 +1,8 @@
+import { contentSecurityPolicy } from './src/security';
 import { defineConfig } from 'vite-plus';
 import { loadEnv, type Plugin, type Connect } from 'vite';
 import solid from '@solidjs/vite-plugin';
+import { wasmProofRoute } from './scripts/wasm-proof-route';
 import { simulatorReports } from './scripts/local-reports.ts';
 import { bugReportRoute } from './src/bug/route.ts';
 import { browserDiagnostics } from './scripts/browser-diagnostics.ts';
@@ -38,7 +40,7 @@ function localArtifacts(env: Record<string, string>): Plugin {
       }
       if (
         prefix === '/runtime/' &&
-        !/^(catalog\.json|[a-zA-Z0-9_-]+\/(pyodide\/[a-zA-Z0-9_.-]+|camera\.json|sources\.zip|_native\.so|inputs\.json|firmware-inputs\.zip))$/.test(
+        !/^(catalog\.json|[a-zA-Z0-9_-]+\/(wasm\.json|(?:bundle\/)?camera\.mjs|(?:bundle\/)?camera\.wasm|runtime-NOTICES\.txt)|wasm-(proof(?:-fault)?|session-proof)\/program\.dat)$/.test(
           relative,
         )
       ) {
@@ -58,7 +60,7 @@ function localArtifacts(env: Record<string, string>): Plugin {
         const gzip =
           /\bgzip\b/.test(` ${req.headers['accept-encoding'] || ''}`) &&
           info.size > 65536 &&
-          /\.(dat|so|wasm|mjs|js)$/i.test(path);
+          /\.(dat|so|wasm|mjs|js|json)$/i.test(path);
         const etag = `"${info.size.toString(16)}-${info.mtimeMs.toString(16)}${gzip ? '-gzip' : ''}"`;
         res.setHeader('Vary', 'Accept-Encoding');
         res.setHeader('Cache-Control', 'no-cache');
@@ -69,13 +71,6 @@ function localArtifacts(env: Record<string, string>): Plugin {
           return;
         }
         if (gzip) res.setHeader('Content-Encoding', 'gzip');
-        else res.setHeader('Content-Length', last - first + 1);
-        res.setHeader(
-          'Content-Type',
-          path.endsWith('.mjs') || path.endsWith('.js')
-            ? 'text/javascript'
-            : path.endsWith('.json')
-              ? 'application/json'
         // Mobile Safari fetches video in byte ranges and stalls without them.
         const range = gzip ? null : /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
         const first = range ? (range[1] ? Number(range[1]) : info.size - Number(range[2])) : 0;
@@ -87,11 +82,20 @@ function localArtifacts(env: Record<string, string>): Plugin {
           res.end();
           return;
         }
-        if (!gzip) res.setHeader('Accept-Ranges', 'bytes');
+        if (!gzip) {
+          res.setHeader('Content-Length', last - first + 1);
+          res.setHeader('Accept-Ranges', 'bytes');
+        }
         if (range) {
           res.statusCode = 206;
           res.setHeader('Content-Range', `bytes ${first}-${last}/${info.size}`);
         }
+        res.setHeader(
+          'Content-Type',
+          path.endsWith('.mjs') || path.endsWith('.js')
+            ? 'text/javascript'
+            : path.endsWith('.json')
+              ? 'application/json'
               : path.endsWith('.wasm')
                 ? 'application/wasm'
                 : path.endsWith('.mp4')
@@ -119,14 +123,6 @@ function localArtifacts(env: Record<string, string>): Plugin {
     configurePreviewServer: (server) => configure(server.middlewares),
   };
 }
-export default defineConfig(({ mode, command }) => ({
-  base: '/',
-  // Solid's server build consumes the manifest produced by its client build.
-  builder: { sharedPlugins: true },
-  define: {
-    __FUJIMOD_BUILD_DAY__: JSON.stringify(new Date().toISOString().slice(0, 10)),
-    __FUJIMOD_INITIAL_CATALOG__: readFileSync(
-      existsSync('public/runtime/catalog.json')
 // Feature media rendered for the catalog: an opt-in local directory, else the staged site assets.
 function featureMedia(env: Record<string, string>) {
   const path = env.FUJIMOD_MEDIA
@@ -134,8 +130,23 @@ function featureMedia(env: Record<string, string>) {
     : 'public/artifacts/docs/media.json';
   return existsSync(path) ? readFileSync(path, 'utf8') : 'null';
 }
-        ? 'public/runtime/catalog.json'
-        : 'public/catalog.json',
+
+function catalogPath(env: Record<string, string>) {
+  return env.FUJIMOD_RUNTIME
+    ? resolve(env.FUJIMOD_RUNTIME, 'catalog.json')
+    : existsSync('public/runtime/catalog.json')
+      ? 'public/runtime/catalog.json'
+      : 'public/catalog.json';
+}
+
+export default defineConfig(({ mode, command }) => ({
+  base: '/',
+  // Solid's server build consumes the manifest produced by its client build.
+  builder: { sharedPlugins: true },
+  define: {
+    __FUJIMOD_BUILD_DAY__: JSON.stringify(new Date().toISOString().slice(0, 10)),
+    __FUJIMOD_INITIAL_CATALOG__: readFileSync(
+      catalogPath(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
       'utf8',
     ),
     __FUJIMOD_INITIAL_RELEASE__: existsSync('public/artifacts/patches.json')
@@ -146,18 +157,22 @@ function featureMedia(env: Record<string, string>) {
     ),
     __FUJIMOD_SIGNAL_URL__: JSON.stringify(
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_SIGNAL_URL || '',
-    __FUJIMOD_FEATURE_MEDIA__: featureMedia(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
     ),
+    __FUJIMOD_FEATURE_MEDIA__: featureMedia(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
     __FUJIMOD_LOCAL_DAT__:
       (command === 'serve' || mode === 'local-preview') &&
       Boolean(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_DAT),
     __FUJIMOD_CATALOG__: JSON.stringify(
-      existsSync('public/runtime/catalog.json') ? 'runtime/catalog.json' : 'catalog.json',
+      catalogPath(loadEnv(mode, process.cwd(), 'FUJIMOD_')).endsWith('runtime/catalog.json') ||
+        loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_RUNTIME
+        ? 'runtime/catalog.json'
+        : 'catalog.json',
     ),
   },
   plugins: [
-    solid({ start: true, ssr: true }),
+    solid({ start: { middleware: './src/middleware.ts' }, ssr: true }),
     bugReportRoute(),
+    wasmProofRoute(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
     simulatorReports(),
     browserDiagnostics(),
     localArtifacts(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
@@ -236,6 +251,10 @@ function featureMedia(env: Record<string, string>) {
     ],
   },
   server: {
+    headers: {
+      'Content-Security-Policy': contentSecurityPolicy,
+    },
+    allowedHosts: ['.ts.net'],
     watch: {
       ignored: [
         '**/build/**',
@@ -249,6 +268,9 @@ function featureMedia(env: Record<string, string>) {
     fs: { strict: true, allow: [resolve('../..')] },
   },
   preview: {
+    headers: {
+      'Content-Security-Policy': contentSecurityPolicy,
+    },
     proxy: { '/usb-proxy': { target: 'http://127.0.0.1:5202', ws: true } },
     host: '127.0.0.1',
     allowedHosts: ['.ts.net'],

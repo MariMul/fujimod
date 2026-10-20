@@ -2,7 +2,8 @@ import type { ReplayStep } from './engine/api';
 
 export interface ReplayScenario {
   firmwareId: string;
-  clockSeconds2000: number;
+  firmwarePath: string;
+  clockSeconds2000?: number;
   interactive: boolean;
   steps: readonly ReplayStep[];
 }
@@ -11,24 +12,37 @@ export interface ReplayScenario {
 const scenarios: Record<string, ReplayScenario> = {
   'x70-movie': {
     firmwareId: 'x70-110',
-    clockSeconds2000: 845510400, // 2026-10-17 00:00:00, fixed RTC input.
+    firmwarePath: '/local/firmware.dat',
+    clockSeconds2000: 845000000, // Fixed checked graph RTC input.
     interactive: false,
     steps: [
-      { action: 'press', id: 'movie' },
-      { action: 'release', id: 'movie' },
+      { action: 'press', id: 'movie_record_button' },
+      { action: 'release', id: 'movie_record_button' },
       { action: 'advance', ticks: 120000000 },
     ],
   },
   'x70-lcd': {
     firmwareId: 'x70-110',
-    clockSeconds2000: 845510400,
+    firmwarePath: '/local/firmware.dat',
+    clockSeconds2000: 845000000,
     interactive: true,
     steps: [],
   },
 };
 
 export function scenarioFromUrl(search: string): ReplayScenario {
-  const id = new URLSearchParams(search).get('scenario') ?? '';
+  const params = new URLSearchParams(search);
+  const id = params.get('scenario') ?? '';
+  if (id === 'camera-rec') {
+    const firmwareId = params.get('firmware') ?? '';
+    if (!/^[a-z0-9]+-[0-9]+$/.test(firmwareId)) throw Error('Invalid simulator firmware ID.');
+    return {
+      firmwareId,
+      firmwarePath: `/local/firmware/${firmwareId}.dat`,
+      interactive: true,
+      steps: [],
+    };
+  }
   if (!Object.hasOwn(scenarios, id)) throw Error('Unknown simulator scenario: ' + id);
   return scenarios[id];
 }

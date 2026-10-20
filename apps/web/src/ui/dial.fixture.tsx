@@ -2,7 +2,7 @@ import type { DetentSound } from '../feedback/detent-sound';
 import type { Engine } from '../engine/api';
 declare global {
   interface Window {
-    requests: { id: string; value: string }[];
+    requests: { id: string; value: string | number }[];
     clicks: number;
     clickTimbres: number[];
     vibrations: (number | number[])[];
@@ -51,7 +51,7 @@ window.panel = new ControlSession(
 window.panel.render(
   [
     {
-      id: 'aperture',
+      id: 'aperture_ring',
       label: 'Aperture',
       kind: 'ring',
       supported: true,
@@ -59,7 +59,7 @@ window.panel.render(
       initial: '5.6',
     },
     {
-      id: 'shutter_speed',
+      id: 'shutter_speed_dial',
       label: 'Speed',
       kind: 'dial',
       supported: true,
@@ -69,6 +69,9 @@ window.panel.render(
     { id: 'control_ring', label: 'Command', kind: 'dial', supported: true, relative: true },
   ],
   {
+    rotate: async (id: string, value: number) => {
+      window.requests.push({ id, value });
+    },
     setPosition: async (id: string, value: string) => {
       window.requests.push({ id, value });
     },
@@ -76,8 +79,8 @@ window.panel.render(
   {
     detentSounds: panelData.detentSounds as Record<string, DetentSound>,
     layout: [
-      { kind: 'control', id: 'aperture', variant: 'dial' },
-      { kind: 'control', id: 'shutter_speed', variant: 'dial' },
+      { kind: 'control', id: 'aperture_ring', variant: 'dial' },
+      { kind: 'control', id: 'shutter_speed_dial', variant: 'dial' },
       { kind: 'control', id: 'control_ring', variant: 'ticks' },
     ],
     combos: [],

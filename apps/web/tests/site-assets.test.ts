@@ -23,20 +23,8 @@ test('a failed local asset preparation preserves the installed website assets', 
         release_date: '',
         download_url: 'https://example.org/firmware',
         emulate: {
-          adapter: 'pyodide',
           bundle: 'runtime/test-100/',
-          inputs: 'runtime/test-100/inputs.json',
-          boot: {
-            datPath: '/firmware.dat',
-            prepare: { module: 'loader', function: 'prepare', options: {} },
-            module: 'boot',
-            sessionModule: 'session',
-            limit: 100,
-            step: 10,
-            readyLimit: 10,
-            readyWhen: ['ready'],
-            sceneInput: false,
-          },
+          sceneInput: false,
         },
       },
     ],
@@ -44,7 +32,7 @@ test('a failed local asset preparation preserves the installed website assets', 
   try {
     await mkdir(join(destination, 'runtime'), { recursive: true });
     await writeFile(join(destination, 'runtime/catalog.json'), 'installed');
-    await mkdir(join(runtime, 'test-100/pyodide'), { recursive: true });
+    await mkdir(join(runtime, 'test-100'), { recursive: true });
     const inputs = { runtime, media: join(root, 'media'), patches: join(root, 'patches') };
     await writeFile(join(runtime, 'catalog.json'), JSON.stringify({ schema: 1, firmwares: [] }));
     await assert.rejects(stageSite(inputs, destination), /requires runnable emulators/);
@@ -69,25 +57,10 @@ test('a failed local asset preparation preserves the installed website assets', 
       join(runtime, 'test-100/browser-qualification.json'),
       JSON.stringify({ sha256: '1'.repeat(64), passed: true }),
     );
-    await assert.rejects(stageSite(inputs, destination), /_native.so/);
-    for (const name of [
-      '_native.so',
-      'sources.zip',
-      'firmware-inputs.zip',
-      'inputs.json',
-      'runtime-NOTICES.txt',
-    ])
+    await assert.rejects(stageSite(inputs, destination), /camera.wasm/);
+    for (const name of ['camera.wasm', 'camera.mjs', 'wasm.json', 'runtime-NOTICES.txt'])
       await writeFile(join(runtime, 'test-100', name), 'test');
-    await writeFile(
-      join(runtime, 'test-100/pyodide/pyodide-lock.json'),
-      JSON.stringify({
-        packages: {
-          numpy: { file_name: '../../escape', depends: [] },
-          pillow: { file_name: 'pillow.whl', depends: [] },
-        },
-      }),
-    );
-    await assert.rejects(stageSite(inputs, destination), /Invalid Pyodide package/);
+    await assert.rejects(stageSite(inputs, destination), /patches.json/);
     assert.equal(await readFile(join(destination, 'runtime/catalog.json'), 'utf8'), 'installed');
   } finally {
     await rm(root, { recursive: true, force: true });

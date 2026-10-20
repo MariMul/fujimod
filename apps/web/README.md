@@ -97,48 +97,26 @@ camera is ready or loading fails. The real-download browser gate is
 `src/home/lazy-loading.browser.ts`; it holds module and runtime requests to
 verify both loading phases in Chromium and WebKit.
 
-Uploading or dropping a supported DAT creates a separate virtual camera, including when the
-same file is used twice. Its firmware, SD card and committed internal storage
-stay in this browser's IndexedDB. Choose a saved camera to reopen it, or use
-**Cameras** to save the current session and return to the library.
+Uploading a supported DAT creates a separate virtual camera record. Its firmware
+stays in IndexedDB. The C ABI supports live execution, same-owner Undo and portable durable media
+saves. Each reopen cold boots committed storage and persistent physical controls. Save failures
+are shown in the library and preserve any previous successful transaction.
 
-Power-off saves durable storage; running cameras also save about every 30 seconds.
-A compatible live snapshot resumes execution. Otherwise the camera cold-boots
-from its saved storage. A camera saved OFF reopens OFF. Save failures appear
-beside the library and keep the previous successful save. See the
-[camera library](src/cameras/README.md) for lifecycle and browser tests.
+`src/engine/api.ts` is the web app's emulator boundary. The standalone Rust Wasm
+worker owns execution, pacing, request ordering and native history. Rendering
+and panel code contain no register addresses or firmware bindings. Inputs,
+labels, support and positions come from native `state.inputs`. Layout, printed
+faces and gestures belong to `devices/x70/panel.json`; icons and badge styling
+belong to `src/feedback/presentation.json`. The X70 panel uses semantic body
+control IDs throughout. A firmware catalog supplies the checked Wasm artifact
+bundle; there is one engine implementation.
 
-`src/engine/api.ts` is the web app's emulator boundary: boot, frames,
-press/release, setPosition, setScene and power. The shared Pyodide WorkerEngine adapter
-owns pacing, request ordering and disposal; it wraps the existing Pyodide
-session worker. No register addresses or firmware bindings appear in rendering
-or panel code. The input artifact belongs to the emulator. Panel layout, labels, faces and power-on gestures live in `devices/x70/panel.json`.
-Control names, feedback icons, and badge styling have one source in
-`bindings/python/python/fujimod/presentation/controls.json` (relative to the
-FujiMod root). Both the web viewer and Python walkthrough renderer consume it.
-The panel does not define control names. Directions display
-only an arrow, with a separate accessible name. Panel faces and captions describe
-the printed arrangement of the controls.
-The catalog selects the shared Pyodide engine and supplies its Python boot
-protocol. Device directories contain panel and initial-position data;
-adding a body does not add conditionals to the worker or viewer.
-`src/viewer/lcd.ts` composes guest LCD frames, boot progress and fault feedback.
-The standalone `crates/simulation` renderer is retained for separate development. The panel is
-rendered from body data by shared dial, key, shutter and segmented controls.
-The SD tree shows actual FAT files, offers downloads and format, and retains
-media through power cycles. Generated patch files seed the initial card.
-Power-on combinations apply external input levels through the checked body
-graph; they do not patch guest RAM or guarantee that every ROM boot mode is
-modeled.
-
-With no image or webcam input, the app supplies the bundled abstract dunes
-still through the ordinary RGB scene input. Clearing an input restores this
-still, which is retained across power cycles and card restarts. The diagnostic
-analytic chart remains available to the underlying emulator and its tests.
-The initial image travels with boot/restart, and readiness waits for a new
-scene frame so the chart is not published as the camera's first ready image.
-The 1536×1024 PNG in `src/engine/assets/default-dunes.png` was generated with
-OpenAI's built-in image generator and selected for the emulator background.
+`src/viewer/lcd.ts` composes actual guest LCD frames and fault feedback. Native
+card state and FAT files supply the SD browser. Unsupported lifecycle operations
+return their native error. With no selected scene, the app supplies the bundled
+1536×1024 dunes PNG through the ordinary RGB scene interface. It was generated
+with OpenAI's built-in image generator for this background. Scene input and
+preview timing are applied through the graph's declared native policies.
 
 The model is **CAMERA ( Fujifilm X70 )** by
 [McCLOUD2101](https://sketchfab.com/McCLOUD2101),
@@ -150,11 +128,8 @@ The idle body preview derives from this model. The Git LFS model is retained in
 both firmware modes, responsive layouts and the absence of 3D asset requests in
 Chromium and WebKit. Its deterministic development preview is `?scenario=x70-lcd#workspace`.
 
-X-M1 1.50 uses the same Wasm runtime with its checked REC graph, native LCD
-and calibrated menu/sub-command controls. It has no 3D model, host RGB scene,
-shutter-capture binding or main command dial. Its virtual card starts ejected;
-inserted-card boot has not passed the browser gate. “Try emulator” selects a
-local configured DAT, or opens the DAT chooser on the public web app.
+Every advertised camera requires a prepared graph and a passing browser workflow.
+“Try emulator” selects a configured local DAT or opens the DAT chooser.
 
 ### Develop
 
@@ -183,71 +158,44 @@ FUJIMOD_DAT=/path/to/local/FPUPDATE.DAT
 ```
 
 The staged runtime directory contains `catalog.json` and firmware-ID folders
-with `_native.so`, `sources.zip`, `inputs.json`, `pyodide/` and
-`firmware-inputs.zip`. A release preparation stages this tree into
+with `camera.wasm`, `camera.mjs`, `wasm.json` and
+`runtime-NOTICES.txt`. A release preparation stages this tree into
 `public/runtime/`, which Vite also serves directly without a mount. These mounts exist only in
 the dev and preview servers. Setting `FUJIMOD_DAT` enables automatic local boot; without it,
 the viewer remains a DAT drop target. Public builds omit the automatic DAT fetch. The local DAT is served from its
 opt-in mount and is never copied into any build artifact.
 
 ```sh
-npm run check  # lint, Solid reactivity rules and TypeScript checks
-npm test       # Vitest through Vite Plus, including TSX/DOM tests
+npm run check
+npm test
 npm run build
-PLAYWRIGHT_BROWSERS_PATH=/path/to/browsers python tests/browser.py \
-  --output /fresh/ignored/proof --expected /path/to/sd-card
+FUJIMOD_WEB_URL=https://your-host.ts.net:port node tests/wasm.browser.ts
+FUJIMOD_WEB_URL=https://your-host.ts.net:port node tests/wasm-camera.browser.ts
+node tests/speed.browser.ts --url 'https://your-host.ts.net:port/?scenario=x70-lcd#workspace' \
+  --engine chromium --output build/fresh-speed-chromium
 ```
 
-`npm run test:watch` runs tests interactively. Tests stay alongside their
-implementation; use `.test.tsx` for Solid DOM tests, and import test APIs from
-`vite-plus/test`. The components project uses jsdom and the browser runtime;
-the unit project runs `.test.ts` in isolated Node processes.
-Solid 2 batches updates: call `flush()` before asserting rendered changes.
-The existing Python browser checks remain integration gates.
+`wasm.browser.ts` runs generated ARM instructions, DAT verification, fault,
+card and scene contracts in Chromium and WebKit. `wasm-camera.browser.ts` uses
+explicitly configured local camera inputs to assert real REC pixels, physical
+MENU, a shutter dial change, scene pixels, card contacts and native Undo.
+`speed.browser.ts` measures 30 wall seconds after 25 guest seconds of warmup,
+with native history enabled. It requires 0.8× guest/wall speed and at least
+9.5 source and presented LCD frames per guest second. Run engines sequentially
+on a quiet host. A missing operation or failed native postcondition fails the gate.
 
-`npm run format -- src/path/to/file.tsx` formats selected files with Oxfmt.
-`npm run format:check` checks formatting across the app. The ordinary check
-command runs lint and types without requiring a formatting sweep of existing
-source. `npm run lint` runs Oxlint independently. From the repository root,
-`mise run web-check`, `web-lint`, `web-format` and `web-test` run the same tools.
+Set `FUJIMOD_WASM_CAMERA` to the prepared `wasm.json` and `FUJIMOD_WASM_DAT` to
+the matching DAT for the development camera test route. Those files are served
+only from their configured paths and are never copied into the public build.
+The ordinary `?scenario=x70-lcd#workspace` development route loads the configured
+local DAT into live REC with deterministic RTC input and normal Engine calls.
+It executes the real guest; no screen state or peripheral result is synthesized.
 
-Solid 2's [official documentation](https://v2.solidjs.com/) and
-[agent-readable index](https://v2.solidjs.com/llms.txt) are the API reference.
-`npm run docs:solid` downloads the index, short agent primer and full corpus into
-ignored `build/docs/solidjs/`; rerun it to refresh them. The installed runtime
-includes `CHEATSHEET.md` and the official reactivity diagnostics skill under
-`node_modules/solid-js/skills/`.
-
-The runtime and DOM package are pinned to Solid 2.0.0-rc.15, with the Solid 2
-compiler plugin `@solidjs/vite-plugin`. DOM APIs come from `@solidjs/web`,
-and TypeScript's JSX import source is `@solidjs/web`. Oxlint enables Solid 2
-rules for removed APIs, effect signatures, store writes and reactive props.
-
-The browser check boots the real local DAT on desktop Chromium and WebKit's
-iPhone 13 emulation, checks live frames and a menu tap, saves page/viewer/LCD
-screenshots and verifies downloaded ZIP members against the `--expected` files.
-WebKit emulation is a desktop browser check, not an iPhone hardware measurement.
-
-To reproduce the Movie-button execution fault in development, open
-`?scenario=x70-movie`. This cold-boots the configured X70 1.10 DAT with a fixed
-RTC, uses the normal bundled scene and card seeds, queues a real Movie press and
-release, then advances by guest ticks without wall-clock pacing. No fault or UI
-state is synthesized; the stock firmware reaches the unsupported sensor capture
-DMA path, and the normal error handler stops the simulator. Diagnostics, Undo,
-Restart and report downloads remain available. Reloading reruns the sequence.
-The URL handler is excluded from production builds. A replay bypasses persistent
-boot checkpoints without deleting the user's cached session. Its generic replay
-adapter issues ordinary worker input/advance requests; camera-specific sequences
-live in `src/scenarios.ts`. Run the URL integration test twice from cold state:
-
-```sh
-python tests/scenario.py --url 'https://your-host.ts.net:port/?scenario=x70-movie' \
-  --output /fresh/ignored/scenario-proof
-```
-
-The test observes worker messages without modifying them and compares both runs'
-ready state, LCD pixels, real device fault, input transcript and final guest-time
-deadline.
+Tests stay next to the code they cover. `.test.tsx` tests use jsdom, and `.test.ts`
+tests use Node. Import test APIs from `vite-plus/test`; call Solid 2 `flush()`
+before asserting batched UI changes. Use `npm run format -- path/to/file.tsx`
+for selected files. The runtime and DOM package are pinned to Solid 2.0.0-rc.15.
+See [the engine contract](src/engine/WASM.md) for transport and history behavior.
 
 ### Local production preview
 
@@ -256,73 +204,12 @@ npm run build:local-preview
 npm run preview -- --mode local-preview --port 5190 --strictPort
 ```
 
-This serves `dist-local-preview/` and enables automatic boot using `FUJIMOD_DAT` in
-ignored `.env.local`. The preview binds only `127.0.0.1` and permits `*.ts.net`
-Host headers for `tailscale serve`. The ordinary public
-`npm run build` writes `dist/`, excludes automatic boot, and cannot overwrite
-the local preview. Restart the preview server after changing its environment.
-
-To switch cameras from a phone on the local preview, add an explicit map of
-firmware IDs to DAT files in `.env.local` (only configured files are served):
-
-```text
-FUJIMOD_LOCAL_FIRMWARES={"x70-110":"/path/to/FPUPDATE.DAT","xm1-150":"/path/to/FWUP0002.DAT"}
-```
-
-With a runtime that implements capture and Playback, verify the built preview:
-
-```sh
-PLAYWRIGHT_BROWSERS_PATH=/path/to/browsers python tests/capture.py \
-  --url http://127.0.0.1:5190/ --output /fresh/ignored/capture-proof
-```
-
-This WebKit iPhone gate checks exact English MENU pixels, touch dial input,
-source/LCD frame cadence, a Full shutter tap, a JPEG download through the card
-UI, and the same saved file decoded by stock Playback. It saves viewport and
-LCD screenshots without modifying served source or installing firmware patches.
-
-The performance gate measures 30 wall seconds with Undo enabled, requires at
-least 0.5× virtual/wall speed and 9.5 source/presented frames per guest second,
-times an exact English MENU pixel match, and requires a real reload below five
-seconds. The capture gate requires a Wasm peak below 1024 MiB and also records
-whole-browser RSS and macOS physical footprint, which are separate quantities.
-
-```sh
-python tests/performance.py --persistent --output /fresh/ignored/performance
-python tests/capture.py --persistent --cold --output /fresh/ignored/capture
-python -m unittest discover -s tests -p test_source_archive.py
-```
-
-Persistent WebKit contexts support OPFS; private contexts can use IndexedDB.
-`--cold` explicitly clears this app's test-origin caches before loading. A fresh
-profile directory alone does not guarantee empty WebKit origin storage. The
-process sampler measures the host browser, including new WebKit XPC processes;
-run only one instance of that browser bundle while sampling.
-
-The engine prepares runtime downloads in parallel with DAT verification. Initial
-card bytes are requested only on a cold miss. ETags revalidate browser-local
-asset caches; catalog, runtime and package checks still verify their bytes.
-OPFS writes stream into atomic replacement files. The source archive loader
-materializes imported source/checked-hash bytecode while preserving ordinary
-source paths for inspection. The allocator hook is specific to the pinned
-Pyodide factory ABI and fails if that ABI changes.
-
-Compare the built page with an approved HTML design reference:
-
-```sh
-PLAYWRIGHT_BROWSERS_PATH=/path/to/browsers python tests/design.py \
-  --reference /path/to/mockup.html --output /fresh/ignored/design-proof
-```
-
-This captures idle, running and forced-fault states at 1300×900 and WebKit
-iPhone 390×844, saves side-by-side composites and checks CSS-pixel geometry.
-Faults pause the engine, paint a Mac-style crash dialog into the LCD, and expose
-raw diagnostics plus a report ZIP containing the preceding RAM snapshot.
-Undo prefers a snapshot at least ten guest seconds earlier. With less history it
-uses the oldest retained safe point, which remains reusable after rollback.
-Restart and error reports remain available when no save point exists.
-Check early faults and repeated Undo against a Vite development
-server with `python tests/undo.py --url http://127.0.0.1:5191/ --output /fresh/ignored/undo-proof`.
+This serves `dist-local-preview/` and enables the configured local DAT. Public
+builds omit automatic DAT loading. The server binds to `127.0.0.1` and accepts
+`*.ts.net` Host headers for Tailscale Serve. Restart after environment changes.
+Native same-owner Undo and durable media restoration use the C ABI. Durable
+saves contain committed SD/NAND media and physical controls; volatile execution
+state starts fresh at each cold boot.
 
 ### Website assets and deployment
 
@@ -422,13 +309,3 @@ and logs. The ZIP’s `report.json` is saved alongside it for direct inspection.
 Dev Tools includes binary USB traces. Unavailable snapshots are recorded
 explicitly. Inspection snapshots preserve the captured boundary and are not resume
 points. Release builds keep the browser download and GitHub issue workflow.
-
-Replay the firmware USB fault at
-`/dev-tools/?target=simulator&firmware=x70-110&connect=1&scenario=console-jpeg`.
-The checked cold boot runs the real `help` and `dcfcc` console commands. Test both
-automatic fault reports and submitted feedback with:
-
-```sh
-FUJIMOD_WEB_URL=https://your-host.ts.net:port/ FUJIMOD_BROWSER=webkit \
-  node src/dev-tools/browser-reports.ts
-```

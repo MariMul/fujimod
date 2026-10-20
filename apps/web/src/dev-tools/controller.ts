@@ -58,7 +58,7 @@ export function createDevTools(
     publishConsoleState(next);
   };
   const currentConnection = () => state;
-  // Which source the current camera came from (physical USB, simulator, remote share).
+  // Which source the current camera came from (physical USB or remote share).
   let connectedTarget: CameraTarget | undefined;
   const [camera, setCamera] = createSignal<CameraChoice>();
   const [entries, setEntries] = createSignal<LogEntry[]>([]);
@@ -373,7 +373,8 @@ export function createDevTools(
     debugSession: () =>
       connection() === ConnectionState.Connected &&
       consoleState() === ConsoleState.Idle &&
-      !inspectionBusy()
+      !inspectionBusy() &&
+      connectedTarget === CameraTarget.Usb
         ? link?.debugSession
         : undefined,
     target: () => connectedTarget,

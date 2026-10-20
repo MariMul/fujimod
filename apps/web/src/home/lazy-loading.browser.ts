@@ -68,7 +68,7 @@ for (const type of [chromium, webkit]) {
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('request', (request) => {
       if (
-        /\/src\/engine\/(index|worker-engine|default-scene-engine)\.ts|\/runtime\/(?!catalog\.json)|default-dunes|pyodide-worker/.test(
+        /\/src\/engine\/(index|wasm-engine)\.ts|\/runtime\/(?!catalog\.json)|default-dunes|wasm-worker/.test(
           request.url(),
         )
       )

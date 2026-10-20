@@ -1,3 +1,4 @@
+import { inputPanel } from '../ui/input-panel';
 import { CameraStore, type CameraRecord } from '../cameras/store';
 import { createSignal, reconcile } from 'solid-js';
 import '../style.css';
@@ -29,7 +30,6 @@ declare const __FUJIMOD_SIMULATOR_BUILD__: string;
 declare const __FUJIMOD_CATALOG__: string;
 const adapters = import.meta.glob<{
   panel: DevicePanel;
-  initialPositions: Record<string, string>;
   preview?: string;
   previewCredit?: PreviewCredit;
   sdBoot?: boolean;
@@ -229,7 +229,7 @@ export function startHome(
   }
   async function loadDevice(body: string) {
     const load = adapters[`../../devices/${body}/index.ts`];
-    if (!load) return;
+    if (!load) return { panel: { layout: [], combos: [] } as DevicePanel };
     const device = await load();
     return device;
   }
@@ -240,6 +240,7 @@ export function startHome(
       s.modSupported = false;
     });
     panel.clear();
+    viewer.clearTouch();
     setCardEngine(undefined);
     setState((s) => {
       s.connections = [];
@@ -276,12 +277,13 @@ export function startHome(
     finishLoading();
     title();
   }
-  async function makeEngine(config: NonNullable<Firmware['emulate']> & { firmwareId: string }) {
+  async function makeEngine() {
     const { createEngine } = await import('../engine');
     let value: Engine;
-    value = createEngine(config, (error) => {
+    value = createEngine((error) => {
       if (engine === value) showFault(faultFrom(error));
     });
+    if (import.meta.env.DEV) window.cameraEngine = value;
     return value;
   }
   function bootMedia(file: File): BootMedia {
@@ -393,7 +395,7 @@ export function startHome(
       selectedFirmware = entry;
       if (modFirmwareHash !== hash) {
         modFirmwareHash = hash;
-        modEnabled = true;
+        modEnabled = !replayScenario;
       }
       const device = entry.device ?? (entry.body ? await loadDevice(entry.body) : undefined);
       if (current !== generation) return;
@@ -472,7 +474,7 @@ export function startHome(
         s.camerasVisible = false;
       });
       title();
-      const active = await makeEngine({ ...entry.emulate, firmwareId: entry.id });
+      const active = await makeEngine();
       if (disposed || current !== generation) {
         active.dispose();
         return;
@@ -523,7 +525,10 @@ export function startHome(
       setState((s) => {
         s.modSupported = modSupported;
       });
-      const bootSource = modSupported && modEnabled ? ('sd' as const) : ('internal' as const);
+      const bootInputs =
+        modSupported && modEnabled
+          ? (device.panel.combos.find((combo) => combo.boot === 'sd')?.inputs ?? [])
+          : [];
       const seeds = modSupported && modEnabled ? bootMedia(file) : undefined;
       if (current !== generation) return;
       const started = performance.now();
@@ -533,14 +538,13 @@ export function startHome(
         {
           ...entry.emulate,
           firmwareId: entry.id,
-          initialPositions: device.initialPositions,
           restart,
           camera: activeCamera && {
             id: activeCamera.id,
             revision: activeCamera.revision,
             modEnabled,
           },
-          bootSource,
+          bootInputs,
           execution: replayScenario
             ? {
                 mode: replayScenario.interactive ? 'live' : 'replay',
@@ -556,7 +560,19 @@ export function startHome(
       const positions = Object.fromEntries(
         inputs.filter((input) => input.initial).map((input) => [input.id, input.initial!]),
       );
-      panel.render(inputs, active, device.panel, positions);
+      panel.render(
+        inputs,
+        active,
+        device.panel.layout.length ? device.panel : inputPanel(inputs),
+        positions,
+      );
+      viewer.configureTouch(inputs, active, (error) => {
+        if (current === generation) showFault(faultFrom(error));
+      });
+      active.powerChanges((on) => {
+        panel.setPowered(on);
+        viewer.powered(on);
+      });
       panel.synchronize(positions);
       setCardEngine(active);
       finishLoading();
@@ -696,7 +712,9 @@ export function startHome(
       // A configured development DAT must not create a camera on page load.
       // Only an explicit replay URL starts firmware without a user selection.
       const localDat =
-        replayScenario && __FUJIMOD_LOCAL_DAT__ ? cachedFetch('/local/firmware.dat') : undefined;
+        replayScenario && __FUJIMOD_LOCAL_DAT__
+          ? cachedFetch(replayScenario.firmwarePath)
+          : undefined;
       const first = cameras.find((camera) => camera.firmware.model_asset);
       if (first?.firmware.model_asset) {
         const device = await loadDevice(first.firmware.model_asset);
@@ -713,7 +731,7 @@ export function startHome(
           // The local preview can reread its verified DAT on Restart. Retaining a
           // synthetic File here would keep another entire DAT in browser memory.
           const reload = async () => {
-            const response = await cachedFetch('/local/firmware.dat');
+            const response = await cachedFetch(replayScenario!.firmwarePath);
             if (!response.ok) throw Error('The local firmware could not be read.');
             return new File([await response.arrayBuffer()], 'FPUPDATE.DAT');
           };

@@ -14,7 +14,6 @@ test('the whole tile invokes its named action and debug instructions stay separa
     expect(onOpen).toHaveBeenLastCalledWith(DeckTool.EnterServiceMode);
     for (const [title, tool] of [
       ['Connect camera', DeckTool.ConnectCamera],
-      ['Connect simulator', DeckTool.ConnectSimulator],
       ['Console', DeckTool.Console],
       ['Inspector', DeckTool.Inspector],
       ['Enter debug mode', DeckTool.EnterDebugMode],
@@ -33,7 +32,10 @@ test('the whole tile invokes its named action and debug instructions stay separa
     expect(bug.getAttribute('href')).toBe('../bug/');
     expect(bug.classList.contains('td-action')).toBe(true);
     expect(bug.querySelector('button, a')).toBeNull();
-    expect(host.querySelectorAll('.td-connects > button')).toHaveLength(2);
+    const simulator = host.querySelector<HTMLAnchorElement>('a[aria-label="Open simulator"]')!;
+    expect(simulator.getAttribute('href')).toBe('../?scenario=x70-lcd#workspace');
+    expect(simulator.classList.contains('td-tile')).toBe(true);
+    expect(host.querySelectorAll('.td-connects > button')).toHaveLength(1);
     expect(host.querySelectorAll('.td-grid > .td-action')).toHaveLength(6);
   } finally {
     dispose();
@@ -67,7 +69,7 @@ test('locked and busy tiles are disabled, display the reason, and cannot invoke 
     );
     for (const title of ['Share camera', 'Leave debug mode']) {
       expect(tile(title).disabled).toBe(true);
-      expect(tile(title).textContent).toContain('Connect a camera or simulator');
+      expect(tile(title).textContent).toContain('Connect a camera');
       tile(title).click();
     }
     tile('Connect camera').click();
@@ -77,7 +79,7 @@ test('locked and busy tiles are disabled, display the reason, and cannot invoke 
     expect(tile('Share camera').disabled).toBe(true);
     expect(tile('Share camera').textContent).toContain('Sharing isn’t available here');
     expect(tile('Leave debug mode').disabled).toBe(false);
-    for (const title of ['Connect camera', 'Connect simulator']) {
+    for (const title of ['Connect camera']) {
       expect(tile(title).disabled).toBe(true);
       expect(tile(title).getAttribute('aria-busy')).toBe('true');
       expect(tile(title).textContent).toContain('Connecting…');
@@ -86,10 +88,9 @@ test('locked and busy tiles are disabled, display the reason, and cannot invoke 
     expect(onOpen).not.toHaveBeenCalled();
     setBusy(false);
     flush();
-    expect(tile('Connect simulator').disabled).toBe(false);
-    expect(tile('Connect simulator').textContent).not.toContain('Connecting…');
-    tile('Connect simulator').click();
-    expect(onOpen).toHaveBeenCalledExactlyOnceWith(DeckTool.ConnectSimulator);
+    const simulator = host.querySelector<HTMLAnchorElement>('a[aria-label="Open simulator"]')!;
+    expect(simulator.getAttribute('href')).toBe('../?scenario=x70-lcd#workspace');
+    expect(onOpen).not.toHaveBeenCalled();
   } finally {
     dispose();
   }

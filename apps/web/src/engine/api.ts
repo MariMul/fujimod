@@ -8,9 +8,12 @@ export interface Input {
   label: string;
   kind: string;
   supported: boolean;
+  unavailable?: string;
   positions?: { id: string; label: string }[];
   initial?: string;
   relative?: boolean;
+  width?: number;
+  height?: number;
   stages?: { id: string; label: string }[];
 }
 export interface Connection {
@@ -20,12 +23,12 @@ export interface Connection {
   support: 'modeled' | 'partial' | 'unmodeled';
   limits: string;
 }
-export interface Frame {
-  rgb: Uint8Array;
+/** Frames are borrowed only during the synchronous listener call. */
+export type Frame = {
   width: number;
   height: number;
   sequence: number;
-}
+} & ({ rgb: Uint8Array } | { rgba: Uint8ClampedArray } | { bitmap: ImageBitmap });
 export interface Scene {
   rgb: Uint8Array;
   width: number;
@@ -65,39 +68,47 @@ export interface BootInput {
   stage?: string;
   position?: string;
 }
-export interface BootProtocol {
-  datPath: string;
-  prepare: {
-    module: string;
-    function: string;
-    options: Record<string, unknown>;
-  };
-  module: string;
-  sessionModule: string;
-  limit: number;
-  step: number;
-  readyLimit: number;
-  readyWhen: string[];
-  sceneInput: boolean;
-}
+export type TouchPhase = 'press' | 'drag' | 'release' | 'tap';
 export type ReplayStep =
   | { action: 'press' | 'release'; id: string; stage?: string }
   | { action: 'set_position'; id: string; position: string }
+  | { action: 'rotate'; id: string; steps: number }
+  | { action: 'touch'; id: string; phase: TouchPhase; x: number; y: number }
   | { action: 'advance'; ticks: number };
 export interface EngineConfig {
   camera?: { id: string; revision: number; modEnabled: boolean };
   firmwareId: string;
   bundle: string;
-  inputs: string;
-  boot: BootProtocol;
+  sceneInput: boolean;
   initialPositions?: Record<string, string>;
   restart?: boolean;
-  /** Explicit SD image handoff for runtimes that start after the boot ROM. */
-  bootSource?: 'sd' | 'internal';
+  /** Physical contacts held before the first instruction of a cold boot. */
+  bootInputs?: BootInput[];
   /** Cold boot with a fixed RTC; replay mode advances only through replay(). */
-  execution?: { mode: 'live' | 'replay'; clockSeconds2000: number };
+  execution?: { mode: 'live' | 'replay'; clockSeconds2000?: number };
+}
+export interface Checkpoint {
+  id: string;
+  tick: string;
+  instructions: string[];
+}
+export interface ReplayLog {
+  format: 'session-input-log-cbor';
+  schema: 1;
+  entries: number;
+  bytes: Uint8Array;
+}
+export interface EngineFingerprint {
+  schema: 1;
+  sha256: string;
 }
 export interface Engine {
+  checkpoint(): Promise<Checkpoint>;
+  restoreCheckpoint(id: string): Promise<void>;
+  undo(): Promise<Record<string, string>>;
+  history(): Promise<ReplayLog>;
+  replayHistory(bytes: Uint8Array): Promise<void>;
+  fingerprint(): Promise<EngineFingerprint>;
   prepare(config: EngineConfig): void;
   saveCamera(): Promise<void>;
   cameraSaves(
@@ -134,10 +145,19 @@ export interface Engine {
   /** Media changes, including busy transitions; refresh the tree after writes settle. */
   cardChanges(listener: (state: CardState) => void): () => void;
   frames(listener: (frame: Frame) => void): () => void;
-  press(id: string, stage?: string, point?: { x: number; y: number }): Promise<void>;
+  press(id: string, stage?: string): Promise<void>;
   release(id: string): Promise<void>;
-  setPosition(id: string, position: string | number): Promise<void>;
+  rotate(id: string, steps: number): Promise<void>;
+  touch(id: string, phase: TouchPhase, x: number, y: number): Promise<void>;
+  setPosition(id: string, position: string): Promise<void>;
   setScene(scene: Scene | null): Promise<void>;
   power(on: boolean): Promise<void>;
+  powerChanges(listener: (on: boolean) => void): () => void;
   dispose(): void;
+}
+
+declare global {
+  interface Window {
+    cameraEngine?: Engine;
+  }
 }
