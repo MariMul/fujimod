@@ -1,7 +1,9 @@
 # Dev Tools: tool deck and debug mode
 
 Agreed with the owner on 2026-10-19. This records the design; implementation
-follows it.
+follows it. The service-mode walkthrough itself already exists as the setup
+wizard (`../../SETUP-WIZARD.md`, route `/setup/`); how the two combine is not
+yet decided.
 
 ## Start screen: the tool deck
 
@@ -34,8 +36,9 @@ Steps, on a numbered rail that fills as each completes:
 1. **Camera.** Saved emulator cameras as tiles, X70 1.10 first. Other bodies
    are listed as "Not supported yet": their service-mode entry and reset guard
    are untraced (`research/debug-mode-generations`).
-2. **Service mode.** Power off, connect USB, hold UP and half-press the shutter
-   while switching ON; the green LED lights. A fixed warning: in service mode
+2. **Service mode.** Connect USB, switch off, then hold UP and press the
+   shutter fully while switching ON; the green LED lights (X70: the USB, UP and
+   full-shutter key states are read at power-on; see `../../SETUP-WIZARD.md`). A fixed warning: in service mode
    do not use the OFF switch, because shutdown factory-resets the camera;
    restart by removing the battery. A large checkbox ("I'm in service mode,
    the green LED is on, and USB is connected") enables **Allow Camera Access**.
