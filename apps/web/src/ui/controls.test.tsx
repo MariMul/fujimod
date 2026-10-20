@@ -20,6 +20,7 @@ function mount(inputs: Input[], data: DevicePanel) {
   const host = document.createElement('div');
   document.body.append(host);
   const engine = {
+    rotate: vi.fn(async () => {}),
     setPosition: vi.fn(async () => {}),
     power: vi.fn(async () => {}),
     press: vi.fn(async () => {}),
@@ -49,10 +50,10 @@ test('every segment selects through the engine and remains synchronized after po
         kind: 'switch',
         supported: true,
         positions: [
-          { id: 'off', label: 'OFF' },
-          { id: 'on', label: 'ON' },
+          { id: 'OFF', label: 'OFF' },
+          { id: 'ON', label: 'ON' },
         ],
-        initial: 'on',
+        initial: 'ON',
       },
       {
         id: 'focus_mode',
@@ -88,14 +89,14 @@ test('every segment selects through the engine and remains synchronized after po
       'true',
     );
   }
-  (host.querySelector('[data-id="power"] [data-value="off"]') as HTMLButtonElement).click();
+  (host.querySelector('[data-id="power"] [data-value="OFF"]') as HTMLButtonElement).click();
   flush();
   expect((host.querySelector('button[data-id="q"]') as HTMLButtonElement).disabled).toBe(true);
   expect((host.querySelector('[data-id="focus_mode"] button') as HTMLButtonElement).disabled).toBe(
     true,
   );
-  (host.querySelector('[data-id="power"] [data-value="on"]') as HTMLButtonElement).click();
-  await Promise.resolve();
+  (host.querySelector('[data-id="power"] [data-value="ON"]') as HTMLButtonElement).click();
+  await vi.waitFor(() => expect(session.ready).toBe(true));
   flush();
   expect(engine.power).toHaveBeenLastCalledWith(true);
   expect((host.querySelector('button[data-id="q"]') as HTMLButtonElement).disabled).toBe(false);
@@ -143,6 +144,11 @@ test('keyboard dials stop at their physical limits and relative dials preserve d
   for (const key of ['ArrowRight', 'ArrowRight', 'ArrowLeft'])
     command.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
   flush();
+  expect(engine.rotate.mock.calls).toEqual([
+    ['control_ring', 1],
+    ['control_ring', 1],
+    ['control_ring', -1],
+  ]);
   expect(session.relativeSteps.get('control_ring')).toBe(1);
   expect((command.querySelector('.vals') as HTMLElement).style.backgroundPositionX).toBe('16px');
 });

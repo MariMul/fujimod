@@ -239,6 +239,7 @@ export function startHome(
       s.modSupported = false;
     });
     panel.clear();
+    viewer.clearTouch();
     setCardEngine(undefined);
     setState((s) => {
       s.connections = [];
@@ -559,6 +560,9 @@ export function startHome(
         inputs.filter((input) => input.initial).map((input) => [input.id, input.initial!]),
       );
       panel.render(inputs, active, device.panel, positions);
+      viewer.configureTouch(inputs, active, (error) => {
+        if (current === generation) showFault(faultFrom(error));
+      });
       active.powerChanges((on) => {
         panel.setPowered(on);
         viewer.powered(on);

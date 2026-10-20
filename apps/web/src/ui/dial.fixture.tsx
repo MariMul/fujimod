@@ -2,7 +2,7 @@ import type { DetentSound } from '../feedback/detent-sound';
 import type { Engine } from '../engine/api';
 declare global {
   interface Window {
-    requests: { id: string; value: string }[];
+    requests: { id: string; value: string | number }[];
     clicks: number;
     clickTimbres: number[];
     vibrations: (number | number[])[];
@@ -69,6 +69,9 @@ window.panel.render(
     { id: 'control_ring', label: 'Command', kind: 'dial', supported: true, relative: true },
   ],
   {
+    rotate: async (id: string, value: number) => {
+      window.requests.push({ id, value });
+    },
     setPosition: async (id: string, value: string) => {
       window.requests.push({ id, value });
     },

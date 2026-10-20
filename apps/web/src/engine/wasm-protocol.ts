@@ -1,4 +1,12 @@
-import type { BootInput, CardFile, CardReadOptions, EngineConfig, ReplayStep, Scene } from './api';
+import type {
+  BootInput,
+  CardFile,
+  CardReadOptions,
+  EngineConfig,
+  ReplayStep,
+  Scene,
+  TouchPhase,
+} from './api';
 import type { EngineFault } from './fault';
 import type { CameraPerformance } from './performance';
 import type { SessionState } from './wasm-abi';
@@ -13,9 +21,11 @@ export type WasmRequest =
       scene?: Scene;
       seedIdentity: { path: string; sha256: string }[];
     }
-  | { action: 'press'; id: string; stage?: string; point?: { x: number; y: number } }
+  | { action: 'press'; id: string; stage?: string }
   | { action: 'release'; id: string }
-  | { action: 'set_position'; id: string; position: string | number }
+  | { action: 'rotate'; id: string; steps: number }
+  | { action: 'touch'; id: string; phase: TouchPhase; x: number; y: number }
+  | { action: 'set_position'; id: string; position: string }
   | { action: 'scene'; scene: Scene | null }
   | { action: 'power'; on: boolean }
   | { action: 'power_cycle'; inputs: BootInput[] }

@@ -99,7 +99,7 @@ export async function proveSession(base: EngineConfig) {
     const pending: [string, () => Promise<unknown>][] = [
       ['press', () => engine.press('menu')],
       ['release', () => engine.release('menu')],
-      ['set_position', () => engine.setPosition('dial', 1)],
+      ['set_position', () => engine.setPosition('dial', 'unknown')],
     ];
     const refusals: Record<string, string> = {};
     for (const [name, run] of pending) {

@@ -1,10 +1,12 @@
 /** Exercise the settled app route through its actual generated control panel. */
+import type { WasmRequest } from '../src/engine/wasm-protocol';
 import { chromium, webkit } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 declare global {
   interface Window {
     qualifiedPositions?: Record<string, string>;
+    qualifiedInputs: WasmRequest[];
   }
 }
 const base = process.env.FUJIMOD_WEB_URL;
@@ -12,16 +14,29 @@ if (!base) throw Error('Set FUJIMOD_WEB_URL.');
 const url = new URL('/?scenario=x70-lcd#workspace', base).href;
 const output = new URL('../build/engine-ui/', import.meta.url);
 await mkdir(output, { recursive: true });
-for (const type of [chromium, webkit]) {
+for (const type of [chromium, webkit].filter(
+  (type) => !process.env.FUJIMOD_TEST_BROWSER || type.name() === process.env.FUJIMOD_TEST_BROWSER,
+)) {
   const browser = await type.launch({ headless: true });
   try {
     const context = await browser.newContext({ viewport: { width: 1300, height: 1100 } });
     await context.routeWebSocket('**/*', () => {});
     await context.addInitScript(() => {
+      window.qualifiedInputs = [];
       const Original = window.Worker;
       window.Worker = class extends Original {
         constructor(...args: ConstructorParameters<typeof Worker>) {
           super(...args);
+          this.postMessage = (
+            message: unknown,
+            options?: Transferable[] | StructuredSerializeOptions,
+          ) => {
+            const packet = message as { type: string; request?: WasmRequest };
+            if (packet.type === 'rpc' && packet.request)
+              window.qualifiedInputs.push(packet.request);
+            if (Array.isArray(options)) super.postMessage(message, options);
+            else super.postMessage(message, options);
+          };
           this.addEventListener('message', ({ data }) => {
             if (data.type === 'state') window.qualifiedPositions = data.state.positions;
           });
@@ -56,7 +71,7 @@ for (const type of [chromium, webkit]) {
       await window.cameraEngine!.rollback(10);
       return { before, after: await window.cameraEngine!.profile(0) };
     });
-    await page.locator('[data-id="power_switch"] [data-value="off"]').click();
+    await page.locator('[data-id="power_switch"] [data-value="OFF"]').click();
     await page.waitForFunction(
       () => document.querySelector<HTMLCanvasElement>('#lcd-source')?.style.visibility === 'hidden',
       undefined,
@@ -65,7 +80,7 @@ for (const type of [chromium, webkit]) {
     const stopped = await page.evaluate(() => window.cameraEngine!.profile(0));
     await page.waitForTimeout(300);
     assert.equal((await page.evaluate(() => window.cameraEngine!.profile(0))).ticks, stopped.ticks);
-    await page.locator('[data-id="power_switch"] [data-value="on"]').click();
+    await page.locator('[data-id="power_switch"] [data-value="ON"]').click();
     await page.waitForFunction(
       () =>
         document.querySelector<HTMLCanvasElement>('#lcd-source')?.style.visibility !== 'hidden' &&
@@ -74,6 +89,63 @@ for (const type of [chromium, webkit]) {
           ?.getAttribute('aria-disabled') === 'false',
       undefined,
       { timeout: 300000 },
+    );
+    for (const direction of ['ArrowRight', 'ArrowLeft']) {
+      const ring = page.locator('[data-id="control_ring"][role="slider"]');
+      const before = await page.evaluate(() => window.cameraEngine!.history());
+      await ring.focus();
+      await ring.press(direction);
+      await page.waitForFunction(
+        async (count) => (await window.cameraEngine!.history()).entries > count,
+        before.entries,
+      );
+      await page.screenshot({
+        path: new URL(type.name() + '-ring-' + direction + '.png', output).pathname,
+        fullPage: true,
+      });
+    }
+    const rect = await canvas.evaluate((canvas: HTMLCanvasElement) => {
+      const b = canvas.getBoundingClientRect(),
+        scale = Math.min(b.width / canvas.width, b.height / canvas.height);
+      return {
+        x: b.x + (b.width - canvas.width * scale) / 2,
+        y: b.y + (b.height - canvas.height * scale) / 2,
+        width: canvas.width * scale,
+        height: canvas.height * scale,
+      };
+    });
+    await page.mouse.move(
+      rect.x + (rect.width * 300.5) / 720,
+      rect.y + (rect.height * 200.5) / 480,
+    );
+    await page.mouse.down();
+    await page.waitForTimeout(100);
+    await page.mouse.move(rect.x + (rect.width * 420) / 720, rect.y + (rect.height * 260) / 480, {
+      steps: 2,
+    });
+    await page.waitForTimeout(100);
+    await page.mouse.up();
+    await page.evaluate(() => window.cameraEngine!.touch('touchscreen', 'tap', 300, 200));
+    const admitted = await page.evaluate(() => window.qualifiedInputs);
+    result.physicalInputs = admitted.filter((r) =>
+      ['rotate', 'touch', 'set_position'].includes(r.action),
+    );
+    assert.deepEqual(
+      admitted.filter((r) => r.action === 'rotate').map((r) => r.steps),
+      [1, -1],
+    );
+    const touches = admitted.filter((r) => r.action === 'touch');
+    assert.deepEqual(
+      [...new Set(touches.map((r) => r.phase))],
+      ['press', 'drag', 'release', 'tap'],
+    );
+    assert.equal(touches[0].x, 300);
+    assert.equal(touches[0].y, 200);
+    assert.deepEqual(
+      admitted.flatMap((r) =>
+        r.action === 'set_position' && r.id === 'power_switch' ? [r.position] : [],
+      ),
+      ['OFF', 'ON'],
     );
     const dial = page.locator('[data-id="shutter_speed_dial"][role="slider"]');
     await dial.focus();

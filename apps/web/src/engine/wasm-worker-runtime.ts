@@ -188,13 +188,22 @@ export class WasmWorkerRuntime {
       case 'release': {
         const { action, ...options } = request;
         if (this.manifest?.construction === 'resolved') {
-          if (action === 'press' && (request.stage || request.point))
+          if (action === 'press' && request.stage)
             throw Error('Resolved key ABI does not support staged or touch input.');
           s.input(request.id, action === 'press');
         } else if (action === 'press') this.observe(s.command('press', options).result);
         else this.observe(s.command('release', options).result);
         return;
       }
+      case 'rotate':
+        this.observe(s.command('rotate', { id: request.id, steps: request.steps }).result);
+        return;
+      case 'touch':
+        this.observe(
+          s.command('touch', { id: request.id, phase: request.phase, x: request.x, y: request.y })
+            .result,
+        );
+        return;
       case 'set_position':
         this.observe(
           s.command('set_position', { id: request.id, position: request.position }).result,
@@ -290,6 +299,7 @@ export class WasmWorkerRuntime {
           ...s.command('profile', { limit: request.limit }).result,
           checkpoints: this.points,
           wasmBytes: s.module.HEAPU8.byteLength,
+          jit: s.module.tcgJitStats?.(),
         };
       case 'error_report': {
         if (!s.created)

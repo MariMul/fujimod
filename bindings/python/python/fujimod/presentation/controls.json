@@ -64,7 +64,7 @@
       "label": "Command press",
       "text": "Command press"
     },
-    "lcd_touch": {
+    "touchscreen": {
       "label": "Screen",
       "text": "Screen"
     },

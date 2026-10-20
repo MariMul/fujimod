@@ -6,12 +6,24 @@ import type {
   Connection,
   Input,
   Checkpoint,
+  TouchPhase,
   EngineFingerprint,
 } from './api';
 
 /** Export names and wasm32 layouts are versioned independently of session JSON. */
 export interface CameraModule {
   HEAPU8: Uint8Array;
+  tcgJitStats?: () => {
+    enabled: boolean;
+    compiled?: number;
+    failures?: number;
+    unsupported?: number;
+    installed?: number;
+    retainedBytes?: number;
+    lastError?: string | null;
+    compiledExecutions?: string;
+    chainedExecutions?: string;
+  };
   _camera_alloc(this: void, length: number): number;
   _camera_free(this: void, pointer: number, length: number): void;
   _camera_create(
@@ -76,11 +88,13 @@ export interface SaveResult {
 export interface SessionCommands {
   state: { request: Record<string, never>; result: SessionState };
   press: {
-    request: { id: string; stage?: string; point?: { x: number; y: number } };
+    request: { id: string; stage?: string };
     result: SessionState;
   };
   release: { request: { id: string }; result: SessionState };
-  set_position: { request: { id: string; position: string | number }; result: SessionState };
+  rotate: { request: { id: string; steps: number }; result: SessionState };
+  touch: { request: { id: string; phase: TouchPhase; x: number; y: number }; result: SessionState };
+  set_position: { request: { id: string; position: string }; result: SessionState };
   power: { request: { on: boolean }; result: SessionState };
   power_cycle: { request: { inputs: BootInput[] }; result: SessionState };
   card_state: { request: Record<string, never>; result: CardState };

@@ -1,6 +1,7 @@
 import { createStore } from 'solid-js';
+import { touchPoint } from './touch';
 import { badgeStyle } from '../feedback/input';
-import type { Frame } from '../engine/api';
+import type { Engine, Input, Frame, TouchPhase } from '../engine/api';
 
 /** Compose guest LCD frames and fault feedback on a 2D canvas. */
 export class LCDViewer {
@@ -8,6 +9,9 @@ export class LCDViewer {
   private setUi;
   private lcdImage?: ImageData;
   private faulted = false;
+  private powerOn = true;
+  private stopTouch?: () => void;
+  private releaseTouch?: () => void;
   private faultStart?: number;
   private faultImage?: ImageData;
   private faultAnimation = 0;
@@ -25,7 +29,88 @@ export class LCDViewer {
     this.host.dataset.renderer = 'lcd';
   }
   powered(on: boolean) {
+    if (!on) this.releaseTouch?.();
+    this.powerOn = on;
     this.lcd.style.visibility = on ? '' : 'hidden';
+  }
+  clearTouch() {
+    this.stopTouch?.();
+  }
+  configureTouch(inputs: Input[], engine: Engine, error: (error: unknown) => void) {
+    this.stopTouch?.();
+    const input = inputs.find((input) => input.kind === 'touch' && input.supported);
+    if (!input?.width || !input.height) return;
+    const width = input.width,
+      height = input.height;
+    let pointer: number | undefined;
+    let x = 0,
+      y = 0;
+    const send = (phase: TouchPhase) => {
+      void engine.touch(input.id, phase, x, y).catch(error);
+    };
+    const locate = (event: PointerEvent) => {
+      const point = touchPoint(
+        this.lcd.getBoundingClientRect(),
+        this.lcd,
+        { width, height },
+        event.clientX,
+        event.clientY,
+      );
+      x = point.x;
+      y = point.y;
+      return point.inside;
+    };
+    const release = () => {
+      if (pointer === undefined) return;
+      const id = pointer;
+      pointer = undefined;
+      send('release');
+      if (this.lcd.hasPointerCapture(id)) this.lcd.releasePointerCapture(id);
+    };
+    const down = (event: PointerEvent) => {
+      if (event.button !== 0 || pointer !== undefined || !this.powerOn || this.faulted) return;
+      if (!locate(event)) return;
+      event.preventDefault();
+      pointer = event.pointerId;
+      this.lcd.setPointerCapture(pointer);
+      send('press');
+    };
+    const move = (event: PointerEvent) => {
+      if (pointer !== event.pointerId) return;
+      event.preventDefault();
+      locate(event);
+      send('drag');
+    };
+    const up = (event: PointerEvent) => {
+      if (pointer !== event.pointerId) return;
+      locate(event);
+      release();
+    };
+    this.releaseTouch = release;
+    this.lcd.style.touchAction = 'none';
+    this.lcd.addEventListener('pointerdown', down);
+    this.lcd.addEventListener('pointermove', move);
+    this.lcd.addEventListener('pointerup', up);
+    this.lcd.addEventListener('pointercancel', up);
+    this.lcd.addEventListener('lostpointercapture', up);
+    const visibility = () => {
+      if (document.hidden) release();
+    };
+    window.addEventListener('blur', release);
+    document.addEventListener('visibilitychange', visibility);
+    this.stopTouch = () => {
+      release();
+      this.lcd.style.touchAction = '';
+      this.lcd.removeEventListener('pointerdown', down);
+      this.lcd.removeEventListener('pointermove', move);
+      this.lcd.removeEventListener('pointerup', up);
+      this.lcd.removeEventListener('pointercancel', up);
+      this.lcd.removeEventListener('lostpointercapture', up);
+      window.removeEventListener('blur', release);
+      document.removeEventListener('visibilitychange', visibility);
+      this.stopTouch = undefined;
+      this.releaseTouch = undefined;
+    };
   }
   captureView(): string {
     return this.lcd.toDataURL('image/png');
@@ -80,6 +165,7 @@ export class LCDViewer {
   }
   fault(active: boolean) {
     if (active === this.faulted) return;
+    if (active) this.releaseTouch?.();
     cancelAnimationFrame(this.faultAnimation);
     const context = this.lcd.getContext('2d')!;
     this.faulted = active;
@@ -157,6 +243,7 @@ export class LCDViewer {
     else this.faultAnimation = requestAnimationFrame(() => this.paintFault());
   }
   dispose() {
+    this.stopTouch?.();
     clearTimeout(this.feedbackTimer);
     cancelAnimationFrame(this.faultAnimation);
   }

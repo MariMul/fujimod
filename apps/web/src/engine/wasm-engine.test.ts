@@ -41,17 +41,31 @@ test('main adapter transfers a DAT, selects absolute runtime paths and preserves
   assert.equal(message.request.config.bundle, 'https://example.invalid/runtime/');
   f.resolve([]);
   await boot;
-  const press = f.engine.press('shutter', 'half', { x: 0.1, y: 0.2 });
+  const press = f.engine.press('shutter', 'half');
   const input = f.sent.at(-1)!;
   assert(input.type === 'rpc');
   assert.deepEqual(input.request, {
     action: 'press',
     id: 'shutter',
     stage: 'half',
-    point: { x: 0.1, y: 0.2 },
   });
   f.resolve();
   await press;
+  for (const phase of ['press', 'drag', 'release', 'tap'] as const) {
+    const task = f.engine.touch('touchscreen', phase, 100, 200);
+    const message = f.sent.at(-1)!;
+    assert(message.type === 'rpc');
+    assert.deepEqual(message, {
+      type: 'rpc',
+      serial: message.serial,
+      request: { action: 'touch', id: 'touchscreen', phase, x: 100, y: 200 },
+    });
+    f.resolve();
+    await task;
+  }
+  const rotation = f.engine.rotate('ring', -2);
+  f.resolve();
+  await rotation;
   const read = f.engine.readCardFile('/a', { revision: 2, maxBytes: 200 });
   f.resolve(new Uint8Array([1, 2]));
   assert.deepEqual([...(await read)], [1, 2]);

@@ -48,7 +48,7 @@
     },
     "fn7": ["Fn_32"],
     "wifi": ["LBL_wifi_11"],
-    "lcd_touch": ["monitorr_screen_46"],
+    "touchscreen": ["monitorr_screen_46"],
     "lcd_tilt_switch": ["monitorr_screen_46"],
     "battery_cover": ["body.bottom_set_50"]
   },
@@ -102,7 +102,7 @@
     "focus_mode",
     "aperture",
     "control_ring",
-    "lcd_touch",
+    "touchscreen",
     "lcd_tilt_switch",
     "battery_cover"
   ],

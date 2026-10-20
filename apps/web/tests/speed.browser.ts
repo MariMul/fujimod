@@ -74,7 +74,9 @@ const result: Record<string, unknown> = {
   browser: browser.version(),
 };
 try {
-  await page.goto(values.url);
+  const response = await page.goto(values.url);
+  result.csp = response?.headers()['content-security-policy'];
+  assert.match(String(result.csp), /'wasm-unsafe-eval'/);
   await page.waitForFunction(() => performance.getEntriesByName('camera-catalog-ready').length > 0);
   if (values.dat) await page.locator('#firmware-file').setInputFiles(values.dat);
   await page.waitForFunction(() => window.cameraPerformance || window.speedTestFault, undefined, {
@@ -99,6 +101,20 @@ try {
       metrics: window.cameraPerformance,
     }));
   }
+  const warmedProfile = await page.evaluate(() => window.cameraEngine!.profile(0));
+  result.jit = warmedProfile.jit;
+  const jit = warmedProfile.jit as {
+    enabled: boolean;
+    compiled: number;
+    installed: number;
+    failures: number;
+    unsupported: number;
+    compiledExecutions: string;
+  };
+  assert.equal(jit.enabled, true);
+  assert.ok(jit.compiled > 0 && jit.installed > 0 && BigInt(jit.compiledExecutions) > 0n);
+  assert.equal(jit.failures, 0);
+  assert.equal(jit.unsupported, 0);
   const before = await sample();
   console.log(`Measuring ${seconds} wall seconds.`);
   await page.waitForTimeout(seconds * 1000);
