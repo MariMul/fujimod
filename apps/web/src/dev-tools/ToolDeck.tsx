@@ -24,7 +24,9 @@ function Tile(props: {
   const content = () => (
     <>
       <span class="td-title">{props.title}</span>
-      <span class="td-description">{props.children}</span>
+      <Show when={props.children}>
+        <span class="td-description">{props.children}</span>
+      </Show>
       <Show when={props.locked}>
         <span class="td-lock">
           <span aria-hidden="true">■</span> {props.locked}

@@ -179,8 +179,10 @@ try {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     await page.goto(url);
     await page.getByText('WebUSB unavailable', { exact: true }).waitFor();
-    assert.equal(await page.getByLabel('Console command', { exact: true }).isDisabled(), true);
-    console.log('PASS WebKit: unsupported WebUSB is visible and command entry is disabled');
+    // Without a connection there is no Console tool, so command entry is absent
+    // rather than present-but-disabled.
+    assert.equal(await page.getByLabel('Console command', { exact: true }).count(), 0);
+    console.log('PASS WebKit: unsupported WebUSB is visible and command entry is unavailable');
   } finally {
     await browser.close();
   }

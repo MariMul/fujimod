@@ -107,7 +107,14 @@ try {
         .getByRole('button', { name, exact: true })
         .click();
       assert.equal(await page.getByRole('region', { name: 'Connection log' }).isVisible(), true);
-      assert.equal(await page.getByLabel('Console command', { exact: true }).isVisible(), true);
+      // The console command input belongs to the Console tool; other tools show a
+      // status line naming the current tool, keeping the bar the same height.
+      const isConsole = name === 'Console';
+      assert.equal(
+        await page.getByLabel('Console command', { exact: true }).isVisible(),
+        isConsole,
+      );
+      if (!isConsole) assert.equal(await page.locator('.dt-bartool').innerText(), name);
     }
     await page.getByRole('button', { name: '← Back to deck', exact: true }).click();
     assert.equal(await page.getByRole('region', { name: 'Connection log' }).isVisible(), true);

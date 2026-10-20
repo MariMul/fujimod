@@ -388,3 +388,48 @@ test('automatic sharing displays remote traffic and collapses bulk request/compl
     f.dispose();
   }
 });
+test('the console composer appears only for the Console tool; other tools show a status bar', async () => {
+  const host = document.createElement('div');
+  document.body.append(host);
+  const backend: CameraBackend = {
+    initialize: async () => {},
+    pick: async () => ({ name: 'Body C', interfaces: [{ id: 0, label: 'USB' }] }),
+    open: async () => ({
+      submit: async () => {},
+      poll: async () => ({ progress: Progress.Complete, status: 0, output: new Uint8Array() }),
+      usable: () => true,
+      close: async () => {},
+      abandon: () => {},
+    }),
+    drain: () => [],
+    onDisconnect: () => () => {},
+    dispose: () => {},
+  };
+  const dispose = render(() => <DevTools backend={backend} supported={true} />, host);
+  const button = (name: string) =>
+    [...host.querySelectorAll('button')].find(
+      (node) => (node.getAttribute('aria-label') ?? node.textContent) === name,
+    )!;
+  try {
+    await vi.waitFor(() => {
+      flush();
+      expect(button('Connect camera')).toBeTruthy();
+    });
+    button('Connect camera').click();
+    await vi.waitFor(() => {
+      flush();
+      expect(host.querySelector('.dt-composer')).toBeTruthy();
+    });
+    button('Inspector').click();
+    flush();
+    expect(host.querySelector('.dt-composer')).toBeNull();
+    expect(host.querySelector('.dt-bartool')!.textContent).toBe('Inspector');
+    button('Console').click();
+    flush();
+    expect(host.querySelector('.dt-composer')).toBeTruthy();
+    expect(host.querySelector('.dt-bartool')).toBeNull();
+  } finally {
+    dispose();
+    host.remove();
+  }
+});

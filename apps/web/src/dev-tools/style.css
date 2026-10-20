@@ -325,6 +325,30 @@
   gap: 4px;
   cursor: pointer;
 }
+/* Fixed-height bar at the foot of the log: the composer when the Console tool
+ * is open, otherwise a status line, so switching tools never shifts the layout. */
+.dt-consolebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 54px;
+}
+.dt-barnotice {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border-top: 1px solid var(--line);
+  background: #101013;
+  color: #9c9ca6;
+  font-size: 12px;
+}
+.dt-bartool {
+  color: #cfcfd6;
+}
+.dt-barnotice .dt-device {
+  margin-left: auto;
+}
 .dt-composer {
   border-top: 1px solid var(--line);
   display: flex;

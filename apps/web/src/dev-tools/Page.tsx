@@ -272,6 +272,20 @@ export default function DevTools(props: {
       tools.consoleState() === ConsoleState.Idle &&
       !tools.inspectionBusy(),
   );
+  const toolLabel = () => {
+    switch (view()) {
+      case View.Inspector:
+        return 'Inspector';
+      case View.EnterServiceMode:
+        return 'Enter service mode';
+      case View.EnterDebugMode:
+        return 'Enter debug mode';
+      case View.LeaveDebugMode:
+        return 'Leave debug mode';
+      default:
+        return 'Dev Tools';
+    }
+  };
   onSettled(() => {
     if (new URLSearchParams(location.search).get('target') === CameraTarget.Emulator)
       setTarget(CameraTarget.Emulator);
@@ -753,79 +767,100 @@ export default function DevTools(props: {
                 Follow
               </label>
             </div>
-            <form class="dt-composer" onSubmit={send}>
-              <span class="dt-prompt" aria-hidden="true">
-                ›
-              </span>
-              <input
-                ref={(element) => {
-                  input = element;
-                }}
-                aria-label="Console command"
-                placeholder="Console command"
-                value={draft()}
-                maxlength={
-                  4096 - (ending() === LineEnding.CrLf ? 2 : ending() === LineEnding.Lf ? 1 : 0)
-                }
-                onInput={(event) => setDraft(event.currentTarget.value)}
-                onKeyDown={recall}
-                disabled={
-                  tools.connection() !== ConnectionState.Connected ||
-                  tools.consoleState() === ConsoleState.Unknown ||
-                  tools.inspectionBusy()
-                }
-                enterkeyhint="send"
-                spellcheck={false}
-                autocomplete="off"
-                autocapitalize="off"
-                autocorrect="off"
-              />
-              <button
-                class="pill dt-primary"
-                type="submit"
-                disabled={!canSend() || !draft().trim()}
-              >
-                Send ↵
-              </button>
-            </form>
-            <div class="dt-composer-footer">
-              <label>
-                Line ending{' '}
-                <select
-                  aria-label="Line ending"
-                  value={ending()}
-                  onChange={(event) => setEnding(event.currentTarget.value as LineEnding)}
-                >
-                  <For each={Object.values(LineEnding)}>
-                    {(value) => <option value={value}>{value}</option>}
-                  </For>
-                </select>
-              </label>
-              <Show when={tools.consoleState() === ConsoleState.Polling}>
-                <button class="dt-text-button" onClick={tools.stopPolling}>
-                  Stop waiting
-                </button>
-              </Show>
-              <Show
-                when={
-                  tools.connection() === ConnectionState.Connected &&
-                  (tools.consoleState() === ConsoleState.Pending ||
-                    tools.consoleState() === ConsoleState.Unknown)
-                }
-              >
-                <button
-                  class="dt-text-button"
-                  onClick={() => {
-                    void tools.readResponse();
-                  }}
-                >
-                  Read response
-                </button>
-              </Show>
-              <Show when={tools.consoleState() === ConsoleState.Unknown}>
-                <span class="dt-warning">Completion unknown</span>
-              </Show>
-              <span class="dt-device">{tools.camera()?.name ?? 'No camera'}</span>
+            <div class="dt-consolebar">
+              <Switch>
+                <Match when={share.controllers().size > 0}>
+                  <div class="dt-barnotice">
+                    <span>This camera is being controlled remotely.</span>
+                    <button class="pill" type="button" onClick={() => tools.disconnect()}>
+                      Disconnect
+                    </button>
+                  </div>
+                </Match>
+                <Match when={view() === View.Console}>
+                  <form class="dt-composer" onSubmit={send}>
+                    <span class="dt-prompt" aria-hidden="true">
+                      ›
+                    </span>
+                    <input
+                      ref={(element) => {
+                        input = element;
+                      }}
+                      aria-label="Console command"
+                      placeholder="Console command"
+                      value={draft()}
+                      maxlength={
+                        4096 -
+                        (ending() === LineEnding.CrLf ? 2 : ending() === LineEnding.Lf ? 1 : 0)
+                      }
+                      onInput={(event) => setDraft(event.currentTarget.value)}
+                      onKeyDown={recall}
+                      disabled={
+                        tools.connection() !== ConnectionState.Connected ||
+                        tools.consoleState() === ConsoleState.Unknown ||
+                        tools.inspectionBusy()
+                      }
+                      enterkeyhint="send"
+                      spellcheck={false}
+                      autocomplete="off"
+                      autocapitalize="off"
+                      autocorrect="off"
+                    />
+                    <button
+                      class="pill dt-primary"
+                      type="submit"
+                      disabled={!canSend() || !draft().trim()}
+                    >
+                      Send ↵
+                    </button>
+                  </form>
+                  <div class="dt-composer-footer">
+                    <label>
+                      Line ending{' '}
+                      <select
+                        aria-label="Line ending"
+                        value={ending()}
+                        onChange={(event) => setEnding(event.currentTarget.value as LineEnding)}
+                      >
+                        <For each={Object.values(LineEnding)}>
+                          {(value) => <option value={value}>{value}</option>}
+                        </For>
+                      </select>
+                    </label>
+                    <Show when={tools.consoleState() === ConsoleState.Polling}>
+                      <button class="dt-text-button" onClick={tools.stopPolling}>
+                        Stop waiting
+                      </button>
+                    </Show>
+                    <Show
+                      when={
+                        tools.connection() === ConnectionState.Connected &&
+                        (tools.consoleState() === ConsoleState.Pending ||
+                          tools.consoleState() === ConsoleState.Unknown)
+                      }
+                    >
+                      <button
+                        class="dt-text-button"
+                        onClick={() => {
+                          void tools.readResponse();
+                        }}
+                      >
+                        Read response
+                      </button>
+                    </Show>
+                    <Show when={tools.consoleState() === ConsoleState.Unknown}>
+                      <span class="dt-warning">Completion unknown</span>
+                    </Show>
+                    <span class="dt-device">{tools.camera()?.name ?? 'No camera'}</span>
+                  </div>
+                </Match>
+                <Match when={true}>
+                  <div class="dt-barnotice">
+                    <span class="dt-bartool">{toolLabel()}</span>
+                    <span class="dt-device">{tools.camera()?.name ?? 'No camera'}</span>
+                  </div>
+                </Match>
+              </Switch>
             </div>
           </div>
         </div>
