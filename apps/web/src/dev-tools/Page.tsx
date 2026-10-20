@@ -1,4 +1,14 @@
-import { For, Show, createEffect, createMemo, createSignal, onSettled, untrack } from 'solid-js';
+import {
+  For,
+  Match,
+  Show,
+  Switch,
+  createEffect,
+  createMemo,
+  createSignal,
+  onSettled,
+  untrack,
+} from 'solid-js';
 import { CameraTarget, type CameraBackend } from './camera';
 import { ConnectionState, ConsoleState, LineEnding, createDevTools } from './controller';
 import { Direction, Layer, Level, exportLog, hex, type LogEntry } from './log';
@@ -7,6 +17,9 @@ import { createShareSession } from './share-session';
 import { pageState } from './page-state';
 import { ProblemAlert, RemoteUseStrip, SharingChip } from './SharingStatus';
 import { ToolActivity } from './ToolActivity';
+import { DeckTool, ToolDeck } from './ToolDeck';
+import { DebugModeWizard } from './debug-mode/Wizard';
+import { LeaveDebugMode } from './debug-mode/LeaveDebugMode';
 import './sharing.css';
 import { scenarios } from './scenarios';
 import { LocalReports } from '../ui/local-reports';
@@ -17,6 +30,21 @@ import './style.css';
 declare const __FUJIMOD_SIMULATOR_BUILD__: string;
 const layers = [Layer.Console, Layer.App80, Layer.Ff80, Layer.Usb];
 const levels = [Level.Error, Level.Warning, Level.Info, Level.Debug, Level.Trace];
+enum View {
+  Deck,
+  Console,
+  EnterDebugMode,
+  LeaveDebugMode,
+}
+/** Console-first entries (a simulator link, a shared camera) skip the tool deck. */
+function initialView(connectOnMount: boolean | undefined): View {
+  if (connectOnMount || typeof window === 'undefined')
+    return connectOnMount ? View.Console : View.Deck;
+  const search = new URLSearchParams(location.search);
+  return search.get('target') === CameraTarget.Emulator || remoteControlUrl(location.href)
+    ? View.Console
+    : View.Deck;
+}
 const connectionNames: Record<ConnectionState, string> = {
   [ConnectionState.Loading]: 'Loading USB',
   [ConnectionState.Disconnected]: 'Disconnected',
@@ -59,7 +87,9 @@ function LogRow(props: { entry: LogEntry }) {
         <span class="dt-message">{props.entry.message.trimEnd()}</span>
         <span class="dt-size">{bytes() ? `${bytes().toLocaleString()} B` : ''}</span>
         <time class="dt-time" datetime={new Date(props.entry.time).toISOString()}>
-          {new Date(props.entry.time).toLocaleTimeString(undefined, { hour12: false })}
+          {new Date(props.entry.time).toLocaleTimeString(undefined, {
+            hour12: false,
+          })}
         </time>
         <span class="dt-expand" aria-hidden="true">
           {expanded() ? '−' : '+'}
@@ -115,6 +145,19 @@ export default function DevTools(props: {
   );
   const [activeLevels, setActiveLevels] = createSignal<ReadonlySet<Level>>(new Set(levels));
   const [target, setTarget] = createSignal(CameraTarget.Usb);
+  const [view, setView] = createSignal(initialView(untrack(() => props.connectOnMount)));
+  const debugCamera = createMemo(
+    () =>
+      [ConnectionState.Connected, ConnectionState.Sharing].includes(tools.connection()) &&
+      tools.target() === CameraTarget.Usb,
+  );
+  // A camera connected from the header opens its console; the wizard keeps its own steps.
+  createEffect(
+    () => tools.connection(),
+    (state) => {
+      if (state === ConnectionState.Connected && untrack(view) === View.Deck) setView(View.Console);
+    },
+  );
   const sharedUrl = share.url;
   const [sharingBusy, setSharingBusy] = createSignal(false);
   const [toast, setToast] = createSignal('');
@@ -463,7 +506,6 @@ export default function DevTools(props: {
         </div>
       </Show>
       <main class="dt-workspace">
-        <h1 class="dt-title">Dev Tools</h1>
         <Show when={tools.connection() === ConnectionState.Selecting}>
           <form
             class="dt-interface"
@@ -490,171 +532,207 @@ export default function DevTools(props: {
             </button>
           </form>
         </Show>
-        <div class="dt-console">
-          <div class="dt-toolbar">
-            <div class="dt-filters" role="group" aria-label="Log layers">
-              <For each={layers}>
-                {(layer) => (
-                  <button
-                    class="dt-chip"
-                    aria-pressed={activeLayers().has(layer) ? 'true' : 'false'}
-                    onClick={() => toggleLayer(layer)}
-                  >
-                    {layer}
-                  </button>
-                )}
-              </For>
-            </div>
-            <div class="dt-log-actions">
-              <details class="dt-levels">
-                <summary>
-                  Levels{' '}
-                  <span>
-                    {activeLevels().size}/{levels.length}
-                  </span>
-                </summary>
-                <div>
-                  <For each={levels}>
-                    {(level) => (
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={activeLevels().has(level)}
-                          onChange={() => toggleLevel(level)}
-                        />
-                        {level}
-                      </label>
+        <Switch>
+          <Match when={view() === View.Deck}>
+            <ToolDeck
+              debugCamera={debugCamera()}
+              shareLocked={
+                sharingConfigured() && tools.canShare() ? undefined : 'Sharing isn’t available here'
+              }
+              onOpen={(tool) => {
+                if (tool === DeckTool.EnterDebugMode) setView(View.EnterDebugMode);
+                else if (tool === DeckTool.LeaveDebugMode) setView(View.LeaveDebugMode);
+                else if (tool === DeckTool.Share) shareDialog.showModal();
+                else setView(View.Console);
+              }}
+            />
+          </Match>
+          <Match when={view() === View.EnterDebugMode}>
+            <DebugModeWizard tools={tools} onClose={() => setView(View.Deck)} />
+          </Match>
+          <Match when={view() === View.LeaveDebugMode}>
+            <LeaveDebugMode connected={debugCamera()} onClose={() => setView(View.Deck)} />
+          </Match>
+          <Match when={true}>
+            <h1 class="dt-title">Dev Tools</h1>
+            <button class="dt-tools-back" onClick={() => setView(View.Deck)}>
+              ← Tools
+            </button>
+            <div class="dt-console">
+              <div class="dt-toolbar">
+                <div class="dt-filters" role="group" aria-label="Log layers">
+                  <For each={layers}>
+                    {(layer) => (
+                      <button
+                        class="dt-chip"
+                        aria-pressed={activeLayers().has(layer) ? 'true' : 'false'}
+                        onClick={() => toggleLayer(layer)}
+                      >
+                        {layer}
+                      </button>
                     )}
                   </For>
                 </div>
-              </details>
-              <button class="dt-text-button" onClick={download} disabled={!tools.entries().length}>
-                Save
-              </button>
-              <button
-                class="dt-text-button"
-                onClick={tools.clear}
-                disabled={!tools.entries().length}
-              >
-                Clear
-              </button>
-            </div>
-          </div>
-          <div
-            class="dt-viewport"
-            ref={(element) => {
-              viewport = element;
-            }}
-            tabindex={0}
-            role="region"
-            aria-label="Connection log"
-            onScroll={() => {
-              if (viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop > 48)
-                setFollow(false);
-            }}
-          >
-            <Show
-              when={entries().length}
-              fallback={
-                <div class="dt-empty">
-                  {tools.entries().length ? 'No matching entries' : 'No connection activity'}
+                <div class="dt-log-actions">
+                  <details class="dt-levels">
+                    <summary>
+                      Levels{' '}
+                      <span>
+                        {activeLevels().size}/{levels.length}
+                      </span>
+                    </summary>
+                    <div>
+                      <For each={levels}>
+                        {(level) => (
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={activeLevels().has(level)}
+                              onChange={() => toggleLevel(level)}
+                            />
+                            {level}
+                          </label>
+                        )}
+                      </For>
+                    </div>
+                  </details>
+                  <button
+                    class="dt-text-button"
+                    onClick={download}
+                    disabled={!tools.entries().length}
+                  >
+                    Save
+                  </button>
+                  <button
+                    class="dt-text-button"
+                    onClick={tools.clear}
+                    disabled={!tools.entries().length}
+                  >
+                    Clear
+                  </button>
                 </div>
-              }
-            >
-              <div class="dt-lines">
-                <For each={entries()}>{(entry) => <LogRow entry={entry} />}</For>
               </div>
-            </Show>
-          </div>
-          <ToolActivity session={share} />
-          <div class="dt-log-footer">
-            <span>
-              {entries().length.toLocaleString()} / {tools.entries().length.toLocaleString()}{' '}
-              entries
-              <Show when={tools.discarded()}>
-                {' '}
-                · {tools.discarded().toLocaleString()} discarded
-              </Show>
-            </span>
-            <label>
-              <input
-                type="checkbox"
-                checked={follow()}
-                onChange={(event) => setFollow(event.currentTarget.checked)}
-              />
-              Follow
-            </label>
-          </div>
-          <form class="dt-composer" onSubmit={send}>
-            <span class="dt-prompt" aria-hidden="true">
-              ›
-            </span>
-            <input
-              ref={(element) => {
-                input = element;
-              }}
-              aria-label="Console command"
-              placeholder="Console command"
-              value={draft()}
-              maxlength={
-                4096 - (ending() === LineEnding.CrLf ? 2 : ending() === LineEnding.Lf ? 1 : 0)
-              }
-              onInput={(event) => setDraft(event.currentTarget.value)}
-              onKeyDown={recall}
-              disabled={
-                tools.connection() !== ConnectionState.Connected ||
-                tools.consoleState() === ConsoleState.Unknown
-              }
-              enterkeyhint="send"
-              spellcheck={false}
-              autocomplete="off"
-              autocapitalize="off"
-              autocorrect="off"
-            />
-            <button class="pill dt-primary" type="submit" disabled={!canSend() || !draft().trim()}>
-              Send ↵
-            </button>
-          </form>
-          <div class="dt-composer-footer">
-            <label>
-              Line ending{' '}
-              <select
-                aria-label="Line ending"
-                value={ending()}
-                onChange={(event) => setEnding(event.currentTarget.value as LineEnding)}
-              >
-                <For each={Object.values(LineEnding)}>
-                  {(value) => <option value={value}>{value}</option>}
-                </For>
-              </select>
-            </label>
-            <Show when={tools.consoleState() === ConsoleState.Polling}>
-              <button class="dt-text-button" onClick={tools.stopPolling}>
-                Stop waiting
-              </button>
-            </Show>
-            <Show
-              when={
-                tools.connection() === ConnectionState.Connected &&
-                (tools.consoleState() === ConsoleState.Pending ||
-                  tools.consoleState() === ConsoleState.Unknown)
-              }
-            >
-              <button
-                class="dt-text-button"
-                onClick={() => {
-                  void tools.readResponse();
+              <div
+                class="dt-viewport"
+                ref={(element) => {
+                  viewport = element;
+                }}
+                tabindex={0}
+                role="region"
+                aria-label="Connection log"
+                onScroll={() => {
+                  if (viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop > 48)
+                    setFollow(false);
                 }}
               >
-                Read response
-              </button>
-            </Show>
-            <Show when={tools.consoleState() === ConsoleState.Unknown}>
-              <span class="dt-warning">Completion unknown</span>
-            </Show>
-            <span class="dt-device">{tools.camera()?.name ?? 'No camera'}</span>
-          </div>
-        </div>
+                <Show
+                  when={entries().length}
+                  fallback={
+                    <div class="dt-empty">
+                      {tools.entries().length ? 'No matching entries' : 'No connection activity'}
+                    </div>
+                  }
+                >
+                  <div class="dt-lines">
+                    <For each={entries()}>{(entry) => <LogRow entry={entry} />}</For>
+                  </div>
+                </Show>
+              </div>
+              <ToolActivity session={share} />
+              <div class="dt-log-footer">
+                <span>
+                  {entries().length.toLocaleString()} / {tools.entries().length.toLocaleString()}{' '}
+                  entries
+                  <Show when={tools.discarded()}>
+                    {' '}
+                    · {tools.discarded().toLocaleString()} discarded
+                  </Show>
+                </span>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={follow()}
+                    onChange={(event) => setFollow(event.currentTarget.checked)}
+                  />
+                  Follow
+                </label>
+              </div>
+              <form class="dt-composer" onSubmit={send}>
+                <span class="dt-prompt" aria-hidden="true">
+                  ›
+                </span>
+                <input
+                  ref={(element) => {
+                    input = element;
+                  }}
+                  aria-label="Console command"
+                  placeholder="Console command"
+                  value={draft()}
+                  maxlength={
+                    4096 - (ending() === LineEnding.CrLf ? 2 : ending() === LineEnding.Lf ? 1 : 0)
+                  }
+                  onInput={(event) => setDraft(event.currentTarget.value)}
+                  onKeyDown={recall}
+                  disabled={
+                    tools.connection() !== ConnectionState.Connected ||
+                    tools.consoleState() === ConsoleState.Unknown
+                  }
+                  enterkeyhint="send"
+                  spellcheck={false}
+                  autocomplete="off"
+                  autocapitalize="off"
+                  autocorrect="off"
+                />
+                <button
+                  class="pill dt-primary"
+                  type="submit"
+                  disabled={!canSend() || !draft().trim()}
+                >
+                  Send ↵
+                </button>
+              </form>
+              <div class="dt-composer-footer">
+                <label>
+                  Line ending{' '}
+                  <select
+                    aria-label="Line ending"
+                    value={ending()}
+                    onChange={(event) => setEnding(event.currentTarget.value as LineEnding)}
+                  >
+                    <For each={Object.values(LineEnding)}>
+                      {(value) => <option value={value}>{value}</option>}
+                    </For>
+                  </select>
+                </label>
+                <Show when={tools.consoleState() === ConsoleState.Polling}>
+                  <button class="dt-text-button" onClick={tools.stopPolling}>
+                    Stop waiting
+                  </button>
+                </Show>
+                <Show
+                  when={
+                    tools.connection() === ConnectionState.Connected &&
+                    (tools.consoleState() === ConsoleState.Pending ||
+                      tools.consoleState() === ConsoleState.Unknown)
+                  }
+                >
+                  <button
+                    class="dt-text-button"
+                    onClick={() => {
+                      void tools.readResponse();
+                    }}
+                  >
+                    Read response
+                  </button>
+                </Show>
+                <Show when={tools.consoleState() === ConsoleState.Unknown}>
+                  <span class="dt-warning">Completion unknown</span>
+                </Show>
+                <span class="dt-device">{tools.camera()?.name ?? 'No camera'}</span>
+              </div>
+            </div>
+          </Match>
+        </Switch>
       </main>
     </div>
   );

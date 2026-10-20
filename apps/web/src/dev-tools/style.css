@@ -430,3 +430,24 @@
     flex: 1;
   }
 }
+
+.dt-tools-back {
+  flex: none;
+  align-self: flex-start;
+  margin: 4px 0;
+  padding: 2px 0;
+  background: none;
+  border: 0;
+  color: var(--dim);
+  font:
+    600 11px/1 ui-monospace,
+    'SF Mono',
+    Menlo,
+    monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.dt-tools-back:hover {
+  color: #eee;
+}

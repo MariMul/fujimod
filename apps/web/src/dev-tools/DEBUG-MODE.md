@@ -1,9 +1,10 @@
 # Dev Tools: tool deck and debug mode
 
 Agreed with the owner on 2026-10-19. This records the design; implementation
-follows it. The service-mode walkthrough itself already exists as the setup
-wizard (`../../SETUP-WIZARD.md`, route `/setup/`); how the two combine is not
-yet decided.
+follows it. This wizard is part of Dev Tools and independent of the animated
+setup wizard (`../../SETUP-WIZARD.md`), by owner decision. The camera
+operations (service-mode check, reset guard, debug-mode save and rollback) go
+in a Rust workflow crate beside `fujimod-usb`, shared by every caller.
 
 ## Start screen: the tool deck
 
