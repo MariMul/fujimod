@@ -3246,9 +3246,9 @@ name = "fujimod"
 version = "0.1.0"
 dependencies = [
  "fujimod-defs",
- "fujimod-mod-install",
  "fujimod-simulation",
  "fujimod-usb",
+ "fujimod-workflows",
 ]
 
 [[package]]
@@ -3296,22 +3296,14 @@ version = "0.1.0"
 dependencies = [
  "fujimod-bindgen",
  "fujimod-defs",
- "fujimod-mod-install",
  "fujimod-usb",
+ "fujimod-workflows",
  "futures-channel",
  "futures-lite",
  "js-sys",
  "nusb",
  "wasm-bindgen",
  "wasm-bindgen-futures",
-]
-
-[[package]]
-name = "fujimod-mod-install"
-version = "0.1.0"
-dependencies = [
- "fujimod-usb",
- "futures-lite",
 ]
 
 [[package]]
@@ -3322,8 +3314,8 @@ dependencies = [
  "fujimod-corpus",
  "fujimod-defs",
  "fujimod-firmware",
- "fujimod-mod-install",
  "fujimod-usb",
+ "fujimod-workflows",
  "futures-channel",
  "futures-lite",
  "nusb",
@@ -3388,6 +3380,14 @@ dependencies = [
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+]
+
+[[package]]
+name = "fujimod-workflows"
+version = "0.1.0"
+dependencies = [
+ "fujimod-usb",
+ "futures-lite",
 ]
 
 [[package]]

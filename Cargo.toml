@@ -7,7 +7,7 @@ members = [
   "crates/defs",
   "crates/fujimod",
   "crates/usb",
-  "crates/mod-install",
+  "crates/workflows",
   "bindings/python",
   "bindings/javascript",
   "bindings/generator",
@@ -28,7 +28,7 @@ fujimod-defs = { path = "crates/defs", version = "0.1.0" }
 serde = "1"
 serde_json = "1"
 fujimod-usb = { path = "crates/usb", version = "0.1.0" }
-fujimod-mod-install = { path = "crates/mod-install", version = "0.1.0" }
+fujimod-workflows = { path = "crates/workflows", version = "0.1.0" }
 nusb = "0.2.8"
 thiserror = "2"
 futures-lite = "2"

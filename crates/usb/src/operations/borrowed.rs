@@ -1,4 +1,5 @@
-use fujimod_usb::{
+//! Borrowed diagnostic callbacks: swap one callback word, query, restore once.
+use crate::{
     Error, Result,
     ff80::{
         commands::{
@@ -113,5 +114,86 @@ impl BorrowedQueries {
         plan.write(self.output.address(), self.original.clone())
             .expect("validated output range");
         plan.commands
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn borrowed_queries_validate_before_append_and_restore_once() {
+        let mut plan = BorrowedQueries::new(
+            Address(0x1000),
+            Address(0x9000),
+            Address(0x1100),
+            b"original".to_vec(),
+        )
+        .unwrap();
+        assert!(
+            plan.call(
+                Address(0x8000),
+                DiagnosticTag::Research(7),
+                vec![],
+                vec![0; 8]
+            )
+            .is_err()
+        );
+        assert_eq!(plan.commands().len(), 0);
+        assert_eq!(
+            plan.call(
+                Address(0x8000),
+                DiagnosticTag::Research(7),
+                vec![(0, 0), (1, 0xffff)],
+                vec![0; 8]
+            )
+            .unwrap(),
+            (6, 8)
+        );
+        assert_eq!(
+            plan.call(
+                Address(0x8004),
+                DiagnosticTag::Research(9),
+                vec![(0, 0)],
+                vec![0; 8]
+            )
+            .unwrap(),
+            (13, 15)
+        );
+        let commands = plan.commands();
+        assert_eq!(commands.len(), 20);
+        let SequenceCommand::Write { address, bytes } = &commands[16] else {
+            panic!()
+        };
+        assert_eq!(address.0, 0x1000);
+        assert_eq!(bytes, &0x9000u32.to_le_bytes());
+        assert!(
+            BorrowedQueries::new(Address(0x1000), Address(0), Address(0x1002), vec![0; 8]).is_err()
+        );
+    }
+
+    #[test]
+    fn query_batches_refuse_overflow_without_mutating_the_plan() {
+        let mut plan =
+            BorrowedQueries::new(Address(0x1000), Address(0), Address(0x1100), vec![0; 8]).unwrap();
+        for _ in 0..72 {
+            plan.call(
+                Address(0x8000),
+                DiagnosticTag::Research(0),
+                vec![(0, 0)],
+                vec![0; 8],
+            )
+            .unwrap();
+        }
+        assert_eq!(plan.commands().len(), 510);
+        assert!(
+            plan.call(
+                Address(0x8000),
+                DiagnosticTag::Research(0),
+                vec![(0, 0)],
+                vec![0; 8]
+            )
+            .is_err()
+        );
+        assert_eq!(plan.commands().len(), 510);
     }
 }

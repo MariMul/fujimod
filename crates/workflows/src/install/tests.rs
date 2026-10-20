@@ -3,12 +3,8 @@ use fujimod_usb::{
     Error,
     ff80::{
         Session, SessionState,
-        commands::{
-            diagnostic::DiagnosticTag,
-            memory::{Address, DebugMemoryLimits, MemoryRange},
-        },
+        commands::memory::{Address, DebugMemoryLimits, MemoryRange},
         framing::RequestKind,
-        sequence::SequenceCommand,
     },
     operations::data::{DataWindow, OffsetMode},
     testing::{Exchange as E, Script},
@@ -137,105 +133,6 @@ fn restore() -> Vec<E> {
     steps.extend(write(0x1000, &0x8000u32.to_le_bytes()));
     steps.extend(read(0x1000, &0x8000u32.to_le_bytes()));
     steps
-}
-#[test]
-fn verified_writes_preserve_tails_and_sequence_bounds() {
-    let bytes = vec![0x5a; 256 * 300 + 3];
-    let batches = verified_writes(Address(0x10000), &bytes, limits(), nz(256)).unwrap();
-    assert_eq!(batches.iter().map(Vec::len).collect::<Vec<_>>(), [512, 90]);
-    let SequenceCommand::Read { range, expected } = batches[1].last().unwrap() else {
-        panic!()
-    };
-    assert_eq!(range.length().get(), 3);
-    assert_eq!(expected.as_ref().unwrap(), &[0x5a; 3]);
-    assert!(verified_writes(Address(u32::MAX), b"xx", limits(), nz(256)).is_err());
-    assert!(verified_writes(Address(u32::MAX), b"x", limits(), nz(256)).is_ok());
-    let small = verified_writes(
-        Address(0),
-        b"12345",
-        DebugMemoryLimits {
-            read: nz(2),
-            write: nz(3),
-        },
-        nz(4),
-    )
-    .unwrap();
-    assert_eq!(small[0].len(), 6);
-}
-#[test]
-fn borrowed_queries_validate_before_append_and_restore_once() {
-    let mut plan = BorrowedQueries::new(
-        Address(0x1000),
-        Address(0x9000),
-        Address(0x1100),
-        b"original".to_vec(),
-    )
-    .unwrap();
-    assert!(
-        plan.call(
-            Address(0x8000),
-            DiagnosticTag::Research(7),
-            vec![],
-            vec![0; 8]
-        )
-        .is_err()
-    );
-    assert_eq!(plan.commands().len(), 0);
-    assert_eq!(
-        plan.call(
-            Address(0x8000),
-            DiagnosticTag::Research(7),
-            vec![(0, 0), (1, 0xffff)],
-            vec![0; 8]
-        )
-        .unwrap(),
-        (6, 8)
-    );
-    assert_eq!(
-        plan.call(
-            Address(0x8004),
-            DiagnosticTag::Research(9),
-            vec![(0, 0)],
-            vec![0; 8]
-        )
-        .unwrap(),
-        (13, 15)
-    );
-    let commands = plan.commands();
-    assert_eq!(commands.len(), 20);
-    let SequenceCommand::Write { address, bytes } = &commands[16] else {
-        panic!()
-    };
-    assert_eq!(address.0, 0x1000);
-    assert_eq!(bytes, &0x9000u32.to_le_bytes());
-    assert!(
-        BorrowedQueries::new(Address(0x1000), Address(0), Address(0x1002), vec![0; 8]).is_err()
-    );
-}
-#[test]
-fn query_batches_refuse_overflow_without_mutating_the_plan() {
-    let mut plan =
-        BorrowedQueries::new(Address(0x1000), Address(0), Address(0x1100), vec![0; 8]).unwrap();
-    for _ in 0..72 {
-        plan.call(
-            Address(0x8000),
-            DiagnosticTag::Research(0),
-            vec![(0, 0)],
-            vec![0; 8],
-        )
-        .unwrap();
-    }
-    assert_eq!(plan.commands().len(), 510);
-    assert!(
-        plan.call(
-            Address(0x8000),
-            DiagnosticTag::Research(0),
-            vec![(0, 0)],
-            vec![0; 8]
-        )
-        .is_err()
-    );
-    assert_eq!(plan.commands().len(), 510);
 }
 #[test]
 fn padding_cannot_reach_adjacent_allocations() {

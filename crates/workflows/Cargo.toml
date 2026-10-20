@@ -1,11 +1,11 @@
 [package]
-name = "fujimod-mod-install"
+name = "fujimod-workflows"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
-description = "Checked debug installation transfers and borrowed callback batches"
+description = "Camera workflows composed from fujimod-usb operations: mod install"
 
 [dependencies]
 fujimod-usb.workspace = true

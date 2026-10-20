@@ -476,12 +476,12 @@ impl Session {
 }
 pub(crate) enum Operation {
     UploadOwned(
-        fujimod_mod_install::OwnedUpload,
-        fujimod_mod_install::UploadDestination,
+        fujimod_workflows::install::OwnedUpload,
+        fujimod_workflows::install::UploadDestination,
         usb::ff80::commands::memory::DebugMemoryLimits,
     ),
     VerifyOwned(
-        fujimod_mod_install::OwnedUpload,
+        fujimod_workflows::install::OwnedUpload,
         usb::operations::data::DataWindow,
     ),
     Sequence(

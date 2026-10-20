@@ -1,14 +1,17 @@
-# Debug mod installation helpers
+# Camera workflows
 
-`fujimod-mod-install` composes the ff80 debug and bulk transports for installation.
-Its Rust implementation is shared by native Python and JavaScript/WebUSB,
-including Pyodide, over local USB or USB sharing.
+`fujimod-workflows` holds camera procedures composed from `fujimod-usb`
+operations (design: [`../WORKFLOWS.md`](../WORKFLOWS.md)). Its Rust
+implementation is shared by native Python and JavaScript/WebUSB, including
+Pyodide, over local USB or USB sharing.
 
-- `verified_writes` builds bounded write/readback batches. Each packet's guard
-  runs at the USB owner before later writes; batches contain at most 512 commands.
-- `BorrowedQueries` checks the original callback and output bytes, verifies each
-  setup write, runs callbacks with explicit accepted status pairs, and restores
-  the borrowed words once after the batch. Calls return reply/output indices.
+## `install`: debug mod installation
+
+Installation also uses two generic `fujimod-usb` operations:
+`operations::verified::verified_writes` (bounded write/readback batches whose
+guards run at the USB owner) and `operations::borrowed::BorrowedQueries`
+(borrowed callback words, explicit accepted statuses, one restore per batch).
+
 - `OwnedUpload` checks that the image and its padded bulk extent fit inside the
   supplied owned allocation. `upload` checks the original destination pointer
   and capacity, borrows the pointer, sends E0 pieces, checks completion and
@@ -23,7 +26,7 @@ Errors and cancellation never retry, repair pointers, free allocations or reset
 the device. Retain ownership records and memory when completion is uncertain.
 
 ```rust,no_run
-use fujimod_mod_install::{OwnedUpload, UploadDestination};
+use fujimod_workflows::install::{OwnedUpload, UploadDestination};
 use fujimod_usb::{Result, ff80::{Session, commands::memory::{DebugMemoryLimits,
     MemoryRange}}, operations::data::DataWindow};
 use std::num::NonZeroU32;
@@ -44,6 +47,6 @@ Bindings expose `usb.InstallQueries`, `usb.OwnedUpload`,
 `session.upload_owned` / `uploadOwned`, `verify_owned` / `verifyOwned`.
 Firmware and allocation policy stays with the caller in each language.
 
-Run `cargo test -p fujimod-mod-install` for range, padding, packet/batch bounds,
+Run `cargo test -p fujimod-workflows` for range, padding, packet/batch bounds,
 pointer guards, bulk completion, cancellation and full readback checks through
 the ff80 core. These checks do not measure physical camera throughput.
