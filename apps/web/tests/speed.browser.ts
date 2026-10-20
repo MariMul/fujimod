@@ -66,8 +66,10 @@ await context.addInitScript(() => {
   };
 });
 const page = await context.newPage();
-const errors: string[] = [];
+const errors: string[] = [],
+  consoleMessages: string[] = [];
 page.on('pageerror', (error) => errors.push(error.message));
+page.on('console', (message) => consoleMessages.push(`${message.type()}: ${message.text()}`));
 const result: Record<string, unknown> = {
   url: values.url,
   engine: values.engine,
@@ -167,6 +169,9 @@ try {
   assert.ok(presentedFps >= 9.5, `${presentedFps} presented frames per guest second`);
   assert.ok(speed >= minimumSpeed, `${speed.toFixed(3)}x < ${minimumSpeed}x`);
 } catch (error) {
+  result.console = consoleMessages;
+  result.lastMetrics = await page.evaluate(() => window.cameraPerformance);
+  result.fault = await page.evaluate(() => window.speedTestFault);
   result.error = String(error);
   throw error;
 } finally {
