@@ -21,6 +21,7 @@ function mount(inputs: Input[], data: DevicePanel) {
   document.body.append(host);
   const engine = {
     setPosition: vi.fn(async () => {}),
+    power: vi.fn(async () => {}),
     press: vi.fn(async () => {}),
     release: vi.fn(async () => {}),
   };
@@ -96,7 +97,7 @@ test('every segment selects through the engine and remains synchronized after po
   (host.querySelector('[data-id="power"] [data-value="on"]') as HTMLButtonElement).click();
   await Promise.resolve();
   flush();
-  expect(engine.setPosition).toHaveBeenLastCalledWith('power', 'on');
+  expect(engine.power).toHaveBeenLastCalledWith(true);
   expect((host.querySelector('button[data-id="q"]') as HTMLButtonElement).disabled).toBe(false);
   session.disable();
   flush();

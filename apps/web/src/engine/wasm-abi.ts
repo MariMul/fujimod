@@ -65,10 +65,10 @@ export interface SessionState {
   connections: Connection[];
   card: CardState;
   poweredOn: boolean;
+  inputQueue?: { pending: number; active: unknown; completed: number };
 }
 export interface SaveResult {
   durable: { offset: number; length: number };
-  snapshot?: { offset: number; length: number };
   positions: Record<string, string>;
   poweredOn: boolean;
 }
@@ -89,11 +89,12 @@ export interface SessionCommands {
   card_insert: { request: { present: boolean }; result: SessionState };
   card_format: { request: Record<string, never>; result: SessionState };
   restart_card: {
-    request: { files: { path: string; offset: number; length: number }[] };
+    request: { files: { path: string; offset: number; length: number }[]; inputs?: BootInput[] };
     result: SessionState;
   };
   save: { request: Record<string, never>; result: SaveResult };
-  checkpoint: { request: Record<string, never>; result: Checkpoint };
+  restore_durable: { request: Record<string, never>; result: SessionState };
+  checkpoint: { request: Record<string, never>; result: Checkpoint & { retainedIds: string[] } };
   restore: { request: { id: string }; result: { tick: string; instructions: string[] } };
   undo: { request: Record<string, never>; result: { tick: string; instructions: string[] } };
   rollback: { request: { tick: string }; result: { tick: string; instructions: string[] } };

@@ -96,6 +96,15 @@ export function testCameraModule(shared = false) {
       let result: unknown = state,
         binary = new Uint8Array();
       switch (request.action) {
+        case 'power':
+          state.poweredOn = Boolean(request.options.on);
+          ticks = 0n;
+          break;
+        case 'power_cycle':
+        case 'restart_card':
+          state.poweredOn = true;
+          ticks = 0n;
+          break;
         case 'card_state':
           result = state.card;
           break;
@@ -111,7 +120,12 @@ export function testCameraModule(shared = false) {
           result = { ticksPerSecond: '12000000', state: { frames: Number(ticks / 1200000n) } };
           break;
         case 'checkpoint':
-          result = { id: String(ticks), tick: String(ticks), instructions: [String(ticks * 2n)] };
+          result = {
+            id: String(ticks),
+            tick: String(ticks),
+            instructions: [String(ticks * 2n)],
+            retainedIds: [String(ticks)],
+          };
           break;
         case 'error_report':
           result = {
@@ -149,11 +163,10 @@ export function testCameraModule(shared = false) {
         case 'save':
           result = {
             durable: { offset: 0, length: 2 },
-            snapshot: { offset: 2, length: 3 },
             positions: state.positions,
             poweredOn: true,
           };
-          binary = new Uint8Array([1, 2, 3, 4, 5]);
+          binary = new Uint8Array([1, 2]);
           break;
       }
       descriptor(out, new TextEncoder().encode(JSON.stringify(result)));

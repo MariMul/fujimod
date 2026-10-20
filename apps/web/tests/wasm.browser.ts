@@ -18,6 +18,7 @@ for (const type of types) {
     const errors: string[] = [],
       requests: string[] = [],
       workers: string[] = [];
+    page.on('console', (message) => console.log(type.name() + ': ' + message.text()));
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('request', (request) => requests.push(request.url()));
     page.on('worker', (worker) => workers.push(worker.url()));
@@ -47,8 +48,8 @@ for (const type of types) {
     assert.equal(result.faults[0]!.kind, 'guest-fault');
     assert.equal(result.card.supported, false);
     assert.deepEqual(result.session.scenes, [0, 1, 2]);
-    assert.equal(result.session.profile.ticks, 20);
-    assert.equal(Object.keys(result.session.refusals).length, 7);
+    assert.equal(result.session.profile.ticks, 0);
+    assert.equal(Object.keys(result.session.refusals).length, 3);
     assert(workers.length >= 3 && workers.every((worker) => worker.includes('wasm-worker')));
     assert.deepEqual(
       requests.filter((request) =>

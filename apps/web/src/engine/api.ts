@@ -76,8 +76,8 @@ export interface EngineConfig {
   sceneInput: boolean;
   initialPositions?: Record<string, string>;
   restart?: boolean;
-  /** Explicit SD image handoff for runtimes that start after the boot ROM. */
-  bootSource?: 'sd' | 'internal';
+  /** Physical contacts held before the first instruction of a cold boot. */
+  bootInputs?: BootInput[];
   /** Cold boot with a fixed RTC; replay mode advances only through replay(). */
   execution?: { mode: 'live' | 'replay'; clockSeconds2000: number };
 }
@@ -144,6 +144,7 @@ export interface Engine {
   setPosition(id: string, position: string | number): Promise<void>;
   setScene(scene: Scene | null): Promise<void>;
   power(on: boolean): Promise<void>;
+  powerChanges(listener: (on: boolean) => void): () => void;
   dispose(): void;
 }
 

@@ -59,6 +59,8 @@ export class WasmEngine implements Engine {
   private sceneInput = false;
   private booted = false;
   private presentedFrames = 0;
+  private powerListeners = new Listeners<boolean>();
+  private latestPower?: boolean;
   private latestCard?: CardState;
   private latestConnections?: Connection[];
   constructor(
@@ -110,6 +112,10 @@ export class WasmEngine implements Engine {
         this.progress?.(event.message, event.percent);
         return;
       case 'state':
+        if (event.state.poweredOn !== this.latestPower) {
+          this.latestPower = event.state.poweredOn;
+          this.powerListeners.emit(this.latestPower);
+        }
         this.latestCard = event.state.card;
         this.latestConnections = event.state.connections;
         this.cardListeners.emit(event.state.card);
@@ -324,14 +330,17 @@ export class WasmEngine implements Engine {
   async setScene(scene: Scene | null) {
     this.selectedScene = scene;
     if (!this.booted) return;
-    const image = this.sceneInput
-      ? (scene ??
-        (await (this.defaultScene ??= loadImageScene(
-          new URL('./assets/default-dunes.png', import.meta.url),
-        ))))
-      : scene;
+    const image =
+      scene ??
+      (await (this.defaultScene ??= loadImageScene(
+        new URL('./assets/default-dunes.png', import.meta.url),
+      )));
     if (this.selectedScene !== scene) return;
     await this.rpc({ action: 'scene', scene: image });
+  }
+  powerChanges(listener: (on: boolean) => void) {
+    if (this.latestPower !== undefined) listener(this.latestPower);
+    return this.powerListeners.add(listener);
   }
   power(on: boolean) {
     return this.rpc({ action: 'power', on });

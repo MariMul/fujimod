@@ -29,7 +29,6 @@ declare const __FUJIMOD_SIMULATOR_BUILD__: string;
 declare const __FUJIMOD_CATALOG__: string;
 const adapters = import.meta.glob<{
   panel: DevicePanel;
-  initialPositions: Record<string, string>;
   preview?: string;
   previewCredit?: PreviewCredit;
   sdBoot?: boolean;
@@ -524,7 +523,10 @@ export function startHome(
       setState((s) => {
         s.modSupported = modSupported;
       });
-      const bootSource = modSupported && modEnabled ? ('sd' as const) : ('internal' as const);
+      const bootInputs =
+        modSupported && modEnabled
+          ? (device.panel.combos.find((combo) => combo.boot === 'sd')?.inputs ?? [])
+          : [];
       const seeds = modSupported && modEnabled ? bootMedia(file) : undefined;
       if (current !== generation) return;
       const started = performance.now();
@@ -540,7 +542,7 @@ export function startHome(
             revision: activeCamera.revision,
             modEnabled,
           },
-          bootSource,
+          bootInputs,
           execution: replayScenario
             ? {
                 mode: replayScenario.interactive ? 'live' : 'replay',
@@ -557,6 +559,10 @@ export function startHome(
         inputs.filter((input) => input.initial).map((input) => [input.id, input.initial!]),
       );
       panel.render(inputs, active, device.panel, positions);
+      active.powerChanges((on) => {
+        panel.setPowered(on);
+        viewer.powered(on);
+      });
       panel.synchronize(positions);
       setCardEngine(active);
       finishLoading();

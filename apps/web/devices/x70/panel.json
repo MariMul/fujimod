@@ -144,7 +144,7 @@
             },
             {
               "kind": "control",
-              "id": "lcd_tilt",
+              "id": "lcd_tilt_switch",
               "variant": "segment",
               "caption": "SCREEN",
               "labels": {
@@ -223,6 +223,7 @@
   "combos": [
     {
       "label": "SD card boot",
+      "boot": "sd",
       "keys": [
         {
           "face": "CMD ●"

@@ -24,6 +24,9 @@ export class LCDViewer {
     this.setUi = setUi;
     this.host.dataset.renderer = 'lcd';
   }
+  powered(on: boolean) {
+    this.lcd.style.visibility = on ? '' : 'hidden';
+  }
   captureView(): string {
     return this.lcd.toDataURL('image/png');
   }

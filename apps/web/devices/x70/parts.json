@@ -49,7 +49,7 @@
     "fn7": ["Fn_32"],
     "wifi": ["LBL_wifi_11"],
     "lcd_touch": ["monitorr_screen_46"],
-    "lcd_tilt": ["monitorr_screen_46"],
+    "lcd_tilt_switch": ["monitorr_screen_46"],
     "battery_cover": ["body.bottom_set_50"]
   },
   "yaw": 3.141592653589793,
@@ -103,7 +103,7 @@
     "aperture",
     "control_ring",
     "lcd_touch",
-    "lcd_tilt",
+    "lcd_tilt_switch",
     "battery_cover"
   ],
   "credit": {
