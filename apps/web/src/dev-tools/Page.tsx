@@ -1,3 +1,4 @@
+import { getRequestEvent } from '@solidjs/web';
 import {
   For,
   Match,
@@ -20,6 +21,7 @@ import { ToolActivity } from './ToolActivity';
 import { DeckTool, ToolDeck } from './ToolDeck';
 import { DebugModeWizard } from './debug-mode/Wizard';
 import { LeaveDebugMode } from './debug-mode/LeaveDebugMode';
+import { sessionDebugModeOperations } from './debug-mode/operations';
 import './sharing.css';
 import { LocalReports } from '../ui/local-reports';
 import { CameraSources } from './sources';
@@ -36,9 +38,18 @@ enum View {
 }
 /** Shared camera connections skip the tool deck. */
 function initialView(connectOnMount: boolean | undefined): View {
-  if (connectOnMount || typeof window === 'undefined')
-    return connectOnMount ? View.Console : View.Deck;
-  return remoteControlUrl(location.href) ? View.Console : View.Deck;
+  if (connectOnMount) return View.Console;
+  const url =
+    getRequestEvent()?.request.url ?? (typeof window === 'undefined' ? undefined : location.href);
+  if (!url) return View.Deck;
+  const search = new URL(url).searchParams;
+  if (import.meta.env.DEV) {
+    if (search.get('tool') === DeckTool.EnterDebugMode) return View.EnterDebugMode;
+    if (search.get('tool') === DeckTool.LeaveDebugMode) return View.LeaveDebugMode;
+  }
+  return search.get('target') === CameraTarget.Emulator || remoteControlUrl(url)
+    ? View.Console
+    : View.Deck;
 }
 const connectionNames: Record<ConnectionState, string> = {
   [ConnectionState.Loading]: 'Loading USB',
@@ -146,6 +157,10 @@ export default function DevTools(props: {
       [ConnectionState.Connected, ConnectionState.Sharing].includes(tools.connection()) &&
       tools.target() === CameraTarget.Usb,
   );
+  const debugOperations = createMemo(() => {
+    const session = tools.debugSession();
+    return session ? sessionDebugModeOperations(session, tools.debugSession) : undefined;
+  });
   // A camera connected from the header opens its console; the wizard keeps its own steps.
   createEffect(
     () => tools.connection(),
@@ -505,6 +520,10 @@ export default function DevTools(props: {
           <Match when={view() === View.Deck}>
             <ToolDeck
               debugCamera={debugCamera()}
+              busy={[ConnectionState.Choosing, ConnectionState.Opening].includes(
+                tools.connection(),
+              )}
+              usbSupported={tools.connection() !== ConnectionState.Unsupported}
               shareLocked={
                 sharingConfigured() && tools.canShare() ? undefined : 'Sharing isn’t available here'
               }
@@ -512,15 +531,28 @@ export default function DevTools(props: {
                 if (tool === DeckTool.EnterDebugMode) setView(View.EnterDebugMode);
                 else if (tool === DeckTool.LeaveDebugMode) setView(View.LeaveDebugMode);
                 else if (tool === DeckTool.Share) shareDialog.showModal();
-                else setView(View.Console);
+                else if (tool === DeckTool.ConnectDebugCamera) {
+                  share.unlockAudio();
+                  void tools.connect(CameraTarget.Usb);
+                } else if (tool === DeckTool.ConnectSimulator) {
+                  void tools.connect(CameraTarget.Emulator);
+                } else setView(View.Console);
               }}
             />
           </Match>
           <Match when={view() === View.EnterDebugMode}>
-            <DebugModeWizard tools={tools} onClose={() => setView(View.Deck)} />
+            <DebugModeWizard
+              tools={tools}
+              operations={debugOperations()}
+              onClose={() => setView(View.Deck)}
+            />
           </Match>
           <Match when={view() === View.LeaveDebugMode}>
-            <LeaveDebugMode connected={debugCamera()} onClose={() => setView(View.Deck)} />
+            <LeaveDebugMode
+              connected={debugCamera()}
+              operation={debugOperations()}
+              onClose={() => setView(View.Deck)}
+            />
           </Match>
           <Match when={true}>
             <h1 class="dt-title">Dev Tools</h1>

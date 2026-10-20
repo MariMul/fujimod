@@ -1,7 +1,7 @@
 import { For, Show, createSignal } from 'solid-js';
 import './wizard.css';
 
-/** Camera operation for this tool. Absent until the workflow crate provides it. */
+/** Persist debug access disabled through the connected USB session. */
 export interface LeaveDebugModeOperation {
   leave(progress: (line: string) => void): Promise<void>;
 }
@@ -15,7 +15,7 @@ export function LeaveDebugMode(props: {
   const [running, setRunning] = createSignal(false);
   const [done, setDone] = createSignal(false);
   async function leave() {
-    if (!props.operation || running()) return;
+    if (!props.operation || !props.connected || running()) return;
     setRunning(true);
     setFailure('');
     setLines([]);
@@ -60,12 +60,6 @@ export function LeaveDebugMode(props: {
           >
             Leave debug mode
           </button>
-        </Show>
-        <Show when={!props.operation}>
-          <p class="dm-caution">
-            Changing the setting from the browser isn’t available yet. The camera has not been
-            changed.
-          </p>
         </Show>
         <Show when={lines().length}>
           <pre class="dm-log" aria-live="polite">

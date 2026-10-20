@@ -5,6 +5,22 @@ operations (design: [`../WORKFLOWS.md`](../WORKFLOWS.md)). Its Rust
 implementation is shared by native Python and JavaScript/WebUSB, including
 Pyodide, over local USB or USB sharing.
 
+## `debug_mode`: persistent debug access
+
+`debug_mode::enter` / `leave` store the selected camera definition's debug
+byte as 1 / 0. Both arm the service reset guard, verify code and storage
+geometry, capture the logical storage banks and configuration RAM, and check
+the borrowed adapter with a no-write probe before calling the one-byte range
+writer once. Readback must differ only at the debug byte; stored reset guard,
+settings/profile payloads, scratch and callbacks must remain unchanged.
+
+Successful cleanup leaves debug access off and the reset guard armed in RAM.
+Failure restores the original debug flag when completion is known, preserves
+unexpected callback/scratch values, and fences failed cleanup. No writer is
+retried. Python exposes `Session.enter_debug_mode` / `leave_debug_mode` with
+the same camera table and firmware identity arguments as `arm_reset_guard`;
+they return `(already_persisted, progress_lines)`.
+
 ## `install`: debug mod installation
 
 Installation also uses two generic `fujimod-usb` operations:

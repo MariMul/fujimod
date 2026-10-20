@@ -7,6 +7,7 @@
 #![doc = include_str!("../README.md")]
 
 mod access;
+pub mod debug_mode;
 pub mod install;
 pub mod service_mode;
 

@@ -304,6 +304,12 @@ export function createDevTools(
     connection,
     consoleState,
     camera,
+    debugSession: () =>
+      connection() === ConnectionState.Connected &&
+      consoleState() === ConsoleState.Idle &&
+      connectedTarget === CameraTarget.Usb
+        ? link?.debugSession
+        : undefined,
     target: () => connectedTarget,
     canShare: () => Boolean(backend.exportUsb) && (backend.canShare?.() ?? true),
     connectionMessage: message,

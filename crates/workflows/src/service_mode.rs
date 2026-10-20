@@ -145,6 +145,9 @@ pub async fn arm_reset_guard(
             Ok::<_, ServiceModeError>(())
         }
         .await;
+        if cleanup.is_err() {
+            access.session.invalidate_completion();
+        }
         outcome?;
         cleanup?;
     } else {
