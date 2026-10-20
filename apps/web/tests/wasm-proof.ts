@@ -2,6 +2,7 @@ import { createEngine } from '../src/engine';
 import type { EngineConfig } from '../src/engine/api';
 import type { EngineFault } from '../src/engine/fault';
 import { LCDViewer } from '../src/viewer/lcd';
+import { proveSession } from './wasm-session-proof';
 
 const host = document.createElement('main');
 const canvas = document.createElement('canvas');
@@ -76,11 +77,8 @@ try {
     'Released frame differs.',
   );
   assert(errors.length === 0, 'Unexpected execution fault.');
-  const missing = await engine.cardState().then(
-    () => '',
-    (error) => String(error),
-  );
-  assert(missing.includes('camera_command'), 'Missing session ABI must reject card operations.');
+  const card = await engine.cardState();
+  assert(card.supported === false, 'Resolved board unexpectedly advertises a card.');
   const bad = createEngine({ ...config(), adapter: 'wasm' }, () => {});
   try {
     const changed = dat.slice(0);
@@ -112,8 +110,9 @@ try {
   } finally {
     failing.dispose();
   }
+  const session = await proveSession(config());
   result.textContent = JSON.stringify(
-    { passed: true, bootMilliseconds, frames, metrics, faults, missing },
+    { passed: true, bootMilliseconds, frames, metrics, faults, card, session },
     null,
     2,
   );

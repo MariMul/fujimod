@@ -48,7 +48,18 @@ export async function wasmFixture(fault = false) {
     session: {
       schema: 1,
       processor: {
-        cores: [{ model: 'cortex-r5f', released: true, pc: RAM, registers: {} }],
+        cores: [
+          {
+            model: 'cortex-r5f',
+            released: true,
+            pc: RAM,
+            registers: {},
+            rprofile: {
+              cp14_identity: 0x4003,
+              tcm: { atcm: { bytes: 0, reset: 0 }, btcm: { bytes: 0, reset: 0 } },
+            },
+          },
+        ],
         interrupts: {
           affinities: [0],
           lines: 256,
@@ -61,6 +72,7 @@ export async function wasmFixture(fault = false) {
         peripherals: fault
           ? []
           : [LCD, ADC].map((address) => ({ core: 0, address, physical: address, size: 0x1000 })),
+        dma_mappings: [{ address: RAM, physical: RAM, size: 0x4000, permissions: 3 }],
         instructions_per_tick: [1, 1],
       },
       body: fault

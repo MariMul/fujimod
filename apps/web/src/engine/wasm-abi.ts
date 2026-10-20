@@ -110,6 +110,9 @@ export class WasmSession {
     this.scratch = module._camera_alloc(32);
     if (!this.scratch || this.scratch % 8) throw Error('Invalid Wasm descriptor allocation.');
   }
+  get created() {
+    return this.handle !== 0;
+  }
   private view() {
     return new DataView(this.module.HEAPU8.buffer);
   }

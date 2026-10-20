@@ -23,7 +23,7 @@ input metadata. The creation envelope is `{schema:1, graph:session, firmwareId,
 bootSource, initialPositions, clockSeconds2000}`. There is no TypeScript device
 map or firmware binding parser. `bootTicks` is an additional guest-time advance
 after creation/restoration; use zero when creation already reaches its boot
-boundary. The session implementation owns boot readiness and failure budgets.
+boundary. Construction currently returns an unexecuted board. `bootTicks` requests an explicit advance; zero does not imply boot readiness. Camera boot readiness and failure budgets remain session policy.
 
 ## Pixel lifetime
 
@@ -52,8 +52,8 @@ directly to shared scene memory would need an additional lease contract.
 
 ## Session extension
 
-The required optional exports are `camera_session_create`, `camera_command`,
-`camera_scene_buffer` and `camera_scene_commit`. Missing exports reject calls.
+The session exports are `camera_session_create`, `camera_command`,
+`camera_scene_buffer` and `camera_scene_commit`. Missing exports reject calls. Current modules expose all four; pending session actions return native refusal errors.
 `SessionCommands` in `wasm-abi.ts` is the typed JSON contract. A command receives
 one `{action, options}` request and an optional opaque binary upload, and returns
 one JSON result and an optional binary result. Binary spans used by card files,
@@ -71,6 +71,14 @@ retrying save failures after 10 seconds without stopping guest execution.
 Stopped execution cannot replace the last good save. Explicit save failures
 reject and publish a save error independently of emulator faults.
 
+Available native commands cover state, card state/tree/read/insert/format,
+profile, error reports and RGB scene publication/reset. Physical bindings,
+power/restart, durable save/restore and rollback currently refuse. Their typed
+calls remain in `SessionCommands`; the engine preserves native errors without
+turning an operation refusal into a guest execution fault. A construction
+refusal is classified as unsupported hardware and diagnostic export reports
+`created:false`, `status:null`, `frame:null`, without querying an absent CPU.
+
 ## Executable browser check
 
 From `apps/web`, using the declared toolchains and a built module directory:
@@ -86,5 +94,29 @@ Artifacts are generated under ignored `public/runtime/wasm-proof*` and
 It runs generated ARM code through the real worker, DAT decoder and modeled
 LCD/ADC devices, presents both MENU states with the ordinary LCD viewer, checks
 every pixel, rejects a modified DAT and reports a real unmapped-load fault.
-The Chromium check asserts that no Python, NumPy or Pillow runtime is requested.
-It does not qualify a camera boot or missing session capabilities.
+The Chromium and WebKit checks assert that no Python, NumPy or Pillow runtime is requested.
+The same page also exercises a generated ARM loop with the real SD host/FAT
+transport, revision/size refusals, eject/insert/format, RGB publication on guest
+clock edges, analytic reset, observational diagnostics and pending-operation
+refusals. It does not qualify a camera boot or missing session capabilities.
+
+`/__wasm-camera` runs construction against separately supplied camera inputs.
+Set `FUJIMOD_WASM_CAMERA` to a manifest file and `FUJIMOD_WASM_DAT` to its DAT
+in the local development environment. These explicit artifacts are served only
+by the development middleware and are never copied into a production build.
+The browser test is:
+
+```sh
+FUJIMOD_WEB_URL="$URL" \
+FUJIMOD_WASM_FIRMWARE="$FIRMWARE_ID" \
+FUJIMOD_WASM_DAT_SHA256="$DAT_SHA256" \
+FUJIMOD_WASM_EXPECT_REFUSAL="$CURRENT_REFUSAL" \
+node tests/wasm-camera.browser.ts
+```
+
+It checks both Chromium and WebKit against the exact DAT identity and current
+construction boundary. It fails if construction starts succeeding, so the
+scenario must then advance to and assert the next real guest boundary. No
+status counts or frames are invented when construction fails. The prepared
+manifest retains unsupported devices; the test supplies no replacement models.
+Receipts and screenshots remain under ignored `build/wasm-camera/`.

@@ -132,7 +132,7 @@ export class WasmWorkerRuntime {
         this.send({
           type: 'error',
           serial: message.serial,
-          error: String(error),
+          error: error instanceof Error ? error.message : String(error),
           fault: fatal ? faultFrom(error) : undefined,
         });
       }
@@ -244,6 +244,17 @@ export class WasmWorkerRuntime {
       case 'profile':
         return s.command('profile', { limit: request.limit }).result;
       case 'error_report': {
+        if (!s.created)
+          return {
+            report: {
+              runtime: 'wasm',
+              runtimeKey: this.runtimeKey,
+              firmwareId: this.config?.firmwareId,
+              created: false,
+              status: null,
+              frame: null,
+            },
+          };
         const status = s.status();
         const base = {
           runtime: 'wasm',
@@ -405,7 +416,11 @@ export class WasmWorkerRuntime {
           } catch (error) {
             this.failed = true;
             this.stop();
-            this.send({ type: 'error', error: String(error), fault: faultFrom(error) });
+            this.send({
+              type: 'error',
+              error: error instanceof Error ? error.message : String(error),
+              fault: faultFrom(error),
+            });
           }
           this.schedule();
         }),

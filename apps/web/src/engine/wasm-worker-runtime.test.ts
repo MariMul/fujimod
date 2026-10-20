@@ -226,3 +226,34 @@ test('cold durable restore preserves physical state and merges replacement card 
   assert(actions.indexOf('restore') < actions.indexOf('restart_card'));
   assert.deepEqual(f.calls.find((call) => call.action === 'restart_card')!.bytes, [8, 9]);
 });
+
+test('creation refusal diagnostics never ask a nonexistent board for status or frames', async () => {
+  const f = setup();
+  f.createError('device requires unavailable adapter');
+  const boot = await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  assert(boot.type === 'error' && boot.fault?.kind === 'unsupported-device');
+  f.module._camera_status = () => {
+    throw Error('No CPU exists');
+  };
+  f.module._camera_frame = () => {
+    throw Error('No display exists');
+  };
+  const reply = await f.send({ action: 'error_report' });
+  assert(reply.type === 'reply');
+  const report = reply.result as { report: { created: boolean; status: unknown; frame: unknown } };
+  assert.equal(report.report.created, false);
+  assert.equal(report.report.status, null);
+  assert.equal(report.report.frame, null);
+  assert.equal(
+    f.events.some(
+      (event) => event.type === 'metrics' || event.type === 'frame' || event.type === 'frame_view',
+    ),
+    false,
+  );
+});

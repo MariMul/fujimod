@@ -162,7 +162,7 @@ export default defineConfig(({ mode, command }) => ({
   plugins: [
     solid({ start: true, ssr: true }),
     bugReportRoute(),
-    wasmProofRoute(),
+    wasmProofRoute(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
     simulatorReports(),
     browserDiagnostics(),
     localArtifacts(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
