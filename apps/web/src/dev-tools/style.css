@@ -1,3 +1,12 @@
+/* Dev Tools palette: Matrix green accent, amber warnings. */
+.dev-tools {
+  --phosphor: #00ff41;
+  --phosphor-rgb: 0, 255, 65;
+  --phosphor-mid: #008f11;
+  --phosphor-dim: rgba(0, 255, 65, 0.1);
+  --amber: #ffb340;
+  --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+}
 .dev-tools.shell {
   max-width: none;
   height: 100dvh;
