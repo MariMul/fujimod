@@ -23,6 +23,7 @@ const check = (value: unknown, message: string) => {
 function show(stage: string) {
   result.stage = stage;
   console.log(stage);
+  console.log('lifecycle-result: ' + JSON.stringify(result));
   output.textContent = JSON.stringify(result, null, 2);
 }
 function attach() {

@@ -8,7 +8,7 @@ canvas.id = 'lcd-source';
 canvas.style.cssText = 'width:720px;height:480px;display:block;image-rendering:pixelated';
 document.body.append(canvas, output);
 const viewer = new LCDViewer(document.body, canvas);
-const result: Record<string, unknown> = { phases: [], firstUse: [] };
+const result: Record<string, unknown> = { phases: [], firstUse: [], afTransitions: [] };
 const phases = result.phases as Record<string, unknown>[];
 const firstUse = result.firstUse as Record<string, unknown>[];
 const errors: string[] = [];
@@ -45,14 +45,18 @@ const hash = async (bytes: BufferSource) =>
 const header = () => hash(canvas.getContext('2d')!.getImageData(0, 0, 720, 48).data);
 const files = (entries: CardEntry[]): CardEntry[] =>
   entries.flatMap((e) => (e.kind === 'directory' ? files(e.children ?? []) : [e]));
-async function until(test: (p: Profile) => boolean | Promise<boolean>, maximum = 120_000_000) {
+async function until(
+  test: (p: Profile) => boolean | Promise<boolean>,
+  maximum = 120_000_000,
+  step = 1_200_000,
+) {
   const start = BigInt((await profile()).ticks);
   for (;;) {
     const p = await profile();
     if (await test(p)) return p;
     if (BigInt(p.ticks) - start >= BigInt(maximum))
       throw Error('Guest completion deadline exceeded.');
-    await advance();
+    await advance(step);
   }
 }
 async function phase(
@@ -70,7 +74,9 @@ async function phase(
     error = String(failure);
   }
   const end = performance.now(),
-    after = await profile();
+    after = await profile().catch((failure) => {
+      throw Error(error ?? String(failure));
+    });
   const guestSeconds = Number(BigInt(after.ticks) - BigInt(before?.ticks ?? '0')) / 12_000_000;
   const measurement = {
     name,
@@ -160,6 +166,14 @@ try {
   await engine.setPosition('focus_mode_selector', 'S');
   await advance(6_000_000);
   for (const stage of ['first', 'warm'] as const) {
+    const transitions: {
+      tick: string;
+      notification: number;
+      rec21: number;
+      rec27: number;
+      rec30: number;
+    }[] = [];
+    (result.afTransitions as unknown[]).push({ stage, transitions });
     await phase(
       'AF-S half-press',
       async () => {
@@ -167,19 +181,37 @@ try {
           changed = false,
           stable: bigint | undefined;
         await engine.press('shutter_button', 'half');
-        await until((p) => {
-          const notification = u32(p.observations.afUI!);
-          changed ||= notification !== last;
-          last = notification;
-          if (changed && [0x816, 0x829].includes(notification)) return true;
-          const machine = new DataView(Uint8Array.from(p.observations.rec21!).buffer).getUint16(
-            0,
-            true,
-          );
-          if (machine !== 8) stable = undefined;
-          else if (stable === undefined) stable = BigInt(p.ticks);
-          return stable !== undefined && BigInt(p.ticks) - stable >= 1_200_000n;
-        });
+        await until(
+          (p) => {
+            const notification = u32(p.observations.afUI!);
+            changed ||= notification !== last;
+            last = notification;
+            const states = new DataView(Uint8Array.from(p.observations.rec21!).buffer);
+            const machine = states.getUint16(0, true);
+            const value = {
+              tick: p.ticks,
+              notification,
+              rec21: machine,
+              rec27: states.getUint16(12, true),
+              rec30: states.getUint16(18, true),
+            };
+            const previous = transitions.at(-1);
+            if (
+              !previous ||
+              previous.notification !== notification ||
+              previous.rec21 !== machine ||
+              previous.rec27 !== value.rec27 ||
+              previous.rec30 !== value.rec30
+            )
+              transitions.push(value);
+            if (changed && [0x816, 0x829].includes(notification)) return true;
+            if (machine !== 8) stable = undefined;
+            else if (stable === undefined) stable = BigInt(p.ticks);
+            return stable !== undefined && BigInt(p.ticks) - stable >= 1_200_000n;
+          },
+          120_000_000,
+          120_000,
+        );
       },
       stage,
     );

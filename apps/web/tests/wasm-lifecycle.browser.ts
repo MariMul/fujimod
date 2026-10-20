@@ -10,13 +10,19 @@ for (const type of [chromium, webkit].filter(
   (type) => !process.env.FUJIMOD_TEST_BROWSER || type.name() === process.env.FUJIMOD_TEST_BROWSER,
 )) {
   const browser = await type.launch({ headless: true });
+  let latest: unknown;
+  const errors: string[] = [];
   try {
     const context = await browser.newContext({ viewport: { width: 1200, height: 1000 } });
     await context.routeWebSocket('**/*', () => {});
     const page = await context.newPage(),
-      errors: string[] = [],
       requests: string[] = [];
-    page.on('console', (message) => console.log(type.name() + ': ' + message.text()));
+    page.on('console', (message) => {
+      const text = message.text();
+      if (text.startsWith('lifecycle-result: ')) latest = JSON.parse(text.slice(18));
+      else console.log(type.name() + ': ' + text);
+    });
+    page.on('crash', () => errors.push('Renderer process crashed'));
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('request', (request) => requests.push(request.url()));
     await page.goto(url);
@@ -42,6 +48,12 @@ for (const type of [chromium, webkit].filter(
     console.log(
       `${type.name()}: owned save/reload, shutter JPEG, Playback, power, held boot, merge, format, report and Undo passed.`,
     );
+  } catch (error) {
+    await writeFile(
+      new URL(`${type.name()}-failure.json`, output),
+      JSON.stringify({ url, error: String(error), errors, latest }, null, 2) + '\n',
+    );
+    throw error;
   } finally {
     await browser.close();
   }
