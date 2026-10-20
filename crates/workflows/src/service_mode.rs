@@ -125,7 +125,7 @@ pub async fn arm_reset_guard(
     session: &mut Session,
     camera: &CameraDefinition,
     limits: Limits,
-    progress: &mut dyn FnMut(&str),
+    progress: &mut (dyn FnMut(&str) + Send),
 ) -> Result<GuardArmed> {
     let guard = camera.guard()?.clone();
     let debug = camera.debug()?;
@@ -202,7 +202,7 @@ async fn arm(
     flag_offset: u32,
     flag_before: u8,
     guard_before: u8,
-    progress: &mut dyn FnMut(&str),
+    progress: &mut (dyn FnMut(&str) + Send),
 ) -> Result<()> {
     if flag_before == 0 {
         work.set(flag_offset, 1).await?;
