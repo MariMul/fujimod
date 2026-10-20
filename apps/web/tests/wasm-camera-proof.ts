@@ -104,8 +104,13 @@ try {
   const log = await engine.history();
   result.history = { format: log.format, entries: log.entries, bytes: log.bytes.length };
   check(log.entries > 0 && log.bytes.length > 0, 'Native history is empty.');
-  await engine.rollback(1);
+  await engine.rollback(10);
   result.undo = await engine.profile(0);
+  check(
+    (result.undo as { ticks: number }).ticks === 30_000_000,
+    'Early Undo did not restore the oldest native checkpoint.',
+  );
+  check((await pixels()) === result.rec, 'Undo did not restore REC pixels.');
   check(errors.length === 0, errors.join('\n'));
   result.errors = errors;
   document.body.dataset.proof = 'passed';

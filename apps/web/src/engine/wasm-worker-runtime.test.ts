@@ -7,7 +7,9 @@ import type { WasmRequest, WasmWorkerEvent } from './wasm-protocol';
 import { testConfig } from './test-fixtures';
 import type { CameraRecord, CameraSave } from '../cameras/store';
 
-function setup(options: { saveError?: string; shared?: boolean } = {}) {
+function setup(
+  options: { saved?: CameraSave; saveError?: string; shared?: boolean; preview?: boolean } = {},
+) {
   const fake = testCameraModule(options.shared),
     events: WasmWorkerEvent[] = [],
     saves: CameraSave[] = [];
@@ -17,7 +19,7 @@ function setup(options: { saveError?: string; shared?: boolean } = {}) {
     module: '',
     wasm: '',
     construction: 'session',
-    session: {},
+    session: options.preview ? { preview: {} } : {},
     ticksPerSecond: 12000000,
     bootTicks: 0,
     output: 0,
@@ -32,6 +34,9 @@ function setup(options: { saveError?: string; shared?: boolean } = {}) {
     },
     async () => ({ session: new WasmSession(fake.module), manifest, identity: 'test' }),
     {
+      async saved() {
+        return options.saved;
+      },
       async save(_id, revision, save) {
         if (options.saveError) throw Error(options.saveError);
         saves.push(save);
@@ -228,4 +233,42 @@ test('worker preserves checkpoint IDs and replay bytes across the transport', as
   assert.deepEqual([...(log.result as { bytes: Uint8Array }).bytes], [0x81, 1]);
   await f.send({ action: 'replay_history', bytes: new Uint8Array([0x81, 1]) });
   assert.deepEqual(f.calls.find((c) => c.action === 'replay')!.bytes, [0x81, 1]);
+});
+
+test('declared preview policy is applied once and source metrics use observational counters', async () => {
+  const f = setup({ preview: true });
+  const boot = await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  assert.equal(boot.type, 'reply');
+  assert.equal(f.calls.filter((c) => c.action === 'preview').length, 1);
+  assert.equal(f.calls.filter((c) => c.action === 'preview_state').length, 1);
+  assert.equal(f.calls.filter((c) => c.action === 'error_report').length, 0);
+  assert(f.events.some((e) => e.type === 'metrics' && e.metrics.runtime?.sourceFrames === 0));
+});
+
+test('an existing durable camera save refuses instead of silently cold booting', async () => {
+  const f = setup({
+    saved: {
+      durable: new ArrayBuffer(1),
+      runtimeKey: 'prior-runtime',
+      positions: {},
+      poweredOn: true,
+      modEnabled: false,
+    },
+  });
+  const boot = await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  assert(boot.type === 'error' && boot.error.includes('cannot restore a durable camera save'));
+  assert.equal(f.calls.length, 0);
+  assert.equal(f.saves.length, 0);
 });

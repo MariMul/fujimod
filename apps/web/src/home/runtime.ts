@@ -276,7 +276,7 @@ export function startHome(
     finishLoading();
     title();
   }
-  async function makeEngine(config: NonNullable<Firmware['emulate']> & { firmwareId: string }) {
+  async function makeEngine() {
     const { createEngine } = await import('../engine');
     let value: Engine;
     value = createEngine((error) => {
@@ -473,7 +473,7 @@ export function startHome(
         s.camerasVisible = false;
       });
       title();
-      const active = await makeEngine({ ...entry.emulate, firmwareId: entry.id });
+      const active = await makeEngine();
       if (disposed || current !== generation) {
         active.dispose();
         return;

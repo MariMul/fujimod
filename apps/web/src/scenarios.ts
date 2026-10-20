@@ -11,17 +11,17 @@ export interface ReplayScenario {
 const scenarios: Record<string, ReplayScenario> = {
   'x70-movie': {
     firmwareId: 'x70-110',
-    clockSeconds2000: 845510400, // 2026-10-17 00:00:00, fixed RTC input.
+    clockSeconds2000: 845000000, // Fixed checked graph RTC input.
     interactive: false,
     steps: [
-      { action: 'press', id: 'movie' },
-      { action: 'release', id: 'movie' },
+      { action: 'press', id: 'movie_record_button' },
+      { action: 'release', id: 'movie_record_button' },
       { action: 'advance', ticks: 120000000 },
     ],
   },
   'x70-lcd': {
     firmwareId: 'x70-110',
-    clockSeconds2000: 0,
+    clockSeconds2000: 845000000,
     interactive: true,
     steps: [],
   },

@@ -39,7 +39,7 @@ function localArtifacts(env: Record<string, string>): Plugin {
       }
       if (
         prefix === '/runtime/' &&
-        !/^(catalog\.json|[a-zA-Z0-9_-]+\/(controls\.json|wasm\.json|camera\.mjs|camera\.wasm|runtime-NOTICES\.txt))$/.test(
+        !/^(catalog\.json|[a-zA-Z0-9_-]+\/(wasm\.json|camera\.mjs|camera\.wasm|runtime-NOTICES\.txt))$/.test(
           relative,
         )
       ) {

@@ -103,6 +103,14 @@ export interface SessionCommands {
   };
   replay: { request: Record<string, never>; result: { tick: string; instructions: string[] } };
   fingerprint: { request: Record<string, never>; result: EngineFingerprint };
+  preview: {
+    request: Record<string, never>;
+    result: { ticksPerSecond: string; state: { frames: number } };
+  };
+  preview_state: {
+    request: Record<string, never>;
+    result: { ticksPerSecond: string; state: { frames: number } };
+  };
   profile: { request: { limit?: number }; result: Record<string, unknown> };
   error_report: {
     request: Record<string, never>;

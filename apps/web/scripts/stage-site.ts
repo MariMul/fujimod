@@ -75,13 +75,7 @@ export async function stageSite(inputs: SiteInputs, destination = 'public') {
         browser.passed !== true
       )
         throw Error(`Emulator qualification failed: ${firmware.id}`);
-      for (const name of [
-        'camera.wasm',
-        'camera.mjs',
-        'wasm.json',
-        'controls.json',
-        'runtime-NOTICES.txt',
-      ])
+      for (const name of ['camera.wasm', 'camera.mjs', 'wasm.json', 'runtime-NOTICES.txt'])
         await copy(join(directory, name), config.bundle + name);
     }
     const catalogBytes = Buffer.from(JSON.stringify(catalog));

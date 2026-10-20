@@ -180,11 +180,14 @@ export class WasmEngine implements Engine {
   checkpoint() {
     return this.rpc<Checkpoint>({ action: 'checkpoint' });
   }
-  restoreCheckpoint(id: string) {
-    return this.rpc({ action: 'restore_checkpoint', id });
+  async restoreCheckpoint(id: string) {
+    await this.rpc({ action: 'restore_checkpoint', id });
+    this.fault = undefined;
   }
-  undo() {
-    return this.rpc<Record<string, string>>({ action: 'undo' });
+  async undo() {
+    const positions = await this.rpc<Record<string, string>>({ action: 'undo' });
+    this.fault = undefined;
+    return positions;
   }
   history() {
     return this.rpc<ReplayLog>({ action: 'history' });

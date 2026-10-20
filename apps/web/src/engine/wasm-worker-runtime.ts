@@ -1,4 +1,4 @@
-import type { CardFile, EngineConfig, Input, ReplayStep, Scene, Checkpoint } from './api';
+import type { CardFile, EngineConfig, ReplayStep, Scene, Checkpoint } from './api';
 import { CameraStore } from '../cameras/store';
 import { digest } from './identity';
 import { faultFrom } from './fault';
@@ -97,7 +97,6 @@ export class WasmWorkerRuntime {
   private nextInspection = 0n;
   private sourceFrames?: number;
   private sourceTicks = 0n;
-  private sequence = -1n;
   private canvas?: OffscreenCanvas;
   private lease = 0;
   private release?: () => void;
@@ -106,7 +105,7 @@ export class WasmWorkerRuntime {
   constructor(
     private send: Send,
     private loader = loadWasm,
-    private cameras: Pick<CameraStore, 'save'> = new CameraStore(),
+    private cameras: Pick<CameraStore, 'saved' | 'save'> = new CameraStore(),
   ) {}
   receive(message: WasmWorkerRequest) {
     if (message.type === 'frame_release') {
@@ -209,7 +208,6 @@ export class WasmWorkerRuntime {
         return;
       case 'power_cycle':
         this.observe(s.command('power_cycle', { inputs: request.inputs }).result);
-        this.sequence = -1n;
         this.rebase();
         this.publish();
         return;
@@ -225,14 +223,12 @@ export class WasmWorkerRuntime {
       case 'card_format':
         this.observe(s.command('card_format', {}).result);
         this.rebase();
-        this.sequence = -1n;
         this.publish();
         return;
       case 'restart_card': {
         const { rows, bytes } = packFiles(request.files);
         this.observe(s.command('restart_card', { files: rows }, bytes).result);
         this.rebase();
-        this.sequence = -1n;
         this.publish();
         return;
       }
@@ -261,7 +257,8 @@ export class WasmWorkerRuntime {
           throw Error('Invalid rollback duration.');
         const now = s.status().ticks;
         const target = now - BigInt(Math.round(request.seconds * this.manifest!.ticksPerSecond));
-        const retained = this.points.filter((point) => BigInt(point.tick) <= target).at(-1);
+        const retained =
+          this.points.filter((point) => BigInt(point.tick) <= target).at(-1) ?? this.points[0];
         try {
           s.command('rollback', { tick: String(target < 0n ? 0n : target) });
         } catch (error) {
@@ -322,6 +319,8 @@ export class WasmWorkerRuntime {
   ) {
     if (this.session) throw Error('Wasm worker already booted.');
     this.config = config;
+    if (config.camera && !config.restart && (await this.cameras.saved(config.camera.id)))
+      throw Error('The native runtime cannot restore a durable camera save yet.');
     this.send({ type: 'progress', message: 'Loading Wasm runtime…' });
     const { session, manifest, identity } = await this.prepare(config.bundle);
     this.session = session;
@@ -368,6 +367,8 @@ export class WasmWorkerRuntime {
     const before = session.status().ticks;
     if (manifest.bootTicks && this.state?.poweredOn !== false)
       session.run(before + BigInt(manifest.bootTicks));
+    if (manifest.construction === 'session' && manifest.session.preview)
+      session.command('preview', {});
     this.observeCurrent();
     this.replayMode = config.execution?.mode === 'replay';
     this.started = this.metricWall = performance.now();
@@ -407,7 +408,7 @@ export class WasmWorkerRuntime {
             const target =
               this.clockTicks +
               BigInt(Math.max(0, Math.floor(((performance.now() - this.clockWall) * rate) / 1000)));
-            const maximum = now + BigInt(Math.max(1, Math.floor(rate / 60)));
+            const maximum = now + BigInt(Math.max(1, Math.floor(rate / 10)));
             if (target > now && this.state?.poweredOn !== false) {
               s.run(target < maximum ? target : maximum);
               if (
@@ -459,7 +460,6 @@ export class WasmWorkerRuntime {
     this.nextInspection = tick;
     this.nextPresentation = tick;
     this.failed = this.require().status().failed;
-    this.sequence = -1n;
     this.observeCurrent();
     this.rebase();
     this.publish(true);
@@ -467,14 +467,11 @@ export class WasmWorkerRuntime {
   }
   private inspectSource(tick: bigint) {
     if (this.manifest!.construction !== 'session' || tick < this.nextInspection) return;
-    const report = this.require().command('error_report', {}).result.report;
-    const bus = report.bus as
-      | { devices?: { kind: string; state: { frames?: number } }[] }
-      | undefined;
-    const sources = bus?.devices?.filter((device) => device.kind === 'external-image-frames') ?? [];
-    this.sourceFrames = sources.length === 1 ? sources[0]!.state.frames : undefined;
+    this.sourceFrames = this.manifest!.session.preview
+      ? this.require().command('preview_state', {}).result.state.frames
+      : undefined;
     this.sourceTicks = tick;
-    this.nextInspection = tick + BigInt(this.manifest!.ticksPerSecond);
+    this.nextInspection = tick + BigInt(Math.round(this.manifest!.ticksPerSecond / 10));
   }
   private async replayStep(step: ReplayStep) {
     if (step.action === 'advance') {
@@ -483,7 +480,7 @@ export class WasmWorkerRuntime {
       // Yield between bounded slices so inputs, disposal and browser messages remain responsive.
       const s = this.require(),
         end = s.status().ticks + BigInt(step.ticks);
-      const quantum = BigInt(Math.max(1, Math.floor(this.manifest!.ticksPerSecond / 60)));
+      const quantum = BigInt(Math.max(1, Math.floor(this.manifest!.ticksPerSecond / 10)));
       while (s.status().ticks < end) {
         const next = s.status().ticks + quantum;
         s.run(next < end ? next : end);
@@ -529,7 +526,6 @@ export class WasmWorkerRuntime {
     this.metricWall = wall;
     const frame = s.frame(this.manifest!.output);
     if (!frame) return;
-    this.sequence = frame.sequence;
     const { rgba, width, height } = frame,
       sequence = Number(frame.sequence);
     if (typeof SharedArrayBuffer !== 'undefined' && rgba.buffer instanceof SharedArrayBuffer) {
