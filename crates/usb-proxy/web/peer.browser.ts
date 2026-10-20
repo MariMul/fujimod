@@ -35,13 +35,11 @@ try {
         { endpointNumber: 1, direction: 'out', type: 'bulk', packetSize: 64 },
       ];
       fixture.iface.alternate = fixture.iface.alternates[0];
-      fixture.device.close = async () => {
-        fixture.device.opened = false;
-        fixture.iface.claimed = false;
-      };
-      const { exportUsbDevice } = (await import(
-        '/@fs/' + repo + 'apps/web/src/dev-tools/usb-sharing.ts'
-      )) as { exportUsbDevice: (device: object) => Promise<import('./types.ts').SharedDevice> };
+      const { initialize, usb } = (await import(
+        '/@fs/' + repo + 'bindings/javascript/dist/index.js'
+      )) as typeof import('../../../bindings/javascript/dist/index.js');
+      await initialize();
+      const [device] = await usb.discover(usb.DeviceFilter.Diagnostic);
       const { ShareHost, newTicket, shareUrl } = (await import(
         '/@fs/' + repo + 'crates/usb-proxy/web/peer.ts'
       )) as typeof import('./peer.ts');
@@ -49,7 +47,7 @@ try {
       signal.protocol = 'wss:';
       const ticket = newTicket(signal.href, []),
         logs: string[] = [];
-      const host = await ShareHost.create(ticket, await exportUsbDevice(fixture.device), {
+      const host = await ShareHost.create(ticket, device.share(), {
         connected: () => logs.push('connected'),
         disconnected: () => logs.push('disconnected'),
         error: (e) => logs.push(e.message),

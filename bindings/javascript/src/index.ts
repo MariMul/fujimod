@@ -7,6 +7,11 @@ export type {
   ResetGuardResult,
   DebugModeResult,
   Device,
+  Exporter,
+  DeviceEvents,
+  DeviceState,
+  LogEvents,
+  Ff80Exchange,
   InfoReply,
   ConfigurationGeometry,
   DiagnosticReply,
@@ -121,6 +126,7 @@ export const defs = Object.freeze({
 });
 export const usb = Object.freeze({
   Device: native.Device,
+  Exporter: native.Exporter,
   Session: native.Session,
   SessionState: native.SessionState,
   ErrorKind: native.ErrorKind,

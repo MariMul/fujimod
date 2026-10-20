@@ -41,10 +41,17 @@ export interface Completion {
   dataLength?: number;
   error?: string | null;
 }
-export interface SharedDevice {
-  descriptor: Descriptor;
-  execute(operation: Operation, timeout: number): Promise<Completion>;
-  close(): Promise<void>;
+/** The Rust/Wasm exporter. JavaScript only routes encoded proxy messages. */
+export interface UsbExporter {
+  readonly inventoryJson: string;
+  execute(controller: string, message: Uint8Array): Promise<Uint8Array>;
+  busy(device: string): boolean;
+  owns(controller: string, device: string): boolean;
+  fenced(device: string): boolean;
+  abandon(controller: string): boolean;
+  stopSharing(): void;
+  shutdown(): Promise<void>;
+  free(): void;
 }
 export interface Ticket {
   v: 1;

@@ -47,6 +47,8 @@ export function installWebUsb() {
     pending: Uint8Array;
     kind?: number;
     cancelPicker: boolean;
+    interfaceDelay: number;
+    interfaceChanging: boolean;
     hangControl?: number;
     pieces: Uint8Array[];
     memory: Map<string, number>;
@@ -62,11 +64,32 @@ export function installWebUsb() {
       pending: new Uint8Array(),
       kind: undefined,
       cancelPicker: false,
+      interfaceDelay: 0,
+      interfaceChanging: false,
       hangControl: undefined,
       pieces: [],
       memory: new Map(),
       configuration: new Map(),
     };
+  const refuseOverlap = (operation: string) => {
+    if (!state.interfaceChanging) return;
+    log.push(['refused', operation]);
+    throw new DOMException(
+      `Failed to execute '${operation}' on 'USBDevice': An operation that changes interface state is in progress.`,
+      'InvalidStateError',
+    );
+  };
+  const interfaceChange = async (operation: string, action: () => void) => {
+    refuseOverlap(operation);
+    state.interfaceChanging = true;
+    try {
+      if (state.interfaceDelay)
+        await new Promise((resolve) => setTimeout(resolve, state.interfaceDelay));
+      action();
+    } finally {
+      state.interfaceChanging = false;
+    }
+  };
   type Alternate = {
     alternateSetting: number;
     interfaceClass: number;
@@ -113,31 +136,43 @@ export function installWebUsb() {
     configurations: [config],
     opened: false,
     async close() {
+      refuseOverlap('close');
+      log.push(['close']);
       this.opened = false;
       iface.claimed = false;
     },
     async open() {
+      refuseOverlap('open');
       this.opened = true;
       log.push(['open']);
     },
     async selectConfiguration(number: number) {
       assert.equal(number, 1);
-      this.configuration = config;
+      await interfaceChange('selectConfiguration', () => {
+        this.configuration = config;
+      });
       log.push(['configuration', number]);
     },
     async claimInterface(number: number) {
       assert.equal(number, 2);
-      iface.claimed = true;
+      await interfaceChange('claimInterface', () => {
+        iface.claimed = true;
+      });
       log.push(['claim', number]);
     },
     async selectAlternateInterface(number: number, alternate: number) {
       assert.equal(number, 2);
       assert.equal(alternate, 3);
+      await interfaceChange('selectAlternateInterface', () => {
+        iface.alternate = iface.alternates.find((item) => item.alternateSetting === alternate);
+      });
       log.push(['alternate', number, alternate]);
     },
     async releaseInterface(number: number) {
       assert.equal(number, 2);
-      iface.claimed = false;
+      await interfaceChange('releaseInterface', () => {
+        iface.claimed = false;
+      });
       log.push(['release', number]);
     },
     async controlTransferIn(
@@ -254,7 +289,29 @@ export function installWebUsb() {
       throw new Error('Unexpected USB reset');
     },
   };
-  const other = { ...device, vendorId: 0x1234, productId: 0x5678 };
+  const otherInterface = { ...iface, claimed: false };
+  const otherConfig = { ...config, interfaces: [otherInterface] };
+  const other = {
+    ...device,
+    vendorId: 0x1234,
+    productId: 0x5678,
+    configuration: null as typeof otherConfig | null,
+    configurations: [otherConfig],
+    async selectConfiguration(number: number) {
+      assert.equal(number, 1);
+      this.configuration = otherConfig;
+    },
+    async claimInterface(number: number) {
+      assert.equal(number, 2);
+      otherInterface.claimed = true;
+      log.push(['claim', number]);
+    },
+    async releaseInterface(number: number) {
+      assert.equal(number, 2);
+      otherInterface.claimed = false;
+      log.push(['release', number]);
+    },
+  };
   if (!realWindow)
     Object.defineProperty(globalThis, 'Window', {
       configurable: true,
@@ -264,9 +321,12 @@ export function installWebUsb() {
         }
       },
     });
+  const usbEvents = new EventTarget();
   Object.defineProperty(nav, 'usb', {
     configurable: true,
     value: {
+      addEventListener: usbEvents.addEventListener.bind(usbEvents),
+      removeEventListener: usbEvents.removeEventListener.bind(usbEvents),
       async getDevices() {
         log.push(['list']);
         return [other, device];
@@ -280,6 +340,12 @@ export function installWebUsb() {
   });
   return {
     device,
+    presence(present: boolean) {
+      if (!present) { device.opened = false; device.configuration = null; iface.claimed = false; }
+      const event = new Event(present ? 'connect' : 'disconnect');
+      Object.defineProperty(event, 'device', { value: device });
+      usbEvents.dispatchEvent(event);
+    },
     iface,
     state,
     log,

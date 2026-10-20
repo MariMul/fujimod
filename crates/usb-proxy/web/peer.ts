@@ -1,6 +1,6 @@
 import type {
   Ticket,
-  SharedDevice,
+  UsbExporter,
   Callbacks,
   ShareStatus,
   Descriptor,
@@ -8,7 +8,7 @@ import type {
 } from './types.ts';
 export type {
   Ticket,
-  SharedDevice,
+  UsbExporter,
   Callbacks,
   ShareStatus,
   Descriptor,
@@ -349,18 +349,16 @@ export async function connectPeer(url: string) {
 }
 export class ShareHost {
   ticket: Ticket;
-  device: SharedDevice | undefined;
+  device: UsbExporter | undefined;
   descriptor: Descriptor;
   offline: string | undefined;
   battery: { level: string; at: number } | undefined;
   callbacks: Callbacks;
   peers: Map<string, { close(): void }>;
-  owner: string | symbol | undefined;
   closed: boolean;
-  fenced: boolean;
   iceServers: RTCIceServer[] = [];
   signal: ReturnType<typeof signaling>;
-  static async create(ticket: Ticket, device: SharedDevice, callbacks: Callbacks = {}) {
+  static async create(ticket: Ticket, device: UsbExporter, callbacks: Callbacks = {}) {
     const host = new ShareHost(ticket, device, callbacks);
     try {
       const ready = await host.signal.ready;
@@ -371,18 +369,16 @@ export class ShareHost {
       throw error;
     }
   }
-  constructor(ticket: Ticket, device: SharedDevice, callbacks: Callbacks) {
+  constructor(ticket: Ticket, device: UsbExporter, callbacks: Callbacks) {
     this.ticket = ticket;
     this.device = device;
     // The link outlives the camera: while it is away, controllers see it offline.
-    this.descriptor = device.descriptor;
+    this.descriptor = JSON.parse(device.inventoryJson)[0] as Descriptor;
     this.offline = undefined;
     this.battery = undefined;
     this.callbacks = callbacks;
     this.peers = new Map();
-    this.owner = undefined;
     this.closed = false;
-    this.fenced = false;
     this.signal = signaling(
       ticket,
       'host',
@@ -416,8 +412,9 @@ export class ShareHost {
   }
   /** Online state and last controller battery report, as controllers see it. */
   status() {
-    const status: ShareStatus = { online: !this.offline };
-    if (this.offline) status.reason = this.offline;
+    const fenced = this.device?.fenced(this.descriptor.id);
+    const status: ShareStatus = { online: !this.offline && !fenced };
+    if (this.offline || fenced) status.reason = this.offline ?? 'not responding';
     if (this.battery) {
       status.battery = this.battery.level;
       status.battery_age_ms = Math.max(0, Date.now() - this.battery.at);
@@ -428,56 +425,19 @@ export class ShareHost {
   cameraLost(reason: string) {
     if (this.closed || !this.device) return;
     const device = this.device;
-    const owner = this.owner;
     this.device = undefined;
     this.offline = reason;
-    this.owner = undefined;
-    this.fenced = false;
-    if (typeof owner === 'string') this.peers.get(owner)?.close();
-    void device.close().catch(() => {});
+    for (const peer of this.peers.values()) peer.close();
+    device.free();
     this.callbacks.state?.(this.status());
   }
   /** The same camera is back (the caller checked its identity); share it again. */
-  cameraReturned(device: SharedDevice) {
+  cameraReturned(device: UsbExporter) {
     if (this.closed) return;
     this.device = device;
-    this.descriptor = device.descriptor;
+    this.descriptor = JSON.parse(device.inventoryJson)[0] as Descriptor;
     this.offline = undefined;
-    this.fenced = false;
     this.callbacks.state?.(this.status());
-  }
-  /** Reserve the same ownership slot as a remote open, before opening locally.
-   * Release only after the local ff80 session closes. An interrupted session
-   * fences the share just like a controller disappearing with a claim. */
-  claimLocal() {
-    if (this.closed || !this.device) throw Error('Shared camera is offline');
-    if (this.fenced) throw Error('Shared camera completion unknown; reconnect on the host');
-    if (this.owner !== undefined)
-      throw Error('Camera is in use by a remote controller. Wait for it to release the device.');
-    const owner = Symbol('local session');
-    const device = this.device;
-    this.owner = owner;
-    return {
-      release: async () => {
-        if (this.owner !== owner) return;
-        // nusb drops its WebUSB claim asynchronously. Await the exporter close
-        // before allowing another session to open the physical interface.
-        try {
-          await device.close();
-        } catch (error) {
-          if (this.owner === owner) this.fenced = true;
-          throw error;
-        } finally {
-          if (this.owner === owner) this.owner = undefined;
-        }
-      },
-      abandon: () => {
-        if (this.owner !== owner) return;
-        this.fenced = true;
-        this.owner = undefined;
-        void device.close().catch((error) => this.callbacks.error?.(error));
-      },
-    };
   }
   /** One operation for controller `from`, under the share's ownership rules. */
   async run(from: string, peer: PeerChannel, message: ExecuteMessage): Promise<UsbCompletion> {
@@ -485,9 +445,9 @@ export class ShareHost {
     if (op.op === 'probe') return {}; /* Network echo; never touches USB. */
     if (op.op === 'list') return { devices: [{ ...this.descriptor, status: this.status() }] };
     if (!this.device) throw Error(`Shared camera offline: ${this.offline}`);
-    if (message.device !== this.device.descriptor.id) throw Error('Unknown shared device');
+    if (message.device !== this.descriptor.id) throw Error('Unknown shared device');
     if (op.op === 'owner_status' || op.op === 'owner_attention') {
-      if (this.owner !== from) throw Error('Shared camera is not claimed');
+      if (!this.device.owns(from, this.descriptor.id)) throw Error('Shared camera is not claimed');
       const text = op.message;
       if (typeof text !== 'string' || !text.length || new TextEncoder().encode(text).length > 512)
         throw Error('Invalid owner message');
@@ -497,18 +457,20 @@ export class ShareHost {
       } else {
         if (!this.callbacks.countdown) throw Error('Owner countdown unavailable');
         await this.callbacks.countdown(from, text);
-        if (peer.ended || this.closed || this.owner !== from || !this.device)
+        if (
+          peer.ended ||
+          this.closed ||
+          !this.device ||
+          !this.device.owns(from, this.descriptor.id)
+        )
           throw Error('Owner countdown interrupted');
       }
       return {};
     }
-    if (op.op === 'open') {
-      if (this.fenced) throw Error('Shared camera completion unknown; reconnect on the host');
-      if (this.owner !== undefined) throw Error('Shared camera is in use');
-      this.owner = from;
-    } else if (this.owner !== from) throw Error('Shared camera is not claimed');
-    const completion = await this.device.execute(op, message.timeout_ms);
-    if (op.op === 'close' && !completion.error) this.owner = undefined;
+    const reply = decodeMessage(await this.device.execute(from, encodeMessage(message)));
+    if (reply.type !== 'result' || reply.seq !== message.seq)
+      throw Error('Invalid Rust exporter reply');
+    const completion = reply.completion;
     return completion;
   }
   async message(frame: SignalFrame) {
@@ -542,15 +504,10 @@ export class ShareHost {
         // A controller's activity and progress end with its connection.
         this.callbacks.activity?.(frame.from, '');
         if (progress) this.callbacks.progress?.(frame.from, undefined);
-        if (this.owner === frame.from) {
-          this.owner = undefined;
-          this.fenced = true;
-          if (!this.closed)
-            this.callbacks.error?.(
-              Error('Remote controller disconnected while USB was claimed; completion unknown'),
-            );
-          void this.device?.close().catch((error) => this.callbacks.error?.(error));
-        }
+        if (this.device?.abandon(frame.from) && !this.closed)
+          this.callbacks.error?.(
+            Error('Remote controller disconnected while USB was claimed; completion unknown'),
+          );
       };
       void (async () => {
         const hello = decodeMessage(await peer.receive());
@@ -647,8 +604,10 @@ export class ShareHost {
     if (this.closed) return;
     this.closed = true;
     this.signal.close();
+    this.device?.stopSharing();
     for (const peer of this.peers.values()) peer.close();
     this.peers.clear();
-    void this.device?.close().catch((error) => this.callbacks.error?.(error));
+    this.device?.free();
+    this.device = undefined;
   }
 }

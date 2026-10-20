@@ -1,4 +1,4 @@
-import type { Descriptor, Operation } from './usb-sharing';
+import type { Descriptor, Operation } from '../../../../crates/usb-proxy/web/types.ts';
 import type { ShareTrafficEvent } from '../../../../crates/usb-proxy/web/share-traffic.ts';
 import { Direction, Layer, Level, describeCommand, type NewEntry } from './log';
 

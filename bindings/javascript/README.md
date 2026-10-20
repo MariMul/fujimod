@@ -313,3 +313,55 @@ remain in `events`. Both share sequence numbers and one event/byte budget.
 completion, failure or cancellation. Protocol records carry the actual request
 and reply bytes, including rejected replies. Tracing never decides completion,
 retries work or invokes user callbacks during an exchange.
+
+## Browser device ownership
+
+`usb.discover(filter)` and `usb.requestDevice(filter)` return per-device handles
+backed by one page-lifetime Rust nusb owner. Discovery opens each selected owner
+once; `await device.open()` is idempotent and verifies that handle is still open
+and present. Rediscovery reuses its stable `device.id`. Remote proxy handles
+continue to use `usb.Session.open(...)` and do not expose a local owner.
+
+- `await device.acquireSession(selection, limits, options)` acquires the owner's
+  exclusive logical session lock and opens FF80. `await session.close()` sends
+  C4 and releases that lock. An abandoned/uncertain session fences the owner.
+- `device.share()` enables sharing and returns a Rust `Exporter` for this device.
+  Pass it to ShareHost. `device.stopSharing()` disables remote access; it does
+  not shut down the device or release its persistent physical interface.
+- `device.status` is a `DeviceState` snapshot: `id`, `present`, `open`, `sharing`,
+  `sessionOwner` (`null`, `{kind: 'local'}`, or `{kind: 'remote', controller}`),
+  and `fenced`. `present`, `sharing`, and `sessionOwner` also have direct getters.
+- `device.watch()` returns `DeviceEvents`. `await events.next()` yields the
+  initial state, then every ownership/presence/sharing transition in order.
+  `events.close()` wakes pending reads; `next()` returns `undefined` once drained.
+  Free the subscription handle when finished. Hotplug events come from nusb.
+- `await device.close()` stops sharing, waits for a local session to finish and
+  awaits physical interface release. Close or abandon active sessions first.
+  `await device.open()` reopens a cleanly shut down owner without reopening USB.
+
+Local and remote clients share the same lock. A busy acquisition refuses without
+USB traffic. Sharing on/off does not acquire that lock, close FF80 or reopen USB.
+Stopping a share with an unfinished remote session conservatively fences the
+owner. Keep the device handle connected independently of any network share.
+
+`Exporter.execute(controllerId, encodedExecute)` returns the encoded proxy Result.
+`inventoryJson`, `busy(id)`, `owns(controllerId, id)`, `fenced(id)` and
+`abandon(controllerId)` support transport routing. `Exporter.stopSharing()`
+detaches its devices; `shutdown()` explicitly shuts them down. Freeing an
+exporter wrapper does not close or release the page's Rust device owner.
+`usb.Exporter.discover()`/`requestDevice()` select and share all permitted devices
+for the `/usb-proxy/` relay page. Device IDs and events remain per-device.
+
+`device.watchLog()` returns a `LogEvents` subscription with `next()` and `close()`.
+It emits exactly one `Ff80Exchange` after each FF80 control-envelope/bulk phase,
+for both direct local sessions and remote controllers. D0 and D1 are separate
+exchanges; D1 carries the decoded request's address/selector context. Events
+include `deviceId`, `holder`, sequence/time, operation, command/function,
+address/selector/page/length, requested/transferred lengths, the 12-byte
+`envelope` and raw payload `data` as `Uint8Array`, plus error/truncation fields.
+Selectors and command fields contain wire values.
+The observer never changes USB execution. Capture is limited to 8 MiB per
+exchange; exact transferred counts and `truncated` describe a longer payload.
+A subscriber exceeding 128 queued events or 16 MiB closes and rejects `next()`
+after its captured events drain, reporting overflow rather than silently losing
+log entries. Close and free subscriptions when finished.

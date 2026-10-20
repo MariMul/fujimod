@@ -81,32 +81,34 @@ an out-of-band offer/answer exchange or an already reachable peer endpoint.
 
 ## Ownership and failure
 
-Sharing closes the owner's healthy FF80 session before exporting its raw USB
-interface. The owner's console is disabled while shared. The simulator remains
-the same running guest and forwards ordinary USB bus operations through its
-worker; it does not synthesize responses, patch guest RAM or inspect program
-state to authorize hardware effects.
+Rust owns each browser USB device for the page's lifetime, whether it is shared
+or not. Repeated discovery, direct local sessions and the browser's Rust/Wasm
+exporter refer to that same nusb owner. JavaScript routes network messages;
+it never opens, claims, releases or closes a second copy of the physical device.
+The `/usb-proxy/` relay page also runs this Rust exporter.
 
-One remote connection owns the device at a time. Other clients may discover it
-but cannot claim it while occupied. Normal Session.close closes the protocol
-session and then releases the host lease. An error or abandoned claimed
-connection fences the shared device; a new client cannot silently resume it.
-The owner must stop sharing and reconnect. No timeout or disconnect retries a
-camera command, resets USB, changes camera modes, or certifies that firmware
-execution stopped. Stop sharing ends remote access; reconnect locally to resume
-the owner's console.
+Local sessions and remote controllers are clients of one owner. One logical
+session can hold the owner's lock at a time. Local sessions acquire it directly;
+remote proxy Open/Close operations acquire/release the same lock. Physical
+configuration and interface claims persist between logical sessions. A successful
+FF80 Session.close sends C4 and releases the logical claim; only device shutdown
+awaits physical interface release. No export handoff occurs.
 
-The current stock simulator can time out on a subsequent session reopen after
-a remote session has completed. This was observed with either Rust or a browser
-as the later controller. Stop sharing and reconnect the simulator before another
-controller session. The sharing layer reports and fences that failure; it does
-not retry or patch the guest. Physical camera handoff has not been tested.
+Sharing is an independent network attachment. Starting it does not close a local
+session. Stopping it detaches peers and leaves the physical connection available
+for local sessions. A controller holding the session lock can refuse another
+client's acquisition. Abandoning an active session or an uncertain USB completion
+fences that owner until explicitly reconnected; no timeout retries a camera
+command, resets USB, changes camera modes, or certifies firmware execution stopped.
+
+The JavaScript binding exposes per-device state and ordered events rather than
+a global camera slot. See the [binding API](../../bindings/javascript/README.md#browser-device-ownership).
 
 ## Checks
 
 Run Rust protocol, encrypted signaling and relay tests with
 `cargo test -p fujimod-usb-proxy --features relay` and exporter tests with
-`node --test crates/usb-proxy/web/exporter.test.ts`.
+`node --test bindings/javascript/tests/ownership.test.ts` after building the production binding.
 
 `FUJIMOD_WEB_URL=<named HTTPS app URL> node crates/usb-proxy/web/peer.browser.ts`
 uses a scripted WebUSB device with the real WebRTC/Rust path to test multi-megabyte
@@ -127,7 +129,7 @@ account credentials are separate from those offline checks.
 
 ## Sharing status in Dev Tools
 
-Agreed design, 2026-10-18; not built yet.
+Sharing is displayed independently of the device connection state.
 
 - **Top bar:** while the camera is shared, the status and Share button become
   one accent **Sharing** chip, with "· N connected" while remote controllers

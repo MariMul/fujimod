@@ -22,10 +22,11 @@ export class CameraSources implements CameraBackend {
   canShare() {
     return this.selected !== this.remote;
   }
-  exportUsb() {
-    if (!this.selected.exportUsb) throw Error('A remote camera cannot be shared again');
-    return this.selected.exportUsb();
+  exporter() {
+    if (!this.selected.exporter) throw Error('A remote camera cannot be shared again');
+    return this.selected.exporter();
   }
+  async disconnect() { await this.selected.disconnect?.(); }
   open(id: number) {
     return this.selected.open(id);
   }

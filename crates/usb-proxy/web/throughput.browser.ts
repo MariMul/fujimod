@@ -7,7 +7,7 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
-import type { SharedDevice } from './types.ts';
+import type { UsbExporter } from './types.ts';
 
 const root = new URL('../../../', import.meta.url);
 const require = createRequire(new URL('bindings/javascript/package.json', root));
@@ -89,30 +89,46 @@ try {
   const link = await page.evaluate(async (relayPort) => {
     const { ShareHost, newTicket, shareUrl } =
       (await import('./peer.js')) as typeof import('./peer.ts');
+    const { decodeMessage, encodeMessage } =
+      (await import('./wire.js')) as typeof import('./wire.ts');
     const data = Uint8Array.from({ length: 8 * 1024 * 1024 }, (_, i) => i & 255);
-    const device: SharedDevice = {
-      descriptor: {
-        id: 'throughput',
-        vendor_id: 0,
-        product_id: 0,
-        manufacturer: null,
-        product: 'Transport benchmark',
-        serial: 'throughput-fixture',
-        interfaces: [],
+    const device: UsbExporter = {
+      inventoryJson: JSON.stringify([
+        {
+          id: 'throughput',
+          vendor_id: 0,
+          product_id: 0,
+          manufacturer: null,
+          product: 'Transport benchmark',
+          serial: 'throughput-fixture',
+          interfaces: [],
+        },
+      ]),
+      busy: () => false,
+      owns: () => true,
+      fenced: () => false,
+      abandon: () => false,
+      stopSharing: () => {},
+      shutdown: async () => {},
+      free: () => {},
+      async execute(_controller, bytes) {
+        const message = decodeMessage(bytes);
+        if (message.type !== 'execute') throw Error('Expected execute');
+        const { op: operation, seq } = message;
+        const run = async () => {
+          if (operation.op === 'open' || operation.op === 'close') return {};
+          if (operation.op === 'transfer_out') {
+            const received = operation.data!;
+            for (let i = 0; i < received.length; i++)
+              if (received[i] !== (i & 255)) throw Error(`Upload corruption at ${i}`);
+            return { transferred: received.length };
+          }
+          if (operation.op === 'transfer_in')
+            return { data: data.subarray(0, operation.length), transferred: operation.length };
+          throw Error('Unsupported benchmark operation');
+        };
+        return encodeMessage({ type: 'result', seq, completion: await run() });
       },
-      async execute(operation) {
-        if (operation.op === 'open' || operation.op === 'close') return {};
-        if (operation.op === 'transfer_out') {
-          const received = operation.data!;
-          for (let i = 0; i < received.length; i++)
-            if (received[i] !== (i & 255)) throw Error(`Upload corruption at ${i}`);
-          return { transferred: received.length };
-        }
-        if (operation.op === 'transfer_in')
-          return { data: data.subarray(0, operation.length), transferred: operation.length };
-        throw Error('Unsupported benchmark operation');
-      },
-      async close() {},
     };
     const ticket = newTicket(`ws://127.0.0.1:${relayPort}/usb-proxy/signal`, []);
     await ShareHost.create(ticket, device);

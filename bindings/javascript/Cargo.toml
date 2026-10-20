@@ -14,6 +14,8 @@ testing = ["fujimod-usb/testing"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 fujimod-usb.workspace = true
+serde_json.workspace = true
+async-channel = "2"
 fujimod-workflows.workspace = true
 fujimod-defs.workspace = true
 nusb.workspace = true

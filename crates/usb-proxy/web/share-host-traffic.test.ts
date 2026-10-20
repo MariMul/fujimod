@@ -1,4 +1,5 @@
-import type { Message, ResultMessage, Ticket, Operation, SharedDevice } from './types.ts';
+import type { Message, ResultMessage, Ticket, Operation } from './types.ts';
+import { exporterFixture } from './exporter-fixture.ts';
 import type { ShareTrafficEvent } from './share-traffic.ts';
 // Exercises ShareHost with isolated signaling and data channels. No network or USB access.
 import test from 'node:test';
@@ -100,8 +101,8 @@ async function fixture(observer?: (event: ShareTrafficEvent) => void) {
     errors: Error[] = [],
     events: ShareTrafficEvent[] = [],
     ticket = newTicket('wss://isolated.test/signal', []);
-  const device: SharedDevice = {
-    descriptor: {
+  const device = exporterFixture(
+    {
       id: 'camera',
       vendor_id: 0,
       product_id: 0,
@@ -110,7 +111,7 @@ async function fixture(observer?: (event: ShareTrafficEvent) => void) {
       serial: null,
       interfaces: [],
     },
-    execute: async (op) => {
+    async (op) => {
       calls.push(op.op);
       return op.op === 'transfer_in'
         ? { data: Uint8Array.of(1, 2, 3), transferred: 3 }
@@ -119,8 +120,7 @@ async function fixture(observer?: (event: ShareTrafficEvent) => void) {
               op.op === 'transfer_out' || op.op === 'control_out' ? (op.data?.length ?? 0) : 12,
           };
     },
-    close: async () => {},
-  };
+  );
   const host = await ShareHost.create(ticket, device, {
     traffic: (event) => {
       events.push(event);

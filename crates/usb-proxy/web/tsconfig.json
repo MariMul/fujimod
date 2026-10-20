@@ -17,7 +17,6 @@
     "wire.ts",
     "pipeline.ts",
     "share-traffic.ts",
-    "usb-exporter.ts",
     "exporter.ts",
     "types.ts",
     "webusb.ts"

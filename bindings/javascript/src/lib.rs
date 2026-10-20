@@ -6,6 +6,7 @@ use wasm_bindgen::prelude::*;
 mod connection;
 mod defs;
 mod error;
+mod exporter;
 mod install;
 mod range;
 mod requests;

@@ -25,7 +25,7 @@
   },
   "scripts": {
     "build": "node scripts/build.ts && tsc",
-    "test": "node scripts/build.ts --testing && tsc && tsc -p tsconfig.types.json && tsc -p tsconfig.testing.json && tsc -p tsconfig.scripts.json && node --test tests/usb.test.ts && node scripts/build.ts && tsc && tsc -p tsconfig.types.json && tsc -p tsconfig.scripts.json && node --test tests/production.ts",
+    "test": "node scripts/build.ts --testing && tsc && tsc -p tsconfig.types.json && tsc -p tsconfig.testing.json && tsc -p tsconfig.scripts.json && node --test tests/usb.test.ts && node scripts/build.ts && tsc && tsc -p tsconfig.types.json && tsc -p tsconfig.scripts.json && node --test tests/production.ts tests/ownership.test.ts",
     "check": "tsc --noEmit && tsc -p tsconfig.types.json && tsc -p tsconfig.scripts.json",
     "test:browser": "npm run build && node tests/browser.ts",
     "test:pyodide": "node ../python/tests/pyodide.ts",

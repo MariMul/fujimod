@@ -39,6 +39,13 @@ APIs over the same core. Python in Pyodide uses the
 [WebUSB adapter](bindings/python/PYODIDE.md) with that initialized module.
 
 The [Python package](bindings/python/README.md) lives in `bindings/python/`.
+
+Rust owns each browser USB device for the page's lifetime. Local sessions and
+remote controllers are both clients of that one nusb owner, with one session
+ownership lock. The browser end runs the Rust/Wasm exporter; JavaScript only
+routes its network messages. Sharing attaches or detaches peers independently
+of the physical connection. See [USB sharing](crates/usb-proxy/SHARING.md).
+
 The JavaScript/Wasm package lives in `bindings/javascript/`. Binding crates are
 members of this same workspace. Each directory owns its language package;
 implementation crates remain independent of PyO3 and wasm-bindgen. The browser

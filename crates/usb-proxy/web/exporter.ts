@@ -1,7 +1,21 @@
 import { VERSION, encodeMessage, decodeMessage } from './wire.ts';
-import { Exporter } from './usb-exporter.ts';
 import { Pipeline } from './pipeline.ts';
-import type { Message } from './types.ts';
+import type { Message, Descriptor, UsbExporter } from './types.ts';
+
+interface ExporterSdk {
+  initialize(): Promise<unknown>;
+  usb: {
+    Exporter: {
+      discover(): Promise<UsbExporter>;
+      requestDevice(): Promise<UsbExporter | undefined>;
+    };
+  };
+}
+// The Rust relay serves the built browser binding beside this transport page.
+const sdk = () => {
+  const url = new URL('/usb-proxy/bindings/dist/index.js', location.href).href;
+  return import(url) as Promise<ExporterSdk>;
+};
 if (typeof document !== 'undefined') {
   const $ = (id: string) => {
     const element = document.getElementById(id);
@@ -13,20 +27,25 @@ if (typeof document !== 'undefined') {
     if (!(element instanceof HTMLButtonElement)) throw Error(`Expected button ${id}`);
     return element;
   };
-  let socket: WebSocket | undefined, exporter: Exporter | undefined;
+  let socket: WebSocket | undefined,
+    exporter: UsbExporter | undefined,
+    binding: ExporterSdk | undefined;
+  const controllers = new Set<string>();
   const status = (text: string) => {
     $('status').textContent = text;
   };
+  const devices = (): Descriptor[] =>
+    exporter ? (JSON.parse(exporter.inventoryJson) as Descriptor[]) : [];
   const update = () => {
     $('devices').replaceChildren(
-      ...[...(exporter?.devices || [])].map(([id, d]) => {
+      ...devices().map((device) => {
         const row = document.createElement('tr');
         for (const value of [
-          d.productName || d.manufacturerName || 'USB device',
-          `${d.vendorId.toString(16).padStart(4, '0')}:${d.productId.toString(16).padStart(4, '0')}`,
-          exporter!.fenced.has(id)
+          device.product || device.manufacturer || 'USB device',
+          `${device.vendor_id.toString(16).padStart(4, '0')}:${device.product_id.toString(16).padStart(4, '0')}`,
+          exporter!.fenced(device.id)
             ? 'Completion unknown'
-            : exporter!.claims.has(id)
+            : exporter!.busy(device.id)
               ? 'In use'
               : 'Available',
         ]) {
@@ -38,44 +57,53 @@ if (typeof document !== 'undefined') {
       }),
     );
   };
-  const inventory = async () => {
-    const active = exporter;
-    if (!active) return;
-    const devices = await active.inventory();
-    if (exporter === active && socket?.readyState === WebSocket.OPEN)
-      socket.send(encodeMessage({ type: 'inventory', devices }));
+  const inventory = () => {
+    if (exporter && socket?.readyState === WebSocket.OPEN)
+      socket.send(encodeMessage({ type: 'inventory', devices: devices() }));
     update();
   };
   const disconnected = async () => {
-    const stopping = exporter;
-    const active = socket;
+    const stopping = exporter,
+      active = socket;
     socket = undefined;
+    exporter = undefined;
     active?.close();
-    for (const id of ['add', 'refresh', 'disconnect']) button(id).disabled = true;
-    button('connect').disabled = true;
+    for (const id of ['add', 'refresh', 'disconnect', 'connect']) button(id).disabled = true;
     status('Disconnecting');
-    await stopping?.stop();
-    if (exporter === stopping) {
+    try {
+      for (const controller of controllers) stopping?.abandon(controller);
+      controllers.clear();
+      await stopping?.shutdown();
+    } finally {
+      stopping?.free();
       button('connect').disabled = false;
       status('Disconnected');
       update();
     }
   };
-  $('connect-form').onsubmit = (event) => {
+  $('connect-form').onsubmit = async (event) => {
     event.preventDefault();
     if (!navigator.usb) {
       status('WebUSB unavailable');
       return;
     }
-    exporter = new Exporter(navigator.usb, update);
+    button('connect').disabled = true;
+    status('Connecting');
+    try {
+      binding = await sdk();
+      await binding.initialize();
+      exporter = await binding.usb.Exporter.discover();
+    } catch (error) {
+      status(String(error));
+      button('connect').disabled = false;
+      return;
+    }
     socket = new WebSocket(
       `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/usb-proxy/ws`,
     );
     socket.binaryType = 'arraybuffer';
     const active = socket;
-    button('connect').disabled = true;
-    status('Connecting');
-    socket.onopen = () => {
+    socket.onopen = () =>
       active.send(
         encodeMessage({
           type: 'hello',
@@ -85,44 +113,50 @@ if (typeof document !== 'undefined') {
           reason: null,
         }),
       );
-    };
-    // One pipeline per controller stream the relay routes here, each run in
-    // order on its own chain.
     const streams = new Map<number, { pipeline: Pipeline; chain: Promise<void> }>();
-    const reply = (stream: number, message: Message) => {
-      if (active.readyState === WebSocket.OPEN)
-        active.send(encodeMessage({ type: 'routed', stream, message }));
-      update();
-    };
-    socket.onmessage = async ({ data }) => {
+    socket.onmessage = ({ data }) => {
       const message = decodeMessage(data);
       if (message.type === 'ready' && message.version === VERSION) {
         status(`Connected · ${message.id}`);
         for (const id of ['add', 'refresh', 'disconnect']) button(id).disabled = false;
-        await inventory();
+        inventory();
         return;
       }
       if (message.type !== 'routed') return;
       const { stream, message: inner } = message;
+      const controller = String(stream);
       if (inner.type === 'goodbye') {
+        exporter?.abandon(controller);
+        controllers.delete(controller);
         streams.delete(stream);
+        update();
         return;
       }
       if (!Pipeline.carries(inner) || !exporter) return;
-      const active = exporter;
+      controllers.add(controller);
       let entry = streams.get(stream);
       if (!entry) {
         entry = {
-          pipeline: new Pipeline((m) => active.run(m.device, m.op, m.timeout_ms)),
+          pipeline: new Pipeline(async (request) => {
+            if (!exporter) throw Error('USB exporter disconnected');
+            const reply = decodeMessage(await exporter.execute(controller, encodeMessage(request)));
+            if (reply.type !== 'result' || reply.seq !== request.seq)
+              throw Error('Invalid Rust exporter reply');
+            return reply.completion;
+          }),
           chain: Promise.resolve(),
         };
         streams.set(stream, entry);
       }
       const { pipeline } = entry;
-      entry.chain = entry.chain.then(async () => {
-        const answer = await pipeline.handle(inner);
-        if (answer) reply(stream, answer);
-      });
+      entry.chain = entry.chain
+        .then(async () => {
+          const answer = await pipeline.handle(inner);
+          if (answer && active.readyState === WebSocket.OPEN)
+            active.send(encodeMessage({ type: 'routed', stream, message: answer }));
+          update();
+        })
+        .catch((error: unknown) => status(String(error)));
     };
     socket.onclose = () => {
       if (socket === active) void disconnected();
@@ -131,19 +165,33 @@ if (typeof document !== 'undefined') {
   };
   $('add').onclick = async () => {
     try {
-      await navigator.usb?.requestDevice({ filters: [] });
-      await inventory();
+      const next = await binding?.usb.Exporter.requestDevice();
+      if (next) {
+        const old = exporter;
+        exporter = next;
+        old?.free();
+        inventory();
+      }
     } catch (error) {
-      if (!(error instanceof Error) || error.name !== 'NotFoundError')
-        status(error instanceof Error ? error.message : String(error));
+      status(String(error));
     }
   };
-  $('refresh').onclick = () => inventory().catch((error) => status(error.message));
-  $('disconnect').onclick = disconnected;
-  navigator.usb?.addEventListener('connect', () => {
-    if (socket?.readyState === WebSocket.OPEN) void inventory();
-  });
-  navigator.usb?.addEventListener('disconnect', () => {
-    if (socket?.readyState === WebSocket.OPEN) void inventory();
-  });
+  $('refresh').onclick = async () => {
+    try {
+      const next = await binding?.usb.Exporter.discover();
+      if (next) {
+        const old = exporter;
+        exporter = next;
+        old?.free();
+        inventory();
+      }
+    } catch (error) {
+      status(String(error));
+    }
+  };
+  $('disconnect').onclick = () => {
+    void disconnected();
+  };
+  navigator.usb?.addEventListener('connect', inventory);
+  navigator.usb?.addEventListener('disconnect', inventory);
 }

@@ -6,7 +6,7 @@ use crate::{Error, Result, protocol::*};
 use axum::{
     Router,
     extract::{
-        State, WebSocketUpgrade,
+        Path, State, WebSocketUpgrade,
         ws::{Message as Ws, WebSocket},
     },
     http::{HeaderMap, StatusCode},
@@ -84,9 +84,46 @@ pub fn router(token: String, origins: Vec<String>) -> Result<Router> {
                 )
             }),
         )
+        .route("/usb-proxy/bindings/{*path}", get(binding_asset))
         .route("/usb-proxy/ws", get(upgrade))
         .with_state(relay)
         .merge(crate::signaling::router()))
+}
+// Generated bindings are served beside the relay bundle. Keeping them as build
+// artifacts avoids a dependency cycle between the Wasm SDK and this crate.
+async fn binding_asset(Path(path): Path<String>) -> axum::response::Response {
+    let allowed = matches!(
+        path.as_str(),
+        "dist/index.js" | "pkg/fujimod.js" | "pkg/service-values.js" | "pkg/fujimod_bg.wasm"
+    ) || (path.starts_with("pkg/snippets/") && path.ends_with(".js"));
+    if !allowed
+        || path
+            .split('/')
+            .any(|part| part.is_empty() || part == "." || part == "..")
+        || path.contains('\\')
+    {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let root = std::env::var_os("FUJIMOD_USB_PROXY_BINDINGS")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../bindings/javascript")
+        });
+    match std::fs::read(root.join(&path)) {
+        Ok(bytes) => (
+            [(
+                "content-type",
+                if path.ends_with(".wasm") {
+                    "application/wasm"
+                } else {
+                    "text/javascript"
+                },
+            )],
+            bytes,
+        )
+            .into_response(),
+        Err(_) => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 async fn upgrade(
     State(relay): State<Relay>,

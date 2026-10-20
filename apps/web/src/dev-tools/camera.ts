@@ -1,6 +1,6 @@
 import type { InspectorRead } from './inspection';
 import { initialize, usb, type Device, type Session } from 'fujimod';
-import { exportUsbDevice, type SharedDevice, type BrowserUsbDevice } from './usb-sharing';
+import type { UsbExporter } from '../../../../crates/usb-proxy/web/types.ts';
 import { Direction, Layer, Level, describeCommand, type NewEntry } from './log';
 export enum CameraTarget {
   Usb = 'usb',
@@ -41,7 +41,8 @@ export interface CameraDiagnostics extends Record<string, unknown> {
   snapshot: Record<string, unknown>;
 }
 export interface CameraBackend {
-  exportUsb?(): Promise<SharedDevice>;
+  exporter?(): UsbExporter;
+  disconnect?(): Promise<void>;
   canShare?(): boolean;
   errors?(listener: (error: Error) => void): () => void;
   diagnostics?(): Promise<CameraDiagnostics>;
@@ -249,6 +250,7 @@ abstract class SessionCamera implements CameraBackend {
     this.device = undefined;
   }
   dispose(): void {
+    void this.device?.close().catch(() => {});
     this.releaseDevice();
     this.trace?.free();
     this.trace = undefined;
@@ -271,20 +273,13 @@ export class WebUsbCamera extends SessionCamera {
       })),
     };
   }
-  async exportUsb(): Promise<SharedDevice> {
-    if (!this.device || !this.activeLink?.usable()) throw Error('No connected camera');
-    const usb = (navigator as Navigator & { usb?: { getDevices(): Promise<BrowserUsbDevice[]> } })
-      .usb;
-    const matches = ((await usb?.getDevices()) ?? []).filter(
-      (raw) =>
-        raw.vendorId === this.device!.vendorId &&
-        raw.productId === this.device!.productId &&
-        raw.serialNumber === this.device!.serialNumber,
-    );
-    if (matches.length !== 1) throw Error('Cannot uniquely select the connected USB device');
-    await this.activeLink.close();
-    this.activeLink = undefined;
-    return exportUsbDevice(matches[0]);
+  exporter(): UsbExporter {
+    if (!this.device) throw Error('No connected camera');
+    return this.device.share();
+  }
+  async disconnect(): Promise<void> {
+    await this.device?.close();
+    this.releaseDevice();
   }
   onDisconnect(callback: () => void): () => void {
     const usbEvents = (navigator as Navigator & { usb?: EventTarget }).usb;

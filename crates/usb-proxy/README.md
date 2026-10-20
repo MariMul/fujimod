@@ -13,7 +13,7 @@ arbitrary calls to the external `nusb` crate.
 ```text
 Rust / Python / Pyodide controller
   → WebSocket relay on the development machine
-  → WebSocket exporter in the laptop browser
+  → Rust/Wasm exporter in the laptop browser
   → browser-permitted USB devices
 ```
 
@@ -142,6 +142,12 @@ Rolldown into one self-contained module in ignored `web/build/`; generated
 JavaScript is never committed.
 
 Run `cargo test -p fujimod-usb-proxy --features relay` for relay/client checks,
-and `node --test crates/usb-proxy/web/exporter.test.ts` for exporter checks.
+and `node --test bindings/javascript/tests/ownership.test.ts` (after building the binding) for exporter ownership checks.
 The browser integration test is `crates/usb-proxy/web/browser.ts`; it uses the
 real relay and bindings with a scripted WebUSB device. No test accesses a camera.
+
+The browser exporter executes in Rust/Wasm on the same nusb owner used by direct
+local sessions. JavaScript routes wire messages only. Build the JavaScript binding
+before serving the relay page (`npm --prefix bindings/javascript run build`).
+The relay serves generated SDK assets from `bindings/javascript/`; deployments
+can set `FUJIMOD_USB_PROXY_BINDINGS` to that built directory.

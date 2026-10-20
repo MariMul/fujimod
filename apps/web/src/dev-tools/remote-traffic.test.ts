@@ -2,7 +2,7 @@ import { expect, test } from 'vite-plus/test';
 import { observeRequest } from '../../../../crates/usb-proxy/web/share-traffic.ts';
 import { RemoteTrafficLog } from './remote-traffic';
 import { Direction, Layer, Level } from './log';
-import type { Completion, Operation } from './usb-sharing';
+import type { Completion, Operation } from '../../../../crates/usb-proxy/web/types.ts';
 function words(...values: number[]) {
   const data = new Uint8Array(values.length * 4),
     view = new DataView(data.buffer);

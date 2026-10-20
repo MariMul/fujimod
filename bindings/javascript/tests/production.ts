@@ -52,6 +52,8 @@ await test('production nusb/WebUSB opens explicit interfaces and preserves endpo
     assert.equal(upload.bytesWritten, 3);
     assert.deepEqual(fixture.state.pieces, [new Uint8Array([9, 8]), new Uint8Array([7])]);
     assert.deepEqual(await session.close(), new Uint8Array([0xaa, 0xbb]));
+    assert.equal(fixture.iface.claimed, true);
+    await picked.close();
     assert.equal(fixture.iface.claimed, false);
     assert.ok(fixture.log.some((e) => e[0] === 'alternate' && e[1] === 2 && e[2] === 3));
     const events = trace.drain().events;
