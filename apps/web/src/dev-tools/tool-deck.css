@@ -40,7 +40,7 @@
   animation: td-in 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 .td-enter {
-  border-color: var(--phosphor, #5fe39a);
+  border-color: var(--phosphor);
 }
 .td-connects .td-tile:nth-child(2) {
   animation-delay: 40ms;
@@ -100,22 +100,52 @@
   font-size: 15px;
   line-height: 1.5;
 }
-/* Square, stroked buttons with a hard one-step pixel shadow. */
+/* Battle.net-style framed buttons: glowing stroke, inset frame line, dark green fill. */
 .td-cta,
 .td-open {
   align-self: flex-start;
   margin-top: auto;
-  border: 2px solid var(--phosphor, #5fe39a);
+  border: 1px solid var(--phosphor);
   border-radius: 0;
-  background: var(--key);
-  color: var(--phosphor, #5fe39a);
-  box-shadow: 4px 4px 0 0 var(--phosphor, #5fe39a);
+  outline: 1px solid rgba(var(--phosphor-rgb), 0.35);
+  outline-offset: -5px;
+  background: rgba(var(--phosphor-rgb), 0.08);
+  color: var(--phosphor);
+  box-shadow:
+    0 0 10px rgba(var(--phosphor-rgb), 0.35),
+    inset 0 0 14px rgba(var(--phosphor-rgb), 0.22);
+  text-shadow: 0 0 8px rgba(var(--phosphor-rgb), 0.8);
   text-transform: uppercase;
   text-decoration: none;
   cursor: pointer;
   transition:
-    transform 80ms steps(2),
-    box-shadow 80ms steps(2);
+    background 120ms,
+    box-shadow 120ms,
+    color 120ms;
+}
+.td-cta:hover:not(:disabled),
+.td-open:hover {
+  background: rgba(var(--phosphor-rgb), 0.18);
+  color: #e6ffea;
+  box-shadow:
+    0 0 18px rgba(var(--phosphor-rgb), 0.6),
+    inset 0 0 20px rgba(var(--phosphor-rgb), 0.4);
+}
+.td-cta:active:not(:disabled),
+.td-open:active {
+  background: rgba(var(--phosphor-rgb), 0.28);
+  box-shadow:
+    0 0 6px rgba(var(--phosphor-rgb), 0.4),
+    inset 0 0 26px rgba(var(--phosphor-rgb), 0.55);
+}
+.td-cta:disabled {
+  border-color: #1c3a22;
+  outline-color: rgba(var(--phosphor-rgb), 0.08);
+  background: transparent;
+  color: #2f6b3a;
+  box-shadow: none;
+  text-shadow: none;
+  cursor: not-allowed;
 }
 .td-cta {
   min-height: 56px;
@@ -127,22 +157,6 @@
   padding: 11px 20px;
   font: 800 15px/1 var(--td-mono);
   letter-spacing: 0.1em;
-}
-.td-cta:hover:not(:disabled),
-.td-open:hover {
-  background: var(--phosphor, #5fe39a);
-  color: #04130a;
-}
-.td-cta:active:not(:disabled),
-.td-open:active {
-  transform: translate(4px, 4px);
-  box-shadow: 0 0 0 0 var(--phosphor, #5fe39a);
-}
-.td-cta:disabled {
-  border-color: var(--edge);
-  color: var(--faint, #5a5a5e);
-  box-shadow: 4px 4px 0 0 var(--edge);
-  cursor: not-allowed;
 }
 .td-locked {
   opacity: 0.6;
