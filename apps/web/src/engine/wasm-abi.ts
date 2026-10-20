@@ -1,3 +1,4 @@
+import { HostTimings } from './host-timings';
 import type {
   BootInput,
   CardReadOptions,
@@ -70,6 +71,7 @@ export interface WasmManifest {
   bootTicks: number;
   output: number;
   inputs?: Input[];
+  observations?: { name: string; address: string; size: number }[];
 }
 export interface SessionState {
   inputs: Input[];
@@ -126,6 +128,10 @@ export interface SessionCommands {
     request: Record<string, never>;
     result: { ticksPerSecond: string; state: { frames: number } };
   };
+  memory_read: {
+    request: { address: string; size: number };
+    result: { address: string; size: number };
+  };
   profile: { request: { limit?: number }; result: Record<string, unknown> };
   error_report: {
     request: Record<string, never>;
@@ -137,6 +143,7 @@ export class GuestExecutionError extends Error {}
 
 /** Owns allocations; every returned pixel span borrows the current Wasm heap. */
 export class WasmSession {
+  readonly timings = new HostTimings();
   private scratch: number;
   private handle = 0;
   constructor(readonly module: CameraModule) {
@@ -198,7 +205,9 @@ export class WasmSession {
     };
   }
   run(until: bigint) {
-    const result = this.module._camera_run_until(this.handle, until);
+    const result = this.timings.measure('run', () =>
+      this.module._camera_run_until(this.handle, until),
+    );
     if (result !== 0) throw new GuestExecutionError(this.error());
   }
   input(key: string, pressed: boolean) {
@@ -211,7 +220,9 @@ export class WasmSession {
     return this.upload(new TextEncoder().encode(value), run);
   }
   frame(output: number) {
-    const code = this.module._camera_frame(this.handle, output, this.scratch);
+    const code = this.timings.measure('frame', () =>
+      this.module._camera_frame(this.handle, output, this.scratch),
+    );
     if (code === 1) return undefined;
     this.check(code);
     const v = this.view(),
@@ -228,6 +239,15 @@ export class WasmSession {
     action: K,
     options: SessionCommands[K]['request'],
     bytes = new Uint8Array(),
+  ): { result: SessionCommands[K]['result']; bytes: Uint8Array<ArrayBuffer> } {
+    return this.timings.measure(`command.${action}`, () =>
+      this.executeCommand(action, options, bytes),
+    );
+  }
+  private executeCommand<K extends keyof SessionCommands>(
+    action: K,
+    options: SessionCommands[K]['request'],
+    bytes: Uint8Array,
   ): { result: SessionCommands[K]['result']; bytes: Uint8Array<ArrayBuffer> } {
     const command = this.module._camera_command;
     if (!command)

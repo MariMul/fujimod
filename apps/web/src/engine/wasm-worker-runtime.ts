@@ -1,3 +1,4 @@
+import { HostTimings } from './host-timings';
 import type { CardFile, EngineConfig, ReplayStep, Scene, Checkpoint, BootInput } from './api';
 import { CameraStore } from '../cameras/store';
 import { digest } from './identity';
@@ -17,11 +18,15 @@ interface Loaded {
   session: WasmSession;
   manifest: WasmManifest;
   identity: string;
+  loadTimings?: ReturnType<HostTimings['snapshot']>;
 }
 export async function loadWasm(bundle: string): Promise<Loaded> {
-  const response = await fetch(new URL('wasm.json', bundle));
+  const timing = new HostTimings();
+  const response = await timing.measureAsync('manifestFetch', () =>
+    fetch(new URL('wasm.json', bundle)),
+  );
   if (!response.ok) throw Error('Wasm runtime manifest is unavailable.');
-  const manifest: WasmManifest = await response.json();
+  const manifest: WasmManifest = await timing.measureAsync('manifestParse', () => response.json());
   if (
     manifest.schema !== 1 ||
     manifest.abi !== 1 ||
@@ -35,19 +40,45 @@ export async function loadWasm(bundle: string): Promise<Loaded> {
     manifest.output > 0xffffffff
   )
     throw Error('Unsupported Wasm manifest.');
-  const binaryResponse = await fetch(new URL(manifest.wasm, bundle));
-  if (!binaryResponse.ok) throw Error('Wasm binary is unavailable.');
-  const wasmBinary = await binaryResponse.arrayBuffer();
-  const { default: create } = (await import(
-    /* @vite-ignore */ new URL(manifest.module, bundle).href
-  )) as {
-    default: (options: {
-      wasmBinary: ArrayBuffer;
-      locateFile: (path: string) => string;
-    }) => Promise<CameraModule>;
-  };
-  const module = await create({ wasmBinary, locateFile: (path) => new URL(path, bundle).href });
-  return { session: new WasmSession(module), manifest, identity: await digest(wasmBinary) };
+  if (
+    manifest.observations &&
+    (manifest.observations.length > 64 ||
+      manifest.observations.some(
+        (o) =>
+          !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(o.name) ||
+          !/^[0-9]+$/.test(o.address) ||
+          !Number.isSafeInteger(o.size) ||
+          o.size < 1 ||
+          o.size > 4096,
+      ))
+  )
+    throw Error('Invalid observation declaration.');
+  // Load the independent module text and binary concurrently.
+  const [wasmBinary, { default: create }] = await Promise.all([
+    timing.measureAsync('binaryFetch', async () => {
+      const response = await fetch(new URL(manifest.wasm, bundle));
+      if (!response.ok) throw Error('Wasm binary is unavailable.');
+      return response.arrayBuffer();
+    }),
+    timing.measureAsync(
+      'moduleImport',
+      async () =>
+        (await import(/* @vite-ignore */ new URL(manifest.module, bundle).href)) as {
+          default: (options: {
+            wasmBinary: ArrayBuffer;
+            locateFile: (path: string) => string;
+          }) => Promise<CameraModule>;
+        },
+    ),
+  ]);
+  const module = await timing.measureAsync('instantiate', () =>
+    create({
+      wasmBinary,
+      locateFile: (path) => new URL(path, bundle).href,
+    }),
+  );
+  const identity = await timing.measureAsync('binaryDigest', () => digest(wasmBinary));
+  return { session: new WasmSession(module), manifest, identity, loadTimings: timing.snapshot() };
 }
 function packFiles(files: CardFile[]) {
   let offset = 0;
@@ -74,6 +105,8 @@ function extent(bytes: Uint8Array, span: { offset: number; length: number }): Ar
 
 /** One serialized owner. Rendering borrows Wasm memory before any next mutation. */
 export class WasmWorkerRuntime {
+  private timings = new HostTimings();
+  private loadTimings?: Loaded['loadTimings'];
   private loaded?: Promise<Loaded>;
   private bundle?: string;
   private session?: WasmSession;
@@ -108,7 +141,11 @@ export class WasmWorkerRuntime {
     private send: Send,
     private loader = loadWasm,
     private cameras: Pick<CameraStore, 'saved' | 'save'> = new CameraStore(),
-  ) {}
+  ) {
+    const transport = send;
+    this.send = (event, transfer) =>
+      this.timings.measure('postMessage', () => transport(event, transfer));
+  }
   receive(message: WasmWorkerRequest) {
     if (message.type === 'frame_release') {
       if (message.lease === this.lease) {
@@ -300,6 +337,17 @@ export class WasmWorkerRuntime {
           checkpoints: this.points,
           wasmBytes: s.module.HEAPU8.byteLength,
           jit: s.module.tcgJitStats?.(),
+          hostTimings: {
+            abi: s.timings.snapshot(),
+            worker: this.timings.snapshot(),
+            load: this.loadTimings,
+          },
+          observations: Object.fromEntries(
+            (this.manifest?.observations ?? []).map((o) => [
+              o.name,
+              [...s.command('memory_read', { address: o.address, size: o.size }).bytes],
+            ]),
+          ),
         };
       case 'error_report': {
         if (!s.created)
@@ -348,37 +396,42 @@ export class WasmWorkerRuntime {
     const saved = config.camera ? await this.cameras.saved(config.camera.id) : undefined;
     this.scene = scene;
     this.send({ type: 'progress', message: 'Loading Wasm runtime…' });
-    const { session, manifest, identity } = await this.prepare(config.bundle);
+    const { session, manifest, identity, loadTimings } = await this.prepare(config.bundle);
+    this.loadTimings = loadTimings;
     this.session = session;
     this.manifest = manifest;
-    this.runtimeKey = await digest(
-      new TextEncoder().encode(
-        JSON.stringify([
-          identity,
-          manifest,
-          config.firmwareId,
-          await digest(dat),
-          config.bootInputs ?? [],
-          config.camera?.modEnabled ?? false,
-          seedIdentity,
-        ]),
+    this.runtimeKey = await this.timings.measureAsync('runtimeIdentity', async () =>
+      digest(
+        new TextEncoder().encode(
+          JSON.stringify([
+            identity,
+            manifest,
+            config.firmwareId,
+            await digest(dat),
+            config.bootInputs ?? [],
+            config.camera?.modEnabled ?? false,
+            seedIdentity,
+          ]),
+        ),
       ),
     );
     this.send({ type: 'progress', message: 'Verifying firmware…' });
-    session.create(
-      manifest.construction === 'resolved'
-        ? manifest.session
-        : {
-            schema: 1,
-            graph: manifest.session,
-            firmwareId: config.firmwareId,
-            bootSource: manifest.session.bootSource,
-            bootInputs: config.bootInputs ?? [],
-            initialPositions: config.initialPositions ?? {},
-            clockSeconds2000: config.execution?.clockSeconds2000,
-          },
-      new Uint8Array(dat),
-      manifest.construction,
+    this.timings.measure('create', () =>
+      session.create(
+        manifest.construction === 'resolved'
+          ? manifest.session
+          : {
+              schema: 1,
+              graph: manifest.session,
+              firmwareId: config.firmwareId,
+              bootSource: manifest.session.bootSource,
+              bootInputs: config.bootInputs ?? [],
+              initialPositions: config.initialPositions ?? {},
+              clockSeconds2000: config.execution?.clockSeconds2000,
+            },
+        new Uint8Array(dat),
+        manifest.construction,
+      ),
     );
     if (manifest.construction === 'session') {
       if (saved)
@@ -486,7 +539,8 @@ export class WasmWorkerRuntime {
               BigInt(Math.max(0, Math.floor(((performance.now() - this.clockWall) * rate) / 1000)));
             const maximum = now + BigInt(Math.max(1, Math.floor(rate / 10)));
             if (target > now && this.state?.poweredOn !== false) {
-              s.run(target < maximum ? target : maximum);
+              // A whole presentation quantum avoids tiny history transactions at the pacing edge.
+              s.run(maximum);
               if (
                 this.manifest!.construction === 'session' &&
                 s.status().ticks >= this.nextCheckpoint
@@ -562,10 +616,17 @@ export class WasmWorkerRuntime {
       while (s.status().ticks < end) {
         const next = s.status().ticks + quantum;
         s.run(next < end ? next : end);
+        if (this.manifest!.construction === 'session' && s.status().ticks >= this.nextCheckpoint)
+          this.captureCheckpoint();
+        if (s.status().ticks >= this.nextPresentation) {
+          this.observeCurrent();
+          this.publish();
+          await this.leased;
+        }
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
       }
       this.observeCurrent();
-      this.publish(true);
+      this.publish();
       // A following replay step must not mutate a shared borrowed frame.
       await this.leased;
     } else await this.dispatch(step);
@@ -631,8 +692,10 @@ export class WasmWorkerRuntime {
         rgba.byteOffset,
         rgba.byteLength,
       );
-      context.putImageData(new ImageData(view, width, height), 0, 0);
-      const bitmap = this.canvas.transferToImageBitmap();
+      const bitmap = this.timings.measure('bitmap', () => {
+        context.putImageData(new ImageData(view, width, height), 0, 0);
+        return this.canvas!.transferToImageBitmap();
+      });
       this.send({ type: 'frame', bitmap, width, height, sequence }, [bitmap]);
     }
   }
