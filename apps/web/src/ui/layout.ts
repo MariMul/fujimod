@@ -15,6 +15,7 @@ export interface ControlNode {
   bindings?: Record<string, string>;
 }
 export interface PowerCombo {
+  boot?: 'sd';
   label: string;
   keys: { face?: string; icon?: string; record?: boolean }[];
   inputs: BootInput[];

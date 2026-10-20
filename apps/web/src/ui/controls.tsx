@@ -70,7 +70,10 @@ export class ControlSession {
         this.positions.set(input.id, initial[input.id] ?? input.initial ?? input.positions[0].id);
     const visit = (nodes: ControlNode[]) => {
       for (const node of nodes) {
-        if (node.operation === 'power') this.powerID = node.id;
+        if (node.operation === 'power') {
+          this.powerID = node.id;
+          if (node.id) this.positions.set(node.id, this.powered ? 'on' : 'off');
+        }
         if (node.variant === 'segment' && node.id && !this.positions.has(node.id)) {
           const first =
             this.inputs.get(node.id)?.positions?.[0]?.id ?? Object.keys(node.labels ?? {})[0];
@@ -91,7 +94,9 @@ export class ControlSession {
   }
   disabled(id: string) {
     this.read();
-    return !this.ready || !this.inputs.get(id)?.supported || (!this.powered && id !== this.powerID);
+    return (
+      !this.ready || (id !== this.powerID && (!this.inputs.get(id)?.supported || !this.powered))
+    );
   }
   classes(id: string) {
     this.read();
@@ -185,7 +190,7 @@ export class ControlSession {
     if (
       !this.ready ||
       (!this.powered && id !== this.powerID) ||
-      !this.inputs.get(id)?.supported ||
+      (id !== this.powerID && !this.inputs.get(id)?.supported) ||
       this.positions.get(id) === value
     )
       return;
@@ -199,8 +204,7 @@ export class ControlSession {
       if (this.powered) this.ready = false;
       this.availability();
     }
-    void engine
-      .setPosition(id, value)
+    void (id === this.powerID ? engine.power(value === 'on') : engine.setPosition(id, value))
       .then(() => {
         if (this.engine === engine && id === this.powerID && value === 'on') {
           this.ready = true;
@@ -394,6 +398,11 @@ export class ControlSession {
       this.renders.get(this.powerID)?.();
     }
     this.availability();
+  }
+  setPowered(on: boolean) {
+    this.powered = on;
+    if (this.powerID) this.positions.set(this.powerID, on ? 'on' : 'off');
+    this.changed();
   }
   synchronize(positions: Record<string, string>) {
     for (const [id, value] of Object.entries(positions)) {
@@ -611,7 +620,12 @@ function Node(props: { session: ControlSession; node: ControlNode }) {
     id = node.id ?? '';
   const input = untrack(() => props.session.inputs.get(id));
   const positions =
-    input?.positions ?? Object.keys(node.labels ?? {}).map((id) => ({ id, label: id }));
+    node.operation === 'power'
+      ? [
+          { id: 'off', label: 'OFF' },
+          { id: 'on', label: 'ON' },
+        ]
+      : (input?.positions ?? Object.keys(node.labels ?? {}).map((id) => ({ id, label: id })));
   const keys =
     node.kind === 'command'
       ? [

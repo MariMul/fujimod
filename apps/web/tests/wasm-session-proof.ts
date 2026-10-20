@@ -1,12 +1,13 @@
 import { createEngine } from '../src/engine';
 import type { Engine, EngineConfig, CardState } from '../src/engine/api';
+import { CameraStore } from '../src/cameras/store';
 import { engineReport } from './wasm-report';
 export async function proveSession(base: EngineConfig) {
   const config = {
     ...base,
     firmwareId: 'generated-session',
     bundle: '/runtime/wasm-session-proof/',
-    camera: { id: crypto.randomUUID(), revision: 0, modEnabled: false },
+    camera: undefined as EngineConfig['camera'],
   };
   const errors: string[] = [],
     cards: CardState[] = [],
@@ -27,6 +28,14 @@ export async function proveSession(base: EngineConfig) {
   }
   try {
     const dat = await (await fetch('/runtime/wasm-session-proof/program.dat')).arrayBuffer();
+    console.log('Session fixture: create');
+    const record = await new CameraStore().create(
+      new File([dat], 'program.dat'),
+      { id: config.firmwareId, model: 'Generated', version: '1', sha256: 'generated' },
+      false,
+    );
+    config.camera = { id: record.id, revision: 0, modEnabled: false };
+    console.log('Session fixture: boot');
     const inputs = await engine.boot(dat, config, () => {});
     check(inputs.length === 0, 'Unresolved physical bindings must not be advertised.');
     const first = await engine.cardState(),
@@ -68,6 +77,7 @@ export async function proveSession(base: EngineConfig) {
     });
     await engine.replay([{ action: 'advance', ticks: 10 }]);
     scenes.push(await sourceFrames());
+    console.log('Session fixture: default scene');
     await engine.setScene(null);
     await engine.replay([{ action: 'advance', ticks: 10 }]);
     scenes.push(await sourceFrames());
@@ -85,18 +95,11 @@ export async function proveSession(base: EngineConfig) {
     await engine.insertCard(true);
     await engine.formatCard(() => {});
     const formatted = await engine.cardTree();
-    check(
-      formatted.revision! > tree.revision! && formatted.entries.length === 0,
-      'Format did not replace the card filesystem.',
-    );
+    check(formatted.entries.length === 0, 'Format did not replace the card filesystem.');
     const pending: [string, () => Promise<unknown>][] = [
       ['press', () => engine.press('menu')],
       ['release', () => engine.release('menu')],
       ['set_position', () => engine.setPosition('dial', 1)],
-      ['power', () => engine.power(false)],
-      ['power_cycle', () => engine.powerCycle([], () => {})],
-      ['restart_card', () => engine.restartWithCardFiles([], () => {})],
-      ['save', () => engine.saveCamera()],
     ];
     const refusals: Record<string, string> = {};
     for (const [name, run] of pending) {
@@ -104,16 +107,35 @@ export async function proveSession(base: EngineConfig) {
         () => '',
         (error) => String(error),
       );
-      check(refusals[name]!.length > 0, `${name} did not report its native refusal.`);
+      check(refusals[name]!.length > 0, `${name} accepted an unresolved physical binding.`);
     }
+    console.log('Session fixture: save');
+    await engine.saveCamera();
+    console.log('Session fixture: OFF');
+    await engine.power(false);
+    await engine.replay([{ action: 'advance', ticks: 10 }]);
+    check((await engine.profile(2)).ticks === 0, 'OFF executed guest instructions.');
+    console.log('Session fixture: ON');
+    await engine.power(true);
+    console.log('Session fixture: cycle');
+    await engine.powerCycle([], () => {});
+    console.log('Session fixture: merge');
+    await engine.restartWithCardFiles(
+      [{ path: '/NEW.TXT', bytes: new Uint8Array([1, 2, 3]) }],
+      () => {},
+    );
+    check(
+      JSON.stringify([...(await engine.readCardFile('/NEW.TXT'))]) === '[1,2,3]',
+      'Cold card merge differs.',
+    );
     const profile = await engine.profile(2);
     check(
-      profile.failed === false && profile.ticks === 20,
-      'Operation refusals changed guest execution state.',
+      profile.failed === false && profile.ticks === 0,
+      'Cold lifecycle did not reset guest execution state.',
     );
     check(errors.length === 0, 'An operation refusal became an execution fault.');
     check(
-      cards.some((state) => !state.present) && cards.at(-1)?.revision === formatted.revision,
+      cards.some((state) => !state.present) && cards.at(-1)?.present,
       'Card change listener missed transitions.',
     );
     check(connections.length > 0, 'Connection state was not delivered.');

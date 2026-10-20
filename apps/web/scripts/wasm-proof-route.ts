@@ -50,8 +50,14 @@ export function wasmProofRoute(env: Record<string, string> = {}): Plugin {
           response.end('Artifact unavailable.');
           return;
         }
-        if (path !== '/__wasm-proof' && path !== '/__wasm-camera') return next();
-        const script = path === '/__wasm-camera' ? 'wasm-camera-proof' : 'wasm-proof';
+        if (path !== '/__wasm-proof' && path !== '/__wasm-camera' && path !== '/__wasm-lifecycle')
+          return next();
+        const script =
+          path === '/__wasm-lifecycle'
+            ? 'wasm-lifecycle-proof'
+            : path === '/__wasm-camera'
+              ? 'wasm-camera-proof'
+              : 'wasm-proof';
         response.setHeader('Content-Type', 'text/html');
         response.end(
           `<!doctype html><html lang="en"><meta charset="utf-8"><title>Wasm execution proof</title><body><script type="module" src="/tests/${script}.ts"></script></body></html>`,

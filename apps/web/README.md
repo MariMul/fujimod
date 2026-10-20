@@ -98,8 +98,8 @@ camera is ready or loading fails. The real-download browser gate is
 verify both loading phases in Chromium and WebKit.
 
 Uploading a supported DAT creates a separate virtual camera record. Its firmware
-stays in IndexedDB. The current C ABI supports live execution and same-owner
-Undo, while durable saves and cold restoration remain unavailable. Save failures
+stays in IndexedDB. The C ABI supports live execution, same-owner Undo and portable durable media
+saves. Each reopen cold boots committed storage and persistent physical controls. Save failures
 are shown in the library and preserve any previous successful transaction.
 
 `src/engine/api.ts` is the web app's emulator boundary. The standalone Rust Wasm
@@ -207,8 +207,9 @@ npm run preview -- --mode local-preview --port 5190 --strictPort
 This serves `dist-local-preview/` and enables the configured local DAT. Public
 builds omit automatic DAT loading. The server binds to `127.0.0.1` and accepts
 `*.ts.net` Host headers for Tailscale Serve. Restart after environment changes.
-Native same-owner Undo is available; durable machine saves and cold restoration
-remain unsupported by the current C ABI and return an explicit error.
+Native same-owner Undo and durable media restoration use the C ABI. Durable
+saves contain committed SD/NAND media and physical controls; volatile execution
+state starts fresh at each cold boot.
 
 ### Website assets and deployment
 

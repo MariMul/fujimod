@@ -114,7 +114,7 @@ test('worker routes physical inputs, scene, card operations, restart, power, pro
     f.events.some((e) => e.type === 'metrics' && e.metrics.runtime?.ticksPerSecond === 12000000),
   );
 });
-test('camera saves commit matched durable/snapshot bytes with optimistic revisions', async () => {
+test('camera saves commit portable durable bytes with optimistic revisions', async () => {
   const f = setup();
   await f.send({
     action: 'boot',
@@ -126,7 +126,6 @@ test('camera saves commit matched durable/snapshot bytes with optimistic revisio
   assert.equal((await f.send({ action: 'save' })).type, 'reply');
   assert.equal((await f.send({ action: 'save' })).type, 'reply');
   assert.deepEqual([...new Uint8Array(f.saves[0]!.durable)], [1, 2]);
-  assert.deepEqual([...new Uint8Array(f.saves[0]!.snapshot!)], [3, 4, 5]);
   assert.deepEqual(
     f.events.filter((e) => e.type === 'saved').map((e) => e.revision),
     [4, 5],
@@ -251,10 +250,10 @@ test('declared preview policy is applied once and source metrics use observation
   assert(f.events.some((e) => e.type === 'metrics' && e.metrics.runtime?.sourceFrames === 0));
 });
 
-test('an existing durable camera save refuses instead of silently cold booting', async () => {
+test('a portable camera save restores media through the C ABI before boot', async () => {
   const f = setup({
     saved: {
-      durable: new ArrayBuffer(1),
+      durable: new Uint8Array([7, 8, 9]).buffer,
       runtimeKey: 'prior-runtime',
       positions: {},
       poweredOn: true,
@@ -268,7 +267,40 @@ test('an existing durable camera save refuses instead of silently cold booting',
     files: [],
     seedIdentity: [],
   });
-  assert(boot.type === 'error' && boot.error.includes('cannot restore a durable camera save'));
-  assert.equal(f.calls.length, 0);
+  assert.equal(boot.type, 'reply');
+  assert.deepEqual(f.calls.find((c) => c.action === 'restore_durable')!.bytes, [7, 8, 9]);
   assert.equal(f.saves.length, 0);
+});
+
+test('replay advance returns while power is OFF and does not run or spin', async () => {
+  const f = setup();
+  await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  await f.send({ action: 'power', on: false });
+  const before = f.calls.length;
+  assert.equal(
+    (await f.send({ action: 'replay', steps: [{ action: 'advance', ticks: 100 }] })).type,
+    'reply',
+  );
+  assert.equal(f.state.poweredOn, false);
+  assert.equal(f.calls.length, before);
+});
+
+test('an idempotent power request does not cold boot or advance the guest', async () => {
+  const f = setup();
+  await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  const before = f.calls.length;
+  assert.equal((await f.send({ action: 'power', on: true })).type, 'reply');
+  assert.equal(f.calls.length, before);
 });
