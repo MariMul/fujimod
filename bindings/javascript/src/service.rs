@@ -1,6 +1,6 @@
 //! Typed App80 values and conversions. Wire codecs live in fujimod-usb.
 use super::*;
-use defs::{ServiceCodec, ServiceDefinition, ServiceModes};
+use catalog::{ServiceCodec, ServiceDefinition, ServiceModes};
 use error::{integer, property, record};
 use usb::app80::catalog as core;
 mod values {

@@ -50,7 +50,7 @@ try {
   const page = await browser.newPage();
   await page.goto(`http://127.0.0.1:${address.port}/`);
   const result = await page.evaluate(async () => {
-    const { usb, defs, initialize } = (await import(
+    const { usb, catalog, initialize } = (await import(
       String('/dist/index.js')
     )) as typeof import('../dist/index.js');
     const { installWebUsb } = (await import(
@@ -73,7 +73,7 @@ try {
       );
       const product = (await session.deviceInfo(usb.InfoSelector.Product)).text;
       const data = [...(await session.readData(123, 5))];
-      const definition = defs.service.Definition.fromJson(
+      const definition = catalog.service.Definition.fromJson(
         JSON.stringify({
           schema: 1,
           firmware: {
@@ -97,13 +97,13 @@ try {
             },
           ],
         }),
-        new defs.FirmwareIdentity('synthetic-b-v2', 'ab'.repeat(32)),
+        new catalog.FirmwareIdentity('synthetic-b-v2', 'ab'.repeat(32)),
       );
       fixture.state.onConfigurationWrite = (page, address) => {
         if (page === 3 && address === 576) fixture.state.configuration.set('3:584', 1);
       };
       const invocation = new usb.app80.Service(definition).prepare(
-        new defs.service.ServiceModes(4),
+        new catalog.service.ServiceModes(4),
         usb.app80.Command.flushConfiguration(),
       );
       const serviceValue = (await usb.app80.execute(session, invocation)).value;

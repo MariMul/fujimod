@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { initialize, usb, defs } from '../dist/index.js';
+import { initialize, usb, catalog } from '../dist/index.js';
 import { TestExchange as E, TestScript } from '../pkg/fujimod.js';
 await initialize({
   module_or_path: await readFile(new URL('../pkg/fujimod_bg.wasm', import.meta.url)),
@@ -407,16 +407,16 @@ function serviceDefinition(
       parameter_table: 8192,
     })),
   };
-  return defs.service.Definition.fromJson(
+  return catalog.service.Definition.fromJson(
     JSON.stringify(document),
-    new defs.FirmwareIdentity(expectedId, 'ab'.repeat(32)),
+    new catalog.FirmwareIdentity(expectedId, 'ab'.repeat(32)),
   );
 }
 function field<K extends string>(value: unknown, key: K): unknown {
   assert.ok(value && typeof value === 'object' && key in value);
   return (value as Record<K, unknown>)[key];
 }
-const serviceModes = () => new defs.service.ServiceModes(4);
+const serviceModes = () => new catalog.service.ServiceModes(4);
 const saveInvocation = () =>
   new usb.app80.Service(serviceDefinition()).prepare(
     serviceModes(),
@@ -441,10 +441,10 @@ await test('shared data loader preserves enums, explicit identity and unreviewed
     entry = d.entries[0];
   assert.equal(d.identity.id, 'synthetic-b-v2');
   assert.equal(d.identity.sha256, 'ab'.repeat(32));
-  assert.equal(entry.codec, defs.service.Codec.FlushConfiguration);
+  assert.equal(entry.codec, catalog.service.Codec.FlushConfiguration);
   assert.equal(entry.handler, 4294967296n);
-  assert.equal(entry.enabledModes.kind, defs.service.ModeAvailabilityKind.Unreviewed);
-  assert.equal(entry.transition.kind, defs.service.ModeTransitionKind.Keep);
+  assert.equal(entry.enabledModes.kind, catalog.service.ModeAvailabilityKind.Unreviewed);
+  assert.equal(entry.transition.kind, catalog.service.ModeTransitionKind.Keep);
   assert.deepEqual(entry.slots, new Uint8Array([7]));
   assert.equal(entry.firmwareKind, 19);
   assert.equal(d.select(153, serviceModes()), undefined);
@@ -454,23 +454,23 @@ await test('shared data loader preserves enums, explicit identity and unreviewed
   );
   assert.throws(
     () => serviceDefinition(undefined, 'another-body'),
-    (e) => defs.isError(e) && e.reason.kind === defs.DefinitionFailureKind.FirmwareMismatch,
+    (e) => catalog.isError(e) && e.reason.kind === catalog.DefinitionFailureKind.FirmwareMismatch,
   );
   assert.throws(
-    () => new defs.FirmwareIdentity('body', 'é'.repeat(32)),
-    (e) => defs.isError(e) && e.reason.kind === defs.DefinitionFailureKind.InvalidDigest,
+    () => new catalog.FirmwareIdentity('body', 'é'.repeat(32)),
+    (e) => catalog.isError(e) && e.reason.kind === catalog.DefinitionFailureKind.InvalidDigest,
   );
   assert.throws(
-    () => new defs.service.ServiceModes(0),
-    (e) => defs.isError(e) && e.reason.kind === defs.DefinitionFailureKind.EmptyModes,
+    () => new catalog.service.ServiceModes(0),
+    (e) => catalog.isError(e) && e.reason.kind === catalog.DefinitionFailureKind.EmptyModes,
   );
   assert.throws(
-    () => defs.service.Definition.fromJson('{}', d.identity),
-    (e) => defs.isError(e) && e.reason.kind === defs.DefinitionFailureKind.Json,
+    () => catalog.service.Definition.fromJson('{}', d.identity),
+    (e) => catalog.isError(e) && e.reason.kind === catalog.DefinitionFailureKind.Json,
   );
   assert.throws(() => {
     // @ts-expect-error Runtime boundary deliberately exercises invalid JavaScript input.
-    entry.codec = defs.service.Codec.Research;
+    entry.codec = catalog.service.Codec.Research;
   }, TypeError);
 });
 
@@ -493,17 +493,17 @@ await test('typed command selection errors retain enum reasons without fallback'
       e.reason.argument === usb.app80.ArgumentKind.WordAlignment,
   );
   assert.throws(
-    () => service.prepare(new defs.service.ServiceModes(1), usb.app80.Command.flushConfiguration()),
+    () => service.prepare(new catalog.service.ServiceModes(1), usb.app80.Command.flushConfiguration()),
     (e) =>
       usb.app80.isError(e) &&
       e.reason.kind === usb.app80.CommandFailureKind.Unsupported &&
-      e.reason.codec === defs.service.Codec.FlushConfiguration,
+      e.reason.codec === catalog.service.Codec.FlushConfiguration,
   );
   assert.throws(
     () =>
       service.prepareResearch(
         new usb.app80.CommandCode(153),
-        new defs.service.ServiceModes(1),
+        new catalog.service.ServiceModes(1),
         new Uint8Array(),
       ),
     (e) =>
@@ -742,18 +742,18 @@ await test('peripheral commands preserve typed ports, checked payloads and low-h
   ]);
   const service = new S.Service(definition),
     modes = serviceModes();
-  const slots = (codec: (typeof defs.service.Codec)[keyof typeof defs.service.Codec]) => {
+  const slots = (codec: (typeof catalog.service.Codec)[keyof typeof catalog.service.Codec]) => {
     const entry = definition.entries.find((e) => e.codec === codec);
     assert.ok(entry);
     return entry.slots;
   };
   const logical = (
     invocation: import('../dist/index.js').App80Invocation,
-    codec: (typeof defs.service.Codec)[keyof typeof defs.service.Codec],
+    codec: (typeof catalog.service.Codec)[keyof typeof catalog.service.Codec],
   ) => [...slots(codec)].map((s) => invocation.raw[1 + s]);
   const decode = (
     invocation: import('../dist/index.js').App80Invocation,
-    codec: (typeof defs.service.Codec)[keyof typeof defs.service.Codec],
+    codec: (typeof catalog.service.Codec)[keyof typeof catalog.service.Codec],
     values: readonly number[],
   ) => {
     const raw = invocation.raw;
@@ -764,7 +764,7 @@ await test('peripheral commands preserve typed ports, checked payloads and low-h
     assert.deepEqual(reply.raw, raw);
     return reply.value;
   };
-  const K = defs.service.Codec;
+  const K = catalog.service.Codec;
   for (const [action, expected] of [
     [R.audioValue(0x56), [0, 0, 0, 0, 0x56, 0, 0]],
     [R.displayFirst(7, 0x1234), [1, 0, 7, 0x12, 0x34, 0, 0]],
@@ -840,7 +840,7 @@ await test('peripheral commands preserve typed ports, checked payloads and low-h
 await test('media commands use checked packets, canonical sound choices and typed charge results', () => {
   const a = usb.app80,
     C = a.Command,
-    K = defs.service.Codec;
+    K = catalog.service.Codec;
   const layouts = [
     ['display_option', 4],
     ['display_mode', 1],
@@ -860,7 +860,7 @@ await test('media commands use checked packets, canonical sound choices and type
   );
   const service = new a.Service(definition),
     modes = serviceModes();
-  const slots = (codec: (typeof defs.service.Codec)[keyof typeof defs.service.Codec]) => {
+  const slots = (codec: (typeof catalog.service.Codec)[keyof typeof catalog.service.Codec]) => {
     const entry = definition.entries.find((e) => e.codec === codec);
     assert.ok(entry);
     return entry.slots;
@@ -869,11 +869,11 @@ await test('media commands use checked packets, canonical sound choices and type
     service.prepare(modes, command);
   const logical = (
     invocation: import('../dist/index.js').App80Invocation,
-    codec: (typeof defs.service.Codec)[keyof typeof defs.service.Codec],
+    codec: (typeof catalog.service.Codec)[keyof typeof catalog.service.Codec],
   ) => [...slots(codec)].map((slot) => invocation.raw[1 + slot]);
   const decode = (
     invocation: import('../dist/index.js').App80Invocation,
-    codec: (typeof defs.service.Codec)[keyof typeof defs.service.Codec],
+    codec: (typeof catalog.service.Codec)[keyof typeof catalog.service.Codec],
     index: number,
     value: number,
   ) => {
@@ -1039,7 +1039,7 @@ await test('audio and storage codecs retain checked quantities, result bytes and
   const service = new a.Service(
       serviceDefinition(layouts.map(([codec], i) => [230 + i, codec, slots[codec], 4])),
     ),
-    modes = new defs.service.ServiceModes(4);
+    modes = new catalog.service.ServiceModes(4);
   const prepare = (command: import('../pkg/fujimod.js').App80Command) =>
       service.prepare(modes, command),
     logical = (p: import('../dist/index.js').App80Invocation, codec: string) =>

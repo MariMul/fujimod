@@ -110,7 +110,7 @@ function isServiceCommandError(error: unknown): error is ServiceCommandError {
   return isUsbError(error) && error.kind === native.ErrorKind.ServiceCommand;
 }
 /** Caller-selected data shared by USB and future emulator/SDK consumers. */
-export const defs = Object.freeze({
+export const catalog = Object.freeze({
   FirmwareIdentity: native.FirmwareIdentity,
   DefinitionFailureKind: native.DefinitionFailureKind,
   isError: isDefinitionError,
@@ -214,5 +214,5 @@ export const usb = Object.freeze({
 export function registerPyodide(runtime: {
   registerJsModule(name: string, module: object): void;
 }): void {
-  runtime.registerJsModule('_fujimod_js', { usb, defs, valueSchemas });
+  runtime.registerJsModule('_fujimod_js', { usb, catalog, valueSchemas });
 }

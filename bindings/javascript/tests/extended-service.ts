@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 // maximum-length device-9 exchange.
 export async function checkExtendedService(
   usb: typeof import('../dist/index.js').usb,
-  defs: typeof import('../dist/index.js').defs,
+  catalog: typeof import('../dist/index.js').catalog,
   installWebUsb: typeof import('./webusb-fixture.ts').installWebUsb,
 ) {
   const fixture = installWebUsb();
@@ -35,17 +35,17 @@ export async function checkExtendedService(
       parameter_table: 0,
     },
   ];
-  const definition = defs.service.Definition.fromJson(
+  const definition = catalog.service.Definition.fromJson(
     JSON.stringify({
       schema: 1,
       firmware: { id, model: 'Synthetic', version: '2', sha256: digest },
       mailbox: { page: 3, offset: 0x240, configuration_limit: 512 },
       entries,
     }),
-    new defs.FirmwareIdentity(id, digest),
+    new catalog.FirmwareIdentity(id, digest),
   );
   const service = new a.Service(definition);
-  const modes = new defs.service.ServiceModes(4);
+  const modes = new catalog.service.ServiceModes(4);
   const position = (value: number) => service.prepare(modes, a.Command.setLensPosition(value));
 
   try {

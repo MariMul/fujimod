@@ -78,6 +78,7 @@ function nameFor(type: ts.Type, hint: string): string {
 function python(type: ts.Type, hint: string): string {
   const flags = type.flags;
   if (flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) return 'object';
+  if (flags & ts.TypeFlags.NonPrimitive) return 'object';
   if (flags & ts.TypeFlags.Never) return 'Never';
   if (flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined | ts.TypeFlags.Void)) return 'None';
   if (flags & ts.TypeFlags.StringLiteral)
@@ -133,7 +134,7 @@ function methods(method: string, signatures: readonly ts.Signature[], hint: stri
 }
 
 const registrations = exports
-  .filter((symbol) => ['usb', 'defs', 'valueSchemas'].includes(symbol.getName()))
+  .filter((symbol) => ['usb', 'catalog', 'valueSchemas'].includes(symbol.getName()))
   .map((symbol) => {
     const type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration ?? file);
     return `${symbol.getName()}: ${python(type, symbol.getName())}`;

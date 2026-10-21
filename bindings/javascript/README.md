@@ -192,17 +192,17 @@ cancellation rejects with `ErrorKind.Canceled`; it never stops camera code.
 
 ## Firmware-selected service controls
 
-`defs` loads the shared firmware data. `usb.app80` exposes typed command factories
+`catalog` loads the shared firmware data. `usb.app80` exposes typed command factories
 and executes their invocations through the same Rust codecs as native Python:
 
 ```ts
-import { defs, usb } from 'fujimod';
+import { catalog, usb } from 'fujimod';
 
-const identity = new defs.FirmwareIdentity(firmwareId, firmwareSha256);
-const definition = defs.service.Definition.fromJson(definitionJson, identity);
+const identity = new catalog.FirmwareIdentity(firmwareId, firmwareSha256);
+const definition = catalog.service.Definition.fromJson(definitionJson, identity);
 const service = new usb.app80.Service(definition);
 const invocation = service.prepare(
-  new defs.service.ServiceModes(currentServiceFlags),
+  new catalog.service.ServiceModes(currentServiceFlags),
   usb.app80.Command.readPins(new usb.app80.PinBank(0)),
 );
 const reply = await usb.app80.execute(session, invocation);
@@ -224,7 +224,7 @@ reply values use immutable unions tagged by enums; TypeScript narrows payload
 fields using their `kind`. Raw mailbox getters return independent `Uint8Array`
 copies. `invocation.decode(raw)` supports offline decoding without a session.
 
-`defs.isError(error)` exposes a typed `DefinitionFailure` in `error.reason`;
+`catalog.isError(error)` exposes a typed `DefinitionFailure` in `error.reason`;
 `usb.app80.isError(error)` similarly exposes `CommandFailure`. Unsupported,
 ambiguous, disabled or unreviewed controls do not fall back to another body.
 Research remains explicit through `service.prepareResearch(code, modes, bytes)`.

@@ -40,14 +40,14 @@ void opened;
 void inspect;
 void errors;
 
-import { defs, type App80CommandReply, type App80ReplyValue } from '../src/index.js';
-const selected = defs.service.Definition.fromJson(
+import { catalog, type App80CommandReply, type App80ReplyValue } from '../src/index.js';
+const selected = catalog.service.Definition.fromJson(
   '{}',
-  new defs.FirmwareIdentity('body-v1', 'ab'.repeat(32)),
+  new catalog.FirmwareIdentity('body-v1', 'ab'.repeat(32)),
 );
 const service = new usb.app80.Service(selected);
 const invocation = service.prepare(
-  new defs.service.ServiceModes(4),
+  new catalog.service.ServiceModes(4),
   usb.app80.Command.readPins(new usb.app80.PinBank(0)),
 );
 const typedReply: Promise<App80CommandReply> = usb.app80.execute(session, invocation);
@@ -77,7 +77,7 @@ function serviceErrors(error: unknown): void {
     // @ts-expect-error Unsupported has a codec, not an argument.
     void error.reason.argument;
   }
-  if (defs.isError(error) && error.reason.kind === defs.DefinitionFailureKind.InvalidLayout) {
+  if (catalog.isError(error) && error.reason.kind === catalog.DefinitionFailureKind.InvalidLayout) {
     const code: number = error.reason.code;
     void code;
   }

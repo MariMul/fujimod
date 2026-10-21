@@ -4,7 +4,7 @@
 use fujimod_usb as usb;
 use wasm_bindgen::prelude::*;
 mod connection;
-mod defs;
+mod catalog;
 mod error;
 mod exporter;
 mod install;

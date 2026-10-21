@@ -1,8 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 const root = fileURLToPath(new URL('../../..', import.meta.url));
 const pkg = fileURLToPath(new URL('../pkg', import.meta.url));
+const target = process.env.CARGO_TARGET_DIR
+  ? resolve(root, process.env.CARGO_TARGET_DIR)
+  : join(root, 'target');
 function run(command: string, args: string[]) {
   const result = spawnSync(command, args, { cwd: root, stdio: 'inherit' });
   if (result.error) throw result.error;
@@ -19,7 +22,7 @@ run('cargo', [
   ...(testing ? ['--features', 'testing'] : []),
 ]);
 run(process.env.WASM_BINDGEN ?? join(root, 'target/tooling/bin/wasm-bindgen'), [
-  join(root, 'target/wasm32-unknown-unknown/release/fujimod_javascript.wasm'),
+  join(target, 'wasm32-unknown-unknown/release/fujimod_javascript.wasm'),
   '--target',
   'web',
   '--out-dir',

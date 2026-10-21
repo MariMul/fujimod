@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { initialize, usb, defs } from '../dist/index.js';
+import { initialize, usb, catalog } from '../dist/index.js';
 import * as raw from '../pkg/fujimod.js';
 await initialize({
   module_or_path: await readFile(new URL('../pkg/fujimod_bg.wasm', import.meta.url)),
@@ -110,7 +110,7 @@ await test('picker cancellation returns no device and sends no USB commands', as
 await test('production WebUSB executes firmware-selected service requests and fences bad nested replies', async () => {
   const fixture = installWebUsb();
   try {
-    const definition = defs.service.Definition.fromJson(
+    const definition = catalog.service.Definition.fromJson(
       JSON.stringify({
         schema: 1,
         firmware: { id: 'synthetic-b-v2', model: 'Body B', version: '2', sha256: 'ab'.repeat(32) },
@@ -129,10 +129,10 @@ await test('production WebUSB executes firmware-selected service requests and fe
           },
         ],
       }),
-      new defs.FirmwareIdentity('synthetic-b-v2', 'ab'.repeat(32)),
+      new catalog.FirmwareIdentity('synthetic-b-v2', 'ab'.repeat(32)),
     );
     const invocation = new usb.app80.Service(definition).prepare(
-      new defs.service.ServiceModes(4),
+      new catalog.service.ServiceModes(4),
       usb.app80.Command.flushConfiguration(),
     );
     const [device] = await usb.discover(usb.DeviceFilter.Diagnostic),
@@ -185,7 +185,7 @@ await test('production WebUSB executes firmware-selected service requests and fe
 await test('production charge status one is a failed result without another host request', async () => {
   const fixture = installWebUsb();
   try {
-    const definition = defs.service.Definition.fromJson(
+    const definition = catalog.service.Definition.fromJson(
       JSON.stringify({
         schema: 1,
         firmware: {
@@ -209,10 +209,10 @@ await test('production charge status one is a failed result without another host
           },
         ],
       }),
-      new defs.FirmwareIdentity('synthetic-charge-v2', 'ab'.repeat(32)),
+      new catalog.FirmwareIdentity('synthetic-charge-v2', 'ab'.repeat(32)),
     );
     const invocation = new usb.app80.Service(definition).prepare(
-      new defs.service.ServiceModes(4),
+      new catalog.service.ServiceModes(4),
       usb.app80.Command.chargeControl(usb.app80.ChargeAction.control(usb.app80.Toggle.Enabled)),
     );
     fixture.state.onConfigurationWrite = (page, address, raw) => {
@@ -287,7 +287,7 @@ await test('production audio/storage results and payload-free commands finish wi
       ['format_storage', 0, a.Command.formatStorage(), null, null, { kind: a.ReplyKind.NoPayload }],
       ['display_setup', 0, a.Command.displaySetup(), null, null, { kind: a.ReplyKind.NoPayload }],
     ] as const) {
-      const definition = defs.service.Definition.fromJson(
+      const definition = catalog.service.Definition.fromJson(
         JSON.stringify({
           schema: 1,
           firmware: {
@@ -311,10 +311,10 @@ await test('production audio/storage results and payload-free commands finish wi
             },
           ],
         }),
-        new defs.FirmwareIdentity('synthetic-storage-v2', 'ab'.repeat(32)),
+        new catalog.FirmwareIdentity('synthetic-storage-v2', 'ab'.repeat(32)),
       );
       const invocation = new a.Service(definition).prepare(
-        new defs.service.ServiceModes(4),
+        new catalog.service.ServiceModes(4),
         command,
       );
       fixture.state.onConfigurationWrite = (page, address, raw) => {
@@ -399,7 +399,7 @@ await test('production radio and NAND results do not request host completion pol
       ],
       ['iperf', 1, a.Command.iperf(), 0, 1, { kind: a.ReplyKind.Iperf, rawResult: 1 }],
     ] as const) {
-      const definition = defs.service.Definition.fromJson(
+      const definition = catalog.service.Definition.fromJson(
         JSON.stringify({
           schema: 1,
           firmware: { id: 'radio-b', model: 'Synthetic', version: '2', sha256: 'ab'.repeat(32) },
@@ -418,10 +418,10 @@ await test('production radio and NAND results do not request host completion pol
             },
           ],
         }),
-        new defs.FirmwareIdentity('radio-b', 'ab'.repeat(32)),
+        new catalog.FirmwareIdentity('radio-b', 'ab'.repeat(32)),
       );
       const invocation = new a.Service(definition).prepare(
-        new defs.service.ServiceModes(4),
+        new catalog.service.ServiceModes(4),
         command,
       );
       fixture.state.onConfigurationWrite = (page, address, raw) => {
@@ -502,7 +502,7 @@ await test('production WPS and station snapshot bytes never trigger another host
         { kind: a.ReplyKind.NoPayload },
       ],
     ] as const) {
-      const definition = defs.service.Definition.fromJson(
+      const definition = catalog.service.Definition.fromJson(
         JSON.stringify({
           schema: 1,
           firmware: { id: 'wps-b', model: 'Synthetic', version: '2', sha256: 'ab'.repeat(32) },
@@ -521,10 +521,10 @@ await test('production WPS and station snapshot bytes never trigger another host
             },
           ],
         }),
-        new defs.FirmwareIdentity('wps-b', 'ab'.repeat(32)),
+        new catalog.FirmwareIdentity('wps-b', 'ab'.repeat(32)),
       );
       const invocation = new a.Service(definition).prepare(
-        new defs.service.ServiceModes(4),
+        new catalog.service.ServiceModes(4),
         command,
       );
       fixture.state.onConfigurationWrite = (page, address, raw) => {
@@ -635,7 +635,7 @@ await test('production AP and transfer controls complete once and retain unknown
         { kind: a.ReplyKind.TransferStarted, result: { kind: a.TransferResultKind.Success } },
       ],
     ] as const) {
-      const definition = defs.service.Definition.fromJson(
+      const definition = catalog.service.Definition.fromJson(
         JSON.stringify({
           schema: 1,
           firmware: {
@@ -659,10 +659,10 @@ await test('production AP and transfer controls complete once and retain unknown
             },
           ],
         }),
-        new defs.FirmwareIdentity('ap-transfer-b', 'ab'.repeat(32)),
+        new catalog.FirmwareIdentity('ap-transfer-b', 'ab'.repeat(32)),
       );
       const invocation = new a.Service(definition).prepare(
-        new defs.service.ServiceModes(4),
+        new catalog.service.ServiceModes(4),
         command,
       );
       fixture.state.onConfigurationWrite = (page, address, raw) => {
@@ -813,7 +813,7 @@ await test('production transfer payload commands use one exchange for raw, rejec
         { kind: a.ReplyKind.NoPayload },
       ],
     ] as const) {
-      const definition = defs.service.Definition.fromJson(
+      const definition = catalog.service.Definition.fromJson(
         JSON.stringify({
           schema: 1,
           firmware: {
@@ -837,10 +837,10 @@ await test('production transfer payload commands use one exchange for raw, rejec
             },
           ],
         }),
-        new defs.FirmwareIdentity('transfer-data-b', 'ab'.repeat(32)),
+        new catalog.FirmwareIdentity('transfer-data-b', 'ab'.repeat(32)),
       );
       const invocation = new a.Service(definition).prepare(
-        new defs.service.ServiceModes(4),
+        new catalog.service.ServiceModes(4),
         command,
       );
       fixture.state.onConfigurationWrite = (page, address) => {
@@ -936,7 +936,7 @@ await test('configuration commands preserve raw snapshots and execute one mailbo
       ],
     ] as const) {
       const slots = Array.from({ length: count }, (_, i) => (i * 5 + 7) % 32);
-      const definition = defs.service.Definition.fromJson(
+      const definition = catalog.service.Definition.fromJson(
         JSON.stringify({
           schema: 1,
           firmware: { id: 'config-b', model: 'Synthetic', version: '2', sha256: 'ab'.repeat(32) },
@@ -955,10 +955,10 @@ await test('configuration commands preserve raw snapshots and execute one mailbo
             },
           ],
         }),
-        new defs.FirmwareIdentity('config-b', 'ab'.repeat(32)),
+        new catalog.FirmwareIdentity('config-b', 'ab'.repeat(32)),
       );
       const invocation = new a.Service(definition).prepare(
-        new defs.service.ServiceModes(4),
+        new catalog.service.ServiceModes(4),
         command,
       );
       assert.deepEqual(
@@ -1025,7 +1025,7 @@ await test('battery and display controls use firmware slots without invented res
       ],
     ] as const) {
       const slots = Array.from({ length: count }, (_, i) => (i * 5 + 7) % 32);
-      const definition = defs.service.Definition.fromJson(
+      const definition = catalog.service.Definition.fromJson(
         JSON.stringify({
           schema: 1,
           firmware: {
@@ -1049,10 +1049,10 @@ await test('battery and display controls use firmware slots without invented res
             },
           ],
         }),
-        new defs.FirmwareIdentity('peripheral-b', 'ab'.repeat(32)),
+        new catalog.FirmwareIdentity('peripheral-b', 'ab'.repeat(32)),
       );
       const invocation = new a.Service(definition).prepare(
-        new defs.service.ServiceModes(4),
+        new catalog.service.ServiceModes(4),
         command,
       );
       assert.deepEqual(
@@ -1202,7 +1202,7 @@ await test('adjustment and lens requests preserve state snapshots without host c
       ['lens_operation5', 0, a.Command.lensOperation5(), [], {}, { kind: a.ReplyKind.NoPayload }],
     ] as const) {
       const slots = Array.from({ length: count }, (_, i) => (i * 5 + 7) % 32);
-      const definition = defs.service.Definition.fromJson(
+      const definition = catalog.service.Definition.fromJson(
         JSON.stringify({
           schema: 1,
           firmware: { id: 'requests-b', model: 'Synthetic', version: '2', sha256: 'ab'.repeat(32) },
@@ -1221,10 +1221,10 @@ await test('adjustment and lens requests preserve state snapshots without host c
             },
           ],
         }),
-        new defs.FirmwareIdentity('requests-b', 'ab'.repeat(32)),
+        new catalog.FirmwareIdentity('requests-b', 'ab'.repeat(32)),
       );
       const invocation = new a.Service(definition).prepare(
-        new defs.service.ServiceModes(4),
+        new catalog.service.ServiceModes(4),
         command,
       );
       assert.deepEqual(
@@ -1374,7 +1374,7 @@ await test('direct adjustment requests publish data without turning callback byt
       ],
     ] as const) {
       const slots = Array.from({ length: count }, (_, i) => (i * 5 + 7) % 32);
-      const definition = defs.service.Definition.fromJson(
+      const definition = catalog.service.Definition.fromJson(
         JSON.stringify({
           schema: 1,
           firmware: {
@@ -1398,10 +1398,10 @@ await test('direct adjustment requests publish data without turning callback byt
             },
           ],
         }),
-        new defs.FirmwareIdentity('adjustment-b', 'ab'.repeat(32)),
+        new catalog.FirmwareIdentity('adjustment-b', 'ab'.repeat(32)),
       );
       const invocation = new a.Service(definition).prepare(
-        new defs.service.ServiceModes(4),
+        new catalog.service.ServiceModes(4),
         command,
       );
       assert.deepEqual(
@@ -1438,7 +1438,7 @@ await test('direct adjustment requests publish data without turning callback byt
 
 import { checkExtendedService } from './extended-service.ts';
 await test('production signed fields and full device9 exchanges validate boundaries', async () => {
-  await checkExtendedService(usb, defs, installWebUsb);
+  await checkExtendedService(usb, catalog, installWebUsb);
 });
 
 await test('external WebUSB attachment reuses one Rust owner without navigator discovery', async () => {
