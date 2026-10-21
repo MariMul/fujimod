@@ -5,6 +5,7 @@ use super::{Prepared, read_rows};
 use crate::Cx;
 
 pub(super) fn prepare(cx: &Cx<'_>, word: impl Fn(u16) -> u32) -> Result<Prepared, String> {
+    let count = (word(4) >> 4 & 7) as usize;
     let width = (word(0x38) & 8191) as usize;
     let height = (word(0x38) >> 16 & 8191) as usize;
     let input_window = (word(0x3c) & 1023) as usize;
@@ -12,7 +13,8 @@ pub(super) fn prepare(cx: &Cx<'_>, word: impl Fn(u16) -> u32) -> Result<Prepared
     let format = word(0xd0);
     let input_alignment = 1usize << (format >> 12 & 7);
     let output_alignment = 1usize << (format >> 28 & 7);
-    if word(4) != 0x24
+    if word(4) & !0x70 != 4
+        || !(1..=4).contains(&count)
         || width == 0
         || width % 2 != 0
         || height == 0
@@ -25,8 +27,6 @@ pub(super) fn prepare(cx: &Cx<'_>, word: impl Fn(u16) -> u32) -> Result<Prepared
         || output_alignment > 16
         || word(0x40) != 0
         || word(0x4c) != 0
-        || word(0x60) & !0x03ff03ff != 0
-        || word(0x64) & !0x03ff03ff != 0
     {
         return Err("unsupported combination signed-sum format or geometry".into());
     }
@@ -51,8 +51,12 @@ pub(super) fn prepare(cx: &Cx<'_>, word: impl Fn(u16) -> u32) -> Result<Prepared
     let mut coefficients = [0i32; 4];
     let mut sources = Vec::new();
     let mut bytes = width * height * 2;
-    for (index, coefficient) in coefficients.iter_mut().enumerate() {
-        let value = (word(0x60 + index as u16 / 2 * 4) >> (index % 2 * 16)) & 1023;
+    for (index, coefficient) in coefficients.iter_mut().enumerate().take(count) {
+        let lane = (word(0x60 + index as u16 / 2 * 4) >> (index % 2 * 16)) & 65535;
+        if lane & !1023 != 0 {
+            return Err("invalid combination signed-sum coefficient lane".into());
+        }
+        let value = lane & 1023;
         *coefficient = if value & 512 != 0 {
             value as i32 - 1024
         } else {
@@ -149,6 +153,8 @@ pub(super) mod tests {
             (0x18, 0),
             (0x30, 0x10004),
             (4, 0x124),
+            (4, 4),
+            (4, 0x54),
             (0xd0, 0x40004100),
         ] {
             let (mut host, mut words) = fixture();
@@ -156,5 +162,29 @@ pub(super) mod tests {
             assert!(prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0)).is_err());
             assert!(host.effects.is_empty());
         }
+    }
+    #[test]
+    fn declared_source_count_gates_descriptors_and_coefficient_lanes() {
+        let (mut host, mut words) = fixture();
+        words.insert(4, 0x34);
+        words.insert(0x18, 0x10000);
+        words.insert(0x20, 0x10000);
+        words.insert(0x24, 8);
+        words.insert(0x60, 0x01000100);
+        // The fourth lane is retained even when only three sources participate.
+        words.insert(0x64, 0x01000100);
+        let result = prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0)).unwrap();
+        assert_eq!(result.pixels, [255, 255, 0, 255, 255, 0, 128, 128]);
+        assert_eq!(result.bytes, 32);
+        words.insert(0x64, 0xffff0100);
+        assert_eq!(
+            prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0))
+                .unwrap()
+                .pixels,
+            result.pixels
+        );
+        words.insert(0x20, 0);
+        assert!(prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0)).is_err());
+        assert!(host.effects.is_empty());
     }
 }
