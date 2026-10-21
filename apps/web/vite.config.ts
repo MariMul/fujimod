@@ -266,11 +266,7 @@ export default defineConfig(({ mode, command }) => ({
         test: {
           name: 'unit',
           environment: 'node',
-          include: [
-            'src/**/*.test.ts',
-            'tests/**/*.test.ts',
-            '../../packages/emulator-ui/src/**/*.test.ts',
-          ],
+          include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
         },
       },
       {
@@ -278,7 +274,7 @@ export default defineConfig(({ mode, command }) => ({
         test: {
           name: 'components',
           environment: 'jsdom',
-          include: ['src/**/*.test.tsx', '../../packages/emulator-ui/src/**/*.test.tsx'],
+          include: ['src/**/*.test.tsx'],
         },
       },
     ],

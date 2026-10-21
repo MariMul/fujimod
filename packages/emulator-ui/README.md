@@ -31,6 +31,8 @@ npm --prefix apps/web run check
 npm --prefix apps/web test
 ```
 
-The web app's test configuration runs the existing unit and component tests
-next to the moved implementations. Browser integration checks remain in
-`apps/web/`, alongside the frontend they exercise.
+Running `npm test` in this package runs its unit and Solid component tests. The
+web app's `npm test` runs this package's tests and then the app tests. Each
+package's Vite configuration discovers tests only under its own source tree.
+Browser integration checks remain in `apps/web/`, alongside the frontend they
+exercise.

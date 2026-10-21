@@ -207,7 +207,8 @@ The ordinary `?scenario=x70-lcd#workspace` development route loads the configure
 local DAT into live REC with deterministic RTC input and normal Engine calls.
 It executes the real guest; no screen state or peripheral result is synthesized.
 
-Tests stay next to the code they cover. `.test.tsx` tests use jsdom, and `.test.ts`
+Tests stay next to the code they cover. `npm test` runs the emulator UI package
+tests and then the web app tests. `.test.tsx` tests use jsdom, and `.test.ts`
 tests use Node. Import test APIs from `vite-plus/test`; call Solid 2 `flush()`
 before asserting batched UI changes. Use `npm run format -- path/to/file.tsx`
 for selected files. The runtime and DOM package are pinned to Solid 2.0.0-rc.15.

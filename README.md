@@ -17,8 +17,9 @@ npm run dev
 ```
 
 The root `web-build`, `web-test` and `web-preview` mise tasks run from that
-application directory. The Pages workflow builds `apps/web` from approved
-main releases. Review branches do not deploy Pages.
+application directory. `web-test` runs both `@fujimod/emulator-ui` tests and the
+web app tests through `apps/web`'s `npm test`. The Pages workflow builds
+`apps/web` from approved main releases. Review branches do not deploy Pages.
 
 ## Rust libraries
 
