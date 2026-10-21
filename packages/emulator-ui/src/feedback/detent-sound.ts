@@ -8,6 +8,10 @@ const sounds = {
 };
 export type DetentSound = keyof typeof sounds;
 
+export function isDetentSound(value: unknown): value is DetentSound {
+  return typeof value === 'string' && Object.hasOwn(sounds, value);
+}
+
 /** Deterministic PCM, cached by the player at its actual output sample rate. */
 export function renderDetentSound(
   sound: DetentSound,

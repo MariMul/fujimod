@@ -77,6 +77,8 @@ window.panel.render(
     },
   } as unknown as Engine,
   {
+    schema: 1,
+    body: 'x70',
     detentSounds: panelData.detentSounds as Record<string, DetentSound>,
     layout: [
       { kind: 'control', id: 'aperture_ring', variant: 'dial' },

@@ -13,7 +13,7 @@ import { EngineError, faultFrom } from '@fujimod/emulator-ui/engine/fault';
 import { cachedFetch } from '../asset-cache';
 import type { CardFile, BootMedia } from '@fujimod/emulator-ui/engine/api';
 import type { ReplayScenario } from '../scenarios';
-import type { DevicePanel } from '@fujimod/emulator-ui/ui/layout';
+import { DEVICE_PANEL_SCHEMA, type DevicePanel } from '@fujimod/emulator-ui/ui/layout';
 
 import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
 import { firmwareActions, type createFirmwareChoice } from '../ui/firmware-actions';
@@ -127,7 +127,10 @@ export function startHome(
   }
   async function loadDevice(body: string) {
     const load = adapters[`../../devices/${body}/index.ts`];
-    if (!load) return { panel: { layout: [], combos: [] } as DevicePanel };
+    if (!load)
+      return {
+        panel: { schema: DEVICE_PANEL_SCHEMA, body, layout: [], combos: [] } satisfies DevicePanel,
+      };
     const device = await load();
     return device;
   }
@@ -259,6 +262,11 @@ export function startHome(
       }
       const device = entry.device ?? (entry.body ? await loadDevice(entry.body) : undefined);
       if (current !== generation) return;
+      if (
+        device &&
+        (device.panel.schema !== DEVICE_PANEL_SCHEMA || device.panel.body !== entry.body)
+      )
+        throw Error('The emulator control layout does not match this firmware body or schema.');
       if (!restart && !reload && !camera) {
         const patchEntry = release?.firmwares.find((item) => item.sha256 === hash);
         let fpUpdate = false;

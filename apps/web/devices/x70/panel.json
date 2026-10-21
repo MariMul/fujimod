@@ -1,4 +1,6 @@
 {
+  "schema": 1,
+  "body": "x70",
   "detentSounds": {
     "aperture_ring": "soft",
     "shutter_speed_dial": "firm",

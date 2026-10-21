@@ -1,4 +1,6 @@
 {
+  "schema": 1,
+  "body": "xm1",
   "detentSounds": {
     "subcommand": "compact"
   },

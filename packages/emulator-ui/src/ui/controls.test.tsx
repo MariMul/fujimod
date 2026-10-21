@@ -70,6 +70,8 @@ test('every segment selects through the engine and remains synchronized after po
       { id: 'q', label: 'Q', kind: 'button', supported: true },
     ],
     {
+      schema: 1,
+      body: 'x70',
       layout: [
         { kind: 'control', id: 'power', operation: 'power', variant: 'segment' },
         { kind: 'control', id: 'focus_mode', variant: 'segment' },
@@ -125,6 +127,8 @@ test('keyboard dials stop at their physical limits and relative dials preserve d
       { id: 'control_ring', label: 'Command', kind: 'dial', supported: true, relative: true },
     ],
     {
+      schema: 1,
+      body: 'x70',
       layout: [
         { kind: 'control', id: 'aperture', variant: 'dial' },
         { kind: 'control', id: 'control_ring', variant: 'ticks' },
@@ -168,6 +172,8 @@ test('a mounted empty panel reacts to the guest input inventory arriving later',
   flush();
   expect(host.querySelectorAll('button').length).toBe(0);
   session.render([{ id: 'q', label: 'Q', kind: 'button', supported: true }], {} as Engine, {
+    schema: 1,
+    body: 'x70',
     layout: [{ kind: 'control', id: 'q', variant: 'key' }],
     combos: [],
   });

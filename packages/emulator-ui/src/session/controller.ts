@@ -289,7 +289,12 @@ export function startSession(
     const positions = Object.fromEntries(
       inputs.filter((input) => input.initial).map((input) => [input.id, input.initial!]),
     );
-    panel.render(inputs, active, layout.layout.length ? layout : inputPanel(inputs), positions);
+    panel.render(
+      inputs,
+      active,
+      layout.layout.length ? layout : inputPanel(inputs, layout.body),
+      positions,
+    );
     viewer.configureTouch(inputs, active, (error) => {
       if (current === generation) showFault(faultFrom(error));
     });
