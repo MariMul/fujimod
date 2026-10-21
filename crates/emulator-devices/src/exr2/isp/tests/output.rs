@@ -297,6 +297,16 @@ fn unequal_output_rasters_wait_for_later_dma_before_publishing_both_irqs() {
     assert_eq!(&m.bytes[0x8000..0x8040], &[4; 64]);
 }
 #[test]
+fn worker_output_keeps_latched_pixels_cancellation_and_paired_publication() {
+    crate::work::configure(2).unwrap();
+    output_latches_pixels_and_address_before_irq_and_waits_for_ack();
+    output_stop_route_withdrawal_and_refusals();
+    output_banks_refuse_physical_alias_overlap();
+    paired_output_writes_both_payloads_before_either_irq_and_waits_for_both_acks();
+    unequal_output_rasters_wait_for_later_dma_before_publishing_both_irqs();
+    crate::work::configure(0).unwrap();
+}
+#[test]
 fn repeating_output_and_statistics_do_not_allocate_per_frame() {
     let base = 0xfff12000;
     let (mut output, image, _) = output(base, 0x2c);
