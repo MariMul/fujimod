@@ -8,9 +8,8 @@ in a Rust workflow crate beside `fujimod-usb`, shared by every caller.
 
 ## Start screen: the tool deck
 
-Dev Tools opens on a service-mode entry guide, a grouped camera/simulator
-connection box, and tool cards. Open simulator navigates to the native runtime
-workspace; it does not create an ff80 Dev Tools connection. Service mode and debug mode both expose the
+Dev Tools opens on a service-mode entry guide, Connect camera, and a simulated
+camera choice among the emulator's saved cameras (see DESIGN.md). Service mode and debug mode both expose the
 ff80 connection; neither a model list nor the Debug Mode setting gates a
 connection. Inspector reads use a usable ff80 session. Persistent debug-mode
 workflows require the idle local USB session.

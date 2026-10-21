@@ -8,14 +8,15 @@
   flex-direction: column;
   align-items: center;
 }
-.td-heading {
+.td-unsupported {
   width: 100%;
   max-width: 1000px;
-  margin: 0 0 18px;
-  font: 800 13px/1 var(--td-mono);
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--dim);
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid #ff7a45;
+  background: #3a1a0a;
+  color: #ffd9c2;
+  font-size: 14px;
 }
 .td-hero {
   width: 100%;
@@ -34,17 +35,11 @@
   border: 1px solid #242424;
   background: #0d0d0d;
 }
-.td-connect-label {
-  padding: 2px 2px 0;
-  font: 800 11px/1 var(--td-mono);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--phosphor);
-}
 .td-connects {
   flex: 1;
   display: grid;
-  grid-template-rows: 1fr 1fr;
+  grid-template-rows: auto;
+  align-content: start;
   gap: 8px;
 }
 .td-tile {
@@ -237,10 +232,6 @@
   font-weight: 400;
   text-shadow: none;
 }
-.td-enter .td-note {
-  font-size: 13px;
-  color: var(--dim);
-}
 .td-lock,
 .td-status {
   margin-top: auto;
@@ -268,4 +259,41 @@
   .td-action {
     transition: none;
   }
+}
+
+/* Simulated camera: a panel of saved cameras to choose from. */
+.td-simulated {
+  border: 1px solid #242424;
+  background: #0d0d0d;
+}
+.td-simulated .td-title {
+  color: #f0f0f2;
+}
+.td-saved {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.td-saved-camera {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--phosphor);
+  background: rgba(var(--phosphor-rgb), 0.08);
+  color: #eafff0;
+  font: 700 14px var(--td-mono);
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .td-saved-camera:hover:not(:disabled) {
+    background: rgba(var(--phosphor-rgb), 0.2);
+  }
+}
+.td-saved-camera:disabled {
+  border-color: #1c3a22;
+  background: #0c0c0c;
+  color: #2f6b3a;
+  cursor: not-allowed;
+}
+.td-empty a {
+  color: var(--phosphor);
 }

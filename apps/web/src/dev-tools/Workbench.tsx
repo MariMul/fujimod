@@ -6,6 +6,7 @@ import {
   createMemo,
   createSignal,
   onCleanup,
+  onSettled,
   untrack,
 } from 'solid-js';
 import type { CameraModel } from './camera-model';
@@ -13,7 +14,8 @@ import { CameraDetails } from './CameraDetails';
 import { CameraStrip } from './CameraStrip';
 import { CameraTools, Wizard, emptyReadings, type Readings } from './CameraTools';
 import { ConsoleLog } from './ConsoleLog';
-import { ToolDeck } from './ToolDeck';
+import { ToolDeck, type SavedCamera } from './ToolDeck';
+import { CameraStore } from '../cameras/store';
 import { DebugModeWizard, WizardConnection } from './debug-mode/Wizard';
 import { LeaveDebugMode } from './debug-mode/LeaveDebugMode';
 import { debugModeOperations } from './debug-mode/operations';
@@ -38,6 +40,14 @@ export function Workbench(props: {
   );
   onCleanup(() => owner.cancel());
 
+  const [savedCameras, setSavedCameras] = createSignal<readonly SavedCamera[]>();
+  // The emulator's saved cameras, offered as simulated cameras.
+  onSettled(() => {
+    new CameraStore().list().then(
+      (records) => setSavedCameras(records.map(({ id, name }) => ({ id, name }))),
+      () => setSavedCameras([]),
+    );
+  });
   const cameras = () => props.model.cameras();
   // Follow the newest camera unless one is chosen; keep a chosen camera even once unplugged.
   createEffect(
@@ -58,6 +68,19 @@ export function Workbench(props: {
       await props.model.connectUsb();
       const added = cameras().find((entry) => !known.has(entry.id));
       if (added) setSelected(added.id);
+    } catch (error) {
+      setConnectError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setConnecting(false);
+    }
+  }
+  async function connectSimulated(savedCamera: string) {
+    const start = props.model.connectSimulated;
+    if (!start || connecting()) return;
+    setConnecting(true);
+    setConnectError('');
+    try {
+      await start.call(props.model, savedCamera);
     } catch (error) {
       setConnectError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -111,6 +134,10 @@ export function Workbench(props: {
             usbSupported={props.usbSupported}
             onServiceMode={() => setWizard(Wizard.Service)}
             onConnect={() => void connect()}
+            savedCameras={savedCameras()}
+            simulationAvailable={Boolean(props.model.connectSimulated)}
+            error={connectError()}
+            onSimulated={(savedCamera) => void connectSimulated(savedCamera)}
           />
         }
       >

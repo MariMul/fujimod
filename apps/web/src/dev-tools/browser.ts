@@ -180,8 +180,10 @@ try {
     const tile = page.getByRole('button', { name: 'Connect camera', exact: true });
     await tile.waitFor();
     assert.equal(await tile.isDisabled(), true);
-    assert.ok((await tile.textContent())?.includes('Use Chrome or Edge'));
-    console.log('PASS WebKit: without WebUSB the camera tile is locked with its reason');
+    assert.ok(
+      (await page.locator('.td-unsupported').textContent())?.includes('Use Chrome or Edge'),
+    );
+    console.log('PASS WebKit: without WebUSB the page says why and the camera tile is unavailable');
   } finally {
     await browser.close();
   }

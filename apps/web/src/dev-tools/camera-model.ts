@@ -30,8 +30,11 @@ export interface CameraSharing {
 export interface Camera {
   /** Stable for the page's lifetime; the same camera plugged back in keeps it. */
   id: string;
-  /** How the camera is reached: this browser's USB, or another host's share. */
-  transport: 'usb' | 'remote';
+  /**
+   * How the camera is reached: this browser's USB, another host's share, or a
+   * simulated camera on a saved firmware over simulated USB.
+   */
+  transport: 'usb' | 'remote' | 'simulated';
   name: string;
   present: boolean;
   /** Time the camera went away, while not present. */
@@ -102,6 +105,12 @@ export interface CameraModel {
   connectUsb(): Promise<void>;
   /** Add the camera another host shares at `link`. */
   connectRemote(link: string): Promise<void>;
+  /**
+   * Start the saved camera `savedCamera` (an id from the emulator's camera
+   * store) as a simulated camera over simulated USB. Absent while this build
+   * cannot run a simulated camera.
+   */
+  connectSimulated?(savedCamera: string): Promise<void>;
   /** Forget a camera: closes its owner and removes it from the list. */
   remove(camera: string): Promise<void>;
   /**

@@ -70,7 +70,10 @@ or take the local session lock.
 ## Workbench layout
 
 Until a camera is known, Dev Tools shows the start screen: how to enter service
-mode, Connect camera, and Open simulator. Once a camera is known:
+mode, Connect camera, and Simulated camera, which lists every camera saved in the
+emulator and starts the chosen one as a simulated camera over simulated USB. It
+stays unavailable until the build can run one, and offers the emulator when no
+camera is saved. Once a camera is known:
 
 - A camera strip lists every camera with its state and whether it is shared,
   plus Connect camera.
