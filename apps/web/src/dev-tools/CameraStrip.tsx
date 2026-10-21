@@ -31,6 +31,12 @@ export function cameraState(camera: Camera): { label: string; tone: Tone } {
   return { label: 'Idle', tone: Tone.Ready };
 }
 
+const transportLabel: Record<Camera['transport'], string> = {
+  usb: 'USB',
+  remote: 'Remote',
+  simulated: 'Simulated',
+};
+
 export function CameraStrip(props: {
   cameras: readonly Camera[];
   selected?: string;
@@ -61,7 +67,7 @@ export function CameraStrip(props: {
                 </Show>
               </span>
               <span class="wb-cam-meta">
-                {camera.transport === 'usb' ? 'USB' : 'Remote'} ·{' '}
+                {transportLabel[camera.transport]} ·{' '}
                 {camera.serviceMode ? 'Service mode · ' : ''}
                 {state().label}
               </span>
