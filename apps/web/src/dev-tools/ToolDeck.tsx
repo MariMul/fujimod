@@ -92,7 +92,7 @@ export function ToolDeck(props: {
           <h2>Enter service mode</h2>
           <p>
             Service mode exposes the camera’s ff80 USB connection. Switching the camera off in
-            service mode restores factory settings; remove the battery to leave service mode.
+            service mode restores factory settings. Remove the battery to leave service mode.
           </p>
           <button class="td-cta" onClick={() => props.onServiceMode()}>
             Show instructions
@@ -113,7 +113,6 @@ export function ToolDeck(props: {
               <h2 id="td-simulated" class="td-title">
                 Simulated camera
               </h2>
-              <p>A saved emulator camera, over simulated USB.</p>
               <Show when={!props.simulationAvailable}>
                 <span class="td-lock">
                   <span aria-hidden="true">■</span> Simulated USB isn’t in this build yet.

@@ -154,8 +154,8 @@ export function Workbench(props: {
           <div class="wb-service" role="alert">
             <strong>Service mode</strong>
             <span>
-              Switching this camera off restores factory settings. Remove the battery to leave
-              service mode.
+              Switching the camera off in service mode restores factory settings. Remove the battery
+              to leave service mode.
             </span>
           </div>
         </Show>
