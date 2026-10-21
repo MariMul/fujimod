@@ -10,6 +10,10 @@ emsdk = "5.0.3"
 cmake = "4.4.4"
 ninja = "1.13.2"
 
+[tasks.commit]
+description = "Commit chosen paths or hunks to the checked-out branch and push"
+run = "python scripts/git/commit.py"
+
 [tasks.web-build]
 dir = "{{config_root}}/apps/web"
 run = "npm run build"

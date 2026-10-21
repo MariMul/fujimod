@@ -31,6 +31,7 @@ extra-paths = [
   "bindings/python/python",
   "bindings/python/tests",
   "scripts/ci",
+  "scripts/git",
 ]
 
 [tool.ty.src]
@@ -79,6 +80,7 @@ source = [
   "apps/web/src/engine",
   "crates/simulation/environments",
   "scripts/ci",
+  "scripts/git",
 ]
 omit = ["*/test_*.py"]
 

@@ -11,3 +11,16 @@ inherited effective settings. Never pass `--allowJs` to tooling. Check source,
 scripts and tests without `@ts-nocheck`, `@ts-ignore`, blanket `any` or weakened
 compiler checks. Run `npm run check:typescript-policy` and the affected type
 checks and tests before committing. The policy check runs in CI.
+
+## Checkouts and commits
+
+Work, test and commit in the existing checkout on `main`. Do not create Git
+worktrees, clones or branches; work left in them does not return to `main`, and
+each copy duplicates large build output. Other contributors' edits in the same
+checkout are not a reason to isolate: report tests they break instead.
+
+Commit with `mise run commit -- -m "Describe the change" path/one path/two`
+(`scripts/git/commit.py`). It commits only the named paths from a private index,
+fast-forwards to `origin/main` first, and pushes. For a file that also holds
+someone else's edits, pass a diff of only your hunks with `--patch FILE`. Never
+stage or reset somebody else's hunks.
