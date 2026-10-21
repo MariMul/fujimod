@@ -1,0 +1,702 @@
+{
+  "$defs": {
+    "ContactPosition": {
+      "additionalProperties": false,
+      "description": "A pin drive position and its resulting contact states.",
+      "properties": {
+        "contacts": {
+          "description": "Resulting contact states.",
+          "items": {
+            "type": "boolean"
+          },
+          "type": "array"
+        },
+        "drive": {
+          "description": "Drive value applied to the actuator.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "drive",
+        "contacts"
+      ],
+      "type": "object"
+    },
+    "DisplayOrientation": {
+      "description": "Display orientation relative to the camera body.",
+      "oneOf": [
+        {
+          "const": "landscape",
+          "description": "Fixed landscape panel.",
+          "type": "string"
+        },
+        {
+          "const": "portrait",
+          "description": "Fixed portrait panel.",
+          "type": "string"
+        },
+        {
+          "const": "tilting",
+          "description": "Panel that can tilt relative to the body.",
+          "type": "string"
+        }
+      ]
+    },
+    "HomeSwitch": {
+      "additionalProperties": false,
+      "description": "A lens home-switch input.",
+      "properties": {
+        "active_high": {
+          "description": "GPIO level indicating the home position.",
+          "type": "boolean"
+        },
+        "pin": {
+          "$ref": "#/$defs/Pin",
+          "description": "GPIO pin used by the home switch."
+        },
+        "threshold": {
+          "description": "Position threshold used to detect home.",
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pin",
+        "threshold",
+        "active_high"
+      ],
+      "type": "object"
+    },
+    "LensMotor": {
+      "additionalProperties": false,
+      "description": "One lens motor and its physical response limits.",
+      "properties": {
+        "home": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HomeSwitch"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional home-switch pin and threshold."
+        },
+        "initial_position": {
+          "description": "Motor's initial position.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "settle_ticks": {
+          "description": "Settling time after motion stops.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ticks_per_step": {
+          "description": "Guest ticks per motor step.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "travel_limits": {
+          "description": "Minimum and maximum travel positions.",
+          "items": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "initial_position",
+        "travel_limits",
+        "ticks_per_step",
+        "settle_ticks"
+      ],
+      "type": "object"
+    },
+    "LensProtocol": {
+      "description": "A supported lens serial protocol.",
+      "oneOf": [
+        {
+          "const": "banked",
+          "description": "Banked lens protocol.",
+          "type": "string"
+        },
+        {
+          "const": "three-byte",
+          "description": "Three-byte lens protocol.",
+          "type": "string"
+        },
+        {
+          "const": "mixed-width",
+          "description": "Mixed-width lens protocol.",
+          "type": "string"
+        },
+        {
+          "const": "dc-zoom",
+          "description": "Direct-current zoom lens protocol.",
+          "type": "string"
+        }
+      ]
+    },
+    "PartEncoder": {
+      "additionalProperties": false,
+      "description": "An optional encoder attached to a physical part.",
+      "properties": {
+        "phase_ticks": {
+          "description": "Guest ticks per encoder phase transition.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pins": {
+          "description": "Encoder GPIO input pins.",
+          "items": {
+            "$ref": "#/$defs/Pin"
+          },
+          "type": "array"
+        },
+        "rest_phase": {
+          "description": "Initial encoder phase.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pins",
+        "phase_ticks",
+        "rest_phase"
+      ],
+      "type": "object"
+    },
+    "PartModel": {
+      "description": "A closed set of reusable physical part models.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A serially controlled optical lens mechanism.",
+          "properties": {
+            "encoder": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PartEncoder"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional physical encoder input."
+            },
+            "kind": {
+              "const": "lens-mechanism",
+              "type": "string"
+            },
+            "motors": {
+              "description": "Lens motors and their travel/response mechanics.",
+              "items": {
+                "$ref": "#/$defs/LensMotor"
+              },
+              "type": "array"
+            },
+            "protocol": {
+              "$ref": "#/$defs/LensProtocol",
+              "description": "Lens protocol and electrical timing."
+            },
+            "zoom": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ZoomMechanism"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional zoom mechanism."
+            }
+          },
+          "required": [
+            "kind",
+            "protocol",
+            "motors"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A multi-pin contact actuator.",
+          "properties": {
+            "contact_pins": {
+              "description": "GPIO pins sensed as contacts.",
+              "items": {
+                "$ref": "#/$defs/Pin"
+              },
+              "type": "array"
+            },
+            "drive_pins": {
+              "description": "GPIO pins that drive the actuator.",
+              "items": {
+                "$ref": "#/$defs/Pin"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "contact-actuator",
+              "type": "string"
+            },
+            "positions": {
+              "description": "Supported drive values and resulting contact state.",
+              "items": {
+                "$ref": "#/$defs/ContactPosition"
+              },
+              "type": "array"
+            },
+            "settle_ticks": {
+              "description": "Time required for a contact transition to settle.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "drive_pins",
+            "contact_pins",
+            "positions",
+            "settle_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A serial output endpoint.",
+          "properties": {
+            "endpoint": {
+              "$ref": "#/$defs/SerialOutputKind",
+              "description": "Serial output endpoint category."
+            },
+            "kind": {
+              "const": "serial-output",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "endpoint"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A microcontroller packet endpoint.",
+          "properties": {
+            "kind": {
+              "const": "microcontroller",
+              "type": "string"
+            },
+            "registers": {
+              "$ref": "#/$defs/RegisterRange",
+              "description": "Register address range used by the endpoint."
+            }
+          },
+          "required": [
+            "kind",
+            "registers"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A power-control endpoint with named startup inputs.",
+          "properties": {
+            "kind": {
+              "const": "power-control",
+              "type": "string"
+            },
+            "status_registers": {
+              "description": "SPI status registers exposed by the power controller.",
+              "items": {
+                "$ref": "#/$defs/StatusRegister"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "status_registers"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "An SD card slot and its physical contacts.",
+          "properties": {
+            "kind": {
+              "const": "sd-card-slot",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "An image sensor protocol and pixel-array component.",
+          "properties": {
+            "black_level": {
+              "description": "Black-level value.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "color_filter": {
+              "description": "Color-filter array pattern.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "control": {
+              "$ref": "#/$defs/SensorControlInterface",
+              "description": "Sensor register and control-bus interface."
+            },
+            "full_scale": {
+              "description": "Full-scale value.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "image-sensor",
+              "type": "string"
+            },
+            "raster": {
+              "$ref": "#/$defs/SensorRaster",
+              "description": "Sensor raster geometry."
+            },
+            "reference_white": {
+              "description": "Per-channel reference-white values.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "raster",
+            "control",
+            "color_filter",
+            "black_level",
+            "full_scale",
+            "reference_white"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A display panel endpoint.",
+          "properties": {
+            "height": {
+              "description": "Display raster height in pixels.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "display-panel",
+              "type": "string"
+            },
+            "orientation": {
+              "$ref": "#/$defs/DisplayOrientation",
+              "description": "Display orientation relative to the body."
+            },
+            "serial": {
+              "$ref": "#/$defs/SerialOutputKind",
+              "description": "Display endpoint serial protocol."
+            },
+            "used_mask": {
+              "description": "Number of panel register bits used by the endpoint.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "width": {
+              "description": "Display raster width in pixels.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "width",
+            "height",
+            "orientation",
+            "serial",
+            "used_mask"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Pin": {
+      "additionalProperties": false,
+      "description": "A two-dimensional GPIO pin identity.",
+      "properties": {
+        "pin": {
+          "description": "Pin number within the GPIO port.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "description": "GPIO port number.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "pin"
+      ],
+      "type": "object"
+    },
+    "RegisterRange": {
+      "additionalProperties": false,
+      "description": "A range of registers exposed by a physical component.",
+      "properties": {
+        "count": {
+          "description": "Number of consecutive registers.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "first": {
+          "description": "First register address.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width_bytes": {
+          "description": "Register width in bytes.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "first",
+        "count",
+        "width_bytes"
+      ],
+      "type": "object"
+    },
+    "SensorControlInterface": {
+      "additionalProperties": false,
+      "description": "A sensor's physical control-bus connection.",
+      "properties": {
+        "address": {
+          "description": "Seven-bit control-bus address.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "data_bits": {
+          "description": "Data width in bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register_address_bits": {
+          "description": "Register-address width in bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "register_address_bits",
+        "data_bits"
+      ],
+      "type": "object"
+    },
+    "SensorRaster": {
+      "additionalProperties": false,
+      "description": "Sensor image and timing geometry.",
+      "properties": {
+        "height": {
+          "description": "Sensor output height in pixels.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "image_area": {
+          "description": "Active image area as `[x, y, width, height]`.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "pixel_clock_hz": {
+          "description": "Sensor clock frequency in hertz when known.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "width": {
+          "description": "Sensor output width in pixels.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "width",
+        "height",
+        "image_area"
+      ],
+      "type": "object"
+    },
+    "SerialOutputKind": {
+      "description": "Serial output endpoint categories.",
+      "oneOf": [
+        {
+          "const": "panel",
+          "description": "Display panel register endpoint.",
+          "type": "string"
+        },
+        {
+          "const": "registers",
+          "description": "Control-bus register endpoint.",
+          "type": "string"
+        },
+        {
+          "const": "command_data",
+          "description": "Command and data serial endpoint.",
+          "type": "string"
+        },
+        {
+          "const": "fixed",
+          "description": "Fixed serial register endpoint.",
+          "type": "string"
+        }
+      ]
+    },
+    "StatusRegister": {
+      "additionalProperties": false,
+      "description": "An SPI status register initialized by a physical control part.",
+      "properties": {
+        "address": {
+          "description": "Register address.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Initial status byte.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "value"
+      ],
+      "type": "object"
+    },
+    "ZoomMechanism": {
+      "additionalProperties": false,
+      "description": "A zoom mechanism's travel and pulse settings.",
+      "properties": {
+        "maximum_position": {
+          "description": "Maximum zoom position.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "minimum_position": {
+          "description": "Minimum zoom position.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "pulse_ticks": {
+          "description": "Guest ticks per zoom pulse.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "minimum_position",
+        "maximum_position",
+        "pulse_ticks"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/part.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A reusable physical or protocol component referenced by a body.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/part.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "id": {
+      "description": "Stable reusable part identity.",
+      "type": "string"
+    },
+    "model": {
+      "$ref": "#/$defs/PartModel",
+      "description": "Typed physical or protocol model for this part."
+    },
+    "schema": {
+      "description": "Part record version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "model"
+  ],
+  "title": "Part",
+  "type": "object"
+}

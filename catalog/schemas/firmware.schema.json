@@ -1,0 +1,363 @@
+{
+  "$defs": {
+    "BootRomIdentity": {
+      "additionalProperties": false,
+      "description": "A verified boot ROM image and its load address.",
+      "properties": {
+        "address": {
+          "description": "Address where the ROM image is loaded.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "content": {
+          "$ref": "#/$defs/ContentIdentity",
+          "description": "Boot ROM content identity."
+        }
+      },
+      "required": [
+        "content",
+        "address"
+      ],
+      "type": "object"
+    },
+    "ContentIdentity": {
+      "additionalProperties": false,
+      "description": "A firmware content identity.",
+      "properties": {
+        "sha256": {
+          "description": "Lowercase SHA-256 digest.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Content size in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "FirmwareGeneratedFacts": {
+      "additionalProperties": false,
+      "description": "Generated firmware facts that inform state observation and initial setup.",
+      "properties": {
+        "first_start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirstStart"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Calibration and input requirements for the first start sequence."
+        },
+        "observation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirmwareObservation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Addresses and values used to observe firmware readiness."
+        }
+      },
+      "type": "object"
+    },
+    "FirmwareInstallation": {
+      "additionalProperties": false,
+      "description": "The flash layout used to install a firmware update.",
+      "properties": {
+        "flash_offset": {
+          "description": "Offset from the update input to the flash image.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "loader_entry": {
+          "description": "Address used to validate the first firmware image.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "flash_offset"
+      ],
+      "type": "object"
+    },
+    "FirmwareObservation": {
+      "additionalProperties": false,
+      "description": "Firmware addresses used by a supported run observer.",
+      "properties": {
+        "menu_active": {
+          "description": "Firmware address containing the menu-active flag.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_node": {
+          "description": "Firmware address containing the current menu node.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pending_mode": {
+          "description": "Firmware address containing the pending UI mode.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "readiness": {
+          "$ref": "#/$defs/ReadinessAddresses",
+          "description": "Readiness observer addresses."
+        },
+        "rec_mode": {
+          "description": "REC mode value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setup_mode": {
+          "description": "Setup mode value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "system_mode": {
+          "description": "Firmware address containing the system mode.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ui_mode": {
+          "description": "Firmware address containing the UI mode.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ui_mode",
+        "system_mode",
+        "menu_active",
+        "pending_mode",
+        "menu_node",
+        "rec_mode",
+        "setup_mode",
+        "readiness"
+      ],
+      "type": "object"
+    },
+    "FirstStart": {
+      "additionalProperties": false,
+      "description": "First-start ADC calibration and press limits.",
+      "properties": {
+        "adc_block_id": {
+          "description": "SoC ADC block identity.",
+          "type": "string"
+        },
+        "calibration_pointer": {
+          "description": "Firmware address of the calibration table pointer.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "channel": {
+          "description": "ADC channel used by the first-start input.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "hold_ticks": {
+          "description": "Press-and-hold time in guest ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "lower_offset": {
+          "description": "Lower calibration-table byte offset.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_presses": {
+          "description": "Maximum first-start input presses.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "settle_ticks": {
+          "description": "Input settle time in guest ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "upper_offset": {
+          "description": "Upper calibration-table byte offset.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "adc_block_id",
+        "channel",
+        "calibration_pointer",
+        "lower_offset",
+        "upper_offset",
+        "hold_ticks",
+        "settle_ticks",
+        "max_presses"
+      ],
+      "type": "object"
+    },
+    "ReadinessAddresses": {
+      "additionalProperties": false,
+      "description": "Addresses used to check REC readiness.",
+      "properties": {
+        "category_one": {
+          "description": "Firmware address for readiness category one.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "category_two": {
+          "description": "Firmware address for readiness category two.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "excluded_mask": {
+          "description": "Mask of readiness bits excluded from the check.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "input_pending": {
+          "description": "Firmware address for pending input state.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "operation_alert_timer": {
+          "description": "Firmware address for the operation-alert timer.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "override_address": {
+          "description": "Firmware address used to override readiness.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "category_one",
+        "category_two",
+        "input_pending",
+        "excluded_mask",
+        "operation_alert_timer",
+        "override_address"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/firmware.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A named firmware version and the content identities needed to run it.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/firmware.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "body_id": {
+      "description": "Body identity that carries this firmware.",
+      "type": "string"
+    },
+    "boot_rom": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BootRomIdentity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Boot ROM content and its physical load address, when applicable."
+    },
+    "generated_facts": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FirmwareGeneratedFacts"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Generated observation facts consumed by supported runs."
+    },
+    "id": {
+      "description": "Stable firmware identity.",
+      "type": "string"
+    },
+    "installation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FirmwareInstallation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Firmware installation and loader facts consumed by the emulator."
+    },
+    "schema": {
+      "description": "Firmware record version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "update": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ContentIdentity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Firmware update content, when distributed for this version."
+    },
+    "version": {
+      "description": "Human-readable firmware version string.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "body_id",
+    "version"
+  ],
+  "title": "Firmware",
+  "type": "object"
+}

@@ -1,0 +1,882 @@
+{
+  "$defs": {
+    "BlockSignal": {
+      "description": "Named control signals carried by SoC blocks.",
+      "oneOf": [
+        {
+          "const": "detect",
+          "description": "Presence or cable-detect signal.",
+          "type": "string"
+        },
+        {
+          "const": "write_protect",
+          "description": "Write-protect signal.",
+          "type": "string"
+        },
+        {
+          "const": "data_ready",
+          "description": "Data ready signal.",
+          "type": "string"
+        },
+        {
+          "const": "clock",
+          "description": "Clock output.",
+          "type": "string"
+        }
+      ]
+    },
+    "BodyConnection": {
+      "additionalProperties": false,
+      "description": "A physical body connection.",
+      "properties": {
+        "id": {
+          "description": "Connection identity referenced by body wiring and run inputs.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ConnectionKind",
+          "description": "Physical connection category."
+        },
+        "signals": {
+          "description": "Electrical or physical signals carried by the connection.",
+          "items": {
+            "$ref": "#/$defs/ConnectionSignal"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "signals"
+      ],
+      "type": "object"
+    },
+    "BodyWiring": {
+      "additionalProperties": false,
+      "description": "A physical wire between a body connection, part, or SoC block.",
+      "properties": {
+        "signal": {
+          "$ref": "#/$defs/WireSignal",
+          "description": "Named signal carried by the wire."
+        },
+        "source_id": {
+          "description": "Source component identity.",
+          "type": "string"
+        },
+        "target_id": {
+          "description": "Target component identity.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "target_id",
+        "signal"
+      ],
+      "type": "object"
+    },
+    "CardSlotAssembly": {
+      "additionalProperties": false,
+      "description": "A body-specific attachment for a removable-card slot part.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection identity for the card data interface.",
+          "type": "string"
+        },
+        "detect_connection_id": {
+          "description": "Body connection identity carrying card-detect state.",
+          "type": "string"
+        },
+        "part_id": {
+          "description": "Reusable card-slot part identity.",
+          "type": "string"
+        },
+        "write_protect_connection_id": {
+          "description": "Body connection identity carrying write-protect state.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id",
+        "detect_connection_id",
+        "write_protect_connection_id"
+      ],
+      "type": "object"
+    },
+    "ConnectionKind": {
+      "description": "Physical connection categories.",
+      "oneOf": [
+        {
+          "const": "control",
+          "description": "User button or control switch.",
+          "type": "string"
+        },
+        {
+          "const": "usb",
+          "description": "USB cable or host connection.",
+          "type": "string"
+        },
+        {
+          "const": "hdmi",
+          "description": "HDMI cable or display connection.",
+          "type": "string"
+        },
+        {
+          "const": "sd-card",
+          "description": "SD card slot.",
+          "type": "string"
+        },
+        {
+          "const": "remote",
+          "description": "Wired remote or microphone connector.",
+          "type": "string"
+        },
+        {
+          "const": "hot-shoe",
+          "description": "Hot-shoe accessory connector.",
+          "type": "string"
+        },
+        {
+          "const": "external-power",
+          "description": "External power connector.",
+          "type": "string"
+        },
+        {
+          "const": "battery-door",
+          "description": "Battery-door interlock.",
+          "type": "string"
+        },
+        {
+          "const": "sensor",
+          "description": "Sensor data or control connection.",
+          "type": "string"
+        },
+        {
+          "const": "lens",
+          "description": "Lens or actuator connection.",
+          "type": "string"
+        },
+        {
+          "const": "display",
+          "description": "Display data or control connection.",
+          "type": "string"
+        },
+        {
+          "const": "microcontroller",
+          "description": "Microcontroller connection.",
+          "type": "string"
+        }
+      ]
+    },
+    "ConnectionSignal": {
+      "description": "One electrical signal exposed by a body connection.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A GPIO pin with an active logic level.",
+          "properties": {
+            "active_level": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "gpio",
+              "type": "string"
+            },
+            "pin": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "port": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "port",
+            "pin",
+            "active_level"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "An ADC channel and threshold.",
+          "properties": {
+            "channel": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "adc",
+              "type": "string"
+            },
+            "threshold": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "channel",
+            "threshold"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A named SoC block signal.",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "block",
+              "type": "string"
+            },
+            "signal": {
+              "$ref": "#/$defs/BlockSignal"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "signal"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A routed serial control channel.",
+          "properties": {
+            "address": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "block_id": {
+              "type": "string"
+            },
+            "channel": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "serial",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "channel",
+            "address"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ControlBusChip": {
+      "additionalProperties": false,
+      "description": "A physical control-bus device installed in a camera body.",
+      "properties": {
+        "address": {
+          "description": "Seven-bit device address.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "channel": {
+          "description": "Control-bus channel index.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "polarity_selector": {
+          "description": "Polarity selector for this device.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "channel",
+        "address",
+        "polarity_selector"
+      ],
+      "type": "object"
+    },
+    "DisplayAssembly": {
+      "additionalProperties": false,
+      "description": "A body display assembly.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection identity carrying display data.",
+          "type": "string"
+        },
+        "part_id": {
+          "description": "Reusable panel or display-controller part identity.",
+          "type": "string"
+        },
+        "route": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SerialRoute"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Body-specific serial wiring for this panel."
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id"
+      ],
+      "type": "object"
+    },
+    "LensAssembly": {
+      "additionalProperties": false,
+      "description": "A body lens assembly.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection identity carrying lens control signals.",
+          "type": "string"
+        },
+        "part_id": {
+          "description": "Reusable lens part identity.",
+          "type": "string"
+        },
+        "pulse": {
+          "$ref": "#/$defs/PulseInterface",
+          "description": "Body-specific pulse-controller wiring for this lens."
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id",
+        "pulse"
+      ],
+      "type": "object"
+    },
+    "MicrocontrollerAssembly": {
+      "additionalProperties": false,
+      "description": "A body-specific attachment for a microcontroller part.",
+      "properties": {
+        "channel": {
+          "description": "Channel selected on the controller.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "connection_id": {
+          "description": "Body connection identity carrying MCU signals.",
+          "type": "string"
+        },
+        "controller_id": {
+          "description": "SoC serial controller block identity.",
+          "type": "string"
+        },
+        "part_id": {
+          "description": "Reusable microcontroller part identity.",
+          "type": "string"
+        },
+        "select_connection_id": {
+          "description": "Body connection identity controlling chip select.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id",
+        "controller_id",
+        "channel",
+        "select_connection_id"
+      ],
+      "type": "object"
+    },
+    "NandGeometry": {
+      "additionalProperties": false,
+      "description": "NAND geometry installed in a camera body or storage part.",
+      "properties": {
+        "bytes": {
+          "description": "Total main-area capacity in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_bytes": {
+          "description": "Main-area page size in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pages_per_block": {
+          "description": "Pages per erase block.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "spare_bytes": {
+          "description": "Spare-area size per page in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bytes",
+        "page_bytes",
+        "pages_per_block",
+        "spare_bytes"
+      ],
+      "type": "object"
+    },
+    "Pin": {
+      "additionalProperties": false,
+      "description": "A two-dimensional GPIO pin identity.",
+      "properties": {
+        "pin": {
+          "description": "Pin number within the GPIO port.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "description": "GPIO port number.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "pin"
+      ],
+      "type": "object"
+    },
+    "PowerControlAssembly": {
+      "additionalProperties": false,
+      "description": "A body-specific attachment for a power-control part.",
+      "properties": {
+        "adc_block_id": {
+          "description": "SoC ADC block identity wired to the controller.",
+          "type": "string"
+        },
+        "adc_channel": {
+          "description": "ADC channel wired to the controller.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "connection_id": {
+          "description": "Body connection identity carrying power-control signals.",
+          "type": "string"
+        },
+        "controller_id": {
+          "description": "SoC serial controller block identity.",
+          "type": "string"
+        },
+        "part_id": {
+          "description": "Reusable power-control part identity.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id",
+        "controller_id",
+        "adc_block_id",
+        "adc_channel"
+      ],
+      "type": "object"
+    },
+    "PulseInterface": {
+      "additionalProperties": false,
+      "description": "A pulse interface required by an optical mechanism.",
+      "properties": {
+        "counter_channels": {
+          "description": "Counter channels sampled by the mechanism.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "initial_phase": {
+          "description": "Initial pulse phase.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "quadrature": {
+          "description": "Whether quadrature signals are active.",
+          "type": "boolean"
+        },
+        "timer_channels": {
+          "description": "Timer channels sampled by the mechanism.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "counter_channels",
+        "timer_channels",
+        "quadrature",
+        "initial_phase"
+      ],
+      "type": "object"
+    },
+    "SensorAssembly": {
+      "additionalProperties": false,
+      "description": "A camera sensor assembly.",
+      "properties": {
+        "channel": {
+          "description": "Control-bus channel connected to the sensor.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "connection_id": {
+          "description": "Body connection identity carrying sensor control and data signals.",
+          "type": "string"
+        },
+        "control": {
+          "$ref": "#/$defs/SensorControlInterface",
+          "description": "Sensor's device-specific control protocol."
+        },
+        "controller_id": {
+          "description": "SoC control-bus block identity wired to the sensor.",
+          "type": "string"
+        },
+        "part_id": {
+          "description": "Reusable sensor part identity.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id",
+        "controller_id",
+        "channel",
+        "control"
+      ],
+      "type": "object"
+    },
+    "SensorControlInterface": {
+      "additionalProperties": false,
+      "description": "A sensor's physical control-bus connection.",
+      "properties": {
+        "address": {
+          "description": "Seven-bit control-bus address.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "data_bits": {
+          "description": "Data width in bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register_address_bits": {
+          "description": "Register-address width in bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "register_address_bits",
+        "data_bits"
+      ],
+      "type": "object"
+    },
+    "SerialRoute": {
+      "additionalProperties": false,
+      "description": "A serial bus route to a physical endpoint.",
+      "properties": {
+        "channel": {
+          "description": "Controller channel identity.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "clock_hz": {
+          "description": "Serial clock frequency in hertz, when known.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "controller_id": {
+          "description": "SoC serial controller block identity.",
+          "type": "string"
+        },
+        "endpoint_id": {
+          "description": "Endpoint identity on the serial bus.",
+          "type": "string"
+        },
+        "select_active_high": {
+          "description": "Active logic level for chip select.",
+          "type": "boolean"
+        },
+        "select_pin": {
+          "$ref": "#/$defs/Pin",
+          "description": "Chip-select GPIO pin."
+        },
+        "word_bits": {
+          "description": "Word width in bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "controller_id",
+        "channel",
+        "endpoint_id",
+        "select_pin",
+        "select_active_high",
+        "word_bits"
+      ],
+      "type": "object"
+    },
+    "WireSignal": {
+      "description": "Named physical wire types.",
+      "oneOf": [
+        {
+          "const": "gpio",
+          "description": "GPIO line.",
+          "type": "string"
+        },
+        {
+          "const": "adc",
+          "description": "ADC input.",
+          "type": "string"
+        },
+        {
+          "const": "serial_data",
+          "description": "Serial control data.",
+          "type": "string"
+        },
+        {
+          "const": "serial_clock",
+          "description": "Serial control clock.",
+          "type": "string"
+        },
+        {
+          "const": "image_data",
+          "description": "Sensor image data.",
+          "type": "string"
+        },
+        {
+          "const": "display_data",
+          "description": "Display output data.",
+          "type": "string"
+        },
+        {
+          "const": "microcontroller",
+          "description": "MCU command and response.",
+          "type": "string"
+        },
+        {
+          "const": "storage",
+          "description": "Memory card data and control.",
+          "type": "string"
+        },
+        {
+          "const": "power",
+          "description": "Power or reset state.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$id": "https://fujimod.com/schemas/body.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A named camera body and its physical components.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/body.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "card_slot": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CardSlotAssembly"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Optional removable-card slot and its body-specific contacts."
+    },
+    "connections": {
+      "description": "Declared physical control and peripheral connections.",
+      "items": {
+        "$ref": "#/$defs/BodyConnection"
+      },
+      "type": "array"
+    },
+    "control_bus_chips": {
+      "description": "Physical control-bus devices installed in this body.",
+      "items": {
+        "$ref": "#/$defs/ControlBusChip"
+      },
+      "type": "array"
+    },
+    "display": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DisplayAssembly"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Optional display assembly and its physical characteristics."
+    },
+    "dram_bytes": {
+      "description": "Installed DRAM capacity in bytes.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "id": {
+      "description": "Stable body identity.",
+      "type": "string"
+    },
+    "lens": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LensAssembly"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Optional lens assembly and its physical characteristics."
+    },
+    "microcontroller": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MicrocontrollerAssembly"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Optional MCU endpoint and its body-specific serial wiring."
+    },
+    "nand": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NandGeometry"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Optional installed NAND geometry."
+    },
+    "parts": {
+      "description": "Reusable part identities installed in this body.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "power_control": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PowerControlAssembly"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Optional power-controller endpoint and its body-specific wiring."
+    },
+    "schema": {
+      "description": "Body record version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "sensor": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SensorAssembly"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Optional sensor assembly and its physical characteristics."
+    },
+    "soc_id": {
+      "description": "SoC identity implemented by this body.",
+      "type": "string"
+    },
+    "wiring": {
+      "description": "Physical links between named body connections and SoC blocks or parts.",
+      "items": {
+        "$ref": "#/$defs/BodyWiring"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "soc_id",
+    "dram_bytes",
+    "control_bus_chips",
+    "connections",
+    "parts",
+    "wiring"
+  ],
+  "title": "Body",
+  "type": "object"
+}

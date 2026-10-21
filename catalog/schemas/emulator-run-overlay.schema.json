@@ -1,0 +1,116 @@
+{
+  "$defs": {
+    "RunOverlayChange": {
+      "description": "The closed set of changes supported by run overlays.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Connect or disconnect the declared USB cable.",
+          "properties": {
+            "connected": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "usb_connection",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connected"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Select another named firmware entry.",
+          "properties": {
+            "kind": {
+              "const": "start",
+              "type": "string"
+            },
+            "start": {
+              "$ref": "#/$defs/RunStart"
+            }
+          },
+          "required": [
+            "kind",
+            "start"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "RunStart": {
+      "description": "A supported firmware start entry.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Reset through the selected firmware's real boot ROM.",
+          "properties": {
+            "kind": {
+              "const": "rom",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Enter through the selected firmware's loader entry.",
+          "properties": {
+            "kind": {
+              "const": "loader",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$id": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A named, typed change to one run configuration.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "change": {
+      "$ref": "#/$defs/RunOverlayChange",
+      "description": "One typed run input change."
+    },
+    "configuration_id": {
+      "description": "Run configuration this overlay applies to.",
+      "type": "string"
+    },
+    "id": {
+      "description": "Stable run-overlay identity.",
+      "type": "string"
+    },
+    "schema": {
+      "description": "Run-overlay document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "configuration_id",
+    "change"
+  ],
+  "title": "RunOverlay",
+  "type": "object"
+}

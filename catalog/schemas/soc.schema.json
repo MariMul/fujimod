@@ -1,0 +1,919 @@
+{
+  "$defs": {
+    "AddressDecoder": {
+      "additionalProperties": false,
+      "description": "A selectable SoC address decoder.",
+      "properties": {
+        "choices": {
+          "description": "Other supported named decoder states.",
+          "items": {
+            "$ref": "#/$defs/DecoderChoice"
+          },
+          "type": "array"
+        },
+        "id": {
+          "description": "Decoder identity.",
+          "type": "string"
+        },
+        "initial": {
+          "$ref": "#/$defs/DecoderSelection",
+          "description": "Initially selected target IDs."
+        }
+      },
+      "required": [
+        "id",
+        "initial",
+        "choices"
+      ],
+      "type": "object"
+    },
+    "AddressMapping": {
+      "additionalProperties": false,
+      "description": "A processor address-space mapping.",
+      "properties": {
+        "address": {
+          "description": "Address visible to the processor.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "core": {
+          "description": "Processor core using this mapping.",
+          "type": "string"
+        },
+        "permissions": {
+          "description": "Read, write and execute permission bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "physical": {
+          "description": "Physical target address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "$ref": "#/$defs/RegionSize",
+          "description": "Mapping extent, including a body DRAM reference when applicable."
+        }
+      },
+      "required": [
+        "core",
+        "address",
+        "physical",
+        "size",
+        "permissions"
+      ],
+      "type": "object"
+    },
+    "ClockDomain": {
+      "additionalProperties": false,
+      "description": "A SoC clock domain.",
+      "properties": {
+        "frequency_hz": {
+          "description": "Clock frequency in hertz, when known.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Clock-domain identity.",
+          "type": "string"
+        },
+        "parent_id": {
+          "description": "Parent clock-domain identity, when present.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "CoprocessorWrite": {
+      "additionalProperties": false,
+      "description": "A CP15 or CP14 coprocessor register write during reset.",
+      "properties": {
+        "core": {
+          "description": "Processor core receiving the write.",
+          "type": "string"
+        },
+        "cp": {
+          "description": "Coprocessor selector.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "crm": {
+          "description": "CRm selector.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "crn": {
+          "description": "CRn selector.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "opc1": {
+          "description": "Opcode selector 1.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "opc2": {
+          "description": "Opcode selector 2.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "secure": {
+          "description": "Secure-state selector.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "set_bits": {
+          "description": "Bits set in the selected register.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "wide": {
+          "description": "Register width selector.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "core",
+        "cp",
+        "wide",
+        "secure",
+        "crn",
+        "crm",
+        "opc1",
+        "opc2",
+        "set_bits"
+      ],
+      "type": "object"
+    },
+    "CoreRelease": {
+      "additionalProperties": false,
+      "description": "A secondary-core release condition.",
+      "properties": {
+        "mask": {
+          "description": "Register bit set when the core is released.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register": {
+          "description": "Release register address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "description": "Interrupt or reset source used to release the core.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target": {
+          "description": "Reset vector address selected on release.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "register",
+        "mask",
+        "source",
+        "target"
+      ],
+      "type": "object"
+    },
+    "DecoderChoice": {
+      "additionalProperties": false,
+      "description": "A named alternate decoder state.",
+      "properties": {
+        "id": {
+          "description": "Choice identity selected by a hardware strap or control.",
+          "type": "string"
+        },
+        "selection": {
+          "$ref": "#/$defs/DecoderSelection",
+          "description": "Routes enabled by this choice."
+        }
+      },
+      "required": [
+        "id",
+        "selection"
+      ],
+      "type": "object"
+    },
+    "DecoderSelection": {
+      "additionalProperties": false,
+      "description": "The processor and DMA routes selected by a decoder state.",
+      "properties": {
+        "dma_mappings": {
+          "description": "DMA mapping identities selected by this state.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "processors": {
+          "description": "Processor cores selected by this state.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "processors",
+        "dma_mappings"
+      ],
+      "type": "object"
+    },
+    "DmaMapping": {
+      "additionalProperties": false,
+      "description": "A DMA address-space mapping.",
+      "properties": {
+        "address": {
+          "description": "DMA-visible address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "permissions": {
+          "description": "Read, write and execute permission bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "physical": {
+          "description": "Physical target address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "$ref": "#/$defs/RegionSize",
+          "description": "Mapping extent, including a body DRAM reference when applicable."
+        }
+      },
+      "required": [
+        "address",
+        "physical",
+        "size",
+        "permissions"
+      ],
+      "type": "object"
+    },
+    "InterruptRoute": {
+      "additionalProperties": false,
+      "description": "A routed interrupt line.",
+      "properties": {
+        "core": {
+          "description": "Processor core receiving the interrupt.",
+          "type": "string"
+        },
+        "line": {
+          "description": "Interrupt line number on the processor core.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_block": {
+          "description": "SoC block producing the interrupt.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "core",
+        "line",
+        "source_block"
+      ],
+      "type": "object"
+    },
+    "MProfileState": {
+      "additionalProperties": false,
+      "description": "M-profile processor identification state.",
+      "properties": {
+        "cpuid": {
+          "description": "CPUID register value presented by the processor.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "vector_base": {
+          "description": "Vector-table address after reset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cpuid",
+        "vector_base"
+      ],
+      "type": "object"
+    },
+    "MemoryKind": {
+      "description": "Memory technologies exposed by the SoC.",
+      "oneOf": [
+        {
+          "const": "dram",
+          "description": "Dynamic random-access memory.",
+          "type": "string"
+        },
+        {
+          "const": "rom",
+          "description": "Read-only boot memory.",
+          "type": "string"
+        },
+        {
+          "const": "sram",
+          "description": "Static random-access memory.",
+          "type": "string"
+        },
+        {
+          "const": "tcm",
+          "description": "Tightly coupled processor memory.",
+          "type": "string"
+        }
+      ]
+    },
+    "MemoryRegion": {
+      "additionalProperties": false,
+      "description": "A memory region provided by a SoC.",
+      "properties": {
+        "base": {
+          "description": "Region's physical base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "description": "Region identity within the SoC.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/MemoryKind",
+          "description": "Hardware memory type."
+        },
+        "size": {
+          "$ref": "#/$defs/RegionSize",
+          "description": "Region capacity or a reference to body DRAM capacity."
+        }
+      },
+      "required": [
+        "id",
+        "base",
+        "size",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "PeripheralMapping": {
+      "additionalProperties": false,
+      "description": "A per-core view into a named SoC block.",
+      "properties": {
+        "address": {
+          "description": "Processor-visible address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "block_id": {
+          "description": "SoC block identity exposed through this window.",
+          "type": "string"
+        },
+        "core": {
+          "description": "Processor core using this peripheral window.",
+          "type": "string"
+        },
+        "physical": {
+          "description": "Physical target address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Window size in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "core",
+        "block_id",
+        "address",
+        "physical",
+        "size"
+      ],
+      "type": "object"
+    },
+    "ProcessorArchitecture": {
+      "description": "A processor architecture described by a system-on-chip record.",
+      "oneOf": [
+        {
+          "const": "arm32",
+          "description": "32-bit ARM processor architecture.",
+          "type": "string"
+        },
+        {
+          "const": "aarch64",
+          "description": "64-bit ARM processor architecture.",
+          "type": "string"
+        }
+      ]
+    },
+    "ProcessorCore": {
+      "additionalProperties": false,
+      "description": "A processor core and its hardware reset state.",
+      "properties": {
+        "id": {
+          "description": "Core identity within its SoC.",
+          "type": "string"
+        },
+        "model": {
+          "$ref": "#/$defs/ProcessorModel",
+          "description": "Implemented processor model."
+        },
+        "mprofile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MProfileState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional M-profile hardware state."
+        },
+        "registers": {
+          "description": "Initial architectural register values.",
+          "items": {
+            "$ref": "#/$defs/RegisterValue"
+          },
+          "type": "array"
+        },
+        "released": {
+          "description": "Whether this core leaves reset when the SoC starts.",
+          "type": "boolean"
+        },
+        "rprofile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RProfileState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional R-profile hardware state."
+        }
+      },
+      "required": [
+        "id",
+        "model",
+        "released",
+        "registers"
+      ],
+      "type": "object"
+    },
+    "ProcessorModel": {
+      "description": "A processor core model supported by the current catalog.",
+      "oneOf": [
+        {
+          "const": "cortex-r5f",
+          "description": "Cortex-R5F family processor.",
+          "type": "string"
+        },
+        {
+          "const": "cortex-a7",
+          "description": "Cortex-A7 family processor.",
+          "type": "string"
+        },
+        {
+          "const": "cortex-a53",
+          "description": "Cortex-A53 family processor.",
+          "type": "string"
+        }
+      ]
+    },
+    "ProcessorRegister": {
+      "description": "Architectural registers explicitly initialized by a catalog record.",
+      "oneOf": [
+        {
+          "const": "pc",
+          "description": "Program counter.",
+          "type": "string"
+        },
+        {
+          "const": "sp",
+          "description": "Stack pointer.",
+          "type": "string"
+        },
+        {
+          "const": "pstate",
+          "description": "Program status register.",
+          "type": "string"
+        },
+        {
+          "const": "cpsr",
+          "description": "Current program status register.",
+          "type": "string"
+        }
+      ]
+    },
+    "RProfileState": {
+      "additionalProperties": false,
+      "description": "R-profile processor identification and TCM state.",
+      "properties": {
+        "atcm": {
+          "$ref": "#/$defs/TcmState",
+          "description": "ATCM state after reset."
+        },
+        "btcm": {
+          "$ref": "#/$defs/TcmState",
+          "description": "BTCM state after reset."
+        },
+        "cp14_identity": {
+          "description": "CP14 processor identity register value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cp14_identity",
+        "atcm",
+        "btcm"
+      ],
+      "type": "object"
+    },
+    "RegionSize": {
+      "description": "A memory extent with no repeated body-specific capacity.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A fixed byte length owned by the SoC.",
+          "properties": {
+            "bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "bytes",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "bytes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The selected body's declared DRAM capacity.",
+          "properties": {
+            "kind": {
+              "const": "body_dram",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "RegisterValue": {
+      "additionalProperties": false,
+      "description": "An initial value for an architectural register.",
+      "properties": {
+        "register": {
+          "$ref": "#/$defs/ProcessorRegister",
+          "description": "Register selected for initialization."
+        },
+        "value": {
+          "description": "Initial register value.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "register",
+        "value"
+      ],
+      "type": "object"
+    },
+    "SocBlock": {
+      "additionalProperties": false,
+      "description": "A named register or address block.",
+      "properties": {
+        "base": {
+          "description": "Physical base address of the block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "clock_id": {
+          "description": "Clock domain supplying this block, when specified.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Block identity used by bodies and run inputs.",
+          "type": "string"
+        },
+        "interrupt_lines": {
+          "description": "Interrupt lines emitted by this block.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/SocBlockKind",
+          "description": "Block's modeled hardware category."
+        },
+        "size": {
+          "description": "Addressable block size in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "base",
+        "size",
+        "kind",
+        "interrupt_lines"
+      ],
+      "type": "object"
+    },
+    "SocBlockKind": {
+      "description": "Hardware block categories represented in the catalog.",
+      "oneOf": [
+        {
+          "const": "gpio",
+          "description": "General-purpose input/output controller.",
+          "type": "string"
+        },
+        {
+          "const": "adc",
+          "description": "Analog-to-digital converter.",
+          "type": "string"
+        },
+        {
+          "const": "interrupt-controller",
+          "description": "Interrupt controller.",
+          "type": "string"
+        },
+        {
+          "const": "timer",
+          "description": "Timer controller.",
+          "type": "string"
+        },
+        {
+          "const": "dma",
+          "description": "Direct-memory-access controller.",
+          "type": "string"
+        },
+        {
+          "const": "control-bus",
+          "description": "Serial control-bus controller.",
+          "type": "string"
+        },
+        {
+          "const": "serial-controller",
+          "description": "General-purpose serial controller.",
+          "type": "string"
+        },
+        {
+          "const": "nand-controller",
+          "description": "Nonvolatile memory controller.",
+          "type": "string"
+        },
+        {
+          "const": "usb-controller",
+          "description": "USB controller.",
+          "type": "string"
+        },
+        {
+          "const": "display-controller",
+          "description": "Display controller.",
+          "type": "string"
+        },
+        {
+          "const": "imaging-controller",
+          "description": "Imaging controller.",
+          "type": "string"
+        },
+        {
+          "const": "reset-controller",
+          "description": "System reset controller.",
+          "type": "string"
+        },
+        {
+          "const": "clock-controller",
+          "description": "Clock controller.",
+          "type": "string"
+        }
+      ]
+    },
+    "SocReset": {
+      "additionalProperties": false,
+      "description": "Hardware state applied when a SoC leaves reset.",
+      "properties": {
+        "coprocessor_writes": {
+          "description": "Coprocessor register writes applied during reset.",
+          "items": {
+            "$ref": "#/$defs/CoprocessorWrite"
+          },
+          "type": "array"
+        },
+        "release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoreRelease"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional secondary-core release register."
+        }
+      },
+      "required": [
+        "coprocessor_writes"
+      ],
+      "type": "object"
+    },
+    "TcmState": {
+      "additionalProperties": false,
+      "description": "A tightly coupled memory reset state.",
+      "properties": {
+        "bytes": {
+          "description": "TCM capacity in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reset_address": {
+          "description": "Address selected by the processor at reset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bytes",
+        "reset_address"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/soc.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A named system-on-chip record.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/soc.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "architecture": {
+      "$ref": "#/$defs/ProcessorArchitecture",
+      "description": "CPU execution architecture implemented by the SoC."
+    },
+    "blocks": {
+      "description": "Address and register blocks exposed by the SoC.",
+      "items": {
+        "$ref": "#/$defs/SocBlock"
+      },
+      "type": "array"
+    },
+    "clocks": {
+      "description": "Clock domains exposed by the SoC.",
+      "items": {
+        "$ref": "#/$defs/ClockDomain"
+      },
+      "type": "array"
+    },
+    "decoders": {
+      "description": "Named hardware-decoder states and supported selections.",
+      "items": {
+        "$ref": "#/$defs/AddressDecoder"
+      },
+      "type": "array"
+    },
+    "dma_mappings": {
+      "description": "DMA address-space mappings used to construct a processor graph.",
+      "items": {
+        "$ref": "#/$defs/DmaMapping"
+      },
+      "type": "array"
+    },
+    "id": {
+      "description": "Stable SoC identity.",
+      "type": "string"
+    },
+    "interrupts": {
+      "description": "Interrupt routes between SoC blocks and processor cores.",
+      "items": {
+        "$ref": "#/$defs/InterruptRoute"
+      },
+      "type": "array"
+    },
+    "mappings": {
+      "description": "CPU address-space mappings used to construct a processor graph.",
+      "items": {
+        "$ref": "#/$defs/AddressMapping"
+      },
+      "type": "array"
+    },
+    "memory_regions": {
+      "description": "Addressable memory regions owned by this SoC.",
+      "items": {
+        "$ref": "#/$defs/MemoryRegion"
+      },
+      "type": "array"
+    },
+    "peripherals": {
+      "description": "Per-core peripheral mappings into named SoC blocks.",
+      "items": {
+        "$ref": "#/$defs/PeripheralMapping"
+      },
+      "type": "array"
+    },
+    "processors": {
+      "description": "Processor cores and their hardware reset configuration.",
+      "items": {
+        "$ref": "#/$defs/ProcessorCore"
+      },
+      "type": "array"
+    },
+    "reset": {
+      "$ref": "#/$defs/SocReset",
+      "description": "Hardware reset and coprocessor setup facts."
+    },
+    "schema": {
+      "description": "SoC record version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "architecture",
+    "processors",
+    "memory_regions",
+    "blocks",
+    "interrupts",
+    "clocks",
+    "mappings",
+    "dma_mappings",
+    "decoders",
+    "peripherals",
+    "reset"
+  ],
+  "title": "Soc",
+  "type": "object"
+}

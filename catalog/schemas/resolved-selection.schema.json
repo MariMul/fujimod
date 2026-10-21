@@ -1,0 +1,2826 @@
+{
+  "$defs": {
+    "AddressDecoder": {
+      "additionalProperties": false,
+      "description": "A selectable SoC address decoder.",
+      "properties": {
+        "choices": {
+          "description": "Other supported named decoder states.",
+          "items": {
+            "$ref": "#/$defs/DecoderChoice"
+          },
+          "type": "array"
+        },
+        "id": {
+          "description": "Decoder identity.",
+          "type": "string"
+        },
+        "initial": {
+          "$ref": "#/$defs/DecoderSelection",
+          "description": "Initially selected target IDs."
+        }
+      },
+      "required": [
+        "id",
+        "initial",
+        "choices"
+      ],
+      "type": "object"
+    },
+    "AddressMapping": {
+      "additionalProperties": false,
+      "description": "A processor address-space mapping.",
+      "properties": {
+        "address": {
+          "description": "Address visible to the processor.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "core": {
+          "description": "Processor core using this mapping.",
+          "type": "string"
+        },
+        "permissions": {
+          "description": "Read, write and execute permission bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "physical": {
+          "description": "Physical target address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "$ref": "#/$defs/RegionSize",
+          "description": "Mapping extent, including a body DRAM reference when applicable."
+        }
+      },
+      "required": [
+        "core",
+        "address",
+        "physical",
+        "size",
+        "permissions"
+      ],
+      "type": "object"
+    },
+    "BlockSignal": {
+      "description": "Named control signals carried by SoC blocks.",
+      "oneOf": [
+        {
+          "const": "detect",
+          "description": "Presence or cable-detect signal.",
+          "type": "string"
+        },
+        {
+          "const": "write_protect",
+          "description": "Write-protect signal.",
+          "type": "string"
+        },
+        {
+          "const": "data_ready",
+          "description": "Data ready signal.",
+          "type": "string"
+        },
+        {
+          "const": "clock",
+          "description": "Clock output.",
+          "type": "string"
+        }
+      ]
+    },
+    "Body": {
+      "additionalProperties": false,
+      "description": "A named camera body and its physical components.",
+      "properties": {
+        "$schema": {
+          "description": "Stable schema URI for this body record.",
+          "type": "string"
+        },
+        "card_slot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CardSlotAssembly"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional removable-card slot and its body-specific contacts."
+        },
+        "connections": {
+          "description": "Declared physical control and peripheral connections.",
+          "items": {
+            "$ref": "#/$defs/BodyConnection"
+          },
+          "type": "array"
+        },
+        "control_bus_chips": {
+          "description": "Physical control-bus devices installed in this body.",
+          "items": {
+            "$ref": "#/$defs/ControlBusChip"
+          },
+          "type": "array"
+        },
+        "display": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DisplayAssembly"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional display assembly and its physical characteristics."
+        },
+        "dram_bytes": {
+          "description": "Installed DRAM capacity in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "description": "Stable body identity.",
+          "type": "string"
+        },
+        "lens": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LensAssembly"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional lens assembly and its physical characteristics."
+        },
+        "microcontroller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MicrocontrollerAssembly"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional MCU endpoint and its body-specific serial wiring."
+        },
+        "nand": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NandGeometry"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional installed NAND geometry."
+        },
+        "parts": {
+          "description": "Reusable part identities installed in this body.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "power_control": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PowerControlAssembly"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional power-controller endpoint and its body-specific wiring."
+        },
+        "schema": {
+          "description": "Body record version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sensor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SensorAssembly"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional sensor assembly and its physical characteristics."
+        },
+        "soc_id": {
+          "description": "SoC identity implemented by this body.",
+          "type": "string"
+        },
+        "wiring": {
+          "description": "Physical links between named body connections and SoC blocks or parts.",
+          "items": {
+            "$ref": "#/$defs/BodyWiring"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "id",
+        "soc_id",
+        "dram_bytes",
+        "control_bus_chips",
+        "connections",
+        "parts",
+        "wiring"
+      ],
+      "type": "object"
+    },
+    "BodyConnection": {
+      "additionalProperties": false,
+      "description": "A physical body connection.",
+      "properties": {
+        "id": {
+          "description": "Connection identity referenced by body wiring and run inputs.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ConnectionKind",
+          "description": "Physical connection category."
+        },
+        "signals": {
+          "description": "Electrical or physical signals carried by the connection.",
+          "items": {
+            "$ref": "#/$defs/ConnectionSignal"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "signals"
+      ],
+      "type": "object"
+    },
+    "BodyWiring": {
+      "additionalProperties": false,
+      "description": "A physical wire between a body connection, part, or SoC block.",
+      "properties": {
+        "signal": {
+          "$ref": "#/$defs/WireSignal",
+          "description": "Named signal carried by the wire."
+        },
+        "source_id": {
+          "description": "Source component identity.",
+          "type": "string"
+        },
+        "target_id": {
+          "description": "Target component identity.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "target_id",
+        "signal"
+      ],
+      "type": "object"
+    },
+    "BootRomIdentity": {
+      "additionalProperties": false,
+      "description": "A verified boot ROM image and its load address.",
+      "properties": {
+        "address": {
+          "description": "Address where the ROM image is loaded.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "content": {
+          "$ref": "#/$defs/ContentIdentity",
+          "description": "Boot ROM content identity."
+        }
+      },
+      "required": [
+        "content",
+        "address"
+      ],
+      "type": "object"
+    },
+    "CardSlotAssembly": {
+      "additionalProperties": false,
+      "description": "A body-specific attachment for a removable-card slot part.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection identity for the card data interface.",
+          "type": "string"
+        },
+        "detect_connection_id": {
+          "description": "Body connection identity carrying card-detect state.",
+          "type": "string"
+        },
+        "part_id": {
+          "description": "Reusable card-slot part identity.",
+          "type": "string"
+        },
+        "write_protect_connection_id": {
+          "description": "Body connection identity carrying write-protect state.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id",
+        "detect_connection_id",
+        "write_protect_connection_id"
+      ],
+      "type": "object"
+    },
+    "ClockDomain": {
+      "additionalProperties": false,
+      "description": "A SoC clock domain.",
+      "properties": {
+        "frequency_hz": {
+          "description": "Clock frequency in hertz, when known.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Clock-domain identity.",
+          "type": "string"
+        },
+        "parent_id": {
+          "description": "Parent clock-domain identity, when present.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "ConnectionKind": {
+      "description": "Physical connection categories.",
+      "oneOf": [
+        {
+          "const": "control",
+          "description": "User button or control switch.",
+          "type": "string"
+        },
+        {
+          "const": "usb",
+          "description": "USB cable or host connection.",
+          "type": "string"
+        },
+        {
+          "const": "hdmi",
+          "description": "HDMI cable or display connection.",
+          "type": "string"
+        },
+        {
+          "const": "sd-card",
+          "description": "SD card slot.",
+          "type": "string"
+        },
+        {
+          "const": "remote",
+          "description": "Wired remote or microphone connector.",
+          "type": "string"
+        },
+        {
+          "const": "hot-shoe",
+          "description": "Hot-shoe accessory connector.",
+          "type": "string"
+        },
+        {
+          "const": "external-power",
+          "description": "External power connector.",
+          "type": "string"
+        },
+        {
+          "const": "battery-door",
+          "description": "Battery-door interlock.",
+          "type": "string"
+        },
+        {
+          "const": "sensor",
+          "description": "Sensor data or control connection.",
+          "type": "string"
+        },
+        {
+          "const": "lens",
+          "description": "Lens or actuator connection.",
+          "type": "string"
+        },
+        {
+          "const": "display",
+          "description": "Display data or control connection.",
+          "type": "string"
+        },
+        {
+          "const": "microcontroller",
+          "description": "Microcontroller connection.",
+          "type": "string"
+        }
+      ]
+    },
+    "ConnectionSignal": {
+      "description": "One electrical signal exposed by a body connection.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A GPIO pin with an active logic level.",
+          "properties": {
+            "active_level": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "gpio",
+              "type": "string"
+            },
+            "pin": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "port": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "port",
+            "pin",
+            "active_level"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "An ADC channel and threshold.",
+          "properties": {
+            "channel": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "adc",
+              "type": "string"
+            },
+            "threshold": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "channel",
+            "threshold"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A named SoC block signal.",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "block",
+              "type": "string"
+            },
+            "signal": {
+              "$ref": "#/$defs/BlockSignal"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "signal"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A routed serial control channel.",
+          "properties": {
+            "address": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "block_id": {
+              "type": "string"
+            },
+            "channel": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "serial",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "channel",
+            "address"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ContactPosition": {
+      "additionalProperties": false,
+      "description": "A pin drive position and its resulting contact states.",
+      "properties": {
+        "contacts": {
+          "description": "Resulting contact states.",
+          "items": {
+            "type": "boolean"
+          },
+          "type": "array"
+        },
+        "drive": {
+          "description": "Drive value applied to the actuator.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "drive",
+        "contacts"
+      ],
+      "type": "object"
+    },
+    "ContentIdentity": {
+      "additionalProperties": false,
+      "description": "A firmware content identity.",
+      "properties": {
+        "sha256": {
+          "description": "Lowercase SHA-256 digest.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Content size in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "ControlBusChip": {
+      "additionalProperties": false,
+      "description": "A physical control-bus device installed in a camera body.",
+      "properties": {
+        "address": {
+          "description": "Seven-bit device address.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "channel": {
+          "description": "Control-bus channel index.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "polarity_selector": {
+          "description": "Polarity selector for this device.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "channel",
+        "address",
+        "polarity_selector"
+      ],
+      "type": "object"
+    },
+    "CoprocessorWrite": {
+      "additionalProperties": false,
+      "description": "A CP15 or CP14 coprocessor register write during reset.",
+      "properties": {
+        "core": {
+          "description": "Processor core receiving the write.",
+          "type": "string"
+        },
+        "cp": {
+          "description": "Coprocessor selector.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "crm": {
+          "description": "CRm selector.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "crn": {
+          "description": "CRn selector.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "opc1": {
+          "description": "Opcode selector 1.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "opc2": {
+          "description": "Opcode selector 2.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "secure": {
+          "description": "Secure-state selector.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "set_bits": {
+          "description": "Bits set in the selected register.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "wide": {
+          "description": "Register width selector.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "core",
+        "cp",
+        "wide",
+        "secure",
+        "crn",
+        "crm",
+        "opc1",
+        "opc2",
+        "set_bits"
+      ],
+      "type": "object"
+    },
+    "CoreRelease": {
+      "additionalProperties": false,
+      "description": "A secondary-core release condition.",
+      "properties": {
+        "mask": {
+          "description": "Register bit set when the core is released.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register": {
+          "description": "Release register address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "description": "Interrupt or reset source used to release the core.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target": {
+          "description": "Reset vector address selected on release.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "register",
+        "mask",
+        "source",
+        "target"
+      ],
+      "type": "object"
+    },
+    "DecoderChoice": {
+      "additionalProperties": false,
+      "description": "A named alternate decoder state.",
+      "properties": {
+        "id": {
+          "description": "Choice identity selected by a hardware strap or control.",
+          "type": "string"
+        },
+        "selection": {
+          "$ref": "#/$defs/DecoderSelection",
+          "description": "Routes enabled by this choice."
+        }
+      },
+      "required": [
+        "id",
+        "selection"
+      ],
+      "type": "object"
+    },
+    "DecoderSelection": {
+      "additionalProperties": false,
+      "description": "The processor and DMA routes selected by a decoder state.",
+      "properties": {
+        "dma_mappings": {
+          "description": "DMA mapping identities selected by this state.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "processors": {
+          "description": "Processor cores selected by this state.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "processors",
+        "dma_mappings"
+      ],
+      "type": "object"
+    },
+    "DisplayAssembly": {
+      "additionalProperties": false,
+      "description": "A body display assembly.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection identity carrying display data.",
+          "type": "string"
+        },
+        "part_id": {
+          "description": "Reusable panel or display-controller part identity.",
+          "type": "string"
+        },
+        "route": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SerialRoute"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Body-specific serial wiring for this panel."
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id"
+      ],
+      "type": "object"
+    },
+    "DisplayOrientation": {
+      "description": "Display orientation relative to the camera body.",
+      "oneOf": [
+        {
+          "const": "landscape",
+          "description": "Fixed landscape panel.",
+          "type": "string"
+        },
+        {
+          "const": "portrait",
+          "description": "Fixed portrait panel.",
+          "type": "string"
+        },
+        {
+          "const": "tilting",
+          "description": "Panel that can tilt relative to the body.",
+          "type": "string"
+        }
+      ]
+    },
+    "DmaMapping": {
+      "additionalProperties": false,
+      "description": "A DMA address-space mapping.",
+      "properties": {
+        "address": {
+          "description": "DMA-visible address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "permissions": {
+          "description": "Read, write and execute permission bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "physical": {
+          "description": "Physical target address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "$ref": "#/$defs/RegionSize",
+          "description": "Mapping extent, including a body DRAM reference when applicable."
+        }
+      },
+      "required": [
+        "address",
+        "physical",
+        "size",
+        "permissions"
+      ],
+      "type": "object"
+    },
+    "Firmware": {
+      "additionalProperties": false,
+      "description": "A named firmware version and the content identities needed to run it.",
+      "properties": {
+        "$schema": {
+          "description": "Stable schema URI for this firmware record.",
+          "type": "string"
+        },
+        "body_id": {
+          "description": "Body identity that carries this firmware.",
+          "type": "string"
+        },
+        "boot_rom": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BootRomIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Boot ROM content and its physical load address, when applicable."
+        },
+        "generated_facts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirmwareGeneratedFacts"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Generated observation facts consumed by supported runs."
+        },
+        "id": {
+          "description": "Stable firmware identity.",
+          "type": "string"
+        },
+        "installation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirmwareInstallation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Firmware installation and loader facts consumed by the emulator."
+        },
+        "schema": {
+          "description": "Firmware record version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "update": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContentIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Firmware update content, when distributed for this version."
+        },
+        "version": {
+          "description": "Human-readable firmware version string.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "id",
+        "body_id",
+        "version"
+      ],
+      "type": "object"
+    },
+    "FirmwareGeneratedFacts": {
+      "additionalProperties": false,
+      "description": "Generated firmware facts that inform state observation and initial setup.",
+      "properties": {
+        "first_start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirstStart"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Calibration and input requirements for the first start sequence."
+        },
+        "observation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirmwareObservation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Addresses and values used to observe firmware readiness."
+        }
+      },
+      "type": "object"
+    },
+    "FirmwareInstallation": {
+      "additionalProperties": false,
+      "description": "The flash layout used to install a firmware update.",
+      "properties": {
+        "flash_offset": {
+          "description": "Offset from the update input to the flash image.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "loader_entry": {
+          "description": "Address used to validate the first firmware image.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "flash_offset"
+      ],
+      "type": "object"
+    },
+    "FirmwareObservation": {
+      "additionalProperties": false,
+      "description": "Firmware addresses used by a supported run observer.",
+      "properties": {
+        "menu_active": {
+          "description": "Firmware address containing the menu-active flag.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_node": {
+          "description": "Firmware address containing the current menu node.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pending_mode": {
+          "description": "Firmware address containing the pending UI mode.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "readiness": {
+          "$ref": "#/$defs/ReadinessAddresses",
+          "description": "Readiness observer addresses."
+        },
+        "rec_mode": {
+          "description": "REC mode value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setup_mode": {
+          "description": "Setup mode value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "system_mode": {
+          "description": "Firmware address containing the system mode.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ui_mode": {
+          "description": "Firmware address containing the UI mode.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ui_mode",
+        "system_mode",
+        "menu_active",
+        "pending_mode",
+        "menu_node",
+        "rec_mode",
+        "setup_mode",
+        "readiness"
+      ],
+      "type": "object"
+    },
+    "FirstStart": {
+      "additionalProperties": false,
+      "description": "First-start ADC calibration and press limits.",
+      "properties": {
+        "adc_block_id": {
+          "description": "SoC ADC block identity.",
+          "type": "string"
+        },
+        "calibration_pointer": {
+          "description": "Firmware address of the calibration table pointer.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "channel": {
+          "description": "ADC channel used by the first-start input.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "hold_ticks": {
+          "description": "Press-and-hold time in guest ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "lower_offset": {
+          "description": "Lower calibration-table byte offset.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_presses": {
+          "description": "Maximum first-start input presses.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "settle_ticks": {
+          "description": "Input settle time in guest ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "upper_offset": {
+          "description": "Upper calibration-table byte offset.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "adc_block_id",
+        "channel",
+        "calibration_pointer",
+        "lower_offset",
+        "upper_offset",
+        "hold_ticks",
+        "settle_ticks",
+        "max_presses"
+      ],
+      "type": "object"
+    },
+    "HomeSwitch": {
+      "additionalProperties": false,
+      "description": "A lens home-switch input.",
+      "properties": {
+        "active_high": {
+          "description": "GPIO level indicating the home position.",
+          "type": "boolean"
+        },
+        "pin": {
+          "$ref": "#/$defs/Pin",
+          "description": "GPIO pin used by the home switch."
+        },
+        "threshold": {
+          "description": "Position threshold used to detect home.",
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pin",
+        "threshold",
+        "active_high"
+      ],
+      "type": "object"
+    },
+    "InterruptRoute": {
+      "additionalProperties": false,
+      "description": "A routed interrupt line.",
+      "properties": {
+        "core": {
+          "description": "Processor core receiving the interrupt.",
+          "type": "string"
+        },
+        "line": {
+          "description": "Interrupt line number on the processor core.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_block": {
+          "description": "SoC block producing the interrupt.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "core",
+        "line",
+        "source_block"
+      ],
+      "type": "object"
+    },
+    "LensAssembly": {
+      "additionalProperties": false,
+      "description": "A body lens assembly.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection identity carrying lens control signals.",
+          "type": "string"
+        },
+        "part_id": {
+          "description": "Reusable lens part identity.",
+          "type": "string"
+        },
+        "pulse": {
+          "$ref": "#/$defs/PulseInterface",
+          "description": "Body-specific pulse-controller wiring for this lens."
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id",
+        "pulse"
+      ],
+      "type": "object"
+    },
+    "LensMotor": {
+      "additionalProperties": false,
+      "description": "One lens motor and its physical response limits.",
+      "properties": {
+        "home": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HomeSwitch"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional home-switch pin and threshold."
+        },
+        "initial_position": {
+          "description": "Motor's initial position.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "settle_ticks": {
+          "description": "Settling time after motion stops.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ticks_per_step": {
+          "description": "Guest ticks per motor step.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "travel_limits": {
+          "description": "Minimum and maximum travel positions.",
+          "items": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "initial_position",
+        "travel_limits",
+        "ticks_per_step",
+        "settle_ticks"
+      ],
+      "type": "object"
+    },
+    "LensProtocol": {
+      "description": "A supported lens serial protocol.",
+      "oneOf": [
+        {
+          "const": "banked",
+          "description": "Banked lens protocol.",
+          "type": "string"
+        },
+        {
+          "const": "three-byte",
+          "description": "Three-byte lens protocol.",
+          "type": "string"
+        },
+        {
+          "const": "mixed-width",
+          "description": "Mixed-width lens protocol.",
+          "type": "string"
+        },
+        {
+          "const": "dc-zoom",
+          "description": "Direct-current zoom lens protocol.",
+          "type": "string"
+        }
+      ]
+    },
+    "MProfileState": {
+      "additionalProperties": false,
+      "description": "M-profile processor identification state.",
+      "properties": {
+        "cpuid": {
+          "description": "CPUID register value presented by the processor.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "vector_base": {
+          "description": "Vector-table address after reset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cpuid",
+        "vector_base"
+      ],
+      "type": "object"
+    },
+    "MemoryKind": {
+      "description": "Memory technologies exposed by the SoC.",
+      "oneOf": [
+        {
+          "const": "dram",
+          "description": "Dynamic random-access memory.",
+          "type": "string"
+        },
+        {
+          "const": "rom",
+          "description": "Read-only boot memory.",
+          "type": "string"
+        },
+        {
+          "const": "sram",
+          "description": "Static random-access memory.",
+          "type": "string"
+        },
+        {
+          "const": "tcm",
+          "description": "Tightly coupled processor memory.",
+          "type": "string"
+        }
+      ]
+    },
+    "MemoryRegion": {
+      "additionalProperties": false,
+      "description": "A memory region provided by a SoC.",
+      "properties": {
+        "base": {
+          "description": "Region's physical base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "description": "Region identity within the SoC.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/MemoryKind",
+          "description": "Hardware memory type."
+        },
+        "size": {
+          "$ref": "#/$defs/RegionSize",
+          "description": "Region capacity or a reference to body DRAM capacity."
+        }
+      },
+      "required": [
+        "id",
+        "base",
+        "size",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "MicrocontrollerAssembly": {
+      "additionalProperties": false,
+      "description": "A body-specific attachment for a microcontroller part.",
+      "properties": {
+        "channel": {
+          "description": "Channel selected on the controller.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "connection_id": {
+          "description": "Body connection identity carrying MCU signals.",
+          "type": "string"
+        },
+        "controller_id": {
+          "description": "SoC serial controller block identity.",
+          "type": "string"
+        },
+        "part_id": {
+          "description": "Reusable microcontroller part identity.",
+          "type": "string"
+        },
+        "select_connection_id": {
+          "description": "Body connection identity controlling chip select.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id",
+        "controller_id",
+        "channel",
+        "select_connection_id"
+      ],
+      "type": "object"
+    },
+    "NandGeometry": {
+      "additionalProperties": false,
+      "description": "NAND geometry installed in a camera body or storage part.",
+      "properties": {
+        "bytes": {
+          "description": "Total main-area capacity in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_bytes": {
+          "description": "Main-area page size in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pages_per_block": {
+          "description": "Pages per erase block.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "spare_bytes": {
+          "description": "Spare-area size per page in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bytes",
+        "page_bytes",
+        "pages_per_block",
+        "spare_bytes"
+      ],
+      "type": "object"
+    },
+    "Part": {
+      "additionalProperties": false,
+      "description": "A reusable physical or protocol component referenced by a body.",
+      "properties": {
+        "$schema": {
+          "description": "Stable schema URI for this part record.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Stable reusable part identity.",
+          "type": "string"
+        },
+        "model": {
+          "$ref": "#/$defs/PartModel",
+          "description": "Typed physical or protocol model for this part."
+        },
+        "schema": {
+          "description": "Part record version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "id",
+        "model"
+      ],
+      "type": "object"
+    },
+    "PartEncoder": {
+      "additionalProperties": false,
+      "description": "An optional encoder attached to a physical part.",
+      "properties": {
+        "phase_ticks": {
+          "description": "Guest ticks per encoder phase transition.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pins": {
+          "description": "Encoder GPIO input pins.",
+          "items": {
+            "$ref": "#/$defs/Pin"
+          },
+          "type": "array"
+        },
+        "rest_phase": {
+          "description": "Initial encoder phase.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pins",
+        "phase_ticks",
+        "rest_phase"
+      ],
+      "type": "object"
+    },
+    "PartModel": {
+      "description": "A closed set of reusable physical part models.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A serially controlled optical lens mechanism.",
+          "properties": {
+            "encoder": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PartEncoder"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional physical encoder input."
+            },
+            "kind": {
+              "const": "lens-mechanism",
+              "type": "string"
+            },
+            "motors": {
+              "description": "Lens motors and their travel/response mechanics.",
+              "items": {
+                "$ref": "#/$defs/LensMotor"
+              },
+              "type": "array"
+            },
+            "protocol": {
+              "$ref": "#/$defs/LensProtocol",
+              "description": "Lens protocol and electrical timing."
+            },
+            "zoom": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ZoomMechanism"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional zoom mechanism."
+            }
+          },
+          "required": [
+            "kind",
+            "protocol",
+            "motors"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A multi-pin contact actuator.",
+          "properties": {
+            "contact_pins": {
+              "description": "GPIO pins sensed as contacts.",
+              "items": {
+                "$ref": "#/$defs/Pin"
+              },
+              "type": "array"
+            },
+            "drive_pins": {
+              "description": "GPIO pins that drive the actuator.",
+              "items": {
+                "$ref": "#/$defs/Pin"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "contact-actuator",
+              "type": "string"
+            },
+            "positions": {
+              "description": "Supported drive values and resulting contact state.",
+              "items": {
+                "$ref": "#/$defs/ContactPosition"
+              },
+              "type": "array"
+            },
+            "settle_ticks": {
+              "description": "Time required for a contact transition to settle.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "drive_pins",
+            "contact_pins",
+            "positions",
+            "settle_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A serial output endpoint.",
+          "properties": {
+            "endpoint": {
+              "$ref": "#/$defs/SerialOutputKind",
+              "description": "Serial output endpoint category."
+            },
+            "kind": {
+              "const": "serial-output",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "endpoint"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A microcontroller packet endpoint.",
+          "properties": {
+            "kind": {
+              "const": "microcontroller",
+              "type": "string"
+            },
+            "registers": {
+              "$ref": "#/$defs/RegisterRange",
+              "description": "Register address range used by the endpoint."
+            }
+          },
+          "required": [
+            "kind",
+            "registers"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A power-control endpoint with named startup inputs.",
+          "properties": {
+            "kind": {
+              "const": "power-control",
+              "type": "string"
+            },
+            "status_registers": {
+              "description": "SPI status registers exposed by the power controller.",
+              "items": {
+                "$ref": "#/$defs/StatusRegister"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "status_registers"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "An SD card slot and its physical contacts.",
+          "properties": {
+            "kind": {
+              "const": "sd-card-slot",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "An image sensor protocol and pixel-array component.",
+          "properties": {
+            "black_level": {
+              "description": "Black-level value.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "color_filter": {
+              "description": "Color-filter array pattern.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "control": {
+              "$ref": "#/$defs/SensorControlInterface",
+              "description": "Sensor register and control-bus interface."
+            },
+            "full_scale": {
+              "description": "Full-scale value.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "image-sensor",
+              "type": "string"
+            },
+            "raster": {
+              "$ref": "#/$defs/SensorRaster",
+              "description": "Sensor raster geometry."
+            },
+            "reference_white": {
+              "description": "Per-channel reference-white values.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "raster",
+            "control",
+            "color_filter",
+            "black_level",
+            "full_scale",
+            "reference_white"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A display panel endpoint.",
+          "properties": {
+            "height": {
+              "description": "Display raster height in pixels.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "display-panel",
+              "type": "string"
+            },
+            "orientation": {
+              "$ref": "#/$defs/DisplayOrientation",
+              "description": "Display orientation relative to the body."
+            },
+            "serial": {
+              "$ref": "#/$defs/SerialOutputKind",
+              "description": "Display endpoint serial protocol."
+            },
+            "used_mask": {
+              "description": "Number of panel register bits used by the endpoint.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "width": {
+              "description": "Display raster width in pixels.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "width",
+            "height",
+            "orientation",
+            "serial",
+            "used_mask"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "PeripheralMapping": {
+      "additionalProperties": false,
+      "description": "A per-core view into a named SoC block.",
+      "properties": {
+        "address": {
+          "description": "Processor-visible address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "block_id": {
+          "description": "SoC block identity exposed through this window.",
+          "type": "string"
+        },
+        "core": {
+          "description": "Processor core using this peripheral window.",
+          "type": "string"
+        },
+        "physical": {
+          "description": "Physical target address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Window size in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "core",
+        "block_id",
+        "address",
+        "physical",
+        "size"
+      ],
+      "type": "object"
+    },
+    "Pin": {
+      "additionalProperties": false,
+      "description": "A two-dimensional GPIO pin identity.",
+      "properties": {
+        "pin": {
+          "description": "Pin number within the GPIO port.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "description": "GPIO port number.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "pin"
+      ],
+      "type": "object"
+    },
+    "PowerControlAssembly": {
+      "additionalProperties": false,
+      "description": "A body-specific attachment for a power-control part.",
+      "properties": {
+        "adc_block_id": {
+          "description": "SoC ADC block identity wired to the controller.",
+          "type": "string"
+        },
+        "adc_channel": {
+          "description": "ADC channel wired to the controller.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "connection_id": {
+          "description": "Body connection identity carrying power-control signals.",
+          "type": "string"
+        },
+        "controller_id": {
+          "description": "SoC serial controller block identity.",
+          "type": "string"
+        },
+        "part_id": {
+          "description": "Reusable power-control part identity.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id",
+        "controller_id",
+        "adc_block_id",
+        "adc_channel"
+      ],
+      "type": "object"
+    },
+    "ProcessorArchitecture": {
+      "description": "A processor architecture described by a system-on-chip record.",
+      "oneOf": [
+        {
+          "const": "arm32",
+          "description": "32-bit ARM processor architecture.",
+          "type": "string"
+        },
+        {
+          "const": "aarch64",
+          "description": "64-bit ARM processor architecture.",
+          "type": "string"
+        }
+      ]
+    },
+    "ProcessorCore": {
+      "additionalProperties": false,
+      "description": "A processor core and its hardware reset state.",
+      "properties": {
+        "id": {
+          "description": "Core identity within its SoC.",
+          "type": "string"
+        },
+        "model": {
+          "$ref": "#/$defs/ProcessorModel",
+          "description": "Implemented processor model."
+        },
+        "mprofile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MProfileState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional M-profile hardware state."
+        },
+        "registers": {
+          "description": "Initial architectural register values.",
+          "items": {
+            "$ref": "#/$defs/RegisterValue"
+          },
+          "type": "array"
+        },
+        "released": {
+          "description": "Whether this core leaves reset when the SoC starts.",
+          "type": "boolean"
+        },
+        "rprofile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RProfileState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional R-profile hardware state."
+        }
+      },
+      "required": [
+        "id",
+        "model",
+        "released",
+        "registers"
+      ],
+      "type": "object"
+    },
+    "ProcessorModel": {
+      "description": "A processor core model supported by the current catalog.",
+      "oneOf": [
+        {
+          "const": "cortex-r5f",
+          "description": "Cortex-R5F family processor.",
+          "type": "string"
+        },
+        {
+          "const": "cortex-a7",
+          "description": "Cortex-A7 family processor.",
+          "type": "string"
+        },
+        {
+          "const": "cortex-a53",
+          "description": "Cortex-A53 family processor.",
+          "type": "string"
+        }
+      ]
+    },
+    "ProcessorRegister": {
+      "description": "Architectural registers explicitly initialized by a catalog record.",
+      "oneOf": [
+        {
+          "const": "pc",
+          "description": "Program counter.",
+          "type": "string"
+        },
+        {
+          "const": "sp",
+          "description": "Stack pointer.",
+          "type": "string"
+        },
+        {
+          "const": "pstate",
+          "description": "Program status register.",
+          "type": "string"
+        },
+        {
+          "const": "cpsr",
+          "description": "Current program status register.",
+          "type": "string"
+        }
+      ]
+    },
+    "PulseInterface": {
+      "additionalProperties": false,
+      "description": "A pulse interface required by an optical mechanism.",
+      "properties": {
+        "counter_channels": {
+          "description": "Counter channels sampled by the mechanism.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "initial_phase": {
+          "description": "Initial pulse phase.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "quadrature": {
+          "description": "Whether quadrature signals are active.",
+          "type": "boolean"
+        },
+        "timer_channels": {
+          "description": "Timer channels sampled by the mechanism.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "counter_channels",
+        "timer_channels",
+        "quadrature",
+        "initial_phase"
+      ],
+      "type": "object"
+    },
+    "RProfileState": {
+      "additionalProperties": false,
+      "description": "R-profile processor identification and TCM state.",
+      "properties": {
+        "atcm": {
+          "$ref": "#/$defs/TcmState",
+          "description": "ATCM state after reset."
+        },
+        "btcm": {
+          "$ref": "#/$defs/TcmState",
+          "description": "BTCM state after reset."
+        },
+        "cp14_identity": {
+          "description": "CP14 processor identity register value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cp14_identity",
+        "atcm",
+        "btcm"
+      ],
+      "type": "object"
+    },
+    "ReadinessAddresses": {
+      "additionalProperties": false,
+      "description": "Addresses used to check REC readiness.",
+      "properties": {
+        "category_one": {
+          "description": "Firmware address for readiness category one.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "category_two": {
+          "description": "Firmware address for readiness category two.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "excluded_mask": {
+          "description": "Mask of readiness bits excluded from the check.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "input_pending": {
+          "description": "Firmware address for pending input state.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "operation_alert_timer": {
+          "description": "Firmware address for the operation-alert timer.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "override_address": {
+          "description": "Firmware address used to override readiness.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "category_one",
+        "category_two",
+        "input_pending",
+        "excluded_mask",
+        "operation_alert_timer",
+        "override_address"
+      ],
+      "type": "object"
+    },
+    "RegionSize": {
+      "description": "A memory extent with no repeated body-specific capacity.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A fixed byte length owned by the SoC.",
+          "properties": {
+            "bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "bytes",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "bytes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The selected body's declared DRAM capacity.",
+          "properties": {
+            "kind": {
+              "const": "body_dram",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "RegisterRange": {
+      "additionalProperties": false,
+      "description": "A range of registers exposed by a physical component.",
+      "properties": {
+        "count": {
+          "description": "Number of consecutive registers.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "first": {
+          "description": "First register address.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width_bytes": {
+          "description": "Register width in bytes.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "first",
+        "count",
+        "width_bytes"
+      ],
+      "type": "object"
+    },
+    "RegisterValue": {
+      "additionalProperties": false,
+      "description": "An initial value for an architectural register.",
+      "properties": {
+        "register": {
+          "$ref": "#/$defs/ProcessorRegister",
+          "description": "Register selected for initialization."
+        },
+        "value": {
+          "description": "Initial register value.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "register",
+        "value"
+      ],
+      "type": "object"
+    },
+    "SensorAssembly": {
+      "additionalProperties": false,
+      "description": "A camera sensor assembly.",
+      "properties": {
+        "channel": {
+          "description": "Control-bus channel connected to the sensor.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "connection_id": {
+          "description": "Body connection identity carrying sensor control and data signals.",
+          "type": "string"
+        },
+        "control": {
+          "$ref": "#/$defs/SensorControlInterface",
+          "description": "Sensor's device-specific control protocol."
+        },
+        "controller_id": {
+          "description": "SoC control-bus block identity wired to the sensor.",
+          "type": "string"
+        },
+        "part_id": {
+          "description": "Reusable sensor part identity.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id",
+        "controller_id",
+        "channel",
+        "control"
+      ],
+      "type": "object"
+    },
+    "SensorControlInterface": {
+      "additionalProperties": false,
+      "description": "A sensor's physical control-bus connection.",
+      "properties": {
+        "address": {
+          "description": "Seven-bit control-bus address.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "data_bits": {
+          "description": "Data width in bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register_address_bits": {
+          "description": "Register-address width in bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "register_address_bits",
+        "data_bits"
+      ],
+      "type": "object"
+    },
+    "SensorRaster": {
+      "additionalProperties": false,
+      "description": "Sensor image and timing geometry.",
+      "properties": {
+        "height": {
+          "description": "Sensor output height in pixels.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "image_area": {
+          "description": "Active image area as `[x, y, width, height]`.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "pixel_clock_hz": {
+          "description": "Sensor clock frequency in hertz when known.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "width": {
+          "description": "Sensor output width in pixels.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "width",
+        "height",
+        "image_area"
+      ],
+      "type": "object"
+    },
+    "SerialOutputKind": {
+      "description": "Serial output endpoint categories.",
+      "oneOf": [
+        {
+          "const": "panel",
+          "description": "Display panel register endpoint.",
+          "type": "string"
+        },
+        {
+          "const": "registers",
+          "description": "Control-bus register endpoint.",
+          "type": "string"
+        },
+        {
+          "const": "command_data",
+          "description": "Command and data serial endpoint.",
+          "type": "string"
+        },
+        {
+          "const": "fixed",
+          "description": "Fixed serial register endpoint.",
+          "type": "string"
+        }
+      ]
+    },
+    "SerialRoute": {
+      "additionalProperties": false,
+      "description": "A serial bus route to a physical endpoint.",
+      "properties": {
+        "channel": {
+          "description": "Controller channel identity.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "clock_hz": {
+          "description": "Serial clock frequency in hertz, when known.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "controller_id": {
+          "description": "SoC serial controller block identity.",
+          "type": "string"
+        },
+        "endpoint_id": {
+          "description": "Endpoint identity on the serial bus.",
+          "type": "string"
+        },
+        "select_active_high": {
+          "description": "Active logic level for chip select.",
+          "type": "boolean"
+        },
+        "select_pin": {
+          "$ref": "#/$defs/Pin",
+          "description": "Chip-select GPIO pin."
+        },
+        "word_bits": {
+          "description": "Word width in bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "controller_id",
+        "channel",
+        "endpoint_id",
+        "select_pin",
+        "select_active_high",
+        "word_bits"
+      ],
+      "type": "object"
+    },
+    "Soc": {
+      "additionalProperties": false,
+      "description": "A named system-on-chip record.",
+      "properties": {
+        "$schema": {
+          "description": "Stable schema URI for this SoC record.",
+          "type": "string"
+        },
+        "architecture": {
+          "$ref": "#/$defs/ProcessorArchitecture",
+          "description": "CPU execution architecture implemented by the SoC."
+        },
+        "blocks": {
+          "description": "Address and register blocks exposed by the SoC.",
+          "items": {
+            "$ref": "#/$defs/SocBlock"
+          },
+          "type": "array"
+        },
+        "clocks": {
+          "description": "Clock domains exposed by the SoC.",
+          "items": {
+            "$ref": "#/$defs/ClockDomain"
+          },
+          "type": "array"
+        },
+        "decoders": {
+          "description": "Named hardware-decoder states and supported selections.",
+          "items": {
+            "$ref": "#/$defs/AddressDecoder"
+          },
+          "type": "array"
+        },
+        "dma_mappings": {
+          "description": "DMA address-space mappings used to construct a processor graph.",
+          "items": {
+            "$ref": "#/$defs/DmaMapping"
+          },
+          "type": "array"
+        },
+        "id": {
+          "description": "Stable SoC identity.",
+          "type": "string"
+        },
+        "interrupts": {
+          "description": "Interrupt routes between SoC blocks and processor cores.",
+          "items": {
+            "$ref": "#/$defs/InterruptRoute"
+          },
+          "type": "array"
+        },
+        "mappings": {
+          "description": "CPU address-space mappings used to construct a processor graph.",
+          "items": {
+            "$ref": "#/$defs/AddressMapping"
+          },
+          "type": "array"
+        },
+        "memory_regions": {
+          "description": "Addressable memory regions owned by this SoC.",
+          "items": {
+            "$ref": "#/$defs/MemoryRegion"
+          },
+          "type": "array"
+        },
+        "peripherals": {
+          "description": "Per-core peripheral mappings into named SoC blocks.",
+          "items": {
+            "$ref": "#/$defs/PeripheralMapping"
+          },
+          "type": "array"
+        },
+        "processors": {
+          "description": "Processor cores and their hardware reset configuration.",
+          "items": {
+            "$ref": "#/$defs/ProcessorCore"
+          },
+          "type": "array"
+        },
+        "reset": {
+          "$ref": "#/$defs/SocReset",
+          "description": "Hardware reset and coprocessor setup facts."
+        },
+        "schema": {
+          "description": "SoC record version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "id",
+        "architecture",
+        "processors",
+        "memory_regions",
+        "blocks",
+        "interrupts",
+        "clocks",
+        "mappings",
+        "dma_mappings",
+        "decoders",
+        "peripherals",
+        "reset"
+      ],
+      "type": "object"
+    },
+    "SocBlock": {
+      "additionalProperties": false,
+      "description": "A named register or address block.",
+      "properties": {
+        "base": {
+          "description": "Physical base address of the block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "clock_id": {
+          "description": "Clock domain supplying this block, when specified.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Block identity used by bodies and run inputs.",
+          "type": "string"
+        },
+        "interrupt_lines": {
+          "description": "Interrupt lines emitted by this block.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/SocBlockKind",
+          "description": "Block's modeled hardware category."
+        },
+        "size": {
+          "description": "Addressable block size in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "base",
+        "size",
+        "kind",
+        "interrupt_lines"
+      ],
+      "type": "object"
+    },
+    "SocBlockKind": {
+      "description": "Hardware block categories represented in the catalog.",
+      "oneOf": [
+        {
+          "const": "gpio",
+          "description": "General-purpose input/output controller.",
+          "type": "string"
+        },
+        {
+          "const": "adc",
+          "description": "Analog-to-digital converter.",
+          "type": "string"
+        },
+        {
+          "const": "interrupt-controller",
+          "description": "Interrupt controller.",
+          "type": "string"
+        },
+        {
+          "const": "timer",
+          "description": "Timer controller.",
+          "type": "string"
+        },
+        {
+          "const": "dma",
+          "description": "Direct-memory-access controller.",
+          "type": "string"
+        },
+        {
+          "const": "control-bus",
+          "description": "Serial control-bus controller.",
+          "type": "string"
+        },
+        {
+          "const": "serial-controller",
+          "description": "General-purpose serial controller.",
+          "type": "string"
+        },
+        {
+          "const": "nand-controller",
+          "description": "Nonvolatile memory controller.",
+          "type": "string"
+        },
+        {
+          "const": "usb-controller",
+          "description": "USB controller.",
+          "type": "string"
+        },
+        {
+          "const": "display-controller",
+          "description": "Display controller.",
+          "type": "string"
+        },
+        {
+          "const": "imaging-controller",
+          "description": "Imaging controller.",
+          "type": "string"
+        },
+        {
+          "const": "reset-controller",
+          "description": "System reset controller.",
+          "type": "string"
+        },
+        {
+          "const": "clock-controller",
+          "description": "Clock controller.",
+          "type": "string"
+        }
+      ]
+    },
+    "SocReset": {
+      "additionalProperties": false,
+      "description": "Hardware state applied when a SoC leaves reset.",
+      "properties": {
+        "coprocessor_writes": {
+          "description": "Coprocessor register writes applied during reset.",
+          "items": {
+            "$ref": "#/$defs/CoprocessorWrite"
+          },
+          "type": "array"
+        },
+        "release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoreRelease"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional secondary-core release register."
+        }
+      },
+      "required": [
+        "coprocessor_writes"
+      ],
+      "type": "object"
+    },
+    "StatusRegister": {
+      "additionalProperties": false,
+      "description": "An SPI status register initialized by a physical control part.",
+      "properties": {
+        "address": {
+          "description": "Register address.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Initial status byte.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "value"
+      ],
+      "type": "object"
+    },
+    "TcmState": {
+      "additionalProperties": false,
+      "description": "A tightly coupled memory reset state.",
+      "properties": {
+        "bytes": {
+          "description": "TCM capacity in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reset_address": {
+          "description": "Address selected by the processor at reset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bytes",
+        "reset_address"
+      ],
+      "type": "object"
+    },
+    "WireSignal": {
+      "description": "Named physical wire types.",
+      "oneOf": [
+        {
+          "const": "gpio",
+          "description": "GPIO line.",
+          "type": "string"
+        },
+        {
+          "const": "adc",
+          "description": "ADC input.",
+          "type": "string"
+        },
+        {
+          "const": "serial_data",
+          "description": "Serial control data.",
+          "type": "string"
+        },
+        {
+          "const": "serial_clock",
+          "description": "Serial control clock.",
+          "type": "string"
+        },
+        {
+          "const": "image_data",
+          "description": "Sensor image data.",
+          "type": "string"
+        },
+        {
+          "const": "display_data",
+          "description": "Display output data.",
+          "type": "string"
+        },
+        {
+          "const": "microcontroller",
+          "description": "MCU command and response.",
+          "type": "string"
+        },
+        {
+          "const": "storage",
+          "description": "Memory card data and control.",
+          "type": "string"
+        },
+        {
+          "const": "power",
+          "description": "Power or reset state.",
+          "type": "string"
+        }
+      ]
+    },
+    "ZoomMechanism": {
+      "additionalProperties": false,
+      "description": "A zoom mechanism's travel and pulse settings.",
+      "properties": {
+        "maximum_position": {
+          "description": "Maximum zoom position.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "minimum_position": {
+          "description": "Minimum zoom position.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "pulse_ticks": {
+          "description": "Guest ticks per zoom pulse.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "minimum_position",
+        "maximum_position",
+        "pulse_ticks"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/resolved-selection.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "All resolved reference records for one body and firmware selection.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/resolved-selection.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "body": {
+      "$ref": "#/$defs/Body",
+      "description": "Resolved body record."
+    },
+    "firmware": {
+      "$ref": "#/$defs/Firmware",
+      "description": "Resolved firmware record."
+    },
+    "parts": {
+      "description": "Resolved reusable parts referenced by the body.",
+      "items": {
+        "$ref": "#/$defs/Part"
+      },
+      "type": "array"
+    },
+    "soc": {
+      "$ref": "#/$defs/Soc",
+      "description": "Resolved SoC record selected by the body."
+    }
+  },
+  "required": [
+    "soc",
+    "body",
+    "firmware",
+    "parts"
+  ],
+  "title": "ResolvedSelection",
+  "type": "object"
+}

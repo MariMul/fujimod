@@ -41,6 +41,7 @@ fujimod-firmware = { path = "crates/firmware", version = "0.1.0" }
 fujimod-emulator-cpu-hvf = { path = "crates/emulator-cpu-hvf", version = "0.1.0" }
 serde = "1"
 serde_json = "1"
+schemars = "1.2.3"
 ciborium = "0.2"
 fujimod-usb = { path = "crates/usb", version = "0.1.0" }
 fujimod-workflows = { path = "crates/workflows", version = "0.1.0" }
