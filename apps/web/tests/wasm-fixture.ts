@@ -39,6 +39,7 @@ export async function wasmFixture(fault = false) {
   const manifest: EmulatorManifest = {
     schema: 1,
     abi: 1,
+    executionPolicy: 'exact',
     module: 'camera.mjs',
     wasm: 'camera.wasm',
     construction: 'resolved',

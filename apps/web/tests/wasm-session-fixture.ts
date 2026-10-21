@@ -22,6 +22,7 @@ export async function wasmSessionFixture() {
   const manifest: EmulatorManifest = {
     schema: 1,
     abi: 1,
+    executionPolicy: 'exact',
     module: '../wasm-proof/camera.mjs',
     wasm: '../wasm-proof/camera.wasm',
     construction: 'session',

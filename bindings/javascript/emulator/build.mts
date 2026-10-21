@@ -150,6 +150,7 @@ export function buildPlan(selected: BuildOptions, source: NodeJS.ProcessEnv): Bu
     env.CARGO_ENCODED_RUSTFLAGS !== undefined
       ? env.CARGO_ENCODED_RUSTFLAGS.split('\x1f')
       : shellWords(env.RUSTFLAGS ?? '');
+  rustFlags.push('-C', 'target-feature=+atomics,+bulk-memory,+mutable-globals');
   if (selected.rustSimd128) rustFlags.push('-C', 'target-feature=+simd128');
   env.CARGO_ENCODED_RUSTFLAGS = rustFlags.join('\x1f');
   delete env.RUSTFLAGS;
@@ -159,6 +160,7 @@ export function buildPlan(selected: BuildOptions, source: NodeJS.ProcessEnv): Bu
     '-fwasm-exceptions',
     '-sSUPPORT_LONGJMP=wasm',
     '-DCONFIG_TCI_WASM_TIER',
+    '-pthread',
     ...(selected.cSimd128 ? ['-msimd128'] : []),
   ];
   const rust = [
@@ -200,6 +202,11 @@ export function buildPlan(selected: BuildOptions, source: NodeJS.ProcessEnv): Bu
     join(out, 'camera.mjs'),
     '-O3',
     '--no-entry',
+    '-pthread',
+    '-sPTHREAD_POOL_SIZE=2',
+    '-sPTHREAD_POOL_SIZE_STRICT=2',
+    '-sDEFAULT_PTHREAD_STACK_SIZE=4194304',
+    '-sALLOW_BLOCKING_ON_MAIN_THREAD=0',
     ...simdFlags,
     '-fwasm-exceptions',
     '-sSUPPORT_LONGJMP=wasm',

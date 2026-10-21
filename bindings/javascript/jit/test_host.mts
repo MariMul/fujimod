@@ -116,6 +116,7 @@ function loader(value: unknown, reject = false) {
       assert.equal(allocated.get(pointer), length);
       allocated.delete(pointer);
     },
+    _camera_policy_setup: (pointer: number, length: number) => { assert.equal(new TextDecoder().decode(state.HEAPU8.subarray(pointer, pointer + length)), 'interactive'); return 0; },
     _camera_jit_setup: (pointer: number, length: number) => {
       configs.push(new TextDecoder().decode(state.HEAPU8.subarray(pointer, pointer + length)));
       return reject ? -1 : 0;
@@ -146,6 +147,9 @@ function loader(value: unknown, reject = false) {
       expected,
     );
   }
+  assert.equal((state.Module.HEAPU8 as Uint8Array).byteLength, memory.buffer.byteLength);
+  memory.grow(1); // Another pthread can grow memory without touching owner JS.
+  assert.equal((state.Module.HEAPU8 as Uint8Array).byteLength, memory.buffer.byteLength);
   assert.equal(oldHook, 1);
   assert.equal(allocated.size, 0);
   assert.deepEqual(configs, [value === undefined ? '' : JSON.stringify(value)]);
@@ -153,6 +157,13 @@ function loader(value: unknown, reject = false) {
 for (const value of [undefined, false, true, { threshold: 19, unknown: 'forwarded to Rust' }])
   loader(value);
 loader(true, true);
+const child = {
+  Module: { postRun: [] as (() => void)[] },
+  ENVIRONMENT_IS_PTHREAD: undefined as boolean | undefined,
+};
+runInNewContext(source('./loader.ts'), child);
+child.ENVIRONMENT_IS_PTHREAD = true;
+child.Module.postRun.forEach((callback) => callback()); // No owner C ABI calls on pthreads.
 console.log(
   JSON.stringify({
     passed: true,

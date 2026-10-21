@@ -27,7 +27,11 @@ test('build plan targets the public static library and preserves encoded Rust fl
   });
   assert.equal(plan.env.CARGO_TARGET_DIR, '/tmp/emulator/rust');
   assert.equal(plan.env.CAMERA_UNICORN_STATIC_DIR, '/tmp/emulator/unicorn');
-  assert.deepEqual(plan.rustFlags, ['-C', 'debuginfo=0', '-C', 'target-feature=+simd128']);
+  assert.deepEqual(plan.rustFlags, ['-C', 'debuginfo=0', '-C', 'target-feature=+atomics,+bulk-memory,+mutable-globals', '-C', 'target-feature=+simd128']);
+  assert(plan.cFlags.includes('-pthread'));
+  assert(plan.link.includes('-pthread'));
+  assert(plan.link.includes('-sPTHREAD_POOL_SIZE=2'));
+  assert(plan.rust.includes('-Zbuild-std'));
   assert(plan.rust.at(-1)?.endsWith('/bindings/javascript/emulator/Cargo.toml'));
   assert(
     plan.link.includes(

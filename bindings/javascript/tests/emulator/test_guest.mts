@@ -295,7 +295,7 @@ async function run(scenario: string, jit: boolean, options: RunOptions) {
     scenario.startsWith('late-') || scenario === 'bulk-unmapped' || scenario === 'bulk-protected';
   const module = (await loadNodeModule(
     modulePath,
-    jit ? { tcgJit: { threshold: 2, batchSize: 2 } } : { tcgJit: false },
+    { executionPolicy: 'exact', tcgJit: jit ? { threshold: 2, batchSize: 2 } : false },
   )) as GuestModule;
   const image = program(scenario),
     json = new TextEncoder().encode(

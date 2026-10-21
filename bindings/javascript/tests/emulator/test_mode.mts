@@ -2,11 +2,13 @@
 import assert from 'node:assert/strict';
 import type { JitOptions, JitStatistics, ModuleOptions } from '../../dist/emulator/node.mjs';
 export function moduleOptions(options: boolean | JitOptions = true): ModuleOptions {
-  return process.env.FUJIMOD_TCG_JIT === '0'
-    ? { tcgJit: false }
-    : process.env.FUJIMOD_TCG_JIT === '1'
-      ? { tcgJit: options }
-      : {};
+  const policy = process.env.FUJIMOD_EXECUTION_POLICY ?? 'exact';
+  assert(policy === 'interactive' || policy === 'exact');
+  return {
+    executionPolicy: policy,
+    ...(process.env.FUJIMOD_TCG_JIT === '0' ? { tcgJit: false } :
+      process.env.FUJIMOD_TCG_JIT === '1' ? { tcgJit: options } : {}),
+  };
 }
 export function verifyJitStats(stats: JitStatistics) {
   if (process.env.FUJIMOD_TCG_JIT === '0') {

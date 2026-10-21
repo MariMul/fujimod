@@ -164,7 +164,11 @@ pub struct Session {
     pub failed: bool,
 }
 impl Session {
-    pub fn create(config: &[u8], firmware: &[u8]) -> Result<Self, String> {
+    pub fn create(
+        config: &[u8],
+        firmware: &[u8],
+        policy: fujimod_emulator_cpu::ExecutionPolicy,
+    ) -> Result<Self, String> {
         let definition: serde_json::Value =
             serde_json::from_slice(config).map_err(|e| e.to_string())?;
         let config: Config = serde_json::from_slice(config).map_err(|e| e.to_string())?;
@@ -305,7 +309,7 @@ impl Session {
                 p.instructions_per_tick[1],
             )?,
         };
-        let board = graph.build(
+        let mut board = graph.build(
             factory::Options {
                 engine: factory::Engine::Unicorn,
                 unicorn: library_path(),
@@ -317,6 +321,7 @@ impl Session {
         for image in images {
             board.write_memory(0, image.base, &image.bytes)?;
         }
+        board.set_execution_policy(policy)?;
         Ok(Self {
             core: fujimod_emulator::session::Session {
                 definition,

@@ -70,6 +70,25 @@ manifests remain the caller's responsibility. Guest conformance scripts can run 
 `npm run test:emulator:guest` and `npm run test:emulator:devices`; each accepts
 an optional path to `camera.mjs`.
 
+Run the emulator in a dedicated browser worker. The runtime uses shared Wasm
+memory and two persistent device threads; serve the page and runtime assets with
+`Cross-Origin-Opener-Policy: same-origin` and
+`Cross-Origin-Embedder-Policy: require-corp`. The generated module is also the
+pthread worker entry, so keep its URL reachable alongside the Wasm binary.
+
+Module loading defaults to `executionPolicy: 'interactive'`, the same board/CPU
+policy used by native clients. Use `{ executionPolicy: 'exact' }` for native
+fingerprint comparisons and deterministic replay. A runtime manifest can select
+the same policy with `executionPolicy`. The policy is selected before the reset
+checkpoint, so power cycling preserves it. Interactive Undo restores a stopped
+checkpoint and may replay approximately.
+
+Device jobs own frozen inputs and staging bytes. They cannot access the bus,
+live guest RAM, processor state or clocks. Only the owner publishes their output;
+checkpointing materializes pending results without publishing device effects.
+Still color development, warp resampling and JPEG work use this executor;
+Exact mode executes the same arithmetic inline.
+
 The [mod installation helpers](../../crates/mod-install/README.md) expose
 `usb.InstallQueries` for guarded borrowed callback batches,
 `usb.CommandSequence.verifiedWrites` for packet-sized write/readback batches,

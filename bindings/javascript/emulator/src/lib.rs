@@ -38,6 +38,7 @@ struct Owner {
     next: u32,
     sessions: BTreeMap<u32, Session>,
     error: String,
+    execution_policy: fujimod_emulator_cpu::ExecutionPolicy,
 }
 thread_local! { static OWNER: RefCell<Owner> = RefCell::new(Owner::default()); }
 
@@ -55,6 +56,35 @@ fn action(handle: u32, f: impl FnOnce(&mut Session) -> Result<(), String>) -> i3
             }
             Err(e) => {
                 session.error = e;
+                -1
+            }
+        }
+    })
+}
+
+/// Select the same board/CPU execution policy used by native clients.
+/// # Safety
+/// The UTF-8 policy span must be valid and immutable for this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn camera_policy_setup(data: *const u8, len: u32) -> i32 {
+    OWNER.with(|owner| {
+        let mut owner = owner.borrow_mut();
+        let result = (|| {
+            if !owner.sessions.is_empty() {
+                return Err("configure execution policy before creating sessions".to_owned());
+            }
+            let name =
+                std::str::from_utf8(unsafe { bytes(data, len)? }).map_err(|e| e.to_string())?;
+            owner.execution_policy = fujimod_emulator_cpu::ExecutionPolicy::parse(name)?;
+            Ok(())
+        })();
+        match result {
+            Ok(()) => {
+                owner.error.clear();
+                0
+            }
+            Err(error) => {
+                owner.error = error;
                 -1
             }
         }
@@ -104,9 +134,11 @@ pub unsafe extern "C" fn camera_create(
                 .next
                 .checked_add(1)
                 .ok_or("session handle space exhausted")?;
-            let session = Session::create(unsafe { bytes(config, config_len)? }, unsafe {
-                bytes(firmware, firmware_len)?
-            })?;
+            let session = Session::create(
+                unsafe { bytes(config, config_len)? },
+                unsafe { bytes(firmware, firmware_len)? },
+                owner.execution_policy,
+            )?;
             owner.sessions.insert(handle, session);
             owner.next = handle;
             Ok::<_, String>(handle)
@@ -274,9 +306,11 @@ pub unsafe extern "C" fn camera_session_create(
                 .next
                 .checked_add(1)
                 .ok_or("session handle space exhausted")?;
-            let session = Session::create_camera(unsafe { bytes(config, config_len)? }, unsafe {
-                bytes(dat, dat_len)?
-            })?;
+            let session = Session::create_camera(
+                unsafe { bytes(config, config_len)? },
+                unsafe { bytes(dat, dat_len)? },
+                owner.execution_policy,
+            )?;
             owner.sessions.insert(handle, session);
             owner.next = handle;
             Ok::<_, String>(handle)

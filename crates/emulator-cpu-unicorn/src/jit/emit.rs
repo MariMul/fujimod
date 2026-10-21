@@ -601,7 +601,12 @@ impl Compiler {
             imports.unsigned(index);
         }
         import(&mut imports, "memory", 2)?;
-        imports.extend(&[0, 1]);
+        if cfg!(all(target_arch = "wasm32", target_feature = "atomics")) {
+            imports.extend(&[3, 1]);
+            imports.unsigned(32768); // Shared wasm32 memory, maximum 2 GiB.
+        } else {
+            imports.extend(&[0, 1]);
+        }
         import(&mut imports, "table", 1)?;
         imports.extend(&[0x70, 0, 0]);
         module.section(2, imports)?;
@@ -694,7 +699,12 @@ impl Compiler {
         let mut imports = Binary::default();
         imports.unsigned(2);
         import(&mut imports, "memory", 2)?;
-        imports.extend(&[0, 1]);
+        if cfg!(all(target_arch = "wasm32", target_feature = "atomics")) {
+            imports.extend(&[3, 1]);
+            imports.unsigned(32768); // Shared wasm32 memory, maximum 2 GiB.
+        } else {
+            imports.extend(&[0, 1]);
+        }
         import(&mut imports, "table", 1)?;
         imports.extend(&[0x70, 0, 0]);
         module.section(2, imports)?;

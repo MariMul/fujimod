@@ -57,6 +57,7 @@ test('manifest parsing validates the versioned runtime and observation shape', (
     module: 'camera.mjs',
     wasm: 'camera.wasm',
     construction: 'session',
+    executionPolicy: 'exact',
     session: {},
     ticksPerSecond: 12_000_000,
     bootTicks: 0,
@@ -64,6 +65,12 @@ test('manifest parsing validates the versioned runtime and observation shape', (
     observations: [{ name: 'frame_count', address: '1234', size: 4 }],
   });
   assert.equal(manifest.output, 1);
+  assert.equal(manifest.executionPolicy, 'exact');
+  assert.equal(parseEmulatorManifest({ ...manifest, executionPolicy: undefined }).executionPolicy, undefined);
+  assert.throws(
+    () => parseEmulatorManifest({ ...manifest, executionPolicy: 'invalid' }),
+    /Unsupported emulator manifest/,
+  );
   assert.throws(
     () =>
       parseEmulatorManifest({

@@ -51,6 +51,9 @@ int32_t camera_command(CameraHandle, const uint8_t *json, uint32_t json_len,
                        const uint8_t *bytes, uint32_t bytes_len, CameraResult *out);
 int32_t camera_scene_buffer(CameraHandle, uint32_t width, uint32_t height, CameraBytes *out);
 int32_t camera_scene_commit(CameraHandle, uint32_t enabled);
+/* Shared board/CPU policy: UTF-8 "interactive" or "exact", before sessions.
+ * This selects the board-owned device executor as well as CPU accounting. */
+int32_t camera_policy_setup(const uint8_t *policy, uint32_t policy_len);
 /* Configure the Rust-generated-code tier once before translation. Empty input
  * selects Rust defaults; JSON accepts true, false or a checked options object.
  * Errors use error(0). Stats are borrowed JSON until the next stats call. */

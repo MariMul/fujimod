@@ -1,7 +1,7 @@
 import type { RequestEvent } from '@solidjs/web';
-import { contentSecurityPolicy } from './security';
+import { runtimeHeaders } from './security';
 export default async function middleware(_event: RequestEvent, next: () => Promise<Response>) {
   const response = await next();
-  response.headers.set('Content-Security-Policy', contentSecurityPolicy);
+  for (const [name, value] of Object.entries(runtimeHeaders)) response.headers.set(name, value);
   return response;
 }

@@ -9,6 +9,8 @@ export interface JitOptions {
 }
 
 export interface ModuleOptions {
+  /** Shared board/CPU policy. Interactive is the feature-exploration default. */
+  executionPolicy?: 'interactive' | 'exact';
   tcgJit?: boolean | JitOptions;
 }
 
@@ -130,6 +132,8 @@ export function parseEmulatorManifest(value: unknown): EmulatorManifest {
     typeof manifest.wasm !== 'string' ||
     manifest.wasm.length === 0 ||
     !['resolved', 'session'].includes(manifest.construction) ||
+    (manifest.executionPolicy !== undefined &&
+      !['interactive', 'exact'].includes(manifest.executionPolicy)) ||
     !record(manifest.session) ||
     !Number.isSafeInteger(manifest.ticksPerSecond) ||
     manifest.ticksPerSecond <= 0 ||
@@ -174,6 +178,8 @@ export interface EmulatorManifest {
   module: string;
   wasm: string;
   construction: 'resolved' | 'session';
+  /** Override the default policy for native-parity qualification bundles. */
+  executionPolicy?: ModuleOptions['executionPolicy'];
   session: Record<string, unknown>;
   ticksPerSecond: number;
   bootTicks: number;

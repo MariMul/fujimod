@@ -64,6 +64,7 @@ export async function loadWasm(
       create,
       wasmBinary,
       (path) => new URL(path, new URL(manifest.wasm, new URL('wasm.json', bundle))).href,
+      { executionPolicy: manifest.executionPolicy },
     ),
   );
   const identity = await timing.measureAsync('binaryDigest', () => digest(wasmBinary));

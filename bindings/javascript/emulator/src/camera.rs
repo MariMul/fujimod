@@ -164,7 +164,11 @@ pub(super) struct Metadata {
 }
 
 impl Session {
-    pub fn create_camera(config: &[u8], dat: &[u8]) -> Result<Self, String> {
+    pub fn create_camera(
+        config: &[u8],
+        dat: &[u8],
+        policy: fujimod_emulator_cpu::ExecutionPolicy,
+    ) -> Result<Self, String> {
         let identity: DefinitionEnvelope =
             serde_json::from_slice(config).map_err(|e| e.to_string())?;
         let definition = serde_json::to_value(identity.graph).map_err(|e| e.to_string())?;
@@ -263,6 +267,7 @@ impl Session {
             bus,
             None,
         )?;
+        board.set_execution_policy(policy)?;
         for irq in assembly.core_interrupts {
             board.configure_core_interrupts(irq.core, irq.device, Box::new(irq.inputs))?;
         }

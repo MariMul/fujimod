@@ -1,4 +1,4 @@
-import { contentSecurityPolicy } from './src/security';
+import { runtimeHeaders } from './src/security';
 import { defineConfig } from 'vite-plus';
 import { loadEnv, type Plugin, type Connect } from 'vite';
 import solid from '@solidjs/vite-plugin';
@@ -11,6 +11,22 @@ import { createReadStream, existsSync, readFileSync } from 'node:fs';
 import { createGzip } from 'node:zlib';
 import { stat } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
+
+// Set these before custom routes can finish a response, including proof pages
+// and runtime mounts that bypass Vite's static-response headers.
+function isolationHeaders(): Plugin {
+  const configure = (middlewares: Connect.Server) => {
+    middlewares.use((_request, response, next) => {
+      for (const [name, value] of Object.entries(runtimeHeaders)) response.setHeader(name, value);
+      next();
+    });
+  };
+  return {
+    name: 'runtime-isolation-headers',
+    configureServer: (server) => { configure(server.middlewares); },
+    configurePreviewServer: (server) => { configure(server.middlewares); },
+  };
+}
 
 // Opt-in local artifact mounts are served by the local server, never copied into dist.
 function localArtifacts(env: Record<string, string>): Plugin {
@@ -203,6 +219,7 @@ export default defineConfig(({ mode, command }) => ({
     ),
   },
   plugins: [
+    isolationHeaders(),
     solid({ start: { middleware: './src/middleware.ts' }, ssr: true }),
     bugReportRoute(),
     wasmProofRoute(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
@@ -284,9 +301,6 @@ export default defineConfig(({ mode, command }) => ({
     ],
   },
   server: {
-    headers: {
-      'Content-Security-Policy': contentSecurityPolicy,
-    },
     allowedHosts: ['.ts.net'],
     watch: {
       ignored: [
@@ -301,9 +315,6 @@ export default defineConfig(({ mode, command }) => ({
     fs: { strict: true, allow: [resolve('../..')] },
   },
   preview: {
-    headers: {
-      'Content-Security-Policy': contentSecurityPolicy,
-    },
     proxy: { '/usb-proxy': { target: 'http://127.0.0.1:5202', ws: true } },
     host: '127.0.0.1',
     allowedHosts: ['.ts.net'],
