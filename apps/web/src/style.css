@@ -550,40 +550,60 @@ header .meta a:first-child {
   width: 132px;
   height: 132px;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 35%, #46464a, #2e2e31 70%);
+  background: #161618;
   box-shadow:
     0 1px 0 #5c5c60 inset,
     0 4px 10px rgba(0, 0, 0, 0.7);
 }
 .dpad .a {
   position: absolute;
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
+  inset: 0;
+  width: 132px;
+  height: 132px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: linear-gradient(#4a4a4e, #333336);
+  box-shadow: none;
+  clip-path: path('M 20.74 18.62 A 65.5 65.5 0 0 1 111.26 18.62 L 86.51 43.37 A 30.5 30.5 0 0 0 45.49 43.37 Z');
+  transform: rotate(var(--turn));
   color: #c7c7cc;
   font-size: 11px;
 }
+.dpad .a span {
+  position: absolute;
+  top: 17px;
+  left: 0;
+  width: 100%;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  transform: rotate(calc(-1 * var(--turn)));
+}
+.dpad .a.active,
+.dpad .a:active {
+  background: #252528;
+  box-shadow: none;
+}
+.dpad .a:focus-visible {
+  background: #626269;
+}
 .dpad .u {
-  top: 0;
-  left: 45px;
+  --turn: 0deg;
 }
 .dpad .d {
-  bottom: 0;
-  left: 45px;
+  --turn: 180deg;
 }
 .dpad .l {
-  left: 0;
-  top: 45px;
+  --turn: 270deg;
 }
 .dpad .r {
-  right: 0;
-  top: 45px;
+  --turn: 90deg;
 }
 .dpad .ok {
   position: absolute;
-  left: 37px;
-  top: 37px;
+  left: 38px;
+  top: 38px;
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -754,6 +774,7 @@ hr {
   position: relative;
   height: 44px;
   border-radius: 22px;
+  overflow: hidden;
   display: grid;
   grid-template-columns: 1fr 48px 1fr;
   align-items: center;
@@ -782,10 +803,25 @@ hr {
   text-align: center;
   font-size: 11px;
   color: #c7c7cc;
+  width: 100%;
+  height: 44px;
+  border-radius: 0;
+  box-shadow: none;
+}
+.knurl .side.l {
+  border-radius: 22px 0 0 22px;
+}
+.knurl .side.r {
+  border-radius: 0 22px 22px 0;
+}
+.knurl button:focus-visible {
+  outline-offset: -3px;
 }
 .knurl .tab {
   position: relative;
   height: 30px;
+  width: 40px;
+  justify-self: center;
   border-radius: 7px;
   background: linear-gradient(#55555a, #3e3e42);
   box-shadow:
@@ -1127,7 +1163,6 @@ a:focus-visible,
   background: transparent;
   padding: 0;
   font-family: inherit;
-  height: 100%;
   cursor: pointer;
 }
 .knurl .tab {
