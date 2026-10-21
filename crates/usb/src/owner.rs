@@ -39,13 +39,19 @@ pub struct OwnerEvent {
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum SessionOwner {
-    Local,
-    Remote { controller: String },
+    Local {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        tool: Option<String>,
+    },
+    Remote {
+        controller: String,
+    },
 }
 #[derive(Default)]
 struct State {
     claim: Option<Claim>,
     next: u64,
+    local_tool: Option<String>,
     fenced: bool,
     stopped: bool,
     present: bool,
@@ -84,6 +90,10 @@ pub struct LocalLease {
 impl LocalLease {
     pub(crate) fn owner(&self) -> &DeviceOwner {
         &self.owner
+    }
+    pub(crate) fn set_tool(&self, tool: String) {
+        self.owner.state.lock().unwrap().local_tool = Some(tool);
+        self.owner.publish();
     }
     pub fn release(&mut self) {
         self.released = true;
@@ -164,7 +174,9 @@ impl DeviceOwner {
             sharing: state.sharing,
             fenced: state.fenced,
             session_owner: state.claim.as_ref().map(|claim| match claim {
-                Claim::Local(_) => SessionOwner::Local,
+                Claim::Local(_) => SessionOwner::Local {
+                    tool: state.local_tool.clone(),
+                },
                 Claim::Remote(controller) => SessionOwner::Remote {
                     controller: controller.clone(),
                 },
@@ -398,6 +410,7 @@ impl DeviceOwner {
             Self::available(&state)?;
             state.next += 1;
             let id = state.next;
+            state.local_tool = None;
             state.claim = Some(Claim::Local(id));
             id
         };

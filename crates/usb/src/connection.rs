@@ -313,6 +313,8 @@ impl Connection {
                     packet_size,
                     timeout: options.timeout,
                     unsynced: Vec::new(),
+                    observation: None,
+                    observed: std::collections::BTreeMap::new(),
                 }),
                 max_reply_bytes: options.max_reply_bytes.get(),
             });
@@ -364,8 +366,22 @@ impl Connection {
         })
     }
 
-    /// Begins the ff80 protocol session. Drop never sends a camera close command;
-    /// explicitly call `Session::close` when exchanges have completed normally.
+    /// Label the current local owner lease before its first FF80 exchange.
+    pub fn set_tool(&self, tool: String) {
+        if let Backend::Usb(io) = &self.io
+            && let Some(lease) = &io.lease
+        {
+            lease.set_tool(tool);
+        }
+    }
+    /// Attach controller-side state and Rust protocol observations to a proxy.
+    pub fn observe_remote(&mut self, lease: crate::remote::Lease) {
+        if let Backend::Proxy(io) = &mut self.io {
+            io.observation = Some(lease);
+        }
+    }
+    /// Begins FF80; explicitly close the session after normal completion.
+    /// Drop never sends a camera close command.
     pub async fn begin_session(self, trace: Option<crate::trace::Trace>) -> Result<Session> {
         Session::open(self.io, self.max_reply_bytes, trace).await
     }

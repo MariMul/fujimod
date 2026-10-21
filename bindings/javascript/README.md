@@ -319,17 +319,21 @@ retries work or invokes user callbacks during an exchange.
 `usb.discover(filter)` and `usb.requestDevice(filter)` return per-device handles
 backed by one page-lifetime Rust nusb owner. Discovery opens each selected owner
 once; `await device.open()` is idempotent and verifies that handle is still open
-and present. Rediscovery reuses its stable `device.id`. Remote proxy handles
-continue to use `usb.Session.open(...)` and do not expose a local owner.
+and present. Rediscovery reuses its stable `device.id`. `discoverProxy` handles
+also expose IDs, sessions, presence events and Rust-decoded traffic. Their IDs
+are scoped to the host, credential and device route; they observe the remote
+owner rather than opening a browser USB device. A read-only inventory monitor
+updates remote presence. Sharing remains exclusive to locally owned devices.
 
-- `await device.acquireSession(selection, limits, options)` acquires the owner's
+- `await device.acquireSession(selection, limits, options, tool?)` acquires the owner's
   exclusive logical session lock and opens FF80. `await session.close()` sends
-  C4 and releases that lock. An abandoned/uncertain session fences the owner.
+  C4 and releases that lock. The optional tool name tags local session and log
+  events. An abandoned/uncertain session fences the owner.
 - `device.share()` enables sharing and returns a Rust `Exporter` for this device.
   Pass it to ShareHost. `device.stopSharing()` disables remote access; it does
   not shut down the device or release its persistent physical interface.
 - `device.status` is a `DeviceState` snapshot: `id`, `present`, `open`, `sharing`,
-  `sessionOwner` (`null`, `{kind: 'local'}`, or `{kind: 'remote', controller}`),
+  `sessionOwner` (`null`, `{kind: 'local', tool?}`, or `{kind: 'remote', controller}`),
   and `fenced`. `present`, `sharing`, and `sessionOwner` also have direct getters.
 - `device.watch()` returns `DeviceEvents`. `await events.next()` yields the
   initial state, then every ownership/presence/sharing transition in order.
@@ -359,7 +363,10 @@ exchanges; D1 carries the decoded request's address/selector context. Events
 include `deviceId`, `holder`, sequence/time, operation, command/function,
 address/selector/page/length, requested/transferred lengths, the 12-byte
 `envelope` and raw payload `data` as `Uint8Array`, plus error/truncation fields.
-Selectors and command fields contain wire values.
+Selectors and command fields contain wire values. `consoleData` contains the
+submitted console command on D0 function 6 or an output chunk on D1 function 7,
+with the protocol lengths checked in Rust; other events contain `null`. A model
+can decode this byte slice as text without duplicating the FF80 decoder.
 The observer never changes USB execution. Capture is limited to 8 MiB per
 exchange; exact transferred counts and `truncated` describe a longer payload.
 A subscriber exceeding 128 queued events or 16 MiB closes and rejects `next()`

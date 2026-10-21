@@ -1,0 +1,771 @@
+import { createSignal, runWithOwner } from 'solid-js';
+import { startDevShare, type DevShareOptions } from './dev-share';
+import {
+  initialize,
+  usb,
+  type Device,
+  type DeviceState,
+  type Ff80Exchange,
+  type Session,
+} from 'fujimod';
+import type { Callbacks, UsbExporter } from '../../../../crates/usb-proxy/web/types.ts';
+import type {
+  Camera,
+  CameraIdentity,
+  CameraLogEntry,
+  CameraModel,
+  SessionHolder,
+  ToolSession,
+} from './camera-model';
+import { Direction, Layer, Level } from './log';
+import { ShareHost, newTicket, shareUrl, signalUrl } from './sharing';
+
+export interface ModelStream<T> {
+  next(): Promise<T | undefined>;
+  close(): void;
+  free(): void;
+}
+type Selection = Awaited<ReturnType<Device['interfaces']>>[number];
+interface Reply {
+  raw: Uint8Array;
+  text?: string;
+  free(): void;
+}
+export interface ModelSession extends Pick<
+  Session,
+  | 'close'
+  | 'free'
+  | 'abandon'
+  | 'state'
+  | 'readMemory'
+  | 'readConfiguration'
+  | 'submitConsole'
+  | 'armResetGuard'
+  | 'enterDebugMode'
+  | 'leaveDebugMode'
+> {
+  deviceInfo(selector: Parameters<Session['deviceInfo']>[0]): Promise<Reply>;
+  configurationGeometry(
+    view: Parameters<Session['configurationGeometry']>[0],
+  ): Promise<{ capacity: number; pageBytes: number; free(): void }>;
+  pollConsole(
+    maximum: number,
+  ): Promise<{ progress: number; status: number; output: Uint8Array; free(): void }>;
+}
+type Holder = { kind: 'local'; tool?: string } | { kind: 'remote'; controller: string };
+type Exchange = Omit<Ff80Exchange, 'holder'> & { holder: Holder };
+export interface ModelDevice extends Pick<
+  Device,
+  | 'id'
+  | 'productName'
+  | 'manufacturer'
+  | 'serialNumber'
+  | 'open'
+  | 'close'
+  | 'free'
+  | 'interfaces'
+  | 'stopSharing'
+> {
+  share(): UsbExporter;
+  readonly status: DeviceState;
+  watch(): ModelStream<DeviceState>;
+  watchLog(): ModelStream<Exchange>;
+  acquireSession(
+    selection: Selection,
+    limits: InstanceType<typeof usb.FirmwareLimits>,
+    options: InstanceType<typeof usb.TransferOptions>,
+    tool?: string,
+  ): Promise<ModelSession>;
+}
+export interface ModelShare {
+  stop(): void;
+  cameraLost(reason: string): void;
+  cameraReturned(exporter: UsbExporter): void;
+}
+export interface UsbCameraServices {
+  initialize(): Promise<unknown>;
+  discover(): Promise<readonly ModelDevice[]>;
+  requestDevice(): Promise<ModelDevice | undefined>;
+  discoverProxy(link: string): Promise<readonly ModelDevice[]>;
+  share(device: ModelDevice, callbacks: Callbacks): Promise<{ host: ModelShare; link: string }>;
+  now(): number;
+  pause(milliseconds: number): Promise<void>;
+}
+const defaults: UsbCameraServices = {
+  initialize,
+  discover: () => usb.discover(usb.DeviceFilter.Diagnostic),
+  requestDevice: () => usb.requestDevice(usb.DeviceFilter.Diagnostic),
+  discoverProxy: (link) => usb.discoverProxy(link, '', usb.DeviceFilter.Diagnostic),
+  async share(device, callbacks) {
+    const ticket = newTicket(signalUrl(location.href));
+    return {
+      host: await ShareHost.create(ticket, device.share(), callbacks),
+      link: shareUrl(location.href, ticket),
+    };
+  },
+  now: () => Date.now(),
+  pause: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+};
+const selectors = [
+  ['Vendor', 'vendor'],
+  ['Manufacturer', 'manufacturer'],
+  ['Product', 'product'],
+  ['InternalVersion', 'internalVersion'],
+  ['DeviceType', 'deviceType'],
+  ['Serial', 'serial'],
+  ['Framework', 'framework'],
+] as const;
+interface Entry {
+  device: ModelDevice;
+  camera: Camera;
+  selection: Promise<Selection>;
+  selections: Selection[];
+  states: ModelStream<DeviceState>;
+  logs: ModelStream<Exchange>;
+  holder?: SessionHolder;
+  session?: ModelSession;
+  removed: boolean;
+  identityNeeded: boolean;
+  identifying: boolean;
+  host?: ModelShare;
+  sharing?: Promise<void>;
+  shareAttempt: number;
+  peers: Map<string, string>;
+  activities: Map<
+    string,
+    { title?: string; progress?: { label: string; done: number; total: number } }
+  >;
+  problemKind?: 'presence' | 'session' | 'sharing' | 'attention';
+  shareStatus?: ReturnType<NonNullable<DevShareOptions['status']>>;
+}
+const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const hex = (value: number) => `0x${value.toString(16)}`;
+function toolSession(session: ModelSession, pause: UsbCameraServices['pause']): ToolSession {
+  return {
+    async deviceInfo(selector) {
+      const selected = selectors.find(([name]) => name === selector);
+      if (!selected) throw Error(`Unknown identity selector: ${selector}`);
+      const reply = await session.deviceInfo(usb.InfoSelector[selected[0]]);
+      try {
+        return { text: reply.text, data: reply.raw.slice() };
+      } finally {
+        reply.free();
+      }
+    },
+    async configurationGeometry() {
+      const reply = await session.configurationGeometry(usb.ConfigurationView.Ram);
+      try {
+        return { capacity: reply.capacity, pageBytes: reply.pageBytes };
+      } finally {
+        reply.free();
+      }
+    },
+    readConfiguration: (offset, length) =>
+      session.readConfiguration(usb.ConfigurationView.Ram, 0, offset, length),
+    readMemory: (address, length) => session.readMemory(address, length),
+    async submitConsole(data) {
+      await session.submitConsole(data);
+    },
+    async pollConsole() {
+      const reply = await session.pollConsole(4096);
+      try {
+        if (reply.progress !== usb.ConsoleProgress.Complete && reply.output.length === 0)
+          await pause(50);
+        return {
+          complete: reply.progress === usb.ConsoleProgress.Complete,
+          status: reply.status,
+          output: reply.output.slice(),
+        };
+      } finally {
+        reply.free();
+      }
+    },
+    debug: {
+      armResetGuard: (...args) => session.armResetGuard(...args),
+      enterDebugMode: (...args) => session.enterDebugMode(...args),
+      leaveDebugMode: (...args) => session.leaveDebugMode(...args),
+    },
+  };
+}
+
+const runtimes = new WeakMap<CameraModel, DevShareOptions & { stop?: () => void }>();
+
+/** One reactive collection; Rust retains USB ownership and produces every FF80 log. */
+export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {}): CameraModel {
+  const services = { ...defaults, ...overrides };
+  const entries = new Map<string, Entry>();
+  let cameraValues: readonly Camera[] = [],
+    logValues: readonly CameraLogEntry[] = [];
+  const [cameraVersion, setCameraVersion] = createSignal(0);
+  const [logVersion, setLogVersion] = createSignal(0);
+  let version = 0,
+    logRevision = 0,
+    nextLog = 0,
+    logBytes = 0,
+    disposed = false;
+  let countdown: ((camera: string, message: string) => Promise<void>) | undefined;
+  const publish = () => {
+    if (disposed) return;
+    cameraValues = [...entries.values()].map(({ camera }) => ({
+      ...camera,
+      sharing: camera.sharing && { ...camera.sharing, peers: new Map(camera.sharing.peers) },
+    }));
+    setCameraVersion(++version);
+  };
+  const append = (
+    entry: Entry,
+    value: Omit<CameraLogEntry, 'id' | 'camera' | 'time'> & { time?: number },
+  ) => {
+    if (disposed || entry.removed) return;
+    const row = {
+      ...value,
+      id: ++nextLog,
+      camera: entry.camera.id,
+      time: value.time ?? services.now(),
+    };
+    const rows = [...logValues, row];
+    logBytes += row.data?.length ?? 0;
+    while (rows.length > 2000 || (rows.length > 1 && logBytes > 16 * 1024 * 1024))
+      logBytes -= rows.shift()!.data?.length ?? 0;
+    logValues = rows;
+    setLogVersion(++logRevision);
+  };
+  const connection = (entry: Entry, message: string, level = Level.Info, holder?: SessionHolder) =>
+    append(entry, { layer: Layer.Connection, direction: Direction.Host, level, message, holder });
+  const problem = (entry: Entry, message: string, kind: Entry['problemKind']) => {
+    entry.camera.problem = message;
+    entry.problemKind = kind;
+    connection(entry, message, Level.Error);
+    publish();
+  };
+  const sessionHolder = (entry: Entry, holder: Holder | null): SessionHolder | undefined =>
+    holder?.kind === 'remote'
+      ? { ...holder, reason: entry.peers.get(holder.controller) ?? '' }
+      : holder
+        ? {
+            kind: 'local',
+            tool: holder.tool ?? (entry.holder?.kind === 'local' ? entry.holder.tool : 'local'),
+          }
+        : undefined;
+  const refreshSession = (entry: Entry) => {
+    const state = entry.device.status;
+    entry.camera.session = entry.holder ?? sessionHolder(entry, state.sessionOwner);
+    entry.camera.uncertain = state.fenced;
+    const holder = entry.camera.session;
+    const activity =
+      holder?.kind === 'remote' ? entry.activities.get(holder.controller) : undefined;
+    entry.camera.remoteActivity =
+      activity && holder?.kind === 'remote'
+        ? { controller: holder.controller, ...activity }
+        : undefined;
+  };
+  const requireEntry = (id: string) => {
+    const entry = entries.get(id);
+    if (!entry || entry.removed || disposed) throw Error('Camera is no longer available');
+    return entry;
+  };
+  async function withSession<T>(
+    id: string,
+    tool: string,
+    operation: (session: ToolSession) => Promise<T>,
+  ): Promise<T> {
+    const entry = requireEntry(id);
+    refreshSession(entry);
+    if (!entry.camera.present) throw Error('Camera is disconnected');
+    if (entry.camera.uncertain) throw Error('USB completion unknown. Reconnect the camera.');
+    if (entry.camera.session)
+      throw Error('Camera session is held by another tool or remote controller');
+    entry.holder = { kind: 'local', tool };
+    refreshSession(entry);
+    publish();
+    let session: ModelSession | undefined;
+    let outcome: { value: T } | { error: unknown } | undefined;
+    try {
+      const selected = await entry.selection;
+      if (entry.removed || disposed || !entry.device.status.present)
+        throw Error('Camera is disconnected');
+      const options = new usb.TransferOptions(5000, 65536),
+        limits = new usb.FirmwareLimits(16384, 16384, 256, 4096);
+      try {
+        session = await entry.device.acquireSession(selected, limits, options, tool);
+      } finally {
+        options.free();
+        limits.free();
+      }
+      entry.session = session;
+      if (entry.removed || disposed) throw Error('Camera is no longer available');
+      outcome = { value: await operation(toolSession(session, services.pause)) };
+    } catch (error) {
+      outcome = { error };
+      if (!entry.removed) problem(entry, errorText(error), 'session');
+    } finally {
+      if (session) {
+        try {
+          await session.close();
+        } catch (error) {
+          if (!outcome || 'value' in outcome) {
+            outcome = { error };
+            if (!entry.removed) problem(entry, errorText(error), 'session');
+          }
+        } finally {
+          session.free();
+        }
+      }
+      entry.session = undefined;
+      entry.holder = undefined;
+      if (!entry.removed && !disposed) {
+        refreshSession(entry);
+        publish();
+        if (entry.identityNeeded)
+          queueMicrotask(() => {
+            void identity(entry);
+          });
+      }
+    }
+    if (!outcome) throw Error('Camera session did not finish');
+    if ('error' in outcome) throw outcome.error;
+    if (entry.problemKind === 'session' && !entry.camera.uncertain) {
+      entry.camera.problem = undefined;
+      entry.problemKind = undefined;
+      publish();
+    }
+    return outcome.value;
+  }
+  const identity = async (entry: Entry) => {
+    if (entry.identifying || !entry.identityNeeded || entry.removed || disposed) return;
+    refreshSession(entry);
+    if (!entry.camera.present || entry.camera.uncertain || entry.camera.session) return;
+    entry.identifying = true;
+    entry.identityNeeded = false;
+    try {
+      const result = await withSession(entry.camera.id, 'identity', async (session) => {
+        const result: CameraIdentity = {};
+        for (const [selector, field] of selectors)
+          result[field] = (await session.deviceInfo(selector)).text;
+        return result;
+      });
+      if (!entry.removed) {
+        entry.camera.identity = result;
+        entry.camera.name = result.product || entry.device.productName || entry.camera.name;
+        publish();
+      }
+    } catch {
+      /* withSession records the connection error and Rust reports fencing. */
+    } finally {
+      entry.identifying = false;
+      if (entry.identityNeeded) void identity(entry);
+    }
+  };
+  async function watchState(entry: Entry) {
+    try {
+      for (;;) {
+        const state = await entry.states.next();
+        if (!state || entry.removed || disposed) return;
+        const wasPresent = entry.camera.present,
+          wasUncertain = entry.camera.uncertain;
+        entry.camera.present = state.present;
+        if (wasPresent !== state.present) {
+          if (state.present) {
+            entry.camera.goneAt = undefined;
+            entry.identityNeeded = true;
+            connection(entry, 'Camera connected');
+            if (entry.problemKind === 'presence' || entry.problemKind === 'session') {
+              entry.camera.problem = undefined;
+              entry.problemKind = undefined;
+            }
+            try {
+              await entry.device.open();
+              if (entry.host) entry.host.cameraReturned(entry.device.share());
+              entry.shareStatus = { ...entry.shareStatus, online: true };
+            } catch (error) {
+              problem(entry, errorText(error), 'session');
+            }
+          } else {
+            entry.camera.goneAt = services.now();
+            entry.shareStatus = { ...entry.shareStatus, online: false, reason: 'unplugged' };
+            connection(entry, 'Camera disconnected');
+            if (entry.host) {
+              entry.host.cameraLost('unplugged');
+              problem(entry, 'Camera disconnected while sharing', 'presence');
+            }
+          }
+        }
+        if (!entry.device.status.sharing && entry.host) {
+          entry.host.stop();
+          entry.host = undefined;
+          entry.camera.sharing = undefined;
+          entry.peers.clear();
+          entry.activities.clear();
+        }
+        refreshSession(entry);
+        if (!wasUncertain && entry.camera.uncertain)
+          problem(entry, 'USB completion unknown. Reconnect the camera.', 'session');
+        publish();
+        void identity(entry);
+      }
+    } catch (error) {
+      if (!entry.removed && !disposed) problem(entry, errorText(error), 'session');
+    }
+  }
+  async function watchLog(entry: Entry) {
+    try {
+      for (;;) {
+        const event = await entry.logs.next();
+        if (!event || entry.removed || disposed) return;
+        const input = ![0xd0, 0xe0].includes(event.kind);
+        const data = new Uint8Array(event.envelope.length + event.data.length);
+        data.set(event.envelope);
+        data.set(event.data, event.envelope.length);
+        const description = [
+          event.operation,
+          event.address === null ? '' : hex(event.address),
+          event.selector === null ? '' : `selector ${hex(event.selector)}`,
+          event.length === null ? '' : `${event.length} B`,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        append(entry, {
+          layer: Layer.Ff80,
+          level: event.error ? Level.Error : Level.Debug,
+          direction: input ? Direction.In : Direction.Out,
+          time: event.timestampMs,
+          holder: sessionHolder(entry, event.holder),
+          message: description,
+          sizes: {
+            sent: event.envelope.length + (input ? 0 : event.transferred),
+            received: input ? event.transferred : 0,
+          },
+          data,
+          detail:
+            event.error ??
+            (event.truncated
+              ? `Captured ${event.data.length} of ${event.transferred} payload bytes`
+              : undefined),
+        });
+        if (event.consoleData?.length)
+          append(entry, {
+            layer: Layer.Console,
+            level: Level.Info,
+            direction: input ? Direction.In : Direction.Out,
+            time: event.timestampMs,
+            holder: sessionHolder(entry, event.holder),
+            message: new TextDecoder().decode(event.consoleData),
+            data: event.consoleData.slice(),
+          });
+      }
+    } catch (error) {
+      if (!entry.removed && !disposed) problem(entry, errorText(error), 'session');
+    }
+  }
+  async function add(device: ModelDevice, transport: Camera['transport']) {
+    if (disposed) {
+      device.free();
+      return;
+    }
+    const known = entries.get(device.id);
+    if (known) {
+      device.free();
+      return;
+    }
+    const state = device.status;
+    const entry: Entry = {
+      device,
+      camera: {
+        id: device.id,
+        transport,
+        name: device.productName || (transport === 'usb' ? 'USB camera' : 'Shared camera'),
+        present: state.present,
+        uncertain: state.fenced,
+        goneAt: state.present ? undefined : services.now(),
+      },
+      selection: Promise.resolve().then(async () => {
+        const selections = await device.interfaces();
+        entry.selections = selections;
+        if (entry.removed) {
+          for (const selection of selections) selection.free();
+          throw Error('Camera was removed');
+        }
+        if (selections.length !== 1) throw Error('Camera must have exactly one bulk USB interface');
+        return selections[0];
+      }),
+      selections: [],
+      states: device.watch(),
+      logs: device.watchLog(),
+      removed: false,
+      identityNeeded: state.present,
+      identifying: false,
+      shareAttempt: 0,
+      peers: new Map(),
+      activities: new Map(),
+    };
+    entries.set(device.id, entry);
+    refreshSession(entry);
+    publish();
+    connection(entry, state.present ? 'Camera connected' : 'Camera disconnected');
+    void entry.selection.catch((error: unknown) => {
+      if (!entry.removed) problem(entry, errorText(error), 'session');
+    });
+    void watchState(entry);
+    void watchLog(entry);
+    void identity(entry);
+  }
+  async function setSharing(id: string, on: boolean) {
+    const entry = requireEntry(id);
+    if (entry.camera.transport === 'remote') {
+      if (on) throw Error('A remote camera cannot be shared again');
+      return;
+    }
+    if (!on) {
+      ++entry.shareAttempt;
+      entry.host?.stop();
+      entry.host = undefined;
+      entry.device.stopSharing();
+      entry.peers.clear();
+      entry.activities.clear();
+      entry.camera.remoteActivity = undefined;
+      if (entry.camera.sharing) connection(entry, 'Camera sharing stopped');
+      entry.camera.sharing = undefined;
+      entry.shareStatus = undefined;
+      refreshSession(entry);
+      publish();
+      return;
+    }
+    if (entry.host) return;
+    if (entry.sharing) {
+      const pending = entry.sharing;
+      await pending;
+      if (!entry.host && !entry.removed && !disposed) return setSharing(id, true);
+      return;
+    }
+    if (!entry.camera.present) throw Error('Camera is disconnected');
+    const attempt = ++entry.shareAttempt;
+    const active = () => !entry.removed && !disposed && attempt === entry.shareAttempt;
+    const activity = (
+      controller: string,
+      update: (value: {
+        title?: string;
+        progress?: { label: string; done: number; total: number };
+      }) => void,
+    ) => {
+      if (!active()) return;
+      const value = { ...entry.activities.get(controller) };
+      update(value);
+      if (value.title || value.progress) entry.activities.set(controller, value);
+      else entry.activities.delete(controller);
+      refreshSession(entry);
+      publish();
+    };
+    entry.sharing = (async () => {
+      const shared = await services.share(entry.device, {
+        connected(controller, reason) {
+          if (!active()) return;
+          entry.peers.set(controller, reason);
+          if (entry.camera.sharing)
+            entry.camera.sharing = { ...entry.camera.sharing, peers: new Map(entry.peers) };
+          refreshSession(entry);
+          connection(
+            entry,
+            `Remote controller connected${reason ? `: ${reason}` : ''}`,
+            Level.Info,
+            { kind: 'remote', controller, reason },
+          );
+          publish();
+        },
+        disconnected(controller, reason) {
+          if (!active()) return;
+          const holder: SessionHolder = {
+            kind: 'remote',
+            controller,
+            reason: entry.peers.get(controller) ?? '',
+          };
+          entry.peers.delete(controller);
+          entry.activities.delete(controller);
+          if (entry.camera.sharing)
+            entry.camera.sharing = { ...entry.camera.sharing, peers: new Map(entry.peers) };
+          refreshSession(entry);
+          connection(entry, `Remote controller disconnected: ${reason}`, Level.Info, holder);
+          publish();
+        },
+        toolStatus(controller, message) {
+          if (active())
+            connection(entry, message, Level.Info, {
+              kind: 'remote',
+              controller,
+              reason: entry.peers.get(controller) ?? '',
+            });
+        },
+        activity: (controller, title) =>
+          activity(controller, (value) => {
+            value.title = title || undefined;
+          }),
+        progress: (controller, progress) =>
+          activity(controller, (value) => {
+            value.progress = progress;
+          }),
+        countdown: async (_controller, message) => {
+          if (!active()) throw Error('Camera sharing stopped');
+          if (!countdown) throw Error('Owner countdown is unavailable');
+          connection(entry, message, Level.Info, {
+            kind: 'remote',
+            controller: _controller,
+            reason: entry.peers.get(_controller) ?? '',
+          });
+          await countdown(id, message);
+        },
+        attention: (_controller, message) => {
+          if (active()) problem(entry, message, 'attention');
+        },
+        error: (error) => {
+          if (active()) problem(entry, errorText(error), 'sharing');
+        },
+        state(status) {
+          if (!active()) return;
+          entry.shareStatus = {
+            online: status.online,
+            reason: status.reason,
+            battery: status.battery,
+            battery_at_ms:
+              status.battery_age_ms === undefined
+                ? undefined
+                : services.now() - status.battery_age_ms,
+          };
+          publish();
+          if (!status.online)
+            problem(entry, `Camera offline: ${status.reason ?? 'unavailable'}`, 'sharing');
+          else if (entry.problemKind === 'sharing') {
+            entry.camera.problem = undefined;
+            entry.problemKind = undefined;
+            publish();
+          }
+        },
+      });
+      if (entry.removed || disposed || attempt !== entry.shareAttempt) {
+        shared.host.stop();
+        return;
+      }
+      entry.host = shared.host;
+      if (!entry.camera.present) {
+        entry.host.cameraLost('unplugged');
+        problem(entry, 'Camera disconnected while sharing', 'presence');
+      }
+      entry.camera.sharing = { link: shared.link, peers: new Map(entry.peers) };
+      connection(entry, 'Camera sharing started');
+      publish();
+    })();
+    try {
+      await entry.sharing;
+    } catch (error) {
+      if (active()) {
+        entry.device.stopSharing();
+        problem(entry, errorText(error), 'sharing');
+      }
+      throw error;
+    } finally {
+      entry.sharing = undefined;
+    }
+  }
+  async function remove(id: string) {
+    const entry = requireEntry(id);
+    entry.shareAttempt++;
+    entry.host?.stop();
+    if (entry.camera.transport === 'usb') entry.device.stopSharing();
+    entry.host = undefined;
+    entry.removed = true;
+    entry.states.close();
+    entry.logs.close();
+    entry.session?.abandon();
+    try {
+      await entry.device.close();
+    } finally {
+      entry.states.free();
+      entry.logs.free();
+      for (const selection of entry.selections) selection.free();
+      entry.device.free();
+      entries.delete(id);
+      publish();
+    }
+  }
+  const initialized = Promise.resolve().then(() => services.initialize());
+  void initialized
+    .then(() => services.discover())
+    .then(async (devices) => {
+      for (const device of devices) await add(device, 'usb');
+    })
+    .catch((error: unknown) => {
+      // A picker can still add a camera if permitted-device discovery failed.
+      for (const entry of entries.values()) problem(entry, errorText(error), 'session');
+    });
+  const model: CameraModel = {
+    cameras() {
+      cameraVersion();
+      return cameraValues;
+    },
+    log() {
+      logVersion();
+      return logValues;
+    },
+    async connectUsb() {
+      await initialized;
+      const device = await services.requestDevice();
+      if (device) await add(device, 'usb');
+    },
+    async connectRemote(link) {
+      await initialized;
+      const devices = await services.discoverProxy(link);
+      for (const device of devices) await add(device, 'remote');
+    },
+    remove,
+    withSession,
+    setSharing,
+    onOwnerCountdown(run) {
+      countdown = run;
+      return () => {
+        if (countdown === run) countdown = undefined;
+      };
+    },
+    dismissProblem(id) {
+      const entry = requireEntry(id);
+      entry.camera.problem = undefined;
+      entry.problemKind = undefined;
+      publish();
+    },
+    clearLog() {
+      logValues = [];
+      logBytes = 0;
+      setLogVersion(++logRevision);
+    },
+    dispose() {
+      if (disposed) return;
+      runtimes.get(model)?.stop?.();
+      for (const id of entries.keys()) void remove(id).catch(() => {});
+      disposed = true;
+      countdown = undefined;
+    },
+  };
+  runtimes.set(model, {
+    report(id, message, error) {
+      const entry = entries.get(id);
+      if (entry) connection(entry, message, error ? Level.Error : Level.Info);
+    },
+    status: (id) => entries.get(id)?.shareStatus,
+  });
+  return model;
+}
+
+const page =
+  typeof window === 'undefined'
+    ? undefined
+    : (window as Window & { __fujimodCameraModel?: CameraModel });
+
+/** The browser page owns this instance across component and module hot swaps. */
+export function pageCameraModel(): CameraModel {
+  if (!page) return runWithOwner(null, () => createUsbCameraModel());
+  if (page.__fujimodCameraModel) return page.__fujimodCameraModel;
+  const model = runWithOwner(null, () => createUsbCameraModel());
+  page.__fujimodCameraModel = model;
+  if (import.meta.env.DEV || import.meta.env.MODE === 'local-preview') {
+    const runtime = runtimes.get(model)!;
+    runtime.stop = runWithOwner(null, () => startDevShare(model, runtime));
+  }
+  return model;
+}

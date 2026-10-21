@@ -2,10 +2,88 @@
 use super::*;
 use fujimod_usb::owner::{DeviceOwner, DeviceOwners};
 use futures_lite::StreamExt;
-use std::{cell::Cell, rc::Rc, sync::Arc};
+use std::{
+    cell::{Cell, RefCell},
+    collections::BTreeMap,
+    rc::Rc,
+    sync::Arc,
+};
 thread_local! {
     static WATCHING: Cell<bool> = const { Cell::new(false) };
+    static PROXIES: RefCell<BTreeMap<String, Arc<fujimod_usb::remote::Observation>>> = const { RefCell::new(BTreeMap::new()) };
     static OWNERS: Rc<DeviceOwners> = Rc::new(DeviceOwners::default());
+}
+pub(crate) fn proxy_observation(
+    remote: &fujimod_usb_proxy::RemoteDevice,
+    source: &str,
+    token: &str,
+) -> Arc<fujimod_usb::remote::Observation> {
+    let next = fujimod_usb::remote::Observation::new(
+        source,
+        token,
+        &remote.descriptor.id,
+        remote
+            .descriptor
+            .status
+            .as_ref()
+            .is_none_or(|status| status.online),
+    );
+    let observation = PROXIES.with(|registry| {
+        registry
+            .borrow_mut()
+            .entry(next.status().id.clone())
+            .or_insert(next)
+            .clone()
+    });
+    if observation.closed() {
+        observation.resume();
+    }
+    observation.presence(
+        remote
+            .descriptor
+            .status
+            .as_ref()
+            .is_none_or(|status| status.online),
+    );
+    monitor_proxy(remote.clone(), observation.clone());
+    observation
+}
+pub(crate) fn monitor_proxy(
+    remote: fujimod_usb_proxy::RemoteDevice,
+    observation: Arc<fujimod_usb::remote::Observation>,
+) {
+    if !observation.start_monitor() {
+        return;
+    }
+    wasm_bindgen_futures::spawn_local(async move {
+        let mut connection = None;
+        while !observation.closed() {
+            if connection.is_none() {
+                connection = remote.connect().await.ok();
+            }
+            let result = if let Some(client) = &mut connection {
+                client.devices().await.ok()
+            } else {
+                None
+            };
+            match result {
+                Some(devices) => observation.presence(
+                    devices
+                        .iter()
+                        .find(|device| device.id == remote.descriptor.id)
+                        .is_some_and(|device| {
+                            device.status.as_ref().is_none_or(|status| status.online)
+                        }),
+                ),
+                None => {
+                    observation.presence(false);
+                    connection = None;
+                }
+            }
+            futures_timer::Delay::new(std::time::Duration::from_secs(1)).await;
+        }
+        observation.monitoring_ended();
+    });
 }
 pub(crate) async fn device_owner(info: nusb::DeviceInfo) -> Result<Arc<DeviceOwner>, JsValue> {
     let owners = OWNERS.with(Clone::clone);
@@ -113,7 +191,7 @@ export interface DeviceState {
     present: boolean;
     open: boolean;
     sharing: boolean;
-    sessionOwner: { kind: 'local' } | { kind: 'remote'; controller: string } | null;
+    sessionOwner: { kind: 'local'; tool?: string } | { kind: 'remote'; controller: string } | null;
     fenced: boolean;
 }
 "#;
@@ -129,9 +207,12 @@ pub struct DeviceEvents {
 }
 impl DeviceEvents {
     pub(crate) fn new(owner: &DeviceOwner) -> Self {
-        Self {
-            receiver: owner.watch(),
-        }
+        Self::from_receiver(owner.watch())
+    }
+    pub(crate) fn from_receiver(
+        receiver: async_channel::Receiver<fujimod_usb::owner::OwnerEvent>,
+    ) -> Self {
+        Self { receiver }
     }
 }
 impl Drop for DeviceEvents {
@@ -178,6 +259,7 @@ export interface Ff80Exchange {
     data: Uint8Array;
     truncated: boolean;
     error: string | null;
+    consoleData: Uint8Array | null;
 }
 "#;
 #[wasm_bindgen]
@@ -186,9 +268,10 @@ pub struct LogEvents {
 }
 impl LogEvents {
     pub(crate) fn new(owner: &DeviceOwner) -> Self {
-        Self {
-            inner: owner.watch_log(),
-        }
+        Self::from_events(owner.watch_log())
+    }
+    pub(crate) fn from_events(inner: Arc<fujimod_usb::owner_log::LogEvents>) -> Self {
+        Self { inner }
     }
 }
 impl Drop for LogEvents {
@@ -235,6 +318,14 @@ impl LogEvents {
                 js_sys::Uint8Array::from(event.data.as_slice()).into(),
             )?;
             set("truncated", JsValue::from_bool(event.truncated))?;
+            set(
+                "consoleData",
+                event
+                    .console_data
+                    .as_deref()
+                    .map(|data| js_sys::Uint8Array::from(data).into())
+                    .unwrap_or(JsValue::NULL),
+            )?;
             set(
                 "error",
                 event

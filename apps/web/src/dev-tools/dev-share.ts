@@ -1,108 +1,152 @@
 import { createEffect, createRoot } from 'solid-js';
-import { CameraTarget } from './camera';
-import { ConnectionState, ConsoleState, type DevToolsController } from './controller';
-import { Level } from './log';
-import type { ShareSession } from './share-session';
+import type { Camera, CameraModel } from './camera-model';
 import { holdReloadsDuringCameraSessions } from './reload-hold';
 
-/**
- * Loaded only by local development pages. Shares a connected camera
- * automatically and keeps its registration (link, camera, online state and
- * battery) current in the relay's registry, where host tools find it. The
- * socket owns the registry entry.
- */
-export function startDevShare(tools: DevToolsController, share: ShareSession): () => void {
-  holdReloadsDuringCameraSessions(tools, share);
-  let socket: WebSocket | undefined;
-  // Stop sharing turns automatic sharing off until the camera is reconnected.
-  let suspended = false;
-  const close = () => {
-    socket?.close();
-    socket = undefined;
+interface RegistrationStatus {
+  online: boolean;
+  reason?: string;
+  battery?: string;
+  battery_at_ms?: number;
+}
+export interface DevShareOptions {
+  report(this: void, camera: string, message: string, error?: boolean): void;
+  status?(camera: string): RegistrationStatus | undefined;
+}
+interface Registration {
+  camera: Camera;
+  socket?: WebSocket;
+  payload?: string;
+  wasPresent: boolean;
+  wasSharing: boolean;
+  pending: boolean;
+  suspended: boolean;
+}
+
+/** One registry socket per USB camera; only the model starts and stops shares. */
+export function startDevShare(model: CameraModel, options: DevShareOptions): () => void {
+  const records = new Map<string, Registration>();
+  let stopped = false;
+  const close = (record: Registration) => {
+    record.socket?.close();
+    record.socket = undefined;
+    record.payload = undefined;
   };
-  const open = () => {
+  const withdraw = () => {
+    for (const record of records.values()) close(record);
+  };
+  const stopReloadHold = holdReloadsDuringCameraSessions(model, options.report);
+  const registration = (camera: Camera) =>
+    JSON.stringify({
+      url: camera.sharing!.link,
+      camera: { model: camera.identity?.product ?? null, serial: camera.identity?.serial ?? null },
+      status: options.status?.(camera.id) ?? {
+        online: camera.present,
+        ...(!camera.present && { reason: 'unplugged' }),
+      },
+    });
+  const open = (record: Registration) => {
     const url = new URL('/usb-proxy/dev-share', location.href);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    const connection = new WebSocket(url);
-    socket = connection;
+    const socket = new WebSocket(url);
+    record.socket = socket;
     let announced = false;
-    connection.onopen = () => {
-      const registration = share.registration();
-      if (connection === socket && registration) connection.send(JSON.stringify(registration));
-    };
-    connection.onmessage = ({ data }) => {
-      if (connection !== socket) return;
-      try {
-        const reply = JSON.parse(data);
-        if (reply.type !== 'registered')
-          throw Error(reply.message || 'Development share registration failed');
-        if (!announced) tools.connectionMessage('Development share registered');
-        announced = true;
-      } catch (error) {
-        tools.connectionMessage(String(error), Level.Error);
-        connection.close();
+    socket.onopen = () => {
+      if (record.socket === socket && record.camera.sharing) {
+        record.payload = registration(record.camera);
+        socket.send(record.payload);
       }
     };
-    connection.onerror = () => {
-      if (connection === socket)
-        tools.connectionMessage('Development share registry unavailable', Level.Error);
+    socket.onmessage = ({ data }) => {
+      if (record.socket !== socket) return;
+      try {
+        const reply: unknown = JSON.parse(String(data));
+        if (
+          !reply ||
+          typeof reply !== 'object' ||
+          !('type' in reply) ||
+          reply.type !== 'registered'
+        )
+          throw Error('Development share registration failed');
+        if (!announced) options.report(record.camera.id, 'Development share registered');
+        announced = true;
+      } catch (error) {
+        options.report(record.camera.id, String(error), true);
+        socket.close();
+      }
+    };
+    socket.onerror = () => {
+      if (record.socket === socket)
+        options.report(record.camera.id, 'Development share registry unavailable', true);
     };
   };
   const dispose = createRoot((dispose) => {
     createEffect(
-      () => share.registration(),
-      (registration) => {
-        if (!registration) return close();
-        if (!socket) return open();
-        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(registration));
-      },
-    );
-    createEffect(
-      () => ({
-        state: tools.connection(),
-        idle: tools.consoleState() === ConsoleState.Idle,
-        sharing: share.sharing(),
-      }),
-      ({ state, idle, sharing }) => {
-        if (state !== ConnectionState.Connected && state !== ConnectionState.Sharing) {
-          suspended = false;
-          return;
+      () => model.cameras(),
+      (cameras) => {
+        if (stopped) return;
+        const ids = new Set(cameras.map((camera) => camera.id));
+        for (const [id, record] of records)
+          if (!ids.has(id)) {
+            close(record);
+            records.delete(id);
+          }
+        for (const camera of cameras) {
+          if (camera.transport !== 'usb') continue;
+          let record = records.get(camera.id);
+          if (!record) {
+            record = {
+              camera,
+              wasPresent: false,
+              wasSharing: false,
+              pending: false,
+              suspended: false,
+            };
+            records.set(camera.id, record);
+          }
+          record.camera = camera;
+          if (!camera.present || !record.wasPresent) record.suspended = false;
+          if (record.wasSharing && !camera.sharing && camera.present && record.wasPresent)
+            record.suspended = true;
+          record.wasPresent = camera.present;
+          record.wasSharing = Boolean(camera.sharing);
+          if (camera.sharing) {
+            if (!record.socket) open(record);
+            else if (record.socket.readyState === WebSocket.OPEN) {
+              const payload = registration(camera);
+              if (record.payload !== payload) {
+                record.socket.send(payload);
+                record.payload = payload;
+              }
+            }
+          } else {
+            close(record);
+            if (camera.present && !camera.uncertain && !record.pending && !record.suspended) {
+              record.pending = true;
+              const current = record;
+              void model
+                .setSharing(camera.id, true)
+                .catch((error: unknown) => {
+                  current.suspended = true;
+                  options.report(camera.id, String(error), true);
+                })
+                .finally(() => {
+                  current.pending = false;
+                });
+            }
+          }
         }
-        if (sharing) return;
-        // Only physical cameras: a simulator registered here would receive camera jobs.
-        const physical = tools.target() === CameraTarget.Usb;
-        if (
-          state === ConnectionState.Connected &&
-          physical &&
-          tools.canShare() &&
-          idle &&
-          !suspended
-        ) {
-          void share.share().catch((error: unknown) => {
-            tools.connectionMessage(String(error), Level.Error);
-          });
-        }
-      },
-    );
-    let wasSharing = false;
-    createEffect(
-      () => share.sharing(),
-      (sharing) => {
-        // A share that ends while the camera stays connected was stopped on purpose.
-        if (wasSharing && !sharing && tools.connection() === ConnectionState.Connected)
-          suspended = true;
-        wasSharing = sharing;
       },
     );
     return dispose;
   });
-  // An unloading page may never run another effect: withdraw synchronously.
-  window.addEventListener('pagehide', close);
-  document.addEventListener('freeze', close);
+  window.addEventListener('pagehide', withdraw);
+  document.addEventListener('freeze', withdraw);
   return () => {
-    window.removeEventListener('pagehide', close);
-    document.removeEventListener('freeze', close);
+    stopped = true;
+    window.removeEventListener('pagehide', withdraw);
+    document.removeEventListener('freeze', withdraw);
+    stopReloadHold();
     dispose();
-    close();
+    withdraw();
   };
 }

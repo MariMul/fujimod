@@ -13,6 +13,7 @@ pub mod operations;
 pub mod owner;
 pub mod owner_log;
 mod proxy;
+pub mod remote;
 pub mod trace;
 
 pub use error::{Error, Result};

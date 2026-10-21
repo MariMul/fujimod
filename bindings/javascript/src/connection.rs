@@ -5,6 +5,7 @@ use js_sys::Array;
 #[derive(Clone)]
 pub struct Device {
     pub(crate) inner: usb::connection::Device,
+    pub(crate) proxy: Option<std::sync::Arc<fujimod_usb::remote::Observation>>,
 }
 impl Device {
     fn owner(&self) -> Result<&std::sync::Arc<fujimod_usb::owner::DeviceOwner>, JsValue> {
@@ -24,25 +25,50 @@ impl Device {
     #[wasm_bindgen(unchecked_return_type = "Promise<void>")]
     pub fn open(&self) -> js_sys::Promise {
         let owner = self.owner().cloned();
+        let proxy = self.proxy.clone();
+        let remote = if let usb::connection::Device::Proxy(remote) = &self.inner {
+            Some(remote.clone())
+        } else {
+            None
+        };
         wasm_bindgen_futures::future_to_promise(async move {
-            owner?.reopen().await.map_err(|e| error(e.into()))?;
+            if let Some(proxy) = proxy {
+                proxy.open().map_err(|e| error(e.into()))?;
+                if let Some(remote) = remote {
+                    crate::exporter::monitor_proxy(remote, proxy);
+                }
+            } else {
+                owner?.reopen().await.map_err(|e| error(e.into()))?;
+            }
             Ok(JsValue::UNDEFINED)
         })
     }
     #[wasm_bindgen(getter)]
     pub fn id(&self) -> Result<String, JsValue> {
+        if let Some(proxy) = &self.proxy {
+            return Ok(proxy.status().id);
+        }
         Ok(self.owner()?.descriptor.id.clone())
     }
     #[wasm_bindgen(getter, unchecked_return_type = "DeviceState")]
     pub fn status(&self) -> Result<JsValue, JsValue> {
+        if let Some(proxy) = &self.proxy {
+            return crate::exporter::state_value(&proxy.status());
+        }
         crate::exporter::state_value(&self.owner()?.status())
     }
     #[wasm_bindgen(getter)]
     pub fn present(&self) -> Result<bool, JsValue> {
+        if let Some(proxy) = &self.proxy {
+            return Ok(proxy.status().present);
+        }
         Ok(self.owner()?.status().present)
     }
     #[wasm_bindgen(getter)]
     pub fn sharing(&self) -> Result<bool, JsValue> {
+        if self.proxy.is_some() {
+            return Ok(false);
+        }
         Ok(self.owner()?.status().sharing)
     }
     #[wasm_bindgen(getter, js_name=sessionOwner, unchecked_return_type="DeviceState['sessionOwner']")]
@@ -51,9 +77,15 @@ impl Device {
     }
     #[wasm_bindgen(js_name=watchLog)]
     pub fn watch_log(&self) -> Result<crate::exporter::LogEvents, JsValue> {
+        if let Some(proxy) = &self.proxy {
+            return Ok(crate::exporter::LogEvents::from_events(proxy.watch_log()));
+        }
         Ok(crate::exporter::LogEvents::new(self.owner()?))
     }
     pub fn watch(&self) -> Result<crate::exporter::DeviceEvents, JsValue> {
+        if let Some(proxy) = &self.proxy {
+            return Ok(crate::exporter::DeviceEvents::from_receiver(proxy.watch()));
+        }
         Ok(crate::exporter::DeviceEvents::new(self.owner()?))
     }
     #[wasm_bindgen(js_name=acquireSession, unchecked_return_type="Promise<Session>")]
@@ -62,8 +94,9 @@ impl Device {
         interface: &InterfaceSelection,
         limits: &FirmwareLimits,
         options: &TransferOptions,
+        tool: Option<String>,
     ) -> js_sys::Promise {
-        session::Session::open(self, interface, limits, options)
+        session::Session::open_named(self, interface, limits, options, tool)
     }
     #[wasm_bindgen(js_name=stopSharing)]
     pub fn stop_sharing(&self) -> Result<(), JsValue> {
@@ -83,7 +116,11 @@ impl Device {
     #[wasm_bindgen(unchecked_return_type = "Promise<void>")]
     pub fn close(&self) -> js_sys::Promise {
         let device = self.inner.clone();
+        let proxy = self.proxy.clone();
         wasm_bindgen_futures::future_to_promise(async move {
+            if let Some(proxy) = proxy {
+                proxy.close();
+            }
             if let usb::connection::Device::Owned(owner) = device {
                 owner.shutdown().await.map_err(|e| error(e.into()))?;
             }
@@ -141,7 +178,7 @@ pub fn discover(
                     }
                     other => other,
                 };
-                out.push(&JsValue::from(Device { inner }));
+                out.push(&JsValue::from(Device { inner, proxy: None }));
             }
             Ok(out.into())
         })
@@ -170,6 +207,7 @@ pub fn request_device(
             let owner = crate::exporter::device_owner(info).await?;
             Ok(JsValue::from(Device {
                 inner: usb::connection::Device::Owned(owner),
+                proxy: None,
             }))
         })
     })
@@ -189,7 +227,12 @@ pub fn discover_proxy(
             .map_err(error)?;
         let out = Array::new();
         for inner in items {
-            out.push(&JsValue::from(Device { inner }));
+            let proxy = if let usb::connection::Device::Proxy(remote) = &inner {
+                Some(crate::exporter::proxy_observation(remote, &url, &token))
+            } else {
+                None
+            };
+            out.push(&JsValue::from(Device { inner, proxy }));
         }
         Ok(out.into())
     }))

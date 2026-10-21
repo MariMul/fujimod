@@ -32,11 +32,12 @@ pub struct Exchange {
     pub envelope: [u8; 12],
     pub data: Vec<u8>,
     pub truncated: bool,
+    pub console_data: Option<Vec<u8>>,
     pub error: Option<String>,
 }
 impl Exchange {
     pub fn bytes(&self) -> usize {
-        self.envelope.len() + self.data.len()
+        self.envelope.len() + self.data.len() + self.console_data.as_ref().map_or(0, Vec::len)
     }
 }
 struct Subscriber {
@@ -255,6 +256,7 @@ impl Recorder {
             envelope,
             data: Vec::new(),
             truncated: false,
+            console_data: None,
             error: None,
         });
     }
@@ -311,6 +313,19 @@ impl Recorder {
             u32::from_be_bytes(frame.envelope[2..6].try_into().unwrap()),
             frame.requested,
         );
+        if frame.decoded.command == Some(0x200001) && frame.error.is_none() {
+            let range = match (frame.kind, word(&frame.data, 16)) {
+                (0xd0, Some(6)) => word(&frame.data, 20).map(|length| (24usize, length as usize)),
+                (0xd1, Some(7)) => word(&frame.data, 28).map(|length| (32usize, length as usize)),
+                _ => None,
+            };
+            frame.console_data = range.and_then(|(offset, length)| {
+                frame
+                    .data
+                    .get(offset..offset.checked_add(length)?)
+                    .map(<[u8]>::to_vec)
+            });
+        }
         if frame.kind == 0xd0 && frame.error.is_none() {
             self.command = Some(frame.decoded.clone());
         } else if frame.kind != 0xd0 {
@@ -342,7 +357,11 @@ mod tests {
         for (offset, value) in [(0, 0x200001u32), (16, 2), (28, 0x12345678), (32, 5)] {
             request[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
         }
-        recorder.start("camera", SessionOwner::Local, &envelope(0xd0, 36));
+        recorder.start(
+            "camera",
+            SessionOwner::Local { tool: None },
+            &envelope(0xd0, 36),
+        );
         recorder.control_complete();
         assert!(log.receiver.try_recv().is_err());
         recorder.payload(false, &request[..16], 16, 16, None);
@@ -353,7 +372,11 @@ mod tests {
         assert_eq!(sent.decoded.address, Some(0x12345678));
         assert_eq!(sent.decoded.length, Some(5));
         assert_eq!(sent.data, request);
-        recorder.start("camera", SessionOwner::Local, &envelope(0xd1, 64));
+        recorder.start(
+            "camera",
+            SessionOwner::Local { tool: None },
+            &envelope(0xd1, 64),
+        );
         recorder.payload(true, &request, 64, 36, None);
         let received = log.receiver.try_recv().unwrap();
         assert_eq!(received.sequence, sent.sequence + 1);
@@ -385,11 +408,50 @@ mod tests {
         assert!(log.receiver.try_recv().is_err());
     }
     #[test]
+    fn console_submit_and_each_output_chunk_are_decoded_once_with_bounds_checks() {
+        let mut recorder = Recorder::default();
+        let log = recorder.watch();
+        for (kind, function, offset, length_offset, text) in [
+            (0xd0, 6u32, 24, 20, b"help".as_slice()),
+            (0xd1, 7, 32, 28, b"hello\n".as_slice()),
+        ] {
+            let mut data = vec![0; offset + text.len()];
+            data[..4].copy_from_slice(&0x200001u32.to_le_bytes());
+            data[16..20].copy_from_slice(&function.to_le_bytes());
+            data[length_offset..length_offset + 4]
+                .copy_from_slice(&(text.len() as u32).to_le_bytes());
+            data[offset..].copy_from_slice(text);
+            for invalid in [false, true] {
+                if invalid {
+                    data[length_offset..length_offset + 4].copy_from_slice(&u32::MAX.to_le_bytes());
+                }
+                recorder.start(
+                    "camera",
+                    SessionOwner::Remote {
+                        controller: "peer".into(),
+                    },
+                    &envelope(kind, data.len() as u32),
+                );
+                recorder.payload(kind == 0xd1, &data, data.len(), data.len(), None);
+                let event = log.receiver.try_recv().unwrap();
+                assert_eq!(
+                    event.console_data.as_deref(),
+                    if invalid { None } else { Some(text) }
+                );
+                assert!(log.receiver.try_recv().is_err());
+            }
+        }
+    }
+    #[test]
     fn slow_subscribers_report_overflow_instead_of_silent_loss() {
         let mut recorder = Recorder::default();
         let log = recorder.watch();
         for _ in 0..129 {
-            recorder.start("camera", SessionOwner::Local, &envelope(0xc0, 8));
+            recorder.start(
+                "camera",
+                SessionOwner::Local { tool: None },
+                &envelope(0xc0, 8),
+            );
             recorder.payload(true, &[0; 8], 8, 8, None);
         }
         futures_lite::future::block_on(async {

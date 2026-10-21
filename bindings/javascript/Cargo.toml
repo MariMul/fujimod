@@ -16,6 +16,8 @@ testing = ["fujimod-usb/testing"]
 fujimod-usb.workspace = true
 serde_json.workspace = true
 async-channel = "2"
+fujimod-usb-proxy = { path = "../../crates/usb-proxy" }
+futures-timer.workspace = true
 fujimod-workflows.workspace = true
 fujimod-defs.workspace = true
 nusb.workspace = true

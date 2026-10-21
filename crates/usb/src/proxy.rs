@@ -35,6 +35,8 @@ pub(crate) struct ProxyIo {
     /// Steps sent since the last sync, in order: sequence, stage, and the OUT
     /// length each must transfer (None for IN).
     pub unsynced: Vec<(u64, TransferStage, Option<usize>)>,
+    pub observation: Option<crate::remote::Lease>,
+    pub observed: std::collections::BTreeMap<u64, Operation>,
 }
 fn vendor_setup() -> Setup {
     Setup {
@@ -65,6 +67,27 @@ fn transfer_error(
     }
 }
 impl ProxyIo {
+    async fn submit_logged(&mut self, operation: Operation) -> Result<u64> {
+        let captured = self.observation.as_ref().map(|_| operation.clone());
+        let seq = self
+            .client
+            .submit(&self.device, operation, self.timeout)
+            .await?;
+        if let Some(operation) = captured {
+            self.observed.insert(seq, operation);
+        }
+        Ok(seq)
+    }
+    fn observe_result(&mut self, seq: u64, outcome: &Outcome) {
+        if let Some(operation) = self.observed.remove(&seq)
+            && let Some(observation) = &self.observation
+        {
+            match outcome {
+                Outcome::Completed(completion) => observation.record(&operation, completion),
+                _ => observation.failed("Proxy operation did not complete"),
+            }
+        }
+    }
     pub(crate) async fn notify_owner(&mut self, message: Message) -> Result<()> {
         Ok(self.client.notify_owner(message).await?)
     }
@@ -87,10 +110,7 @@ impl ProxyIo {
             }
             _ => None,
         };
-        let seq = self
-            .client
-            .submit(&self.device, operation, self.timeout)
-            .await?;
+        let seq = self.submit_logged(operation).await?;
         self.unsynced.push((seq, stage, expected));
         Ok(())
     }
@@ -108,6 +128,7 @@ impl ProxyIo {
         }
         let mut replies = Vec::new();
         for ((seq, stage, expected), (done, outcome)) in steps.into_iter().zip(outcomes) {
+            self.observe_result(seq, &outcome);
             let Outcome::Completed(completion) = outcome else {
                 return Err(fujimod_usb_proxy::Error("USB step not run".into()).into());
             };
@@ -227,19 +248,14 @@ impl ProxyIo {
                     }
                     _ => unreachable!(),
                 };
-                let seq = self.client.submit(&self.device, op, self.timeout).await?;
+                let seq = self.submit_logged(op).await?;
                 steps.push((seq, CheckedStep::Out(count)));
             }
             let seq = self
-                .client
-                .submit(
-                    &self.device,
-                    Operation::TransferIn {
-                        endpoint: self.input,
-                        length,
-                    },
-                    self.timeout,
-                )
+                .submit_logged(Operation::TransferIn {
+                    endpoint: self.input,
+                    length,
+                })
                 .await?;
             steps.push((seq, CheckedStep::Reply));
             let first = expected.remove(0);
@@ -259,6 +275,7 @@ impl ProxyIo {
         for (index, ((seq, expected), (done, outcome))) in
             steps.into_iter().zip(outcomes).enumerate()
         {
+            self.observe_result(seq, &outcome);
             if seq != done {
                 return Err(fujimod_usb_proxy::Error(
                     "inconsistent checked pipeline sequence".into(),
@@ -298,6 +315,9 @@ impl Io for ProxyIo {
             .await?;
         if let Some(error) = completion.error {
             return Err(fujimod_usb_proxy::Error(error).into());
+        }
+        if let Some(observation) = &mut self.observation {
+            observation.release();
         }
         Ok(())
     }

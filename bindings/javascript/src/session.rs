@@ -159,6 +159,51 @@ impl Session {
         }))
     }
 }
+impl Session {
+    pub(crate) fn open_named(
+        device: &connection::Device,
+        interface: &InterfaceSelection,
+        limits: &FirmwareLimits,
+        options: &TransferOptions,
+        tool: Option<String>,
+    ) -> js_sys::Promise {
+        let info = device.inner.clone();
+        let proxy = device.proxy.clone();
+        let interface = interface.inner;
+        let trace = options.trace.clone();
+        let options = options.inner;
+        let limits = *limits;
+
+        wasm_bindgen_futures::future_to_promise(async move {
+            let mut claim = proxy
+                .as_ref()
+                .map(|proxy| proxy.acquire(tool.clone()))
+                .transpose()
+                .map_err(|e| error(e.into()))?;
+            let connection = usb::connection::Connection::open(&info, interface, options).await;
+            let mut connection = match connection {
+                Ok(connection) => connection,
+                Err(failure) => {
+                    if let Some(claim) = &mut claim {
+                        claim.release();
+                    }
+                    return Err(error(failure));
+                }
+            };
+            if let Some(tool) = tool {
+                connection.set_tool(tool);
+            }
+            if let Some(claim) = claim {
+                connection.observe_remote(claim);
+            }
+            Ok(Self::wrap(
+                connection.begin_session(trace).await.map_err(error)?,
+                limits,
+            )
+            .into())
+        })
+    }
+}
 #[wasm_bindgen]
 impl Session {
     #[wasm_bindgen(unchecked_return_type = "Promise<Session>")]
@@ -168,22 +213,7 @@ impl Session {
         limits: &FirmwareLimits,
         options: &TransferOptions,
     ) -> js_sys::Promise {
-        let info = device.inner.clone();
-        let interface = interface.inner;
-        let trace = options.trace.clone();
-        let options = options.inner;
-        let limits = *limits;
-
-        wasm_bindgen_futures::future_to_promise(async move {
-            let connection = usb::connection::Connection::open(&info, interface, options)
-                .await
-                .map_err(error)?;
-            Ok(Self::wrap(
-                connection.begin_session(trace).await.map_err(error)?,
-                limits,
-            )
-            .into())
-        })
+        Self::open_named(device, interface, limits, options, None)
     }
     #[wasm_bindgen(getter)]
     pub fn state(&self) -> SessionState {

@@ -49,3 +49,20 @@ holder, and filters by layer and by camera.
 Binary data stays binary. Descriptive fields (identity, geometry, times) may
 be JSON; bytes read from a camera are stored as binary files, never as JSON
 number arrays.
+
+The browser entry point is `pageCameraModel()` in `usb-camera-model.ts`. It pins
+one model to the browser page, outside component ownership, so component and
+module hot swaps keep every Rust device owner and session alive. Server renders
+create independent models. The model owns connection, peer and FF80 log entries;
+Rust supplies decoded traffic, including console command and output bytes, tagged
+with the device and session holder. Empty, incomplete console polls wait 50 ms
+before returning so callers can poll without a busy loop.
+
+Development and local-preview pages start `startDevShare(model, options)` once.
+Each present USB camera gets its own share and registry WebSocket through
+`model.setSharing`; remote cameras are never registered as local hardware.
+Identity, presence and battery status update that camera's registration. Stopping
+a share suspends automatic sharing for that camera until it reconnects. A shared
+camera keeps its offline registration while unplugged. Page unload withdraws all
+registrations synchronously. These attachments never change device connectivity
+or take the local session lock.
