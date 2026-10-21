@@ -64,7 +64,7 @@ impl Keyframe {
 }
 impl State {
     fn checkpoint_boundary(&self) -> Result<(), String> {
-        if self.active_slice.is_some() || self.memory_access {
+        if self.active_slice.is_some() || self.parallel.is_some() || self.memory_access {
             return Err("keyframe requires a stopped board".into());
         }
         Ok(())
@@ -107,6 +107,7 @@ impl State {
             exclusive: _,
             code_run,
             active_slice: _,
+            parallel: _,
             decoders: _,
             memory_access: _,
             continuation: _,

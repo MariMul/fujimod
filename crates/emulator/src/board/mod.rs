@@ -11,6 +11,7 @@ pub mod harness;
 mod host;
 #[cfg(feature = "host-profile")]
 mod host_profile;
+mod interactive;
 pub mod keyframe;
 mod loops;
 pub mod memory;
@@ -102,6 +103,7 @@ struct State {
     // A peer run or host/DMA write requires resynchronizing Unicorn's code cache.
     code_run: Option<usize>,
     active_slice: Option<schedule::Slice>,
+    parallel: Option<interactive::Epoch>,
     decoders: decoder::Decoders,
     memory_access: bool,
 }
@@ -111,11 +113,12 @@ struct Binding {
     core: usize,
     base: u64,
 }
-/// All processor execution and callbacks are serialized on one owner. Native
-/// vCPU workers are a backend detail, never independently scheduled guests.
+/// Devices and callbacks have one owner. Interactive native processors run
+/// concurrently between barriers; exact execution uses ordered slices.
 pub struct Board {
     cpus: Rc<Vec<Rc<dyn Cpu>>>,
     state: Rc<RefCell<State>>,
+    run_wakeup: fujimod_emulator_cpu::RunWakeup,
     bindings: Vec<Box<Binding>>,
     hooks: Vec<(usize, HookId)>,
     mmio: Vec<(usize, u64, usize)>,
@@ -143,7 +146,7 @@ impl Board {
             .state
             .try_borrow_mut()
             .map_err(|_| "policy requires a stopped board")?;
-        if state.active_slice.is_some() || state.memory_access {
+        if state.active_slice.is_some() || state.parallel.is_some() || state.memory_access {
             return Err("policy requires a stopped board".into());
         }
         let previous = state.execution_policy;
@@ -173,7 +176,7 @@ impl Board {
             .state
             .try_borrow()
             .map_err(|_| "fingerprint requires a stopped board")?;
-        if state.active_slice.is_some() || state.memory_access {
+        if state.active_slice.is_some() || state.parallel.is_some() || state.memory_access {
             return Err("fingerprint requires a stopped board".into());
         }
         let mut runtime = self.state();
@@ -291,10 +294,12 @@ impl Board {
             exclusive,
             code_run: None,
             active_slice: None,
+            parallel: None,
             decoders: decoder::Decoders::default(),
             memory_access: false,
         }));
         let mut board = Self {
+            run_wakeup: Default::default(),
             host_pause: Default::default(),
             isolated_core: Cell::new(None),
             continuation: None,
@@ -313,6 +318,9 @@ impl Board {
             physical_memory: memory,
         };
         for core in 0..n {
+            if board.cpus[core].features().asynchronous_runs {
+                board.cpus[core].set_run_wakeup(board.run_wakeup.clone())?;
+            }
             let binding = Box::new(Binding {
                 state: board.state.clone(),
                 cpus: Rc::downgrade(&board.cpus),
@@ -321,6 +329,15 @@ impl Board {
             });
             let data = (&*binding as *const Binding).cast_mut().cast();
             let features = board.cpus[core].features();
+            if features.asynchronous_runs {
+                let hook = unsafe {
+                    board.cpus[core].install_hook(Hook::Synchronization {
+                        callback: synchronization_barrier,
+                        data,
+                    })?
+                };
+                board.hooks.push((core, hook));
+            }
             let batches = board.cpus[core].model() != fujimod_emulator_cpu::Model::CortexM4
                 && features.architectural_exits
                 && features.instruction_progress
@@ -542,8 +559,8 @@ impl Board {
         self.mmio.push((core, address, bytes));
         Ok(())
     }
-    /// Execute bounded, deterministic round-robin quanta. Host cancellation
-    /// limits belong to the caller; they never supply guest elapsed time.
+    /// Execute to a guest tick. Exact uses deterministic round-robin slices;
+    /// Interactive workers finish blocks and join at device/owner barriers.
     pub fn run_until(&mut self, until: u64, quantum: usize) -> Result<(), String> {
         let result = self.run_inner(Some(until), None, None, quantum);
         self.state.borrow_mut().clock_limit = None;
@@ -555,9 +572,9 @@ impl Board {
     pub fn run_for_instructions(&mut self, count: u64, quantum: usize) -> Result<(), String> {
         self.run_with_limits(count, quantum, None, None)
     }
-    /// A soft absolute instruction threshold pauses after the current
-    /// round-robin cycle. Hard instruction/time limits can end a partial
-    /// slice; its phase survives the next host call.
+    /// Exact thresholds preserve partial slices and stop at hard instruction
+    /// limits. Interactive thresholds are block boundaries and may overshoot
+    /// by an admitted block per runnable core; guest time stops at `until`.
     pub fn run_with_limits(
         &mut self,
         count: u64,
@@ -678,6 +695,38 @@ impl Board {
             {
                 return Ok(());
             }
+            if s.execution_policy == ExecutionPolicy::Interactive {
+                let cores: Vec<_> = (0..n)
+                    .map(|offset| (self.next_core.get() + offset) % n)
+                    .filter(|&core| s.released[core] && !s.waiting[core])
+                    .collect();
+                if cores.len() > 1
+                    && cores
+                        .iter()
+                        .all(|&core| self.cpus[core].features().asynchronous_runs)
+                {
+                    let entered = s.total_instructions()?;
+                    let pause_room =
+                        pause_after.map_or(u64::MAX, |pause| pause.saturating_sub(entered).max(1));
+                    let room = remaining
+                        .min(pause_room)
+                        .div_ceil(cores.len() as u64)
+                        .max(1);
+                    let cap = s.timeline.ratio().budget(
+                        s.timeline.now(),
+                        s.timeline.phase(),
+                        until.unwrap_or(u64::MAX),
+                    )?;
+                    let budget = s.timeline.budget(room.min(cap).min(usize::MAX as u64))? as usize;
+                    if budget == 0 {
+                        return Err("scheduler made no progress at a device deadline".into());
+                    }
+                    drop(s);
+                    self.interactive_window(&cores, budget, quantum)?;
+                    completed_slice = None;
+                    continue;
+                }
+            }
             let start = self.next_core.get();
             let core = (0..n)
                 .map(|i| (start + i) % n)
@@ -786,29 +835,7 @@ impl Board {
             }
             let exit = result.map_err(|e| e.to_string())?;
             s.apply_memory(&self.cpus)?;
-            match exit {
-                Exit::Stopped => (),
-                Exit::Hint(hint) => s.hint(core, hint),
-                Exit::Trap(t) if t.syndrome >> 26 == 1 => {
-                    set(
-                        &**cpu,
-                        Register::Pc,
-                        scalar(&**cpu, Register::Pc)?.wrapping_add(4),
-                    )?;
-                    s.hint(
-                        core,
-                        if t.syndrome & 1 != 0 {
-                            fujimod_emulator_cpu::Hint::WaitForEvent
-                        } else {
-                            fujimod_emulator_cpu::Hint::WaitForInterrupt
-                        },
-                    );
-                }
-                Exit::Trap(t) if t.syndrome >> 26 == 0x18 => {
-                    s.system_register(&**cpu, core, t.syndrome)?;
-                }
-                other => return Err(format!("unhandled CPU{core} exit at {pc:#x}: {other:?}")),
-            }
+            s.finish_exit(&**cpu, core, pc, exit)?;
             let entered = s.instructions[core]
                 .checked_sub(entered)
                 .ok_or("processor entry count moved backward")?;
@@ -883,6 +910,38 @@ fn set(cpu: &dyn Cpu, r: Register, v: u64) -> Result<(), String> {
     cpu.write_register(r, &v.to_le_bytes()[..n])
 }
 impl State {
+    fn finish_exit(
+        &mut self,
+        cpu: &dyn Cpu,
+        core: usize,
+        pc: u64,
+        exit: Exit,
+    ) -> Result<(), String> {
+        match exit {
+            Exit::Stopped => (),
+            Exit::Hint(hint) => self.hint(core, hint),
+            Exit::Trap(t) if t.syndrome >> 26 == 1 => {
+                set(
+                    cpu,
+                    Register::Pc,
+                    scalar(cpu, Register::Pc)?.wrapping_add(4),
+                )?;
+                self.hint(
+                    core,
+                    if t.syndrome & 1 != 0 {
+                        fujimod_emulator_cpu::Hint::WaitForEvent
+                    } else {
+                        fujimod_emulator_cpu::Hint::WaitForInterrupt
+                    },
+                );
+            }
+            Exit::Trap(t) if t.syndrome >> 26 == 0x18 => {
+                self.system_register(cpu, core, t.syndrome)?
+            }
+            other => return Err(format!("unhandled CPU{core} exit at {pc:#x}: {other:?}")),
+        }
+        Ok(())
+    }
     fn apply_memory(&mut self, cpus: &[Rc<dyn Cpu>]) -> Result<(), String> {
         if self.decoders.pending() {
             self.code_run = None;
@@ -950,15 +1009,19 @@ impl State {
             let delta = progress
                 .checked_sub(self.accounted[core])
                 .ok_or("processor entry count moved backward")?;
+            let elapsed = self
+                .parallel
+                .as_mut()
+                .map_or(delta, |epoch| epoch.advance(core, progress));
             let elapsed = if self.execution_policy == ExecutionPolicy::Interactive {
                 let boundary = self.timeline.ratio().budget(
                     self.timeline.now(),
                     self.timeline.phase(),
                     self.clock_limit.unwrap_or(u64::MAX),
                 )?;
-                self.timeline.budget(delta.min(boundary))?
+                self.timeline.budget(elapsed.min(boundary))?
             } else {
-                delta
+                elapsed
             };
             self.timeline.advance_instructions(elapsed)?;
             self.instructions[core] = self.instructions[core]
@@ -1645,6 +1708,9 @@ unsafe fn access(data: *mut c_void, offset: u64, size: u32, value: Option<u64>) 
 unsafe fn read(offset: u64, size: u32, data: *mut c_void) -> u64 {
     unsafe { access(data, offset, size, None) }
 }
+// The async owner pump parks every peer before dispatching this callback.
+// Sensitive CPU memory operations retire only after it returns.
+unsafe fn synchronization_barrier(_: *mut c_void) {}
 unsafe fn write(offset: u64, size: u32, value: u64, data: *mut c_void) {
     unsafe {
         access(data, offset, size, Some(value));

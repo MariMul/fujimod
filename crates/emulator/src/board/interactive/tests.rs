@@ -131,8 +131,17 @@ fn board(policy: ExecutionPolicy, due: Option<u64>) -> (Board, usize) {
                 .collect::<Vec<_>>(),
         )
         .unwrap();
+    // Either host thread may finish first. Both complete the same store so
+    // the sampled value does not depend on which worker reaches its barrier.
     board
-        .write_memory(0, 0x2000, &0xeafffffeu32.to_le_bytes())
+        .write_memory(
+            0,
+            0x2000,
+            &code
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<_>>(),
+        )
         .unwrap();
     if policy != ExecutionPolicy::Exact {
         board.set_execution_policy(policy).unwrap();
