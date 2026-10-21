@@ -10,8 +10,8 @@ from typing import cast
 from unittest import TestCase
 from unittest.mock import Mock
 
-from fujimod.walkthroughs import Guide, MenuCamera, MenuGuide, open_menu
 from fujimod.recording import Frame, Recorder
+from fujimod.walkthroughs import Guide, MenuCamera, MenuGuide, open_menu
 from fujimod.walkthroughs.text import MenuEntry, encode, plain
 
 

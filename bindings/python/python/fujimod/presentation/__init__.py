@@ -38,9 +38,7 @@ class Presentation(TypedDict):
     icons: dict[str, Shape]
 
 
-SPEC = cast(
-    Presentation, json.loads(controls())
-)
+SPEC = cast(Presentation, json.loads(controls()))
 
 
 def control(name: str) -> Control:

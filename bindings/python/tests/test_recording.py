@@ -1,9 +1,10 @@
 """The shared native source protocol and screenshot-default recording API."""
+
 import hashlib
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 from fujimod.recording import Frame, Recorder, capture_scanout
 
@@ -13,14 +14,23 @@ class Source:
         self.calls = 0
         self.instructions, self.ticks = 123, 456
 
-    def recording_frame(self, node: str, instance: int, diagnostics: bool) -> tuple[bytes, str, int, int]:
-        assert node == 'scanout' and instance == 0
+    def recording_frame(
+        self, node: str, instance: int, diagnostics: bool
+    ) -> tuple[bytes, str, int, int]:
+        assert node == "scanout" and instance == 0
         self.calls += 1
-        return bytes([40]) * 320 * 240 * 3, json.dumps(dict(instance=instance)), 320, 240
+        return (
+            bytes([40]) * 320 * 240 * 3,
+            json.dumps(dict(instance=instance)),
+            320,
+            240,
+        )
 
 
 class RecordingTests(unittest.TestCase):
-    def test_screenshot_default_samples_just_the_start_and_never_requires_encoders(self) -> None:
+    def test_screenshot_default_samples_just_the_start_and_never_requires_encoders(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             recorder, source = Recorder(root), Source()
@@ -29,23 +39,26 @@ class RecordingTests(unittest.TestCase):
                 recorder.sample_scanout(source, index / 15, force=True)
             frame = capture_scanout(source)
             assert frame is not None
-            digest = recorder.screenshot(frame, 'screenshots/001.png')
+            digest = recorder.screenshot(frame, "screenshots/001.png")
             recorder.still(frame, 1.5)
             recorder.finish()
             self.assertEqual(source.calls, 2)
             self.assertEqual((source.instructions, source.ticks), (123, 456))
-            self.assertEqual(digest, hashlib.sha256((root/'screenshots/001.png').read_bytes()).hexdigest())
+            self.assertEqual(
+                digest,
+                hashlib.sha256((root / "screenshots/001.png").read_bytes()).hexdigest(),
+            )
             self.assertEqual(frame.sha256, digest)
-            self.assertEqual(json.loads(recorder.metrics())['written_frames'], 0)
-            self.assertFalse((root/'video.mp4').exists())
-            self.assertFalse((root/'ffmpeg.log').exists())
+            self.assertEqual(json.loads(recorder.metrics())["written_frames"], 0)
+            self.assertFalse((root / "video.mp4").exists())
+            self.assertFalse((root / "ffmpeg.log").exists())
 
     def test_badges_do_not_change_clean_frames_or_native_resolution(self) -> None:
         frame = Frame.rgb(320, 240, bytes([40]) * 320 * 240 * 3)
         before = frame.png()
-        annotated = frame.annotated([('right', 255)])
+        annotated = frame.annotated([("right", 255)])
         self.assertEqual(frame.png(), before)
         self.assertNotEqual(annotated.png(), before)
         self.assertEqual((annotated.width, annotated.height), (320, 240))
-        with self.assertRaisesRegex(ValueError, 'Missing input presentation'):
-            frame.annotated([('unconfigured control', 255)])
+        with self.assertRaisesRegex(ValueError, "Missing input presentation"):
+            frame.annotated([("unconfigured control", 255)])

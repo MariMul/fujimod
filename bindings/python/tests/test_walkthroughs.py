@@ -61,7 +61,11 @@ class WalkthroughTests(unittest.TestCase):
     def guide(self, *, video: bool = False) -> tuple[Camera, Guide[Camera]]:
         camera = Camera()
         return camera, Guide(
-            camera, self.root / "run", identity={"build": "test"}, title="Test", video=video
+            camera,
+            self.root / "run",
+            identity={"build": "test"},
+            title="Test",
+            video=video,
         )
 
     def test_multiple_functions_and_filename_identity(self) -> None:
@@ -243,7 +247,6 @@ class WalkthroughTests(unittest.TestCase):
         os.utime(source, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
         self.assertEqual(discover(source)[0].title, "Two")
 
-
     def test_zero_hold_adds_no_frame(self) -> None:
         camera, guide = self.guide()
         guide.recording.still(camera.frame, 0)
@@ -277,7 +280,6 @@ class WalkthroughTests(unittest.TestCase):
         self.assertFalse(
             json.loads((guide.output / "guide.json").read_text())["passed"]
         )
-
 
     def test_helper_rewrite_with_unchanged_timestamp_is_not_cached(self) -> None:
         import os
@@ -327,7 +329,9 @@ class WalkthroughTests(unittest.TestCase):
             camera.menu_reference = lambda item: MenuEntry(
                 "item", "ITEM", ancestors=(MenuEntry("root", "MENU"),)
             )
-            camera.select_menu_item = lambda item: setattr(camera, "frame", Frame.from_png(png("blue")))
+            camera.select_menu_item = lambda item: setattr(
+                camera, "frame", Frame.from_png(png("blue"))
+            )
 
             def activate(item: MenuReference) -> None:
                 self.assertEqual(camera.frame.png(), png("blue"))
@@ -411,7 +415,12 @@ class WalkthroughTests(unittest.TestCase):
     ) -> None:
         camera, guide = self.guide()
         recording = guide.recording
-        for image, time in [(camera.frame.png(), 0), (camera.frame.png(), 3), (png("blue"), 3.1), (png("blue"), 4.1)]:
+        for image, time in [
+            (camera.frame.png(), 0),
+            (camera.frame.png(), 3),
+            (png("blue"), 3.1),
+            (png("blue"), 4.1),
+        ]:
             recording.frame(Frame.from_png(image), time)
         self.assertAlmostEqual(recording.skipped_seconds, 3.3)
         self.assertEqual(recording.frames, 12)
@@ -424,6 +433,7 @@ class WalkthroughTests(unittest.TestCase):
 
     def test_action_holds_only_present_the_result_and_replay_has_no_hold(self) -> None:
         from unittest.mock import Mock
+
         camera, guide = self.guide()
         camera.capture = Mock(return_value=camera.frame)
         with guide.action(navigation=True):

@@ -18,7 +18,6 @@ from string.templatelib import Template
 from typing import NotRequired, Protocol, Self, TypedDict, cast
 
 from ..recording import Frame
-
 from .text import (
     MenuEntry,
     MenuReference,
