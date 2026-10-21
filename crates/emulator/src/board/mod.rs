@@ -517,8 +517,18 @@ impl Board {
             base: physical,
         });
         let data = (&*binding as *const Binding).cast_mut().cast();
+        let fast_reads = self
+            .state
+            .borrow()
+            .bus
+            .fast_reads(physical, bytes)
+            .into_iter()
+            .map(|(offset, value)| {
+                fujimod_emulator_cpu::FastMmioRead::atomic_u32(offset, value)
+            })
+            .collect();
         unsafe {
-            cpu.map_mmio(address, bytes, Mmio { read, write, data })?;
+            cpu.map_mmio_fast(address, bytes, Mmio { read, write, data }, fast_reads)?;
         }
         self.bindings.push(binding);
         self.mmio.push((core, address, bytes));

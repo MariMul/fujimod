@@ -1,6 +1,11 @@
+use crate::bus::FastReadWord;
 use crate::record::Result;
 use crate::{Record, Unsupported, Value, WordMap};
 use serde::{Deserialize, Serialize};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU32, Ordering},
+};
 
 pub const BASES: [u64; 2] = [0xfff6a000, 0xfff6d000];
 pub const EXTERNAL: &str = "declared-external-phase-clock-unmeasured";
@@ -324,7 +329,14 @@ impl Timing {
     }
     pub fn read(&mut self, a: u64, size: u32, now: i64, host: &mut dyn TimingHost) -> Result<u32> {
         let (i, o) = address(a, size)?;
-        self.tick(now, host)?;
+        if now < self.last_tick {
+            return Err("Display virtual time moved backwards".into());
+        }
+        // A status read between events is pure, including checkpoint state.
+        // Due work and clock-peer transitions remain explicit boundaries.
+        if self.deadline_with_clock(now, host.clock_ready()?).is_some_and(|at| at <= now) {
+            self.tick(now, host)?;
+        }
         Ok(if o == 0x30 {
             self.banks[i].status
         } else {
@@ -477,6 +489,7 @@ pub struct Wiring {
 }
 pub struct DisplayTiming {
     state: Timing,
+    status_snapshots: [Arc<AtomicU32>; 2],
     options: Options,
     clock: crate::exr2::clock::Output,
     controllers: [crate::exr2::irq::Inputs; 2],
@@ -538,110 +551,29 @@ impl DisplayTiming {
             ClockMode::ConfiguredClocked => "configured-clocked",
             ClockMode::External => EXTERNAL,
         };
+        let state = Timing::new(
+            options.frame_ticks.map(|v| v as i64),
+            options.stop_ticks as i64,
+            profile.into(),
+            wiring.start_tick as i64,
+        );
+        let status_snapshots =
+            std::array::from_fn(|i| Arc::new(AtomicU32::new(state.banks[i].status)));
         Ok(Self {
-            state: Timing::new(
-                options.frame_ticks.map(|v| v as i64),
-                options.stop_ticks as i64,
-                profile.into(),
-                wiring.start_tick as i64,
-            ),
+            state,
+            status_snapshots,
             options,
             clock: wiring.clock,
             controllers,
             ceiling,
         })
     }
-    fn time(&self, cx: &mut crate::Cx<'_>) -> Option<i64> {
-        if cx.now() > self.ceiling {
-            cx.fail("display timing exceeds its guest clock range");
-            None
-        } else {
-            Some(cx.now() as i64)
+    fn publish_status(&self) {
+        for (snapshot, bank) in self.status_snapshots.iter().zip(&self.state.banks) {
+            snapshot.store(bank.status, Ordering::Release);
         }
     }
-}
-impl crate::Device for DisplayTiming {
-    crate::checkpoint_fields!(state: Timing);
-
-    fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
-        Ok(self.save())
-    }
-
-    fn name(&self) -> &'static str {
-        "display-timing"
-    }
-    fn read(&mut self, cx: &mut crate::Cx<'_>, a: u64, size: u8) -> u64 {
-        if address(a, size as u32).is_err() {
-            cx.unmodeled();
-            return 0;
-        }
-        let Some(now) = self.time(cx) else { return 0 };
-        let mut host = Connected {
-            cx,
-            clock: &self.clock,
-            controllers: &self.controllers,
-        };
-        match self.state.read(a, size as u32, now, &mut host) {
-            Ok(value) => value.into(),
-            Err(error) => {
-                host.cx.fail(error.0);
-                0
-            }
-        }
-    }
-    fn write(&mut self, cx: &mut crate::Cx<'_>, a: u64, size: u8, value: u64) {
-        if address(a, size as u32).is_err() {
-            cx.unmodeled();
-            return;
-        }
-        let Some(now) = self.time(cx) else { return };
-        let cpu = cx.cpu as i64;
-        let mut host = Connected {
-            cx,
-            clock: &self.clock,
-            controllers: &self.controllers,
-        };
-        if let Err(error) = self
-            .state
-            .write(cpu, a, size as u32, value.into(), now, &mut host)
-        {
-            host.cx.fail(error.0);
-        }
-    }
-    fn advance(&mut self, cx: &mut crate::Cx<'_>) {
-        let Some(now) = self.time(cx) else { return };
-        if !self
-            .state
-            .deadline_with_clock(now, self.clock.ready())
-            .is_some_and(|due| due <= now)
-        {
-            return;
-        }
-        let mut host = Connected {
-            cx,
-            clock: &self.clock,
-            controllers: &self.controllers,
-        };
-        if let Err(error) = self.state.tick(now, &mut host) {
-            host.cx.fail(error.0);
-        }
-    }
-    fn next_deadline(&self, now: u64) -> Option<u64> {
-        if now > self.ceiling {
-            return Some(now);
-        }
-        self.state
-            .deadline_with_clock(now as i64, self.clock.ready())
-            .map(|v| v as u64)
-    }
-    fn pollable(&self, address: u64, size: u8) -> bool {
-        self::address(address, size as u32).is_ok()
-    }
-    fn save(&self) -> serde_json::Value {
-        serde_json::to_value(&self.state).expect("typed display timing state")
-    }
-    fn restore(&mut self, value: &serde_json::Value) -> std::result::Result<(), String> {
-        let state: Timing = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+    fn validate_state(&self, state: &Timing) -> std::result::Result<(), String> {
         if state.phase_profile != self.state.phase_profile
             || state.frame_period_ticks != self.options.frame_ticks.map(|v| v as i64)
             || state.stop_delay_ticks != self.options.stop_ticks as i64
@@ -670,7 +602,147 @@ impl crate::Device for DisplayTiming {
         {
             return Err("invalid display timing state".into());
         }
+        Ok(())
+    }
+    fn time(&self, cx: &mut crate::Cx<'_>) -> Option<i64> {
+        if cx.now() > self.ceiling {
+            cx.fail("display timing exceeds its guest clock range");
+            None
+        } else {
+            Some(cx.now() as i64)
+        }
+    }
+}
+impl crate::Device for DisplayTiming {
+    fn checkpoint(&self) -> std::result::Result<crate::checkpoint::Checkpoint, String> {
+        crate::checkpoint::Checkpoint::encode(self.name(), &self.state)
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &crate::checkpoint::Checkpoint,
+    ) -> std::result::Result<(), String> {
+        self.validate_state(&saved.decode(self.name())?)
+    }
+    fn restore_checkpoint(
+        &mut self,
+        saved: &crate::checkpoint::Checkpoint,
+    ) -> std::result::Result<(), String> {
+        let state: Timing = saved.decode(self.name())?;
+        self.validate_state(&state)?;
         self.state = state;
+        self.publish_status();
+        Ok(())
+    }
+
+    fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
+        Ok(self.save())
+    }
+
+    fn name(&self) -> &'static str {
+        "display-timing"
+    }
+    fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<FastReadWord> {
+        let Some(window_end) = window_base.checked_add(window_size) else {
+            return Vec::new();
+        };
+        BASES
+            .iter()
+            .enumerate()
+            .filter_map(|(bank, base)| {
+                let address = base.checked_add(0x30)?;
+                let end = address.checked_add(4)?;
+                (address >= window_base && end <= window_end).then(|| FastReadWord {
+                    offset: address - window_base,
+                    value: self.status_snapshots[bank].clone(),
+                })
+            })
+            .collect()
+    }
+    fn read(&mut self, cx: &mut crate::Cx<'_>, a: u64, size: u8) -> u64 {
+        if address(a, size as u32).is_err() {
+            cx.unmodeled();
+            return 0;
+        }
+        let Some(now) = self.time(cx) else { return 0 };
+        let result = {
+            let mut host = Connected {
+                cx,
+                clock: &self.clock,
+                controllers: &self.controllers,
+            };
+            self.state.read(a, size as u32, now, &mut host)
+        };
+        self.publish_status();
+        match result {
+            Ok(value) => value.into(),
+            Err(error) => {
+                cx.fail(error.0);
+                0
+            }
+        }
+    }
+    fn write(&mut self, cx: &mut crate::Cx<'_>, a: u64, size: u8, value: u64) {
+        if address(a, size as u32).is_err() {
+            cx.unmodeled();
+            return;
+        }
+        let Some(now) = self.time(cx) else { return };
+        let cpu = cx.cpu as i64;
+        let result = {
+            let mut host = Connected {
+                cx,
+                clock: &self.clock,
+                controllers: &self.controllers,
+            };
+            self.state
+                .write(cpu, a, size as u32, value.into(), now, &mut host)
+        };
+        self.publish_status();
+        if let Err(error) = result {
+            cx.fail(error.0);
+        }
+    }
+    fn advance(&mut self, cx: &mut crate::Cx<'_>) {
+        let Some(now) = self.time(cx) else { return };
+        if !self
+            .state
+            .deadline_with_clock(now, self.clock.ready())
+            .is_some_and(|due| due <= now)
+        {
+            return;
+        }
+        let result = {
+            let mut host = Connected {
+                cx,
+                clock: &self.clock,
+                controllers: &self.controllers,
+            };
+            self.state.tick(now, &mut host)
+        };
+        self.publish_status();
+        if let Err(error) = result {
+            cx.fail(error.0);
+        }
+    }
+    fn next_deadline(&self, now: u64) -> Option<u64> {
+        if now > self.ceiling {
+            return Some(now);
+        }
+        self.state
+            .deadline_with_clock(now as i64, self.clock.ready())
+            .map(|v| v as u64)
+    }
+    fn pollable(&self, address: u64, size: u8) -> bool {
+        self::address(address, size as u32).is_ok()
+    }
+    fn save(&self) -> serde_json::Value {
+        serde_json::to_value(&self.state).expect("typed display timing state")
+    }
+    fn restore(&mut self, value: &serde_json::Value) -> std::result::Result<(), String> {
+        let state: Timing = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        self.validate_state(&state)?;
+        self.state = state;
+        self.publish_status();
         Ok(())
     }
 }
@@ -723,8 +795,27 @@ mod native_tests {
         (timing, clock, host)
     }
     #[test]
+    fn pure_status_reads_leave_checkpoint_state_unchanged_between_deadlines() {
+        let (mut timing, _, mut host) = fixture();
+        let before = timing.save();
+        for now in [1, 2, 100, 10000] {
+            host.now = now;
+            let mut cx = host.cx();
+            assert_eq!(timing.read(&mut cx, BASES[0] + 0x30, 4), 2);
+            assert!(cx.refusal().is_none());
+            assert_eq!(timing.save(), before);
+        }
+    }
+    #[test]
     fn clock_settling_wakes_cadence_and_routes_exact_phase_edges_without_python() {
         let (mut timing, mut clock, mut host) = fixture();
+        let status = timing
+            .fast_reads(BASES[1], 0x1000)
+            .into_iter()
+            .find(|read| read.offset == 0x30)
+            .unwrap()
+            .value;
+        assert_eq!(status.load(Ordering::Acquire), 2);
         for (offset, _) in MASKS {
             let value = match offset {
                 4 => 0x10001,
@@ -745,8 +836,19 @@ mod native_tests {
         assert_eq!(timing.save(), saved);
         for tick in [11, 14, 17] {
             advance(&mut timing, &mut host, tick);
+            assert_eq!(
+                status.load(Ordering::Acquire),
+                if tick == 17 { 2 } else { 0 }
+            );
         }
         assert_eq!(host.irqs, [(1, 55), (1, 56), (1, 55)]);
+        let checkpoint = timing.checkpoint().unwrap();
+        host.now = 23;
+        write(&mut timing, &mut host, BASES[1] + 0x34, 0);
+        assert_eq!(status.load(Ordering::Acquire), 0);
+        host.now = 17;
+        timing.restore_checkpoint(&checkpoint).unwrap();
+        assert_eq!(status.load(Ordering::Acquire), 2);
         let saved = timing.save();
         timing.restore(&saved).unwrap();
         assert_eq!(timing.save(), saved);

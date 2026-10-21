@@ -5,6 +5,17 @@
 //! modeled refusals.
 
 use crate::record::Record;
+use std::sync::{Arc, atomic::AtomicU32};
+
+/// One device-owned, side-effect-free 32-bit register snapshot. `offset` is
+/// relative to one declared device window. The device publishes changes to
+/// `value`; runtimes may use it only while servicing the device's event
+/// boundaries and must retain the ordinary read law as the fallback.
+#[derive(Clone)]
+pub struct FastReadWord {
+    pub offset: u64,
+    pub value: Arc<AtomicU32>,
+}
 
 /// A board-wired per-core interrupt controller's physical inputs and output.
 /// Delivery is serialized with guest execution. Changing an input wakes its
@@ -205,6 +216,17 @@ impl<'a> Cx<'a> {
 /// A register-level device behind one or more address windows.
 pub trait Device: Send + std::any::Any {
     fn name(&self) -> &'static str;
+    /// Optional pure status-word snapshots for one of this device's register
+    /// windows. This query is observational: it must not settle time or change
+    /// modeled state. Publish each changed value with `Release` after a guest
+    /// write, due event, or validated restore. Interactive runtimes may bypass
+    /// `read` only between the device's real deadlines. These values also
+    /// declare side-effect-free inputs to exact CPU loop proofs: they stay
+    /// stable until the next device deadline, guest/peer access or DMA event.
+    /// Ordinary exact execution keeps using the regular read callback.
+    fn fast_reads(&self, _window_base: u64, _window_size: u64) -> Vec<FastReadWord> {
+        Vec::new()
+    }
     /// Full typed mutable state, including pending operations and owned input
     /// parts. Unsupported models refuse; diagnostic `save()` is not a fallback.
     fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {

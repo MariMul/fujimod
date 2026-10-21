@@ -1391,3 +1391,111 @@ mod discovery_tests {
         }
     }
 }
+use fujimod_emulator_devices::bus::FastReadWord;
+use std::sync::{Arc, atomic::AtomicU32};
+    /// Pure read snapshots that fall inside this CPU's physical MMIO mapping.
+    /// Device declarations are relative to their registered windows; return
+    /// offsets relative to the requested mapping for the CPU backend.
+    pub(super) fn fast_reads(
+        &self,
+        physical_base: u64,
+        bytes: usize,
+    ) -> Vec<(u64, Arc<AtomicU32>)> {
+        let Some(physical_end) = physical_base.checked_add(bytes as u64) else {
+            return Vec::new();
+        };
+        let mut reads = Vec::new();
+        for node in &self.windows {
+            for mapping in &node.mappings {
+                let Some(mapping_end) = mapping.base.checked_add(mapping.size) else {
+                    continue;
+                };
+                for FastReadWord { offset, value } in
+                    node.device.fast_reads(mapping.base, mapping.size)
+                {
+                    let Some(address) = mapping.base.checked_add(offset) else {
+                        continue;
+                    };
+                    let Some(end) = address.checked_add(4) else {
+                        continue;
+                    };
+                    if offset & 3 != 0
+                        || end > mapping_end
+                        || address < physical_base
+                        || end > physical_end
+                    {
+                        continue;
+                    }
+                    reads.push((address - physical_base, value));
+                }
+            }
+        }
+        reads.sort_by_key(|(offset, _)| *offset);
+        reads
+    }
+    #[test]
+    fn pure_read_snapshots_rebase_from_their_device_windows() {
+        use std::sync::atomic::AtomicU32;
+
+        struct Snapshot(Arc<AtomicU32>);
+        impl Device for Snapshot {
+            fn name(&self) -> &'static str {
+                "snapshot"
+            }
+            fn read(&mut self, _: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+                0
+            }
+            fn write(&mut self, _: &mut Cx<'_>, _: u64, _: u8, _: u64) {}
+            fn fast_reads(&self, base: u64, size: u64) -> Vec<FastReadWord> {
+                let offset = match base {
+                    0x1000 => 0x10,
+                    0x9000 => 4,
+                    _ => return Vec::new(),
+                };
+                if offset + 4 > size {
+                    return Vec::new();
+                }
+                vec![FastReadWord {
+                    offset,
+                    value: self.0.clone(),
+                }]
+            }
+        }
+
+        let value = Arc::new(AtomicU32::new(7));
+        let mut bus = Bus::new(Mode::Strict);
+        bus.register_windows(
+            vec![
+                Mapping {
+                    base: 0x1000,
+                    size: 0x20,
+                },
+                Mapping {
+                    base: 0x9000,
+                    size: 0x20,
+                },
+            ],
+            Box::new(Snapshot(value.clone())),
+        )
+        .unwrap();
+
+        let whole = bus.fast_reads(0x1000, 0x20);
+        assert_eq!(whole.len(), 1);
+        assert_eq!(whole[0].0, 0x10);
+        assert!(Arc::ptr_eq(&whole[0].1, &value));
+
+        let subrange = bus.fast_reads(0x1008, 0x10);
+        assert_eq!(subrange.len(), 1);
+        assert_eq!(subrange[0].0, 8);
+        assert!(Arc::ptr_eq(&subrange[0].1, &value));
+
+        let second = bus.fast_reads(0x9000, 0x20);
+        assert_eq!(second.len(), 1);
+        assert_eq!(second[0].0, 4);
+        assert!(Arc::ptr_eq(&second[0].1, &value));
+        let register_slice = bus.fast_reads(0x9004, 4);
+        assert_eq!(register_slice.len(), 1);
+        assert_eq!(register_slice[0].0, 0);
+        assert!(bus.fast_reads(0x9008, 4).is_empty());
+    }
+
