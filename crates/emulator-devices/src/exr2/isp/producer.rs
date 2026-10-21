@@ -2,13 +2,17 @@
 //! selected gradient arithmetic consume the connected packed-luma raster; DMA
 //! uses an explicit transfer clock. No configuration hashes or finite lifetimes.
 use super::{
-    Irq,
     dma::{self, IrqRoutes},
-    due,
+    due, Irq,
 };
 use crate::scene::{ImageFrames, StatisticsFrames, StatisticsSpan};
+use crate::{
+    imaging::{analysis::ImageLayout, radiometric::FrozenReadout},
+    work::Job,
+};
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 const BASE: u64 = 0xfff18000;
 const GLOBAL: u64 = 0xfff28000;
@@ -50,6 +54,87 @@ struct Transfer {
     histogram: bool,
     computed_histogram: bool,
 }
+#[derive(Clone, Serialize, Deserialize)]
+struct RasterBanks {
+    contrast: Option<(Vec<u8>, Vec<u8>)>,
+    metering: Option<Vec<u8>>,
+}
+enum RasterCompletion {
+    Running(Job<Result<RasterBanks, String>>),
+    Ready(Result<RasterBanks, String>),
+}
+impl RasterCompletion {
+    fn snapshot(&self) -> Result<RasterBanks, String> {
+        match self {
+            Self::Running(job) => job.get().clone(),
+            Self::Ready(result) => result.clone(),
+        }
+    }
+    fn take(self) -> Result<RasterBanks, String> {
+        match self {
+            Self::Running(job) => job.into_value(),
+            Self::Ready(result) => result,
+        }
+    }
+}
+enum RasterInput {
+    Sensor(FrozenReadout),
+    Packed(Arc<[u8]>),
+}
+struct RasterJobInput {
+    source: RasterInput,
+    layout: ImageLayout,
+    registers: [u32; 1024],
+    contrast: Option<super::contrast::Arithmetic>,
+    metering: bool,
+}
+impl RasterJobInput {
+    fn compute(self) -> Result<RasterBanks, String> {
+        let pixels = match self.source {
+            RasterInput::Sensor(readout) => readout.render(0)?,
+            RasterInput::Packed(pixels) => pixels,
+        };
+        let contrast = self
+            .contrast
+            .as_ref()
+            .map(|arithmetic| {
+                super::contrast::banks(&self.registers, &pixels, self.layout, arithmetic)
+            })
+            .transpose()?;
+        let metering = self
+            .metering
+            .then(|| super::metering::banks(&self.registers, &pixels, self.layout))
+            .transpose()?;
+        Ok(RasterBanks { contrast, metering })
+    }
+}
+enum ImagePixelsSnapshot {
+    Sensor {
+        image: Arc<crate::imaging::radiometric::Image>,
+        readout: FrozenReadout,
+    },
+    Packed(Arc<[u8]>),
+}
+impl ImagePixelsSnapshot {
+    fn histogram_image(&self) -> Option<&Arc<crate::imaging::radiometric::Image>> {
+        match self {
+            Self::Sensor { image, .. } => Some(image),
+            Self::Packed(_) => None,
+        }
+    }
+    fn raster_input(&self) -> RasterInput {
+        match self {
+            Self::Sensor { readout, .. } => RasterInput::Sensor(readout.clone()),
+            Self::Packed(pixels) => RasterInput::Packed(pixels.clone()),
+        }
+    }
+}
+struct ImageSnapshot {
+    edge: Option<crate::scene::FrameEdge>,
+    layout: ImageLayout,
+    pixels: ImagePixelsSnapshot,
+    radiance: Option<crate::imaging::exposure::ExposedFrame>,
+}
 pub struct Block18000 {
     options: Options,
     wiring: Wiring,
@@ -60,6 +145,7 @@ pub struct Block18000 {
     ack_step: AckStep,
     ack_channel: Option<usize>,
     pending: Option<Transfer>,
+    raster_completion: Option<RasterCompletion>,
     seen_frame: u64,
     spans: Vec<StatisticsSpan>,
     histogram_bytes: [u8; 1024],
@@ -120,6 +206,7 @@ impl Block18000 {
             ack_step: AckStep::Clear,
             ack_channel: None,
             pending: None,
+            raster_completion: None,
             seen_frame: 0,
             spans,
             histogram_bytes: [0; 1024],
@@ -213,7 +300,7 @@ impl Block18000 {
         let r = &self.registers;
         r[1] == 0x33173317 && r[2] & 1 != 0 && r[0x984 / 4] == 1 && r[0x9f8 / 4] == 0x10000000
     }
-    fn latch(&mut self, now: u64, workers: usize) -> Result<(), String> {
+    fn latch(&mut self, now: u64) -> Result<(), String> {
         let frame = self.wiring.frames.0.lock().unwrap();
         let Some(edge) = frame.edge else {
             return Ok(());
@@ -231,28 +318,45 @@ impl Block18000 {
         let live = self.live();
         let histogram = self.histogram();
         let computed_histogram = histogram && !self.options.external_statistics;
-        let grid = {
-            let image = self.wiring.images.0.lock().unwrap();
-            if image.radiance.is_some() {
-                self.wiring
-                    .grid
-                    .as_ref()
-                    .map(|g| {
-                        g.lock()
-                            .map(|v| *v)
-                            .map_err(|_| "statistics image grid poisoned")
-                    })
-                    .transpose()?
-                    .unwrap_or([image.layout.width, image.layout.height])
-            } else {
-                [image.layout.width, image.layout.height]
-            }
-        };
         if !live && !histogram {
             return Ok(());
         }
         let Ok(route) = self.wiring.routes.latch(IRQ) else {
             return Ok(());
+        };
+        let frame_spans = frame.spans.clone();
+        drop(frame);
+        let image = {
+            let image = self.wiring.images.0.lock().unwrap();
+            let pixels = match &image.pixels {
+                crate::scene::frames::Pixels::Sensor(physical) => ImagePixelsSnapshot::Sensor {
+                    image: physical.clone(),
+                    readout: physical.freeze(image.layout)?,
+                },
+                crate::scene::frames::Pixels::Packed(pixels) => {
+                    ImagePixelsSnapshot::Packed(pixels.clone())
+                }
+            };
+            ImageSnapshot {
+                edge: image.edge,
+                layout: image.layout,
+                pixels,
+                radiance: image.radiance.clone(),
+            }
+        };
+        let grid = if image.radiance.is_some() {
+            self.wiring
+                .grid
+                .as_ref()
+                .map(|g| {
+                    g.lock()
+                        .map(|v| *v)
+                        .map_err(|_| "statistics image grid poisoned")
+                })
+                .transpose()?
+                .unwrap_or([image.layout.width, image.layout.height])
+        } else {
+            [image.layout.width, image.layout.height]
         };
         let mut destinations = [0; 10];
         destinations[..9].copy_from_slice(&self.registers[0x500 / 4..0x524 / 4]);
@@ -265,7 +369,6 @@ impl Block18000 {
             }
         }
         if computed_histogram {
-            let image = self.wiring.images.0.lock().unwrap();
             if image.edge != Some(edge) {
                 return Err("histogram image and statistics frame edges differ".into());
             }
@@ -278,7 +381,9 @@ impl Block18000 {
                 (y as usize & 0x1fff) + 1,
             ];
             match &image.pixels {
-                crate::scene::frames::Pixels::Sensor(physical) => {
+                ImagePixelsSnapshot::Sensor {
+                    image: physical, ..
+                } => {
                     if live && image.radiance.is_some() {
                         let mut windows =
                             super::pixel_statistics::windows(grid, self.registers.as_slice());
@@ -298,21 +403,18 @@ impl Block18000 {
                     }
                     physical.histogram(grid, window, &mut self.histogram_bytes)?
                 }
-                crate::scene::frames::Pixels::Packed(pixels) => {
-                    crate::imaging::analysis::histogram_luma(
-                        pixels,
-                        image.layout,
-                        grid,
-                        window,
-                        &mut self.histogram_bytes,
-                    )?
-                }
+                ImagePixelsSnapshot::Packed(pixels) => crate::imaging::analysis::histogram_luma(
+                    pixels,
+                    image.layout,
+                    grid,
+                    window,
+                    &mut self.histogram_bytes,
+                )?,
             }
             dma::span(destinations[9] as u64, self.histogram_bytes.len())?;
         }
         let mut radiometric_spans = None;
         if live && !self.options.external_statistics {
-            let image = self.wiring.images.0.lock().unwrap();
             if (image.radiance.is_some()
                 || self.options.contrast.is_some()
                 || self.options.metering.is_some())
@@ -322,8 +424,7 @@ impl Block18000 {
             }
             if let Some(exposed) = &image.radiance {
                 let measured;
-                let exposed = if let crate::scene::frames::Pixels::Sensor(physical) = &image.pixels
-                {
+                let exposed = if let Some(physical) = image.pixels.histogram_image() {
                     measured = physical.measurement_windows(
                         grid,
                         &super::pixel_statistics::windows(grid, self.registers.as_slice()),
@@ -335,8 +436,7 @@ impl Block18000 {
                 if self.options.metering.is_some() {
                     return Err("radiometric and packed-pixel metering cannot replace the same statistics bank".into());
                 }
-                let mut spans: Vec<_> = frame
-                    .spans
+                let mut spans: Vec<_> = frame_spans
                     .iter()
                     .filter(|s| ![0, 1, 2, 3, 6].contains(&s.destination))
                     .cloned()
@@ -349,14 +449,18 @@ impl Block18000 {
                 radiometric_spans = Some(spans);
             }
         }
-        let base = radiometric_spans.as_deref().unwrap_or(&frame.spans);
+        let base = radiometric_spans.as_deref().unwrap_or(&frame_spans);
         let contrast = self.options.contrast.is_some() && !self.options.external_statistics;
         let metering = self.options.metering.is_some() && !self.options.external_statistics;
         let computed = [(0, 2048), (1, 80), (2, 3072)];
         let selected = || {
             computed.iter().copied().filter(
                 |(destination, _)| {
-                    if *destination < 2 { contrast } else { metering }
+                    if *destination < 2 {
+                        contrast
+                    } else {
+                        metering
+                    }
                 },
             )
         };
@@ -387,28 +491,27 @@ impl Block18000 {
                 });
             }
         }
-        if live && contrast && !self.options.external_statistics {
-            let image = self.wiring.images.0.lock().unwrap();
-            let (grid, bands) = super::contrast::banks(
-                self.registers.as_slice(),
-                &image.pixels.render(image.layout, workers)?,
-                image.layout,
-                self.options.contrast.as_ref().unwrap(),
-            )?;
-            self.spans[base.len()].bytes.copy_from_slice(&grid);
-            self.spans[base.len() + 1].bytes.copy_from_slice(&bands);
-        }
-        if live && metering && !self.options.external_statistics {
-            let image = self.wiring.images.0.lock().unwrap();
-            let bytes = super::metering::banks(
-                self.registers.as_slice(),
-                &image.pixels.render(image.layout, workers)?,
-                image.layout,
-            )?;
-            self.spans[base.len() + usize::from(contrast) * 2]
-                .bytes
-                .copy_from_slice(&bytes);
-        }
+        let raster_completion = if contrast || metering {
+            let input = RasterJobInput {
+                source: image.pixels.raster_input(),
+                layout: image.layout,
+                registers: *self.registers,
+                contrast: self.options.contrast.clone().filter(|_| contrast),
+                metering,
+            };
+            let job = Job::submit(move || input.compute());
+            if crate::work::worker_count() == 0 {
+                let result = job.into_value();
+                if let Err(error) = &result {
+                    return Err(error.clone());
+                }
+                Some(RasterCompletion::Ready(result))
+            } else {
+                Some(RasterCompletion::Running(job))
+            }
+        } else {
+            None
+        };
         if live {
             for (i, span) in self.spans.iter().enumerate() {
                 let address = destinations[span.destination] as u64 + span.offset as u64;
@@ -440,7 +543,6 @@ impl Block18000 {
             destinations[9] = 0;
         }
         let processing_ticks = if let Some(rate) = self.options.pixels_per_tick {
-            let image = self.wiring.images.0.lock().unwrap();
             if image.edge != Some(edge) {
                 return Err("statistics processing image and frame edges differ".into());
             }
@@ -479,6 +581,41 @@ impl Block18000 {
             histogram,
             computed_histogram,
         });
+        self.raster_completion = raster_completion;
+        Ok(())
+    }
+    fn raster_snapshot(&self) -> Option<Result<RasterBanks, String>> {
+        self.raster_completion
+            .as_ref()
+            .map(RasterCompletion::snapshot)
+    }
+    fn replace_raster_bank(
+        spans: &mut [StatisticsSpan],
+        destination: usize,
+        bytes: Vec<u8>,
+    ) -> Result<(), String> {
+        let span = spans
+            .iter_mut()
+            .find(|span| span.destination == destination && span.offset == 0)
+            .ok_or("missing computed statistics bank")?;
+        if span.bytes.len() != bytes.len() {
+            return Err("computed statistics bank extent changed".into());
+        }
+        span.bytes.copy_from_slice(&bytes);
+        Ok(())
+    }
+    fn finish_raster(&mut self) -> Result<(), String> {
+        let Some(completion) = self.raster_completion.take() else {
+            return Ok(());
+        };
+        let banks = completion.take()?;
+        if let Some((contrast, bands)) = banks.contrast {
+            Self::replace_raster_bank(&mut self.spans, 0, contrast)?;
+            Self::replace_raster_bank(&mut self.spans, 1, bands)?;
+        }
+        if let Some(metering) = banks.metering {
+            Self::replace_raster_bank(&mut self.spans, 2, metering)?;
+        }
         Ok(())
     }
     fn run(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
@@ -498,7 +635,9 @@ impl Block18000 {
                 || p.histogram && !self.histogram()
             {
                 self.pending = None;
+                self.raster_completion = None;
             } else {
+                self.finish_raster()?;
                 for s in &self.spans {
                     if p.destinations[s.destination] != 0 {
                         dma::write(
@@ -517,7 +656,7 @@ impl Block18000 {
                 p.route.raise(cx)?;
             }
         }
-        self.latch(cx.now(), cx.compute_workers())
+        self.latch(cx.now())
     }
     fn ack_read(&mut self, o: usize) -> Result<(), String> {
         let Some(ch) = self.ack_channel else {
@@ -581,6 +720,7 @@ impl Device for Block18000 {
                 &self.spans,
                 self.histogram_bytes.as_slice(),
                 self.wiring.grid.is_some(),
+                self.raster_snapshot(),
             ),
         )
     }
@@ -597,11 +737,13 @@ impl Device for Block18000 {
             Vec<StatisticsSpan>,
             Vec<u8>,
             bool,
+            Option<Result<RasterBanks, String>>,
         ) = saved.decode(self.name())?;
         if s.10 != self.wiring.grid.is_some()
             || s.0.len() != 1024
             || s.1.len() != 3328
             || s.9.len() != 1024
+            || s.11.is_some() && s.6.is_none()
         {
             return Err("statistics snapshot bank length differs".into());
         }
@@ -621,6 +763,7 @@ impl Device for Block18000 {
             spans,
             histogram,
             _,
+            raster,
         ): (
             Vec<u32>,
             Vec<u32>,
@@ -633,6 +776,7 @@ impl Device for Block18000 {
             Vec<StatisticsSpan>,
             Vec<u8>,
             bool,
+            Option<Result<RasterBanks, String>>,
         ) = saved.decode(self.name())?;
         self.registers.copy_from_slice(&registers);
         self.global.copy_from_slice(&global);
@@ -641,6 +785,7 @@ impl Device for Block18000 {
         self.ack_step = ack_step;
         self.ack_channel = ack_channel;
         self.pending = pending;
+        self.raster_completion = raster.map(RasterCompletion::Ready);
         self.seen_frame = seen_frame;
         self.spans = spans;
         self.histogram_bytes.copy_from_slice(&histogram);
@@ -653,7 +798,8 @@ impl Device for Block18000 {
             serde_json::json!({"options":self.options,"registers":self.registers.as_slice(),"global":self.global.as_slice(),
             "stop_due":self.stop_due,"ack_due":self.ack_due,"ack_step":self.ack_step,"ack_channel":self.ack_channel,
             "pending":self.pending,"seen_frame":self.seen_frame,"spans":self.spans,
-            "statistics_grid":self.wiring.grid.is_some(),"histogram":crate::fingerprint::bytes(&self.histogram_bytes)}),
+            "raster_result":self.raster_snapshot(),"statistics_grid":self.wiring.grid.is_some(),
+            "histogram":crate::fingerprint::bytes(&self.histogram_bytes)}),
         )
     }
     fn save(&self) -> serde_json::Value {
@@ -725,6 +871,7 @@ impl Device for Block18000 {
                 if v == 0 {
                     self.stop_due = Some(due(cx.now(), self.options.stop_ticks)?);
                     self.pending = None;
+                    self.raster_completion = None;
                 } else if v & !0x1007333f != 0
                     || [0, 2, 4, 8].into_iter().any(|shift| (v >> shift) & 3 > 2)
                 {

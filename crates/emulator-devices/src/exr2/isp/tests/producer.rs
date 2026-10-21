@@ -1,10 +1,10 @@
 use super::super::dma::IrqRoutes;
 use super::super::*;
 use super::liveview_support::*;
-use crate::Cx;
-use crate::Device;
 use crate::imaging::analysis::ImageLayout;
 use crate::scene::{FrameEdge, ImageFrames, StatisticsFrames, StatisticsSpan};
+use crate::Cx;
+use crate::Device;
 pub(super) fn producer(
     hist: bool,
 ) -> (Block18000, StatisticsFrames, ImageFrames, IrqRoutes, Memory) {
@@ -108,6 +108,76 @@ fn producer_with_metering(
     }
     advance(&mut d, &mut m, 2);
     (d, frames, images, routes, m)
+}
+fn producer_with_raster_banks() -> (
+    Block18000,
+    StatisticsFrames,
+    ImageFrames,
+    IrqRoutes,
+    Memory,
+    ImageLayout,
+    Vec<u8>,
+) {
+    let layout = ImageLayout {
+        width: 64,
+        height: 48,
+        stride: 128,
+    };
+    let pixels: Vec<u8> = (0..layout.bytes().unwrap())
+        .map(|i| ((i * 47 + i / 7 * 13) % 256) as u8)
+        .collect();
+    let images = ImageFrames::from_pixels(layout, pixels.clone()).unwrap();
+    let frames = StatisticsFrames::new(vec![StatisticsSpan {
+        destination: 4,
+        offset: 0,
+        bytes: vec![3; 4],
+    }])
+    .unwrap();
+    let routes = routes(0x2e);
+    let mut d = Block18000::new(
+        producer::Options {
+            pixels_per_tick: None,
+            contrast: Some(
+                super::super::contrast::Arithmetic::SquaredHorizontalGradients { luma_bits: 8 },
+            ),
+            metering: Some(super::super::metering::Arithmetic::RgbCellMeans12),
+            clock: super::super::dma::Clock::Fixed { ticks: 5 },
+            ack_ticks: 2,
+            stop_ticks: 3,
+            histogram: false,
+            external_statistics: false,
+            diagnostic_reads: true,
+        },
+        producer::Wiring {
+            grid: None,
+            frames: frames.clone(),
+            images: images.clone(),
+            routes: routes.clone(),
+        },
+    )
+    .unwrap();
+    let mut m = Memory::default();
+    for i in 0..9 {
+        write(&mut d, &mut m, 0xfff18500 + i * 4, 0x4000 + i * 0x4000);
+    }
+    for (offset, value) in [
+        (0x100, layout.width as u32 - 1),
+        (0x104, layout.height as u32 - 1),
+        (0x200, layout.width as u32 - 1),
+        (0x204, layout.height as u32 - 1),
+        (0x88c, 0),
+        (0x8f4, 1),
+        (0x8a0, 0x80003000),
+        (0x8f8, 0),
+        (0x8c4, 2),
+        (0x8f8, 0x10000000),
+        (0x884, 1),
+        (4, 0x33173317),
+    ] {
+        write(&mut d, &mut m, 0xfff18000 + offset, value as u64);
+    }
+    advance(&mut d, &mut m, 2);
+    (d, frames, images, routes, m, layout, pixels)
 }
 #[test]
 fn statistics_dma_histogram_and_paired_ack_backpressure() {
@@ -533,4 +603,92 @@ fn histogram_coordinates_follow_the_upstream_extent_instead_of_the_display_raste
     );
     histogram_luma(&source, layout, [4, 2], [0, 2, 4, 1], &mut bins).unwrap();
     assert!(bins.iter().all(|v| *v == 0));
+}
+
+#[test]
+fn raster_worker_result_is_frozen_in_fingerprint_and_checkpoint_until_due() {
+    crate::work::configure(2).unwrap();
+    let (mut d, frames, images, _, mut memory, layout, pixels) = producer_with_raster_banks();
+    let edge = FrameEdge { index: 1, tick: 10 };
+    images.publish(edge, &pixels).unwrap();
+    frames.publish(edge).unwrap();
+    advance(&mut d, &mut memory, 10);
+    assert_eq!(d.next_deadline(10), Some(15));
+
+    let mut registers = [0; 1024];
+    registers[0x100 / 4] = layout.width as u32 - 1;
+    registers[0x104 / 4] = layout.height as u32 - 1;
+    registers[0x200 / 4] = layout.width as u32 - 1;
+    registers[0x204 / 4] = layout.height as u32 - 1;
+    let (expected_contrast, expected_bands) = super::super::contrast::banks(
+        &registers,
+        &pixels,
+        layout,
+        &super::super::contrast::Arithmetic::SquaredHorizontalGradients { luma_bits: 8 },
+    )
+    .unwrap();
+    let expected_metering = super::super::metering::banks(&registers, &pixels, layout).unwrap();
+
+    let before = d.fingerprint().unwrap();
+    let saved = d.checkpoint().unwrap();
+    assert_eq!(d.fingerprint().unwrap(), before);
+    let (mut restored, _, _, _, mut restored_memory, _, _) = producer_with_raster_banks();
+    restored_memory.now = 10;
+    restored.restore_checkpoint(&saved).unwrap();
+    assert_eq!(restored.fingerprint().unwrap(), before);
+
+    let next_edge = FrameEdge { index: 2, tick: 11 };
+    images
+        .publish(next_edge, &vec![0x91; pixels.len()])
+        .unwrap();
+    frames.publish(next_edge).unwrap();
+    advance(&mut d, &mut memory, 15);
+    advance(&mut restored, &mut restored_memory, 15);
+    assert_eq!(&memory.bytes[0x4000..0x4000 + 2048], expected_contrast);
+    assert_eq!(&memory.bytes[0x8000..0x8000 + 80], expected_bands);
+    assert_eq!(&memory.bytes[0xc000..0xc000 + 3072], expected_metering);
+    assert_eq!(
+        &restored_memory.bytes[0x4000..0x4000 + 2048],
+        expected_contrast
+    );
+    assert_eq!(&restored_memory.bytes[0x8000..0x8000 + 80], expected_bands);
+    assert_eq!(
+        &restored_memory.bytes[0xc000..0xc000 + 3072],
+        expected_metering
+    );
+    assert_eq!(memory.effects, restored_memory.effects);
+    crate::work::configure(0).unwrap();
+}
+
+#[test]
+fn raster_worker_results_are_discarded_when_route_or_transfer_is_cancelled() {
+    crate::work::configure(2).unwrap();
+    let (mut d, frames, images, routes, mut memory, _, pixels) = producer_with_raster_banks();
+    let edge = FrameEdge { index: 1, tick: 10 };
+    images.publish(edge, &pixels).unwrap();
+    frames.publish(edge).unwrap();
+    advance(&mut d, &mut memory, 10);
+    routes.set(0x2e, None).unwrap();
+    advance(&mut d, &mut memory, 15);
+    assert!(memory.effects.is_empty());
+    assert_eq!(d.save()["pending_due"], serde_json::Value::Null);
+    assert_eq!(
+        d.fingerprint().unwrap()["raster_result"],
+        serde_json::Value::Null
+    );
+
+    let (mut stopped, frames, images, _, mut stopped_memory, _, pixels) =
+        producer_with_raster_banks();
+    images.publish(edge, &pixels).unwrap();
+    frames.publish(edge).unwrap();
+    advance(&mut stopped, &mut stopped_memory, 10);
+    write(&mut stopped, &mut stopped_memory, 0xfff28000, 0);
+    advance(&mut stopped, &mut stopped_memory, 15);
+    assert!(stopped_memory.effects.is_empty());
+    assert_eq!(stopped.save()["pending_due"], serde_json::Value::Null);
+    assert_eq!(
+        stopped.fingerprint().unwrap()["raster_result"],
+        serde_json::Value::Null
+    );
+    crate::work::configure(0).unwrap();
 }
