@@ -8,6 +8,7 @@ fn execute(code: &[u32], mode: LoopMode, budget: usize, counter: u32) -> (Vec<u3
     set(&cpu, arm::CPSR, 0x13 | 0xa000_0000);
     set(&cpu, arm::CORE[0], counter);
     set(&cpu, arm::CORE[2], 0x2000);
+    set(&cpu, arm::CORE[3], 200);
     cpu.set_loop_mode(mode).unwrap();
     cpu.set_loop_window(true).unwrap();
     cpu.run(Run {
@@ -32,7 +33,8 @@ fn execute(code: &[u32], mode: LoopMode, budget: usize, counter: u32) -> (Vec<u3
 fn every_counted_loop_budget_matches_instruction_execution() {
     for code in [
         vec![0xe2500001, 0x1afffffd, 0xe320f003], // SUBS; BNE
-        vec![0xe2800001, 0xe35000c8, 0x3afffffc, 0xe320f003], // ADD; CMP; BLO
+        vec![0xe2800001, 0xe35000c8, 0x3afffffc, 0xe320f003],
+        vec![0xe2800001, 0xe1500003, 0x3afffffc, 0xe320f003], // ADD; CMP; BLO
         vec![0xe2400001, 0xe3500009, 0x8afffffc, 0xe320f003], // SUB; CMP; BHI
     ] {
         for budget in (1..40).chain([100, 101, 199, 200, 201, 399, 600]) {

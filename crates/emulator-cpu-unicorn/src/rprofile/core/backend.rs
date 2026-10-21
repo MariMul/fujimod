@@ -343,6 +343,7 @@ impl Cpu for Core {
         if e.active.get() {
             return Err("nested R-profile execution is refused".into());
         }
+        let _window = loops::Window(&e.loops.window);
         e.clock_overshoot.set(0);
         e.count.set(0);
         e.last_span.set(None);
@@ -384,7 +385,6 @@ impl Cpu for Core {
             }
         }
         let result = self.execute(request, begin);
-        e.loops.window.set(false);
         e.clock_overshoot
             .set(if e.policy.get() == ExecutionPolicy::Interactive {
                 e.count.get().saturating_sub(e.cap.get())

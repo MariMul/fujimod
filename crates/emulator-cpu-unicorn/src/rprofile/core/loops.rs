@@ -14,6 +14,12 @@ pub(super) struct Loops {
     pub counted_instructions: Cell<u64>,
     pub accelerated_instructions: Cell<u64>,
 }
+pub(super) struct Window<'a>(pub &'a Cell<bool>);
+impl Drop for Window<'_> {
+    fn drop(&mut self) {
+        self.0.set(false);
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 enum Operand {
@@ -217,7 +223,7 @@ impl Proof {
     }
     /// A single unit-step counter, followed only by a fixed comparison.
     /// Restricting the algebra keeps its first-exit proof small and auditable.
-    fn counter(&self) -> Option<(usize, i64, u32)> {
+    fn counter(&self, state: State) -> Option<(usize, i64, u32)> {
         let (&first, rest) = self.body.split_first()?;
         let Op::Data {
             opcode,
@@ -238,10 +244,14 @@ impl Proof {
                 Op::Data {
                     opcode: 10,
                     lhs,
-                    rhs: Operand::Immediate(value, _),
+                    rhs,
                     ..
                 },
-            ] if *lhs == dst => *value,
+            ] if *lhs == dst => match *rhs {
+                Operand::Immediate(value, _) => value,
+                Operand::Register(r, 0, 0) if r != dst => state.registers[r],
+                _ => return None,
+            },
             _ => return None,
         };
         matches!(self.condition, 1 | 2 | 3 | 8 | 9).then_some((
@@ -265,7 +275,7 @@ impl Proof {
         if next == state {
             return Some((state, cycles, false));
         }
-        let (counter, step, compare) = self.counter()?;
+        let (counter, step, compare) = self.counter(state)?;
         let value = state.registers[counter];
         let distance = if step < 0 {
             u64::from(value)

@@ -1,0 +1,230 @@
+use super::*;
+use fujimod_emulator_cpu::{Model, arm, memory::Backing};
+use fujimod_emulator_cpu_unicorn::{Library, rprofile};
+use fujimod_emulator_devices::{Cx, Device, bus::FastReadWord};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicU32, Ordering},
+};
+
+struct Flag {
+    value: Arc<AtomicU32>,
+    due: Option<u64>,
+    declared: bool,
+    irq: bool,
+}
+impl Device for Flag {
+    fn name(&self) -> &'static str {
+        "test-stable-flag"
+    }
+    fn fast_reads(&self, _: u64, _: u64) -> Vec<FastReadWord> {
+        if self.declared {
+            vec![FastReadWord {
+                offset: 0,
+                value: self.value.clone(),
+            }]
+        } else {
+            vec![]
+        }
+    }
+    fn read(&mut self, _: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+        self.value.load(Ordering::Acquire) as u64
+    }
+    fn write(&mut self, cx: &mut Cx<'_>, _: u64, _: u8, _: u64) {
+        cx.unmodeled();
+    }
+    fn next_deadline(&self, _: u64) -> Option<u64> {
+        self.due
+    }
+    fn advance(&mut self, cx: &mut Cx<'_>) {
+        if self.due.is_some_and(|due| due <= cx.now()) {
+            self.due = None;
+            self.value.store(1, Ordering::Release);
+            cx.ram_write(0x3000, &1u32.to_le_bytes()).unwrap();
+            // Exercise a DMA replacement of code already proven by this CPU.
+            cx.ram_write(0x1004, &0xe3110001u32.to_le_bytes()).unwrap();
+            if self.irq {
+                cx.set_core_irq(0, 3, true).unwrap();
+            }
+        }
+    }
+    fn save(&self) -> Value {
+        json!({"value":self.value.load(Ordering::Acquire),"due":self.due})
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.save())
+    }
+}
+fn board(mmio: bool, declared: bool, peer: bool, irq: bool, mode: LoopMode) -> Board {
+    let library = Library::load(&crate::board::test_support::unicorn_library_path()).unwrap();
+    let backing = Backing::aligned_zeros(0x4000, 4096).unwrap();
+    let memory = rprofile::memory::Memory::default();
+    let cpus = (0..if peer { 2 } else { 1 })
+        .map(|core| {
+            let cpu = rprofile::core::Core::new(
+                library.open(Model::CortexR5F, 1024 * 1024).unwrap(),
+                Default::default(),
+                rprofile::core::Wiring {
+                    memory: memory.clone(),
+                },
+            )
+            .unwrap();
+            unsafe {
+                cpu.map_physical(
+                    0,
+                    0,
+                    0x4000,
+                    7,
+                    std::ptr::NonNull::new(backing.as_ptr()).unwrap(),
+                )
+                .unwrap();
+            }
+            set(&cpu, Register::Pc, 0x1000 + core * 0x1000).unwrap();
+            set(&cpu, Register::Pstate, if irq { 0x53 } else { 0xd3 }).unwrap();
+            set(
+                &cpu,
+                arm::CORE[2],
+                if mmio && core == 0 { 0x8000000 } else { 0x3000 },
+            )
+            .unwrap();
+            Box::new(cpu) as Box<dyn Cpu>
+        })
+        .collect();
+    let mut bus = Bus::new(bus::Mode::Strict);
+    bus.register(
+        0x8000000,
+        4,
+        Box::new(Flag {
+            value: Arc::new(AtomicU32::new(0)),
+            due: Some(53),
+            declared,
+            irq,
+        }),
+    )
+    .unwrap();
+    let mut board = Board::new(
+        cpus,
+        bus,
+        Ratio::new(7, 3).unwrap(),
+        None,
+        vec![true; if peer { 2 } else { 1 }],
+        memory::Memory::new(vec![(0, backing)], vec![memory::BusMapping::ram(0, 0x4000)]).unwrap(),
+    )
+    .unwrap();
+    board.map_mmio(0, 0x8000000, 0x1000, 0x8000000).unwrap();
+    let code = [0xe5921000u32, 0xe3110001, 0x0afffffc, 0xe320f003];
+    board
+        .write_memory(
+            0,
+            0x1000,
+            &code
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    // Runnable peer writes the RAM flag after its counted delay.
+    let code = [
+        0xe3a00004u32,
+        0xe2500001,
+        0x1afffffd,
+        0xe3a01001,
+        0xe5821000,
+        0xe320f003,
+    ];
+    board
+        .write_memory(
+            0,
+            0x2000,
+            &code
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    board.set_loop_mode(mode).unwrap();
+    if irq {
+        board
+            .configure_core_interrupts(0, 0, Box::new(Pin(Arc::new(AtomicBool::new(false)))))
+            .unwrap();
+        let code = [0xe3a07077u32, 0xe320f003];
+        board
+            .write_memory(
+                0,
+                0x18,
+                &code
+                    .into_iter()
+                    .flat_map(u32::to_le_bytes)
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
+    }
+    board
+}
+#[test]
+fn loop_execution_stops_at_dma_deadlines_and_peer_turns_with_rational_time() {
+    for mmio in [false, true] {
+        for peer in [false, true] {
+            for quantum in [1, 7, 1000] {
+                let mut off = board(mmio, true, peer, false, LoopMode::Disabled);
+                let mut on = board(mmio, true, peer, false, LoopMode::Accelerate);
+                for tick in [9, 28, 52, 53, 54, 100] {
+                    off.run_until(tick, quantum).unwrap();
+                    on.run_until(tick, quantum).unwrap();
+                    assert_eq!(
+                        on.fingerprint().unwrap(),
+                        off.fingerprint().unwrap(),
+                        "mmio={mmio} peer={peer} quantum={quantum} tick={tick}"
+                    );
+                }
+                if !peer {
+                    assert!(
+                        on.loop_statistics().unwrap()[0]["loop_accelerated_instructions"]
+                            .as_u64()
+                            .unwrap()
+                            > 0
+                    );
+                }
+            }
+        }
+    }
+}
+#[test]
+fn an_undeclared_device_read_is_never_accelerated() {
+    let mut board = board(true, false, false, false, LoopMode::Accelerate);
+    board.run_until(100, 1000).unwrap();
+    assert_eq!(
+        board.loop_statistics().unwrap()[0]["loop_accelerated_instructions"],
+        0
+    );
+}
+
+struct Pin(Arc<AtomicBool>);
+impl fujimod_emulator_devices::bus::CoreInterrupts for Pin {
+    fn pulse(&self, _: u32) -> Result<(), String> {
+        self.0.store(true, Ordering::Release);
+        Ok(())
+    }
+    fn level(&self, _: u32, high: bool) -> Result<(), String> {
+        self.0.store(high, Ordering::Release);
+        Ok(())
+    }
+    fn irq(&self) -> bool {
+        self.0.load(Ordering::Acquire)
+    }
+}
+#[test]
+fn an_interrupt_at_the_input_deadline_enters_before_the_next_loop_instruction() {
+    let mut off = board(false, true, false, true, LoopMode::Disabled);
+    let mut on = board(false, true, false, true, LoopMode::Accelerate);
+    for tick in [52, 53, 54, 70] {
+        off.run_until(tick, 1000).unwrap();
+        on.run_until(tick, 1000).unwrap();
+        assert_eq!(
+            on.fingerprint().unwrap(),
+            off.fingerprint().unwrap(),
+            "tick={tick}"
+        );
+    }
+    assert_eq!(on.read_register(0, arm::CORE[7]).unwrap(), 0x77);
+}

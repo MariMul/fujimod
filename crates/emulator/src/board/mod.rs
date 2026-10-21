@@ -12,6 +12,7 @@ mod host;
 #[cfg(feature = "host-profile")]
 mod host_profile;
 pub mod keyframe;
+mod loops;
 pub mod memory;
 #[cfg(test)]
 mod memory_tests;
@@ -746,6 +747,9 @@ impl Board {
             let entered = s.instructions[core];
             drop(s);
             let cpu = &self.cpus[core];
+            // The exact budget ends at the first device/DMA/processor event
+            // or runnable-peer turn; those boundaries end the stable window.
+            cpu.set_loop_window(self.state.borrow().loop_window())?;
             let pc = scalar(&**cpu, Register::Pc)?;
             #[cfg(feature = "host-profile")]
             let profile_engine = self.state.borrow().bus.profile_begin_engine();

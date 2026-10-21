@@ -223,8 +223,10 @@ impl Bus {
             .collect::<Result<Vec<_>, String>>()?;
         state["devices"] = json!(devices);
         state["skipped_deadlines"] = json!(self.skipped_deadlines);
+        // Visit stamps only deduplicate one already-drained worklist. Their
+        // arbitrary identities are accelerator bookkeeping, not pending work.
         state["wakeups"] = json!({"touched":self.touched,"dirty":self.dirty,
-            "queue":self.wake_queue,"visited":self.visited,"generation":self.wake_generation});
+            "queue":self.wake_queue});
         if !self.pending_pcs.is_empty() {
             return Err("fingerprint requires completed discovery PC recording".into());
         }
@@ -452,6 +454,9 @@ impl Bus {
     }
     pub fn is_empty(&self) -> bool {
         self.windows.is_empty()
+    }
+    pub(super) fn loop_window(&self) -> bool {
+        self.mode == Mode::Strict && self.transactions.is_none() && self.continuation.is_none()
     }
     pub fn register(
         &mut self,

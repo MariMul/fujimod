@@ -25,3 +25,25 @@ CAMERA_UNICORN_LIBRARY="$PWD/target/unicorn-native/libunicorn.2.dylib" \
 
 On other platforms, set `CAMERA_UNICORN_LIBRARY` to the shared library path
 produced by CMake.
+
+## Exact loop execution
+
+R-profile execution supports `LoopMode::Measure` and `LoopMode::Accelerate`.
+The board grants each exact run a stable window ending at its first device,
+DMA, interrupt or runnable-peer boundary. A standalone CPU owner must grant
+that window explicitly; it expires when the run returns. Measurement executes
+every instruction and counts qualifying taken iterations. Acceleration charges
+the same instructions and leaves partial iterations to ordinary execution.
+
+The conservative A32 proof accepts direct backward loops of at most sixteen
+instructions, unconditional integer operations, aligned RAM/declared pure
+status loads, fixed architectural states and unit-step counters compared with
+an invariant immediate or register. It rebuilds the proof from fetch-checked
+bytes, checks data permissions, preserves NZCV, and stops before counter wrap.
+Stores, atomics, system operations, conditional bodies, Thumb and unsupported
+algebra continue through the CPU normally. Instruction/block observers inside
+a loop, read observers, discovery, transaction recording and watched device
+waits disable acceleration. Loop counters and worklist visit stamps are host
+bookkeeping; pending work, deadlines and all modeled device state remain in
+the machine fingerprint.
+

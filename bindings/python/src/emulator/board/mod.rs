@@ -1,6 +1,7 @@
 //! Python client and transitional devices on the shared runtime.
 mod checkpoint;
 mod context;
+mod loops;
 mod observation;
 mod xp4;
 pub use checkpoint::Checkpoint;
