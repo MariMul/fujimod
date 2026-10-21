@@ -1,111 +1,38 @@
 //! Host preparation of declared persistent inputs. Asset identity, placement,
-//! byte edits and journal layout come from firmware JSON. No guest execution,
+//! byte edits and journal layout come from explicit typed run inputs. No guest execution,
 //! camera transport or capture-pipeline module participates in preparation.
 use crate::parts::nand::{Nand, Options as Geometry, Overlay, managed_tag};
-use serde::Deserialize;
-use sha2::{Digest, Sha256};
+use fujimod_catalog::persistent_inputs::{
+    PersistentInputs, PersistentJournalAppend, PersistentPacket,
+};
 use std::{collections::BTreeMap, sync::Arc};
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Patch {
-    pub offset: usize,
-    pub bytes: Vec<u8>,
+
+pub trait PreparePersistentInputs {
+    fn mcu_packet(
+        &self,
+        set: &str,
+        loaded: &BTreeMap<String, Vec<u8>>,
+    ) -> Result<Option<[u8; 16]>, String>;
+    fn prepare(
+        &self,
+        geometry: Geometry,
+        set: &str,
+        loaded: &BTreeMap<String, Vec<u8>>,
+        base: Arc<[u8]>,
+    ) -> Result<Nand, String>;
 }
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Asset {
-    pub bytes: usize,
-    pub sha256: String,
-    pub normalized_sha256: String,
-    pub patches: Vec<Patch>,
-}
-impl Asset {
-    /// The loader supplies only this declared window. Both raw captures and
-    /// already-normalized browser bundle windows are accepted by identity.
-    pub fn prepare(&self, input: &[u8]) -> Result<Vec<u8>, String> {
-        if input.len() != self.bytes {
-            return Err("Persistent input window length differs".into());
-        }
-        let digest = format!("{:x}", Sha256::digest(input));
-        let mut bytes = input.to_vec();
-        if digest == self.sha256 {
-            for patch in &self.patches {
-                let end = patch
-                    .offset
-                    .checked_add(patch.bytes.len())
-                    .ok_or("Persistent patch extent overflow")?;
-                bytes
-                    .get_mut(patch.offset..end)
-                    .ok_or("Persistent patch exceeds input")?
-                    .copy_from_slice(&patch.bytes);
-            }
-        } else if digest != self.normalized_sha256 {
-            return Err("Persistent input SHA-256 differs".into());
-        }
-        if format!("{:x}", Sha256::digest(&bytes)) != self.normalized_sha256 {
-            return Err("Normalized persistent input SHA-256 differs".into());
-        }
-        Ok(bytes)
-    }
-}
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Placement {
-    pub asset: String,
-    pub source_offset: usize,
-    pub bytes: usize,
-    pub physical_offset: u64,
-    pub managed_index: Option<u16>,
-}
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct JournalAppend {
-    pub record_asset: String,
-    pub payload_asset: String,
-    pub payload_offset: usize,
-    pub payload_bytes: usize,
-    pub record_payload_offset: usize,
-    pub parity_offset: usize,
-    pub checksum_offset: usize,
-    pub physical_offset: u64,
-}
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct InputSet {
-    pub placements: Vec<Placement>,
-    pub append: Option<JournalAppend>,
-    pub mcu_packet: Option<Packet>,
-}
-#[derive(Clone, Debug, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub enum Packet {
-    Bytes {
-        bytes: Vec<u8>,
-    },
-    Window {
-        asset: String,
-        offset: usize,
-        bytes: usize,
-    },
-}
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Catalog {
-    pub geometry: Geometry,
-    pub assets: BTreeMap<String, Asset>,
-    pub sets: BTreeMap<String, InputSet>,
-}
-impl Catalog {
-    pub fn mcu_packet(
+impl PreparePersistentInputs for PersistentInputs {
+    fn mcu_packet(
         &self,
         set: &str,
         loaded: &BTreeMap<String, Vec<u8>>,
     ) -> Result<Option<[u8; 16]>, String> {
+        self.validate()?;
         let set = self.sets.get(set).ok_or("Unknown persistent input set")?;
         let bytes = match &set.mcu_packet {
             None => return Ok(None),
-            Some(Packet::Bytes { bytes }) => bytes.clone(),
-            Some(Packet::Window {
+            Some(PersistentPacket::Bytes { bytes }) => bytes.clone(),
+            Some(PersistentPacket::Window {
                 asset,
                 offset,
                 bytes,
@@ -130,19 +57,16 @@ impl Catalog {
         Ok(Some(packet))
     }
     /// Loaded values are bounded source windows, not whole capture files.
-    pub fn prepare(
+    fn prepare(
         &self,
+        geometry: Geometry,
         set: &str,
         loaded: &BTreeMap<String, Vec<u8>>,
         base: Arc<[u8]>,
     ) -> Result<Nand, String> {
+        self.validate()?;
         let set = self.sets.get(set).ok_or("Unknown persistent input set")?;
-        Nand::new(
-            self.geometry.clone(),
-            base.clone(),
-            Vec::new(),
-            BTreeMap::new(),
-        )?;
+        Nand::new(geometry.clone(), base.clone(), Vec::new(), BTreeMap::new())?;
         let mut assets = BTreeMap::new();
         for name in set.placements.iter().map(|p| p.asset.as_str()).chain(
             set.append
@@ -161,11 +85,11 @@ impl Catalog {
         }
         let mut overlays = Vec::new();
         let mut spare = BTreeMap::new();
-        let block_bytes = self.geometry.page_bytes as u64 * self.geometry.pages_per_block as u64;
+        let block_bytes = geometry.page_bytes as u64 * geometry.pages_per_block as u64;
         for p in &set.placements {
             if p.physical_offset
                 .checked_add(p.bytes as u64)
-                .is_none_or(|end| end > self.geometry.bytes)
+                .is_none_or(|end| end > geometry.bytes)
             {
                 return Err("Persistent placement exceeds NAND geometry".into());
             }
@@ -193,10 +117,9 @@ impl Catalog {
                         .ok_or("Managed tag index overflow")?;
                     let tag = managed_tag(logical)?.to_vec();
                     let first = ((p.physical_offset / block_bytes + n)
-                        * self.geometry.pages_per_block as u64)
-                        as u32;
+                        * geometry.pages_per_block as u64) as u32;
                     spare.insert(first, tag.clone());
-                    spare.insert(first + self.geometry.pages_per_block - 1, tag);
+                    spare.insert(first + geometry.pages_per_block - 1, tag);
                 }
             }
         }
@@ -233,12 +156,16 @@ impl Catalog {
                 return Err("Journal append does not fit declared placement".into());
             }
         }
-        Nand::new(self.geometry.clone(), base, overlays, spare)
+        Nand::new(geometry.clone(), base, overlays, spare)
     }
 }
 /// Stock journal format: increment LE16 sequence; one parity bit per LE32
 /// data word plus an XOR checksum. Layout is supplied by the firmware data.
-fn append_record(record: &[u8], payload: &[u8], layout: &JournalAppend) -> Result<Vec<u8>, String> {
+fn append_record(
+    record: &[u8],
+    payload: &[u8],
+    layout: &PersistentJournalAppend,
+) -> Result<Vec<u8>, String> {
     let parity_bytes = (layout.parity_offset / 4).div_ceil(8);
     if record.len() < 2
         || layout.record_payload_offset < 2
@@ -274,20 +201,31 @@ fn append_record(record: &[u8], payload: &[u8], layout: &JournalAppend) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fujimod_catalog::persistent_inputs::{PersistentAsset, PersistentPatch};
+    use sha2::{Digest, Sha256};
     #[test]
     fn authored_catalog_decodes_and_erased_inputs_need_no_assets() {
         let mut packet = vec![0; 16];
         packet[14] = 0xaa;
         packet[15] = 0x56;
-        let catalog: Catalog = serde_json::from_value(serde_json::json!({
-            "geometry":{"bytes":16384,"page_bytes":512,"pages_per_block":32,"spare_bytes":16},
+        let catalog: PersistentInputs = serde_json::from_value(serde_json::json!({
             "assets":{},
             "sets":{"erased":{"placements":[],"append":null,
                 "mcu_packet":{"kind":"bytes","bytes":packet}}}
         }))
         .unwrap();
         let nand = catalog
-            .prepare("erased", &BTreeMap::new(), Arc::from([]))
+            .prepare(
+                Geometry {
+                    bytes: 16384,
+                    page_bytes: 512,
+                    pages_per_block: 32,
+                    spare_bytes: 16,
+                },
+                "erased",
+                &BTreeMap::new(),
+                Arc::from([]),
+            )
             .unwrap();
         let mut bytes = [0; 16];
         nand.read(0, &mut bytes).unwrap();
@@ -299,7 +237,17 @@ mod tests {
         assert_eq!(packet[14], 0xaa);
         assert!(
             catalog
-                .prepare("absent", &BTreeMap::new(), Arc::from([]))
+                .prepare(
+                    Geometry {
+                        bytes: 16384,
+                        page_bytes: 512,
+                        pages_per_block: 32,
+                        spare_bytes: 16
+                    },
+                    "absent",
+                    &BTreeMap::new(),
+                    Arc::from([])
+                )
                 .is_err()
         );
     }
@@ -307,11 +255,11 @@ mod tests {
     fn patches_are_identity_checked_and_journal_parity_is_recomputed() {
         let source = [1u8, 2, 3];
         let normalized = [1u8, 5, 3];
-        let asset = Asset {
+        let asset = PersistentAsset {
             bytes: 3,
             sha256: format!("{:x}", Sha256::digest(source)),
             normalized_sha256: format!("{:x}", Sha256::digest(normalized)),
-            patches: vec![Patch {
+            patches: vec![PersistentPatch {
                 offset: 1,
                 bytes: vec![5],
             }],
@@ -319,7 +267,7 @@ mod tests {
         assert_eq!(asset.prepare(&source).unwrap(), normalized);
         assert_eq!(asset.prepare(&normalized).unwrap(), normalized);
         assert!(asset.prepare(&[1, 2, 4]).is_err());
-        let layout = JournalAppend {
+        let layout = PersistentJournalAppend {
             record_asset: "r".into(),
             payload_asset: "p".into(),
             payload_offset: 0,

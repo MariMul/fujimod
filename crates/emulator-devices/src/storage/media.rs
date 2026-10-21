@@ -1,5 +1,6 @@
 //! Declarative external NAND inputs shared by native and browser frontends.
 //! Preparation verifies declared asset windows before constructing a medium.
+use super::inputs::PreparePersistentInputs;
 use crate::parts::nand::{Nand, Options, Overlay};
 use serde::Deserialize;
 use std::{collections::BTreeMap, sync::Arc};
@@ -19,7 +20,8 @@ pub enum NandInput {
         spare: Vec<(u32, String)>,
     },
     Catalog {
-        catalog: super::inputs::Catalog,
+        options: Options,
+        definition: fujimod_catalog::persistent_inputs::PersistentInputs,
         set: String,
         base: String,
         assets: BTreeMap<String, String>,
@@ -71,7 +73,8 @@ impl NandInput {
                     })?,
             ),
             Self::Catalog {
-                catalog,
+                options,
+                definition,
                 set,
                 base,
                 assets,
@@ -80,7 +83,7 @@ impl NandInput {
                     .into_iter()
                     .map(|(name, source)| Ok((name, asset(&source)?.clone())))
                     .collect::<Result<_, String>>()?;
-                catalog.prepare(&set, &windows, Arc::from(asset(&base)?.as_slice()))
+                definition.prepare(options, &set, &windows, Arc::from(asset(&base)?.as_slice()))
             }
         }
     }
@@ -160,18 +163,22 @@ mod tests {
             .as_array_mut()
             .unwrap()
             .push(serde_json::json!([64, "tag"]));
-        assert!(serde_json::from_value::<NandInput>(duplicate)
-            .unwrap()
-            .build(&inputs)
-            .is_err());
+        assert!(
+            serde_json::from_value::<NandInput>(duplicate)
+                .unwrap()
+                .build(&inputs)
+                .is_err()
+        );
         let mut missing = inputs.clone();
         missing.remove("settings");
-        assert!(serde_json::from_value::<NandInput>(spec)
-            .unwrap()
-            .build(&missing)
-            .err()
-            .unwrap()
-            .contains("settings"));
+        assert!(
+            serde_json::from_value::<NandInput>(spec)
+                .unwrap()
+                .build(&missing)
+                .err()
+                .unwrap()
+                .contains("settings")
+        );
     }
 }
 
@@ -263,14 +270,18 @@ mod card_tests {
             .as_array_mut()
             .unwrap()
             .push(serde_json::json!([7, "payload"]));
-        assert!(serde_json::from_value::<CardInput>(duplicate)
-            .unwrap()
-            .build(&assets)
-            .is_err());
+        assert!(
+            serde_json::from_value::<CardInput>(duplicate)
+                .unwrap()
+                .build(&assets)
+                .is_err()
+        );
         let bad = BTreeMap::from([("payload".into(), vec![0x85; 511])]);
-        assert!(serde_json::from_value::<CardInput>(spec)
-            .unwrap()
-            .build(&bad)
-            .is_err());
+        assert!(
+            serde_json::from_value::<CardInput>(spec)
+                .unwrap()
+                .build(&bad)
+                .is_err()
+        );
     }
 }

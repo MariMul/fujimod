@@ -3462,6 +3462,7 @@ name = "fujimod-emulator-devices"
 version = "0.1.0"
 dependencies = [
  "ciborium",
+ "fujimod-catalog",
  "libm",
  "serde",
  "serde_json",
