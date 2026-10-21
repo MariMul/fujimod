@@ -393,7 +393,8 @@ async fn run(
                 }
                 continue; // Drain the complete RTC output after every mutation.
             }
-            continue; // Drain the complete RTC output after every mutation.
+            // With no queued packet, wait for outbound work below. Spinning
+            // here starves the controller's first Hello and all later sends.
         }
         enum Wake {
             Out(std::result::Result<Vec<u8>, async_channel::RecvError>),

@@ -98,6 +98,25 @@ try {
     { type: 'result', seq: 1, completion: { devices: [], data: [], transferred: 0, error: null } },
   );
   console.log('PASS USB-free latency echo over real WebRTC');
+  // An idle native I/O loop must wake for the first outbound Hello. This
+  // handshake uses no USB operations and must leave the exporter untouched.
+  const beforeProbe = await page.evaluate(() => JSON.stringify(peerTest.fixture.log));
+  const probe = spawn('cargo', ['run', '-p', 'fujimod-usb-proxy', '--bin', 'fujimod-share-probe'], {
+    cwd: repo,
+    env: { ...process.env, FUJIMOD_USB_PROXY_URL: link },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let probeOutput = '';
+  probe.stdout.on('data', (data) => (probeOutput += data));
+  probe.stderr.on('data', (data) => (probeOutput += data));
+  const probeExit = await new Promise((resolve, reject) => {
+    probe.on('exit', resolve);
+    probe.on('error', reject);
+  });
+  assert.equal(probeExit, 0, probeOutput);
+  assert.match(probeOutput, /BRIDGE READY/);
+  assert.equal(await page.evaluate(() => JSON.stringify(peerTest.fixture.log)), beforeProbe);
+  console.log('PASS idle native handshake without USB requests');
   // Exercise the actual native Rust client, with all byte values through the transfer limit.
   const rust = spawn(
     'cargo',
