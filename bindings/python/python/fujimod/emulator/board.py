@@ -178,8 +178,7 @@ class Board:
     def from_inputs(
         cls,
         *,
-        body: str,
-        firmware: str,
+        configuration_id: str,
         update: str | PathLike[str],
         boot_rom: str | PathLike[str],
         unicorn: str | PathLike[str],
@@ -188,21 +187,22 @@ class Board:
     ) -> Self:
         """Boot a catalog runtime from files selected by the caller.
 
+        ``configuration_id`` selects a catalog run configuration. Its body
+        and firmware references are resolved by the catalog, not supplied as
+        separate caller identities.
+
         ``update`` and ``boot_rom`` are required files. ``nand`` and
-        ``settings`` supply optional persistent storage inputs. The runtime
-        graph is selected by ``body`` and ``firmware``; no file is inferred
-        from either identifier.
+        ``settings`` supply optional persistent storage inputs. No file path
+        is inferred from the selected configuration.
         """
-        body = cls._identifier(body, "body")
-        firmware = cls._identifier(firmware, "firmware")
+        configuration_id = cls._identifier(configuration_id, "configuration_id")
         update = cls._input_path(update, "update")
         boot_rom = cls._input_path(boot_rom, "boot_rom")
         unicorn = cls._input_path(unicorn, "unicorn")
         nand = None if nand is None else cls._input_path(nand, "nand")
         settings = None if settings is None else cls._input_path(settings, "settings")
         native = _native.Board.from_inputs(
-            body=body,
-            firmware=firmware,
+            configuration_id=configuration_id,
             update=update,
             boot_rom=boot_rom,
             unicorn=unicorn,

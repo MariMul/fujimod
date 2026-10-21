@@ -31,8 +31,7 @@ if TYPE_CHECKING:
 
     def emulator_inputs() -> None:
         board = Board.from_inputs(
-            body="body-id",
-            firmware="firmware-id",
+            configuration_id="x70-110-rec",
             update=Path("update.dat"),
             boot_rom=Path("boot.rom"),
             unicorn=Path("libunicorn.dylib"),

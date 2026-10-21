@@ -204,19 +204,17 @@ def test_board_rejects_invalid_execution_limits_before_native_calls() -> None:
         make_board(definition, {})
 
 
-def test_board_from_inputs_validates_identifiers_and_paths_first() -> None:
-    with pytest.raises(ValueError, match="body"):
+def test_board_from_inputs_validates_configuration_and_paths_first() -> None:
+    with pytest.raises(ValueError, match="configuration_id"):
         Board.from_inputs(
-            body="../body",
-            firmware="firmware",
+            configuration_id="../configuration",
             update="update.bin",
             boot_rom="boot.rom",
             unicorn="libunicorn.dylib",
         )
     with pytest.raises(TypeError, match="boot_rom"):
         Board.from_inputs(
-            body="body",
-            firmware="firmware",
+            configuration_id="x70-110-rec",
             update="update.bin",
             boot_rom=cast(str, object()),
             unicorn="libunicorn.dylib",

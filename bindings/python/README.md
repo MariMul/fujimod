@@ -33,8 +33,7 @@ from pathlib import Path
 from fujimod.emulator import Board
 
 with Board.from_inputs(
-    body="body-id",
-    firmware="firmware-id",
+    configuration_id="x70-110-rec",
     update=Path("/inputs/update.dat"),
     boot_rom=Path("/inputs/boot.rom"),
     unicorn=Path("/libraries/libunicorn.dylib"),
@@ -44,10 +43,12 @@ with Board.from_inputs(
     report = board.boot_to_rec()
 ```
 
-Omit `nand` or `settings` when those files are not supplied. The board owns its
-native execution session, exposes processor, memory, checkpoint and state
-operations, and supports `with` or an explicit `close()`. Closing is safe to
-repeat; methods that need an active session raise `RuntimeError` after close.
+Omit `nand` or `settings` when those files are not supplied. The configuration
+selects its body and firmware by identity; input paths remain caller-selected.
+The board owns its native execution session. It exposes processor, memory,
+checkpoint and state operations, and supports `with` or an explicit `close()`.
+Closing is safe to repeat; methods that need an active session raise
+`RuntimeError` after close.
 `board.session` provides typed ADC, GPIO, logical-input, physical-control and
 display capabilities over that same native owner. Use `set_adc_samples`,
 `gpio_input`, `input_level`, `set_position` and `rotate` to select external

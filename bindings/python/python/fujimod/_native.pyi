@@ -47,8 +47,7 @@ class emulator:
         @staticmethod
         def from_inputs(
             *,
-            body: str,
-            firmware: str,
+            configuration_id: str,
             update: str | PathLike[str],
             boot_rom: str | PathLike[str],
             unicorn: str | PathLike[str],
