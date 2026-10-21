@@ -224,3 +224,45 @@ fn content_identity_uses_standard_sha256_and_exact_byte_counts() {
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     );
 }
+
+#[test]
+fn published_x70_connection_limits_are_nonempty_strings() {
+    let bodies =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../catalog/emulator/bodies");
+    for name in ["x70.json", "x70-rec-usb.json"] {
+        let path = bodies.join(name);
+        let bytes =
+            std::fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+        let document: serde_json::Value = serde_json::from_slice(&bytes)
+            .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+        let connections = document
+            .get("connections")
+            .and_then(serde_json::Value::as_array)
+            .unwrap_or_else(|| panic!("{}: missing connections", path.display()));
+        assert!(
+            !connections.is_empty(),
+            "{}: no connections",
+            path.display()
+        );
+        for connection in connections {
+            let id = connection
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("<missing id>");
+            let limits = connection
+                .get("limits")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{} connection {id}: limits must be a string",
+                        path.display()
+                    )
+                });
+            assert!(
+                !limits.trim().is_empty(),
+                "{} connection {id}: limits must not be empty",
+                path.display()
+            );
+        }
+    }
+}

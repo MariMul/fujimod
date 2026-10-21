@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "execution_scope": "emulator-only",
+  "firmware_id": "x20-103",
+  "source_sha256": "7e3dd41696b6ffbd02a8d4b6555eba766a4850b18cbc0f69939f6487d8e0914b",
+  "off_inputs": {
+    "adc": [
+      {
+        "channel": 7,
+        "value": 1023
+      }
+    ],
+    "basis": "Declared catalog input."
+  },
+  "shutdown_instructions": 300000000,
+  "poweroff_pc": "0x11d4e00",
+  "$schema": "../../schemas/emulator-document.schema.json"
+}

@@ -1,0 +1,243 @@
+{
+  "schema": 1,
+  "id": "xp4",
+  "architecture": "arm32",
+  "runtime_abi": "armv7a-unicorn-v1",
+  "cpu_model": "Cortex-A7",
+  "cores": 4,
+  "mmu": "Unicorn ARMv7-A CPU page-table walker; guest CP15 and page tables",
+  "cbar": "0xffff0000",
+  "cache_geometry": {
+    "l1_data_bytes": 32768,
+    "l1_instruction_bytes": 32768,
+    "l2_bytes": 1048576,
+    "basis": "Declared catalog input."
+  },
+  "register_maps": {
+    "sd_host_clocks": {
+      "words": [
+        "0xfffc402c",
+        "0xfffc622c",
+        "0xfffc802c",
+        "0xfffca22c"
+      ],
+      "settle_ticks": 8,
+      "basis": "Declared catalog input."
+    },
+    "gpio": {
+      "base": "0xfff41000",
+      "size": "0x400",
+      "basis": "Declared catalog input."
+    },
+    "temperature": {
+      "base": "0xfff47810",
+      "size": "0x44",
+      "sample_ticks": 5000,
+      "basis": "Declared catalog input."
+    },
+    "adc": {
+      "base": "0xfff40000",
+      "size": "0x48",
+      "sample_ticks": 16,
+      "basis": "Declared catalog input."
+    },
+    "dmp": {
+      "base": "0xfffd0000",
+      "size": "0x3000",
+      "irq_route": 92,
+      "basis": "Declared catalog input."
+    },
+    "movdc": [
+      {
+        "base": "0xfff72000",
+        "irq": 107,
+        "reset_ticks": 8
+      },
+      {
+        "base": "0xfff73000",
+        "irq": 108,
+        "reset_ticks": 8
+      }
+    ],
+    "lcdc": [
+      {
+        "base": "0xfff7a000",
+        "pixel_clock_ticks": 2,
+        "irq_routes": [
+          112,
+          113
+        ],
+        "basis": "Declared catalog input."
+      },
+      {
+        "base": "0xfffa9000",
+        "pixel_clock_ticks": 2,
+        "irq_routes": [
+          117,
+          118
+        ],
+        "picture_layout": "bgra8888-straight",
+        "video_layout": "yycbcr422",
+        "basis": "Declared catalog input."
+      }
+    ],
+    "imaging": {
+      "command_base": "0xfff6c000",
+      "receiver_base": "0xfff69000",
+      "normal_irqs": [
+        296,
+        298
+      ],
+      "error_irqs": [
+        297,
+        297
+      ],
+      "timing_irqs": [
+        102,
+        100
+      ],
+      "input_buffer": {
+        "base": "0xfff70000",
+        "irq": 106,
+        "reset_ticks": 8,
+        "sram_base": "0xfff10000",
+        "bank_size": "0x7000",
+        "basis": "Declared catalog input."
+      },
+      "command_ticks": 5400,
+      "reset_ticks": 8,
+      "basis": "Declared catalog input."
+    },
+    "control_requests": {
+      "registers": [
+        "0xff701080",
+        "0xff701280",
+        "0xff701480",
+        "0xff701680",
+        "0xff701880",
+        "0xff701a80",
+        "0xff701c80",
+        "0xff702080",
+        "0xff703080",
+        "0xff704080",
+        "0xff705080",
+        "0xff706080",
+        "0xff709080"
+      ],
+      "ack_ticks": 8,
+      "basis": "Declared catalog input."
+    },
+    "io_groups": {
+      "base": "0xfff42000",
+      "basis": "Declared catalog input."
+    },
+    "decompressor": {
+      "base": "0xfff79000",
+      "irq_route": 128,
+      "basis": "Declared catalog input."
+    },
+    "spi": {
+      "1": {
+        "base": "0xfff33000",
+        "parent_clock_ticks": 1,
+        "basis": "Declared catalog input."
+      },
+      "4": {
+        "base": "0xfff36000",
+        "parent_clock_ticks": 1,
+        "basis": "Declared catalog input."
+      },
+      "5": {
+        "base": "0xfff37000",
+        "parent_clock_ticks": 1,
+        "basis": "Declared catalog input."
+      }
+    },
+    "serial_flash": {
+      "irq_route": 37,
+      "native_dependencies": [
+        "dma"
+      ],
+      "base": "0xfffd8000",
+      "aperture": "0xf0000000",
+      "size": "0x08000000",
+      "timing": "8 guest ticks per command acceptance; functional latency, not measured silicon timing.",
+      "basis": "Declared catalog input."
+    },
+    "dma": {
+      "base": "0xfffe0000",
+      "channels": 16,
+      "request_mux": "0xfff4a500",
+      "native_dependencies": [
+        "serial_flash"
+      ],
+      "timing": "16 guest setup ticks plus ceil(bytes/16); functional transfer timing, not measured bus bandwidth.",
+      "irq_routes": [
+        207,
+        208,
+        209,
+        210,
+        211,
+        212,
+        213,
+        214,
+        215,
+        216,
+        217,
+        218,
+        219,
+        220,
+        221,
+        222
+      ],
+      "basis": "Declared catalog input."
+    },
+    "gic": {
+      "distributor": "0xffff1000",
+      "cpu_interface": "0xffff2000",
+      "lines": 512,
+      "basis": "Declared catalog input."
+    },
+    "interval_timer": {
+      "base": "0xfff3c300",
+      "routes": [
+        {
+          "channel": 0,
+          "irq": 57
+        },
+        {
+          "channel": 1,
+          "irq": 58
+        },
+        {
+          "channel": 2,
+          "irq": 59
+        },
+        {
+          "channel": 3,
+          "irq": 60
+        },
+        {
+          "channel": 4,
+          "irq": 61
+        },
+        {
+          "channel": 5,
+          "irq": 62
+        },
+        {
+          "channel": 6,
+          "irq": 63
+        },
+        {
+          "channel": 7,
+          "irq": 64
+        }
+      ],
+      "clock": "one 54 MHz timer cycle per aggregate CPU instruction; synthetic ratio",
+      "basis": "Declared catalog input."
+    }
+  },
+  "limits": [],
+  "$schema": "../../schemas/emulator-document.schema.json"
+}

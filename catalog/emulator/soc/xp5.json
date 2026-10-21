@@ -1,0 +1,509 @@
+{
+  "schema": 1,
+  "id": "xp5",
+  "architecture": "aarch64",
+  "runtime_abi": "armv8a-shared-v1",
+  "engines": [
+    "hypervisor"
+  ],
+  "cpu_model": "Cortex-A53",
+  "cores": 4,
+  "board_ticks_per_second": 1000000000,
+  "instructions_per_tick": {
+    "numerator": 1,
+    "denominator": 1
+  },
+  "counter_hz": 1000000000,
+  "pmu_hz": 1000000000,
+  "physical_timer_irq": 30,
+  "virtual_timer_irq": 27,
+  "reset_system": {
+    "MIDR_EL1": 1091555380
+  },
+  "gic": {
+    "distributor": 4194304000,
+    "redistributor": 4194828288,
+    "stride": 131072,
+    "lines": 512
+  },
+  "companion": {
+    "model": "Cortex-M4",
+    "processor": 4,
+    "clock_hz": 600000000,
+    "vector_base": 0,
+    "mailbox": {
+      "request": 55,
+      "control": 58,
+      "reply": 141,
+      "status": 142,
+      "fault": 143
+    },
+    "mappings": [
+      {
+        "address": 0,
+        "physical": 4196401152,
+        "size": 1048576,
+        "permissions": 7
+      },
+      {
+        "address": 1749495808,
+        "physical": 138883072,
+        "size": 5754880,
+        "permissions": 7
+      },
+      {
+        "address": 1650708480,
+        "physical": 40095744,
+        "size": 266240,
+        "permissions": 7
+      }
+    ],
+    "mmio": [
+      {
+        "address": 1593835520,
+        "physical": 4278190080,
+        "size": 16777216
+      }
+    ]
+  },
+  "mmio": [
+    {
+      "address": 4278190080,
+      "physical": 4278190080,
+      "size": 16777216
+    },
+    {
+      "address": 4194304000,
+      "physical": 4194304000,
+      "size": 1048576
+    },
+    {
+      "address": 4026531840,
+      "physical": 4026531840,
+      "size": 134217728
+    },
+    {
+      "address": 4210053120,
+      "physical": 4210053120,
+      "size": 4096
+    },
+    {
+      "address": 4210118656,
+      "physical": 4210118656,
+      "size": 4096
+    },
+    {
+      "address": 4210184192,
+      "physical": 4210184192,
+      "size": 4096
+    },
+    {
+      "address": 4210249728,
+      "physical": 4210249728,
+      "size": 4096
+    },
+    {
+      "address": 4160749568,
+      "physical": 4160749568,
+      "size": 4
+    },
+    {
+      "address": 4178575360,
+      "physical": 4178575360,
+      "size": 4
+    },
+    {
+      "address": 4205314064,
+      "physical": 4205314064,
+      "size": 4
+    },
+    {
+      "address": 4208984064,
+      "physical": 4208984064,
+      "size": 12288
+    },
+    {
+      "address": 4209377280,
+      "physical": 4209377280,
+      "size": 147456
+    },
+    {
+      "address": 4210065408,
+      "physical": 4210065408,
+      "size": 4096
+    },
+    {
+      "address": 1744830464,
+      "physical": 1744830464,
+      "size": 4
+    },
+    {
+      "address": 2147483648,
+      "physical": 2147483648,
+      "size": 4
+    },
+    {
+      "address": 7516192768,
+      "physical": 7516192768,
+      "size": 4
+    }
+  ],
+  "windows": [
+    {
+      "name": "timer",
+      "base": 4287660032,
+      "size": 4096,
+      "attachment": "timer"
+    },
+    {
+      "name": "extended_timer",
+      "base": 4287664128,
+      "size": 4096,
+      "kind": "timer-extended"
+    },
+    {
+      "name": "flash_aperture",
+      "base": 4026531840,
+      "size": 134217728,
+      "kind": "flash-storage"
+    },
+    {
+      "name": "flash",
+      "base": 4287668224,
+      "size": 4096,
+      "kind": "flash-storage-controller"
+    },
+    {
+      "name": "flash_dma",
+      "base": 4287860736,
+      "size": 4096,
+      "kind": "flash-storage-dma"
+    },
+    {
+      "name": "clock_gates",
+      "base": 4287676416,
+      "size": 4096,
+      "kind": "clock-gates"
+    },
+    {
+      "name": "power_gates",
+      "base": 4287680512,
+      "size": 4096,
+      "kind": "power-gates"
+    },
+    {
+      "name": "clock_banks",
+      "base": 4288675840,
+      "size": 131072,
+      "kind": "clock-banks"
+    },
+    {
+      "name": "dma",
+      "base": 4287823872,
+      "size": 32768,
+      "kind": "general-dma",
+      "options": {
+        "companion_irq_base": 83
+      }
+    },
+    {
+      "name": "spi8",
+      "base": 4287725568,
+      "size": 4096,
+      "attachment": "spi8"
+    },
+    {
+      "name": "output_link",
+      "base": 4288286720,
+      "size": 28,
+      "kind": "display-output-link"
+    },
+    {
+      "name": "pin_control",
+      "base": 4287643648,
+      "size": 4096,
+      "kind": "pin-control"
+    },
+    {
+      "name": "temperature",
+      "base": 4287647744,
+      "size": 4096,
+      "kind": "soc-temperature"
+    },
+    {
+      "name": "adc",
+      "base": 4287651840,
+      "size": 4096,
+      "kind": "adc"
+    },
+    {
+      "name": "gpio",
+      "base": 4287655936,
+      "size": 4096,
+      "kind": "gpio"
+    },
+    {
+      "name": "gpio3",
+      "base": 4287672320,
+      "size": 4096,
+      "kind": "gpio-port3"
+    },
+    {
+      "name": "spi0",
+      "base": 4287692800,
+      "size": 4096,
+      "kind": "spi-controller",
+      "options": {
+        "source_hz": 48000000
+      }
+    },
+    {
+      "name": "i2c1",
+      "base": 4287778816,
+      "size": 4096,
+      "kind": "battery-i2c"
+    },
+    {
+      "name": "lz",
+      "base": 4288151552,
+      "size": 4096,
+      "kind": "lz"
+    },
+    {
+      "name": "pixel_pll0",
+      "base": 4288745472,
+      "size": 4096,
+      "kind": "panel-pll"
+    },
+    {
+      "name": "pixel_pll1",
+      "base": 4288749568,
+      "size": 4096,
+      "kind": "panel-pll"
+    },
+    {
+      "name": "pixel_pll2",
+      "base": 4288753664,
+      "size": 4096,
+      "kind": "panel-pll"
+    },
+    {
+      "name": "pixel_pll3",
+      "base": 4288757760,
+      "size": 4096,
+      "kind": "panel-pll"
+    },
+    {
+      "name": "display0",
+      "base": 4288217088,
+      "size": 4096,
+      "kind": "display"
+    },
+    {
+      "name": "display1",
+      "base": 4288282624,
+      "size": 4096,
+      "kind": "display"
+    },
+    {
+      "name": "spi9",
+      "base": 4287729664,
+      "size": 4096,
+      "kind": "panel-spi",
+      "options": {
+        "source_hz": 48000000
+      }
+    },
+    {
+      "name": "renderer",
+      "base": 4287873024,
+      "size": 12288,
+      "kind": "renderer"
+    },
+    {
+      "name": "sensor",
+      "base": 4287922176,
+      "size": 4096,
+      "kind": "imaging-sensor",
+      "options": {
+        "command_latency_us": 1
+      }
+    },
+    {
+      "name": "receiver0",
+      "base": 4287889408,
+      "size": 4096,
+      "kind": "imaging-receiver"
+    },
+    {
+      "name": "receiver1",
+      "base": 4287893504,
+      "size": 4096,
+      "kind": "imaging-receiver"
+    },
+    {
+      "name": "phy",
+      "base": 4287905792,
+      "size": 4096,
+      "kind": "imaging-phy"
+    },
+    {
+      "name": "input",
+      "base": 4287913984,
+      "size": 4096,
+      "kind": "imaging-input"
+    },
+    {
+      "name": "input_reset",
+      "base": 4287954944,
+      "size": 4096,
+      "kind": "imaging-reset"
+    },
+    {
+      "name": "movdc0",
+      "base": 4288086016,
+      "size": 4096,
+      "kind": "movdc"
+    },
+    {
+      "name": "movdc1",
+      "base": 4288090112,
+      "size": 4096,
+      "kind": "movdc"
+    },
+    {
+      "name": "movdc2",
+      "base": 4288094208,
+      "size": 4096,
+      "kind": "movdc"
+    },
+    {
+      "name": "movdc_reset",
+      "base": 4288098304,
+      "size": 4096,
+      "kind": "imaging-reset"
+    },
+    {
+      "name": "resize",
+      "base": 4288159744,
+      "size": 4096,
+      "kind": "imaging-resize"
+    },
+    {
+      "name": "statistics",
+      "base": 4286578688,
+      "size": 60224,
+      "kind": "imaging-statistics"
+    },
+    {
+      "name": "paf",
+      "base": 4288110592,
+      "size": 4096,
+      "kind": "imaging-paf"
+    },
+    {
+      "name": "preview",
+      "base": 4288102400,
+      "size": 4096,
+      "kind": "imaging-preview"
+    },
+    {
+      "name": "rifp_io",
+      "base": 4291825664,
+      "size": 4096,
+      "kind": "imaging-rifp-io"
+    },
+    {
+      "name": "rifp",
+      "base": 4291829760,
+      "size": 4096,
+      "kind": "imaging-rifp"
+    },
+    {
+      "name": "spi3",
+      "base": 4287705088,
+      "size": 4096,
+      "attachment": "spi3"
+    },
+    {
+      "name": "spi4",
+      "base": 4287709184,
+      "size": 4096,
+      "attachment": "spi4"
+    },
+    {
+      "name": "spi5",
+      "base": 4287713280,
+      "size": 4096,
+      "attachment": "spi5"
+    },
+    {
+      "name": "mailbox",
+      "base": 4287684864,
+      "size": 36,
+      "kind": "interprocessor-mailbox"
+    },
+    {
+      "name": "serial",
+      "base": 4287696896,
+      "size": 4096,
+      "kind": "pl022",
+      "options": {
+        "source_hz": 48000000,
+        "ticks_per_second": 1000000000,
+        "receive_request": 2,
+        "transmit_request": 3
+      }
+    },
+    {
+      "name": "capture0",
+      "base": 4287791104,
+      "size": 4096,
+      "kind": "input-capture"
+    },
+    {
+      "name": "capture1",
+      "base": 4287795200,
+      "size": 4096,
+      "kind": "input-capture"
+    },
+    {
+      "name": "dma_address_high",
+      "base": 4287686472,
+      "size": 64,
+      "kind": "dma-address-high"
+    },
+    {
+      "name": "dma_routes",
+      "base": 4287685888,
+      "size": 32,
+      "kind": "dma-request-routing"
+    },
+    {
+      "name": "bus_drain_68000000",
+      "base": 1744830464,
+      "size": 4,
+      "kind": "unmodeled-bus-drain"
+    },
+    {
+      "name": "bus_drain_80000000",
+      "base": 2147483648,
+      "size": 4,
+      "kind": "unmodeled-bus-drain"
+    },
+    {
+      "name": "bus_drain_1c0000000",
+      "base": 7516192768,
+      "size": 4,
+      "kind": "unmodeled-bus-drain"
+    }
+  ],
+  "limits": [],
+  "affinities": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "$schema": "../../schemas/emulator-document.schema.json"
+}

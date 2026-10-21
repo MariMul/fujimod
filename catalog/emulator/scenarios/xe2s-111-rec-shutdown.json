@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "execution_scope": "emulator-only",
+  "firmware_id": "xe2s-111",
+  "source_sha256": "a34859b8e7ad2b915bcb77b337ddca4799cc29141a57de88909ee5746c62d424",
+  "off_inputs": {
+    "gpio": [
+      {
+        "port": 0,
+        "pin": 5,
+        "value": 0,
+        "basis": "Declared catalog input."
+      }
+    ],
+    "mcu_status": 1,
+    "basis": "Declared catalog input."
+  },
+  "shutdown_instructions": 300000000,
+  "poweroff_pc": "0x120df3c",
+  "poweroff_function": {
+    "address": "0x120de70",
+    "size": 208,
+    "sha256": "8b37f7b3a36e1f03a9ef97a4ba05f871515ad945ecebf9e5b9d1fa19da566a4c"
+  },
+  "$schema": "../../schemas/emulator-document.schema.json"
+}

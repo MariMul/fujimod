@@ -1,0 +1,211 @@
+{
+  "schema": 1,
+  "id": "x100vi",
+  "soc_id": "xp5",
+  "dram": {
+    "size": "0x68000000",
+    "basis": "Declared catalog input."
+  },
+  "ram": [
+    {
+      "base": 0,
+      "size": 1073741824
+    },
+    {
+      "base": 1073741824,
+      "size": 671088640
+    },
+    {
+      "base": 4196401152,
+      "size": 1048576
+    }
+  ],
+  "parts": {
+    "timer": {
+      "kind": "timer-focus-capture"
+    },
+    "spi8": {
+      "kind": "audio-spi-sink"
+    },
+    "spi3": {
+      "kind": "imaging-serial-sink"
+    },
+    "spi4": {
+      "kind": "focus-actuator"
+    },
+    "spi5": {
+      "kind": "iris-actuator"
+    }
+  },
+  "wiring": {
+    "flash_aperture": {
+      "erased_tail": 255,
+      "seed": [
+        {
+          "offset": 6684919,
+          "value": 3
+        }
+      ]
+    },
+    "flash": {
+      "jedec_id": 2145056
+    },
+    "adc": {
+      "samples": [
+        2712,
+        4095,
+        4095,
+        4095,
+        4095,
+        4095,
+        4095,
+        2241,
+        4095,
+        4095,
+        2712,
+        4095,
+        4095,
+        4095,
+        4095
+      ]
+    },
+    "gpio": {
+      "input_irqs": [
+        {
+          "port": 0,
+          "pin": 0,
+          "line": 116,
+          "active_high": false
+        },
+        {
+          "port": 0,
+          "pin": 1,
+          "line": 117,
+          "active_high": false
+        }
+      ],
+      "initial_outputs": [
+        {
+          "port": 12,
+          "levels": 256
+        }
+      ],
+      "feedback": [
+        {
+          "port": 4,
+          "register": 0,
+          "bit": 4,
+          "input_port": 4,
+          "input_pin": 4
+        }
+      ]
+    },
+    "spi0": {
+      "endpoints": [
+        {
+          "select": {
+            "port": 12,
+            "pin": 10,
+            "active_high": true
+          },
+          "part": {
+            "kind": "power-controller",
+            "rtc_seconds": 845151906,
+            "rtc_valid": true
+          }
+        },
+        {
+          "select": {
+            "port": 12,
+            "pin": 8,
+            "active_high": false
+          },
+          "part": {
+            "kind": "serial-calibration-registers",
+            "miso_high": false
+          }
+        }
+      ]
+    },
+    "spi9": {
+      "select_port": 15,
+      "select_pin": 13
+    },
+    "receiver0": {
+      "frame_period_us": 1000000,
+      "frame_active_us": 10000
+    },
+    "receiver1": {
+      "frame_period_us": 1000000
+    },
+    "movdc0": {
+      "frame_period_us": 1000000,
+      "source_luma": 128
+    },
+    "movdc1": {
+      "frame_period_us": 1000000,
+      "source_luma": 128
+    },
+    "movdc2": {
+      "frame_period_us": 1000000,
+      "source_luma": 128
+    },
+    "resize": {
+      "completion_us": 1000
+    },
+    "preview": {
+      "frame_period_us": 1000000,
+      "source_luma": 128
+    },
+    "rifp": {
+      "completion_us": 1000,
+      "source_luma": 128
+    },
+    "serial": {
+      "wire": {
+        "kind": "gpio-selected",
+        "endpoints": [
+          {
+            "select": {
+              "port": 11,
+              "pin": 5,
+              "active_high": false
+            },
+            "part": {
+              "kind": "bis-configuration-registers",
+              "revision": [
+                0,
+                0
+              ],
+              "idle_high": false
+            }
+          },
+          {
+            "select": {
+              "port": 11,
+              "pin": 3,
+              "active_high": false
+            },
+            "part": {
+              "kind": "lsm6ds-configuration-registers"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "controls": {
+    "kind": "x100vi",
+    "key_samples": {
+      "menu": 3472,
+      "back": 2227,
+      "menu_back": 1999,
+      "up": 1558,
+      "down": 3409,
+      "left": 2829,
+      "right": 2068
+    }
+  },
+  "limits": [],
+  "$schema": "../../schemas/emulator-document.schema.json"
+}

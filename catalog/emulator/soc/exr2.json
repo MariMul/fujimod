@@ -1,0 +1,169 @@
+{
+  "schema": 1,
+  "id": "exr2",
+  "architecture": "arm32",
+  "cpu_model": "Cortex-R5F proxy for R4",
+  "dram_alias": "0x40000000",
+  "rom_address": "0x80000000",
+  "rom_size": "0x4000",
+  "sram_address": "0xfff00000",
+  "sram_size": "0x1000",
+  "vector_aliases": [
+    "0x3fff0000",
+    "0x7fff0000"
+  ],
+  "private_mmio": [
+    {
+      "address": "0xfe318000",
+      "size": "0x1000"
+    },
+    {
+      "address": "0xfe3b0000",
+      "size": "0x1000"
+    },
+    {
+      "address": "0xfe80c000",
+      "size": "0x1000"
+    },
+    {
+      "address": "0xfe80d000",
+      "size": "0x1000"
+    }
+  ],
+  "register_maps": {
+    "control_bus0": {
+      "base": "0xfff85000",
+      "offsets": [
+        0,
+        4,
+        8,
+        16,
+        24
+      ],
+      "irq": "0x65",
+      "modes": [
+        1,
+        9
+      ]
+    },
+    "control_bus1": {
+      "base": "0xfff85040",
+      "irq": "0x66"
+    },
+    "interrupts": {
+      "bases": [
+        "0xfffb3000",
+        "0xfffb4000"
+      ],
+      "timer_base": "0xfff91000"
+    },
+    "nand": {
+      "base": "0xfff52000"
+    },
+    "loader_dma": {
+      "base": "0xfff02000"
+    },
+    "decompressor": {
+      "base": "0xfff43000"
+    },
+    "usb": {
+      "core": "0xfff54000",
+      "phy": "0xfff55000",
+      "irq": 84,
+      "dma_irq": 85
+    }
+  },
+  "limits": [],
+  "runtime_abi": "exr2-r5f-fixed-map-v1",
+  "tcm": {
+    "atcm": {
+      "size": "0x2000",
+      "reset_base": "0xffff8000",
+      "reset_enabled": true,
+      "basis": "Declared catalog input."
+    },
+    "btcm": {
+      "size": 0,
+      "reset_base": 0,
+      "reset_enabled": false,
+      "basis": "Declared catalog input."
+    }
+  },
+  "boot_rom": {
+    "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be",
+    "size": "0x4000",
+    "basis": "Declared catalog input."
+  },
+  "reset_release": {
+    "register": "0xfffb40cc",
+    "mask": "0x01000000",
+    "source": 120,
+    "target": "0x3fff0000"
+  },
+  "update_boot": {
+    "flash_dat_bias": "0x25c",
+    "diagnostic_headers": [
+      {
+        "name": "kernel0",
+        "offset": "0x80000",
+        "address": "0x40000"
+      },
+      {
+        "name": "kernel1",
+        "offset": "0xa0000",
+        "address": "0xd0000"
+      }
+    ],
+    "nand_layouts": {
+      "0": {
+        "name": "nand-512-byte-pages",
+        "images": [
+          {
+            "name": "boot",
+            "offset": "0x8000",
+            "size": "0x20000",
+            "address": 0
+          }
+        ],
+        "entry_labels": {
+          "0x4000": "primary loader",
+          "0x14000": "secondary loader",
+          "0x40020": "primary kernel",
+          "0xd0020": "secondary kernel"
+        },
+        "basis": "Declared catalog input."
+      },
+      "1": {
+        "name": "nand-2048-byte-pages",
+        "images": [
+          {
+            "name": "boot",
+            "offset": "0x40000",
+            "size": "0x20000",
+            "address": 0
+          }
+        ],
+        "entry_labels": {
+          "0x1800": "primary loader",
+          "0x11800": "secondary loader",
+          "0x40020": "primary kernel",
+          "0xd0020": "secondary kernel"
+        },
+        "basis": "Declared catalog input."
+      }
+    }
+  },
+  "discovery_mmio": [
+    {
+      "address": "0xf0000000",
+      "size": "0x0fff0000",
+      "basis": "Declared catalog input."
+    },
+    {
+      "address": "0x9fec0000",
+      "size": "0x10000",
+      "basis": "Declared catalog input."
+    }
+  ],
+  "$schema": "../../schemas/emulator-document.schema.json"
+}

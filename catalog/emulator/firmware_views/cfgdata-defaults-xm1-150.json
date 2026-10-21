@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "firmware_id": "xm1-150",
+  "source_sha256": "43d67afa1a2bc9ae8481bc0acf02cb085ed0f515122dcbd26addcae102cd1490",
+  "builder_entry": "0x69f144",
+  "sections": [
+    "stream-0016025c"
+  ],
+  "max_instructions": 8000000,
+  "pointer_address": "0x96ca50",
+  "output": {
+    "address": "0x41acd800",
+    "size": "0x420000"
+  },
+  "table": {
+    "name": "defaults_table",
+    "address": "0x7c8a44",
+    "size": "0x1f8",
+    "sha256": "8179e82dd07c45460f20ca51150e4b14d119dd27878690454a3f0cb8c5b263b1",
+    "sampling": "immutable-source",
+    "count": 125
+  },
+  "code_checks": [
+    {
+      "name": "defaults_builder",
+      "address": "0x69f144",
+      "size": "0xc0",
+      "sha256": "0e531b589b7cea277ba39ddad25430200d8cb713c143d04e9df1520b59eca9aa",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "cfg_pointer_initialization",
+      "address": "0x69f214",
+      "size": "0xc",
+      "sha256": "27f22953918ff1145910f89489fc7bca44dcff2eb2526d2df3931a33c35e49d9",
+      "sampling": "immutable-source"
+    }
+  ],
+  "final_version_bytes": [
+    {
+      "offset": "0x204",
+      "value": 1
+    },
+    {
+      "offset": "0x205",
+      "value": "0x78"
+    }
+  ],
+  "static_oracle_sha256": "a0246bdafbb983bb805ab38a9deae199eb754c2b604709381cc235485da52b7e",
+  "limits": [],
+  "store_limit": 2097152,
+  "$schema": "../../schemas/emulator-document.schema.json"
+}

@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "firmware_id": "xm1-150",
+  "execution_scope": "offline-boot-development",
+  "soc": {
+    "path": "emulator/soc/exr2-service-transports.json",
+    "sha256": "d291c1c4243c31dba1c4188b956edcbc6359e7a65bcc3e94c9777fc868600060",
+    "size": 3567
+  },
+  "board": {
+    "path": "emulator/bodies/xm1-rec.json",
+    "sha256": "f8b2932f852bac5ef903f4b5f7d9dd6445a68a12e9c87196cb89f998d0e3792e",
+    "size": 7811
+  },
+  "firmware": {
+    "path": "emulator/firmwares/xm1-150.json",
+    "sha256": "b44ec0e39735b5cf099ee3ea023996af197ee412ecc7a0edc1b953b8d323482e",
+    "size": 5139
+  },
+  "$schema": "../../../schemas/emulator-profile.schema.json"
+}

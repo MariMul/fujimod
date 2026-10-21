@@ -1,0 +1,3876 @@
+{
+  "format_version": 2,
+  "firmware_id": "x70-110",
+  "firmware_sha256": "7dd5b358a66f38d1fc7dad899a77d35fe4e6ed0edd0ed1d04fbca512d5dc8fd6",
+  "facts": {
+    "controls": {
+      "value": {
+        "controls": {
+          "exposure_compensation_dial": {
+            "keys": [
+              "KEY_EXP_DIAL_P3",
+              "KEY_EXP_DIAL_P8_3",
+              "KEY_EXP_DIAL_P7_3",
+              "KEY_EXP_DIAL_P2",
+              "KEY_EXP_DIAL_P5_3",
+              "KEY_EXP_DIAL_P4_3",
+              "KEY_EXP_DIAL_P1",
+              "KEY_EXP_DIAL_P2_3",
+              "KEY_EXP_DIAL_P1_3",
+              "KEY_EXP_DIAL_0",
+              "KEY_EXP_DIAL_M1_3",
+              "KEY_EXP_DIAL_M2_3",
+              "KEY_EXP_DIAL_M1",
+              "KEY_EXP_DIAL_M4_3",
+              "KEY_EXP_DIAL_M5_3",
+              "KEY_EXP_DIAL_M2",
+              "KEY_EXP_DIAL_M7_3",
+              "KEY_EXP_DIAL_M8_3",
+              "KEY_EXP_DIAL_M3"
+            ],
+            "input": {
+              "KEY_EXP_DIAL_P3": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14158,
+                    "upper": 14156
+                  },
+                  "scanner_record": {
+                    "address": 11940880,
+                    "stride": 28,
+                    "physical": 812,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14158,
+                    "upper": 14156
+                  }
+                }
+              ],
+              "KEY_EXP_DIAL_P8_3": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14154,
+                    "upper": 14152
+                  },
+                  "scanner_record": {
+                    "address": 11940852,
+                    "stride": 28,
+                    "physical": 813,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14154,
+                    "upper": 14152
+                  }
+                }
+              ],
+              "KEY_EXP_DIAL_P7_3": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14150,
+                    "upper": 14148
+                  },
+                  "scanner_record": {
+                    "address": 11940824,
+                    "stride": 28,
+                    "physical": 814,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14150,
+                    "upper": 14148
+                  }
+                }
+              ],
+              "KEY_EXP_DIAL_P2": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14146,
+                    "upper": 14144
+                  },
+                  "scanner_record": {
+                    "address": 11940796,
+                    "stride": 28,
+                    "physical": 815,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14146,
+                    "upper": 14144
+                  }
+                }
+              ],
+              "KEY_EXP_DIAL_P5_3": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14142,
+                    "upper": 14140
+                  },
+                  "scanner_record": {
+                    "address": 11940768,
+                    "stride": 28,
+                    "physical": 816,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14142,
+                    "upper": 14140
+                  }
+                }
+              ],
+              "KEY_EXP_DIAL_P4_3": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14138,
+                    "upper": 14136
+                  },
+                  "scanner_record": {
+                    "address": 11940740,
+                    "stride": 28,
+                    "physical": 817,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14138,
+                    "upper": 14136
+                  }
+                }
+              ],
+              "KEY_EXP_DIAL_P1": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14134,
+                    "upper": 14132
+                  },
+                  "scanner_record": {
+                    "address": 11940712,
+                    "stride": 28,
+                    "physical": 818,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14134,
+                    "upper": 14132
+                  }
+                }
+              ],
+              "KEY_EXP_DIAL_P2_3": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14130,
+                    "upper": 14128
+                  },
+                  "scanner_record": {
+                    "address": 11940684,
+                    "stride": 28,
+                    "physical": 819,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14130,
+                    "upper": 14128
+                  }
+                }
+              ],
+              "KEY_EXP_DIAL_P1_3": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14126,
+                    "upper": 14124
+                  },
+                  "scanner_record": {
+                    "address": 11940656,
+                    "stride": 28,
+                    "physical": 820,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14126,
+                    "upper": 14124
+                  }
+                }
+              ],
+              "KEY_EXP_DIAL_0": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14122,
+                    "upper": 14120
+                  },
+                  "scanner_record": {
+                    "address": 11940628,
+                    "stride": 28,
+                    "physical": 821,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14122,
+                    "upper": 14120
+                  }
+                }
+              ],
+              "KEY_EXP_DIAL_M1_3": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14118,
+                    "upper": 14116
+                  },
+                  "scanner_record": {
+                    "address": 11940600,
+                    "stride": 28,
+                    "physical": 822,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14118,
+                    "upper": 14116
+                  }
+                }
+              ],
+              "KEY_EXP_DIAL_M2_3": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14114,
+                    "upper": 14112
+                  },
+                  "scanner_record": {
+                    "address": 11940572,
+                    "stride": 28,
+                    "physical": 823,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14114,
+                    "upper": 14112
+                  }
+                }
+              ],
+              "KEY_EXP_DIAL_M1": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14110,
+                    "upper": 14108
+                  },
+                  "scanner_record": {
+                    "address": 11940544,
+                    "stride": 28,
+                    "physical": 824,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14110,
+                    "upper": 14108
+                  }
+                }
+              ],
+              "KEY_EXP_DIAL_M4_3": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14106,
+                    "upper": 14104
+                  },
+                  "scanner_record": {
+                    "address": 11940516,
+                    "stride": 28,
+                    "physical": 825,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14106,
+                    "upper": 14104
+                  }
+                }
+              ],
+              "KEY_EXP_DIAL_M5_3": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14102,
+                    "upper": 14100
+                  },
+                  "scanner_record": {
+                    "address": 11940488,
+                    "stride": 28,
+                    "physical": 826,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14102,
+                    "upper": 14100
+                  }
+                }
+              ],
+              "KEY_EXP_DIAL_M2": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14098,
+                    "upper": 14096
+                  },
+                  "scanner_record": {
+                    "address": 11940460,
+                    "stride": 28,
+                    "physical": 827,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14098,
+                    "upper": 14096
+                  }
+                }
+              ],
+              "KEY_EXP_DIAL_M7_3": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14094,
+                    "upper": 14092
+                  },
+                  "scanner_record": {
+                    "address": 11940432,
+                    "stride": 28,
+                    "physical": 828,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14094,
+                    "upper": 14092
+                  }
+                }
+              ],
+              "KEY_EXP_DIAL_M8_3": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14090,
+                    "upper": 14088
+                  },
+                  "scanner_record": {
+                    "address": 11940404,
+                    "stride": 28,
+                    "physical": 829,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14090,
+                    "upper": 14088
+                  }
+                }
+              ],
+              "KEY_EXP_DIAL_M3": [
+                {
+                  "kind": "adc",
+                  "channel": 4,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14086,
+                    "upper": 14084
+                  },
+                  "scanner_record": {
+                    "address": 11940376,
+                    "stride": 28,
+                    "physical": 830,
+                    "kind": 1,
+                    "source": 4,
+                    "lower": 14086,
+                    "upper": 14084
+                  }
+                }
+              ]
+            },
+            "actions": {},
+            "positions": [
+              {
+                "position": "+3",
+                "keys": [
+                  "KEY_EXP_DIAL_P3"
+                ]
+              },
+              {
+                "position": "8/3",
+                "keys": [
+                  "KEY_EXP_DIAL_P8_3"
+                ]
+              },
+              {
+                "position": "7/3",
+                "keys": [
+                  "KEY_EXP_DIAL_P7_3"
+                ]
+              },
+              {
+                "position": "+2",
+                "keys": [
+                  "KEY_EXP_DIAL_P2"
+                ]
+              },
+              {
+                "position": "5/3",
+                "keys": [
+                  "KEY_EXP_DIAL_P5_3"
+                ]
+              },
+              {
+                "position": "4/3",
+                "keys": [
+                  "KEY_EXP_DIAL_P4_3"
+                ]
+              },
+              {
+                "position": "+1",
+                "keys": [
+                  "KEY_EXP_DIAL_P1"
+                ]
+              },
+              {
+                "position": "2/3",
+                "keys": [
+                  "KEY_EXP_DIAL_P2_3"
+                ]
+              },
+              {
+                "position": "1/3",
+                "keys": [
+                  "KEY_EXP_DIAL_P1_3"
+                ]
+              },
+              {
+                "position": "0",
+                "keys": [
+                  "KEY_EXP_DIAL_0"
+                ]
+              },
+              {
+                "position": "-1/3",
+                "keys": [
+                  "KEY_EXP_DIAL_M1_3"
+                ]
+              },
+              {
+                "position": "-2/3",
+                "keys": [
+                  "KEY_EXP_DIAL_M2_3"
+                ]
+              },
+              {
+                "position": "\u22121",
+                "keys": [
+                  "KEY_EXP_DIAL_M1"
+                ]
+              },
+              {
+                "position": "-4/3",
+                "keys": [
+                  "KEY_EXP_DIAL_M4_3"
+                ]
+              },
+              {
+                "position": "-5/3",
+                "keys": [
+                  "KEY_EXP_DIAL_M5_3"
+                ]
+              },
+              {
+                "position": "\u22122",
+                "keys": [
+                  "KEY_EXP_DIAL_M2"
+                ]
+              },
+              {
+                "position": "-7/3",
+                "keys": [
+                  "KEY_EXP_DIAL_M7_3"
+                ]
+              },
+              {
+                "position": "-8/3",
+                "keys": [
+                  "KEY_EXP_DIAL_M8_3"
+                ]
+              },
+              {
+                "position": "\u22123",
+                "keys": [
+                  "KEY_EXP_DIAL_M3"
+                ]
+              }
+            ]
+          },
+          "drive_button": {
+            "keys": [
+              "DRIVE"
+            ],
+            "input": {
+              "DRIVE": [
+                {
+                  "kind": "gpio",
+                  "port": 2,
+                  "pin": 12,
+                  "active_level": 0,
+                  "active_level_proof": {
+                    "sampler": {
+                      "address": 9697324,
+                      "size": 56,
+                      "sha256": "60852d3acac99ae77b810d30f929457244f12970b096517764daf82d5f5a2405",
+                      "reader": 9558600
+                    },
+                    "record_address": 11941468,
+                    "record_bytes": "1700000000000000000200000c000200010000000200000000000000"
+                  },
+                  "scanner_record": {
+                    "address": 11941468,
+                    "stride": 28,
+                    "physical": 23,
+                    "kind": 2,
+                    "source": 131084,
+                    "lower": 1,
+                    "upper": 0
+                  }
+                }
+              ]
+            },
+            "actions": {
+              "press": {
+                "keys": [
+                  "DRIVE"
+                ]
+              }
+            },
+            "positions": []
+          },
+          "auto_mode_selector_lever": {
+            "keys": [
+              "KEY_RECL_MANUAL",
+              "KEY_RECL_AUTO"
+            ],
+            "input": {
+              "KEY_RECL_MANUAL": [
+                {
+                  "kind": "gpio",
+                  "port": 2,
+                  "pin": 11,
+                  "active_level": 0,
+                  "active_level_proof": {
+                    "sampler": {
+                      "address": 9697324,
+                      "size": 56,
+                      "sha256": "60852d3acac99ae77b810d30f929457244f12970b096517764daf82d5f5a2405",
+                      "reader": 9558600
+                    },
+                    "record_address": 11940348,
+                    "record_bytes": "3505000000000000070200000b000200010000000200000000000000"
+                  },
+                  "scanner_record": {
+                    "address": 11940348,
+                    "stride": 28,
+                    "physical": 1333,
+                    "kind": 2,
+                    "source": 131083,
+                    "lower": 1,
+                    "upper": 0
+                  }
+                }
+              ],
+              "KEY_RECL_AUTO": [
+                {
+                  "kind": "gpio",
+                  "port": 2,
+                  "pin": 11,
+                  "active_level": 1,
+                  "active_level_proof": {
+                    "sampler": {
+                      "address": 9697324,
+                      "size": 56,
+                      "sha256": "60852d3acac99ae77b810d30f929457244f12970b096517764daf82d5f5a2405",
+                      "reader": 9558600
+                    },
+                    "record_address": 11940320,
+                    "record_bytes": "3405000000000000070200000b000200000001000200000000000000"
+                  },
+                  "scanner_record": {
+                    "address": 11940320,
+                    "stride": 28,
+                    "physical": 1332,
+                    "kind": 2,
+                    "source": 131083,
+                    "lower": 0,
+                    "upper": 1
+                  }
+                }
+              ]
+            },
+            "actions": {},
+            "positions": [
+              {
+                "position": "manual",
+                "keys": [
+                  "KEY_RECL_MANUAL"
+                ]
+              },
+              {
+                "position": "AUTO",
+                "keys": [
+                  "KEY_RECL_AUTO"
+                ]
+              }
+            ]
+          },
+          "shutter_speed_dial": {
+            "keys": [
+              "S-A",
+              "S-1/4000",
+              "S-1/2000",
+              "S-1/1000",
+              "S-1/500",
+              "S-1/250",
+              "S-1/125",
+              "S-1/60",
+              "S-1/30",
+              "S-1/15",
+              "S-1/8",
+              "S-1/4",
+              "S-1/2",
+              "S-1/1",
+              "S-T",
+              "S-B"
+            ],
+            "input": {
+              "S-A": [
+                {
+                  "kind": "adc",
+                  "channel": 3,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14078,
+                    "upper": 14076
+                  },
+                  "scanner_record": {
+                    "address": 11941328,
+                    "stride": 28,
+                    "physical": 795,
+                    "kind": 1,
+                    "source": 3,
+                    "lower": 14078,
+                    "upper": 14076
+                  }
+                }
+              ],
+              "S-1/4000": [
+                {
+                  "kind": "adc",
+                  "channel": 3,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14074,
+                    "upper": 14072
+                  },
+                  "scanner_record": {
+                    "address": 11941300,
+                    "stride": 28,
+                    "physical": 796,
+                    "kind": 1,
+                    "source": 3,
+                    "lower": 14074,
+                    "upper": 14072
+                  }
+                }
+              ],
+              "S-1/2000": [
+                {
+                  "kind": "adc",
+                  "channel": 3,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14070,
+                    "upper": 14068
+                  },
+                  "scanner_record": {
+                    "address": 11941272,
+                    "stride": 28,
+                    "physical": 797,
+                    "kind": 1,
+                    "source": 3,
+                    "lower": 14070,
+                    "upper": 14068
+                  }
+                }
+              ],
+              "S-1/1000": [
+                {
+                  "kind": "adc",
+                  "channel": 3,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14066,
+                    "upper": 14064
+                  },
+                  "scanner_record": {
+                    "address": 11941244,
+                    "stride": 28,
+                    "physical": 798,
+                    "kind": 1,
+                    "source": 3,
+                    "lower": 14066,
+                    "upper": 14064
+                  }
+                }
+              ],
+              "S-1/500": [
+                {
+                  "kind": "adc",
+                  "channel": 3,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14062,
+                    "upper": 14060
+                  },
+                  "scanner_record": {
+                    "address": 11941216,
+                    "stride": 28,
+                    "physical": 799,
+                    "kind": 1,
+                    "source": 3,
+                    "lower": 14062,
+                    "upper": 14060
+                  }
+                }
+              ],
+              "S-1/250": [
+                {
+                  "kind": "adc",
+                  "channel": 3,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14058,
+                    "upper": 14056
+                  },
+                  "scanner_record": {
+                    "address": 11941188,
+                    "stride": 28,
+                    "physical": 800,
+                    "kind": 1,
+                    "source": 3,
+                    "lower": 14058,
+                    "upper": 14056
+                  }
+                }
+              ],
+              "S-1/125": [
+                {
+                  "kind": "adc",
+                  "channel": 3,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14054,
+                    "upper": 14052
+                  },
+                  "scanner_record": {
+                    "address": 11941160,
+                    "stride": 28,
+                    "physical": 802,
+                    "kind": 1,
+                    "source": 3,
+                    "lower": 14054,
+                    "upper": 14052
+                  }
+                }
+              ],
+              "S-1/60": [
+                {
+                  "kind": "adc",
+                  "channel": 3,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14050,
+                    "upper": 14048
+                  },
+                  "scanner_record": {
+                    "address": 11941132,
+                    "stride": 28,
+                    "physical": 803,
+                    "kind": 1,
+                    "source": 3,
+                    "lower": 14050,
+                    "upper": 14048
+                  }
+                }
+              ],
+              "S-1/30": [
+                {
+                  "kind": "adc",
+                  "channel": 3,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14046,
+                    "upper": 14044
+                  },
+                  "scanner_record": {
+                    "address": 11941104,
+                    "stride": 28,
+                    "physical": 804,
+                    "kind": 1,
+                    "source": 3,
+                    "lower": 14046,
+                    "upper": 14044
+                  }
+                }
+              ],
+              "S-1/15": [
+                {
+                  "kind": "adc",
+                  "channel": 3,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14042,
+                    "upper": 14040
+                  },
+                  "scanner_record": {
+                    "address": 11941076,
+                    "stride": 28,
+                    "physical": 805,
+                    "kind": 1,
+                    "source": 3,
+                    "lower": 14042,
+                    "upper": 14040
+                  }
+                }
+              ],
+              "S-1/8": [
+                {
+                  "kind": "adc",
+                  "channel": 3,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14038,
+                    "upper": 14036
+                  },
+                  "scanner_record": {
+                    "address": 11941048,
+                    "stride": 28,
+                    "physical": 806,
+                    "kind": 1,
+                    "source": 3,
+                    "lower": 14038,
+                    "upper": 14036
+                  }
+                }
+              ],
+              "S-1/4": [
+                {
+                  "kind": "adc",
+                  "channel": 3,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14034,
+                    "upper": 14032
+                  },
+                  "scanner_record": {
+                    "address": 11941020,
+                    "stride": 28,
+                    "physical": 807,
+                    "kind": 1,
+                    "source": 3,
+                    "lower": 14034,
+                    "upper": 14032
+                  }
+                }
+              ],
+              "S-1/2": [
+                {
+                  "kind": "adc",
+                  "channel": 3,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14030,
+                    "upper": 14028
+                  },
+                  "scanner_record": {
+                    "address": 11940992,
+                    "stride": 28,
+                    "physical": 808,
+                    "kind": 1,
+                    "source": 3,
+                    "lower": 14030,
+                    "upper": 14028
+                  }
+                }
+              ],
+              "S-1/1": [
+                {
+                  "kind": "adc",
+                  "channel": 3,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14026,
+                    "upper": 14024
+                  },
+                  "scanner_record": {
+                    "address": 11940964,
+                    "stride": 28,
+                    "physical": 809,
+                    "kind": 1,
+                    "source": 3,
+                    "lower": 14026,
+                    "upper": 14024
+                  }
+                }
+              ],
+              "S-T": [
+                {
+                  "kind": "adc",
+                  "channel": 3,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14022,
+                    "upper": 14020
+                  },
+                  "scanner_record": {
+                    "address": 11940936,
+                    "stride": 28,
+                    "physical": 810,
+                    "kind": 1,
+                    "source": 3,
+                    "lower": 14022,
+                    "upper": 14020
+                  }
+                }
+              ],
+              "S-B": [
+                {
+                  "kind": "adc",
+                  "channel": 3,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14018,
+                    "upper": 14016
+                  },
+                  "scanner_record": {
+                    "address": 11940908,
+                    "stride": 28,
+                    "physical": 811,
+                    "kind": 1,
+                    "source": 3,
+                    "lower": 14018,
+                    "upper": 14016
+                  }
+                }
+              ]
+            },
+            "actions": {},
+            "positions": [
+              {
+                "position": "A",
+                "keys": [
+                  "S-A"
+                ]
+              },
+              {
+                "position": "4000",
+                "keys": [
+                  "S-1/4000"
+                ]
+              },
+              {
+                "position": "2000",
+                "keys": [
+                  "S-1/2000"
+                ]
+              },
+              {
+                "position": "1000",
+                "keys": [
+                  "S-1/1000"
+                ]
+              },
+              {
+                "position": "500",
+                "keys": [
+                  "S-1/500"
+                ]
+              },
+              {
+                "position": "250",
+                "keys": [
+                  "S-1/250"
+                ]
+              },
+              {
+                "position": "125",
+                "keys": [
+                  "S-1/125"
+                ]
+              },
+              {
+                "position": "60",
+                "keys": [
+                  "S-1/60"
+                ]
+              },
+              {
+                "position": "30",
+                "keys": [
+                  "S-1/30"
+                ]
+              },
+              {
+                "position": "15",
+                "keys": [
+                  "S-1/15"
+                ]
+              },
+              {
+                "position": "8",
+                "keys": [
+                  "S-1/8"
+                ]
+              },
+              {
+                "position": "4",
+                "keys": [
+                  "S-1/4"
+                ]
+              },
+              {
+                "position": "2",
+                "keys": [
+                  "S-1/2"
+                ]
+              },
+              {
+                "position": "1",
+                "keys": [
+                  "S-1/1"
+                ]
+              },
+              {
+                "position": "T",
+                "keys": [
+                  "S-T"
+                ]
+              },
+              {
+                "position": "B",
+                "keys": [
+                  "S-B"
+                ]
+              }
+            ]
+          },
+          "control_ring_options_button": {
+            "keys": [
+              "KEY_FUNCTION2"
+            ],
+            "input": {
+              "KEY_FUNCTION2": [
+                {
+                  "kind": "adc",
+                  "channel": 7,
+                  "intervals": [
+                    {
+                      "kind": "configuration_u16",
+                      "lower": 14252,
+                      "upper": 14250
+                    },
+                    {
+                      "kind": "configuration_u16",
+                      "lower": 14260,
+                      "upper": 14258
+                    },
+                    {
+                      "kind": "configuration_u16",
+                      "lower": 14268,
+                      "upper": 14266
+                    }
+                  ],
+                  "via_callback": 9694712,
+                  "predicate_proof": {
+                    "address": 9694712,
+                    "size": 200,
+                    "sha256": "83cca6cc8ad3b02e28cbc3181c2f30cec0fe4fdf0d5f8acfdfa1db623d853cb1",
+                    "reader": 9721296
+                  },
+                  "expected_result": 1,
+                  "scanner_record": {
+                    "address": 11941888,
+                    "stride": 28,
+                    "physical": 550,
+                    "kind": 5,
+                    "source": 9694712,
+                    "lower": 0,
+                    "upper": 1
+                  }
+                }
+              ]
+            },
+            "actions": {
+              "press": {
+                "keys": [
+                  "KEY_FUNCTION2"
+                ]
+              }
+            },
+            "positions": []
+          },
+          "focus_mode_selector": {
+            "keys": [
+              "MF_AF_A",
+              "MF_AF_C",
+              "MF_AF_M"
+            ],
+            "input": {
+              "MF_AF_A": [
+                {
+                  "kind": "adc",
+                  "channel": 7,
+                  "intervals": [
+                    {
+                      "kind": "configuration_u16",
+                      "lower": 14248,
+                      "upper": 14246
+                    },
+                    {
+                      "kind": "configuration_u16",
+                      "lower": 14252,
+                      "upper": 14250
+                    }
+                  ],
+                  "via_callback": 9695192,
+                  "predicate_proof": {
+                    "address": 9695192,
+                    "size": 140,
+                    "sha256": "f89524d6e53ebc803e82cf142dc1318e1f901b611be736d55de655b5222da578",
+                    "reader": 9721296
+                  },
+                  "expected_result": 1,
+                  "scanner_record": {
+                    "address": 11941804,
+                    "stride": 28,
+                    "physical": 30,
+                    "kind": 5,
+                    "source": 9695192,
+                    "lower": 0,
+                    "upper": 1
+                  }
+                }
+              ],
+              "MF_AF_C": [
+                {
+                  "kind": "adc",
+                  "channel": 7,
+                  "intervals": [
+                    {
+                      "kind": "configuration_u16",
+                      "lower": 14256,
+                      "upper": 14254
+                    },
+                    {
+                      "kind": "configuration_u16",
+                      "lower": 14260,
+                      "upper": 14258
+                    }
+                  ],
+                  "via_callback": 9695052,
+                  "predicate_proof": {
+                    "address": 9695052,
+                    "size": 140,
+                    "sha256": "581391e7a5acaf64b193a9b7a2901c784dd77edfec3a4f84847bc0b8b3619b95",
+                    "reader": 9721296
+                  },
+                  "expected_result": 1,
+                  "scanner_record": {
+                    "address": 11941832,
+                    "stride": 28,
+                    "physical": 31,
+                    "kind": 5,
+                    "source": 9695052,
+                    "lower": 0,
+                    "upper": 1
+                  }
+                }
+              ],
+              "MF_AF_M": [
+                {
+                  "kind": "adc",
+                  "channel": 7,
+                  "intervals": [
+                    {
+                      "kind": "configuration_u16",
+                      "lower": 14264,
+                      "upper": 14262
+                    },
+                    {
+                      "kind": "configuration_u16",
+                      "lower": 14268,
+                      "upper": 14266
+                    }
+                  ],
+                  "via_callback": 9694912,
+                  "predicate_proof": {
+                    "address": 9694912,
+                    "size": 140,
+                    "sha256": "44a39cdc0d19903cde9629cdbeaa6cdcadeaa96abe3095011acf508a12ddbec0",
+                    "reader": 9721296
+                  },
+                  "expected_result": 1,
+                  "scanner_record": {
+                    "address": 11941860,
+                    "stride": 28,
+                    "physical": 32,
+                    "kind": 5,
+                    "source": 9694912,
+                    "lower": 0,
+                    "upper": 1
+                  }
+                }
+              ]
+            },
+            "actions": {},
+            "positions": [
+              {
+                "position": "S",
+                "keys": [
+                  "MF_AF_A"
+                ]
+              },
+              {
+                "position": "C",
+                "keys": [
+                  "MF_AF_C"
+                ]
+              },
+              {
+                "position": "M",
+                "keys": [
+                  "MF_AF_M"
+                ]
+              }
+            ]
+          },
+          "aperture_ring": {
+            "keys": [
+              "KEY_M_IRIS_A",
+              "KEY_M_IRIS_F2_8",
+              "KEY_M_IRIS_F3_2",
+              "KEY_M_IRIS_F3_6",
+              "KEY_M_IRIS_F4_0",
+              "KEY_M_IRIS_F4_5",
+              "KEY_M_IRIS_F5_0",
+              "KEY_M_IRIS_F5_6",
+              "KEY_M_IRIS_F6_4",
+              "KEY_M_IRIS_F7_1",
+              "KEY_M_IRIS_F8",
+              "KEY_M_IRIS_F9",
+              "KEY_M_IRIS_F10",
+              "KEY_M_IRIS_F11",
+              "KEY_M_IRIS_F13",
+              "KEY_M_IRIS_F14",
+              "KEY_M_IRIS_F16"
+            ],
+            "input": {
+              "KEY_M_IRIS_A": [
+                {
+                  "kind": "adc",
+                  "channel": 9,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14166,
+                    "upper": 14164
+                  },
+                  "scanner_record": {
+                    "address": 11941916,
+                    "stride": 28,
+                    "physical": 1024,
+                    "kind": 1,
+                    "source": 9,
+                    "lower": 14166,
+                    "upper": 14164
+                  }
+                }
+              ],
+              "KEY_M_IRIS_F2_8": [
+                {
+                  "kind": "adc",
+                  "channel": 9,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14230,
+                    "upper": 14228
+                  },
+                  "scanner_record": {
+                    "address": 11942364,
+                    "stride": 28,
+                    "physical": 1295,
+                    "kind": 1,
+                    "source": 9,
+                    "lower": 14230,
+                    "upper": 14228
+                  }
+                }
+              ],
+              "KEY_M_IRIS_F3_2": [
+                {
+                  "kind": "adc",
+                  "channel": 9,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14226,
+                    "upper": 14224
+                  },
+                  "scanner_record": {
+                    "address": 11942336,
+                    "stride": 28,
+                    "physical": 1294,
+                    "kind": 1,
+                    "source": 9,
+                    "lower": 14226,
+                    "upper": 14224
+                  }
+                }
+              ],
+              "KEY_M_IRIS_F3_6": [
+                {
+                  "kind": "adc",
+                  "channel": 9,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14222,
+                    "upper": 14220
+                  },
+                  "scanner_record": {
+                    "address": 11942308,
+                    "stride": 28,
+                    "physical": 1293,
+                    "kind": 1,
+                    "source": 9,
+                    "lower": 14222,
+                    "upper": 14220
+                  }
+                }
+              ],
+              "KEY_M_IRIS_F4_0": [
+                {
+                  "kind": "adc",
+                  "channel": 9,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14218,
+                    "upper": 14216
+                  },
+                  "scanner_record": {
+                    "address": 11942280,
+                    "stride": 28,
+                    "physical": 1292,
+                    "kind": 1,
+                    "source": 9,
+                    "lower": 14218,
+                    "upper": 14216
+                  }
+                }
+              ],
+              "KEY_M_IRIS_F4_5": [
+                {
+                  "kind": "adc",
+                  "channel": 9,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14214,
+                    "upper": 14212
+                  },
+                  "scanner_record": {
+                    "address": 11942252,
+                    "stride": 28,
+                    "physical": 1291,
+                    "kind": 1,
+                    "source": 9,
+                    "lower": 14214,
+                    "upper": 14212
+                  }
+                }
+              ],
+              "KEY_M_IRIS_F5_0": [
+                {
+                  "kind": "adc",
+                  "channel": 9,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14210,
+                    "upper": 14208
+                  },
+                  "scanner_record": {
+                    "address": 11942224,
+                    "stride": 28,
+                    "physical": 1290,
+                    "kind": 1,
+                    "source": 9,
+                    "lower": 14210,
+                    "upper": 14208
+                  }
+                }
+              ],
+              "KEY_M_IRIS_F5_6": [
+                {
+                  "kind": "adc",
+                  "channel": 9,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14206,
+                    "upper": 14204
+                  },
+                  "scanner_record": {
+                    "address": 11942196,
+                    "stride": 28,
+                    "physical": 1289,
+                    "kind": 1,
+                    "source": 9,
+                    "lower": 14206,
+                    "upper": 14204
+                  }
+                }
+              ],
+              "KEY_M_IRIS_F6_4": [
+                {
+                  "kind": "adc",
+                  "channel": 9,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14202,
+                    "upper": 14200
+                  },
+                  "scanner_record": {
+                    "address": 11942168,
+                    "stride": 28,
+                    "physical": 1288,
+                    "kind": 1,
+                    "source": 9,
+                    "lower": 14202,
+                    "upper": 14200
+                  }
+                }
+              ],
+              "KEY_M_IRIS_F7_1": [
+                {
+                  "kind": "adc",
+                  "channel": 9,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14198,
+                    "upper": 14196
+                  },
+                  "scanner_record": {
+                    "address": 11942140,
+                    "stride": 28,
+                    "physical": 1287,
+                    "kind": 1,
+                    "source": 9,
+                    "lower": 14198,
+                    "upper": 14196
+                  }
+                }
+              ],
+              "KEY_M_IRIS_F8": [
+                {
+                  "kind": "adc",
+                  "channel": 9,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14194,
+                    "upper": 14192
+                  },
+                  "scanner_record": {
+                    "address": 11942112,
+                    "stride": 28,
+                    "physical": 1286,
+                    "kind": 1,
+                    "source": 9,
+                    "lower": 14194,
+                    "upper": 14192
+                  }
+                }
+              ],
+              "KEY_M_IRIS_F9": [
+                {
+                  "kind": "adc",
+                  "channel": 9,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14190,
+                    "upper": 14188
+                  },
+                  "scanner_record": {
+                    "address": 11942084,
+                    "stride": 28,
+                    "physical": 1285,
+                    "kind": 1,
+                    "source": 9,
+                    "lower": 14190,
+                    "upper": 14188
+                  }
+                }
+              ],
+              "KEY_M_IRIS_F10": [
+                {
+                  "kind": "adc",
+                  "channel": 9,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14186,
+                    "upper": 14184
+                  },
+                  "scanner_record": {
+                    "address": 11942056,
+                    "stride": 28,
+                    "physical": 1284,
+                    "kind": 1,
+                    "source": 9,
+                    "lower": 14186,
+                    "upper": 14184
+                  }
+                }
+              ],
+              "KEY_M_IRIS_F11": [
+                {
+                  "kind": "adc",
+                  "channel": 9,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14182,
+                    "upper": 14180
+                  },
+                  "scanner_record": {
+                    "address": 11942028,
+                    "stride": 28,
+                    "physical": 1283,
+                    "kind": 1,
+                    "source": 9,
+                    "lower": 14182,
+                    "upper": 14180
+                  }
+                }
+              ],
+              "KEY_M_IRIS_F13": [
+                {
+                  "kind": "adc",
+                  "channel": 9,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14178,
+                    "upper": 14176
+                  },
+                  "scanner_record": {
+                    "address": 11942000,
+                    "stride": 28,
+                    "physical": 1282,
+                    "kind": 1,
+                    "source": 9,
+                    "lower": 14178,
+                    "upper": 14176
+                  }
+                }
+              ],
+              "KEY_M_IRIS_F14": [
+                {
+                  "kind": "adc",
+                  "channel": 9,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14174,
+                    "upper": 14172
+                  },
+                  "scanner_record": {
+                    "address": 11941972,
+                    "stride": 28,
+                    "physical": 1281,
+                    "kind": 1,
+                    "source": 9,
+                    "lower": 14174,
+                    "upper": 14172
+                  }
+                }
+              ],
+              "KEY_M_IRIS_F16": [
+                {
+                  "kind": "adc",
+                  "channel": 9,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14170,
+                    "upper": 14168
+                  },
+                  "scanner_record": {
+                    "address": 11941944,
+                    "stride": 28,
+                    "physical": 1280,
+                    "kind": 1,
+                    "source": 9,
+                    "lower": 14170,
+                    "upper": 14168
+                  }
+                }
+              ]
+            },
+            "actions": {},
+            "positions": [
+              {
+                "position": "A",
+                "keys": [
+                  "KEY_M_IRIS_A"
+                ]
+              },
+              {
+                "position": "2.8",
+                "keys": [
+                  "KEY_M_IRIS_F2_8"
+                ]
+              },
+              {
+                "position": "F3.2",
+                "keys": [
+                  "KEY_M_IRIS_F3_2"
+                ]
+              },
+              {
+                "position": "F3.6",
+                "keys": [
+                  "KEY_M_IRIS_F3_6"
+                ]
+              },
+              {
+                "position": "4",
+                "keys": [
+                  "KEY_M_IRIS_F4_0"
+                ]
+              },
+              {
+                "position": "F4.5",
+                "keys": [
+                  "KEY_M_IRIS_F4_5"
+                ]
+              },
+              {
+                "position": "F5",
+                "keys": [
+                  "KEY_M_IRIS_F5_0"
+                ]
+              },
+              {
+                "position": "5.6",
+                "keys": [
+                  "KEY_M_IRIS_F5_6"
+                ]
+              },
+              {
+                "position": "F6.4",
+                "keys": [
+                  "KEY_M_IRIS_F6_4"
+                ]
+              },
+              {
+                "position": "F7.1",
+                "keys": [
+                  "KEY_M_IRIS_F7_1"
+                ]
+              },
+              {
+                "position": "8",
+                "keys": [
+                  "KEY_M_IRIS_F8"
+                ]
+              },
+              {
+                "position": "F9",
+                "keys": [
+                  "KEY_M_IRIS_F9"
+                ]
+              },
+              {
+                "position": "F10",
+                "keys": [
+                  "KEY_M_IRIS_F10"
+                ]
+              },
+              {
+                "position": "11",
+                "keys": [
+                  "KEY_M_IRIS_F11"
+                ]
+              },
+              {
+                "position": "F13",
+                "keys": [
+                  "KEY_M_IRIS_F13"
+                ]
+              },
+              {
+                "position": "F14",
+                "keys": [
+                  "KEY_M_IRIS_F14"
+                ]
+              },
+              {
+                "position": "16",
+                "keys": [
+                  "KEY_M_IRIS_F16"
+                ]
+              }
+            ]
+          },
+          "control_ring": {
+            "keys": [
+              "KEY_CTRLRING_CCW",
+              "CRING-",
+              "KEY_CTRLRING_CW",
+              "CRING+"
+            ],
+            "input": {
+              "KEY_CTRLRING_CCW": [
+                {
+                  "kind": "gpio_quadrature",
+                  "pins": [
+                    {
+                      "port": 3,
+                      "pin": 6
+                    },
+                    {
+                      "port": 3,
+                      "pin": 7
+                    }
+                  ],
+                  "phase_map": [
+                    0,
+                    1,
+                    2,
+                    3
+                  ],
+                  "transitions": [
+                    0,
+                    1,
+                    0,
+                    0,
+                    2,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "reset": [
+                    0,
+                    0,
+                    1,
+                    1
+                  ],
+                  "event": 2,
+                  "guard": 9712800,
+                  "threshold": 1,
+                  "proof": {
+                    "initializer": {
+                      "address": 9708460,
+                      "size": 420,
+                      "sha256": "80e851a912e056223485f4e59f1bc7ceb7ecd613730055a6cef6f4bfd05344db"
+                    },
+                    "decoder": {
+                      "address": 9707676,
+                      "size": 784,
+                      "sha256": "444c4be1664fbc8dd2d332b348d7f612750a8c94fe28b6ee59f9ca3a005b5cd1"
+                    },
+                    "sampler": {
+                      "address": 9709864,
+                      "size": 268,
+                      "sha256": "140cbe53893ae30b47899ecc9223215b8f5e54b8303317072f33f655ffd01c4b"
+                    },
+                    "count": {
+                      "address": 11487888,
+                      "size": 4,
+                      "sha256": "9d9f290527a6be626a8f5985b26e19b237b44872b03631811df4416fc1713178"
+                    },
+                    "record": {
+                      "address": 11942616,
+                      "size": 28,
+                      "sha256": "889bc6f23ddef60d3d73f50fe6658b2436f6eaf006463df660eb4fee99eb0798"
+                    },
+                    "descriptor": {
+                      "address": 11942712,
+                      "size": 40,
+                      "sha256": "c99254825767ff4855fc295488485a35a034ed5555ad2df86a109a7941a2ba08"
+                    },
+                    "request": {
+                      "address": 11942752,
+                      "size": 12,
+                      "sha256": "84f20e05e11032e741cea36d7925ba34c7424ec6d3cb34ef054873eac8db0e93"
+                    },
+                    "pins": {
+                      "address": 11942664,
+                      "size": 8,
+                      "sha256": "6df67eddbe5efcc92a151ecb0fccd407aa8a03387f80d42d94244bbe1436e134"
+                    },
+                    "phases": {
+                      "address": 11942644,
+                      "size": 4,
+                      "sha256": "054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8"
+                    },
+                    "transitions": {
+                      "address": 11942764,
+                      "size": 16,
+                      "sha256": "2c22fc1930ebd3bd69eb45adf27ba7c8e08e8cca2cddc75e9c16973f9fbcc3ce"
+                    },
+                    "reset": {
+                      "address": 11942648,
+                      "size": 16,
+                      "sha256": "b342c83d7060c5852f741e8e009d375103df2e1f7c76fbc512e575cd86d7b03d"
+                    }
+                  }
+                }
+              ],
+              "CRING-": [
+                {
+                  "kind": "gpio_quadrature",
+                  "pins": [
+                    {
+                      "port": 3,
+                      "pin": 6
+                    },
+                    {
+                      "port": 3,
+                      "pin": 7
+                    }
+                  ],
+                  "phase_map": [
+                    0,
+                    1,
+                    2,
+                    3
+                  ],
+                  "transitions": [
+                    0,
+                    1,
+                    0,
+                    0,
+                    2,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "reset": [
+                    0,
+                    0,
+                    1,
+                    1
+                  ],
+                  "event": 2,
+                  "guard": 9712800,
+                  "threshold": 1,
+                  "proof": {
+                    "initializer": {
+                      "address": 9708460,
+                      "size": 420,
+                      "sha256": "80e851a912e056223485f4e59f1bc7ceb7ecd613730055a6cef6f4bfd05344db"
+                    },
+                    "decoder": {
+                      "address": 9707676,
+                      "size": 784,
+                      "sha256": "444c4be1664fbc8dd2d332b348d7f612750a8c94fe28b6ee59f9ca3a005b5cd1"
+                    },
+                    "sampler": {
+                      "address": 9709864,
+                      "size": 268,
+                      "sha256": "140cbe53893ae30b47899ecc9223215b8f5e54b8303317072f33f655ffd01c4b"
+                    },
+                    "count": {
+                      "address": 11487888,
+                      "size": 4,
+                      "sha256": "9d9f290527a6be626a8f5985b26e19b237b44872b03631811df4416fc1713178"
+                    },
+                    "record": {
+                      "address": 11942616,
+                      "size": 28,
+                      "sha256": "889bc6f23ddef60d3d73f50fe6658b2436f6eaf006463df660eb4fee99eb0798"
+                    },
+                    "descriptor": {
+                      "address": 11942712,
+                      "size": 40,
+                      "sha256": "c99254825767ff4855fc295488485a35a034ed5555ad2df86a109a7941a2ba08"
+                    },
+                    "request": {
+                      "address": 11942752,
+                      "size": 12,
+                      "sha256": "84f20e05e11032e741cea36d7925ba34c7424ec6d3cb34ef054873eac8db0e93"
+                    },
+                    "pins": {
+                      "address": 11942664,
+                      "size": 8,
+                      "sha256": "6df67eddbe5efcc92a151ecb0fccd407aa8a03387f80d42d94244bbe1436e134"
+                    },
+                    "phases": {
+                      "address": 11942644,
+                      "size": 4,
+                      "sha256": "054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8"
+                    },
+                    "transitions": {
+                      "address": 11942764,
+                      "size": 16,
+                      "sha256": "2c22fc1930ebd3bd69eb45adf27ba7c8e08e8cca2cddc75e9c16973f9fbcc3ce"
+                    },
+                    "reset": {
+                      "address": 11942648,
+                      "size": 16,
+                      "sha256": "b342c83d7060c5852f741e8e009d375103df2e1f7c76fbc512e575cd86d7b03d"
+                    }
+                  }
+                }
+              ],
+              "KEY_CTRLRING_CW": [
+                {
+                  "kind": "gpio_quadrature",
+                  "pins": [
+                    {
+                      "port": 3,
+                      "pin": 6
+                    },
+                    {
+                      "port": 3,
+                      "pin": 7
+                    }
+                  ],
+                  "phase_map": [
+                    0,
+                    1,
+                    2,
+                    3
+                  ],
+                  "transitions": [
+                    0,
+                    1,
+                    0,
+                    0,
+                    2,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "reset": [
+                    0,
+                    0,
+                    1,
+                    1
+                  ],
+                  "event": 1,
+                  "guard": 9712800,
+                  "threshold": 1,
+                  "proof": {
+                    "initializer": {
+                      "address": 9708460,
+                      "size": 420,
+                      "sha256": "80e851a912e056223485f4e59f1bc7ceb7ecd613730055a6cef6f4bfd05344db"
+                    },
+                    "decoder": {
+                      "address": 9707676,
+                      "size": 784,
+                      "sha256": "444c4be1664fbc8dd2d332b348d7f612750a8c94fe28b6ee59f9ca3a005b5cd1"
+                    },
+                    "sampler": {
+                      "address": 9709864,
+                      "size": 268,
+                      "sha256": "140cbe53893ae30b47899ecc9223215b8f5e54b8303317072f33f655ffd01c4b"
+                    },
+                    "count": {
+                      "address": 11487888,
+                      "size": 4,
+                      "sha256": "9d9f290527a6be626a8f5985b26e19b237b44872b03631811df4416fc1713178"
+                    },
+                    "record": {
+                      "address": 11942588,
+                      "size": 28,
+                      "sha256": "6eca8b8a3c8eec673cb4639ef082f03d131afb644287f22210c11bfa9d29a16e"
+                    },
+                    "descriptor": {
+                      "address": 11942712,
+                      "size": 40,
+                      "sha256": "c99254825767ff4855fc295488485a35a034ed5555ad2df86a109a7941a2ba08"
+                    },
+                    "request": {
+                      "address": 11942752,
+                      "size": 12,
+                      "sha256": "84f20e05e11032e741cea36d7925ba34c7424ec6d3cb34ef054873eac8db0e93"
+                    },
+                    "pins": {
+                      "address": 11942664,
+                      "size": 8,
+                      "sha256": "6df67eddbe5efcc92a151ecb0fccd407aa8a03387f80d42d94244bbe1436e134"
+                    },
+                    "phases": {
+                      "address": 11942644,
+                      "size": 4,
+                      "sha256": "054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8"
+                    },
+                    "transitions": {
+                      "address": 11942764,
+                      "size": 16,
+                      "sha256": "2c22fc1930ebd3bd69eb45adf27ba7c8e08e8cca2cddc75e9c16973f9fbcc3ce"
+                    },
+                    "reset": {
+                      "address": 11942648,
+                      "size": 16,
+                      "sha256": "b342c83d7060c5852f741e8e009d375103df2e1f7c76fbc512e575cd86d7b03d"
+                    }
+                  }
+                }
+              ],
+              "CRING+": [
+                {
+                  "kind": "gpio_quadrature",
+                  "pins": [
+                    {
+                      "port": 3,
+                      "pin": 6
+                    },
+                    {
+                      "port": 3,
+                      "pin": 7
+                    }
+                  ],
+                  "phase_map": [
+                    0,
+                    1,
+                    2,
+                    3
+                  ],
+                  "transitions": [
+                    0,
+                    1,
+                    0,
+                    0,
+                    2,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "reset": [
+                    0,
+                    0,
+                    1,
+                    1
+                  ],
+                  "event": 1,
+                  "guard": 9712800,
+                  "threshold": 1,
+                  "proof": {
+                    "initializer": {
+                      "address": 9708460,
+                      "size": 420,
+                      "sha256": "80e851a912e056223485f4e59f1bc7ceb7ecd613730055a6cef6f4bfd05344db"
+                    },
+                    "decoder": {
+                      "address": 9707676,
+                      "size": 784,
+                      "sha256": "444c4be1664fbc8dd2d332b348d7f612750a8c94fe28b6ee59f9ca3a005b5cd1"
+                    },
+                    "sampler": {
+                      "address": 9709864,
+                      "size": 268,
+                      "sha256": "140cbe53893ae30b47899ecc9223215b8f5e54b8303317072f33f655ffd01c4b"
+                    },
+                    "count": {
+                      "address": 11487888,
+                      "size": 4,
+                      "sha256": "9d9f290527a6be626a8f5985b26e19b237b44872b03631811df4416fc1713178"
+                    },
+                    "record": {
+                      "address": 11942588,
+                      "size": 28,
+                      "sha256": "6eca8b8a3c8eec673cb4639ef082f03d131afb644287f22210c11bfa9d29a16e"
+                    },
+                    "descriptor": {
+                      "address": 11942712,
+                      "size": 40,
+                      "sha256": "c99254825767ff4855fc295488485a35a034ed5555ad2df86a109a7941a2ba08"
+                    },
+                    "request": {
+                      "address": 11942752,
+                      "size": 12,
+                      "sha256": "84f20e05e11032e741cea36d7925ba34c7424ec6d3cb34ef054873eac8db0e93"
+                    },
+                    "pins": {
+                      "address": 11942664,
+                      "size": 8,
+                      "sha256": "6df67eddbe5efcc92a151ecb0fccd407aa8a03387f80d42d94244bbe1436e134"
+                    },
+                    "phases": {
+                      "address": 11942644,
+                      "size": 4,
+                      "sha256": "054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8"
+                    },
+                    "transitions": {
+                      "address": 11942764,
+                      "size": 16,
+                      "sha256": "2c22fc1930ebd3bd69eb45adf27ba7c8e08e8cca2cddc75e9c16973f9fbcc3ce"
+                    },
+                    "reset": {
+                      "address": 11942648,
+                      "size": 16,
+                      "sha256": "b342c83d7060c5852f741e8e009d375103df2e1f7c76fbc512e575cd86d7b03d"
+                    }
+                  }
+                }
+              ]
+            },
+            "actions": {
+              "decrease": {
+                "keys": [
+                  "KEY_CTRLRING_CCW",
+                  "CRING-"
+                ]
+              },
+              "increase": {
+                "keys": [
+                  "KEY_CTRLRING_CW",
+                  "CRING+"
+                ]
+              }
+            },
+            "positions": []
+          },
+          "front_ring": {
+            "keys": [],
+            "input": null,
+            "actions": {},
+            "positions": []
+          },
+          "power_switch": {
+            "keys": [
+              "POWER"
+            ],
+            "input": null,
+            "actions": {
+              "on": {
+                "keys": [
+                  "POWER"
+                ]
+              },
+              "off": {
+                "keys": [
+                  "POWER"
+                ]
+              }
+            },
+            "positions": [
+              {
+                "position": "ON",
+                "keys": [
+                  "POWER"
+                ]
+              },
+              {
+                "position": "OFF",
+                "keys": [
+                  "POWER"
+                ]
+              }
+            ],
+            "interface": {
+              "kind": "power_switch",
+              "gpio": {
+                "base": 4294479872,
+                "port": 0,
+                "pin": 5,
+                "on_level": 1,
+                "saved_inputs": 1074397184
+              },
+              "serial": {
+                "endpoint": 9,
+                "register": 96,
+                "mask": 1,
+                "on_value": 0,
+                "off_value": 1
+              },
+              "proof": {
+                "predicate": {
+                  "address": 9694384,
+                  "size": 44,
+                  "sha256": "905a3fa6543ebe4dc06c68f2c4a2ede81617342846bfb16586336bd5cfebbe37"
+                },
+                "initializer": {
+                  "address": 9695436,
+                  "size": 244,
+                  "sha256": "7f188e5f31f13d1067290b6fa9e211ae5762ed433fc47ad9c74d2ab0591fa81e"
+                },
+                "live_sampler": {
+                  "address": 9705592,
+                  "size": 208,
+                  "sha256": "f9ee2557007be82d71f0b975a1c75b55dee1b3dfe1258ad9fcd4c5ea2acc1e75"
+                },
+                "gpio_reader": {
+                  "address": 9558600,
+                  "size": 72,
+                  "sha256": "cde0c85f0f6d79f47fb0b3f4c6cb7e27d76625889385cf319c7ed78e175f1342"
+                },
+                "field_reader": {
+                  "address": 9729472,
+                  "size": 152,
+                  "sha256": "efca4c5a7ec6bd64b4f40e133d3e681745cab083e0fa5a150399c48754941cba"
+                },
+                "descriptor": {
+                  "address": 11452354,
+                  "size": 6,
+                  "sha256": "f466701e352465472f0e67c7dbef863dbe91bc686839c364d08d7e3649eead93"
+                },
+                "mask": {
+                  "address": 9729156,
+                  "size": 316,
+                  "sha256": "c1636757e5e7dd723be9ffb1f1b85d29c519a126d519744ec2f229aa2ecedfb7"
+                },
+                "serial": {
+                  "address": 9729008,
+                  "size": 148,
+                  "sha256": "b10bfdb7bef1fbeccc6240f9592c5c0dfb4b2e8a551fb71db1c1287a6f09ad7a"
+                },
+                "boot": {
+                  "address": 9729868,
+                  "size": 452,
+                  "sha256": "f26ef02b0b38395b356eb53517e9ab56d3861b76d6dbff98019bb98c3e36aec0"
+                }
+              }
+            }
+          },
+          "shutter_button": {
+            "keys": [
+              "S1",
+              "S2"
+            ],
+            "input": {
+              "S1": [
+                {
+                  "kind": "gpio",
+                  "port": 0,
+                  "pin": 2,
+                  "active_level": 0,
+                  "active_level_proof": {
+                    "base": 11448288,
+                    "count": 130,
+                    "dispatch": [
+                      {
+                        "address": 9697380,
+                        "size": 8,
+                        "sha256": "562eec6a75297740efb1e9c21c102624a227f6ec233fc3a17014c2f2f2c86291"
+                      },
+                      {
+                        "address": 9697496,
+                        "size": 8,
+                        "sha256": "63908f60318007fa7e36de0f1353892c10c2cdfde10172ce99235fb89acfb8ab"
+                      }
+                    ],
+                    "sampler": {
+                      "address": 9697620,
+                      "size": 56,
+                      "sha256": "16737c2b8d0edfcfd5e9aab7e77dab71dc1daf1c71f2254ea65e6d816115c367"
+                    },
+                    "conversion": {
+                      "address": 9695332,
+                      "size": 72,
+                      "sha256": "ae0b0d35f3c7f500fb1e1e5ccddf660d5a81df71a69e4263a5a2133306f4e1da"
+                    },
+                    "lookup": {
+                      "address": 9691020,
+                      "size": 80,
+                      "sha256": "bd4783d3eb9a7d4042410832b0d144b1a064946ef33c1f72ed2cfa45eae84320"
+                    },
+                    "index": 32,
+                    "triplet_address": 11448672,
+                    "triplet_bytes": "0a0000000700000000000000",
+                    "record_address": 11940264,
+                    "record_bytes": "07000000000000000004000002000000010020000200000000000000"
+                  },
+                  "scanner_record": {
+                    "address": 11940264,
+                    "stride": 28,
+                    "physical": 7,
+                    "kind": 4,
+                    "source": 2,
+                    "lower": 1,
+                    "upper": 32
+                  }
+                }
+              ],
+              "S2": [
+                {
+                  "kind": "gpio",
+                  "port": 0,
+                  "pin": 3,
+                  "active_level": 0,
+                  "active_level_proof": {
+                    "base": 11448288,
+                    "count": 130,
+                    "dispatch": [
+                      {
+                        "address": 9697380,
+                        "size": 8,
+                        "sha256": "562eec6a75297740efb1e9c21c102624a227f6ec233fc3a17014c2f2f2c86291"
+                      },
+                      {
+                        "address": 9697496,
+                        "size": 8,
+                        "sha256": "63908f60318007fa7e36de0f1353892c10c2cdfde10172ce99235fb89acfb8ab"
+                      }
+                    ],
+                    "sampler": {
+                      "address": 9697620,
+                      "size": 56,
+                      "sha256": "16737c2b8d0edfcfd5e9aab7e77dab71dc1daf1c71f2254ea65e6d816115c367"
+                    },
+                    "conversion": {
+                      "address": 9695332,
+                      "size": 72,
+                      "sha256": "ae0b0d35f3c7f500fb1e1e5ccddf660d5a81df71a69e4263a5a2133306f4e1da"
+                    },
+                    "lookup": {
+                      "address": 9691020,
+                      "size": 80,
+                      "sha256": "bd4783d3eb9a7d4042410832b0d144b1a064946ef33c1f72ed2cfa45eae84320"
+                    },
+                    "index": 34,
+                    "triplet_address": 11448696,
+                    "triplet_bytes": "0b0000000700000000000000",
+                    "record_address": 11940292,
+                    "record_bytes": "08000000000000000004000003000000010022000200000000000000"
+                  },
+                  "scanner_record": {
+                    "address": 11940292,
+                    "stride": 28,
+                    "physical": 8,
+                    "kind": 4,
+                    "source": 3,
+                    "lower": 1,
+                    "upper": 34
+                  }
+                }
+              ]
+            },
+            "actions": {
+              "half_press": {
+                "keys": [
+                  "S1"
+                ]
+              },
+              "full_press": {
+                "keys": [
+                  "S2"
+                ]
+              }
+            },
+            "positions": []
+          },
+          "movie_record_button": {
+            "keys": [
+              "KEY_FUNCTION3"
+            ],
+            "input": {
+              "KEY_FUNCTION3": [
+                {
+                  "kind": "gpio",
+                  "port": 0,
+                  "pin": 11,
+                  "active_level": 0,
+                  "active_level_proof": {
+                    "sampler": {
+                      "address": 9697324,
+                      "size": 56,
+                      "sha256": "60852d3acac99ae77b810d30f929457244f12970b096517764daf82d5f5a2405",
+                      "reader": 9558600
+                    },
+                    "record_address": 11941440,
+                    "record_bytes": "3d00000000000000000200000b000000010000001400000000000000"
+                  },
+                  "scanner_record": {
+                    "address": 11941440,
+                    "stride": 28,
+                    "physical": 61,
+                    "kind": 2,
+                    "source": 11,
+                    "lower": 1,
+                    "upper": 0
+                  }
+                }
+              ]
+            },
+            "actions": {
+              "press": {
+                "keys": [
+                  "KEY_FUNCTION3"
+                ]
+              }
+            },
+            "positions": []
+          },
+          "delete_button": {
+            "keys": [
+              "DELETE"
+            ],
+            "input": {
+              "DELETE": [
+                {
+                  "kind": "gpio",
+                  "port": 3,
+                  "pin": 3,
+                  "active_level": 0,
+                  "active_level_proof": {
+                    "sampler": {
+                      "address": 9697324,
+                      "size": 56,
+                      "sha256": "60852d3acac99ae77b810d30f929457244f12970b096517764daf82d5f5a2405",
+                      "reader": 9558600
+                    },
+                    "record_address": 11941524,
+                    "record_bytes": "2d020000000000000002000003000300010000000200000000000000"
+                  },
+                  "scanner_record": {
+                    "address": 11941524,
+                    "stride": 28,
+                    "physical": 557,
+                    "kind": 2,
+                    "source": 196611,
+                    "lower": 1,
+                    "upper": 0
+                  }
+                }
+              ]
+            },
+            "actions": {
+              "press": {
+                "keys": [
+                  "DELETE"
+                ]
+              }
+            },
+            "positions": []
+          },
+          "playback_button": {
+            "keys": [
+              "K_PLAY"
+            ],
+            "input": {
+              "K_PLAY": [
+                {
+                  "kind": "gpio",
+                  "port": 2,
+                  "pin": 9,
+                  "active_level": 0,
+                  "active_level_proof": {
+                    "sampler": {
+                      "address": 9697324,
+                      "size": 56,
+                      "sha256": "60852d3acac99ae77b810d30f929457244f12970b096517764daf82d5f5a2405",
+                      "reader": 9558600
+                    },
+                    "record_address": 11941496,
+                    "record_bytes": "0b000000000000000002000009000200010000000200000000000000"
+                  },
+                  "scanner_record": {
+                    "address": 11941496,
+                    "stride": 28,
+                    "physical": 11,
+                    "kind": 2,
+                    "source": 131081,
+                    "lower": 1,
+                    "upper": 0
+                  }
+                }
+              ]
+            },
+            "actions": {
+              "press": {
+                "keys": [
+                  "K_PLAY"
+                ]
+              }
+            },
+            "positions": []
+          },
+          "command_control": {
+            "keys": [
+              "CMD_LEFT",
+              "CMD_RIGHT",
+              "CMD_PUSH"
+            ],
+            "input": {
+              "CMD_LEFT": [
+                {
+                  "kind": "gpio",
+                  "port": 3,
+                  "pin": 8,
+                  "active_level": 0,
+                  "active_level_proof": {
+                    "sampler": {
+                      "address": 9697324,
+                      "size": 56,
+                      "sha256": "60852d3acac99ae77b810d30f929457244f12970b096517764daf82d5f5a2405",
+                      "reader": 9558600
+                    },
+                    "record_address": 11941356,
+                    "record_bytes": "2b000000000000000002000008000300010000000200000000000000"
+                  },
+                  "scanner_record": {
+                    "address": 11941356,
+                    "stride": 28,
+                    "physical": 43,
+                    "kind": 2,
+                    "source": 196616,
+                    "lower": 1,
+                    "upper": 0
+                  }
+                }
+              ],
+              "CMD_RIGHT": [
+                {
+                  "kind": "gpio",
+                  "port": 3,
+                  "pin": 9,
+                  "active_level": 0,
+                  "active_level_proof": {
+                    "sampler": {
+                      "address": 9697324,
+                      "size": 56,
+                      "sha256": "60852d3acac99ae77b810d30f929457244f12970b096517764daf82d5f5a2405",
+                      "reader": 9558600
+                    },
+                    "record_address": 11941384,
+                    "record_bytes": "2c000000000000000002000009000300010000000200000000000000"
+                  },
+                  "scanner_record": {
+                    "address": 11941384,
+                    "stride": 28,
+                    "physical": 44,
+                    "kind": 2,
+                    "source": 196617,
+                    "lower": 1,
+                    "upper": 0
+                  }
+                }
+              ],
+              "CMD_PUSH": [
+                {
+                  "kind": "gpio",
+                  "port": 0,
+                  "pin": 10,
+                  "active_level": 0,
+                  "active_level_proof": {
+                    "sampler": {
+                      "address": 9697324,
+                      "size": 56,
+                      "sha256": "60852d3acac99ae77b810d30f929457244f12970b096517764daf82d5f5a2405",
+                      "reader": 9558600
+                    },
+                    "record_address": 11941412,
+                    "record_bytes": "2a00000000000000000200000a000000010000000200000000000000"
+                  },
+                  "scanner_record": {
+                    "address": 11941412,
+                    "stride": 28,
+                    "physical": 42,
+                    "kind": 2,
+                    "source": 10,
+                    "lower": 1,
+                    "upper": 0
+                  }
+                }
+              ]
+            },
+            "actions": {
+              "decrease": {
+                "keys": [
+                  "CMD_LEFT"
+                ]
+              },
+              "increase": {
+                "keys": [
+                  "CMD_RIGHT"
+                ]
+              },
+              "press": {
+                "keys": [
+                  "CMD_PUSH"
+                ]
+              }
+            },
+            "positions": []
+          },
+          "quick_menu_button": {
+            "keys": [
+              "K_Q"
+            ],
+            "input": {
+              "K_Q": [
+                {
+                  "kind": "adc",
+                  "channel": 8,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14316,
+                    "upper": 14314
+                  },
+                  "scanner_record": {
+                    "address": 11941692,
+                    "stride": 28,
+                    "physical": 49,
+                    "kind": 1,
+                    "source": 8,
+                    "lower": 14316,
+                    "upper": 14314
+                  }
+                }
+              ]
+            },
+            "actions": {
+              "press": {
+                "keys": [
+                  "K_Q"
+                ]
+              }
+            },
+            "positions": []
+          },
+          "selector_function_buttons": {
+            "keys": [
+              "UP",
+              "DOWN",
+              "LEFT",
+              "RIGHT"
+            ],
+            "input": {
+              "UP": [
+                {
+                  "kind": "adc",
+                  "channel": 8,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14296,
+                    "upper": 14294
+                  },
+                  "scanner_record": {
+                    "address": 11941552,
+                    "stride": 28,
+                    "physical": 2,
+                    "kind": 1,
+                    "source": 8,
+                    "lower": 14296,
+                    "upper": 14294
+                  }
+                }
+              ],
+              "DOWN": [
+                {
+                  "kind": "adc",
+                  "channel": 8,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14300,
+                    "upper": 14298
+                  },
+                  "scanner_record": {
+                    "address": 11941580,
+                    "stride": 28,
+                    "physical": 3,
+                    "kind": 1,
+                    "source": 8,
+                    "lower": 14300,
+                    "upper": 14298
+                  }
+                }
+              ],
+              "LEFT": [
+                {
+                  "kind": "adc",
+                  "channel": 8,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14304,
+                    "upper": 14302
+                  },
+                  "scanner_record": {
+                    "address": 11941608,
+                    "stride": 28,
+                    "physical": 4,
+                    "kind": 1,
+                    "source": 8,
+                    "lower": 14304,
+                    "upper": 14302
+                  }
+                }
+              ],
+              "RIGHT": [
+                {
+                  "kind": "adc",
+                  "channel": 8,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14308,
+                    "upper": 14306
+                  },
+                  "scanner_record": {
+                    "address": 11941636,
+                    "stride": 28,
+                    "physical": 5,
+                    "kind": 1,
+                    "source": 8,
+                    "lower": 14308,
+                    "upper": 14306
+                  }
+                }
+              ]
+            },
+            "actions": {
+              "up": {
+                "keys": [
+                  "UP"
+                ]
+              },
+              "down": {
+                "keys": [
+                  "DOWN"
+                ]
+              },
+              "left": {
+                "keys": [
+                  "LEFT"
+                ]
+              },
+              "right": {
+                "keys": [
+                  "RIGHT"
+                ]
+              }
+            },
+            "positions": []
+          },
+          "menu_ok_button": {
+            "keys": [
+              "EXE_M"
+            ],
+            "input": {
+              "EXE_M": [
+                {
+                  "kind": "adc",
+                  "channel": 8,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14324,
+                    "upper": 14322
+                  },
+                  "scanner_record": {
+                    "address": 11941748,
+                    "stride": 28,
+                    "physical": 1,
+                    "kind": 1,
+                    "source": 8,
+                    "lower": 14324,
+                    "upper": 14322
+                  }
+                }
+              ]
+            },
+            "actions": {
+              "press": {
+                "keys": [
+                  "EXE_M"
+                ]
+              }
+            },
+            "positions": []
+          },
+          "wifi_button": {
+            "keys": [
+              "KEY_FUNCTION"
+            ],
+            "input": {
+              "KEY_FUNCTION": [
+                {
+                  "kind": "adc",
+                  "channel": 8,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14320,
+                    "upper": 14318
+                  },
+                  "scanner_record": {
+                    "address": 11941720,
+                    "stride": 28,
+                    "physical": 39,
+                    "kind": 1,
+                    "source": 8,
+                    "lower": 14320,
+                    "upper": 14318
+                  }
+                }
+              ]
+            },
+            "actions": {
+              "press": {
+                "keys": [
+                  "KEY_FUNCTION"
+                ]
+              }
+            },
+            "positions": []
+          },
+          "disp_back_button": {
+            "keys": [
+              "DISP_B"
+            ],
+            "input": {
+              "DISP_B": [
+                {
+                  "kind": "adc",
+                  "channel": 8,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14328,
+                    "upper": 14326
+                  },
+                  "scanner_record": {
+                    "address": 11941776,
+                    "stride": 28,
+                    "physical": 9,
+                    "kind": 1,
+                    "source": 8,
+                    "lower": 14328,
+                    "upper": 14326
+                  }
+                }
+              ]
+            },
+            "actions": {
+              "press": {
+                "keys": [
+                  "DISP_B"
+                ]
+              }
+            },
+            "positions": []
+          },
+          "af_ae_lock_button": {
+            "keys": [
+              "AEAF_LOCK"
+            ],
+            "input": {
+              "AEAF_LOCK": [
+                {
+                  "kind": "adc",
+                  "channel": 8,
+                  "interval": {
+                    "kind": "configuration_u16",
+                    "lower": 14312,
+                    "upper": 14310
+                  },
+                  "scanner_record": {
+                    "address": 11941664,
+                    "stride": 28,
+                    "physical": 529,
+                    "kind": 1,
+                    "source": 8,
+                    "lower": 14312,
+                    "upper": 14310
+                  }
+                }
+              ]
+            },
+            "actions": {
+              "press": {
+                "keys": [
+                  "AEAF_LOCK"
+                ]
+              }
+            },
+            "positions": []
+          },
+          "lcd_tilt_switch": {
+            "keys": [
+              "KEY_LCD_TILT"
+            ],
+            "input": {
+              "KEY_LCD_TILT": [
+                {
+                  "kind": "gpio",
+                  "port": 1,
+                  "pin": 1,
+                  "active_level": 0,
+                  "active_level_proof": {
+                    "sampler": {
+                      "address": 9697324,
+                      "size": 56,
+                      "sha256": "60852d3acac99ae77b810d30f929457244f12970b096517764daf82d5f5a2405",
+                      "reader": 9558600
+                    },
+                    "record_address": 11942532,
+                    "record_bytes": "15050000000000000002000001000100010000000200000000000000"
+                  },
+                  "scanner_record": {
+                    "address": 11942532,
+                    "stride": 28,
+                    "physical": 1301,
+                    "kind": 2,
+                    "source": 65537,
+                    "lower": 1,
+                    "upper": 0
+                  }
+                }
+              ]
+            },
+            "actions": {},
+            "positions": [
+              {
+                "position": "normal",
+                "keys": [
+                  "KEY_LCD_TILT"
+                ],
+                "active": false
+              },
+              {
+                "position": "selfie",
+                "keys": [
+                  "KEY_LCD_TILT"
+                ],
+                "active": true
+              }
+            ]
+          },
+          "touchscreen": {
+            "keys": [],
+            "input": null,
+            "actions": {},
+            "positions": [],
+            "interface": {
+              "kind": "prefixed_touch",
+              "address": 85,
+              "channel": 0,
+              "mode": 1,
+              "register": 0,
+              "report_bytes": 11,
+              "contacts": 2,
+              "coordinate_bits": 12,
+              "width": 720,
+              "height": 480,
+              "offset_tags": [
+                39513,
+                39514
+              ],
+              "irq": 15,
+              "priority": 10,
+              "irq_mode": 2,
+              "proof": {
+                "task": {
+                  "address": 9821328,
+                  "size": 1304,
+                  "sha256": "e946bdc1ed4dad409c78980a4d75d0639f5b9708e8e3c9adf6bc61c3ad7143eb"
+                },
+                "reader": {
+                  "address": 9818096,
+                  "size": 92,
+                  "sha256": "e24068bf840bb1210881191618955e3cece3b4c549aeedbd42d5e72b38877f56"
+                },
+                "bus": {
+                  "address": 9731828,
+                  "size": 836,
+                  "sha256": "a05b4f4846afa7e45a05fe2ac313ef70491b9aa69b401f0890f28336a19f4482"
+                },
+                "endpoint": {
+                  "address": 11452644,
+                  "size": 12,
+                  "sha256": "60ef66712fa27962c6bf12d2bba333ed55eed5a4e9a011b6b03f613be45c884c"
+                },
+                "registration": {
+                  "address": 9821248,
+                  "size": 76,
+                  "sha256": "ba5b0fd8848c4358701c0ac6712eee42a6025b6de8eab2cb1d2294f8b2a97876"
+                },
+                "irq_dispatch": {
+                  "address": 9540880,
+                  "size": 292,
+                  "sha256": "1867ca2557156925163b6786aacefaecca7a694023e925592bf3b17fc276cdda"
+                },
+                "irq": {
+                  "address": 11449320,
+                  "size": 12,
+                  "sha256": "ed87f724c42121acea4d0a8f8174292bec302eef5af8a2e6b6603cf60c46a2a4"
+                },
+                "x": {
+                  "address": 9817732,
+                  "size": 60,
+                  "sha256": "21e3ba80a60d6f7b191ef4c40d97b055680b6ffb571f40e358b027d72e761410"
+                },
+                "y": {
+                  "address": 9817792,
+                  "size": 60,
+                  "sha256": "4573985792c184db6956035ab54b1a5ca3d0560f2f4b4c8ff8b23e87f97eb79f"
+                }
+              }
+            }
+          },
+          "battery_chamber_cover_latch": {
+            "keys": [],
+            "input": null,
+            "actions": {},
+            "positions": []
+          },
+          "battery_latch": {
+            "keys": [],
+            "input": null,
+            "actions": {},
+            "positions": []
+          }
+        },
+        "debug_keys_available": true,
+        "unmatched_controls": [
+          {
+            "control": "front_ring",
+            "reason": "No electronic key established for this mechanical control"
+          },
+          {
+            "control": "battery_chamber_cover_latch",
+            "reason": "No electronic key established for this mechanical control"
+          },
+          {
+            "control": "battery_latch",
+            "reason": "No electronic key established for this mechanical control"
+          }
+        ],
+        "unmatched_positions": [],
+        "unmatched_actions": [],
+        "unmatched_inputs": [],
+        "unmatched_key_names": [
+          "BARR_OP",
+          "BARR_CL",
+          "CRADLE",
+          "ADAPTER",
+          "USB",
+          "DOOR",
+          "CARD",
+          "FMODE",
+          "EXP",
+          "METER",
+          "TELE2",
+          "WIDE2",
+          "TELE",
+          "WIDE",
+          "AF",
+          "VIDEO",
+          "HDTV",
+          "CONT",
+          "AS_MODE",
+          "K_HOME",
+          "FACE",
+          "CRD_P",
+          "CRD_U",
+          "MET_SP",
+          "MET_AV",
+          "MET_MU",
+          "HVS_0",
+          "HVS_90",
+          "HVS_180",
+          "HVS_270",
+          "POP",
+          "C_DIAL+",
+          "C_DIAL-",
+          "W_DIAL+",
+          "W_DIAL-",
+          "1P_AF+",
+          "F_RING+",
+          "F_RING-",
+          "Z_RING+",
+          "Z_RING-",
+          "AE-LOCK",
+          "AF-LOCK",
+          "EVF_LCD",
+          "INFO",
+          "WB",
+          "K_PS",
+          "AE",
+          "VIEW",
+          "EVF_OVF",
+          "MACRO",
+          "MOVIE_REC",
+          "EYE_SEN",
+          "RING_OFF",
+          "RING_STB",
+          "RING_ON",
+          "FUNCTION2",
+          "FUNCTION",
+          "WLAN",
+          "CRING_MF",
+          "CR_TELE2",
+          "CR_WIDE2",
+          "CR_TELE",
+          "CR_WIDE",
+          "FOCUS",
+          "CMD2_L",
+          "CMD2_R",
+          "EXTFUNC",
+          "GRIP_C_L",
+          "GRIP_C_R",
+          "GRIP_C2_L",
+          "GRIP_C2_R",
+          "PLAY",
+          "REC",
+          "AUTO",
+          "QUICK",
+          "SP",
+          "SP2",
+          "SR",
+          "PORTRAIT",
+          "LANDSCAPE",
+          "SPORTS",
+          "NIGHT",
+          "BLURRE",
+          "NATURAL",
+          "PROGRAM",
+          "SHUTTER",
+          "APERTURE",
+          "MANUAL",
+          "N_FLASH",
+          "C1",
+          "C2",
+          "C3",
+          "FSB",
+          "ISO",
+          "ADVANCE",
+          "FILTER",
+          "PANORAMA",
+          "E-D+3.0",
+          "E-D+2.7",
+          "E-D+2.3",
+          "E-D+2.0",
+          "E-D+1.7",
+          "E-D+1.3",
+          "E-D+1.0",
+          "E-D+0.7",
+          "E-D+0.3",
+          "E-D=0",
+          "E-D-0.3",
+          "E-D-0.7",
+          "E-D-1.0",
+          "E-D-1.3",
+          "E-D-1.7",
+          "E-D-2.0",
+          "E-D-2.3",
+          "E-D-2.7",
+          "E-D-3.0",
+          "ISO_A",
+          "ISO_L",
+          "I200",
+          "I200_1_3",
+          "I200_2_3",
+          "I400",
+          "I400_1_3",
+          "I400_2_3",
+          "I800",
+          "I800_1_3",
+          "I800_2_3",
+          "I1600",
+          "I1600_1_3",
+          "I1600_2_3",
+          "I3200",
+          "I3200_1_3",
+          "I3200_2_3",
+          "I6400",
+          "ISO_H1",
+          "ISO_H2",
+          "DRV-PANO",
+          "DRV-ADV",
+          "DRV-MULTI",
+          "DRV-ONE",
+          "DRV-C_L",
+          "DRV-C_H",
+          "DRV-BKT",
+          "I-M_A",
+          "I-M_F16",
+          "I-M_F11",
+          "I-M_F8.0",
+          "I-M_F5.6",
+          "I-M_F4.0",
+          "I-M_F2.8",
+          "I-M_F2.0",
+          "I-M_POS30",
+          "I-M_POS29",
+          "I-M_POS28",
+          "I-M_POS27",
+          "I-M_POS26",
+          "I-M_POS25",
+          "I-M_POS24",
+          "I-M_POS23",
+          "I-M_POS22",
+          "I-M_POS21",
+          "I-M_POS20",
+          "I-M_POS19",
+          "I-M_POS18",
+          "I-M_POS17",
+          "I-M_POS16",
+          "I-M_POS15",
+          "I-M_POS14",
+          "I-M_POS13",
+          "I-M_POS12",
+          "I-M_POS11",
+          "I-M_POS10",
+          "I-M_POS9",
+          "I-M_POS8",
+          "I-M_POS7",
+          "I-M_POS6",
+          "I-M_POS5",
+          "I-M_POS4",
+          "I-M_POS3",
+          "I-M_POS2",
+          "I-M_POS1",
+          "I-M_POS0",
+          "F_R_+4",
+          "F_R_+3",
+          "F_R_+2",
+          "F_R_+1",
+          "F_R_STOP",
+          "F_R_-1",
+          "F_R_-2",
+          "F_R_-3",
+          "F_R_-4",
+          "SETUP",
+          "M_SEL",
+          "VOICE",
+          "MOVIE",
+          "JIG",
+          "EXR",
+          "VREC",
+          "MJPEG",
+          "SCEN_P",
+          "SCEN_S",
+          "MMOD_P",
+          "MMOD_S",
+          "MMOD_A",
+          "MMOD_M",
+          "APERT",
+          "KEY_OK",
+          "KEY_UP",
+          "KEY_DOWN",
+          "KEY_LEFT",
+          "KEY_RIGHT",
+          "KEY_S1",
+          "KEY_S2",
+          "KEY_DISP_BACK",
+          "KEY_PLAY",
+          "KEY_CARD_DET",
+          "KEY_DRIVE",
+          "KEY_FOCUS_AF",
+          "KEY_FOCUS_CAF",
+          "KEY_FOCUS_MF",
+          "KEY_CMDL_PUSH",
+          "KEY_CMDL_LEFT",
+          "KEY_CMDL_RIGHT",
+          "KEY_Q",
+          "KEY_FLASH_EXT",
+          "KEY_AEAF_LOCK",
+          "KEY_R1_S1",
+          "KEY_R1_S2",
+          "KEY_DELETE",
+          "KEY_SHUTTER_DIAL_A",
+          "KEY_SHUTTER_DIAL_1_4000",
+          "KEY_SHUTTER_DIAL_1_2000",
+          "KEY_SHUTTER_DIAL_1_1000",
+          "KEY_SHUTTER_DIAL_1_500",
+          "KEY_SHUTTER_DIAL_1_250",
+          "KEY_SHUTTER_DIAL_1_125",
+          "KEY_SHUTTER_DIAL_1_60",
+          "KEY_SHUTTER_DIAL_1_30",
+          "KEY_SHUTTER_DIAL_1_15",
+          "KEY_SHUTTER_DIAL_1_8",
+          "KEY_SHUTTER_DIAL_1_4",
+          "KEY_SHUTTER_DIAL_1_2",
+          "KEY_SHUTTER_DIAL_1_1",
+          "KEY_SHUTTER_DIAL_T",
+          "KEY_SHUTTER_DIAL_B"
+        ],
+        "input_readers": {
+          "calibration": {
+            "reader": 9721296,
+            "location": {
+              "kind": "pointer",
+              "address": 12466684
+            },
+            "proof": {
+              "word": {
+                "address": 9721296,
+                "size": 40,
+                "sha256": "ae15c317d7874846f9830e8b5d95c0ce956c2b68b10ed1b77b89f10f20aded3d"
+              },
+              "wrapper": {
+                "address": 9721280,
+                "size": 16,
+                "sha256": "e9ab9045745bcc93f55735ad846d5a0f11fc54a9252ccf38a2e348367509efd6"
+              },
+              "byte": {
+                "address": 9720600,
+                "size": 32,
+                "sha256": "c47970b9741973b3b808cca197ab7811feffec60ffc7aaec802b43a9a8c8befc"
+              },
+              "offsets": [
+                {
+                  "address": 9720364,
+                  "size": 24,
+                  "sha256": "17d5bf00eaca5e2fba0ba74fbfbb43e93414b49201419a85368b48530774a47c"
+                },
+                {
+                  "address": 9720420,
+                  "size": 12,
+                  "sha256": "28f7857e47afacfb35339b3bfaf88f0b710c2cfcaaf3bc855c54c398d28f966f"
+                },
+                {
+                  "address": 9720488,
+                  "size": 4,
+                  "sha256": "487fb3379d55bef9e3634026158cc0a0c7b47900284fae207563f7aafcb00462"
+                }
+              ]
+            }
+          },
+          "scanner": {
+            "stable_offset": 21,
+            "reader": 9698088,
+            "size": 64,
+            "sha256": "75a54a914b5952e3003b08377ff0c0a20990f521f8749e2da1b6b9cd40437084"
+          }
+        },
+        "scanner": {
+          "base": 11940180,
+          "count": 85,
+          "stride": 28,
+          "lookup": 9697928,
+          "sha256": "aa7c2d15d8f4d2f01b8a1d7cdfb138707b9796226bd4ed28e3cf4ea1796043ff"
+        },
+        "native_key_names": {
+          "rows": [
+            {
+              "event": 1,
+              "name": "KEY_OK",
+              "string_address": 10718500
+            },
+            {
+              "event": 2,
+              "name": "KEY_UP",
+              "string_address": 10718552
+            },
+            {
+              "event": 3,
+              "name": "KEY_DOWN",
+              "string_address": 10718564
+            },
+            {
+              "event": 4,
+              "name": "KEY_LEFT",
+              "string_address": 10718596
+            },
+            {
+              "event": 5,
+              "name": "KEY_RIGHT",
+              "string_address": 10718580
+            },
+            {
+              "event": 7,
+              "name": "KEY_S1",
+              "string_address": 10718528
+            },
+            {
+              "event": 8,
+              "name": "KEY_S2",
+              "string_address": 10718540
+            },
+            {
+              "event": 9,
+              "name": "KEY_DISP_BACK",
+              "string_address": 10623108
+            },
+            {
+              "event": 11,
+              "name": "KEY_PLAY",
+              "string_address": 10718976
+            },
+            {
+              "event": 16,
+              "name": "KEY_CARD_DET",
+              "string_address": 10719136
+            },
+            {
+              "event": 23,
+              "name": "KEY_DRIVE",
+              "string_address": 10721004
+            },
+            {
+              "event": 30,
+              "name": "KEY_FOCUS_AF",
+              "string_address": 10720232
+            },
+            {
+              "event": 31,
+              "name": "KEY_FOCUS_CAF",
+              "string_address": 10720272
+            },
+            {
+              "event": 32,
+              "name": "KEY_FOCUS_MF",
+              "string_address": 10720252
+            },
+            {
+              "event": 39,
+              "name": "KEY_FUNCTION",
+              "string_address": 10719472
+            },
+            {
+              "event": 42,
+              "name": "KEY_CMDL_PUSH",
+              "string_address": 10720944
+            },
+            {
+              "event": 43,
+              "name": "KEY_CMDL_LEFT",
+              "string_address": 10720964
+            },
+            {
+              "event": 44,
+              "name": "KEY_CMDL_RIGHT",
+              "string_address": 10720984
+            },
+            {
+              "event": 49,
+              "name": "KEY_Q",
+              "string_address": 10623224
+            },
+            {
+              "event": 52,
+              "name": "KEY_FLASH_EXT",
+              "string_address": 10719344
+            },
+            {
+              "event": 61,
+              "name": "KEY_FUNCTION3",
+              "string_address": 10623264
+            },
+            {
+              "event": 526,
+              "name": "KEY_CTRLRING_CW",
+              "string_address": 10720536
+            },
+            {
+              "event": 527,
+              "name": "KEY_CTRLRING_CCW",
+              "string_address": 10720512
+            },
+            {
+              "event": 529,
+              "name": "KEY_AEAF_LOCK",
+              "string_address": 10719296
+            },
+            {
+              "event": 530,
+              "name": "KEY_R1_S1",
+              "string_address": 10623432
+            },
+            {
+              "event": 531,
+              "name": "KEY_R1_S2",
+              "string_address": 10623444
+            },
+            {
+              "event": 550,
+              "name": "KEY_FUNCTION2",
+              "string_address": 10623616
+            },
+            {
+              "event": 557,
+              "name": "KEY_DELETE",
+              "string_address": 10719524
+            },
+            {
+              "event": 795,
+              "name": "KEY_SHUTTER_DIAL_A",
+              "string_address": 10721240
+            },
+            {
+              "event": 796,
+              "name": "KEY_SHUTTER_DIAL_1_4000",
+              "string_address": 10721264
+            },
+            {
+              "event": 797,
+              "name": "KEY_SHUTTER_DIAL_1_2000",
+              "string_address": 10721292
+            },
+            {
+              "event": 798,
+              "name": "KEY_SHUTTER_DIAL_1_1000",
+              "string_address": 10721320
+            },
+            {
+              "event": 799,
+              "name": "KEY_SHUTTER_DIAL_1_500",
+              "string_address": 10721348
+            },
+            {
+              "event": 800,
+              "name": "KEY_SHUTTER_DIAL_1_250",
+              "string_address": 10721376
+            },
+            {
+              "event": 802,
+              "name": "KEY_SHUTTER_DIAL_1_125",
+              "string_address": 10721432
+            },
+            {
+              "event": 803,
+              "name": "KEY_SHUTTER_DIAL_1_60",
+              "string_address": 10721460
+            },
+            {
+              "event": 804,
+              "name": "KEY_SHUTTER_DIAL_1_30",
+              "string_address": 10721488
+            },
+            {
+              "event": 805,
+              "name": "KEY_SHUTTER_DIAL_1_15",
+              "string_address": 10721516
+            },
+            {
+              "event": 806,
+              "name": "KEY_SHUTTER_DIAL_1_8",
+              "string_address": 10721544
+            },
+            {
+              "event": 807,
+              "name": "KEY_SHUTTER_DIAL_1_4",
+              "string_address": 10721572
+            },
+            {
+              "event": 808,
+              "name": "KEY_SHUTTER_DIAL_1_2",
+              "string_address": 10721600
+            },
+            {
+              "event": 809,
+              "name": "KEY_SHUTTER_DIAL_1_1",
+              "string_address": 10721628
+            },
+            {
+              "event": 810,
+              "name": "KEY_SHUTTER_DIAL_T",
+              "string_address": 10721656
+            },
+            {
+              "event": 811,
+              "name": "KEY_SHUTTER_DIAL_B",
+              "string_address": 10721680
+            },
+            {
+              "event": 812,
+              "name": "KEY_EXP_DIAL_P3",
+              "string_address": 10721704
+            },
+            {
+              "event": 813,
+              "name": "KEY_EXP_DIAL_P8_3",
+              "string_address": 10721724
+            },
+            {
+              "event": 814,
+              "name": "KEY_EXP_DIAL_P7_3",
+              "string_address": 10721748
+            },
+            {
+              "event": 815,
+              "name": "KEY_EXP_DIAL_P2",
+              "string_address": 10721772
+            },
+            {
+              "event": 816,
+              "name": "KEY_EXP_DIAL_P5_3",
+              "string_address": 10721792
+            },
+            {
+              "event": 817,
+              "name": "KEY_EXP_DIAL_P4_3",
+              "string_address": 10721816
+            },
+            {
+              "event": 818,
+              "name": "KEY_EXP_DIAL_P1",
+              "string_address": 10721840
+            },
+            {
+              "event": 819,
+              "name": "KEY_EXP_DIAL_P2_3",
+              "string_address": 10721860
+            },
+            {
+              "event": 820,
+              "name": "KEY_EXP_DIAL_P1_3",
+              "string_address": 10721884
+            },
+            {
+              "event": 821,
+              "name": "KEY_EXP_DIAL_0",
+              "string_address": 10721908
+            },
+            {
+              "event": 822,
+              "name": "KEY_EXP_DIAL_M1_3",
+              "string_address": 10721928
+            },
+            {
+              "event": 823,
+              "name": "KEY_EXP_DIAL_M2_3",
+              "string_address": 10721952
+            },
+            {
+              "event": 824,
+              "name": "KEY_EXP_DIAL_M1",
+              "string_address": 10721976
+            },
+            {
+              "event": 825,
+              "name": "KEY_EXP_DIAL_M4_3",
+              "string_address": 10721996
+            },
+            {
+              "event": 826,
+              "name": "KEY_EXP_DIAL_M5_3",
+              "string_address": 10722020
+            },
+            {
+              "event": 827,
+              "name": "KEY_EXP_DIAL_M2",
+              "string_address": 10722044
+            },
+            {
+              "event": 828,
+              "name": "KEY_EXP_DIAL_M7_3",
+              "string_address": 10722064
+            },
+            {
+              "event": 829,
+              "name": "KEY_EXP_DIAL_M8_3",
+              "string_address": 10722088
+            },
+            {
+              "event": 830,
+              "name": "KEY_EXP_DIAL_M3",
+              "string_address": 10722112
+            },
+            {
+              "event": 1024,
+              "name": "KEY_M_IRIS_A",
+              "string_address": 10722132
+            },
+            {
+              "event": 1280,
+              "name": "KEY_M_IRIS_F16",
+              "string_address": 10722152
+            },
+            {
+              "event": 1281,
+              "name": "KEY_M_IRIS_F14",
+              "string_address": 10623976
+            },
+            {
+              "event": 1282,
+              "name": "KEY_M_IRIS_F13",
+              "string_address": 10623992
+            },
+            {
+              "event": 1283,
+              "name": "KEY_M_IRIS_F11",
+              "string_address": 10722172
+            },
+            {
+              "event": 1284,
+              "name": "KEY_M_IRIS_F10",
+              "string_address": 10624008
+            },
+            {
+              "event": 1285,
+              "name": "KEY_M_IRIS_F9",
+              "string_address": 10624024
+            },
+            {
+              "event": 1286,
+              "name": "KEY_M_IRIS_F8",
+              "string_address": 10722192
+            },
+            {
+              "event": 1287,
+              "name": "KEY_M_IRIS_F7_1",
+              "string_address": 10624040
+            },
+            {
+              "event": 1288,
+              "name": "KEY_M_IRIS_F6_4",
+              "string_address": 10624056
+            },
+            {
+              "event": 1289,
+              "name": "KEY_M_IRIS_F5_6",
+              "string_address": 10722212
+            },
+            {
+              "event": 1290,
+              "name": "KEY_M_IRIS_F5_0",
+              "string_address": 10624072
+            },
+            {
+              "event": 1291,
+              "name": "KEY_M_IRIS_F4_5",
+              "string_address": 10624088
+            },
+            {
+              "event": 1292,
+              "name": "KEY_M_IRIS_F4_0",
+              "string_address": 10722232
+            },
+            {
+              "event": 1293,
+              "name": "KEY_M_IRIS_F3_6",
+              "string_address": 10624104
+            },
+            {
+              "event": 1294,
+              "name": "KEY_M_IRIS_F3_2",
+              "string_address": 10624120
+            },
+            {
+              "event": 1295,
+              "name": "KEY_M_IRIS_F2_8",
+              "string_address": 10722252
+            },
+            {
+              "event": 1301,
+              "name": "KEY_LCD_TILT",
+              "string_address": 10624208
+            },
+            {
+              "event": 1332,
+              "name": "KEY_RECL_AUTO",
+              "string_address": 10624276
+            },
+            {
+              "event": 1333,
+              "name": "KEY_RECL_MANUAL",
+              "string_address": 10624292
+            }
+          ],
+          "reader": 9172536,
+          "size": 9348,
+          "sha256": "ec1028438b6f30f187a08f665f0925dafe2cc80aace3d75e69e19e9b7e817bff"
+        }
+      }
+    },
+    "cfgdata_location": {
+      "value": {
+        "kind": "pointer",
+        "address": 12466684
+      }
+    },
+    "ui_mode": {
+      "value": 13358048
+    },
+    "ui_modes": {
+      "value": {
+        "rec": 3,
+        "play": 4,
+        "setup_rec": 5,
+        "setup_play": 6
+      }
+    },
+    "remote_menu": {
+      "value": {
+        "uncached_alias": 1073741824,
+        "menu_node_address": 13175040,
+        "menu_active_address": 13180008,
+        "pending_mode_address": 13358060,
+        "keys": {
+          "menu": "EXE_M",
+          "back": "DISP_B",
+          "up": "UP",
+          "down": "DOWN"
+        }
+      }
+    },
+    "identity_checks": {
+      "value": [
+        {
+          "address": 9525536,
+          "size": 256,
+          "sha256": "cf9e6d36e535973642d7a1383fb169a798b95991788b685cb06f2787ec52d3f9"
+        },
+        {
+          "address": 18790788,
+          "size": 180,
+          "sha256": "461f10b19e24f2ab7638b612937bc8ac80909b8b0154583f4af8c37069185084"
+        }
+      ]
+    },
+    "menu_cursor": {
+      "value": 13175048
+    }
+  },
+  "$schema": "../../../schemas/firmware-facts.schema.json"
+}

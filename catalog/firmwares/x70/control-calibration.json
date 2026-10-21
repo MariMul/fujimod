@@ -1,0 +1,5 @@
+{
+  "$schema": "../../schemas/body-control-calibration.schema.json",
+  "schema": 1,
+  "analog_levels": 1024
+}

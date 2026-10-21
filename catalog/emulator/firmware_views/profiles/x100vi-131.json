@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "firmware_id": "x100vi-131",
+  "soc": {
+    "path": "emulator/soc/xp5.json",
+    "sha256": "5640b066500b6350c84c38e4da6f29e8feff2561596b9a9f079e6e6d2acadb13",
+    "size": 9614
+  },
+  "board": {
+    "path": "emulator/bodies/x100vi.json",
+    "sha256": "346c96b568a7c34a1f6d7f9cae8872455be83c5d5fa79f2255c8080f27e3a74d",
+    "size": 3884
+  },
+  "firmware": {
+    "path": "emulator/firmwares/x100vi-131.json",
+    "sha256": "36d5d359d2625e46352ab12f6ea4df14024b6f20b5d77855eaca6df8864e51eb",
+    "size": 4309
+  },
+  "$schema": "../../../schemas/emulator-profile.schema.json"
+}

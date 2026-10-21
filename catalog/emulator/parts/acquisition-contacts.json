@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "name": "acquisition_contacts",
+  "options": {
+    "drive": [
+      {
+        "port": 1,
+        "pin": 1
+      },
+      {
+        "port": 1,
+        "pin": 2
+      }
+    ],
+    "contacts": [
+      {
+        "port": 0,
+        "pin": 9
+      },
+      {
+        "port": 0,
+        "pin": 6
+      }
+    ],
+    "positions": [
+      {
+        "drive": 0,
+        "contacts": [
+          true,
+          true
+        ]
+      },
+      {
+        "drive": 1,
+        "contacts": [
+          false,
+          false
+        ]
+      },
+      {
+        "drive": 3,
+        "contacts": [
+          true,
+          true
+        ]
+      }
+    ],
+    "initial_position": 0,
+    "settle_ticks": 3000
+  },
+  "gpio_irqs": [
+    {
+      "pin": {
+        "port": 0,
+        "pin": 9
+      },
+      "edge": "rising",
+      "outputs": [
+        {
+          "Core": {
+            "core": 0,
+            "line": 17
+          }
+        }
+      ]
+    },
+    {
+      "pin": {
+        "port": 0,
+        "pin": 6
+      },
+      "edge": "falling",
+      "outputs": [
+        {
+          "Core": {
+            "core": 0,
+            "line": 17
+          }
+        }
+      ]
+    }
+  ],
+  "limits": [],
+  "$schema": "../../schemas/emulator-document.schema.json"
+}

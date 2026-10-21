@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "execution_scope": "emulator-only",
+  "firmware_id": "xt1-552",
+  "soc_file": "emulator/soc/exr2-service-transports.json",
+  "body_file": "emulator/bodies/xt1-rec.json",
+  "options_file": "emulator/profiles/xt1-rec-discovery.json",
+  "remove_options": [
+    "mcu_profile",
+    "user_journals"
+  ],
+  "factory_options": {
+    "storage_profile": "erased",
+    "settings": "default",
+    "clock_seconds_2000": 0,
+    "rectangle_profile": "xm1-150-declared-luma-rectangle-overlay-unmeasured"
+  },
+  "frame_source": "configured-image-input",
+  "boot_ticks": 40000000,
+  "pulse_ticks": 3600000,
+  "settle_ticks": 20000000,
+  "instruction_limit": 2000000000,
+  "maximum_setup_keys": 4,
+  "limits": [],
+  "shutdown_ticks": 30000000,
+  "shutdown_ui_mode": 14,
+  "power_off": {
+    "mask": 1,
+    "value": 1,
+    "kind": "mcu-status"
+  },
+  "$schema": "../../schemas/emulator-document.schema.json"
+}

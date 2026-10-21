@@ -1,0 +1,153 @@
+{
+  "schema": 1,
+  "firmware_id": "xq1-121",
+  "source_sha256": "c15f1b9cefdae73019af724de509f3a5007a59ec1bba78952d6d6573b7930e41",
+  "soc": {
+    "register_maps": {
+      "usb": {
+        "core": "0xfff54000",
+        "phy": "0xfff55000",
+        "basis": "Declared catalog input.",
+        "irq": 84,
+        "dma_irq": 85
+      }
+    }
+  },
+  "board": {
+    "inputs": {
+      "usb_connected": true
+    },
+    "service_controllers": {
+      "usb": {
+        "transfer_ticks": 4,
+        "packet_bytes": 512,
+        "out_endpoints": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            1
+          ]
+        ],
+        "in_endpoints": [
+          [
+            128,
+            0
+          ],
+          [
+            130,
+            1
+          ],
+          [
+            131,
+            2
+          ]
+        ],
+        "basis": "Declared catalog input."
+      }
+    }
+  },
+  "firmware": {
+    "usb_irq_wiring": {
+      "views": [
+        {
+          "name": "irq",
+          "address": "0x840f8c",
+          "size": "0xc",
+          "sha256": "5cc548bd54d16b6bd80ce6376a79b9ccbc8a7b17e379bcab9c9b58e7f1ebcbb1",
+          "sampling": "immutable-source"
+        },
+        {
+          "name": "dma_irq",
+          "address": "0x841220",
+          "size": "0xc",
+          "sha256": "879883a19c7732f9ec2115a2a01006f101c4762956464fd7107bc25166125600",
+          "sampling": "immutable-source"
+        }
+      ]
+    }
+  },
+  "factory_options": {
+    "secondary_bus_profile": null
+  },
+  "nand_inputs": [],
+  "limits": [],
+  "configuration_input": {
+    "nand": "nand",
+    "bank_descriptor": {
+      "name": "usb_configuration_bank",
+      "address": "0x840a88",
+      "size": "0xc",
+      "sha256": "324cd67e633dc7d4f9fb8de449632dd2938ffe7d7159d77fee4c462131eb34e2",
+      "sampling": "immutable-source"
+    },
+    "bank": [
+      2,
+      40,
+      931
+    ],
+    "logical_first": 41,
+    "configuration_bytes": "0x400000",
+    "fields": [
+      {
+        "offset": "0xf7",
+        "basis": "Declared catalog input."
+      },
+      {
+        "offset": "0x202",
+        "basis": "Declared catalog input."
+      },
+      {
+        "offset": "0x204",
+        "basis": "Declared catalog input."
+      },
+      {
+        "offset": "0x100",
+        "basis": "Declared catalog input."
+      },
+      {
+        "offset": "0x13e",
+        "basis": "Declared catalog input."
+      },
+      {
+        "offset": "0x19a",
+        "basis": "Declared catalog input."
+      },
+      {
+        "offset": "0x9811",
+        "basis": "Declared catalog input."
+      },
+      {
+        "offset": "0x1e400",
+        "basis": "Declared catalog input."
+      }
+    ],
+    "limits": [],
+    "code_checks": [
+      {
+        "name": "usb_product_text_getter",
+        "address": "0x6d67cc",
+        "size": "0x34",
+        "sha256": "cb28a74b040040d9546ae663032de092452f4bc67a49fdd25081714eed585447",
+        "sampling": "immutable-source"
+      },
+      {
+        "name": "usb_focus_conversion",
+        "address": "0x779b30",
+        "size": "0x448",
+        "sha256": "3dbcef710f019e0bea91147fc860b190ee55c143075ef3e3b0c275c7f80c11ff",
+        "sampling": "immutable-source"
+      }
+    ],
+    "defaults_table": {
+      "name": "usb_configuration_defaults",
+      "address": "0x8407f8",
+      "size": "0x1f8",
+      "sha256": "ff0d65b1abf08faae3b24983442994e27d2d8af16bbc2225e722f75875931604",
+      "sampling": "immutable-source"
+    }
+  },
+  "$schema": "../../schemas/emulator-document.schema.json"
+}

@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "firmware_id": "x70-110",
+  "source_sha256": "7dd5b358a66f38d1fc7dad899a77d35fe4e6ed0edd0ed1d04fbca512d5dc8fd6",
+  "rom": {
+    "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be",
+    "size": "0x4000"
+  },
+  "entry_labels": {
+    "0x1800": "primary loader",
+    "0x11800": "secondary loader",
+    "0x40020": "primary kernel",
+    "0xd0020": "secondary kernel",
+    "0x93e578": "application entry",
+    "0x93eac4": "application INIT",
+    "0x96bac8": "LCD/EVF task",
+    "0x96aabc": "graphics task",
+    "0x9726c4": "HDMI task",
+    "0x973008": "VGLIB task",
+    "0x11e11e8": "system task",
+    "0x10fbb94": "recording task",
+    "0x9d9b30": "overlay loader task",
+    "0x8a073c": "overlay prefetch handler",
+    "0x8a08a4": "overlay fault task continuation",
+    "0x9d9f40": "overlay fault wait",
+    "0x9d9cb4": "overlay availability update",
+    "0x1d16508": "playcont task",
+    "0x9049dc": "UI initialization",
+    "0x904668": "UI mode installation",
+    "0x92c8cc": "statistics DMA ISR",
+    "0x11f8ef8": "statistics completion callback",
+    "0x11ff3f0": "statistics normalization",
+    "0x12f604c": "statistics IMGDC packet",
+    "0x12f8814": "statistics IMGDC consumer",
+    "0x1202870": "statistics acquisition stop",
+    "0x1226c1c": "REC statistics data handler",
+    "0x1226e10": "REC statistics finish handler"
+  },
+  "flash_dat_bias": "0x25c",
+  "loader_validation": {
+    "entry": "0x40020",
+    "sections": [
+      "kernel0",
+      "kernel1",
+      "section4"
+    ]
+  },
+  "reset_release": {
+    "register": "0xfffb40cc",
+    "mask": "0x01000000",
+    "source": 120,
+    "target": "0x3fff0000"
+  },
+  "fixture_layouts": {
+    "status": "Existing X70 module contracts retained; address extraction proceeds in steps4/5/9"
+  },
+  "soc_id": "exr2",
+  "board_id": "x70",
+  "control_bus_views": {
+    "path": "emulator/firmware_views/control-bus-x70-110.json",
+    "sha256": "ba738bb612a00106d9b237b9b8730b4e41b93913c637cb61bbea5614f1232452"
+  },
+  "usb_irq_wiring": {
+    "views": [
+      {
+        "name": "irq",
+        "address": "0xaeb0a0",
+        "size": "0xc",
+        "sha256": "5cc548bd54d16b6bd80ce6376a79b9ccbc8a7b17e379bcab9c9b58e7f1ebcbb1",
+        "sampling": "immutable-source"
+      },
+      {
+        "name": "dma_irq",
+        "address": "0xaeb334",
+        "size": "0xc",
+        "sha256": "879883a19c7732f9ec2115a2a01006f101c4762956464fd7107bc25166125600",
+        "sampling": "immutable-source"
+      }
+    ]
+  },
+  "$schema": "../../schemas/emulator-document.schema.json"
+}

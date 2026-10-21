@@ -1,0 +1,353 @@
+{
+  "schema": 1,
+  "id": "xm1",
+  "soc_id": "exr2",
+  "execution_scope": "offline-boot-development",
+  "dram": {
+    "size": "0x20000000",
+    "basis": "Declared catalog input."
+  },
+  "devices": [
+    {
+      "name": "bootcontrols",
+      "kind": "BootControls",
+      "refs": {}
+    },
+    {
+      "name": "kernelinterrupts",
+      "kind": "KernelInterrupts",
+      "refs": {}
+    },
+    {
+      "name": "nandcontroller",
+      "kind": "NandController",
+      "refs": {}
+    },
+    {
+      "name": "fujidecompressor",
+      "kind": "FujiDecompressor",
+      "refs": {}
+    },
+    {
+      "name": "loadermemorydma",
+      "kind": "LoaderMemoryDMA",
+      "refs": {}
+    },
+    {
+      "name": "usbcontrol",
+      "kind": "USBControl",
+      "refs": {
+        "power": "powerdevices"
+      }
+    },
+    {
+      "name": "powerdevices",
+      "kind": "PowerDevices",
+      "refs": {}
+    },
+    {
+      "name": "audio",
+      "kind": "SerialAudioTransmitSink",
+      "refs": {}
+    },
+    {
+      "name": "pulseoutputs",
+      "kind": "PulseOutputs",
+      "refs": {}
+    },
+    {
+      "name": "lensendpoint",
+      "kind": "LensEndpoint",
+      "refs": {}
+    },
+    {
+      "name": "spi2serial",
+      "kind": "SPI2Serial",
+      "refs": {
+        "endpoint": "lensendpoint"
+      }
+    },
+    {
+      "name": "controlbus",
+      "kind": "ControlBus",
+      "refs": {}
+    },
+    {
+      "name": "secondarycontrolbus",
+      "kind": "SecondaryControlBus",
+      "refs": {
+        "power": "powerdevices"
+      }
+    },
+    {
+      "name": "fe80control",
+      "kind": "FE80Control",
+      "refs": {}
+    },
+    {
+      "name": "inputprocessingcontrol",
+      "kind": "InputProcessingControl",
+      "refs": {}
+    },
+    {
+      "name": "inputauxiliarycontrol",
+      "kind": "InputAuxiliaryControl",
+      "refs": {}
+    },
+    {
+      "name": "producercontrol",
+      "kind": "ProducerControl",
+      "refs": {}
+    },
+    {
+      "name": "imageparametercontrol",
+      "kind": "ImageParameterControl",
+      "refs": {}
+    },
+    {
+      "name": "imageworkcontrol",
+      "kind": "ImageWorkControl",
+      "refs": {}
+    },
+    {
+      "name": "faceanalysiscontrol",
+      "kind": "FaceAnalysisControl",
+      "refs": {}
+    },
+    {
+      "name": "hdmisink",
+      "kind": "HDMISink",
+      "refs": {}
+    },
+    {
+      "name": "hdmistartup",
+      "kind": "HDMIStartup",
+      "refs": {
+        "sink": "hdmisink"
+      }
+    },
+    {
+      "name": "outputcontrol",
+      "kind": "OutputControl",
+      "refs": {}
+    },
+    {
+      "name": "graphicsaccelerator",
+      "kind": "GraphicsAccelerator",
+      "refs": {}
+    },
+    {
+      "name": "displayscanout",
+      "kind": "DisplayScanout",
+      "refs": {}
+    },
+    {
+      "name": "displaytiming",
+      "kind": "DisplayTiming",
+      "refs": {}
+    },
+    {
+      "name": "displayformatter",
+      "kind": "DisplayFormatter",
+      "refs": {}
+    }
+  ],
+  "construction_order": [
+    "bootcontrols",
+    "kernelinterrupts",
+    "nandcontroller",
+    "fujidecompressor",
+    "loadermemorydma",
+    "powerdevices",
+    "usbcontrol",
+    "audio",
+    "pulseoutputs",
+    "lensendpoint",
+    "spi2serial",
+    "controlbus",
+    "secondarycontrolbus",
+    "fe80control",
+    "inputprocessingcontrol",
+    "inputauxiliarycontrol",
+    "producercontrol",
+    "imageparametercontrol",
+    "imageworkcontrol",
+    "faceanalysiscontrol",
+    "hdmisink",
+    "hdmistartup",
+    "outputcontrol",
+    "graphicsaccelerator",
+    "displayscanout",
+    "displaytiming",
+    "displayformatter"
+  ],
+  "attachment_order": [
+    "bootcontrols",
+    "kernelinterrupts",
+    "nandcontroller",
+    "fujidecompressor",
+    "loadermemorydma",
+    "usbcontrol",
+    "powerdevices",
+    "audio",
+    "pulseoutputs",
+    "lensendpoint",
+    "spi2serial",
+    "controlbus",
+    "secondarycontrolbus",
+    "fe80control",
+    "inputprocessingcontrol",
+    "inputauxiliarycontrol",
+    "producercontrol",
+    "imageparametercontrol",
+    "imageworkcontrol",
+    "faceanalysiscontrol",
+    "hdmisink",
+    "hdmistartup",
+    "outputcontrol",
+    "graphicsaccelerator",
+    "displayscanout",
+    "displaytiming",
+    "displayformatter"
+  ],
+  "limits": [],
+  "inputs": {
+    "gpio": {
+      "gpio_inputs": {
+        "0": 3104,
+        "2": 4608,
+        "3": 776,
+        "12": 128,
+        "11": 0
+      },
+      "profile_name": "Synthetic X-M1 USB+UP+S2 entry; flag mapping2/16/8 comes from stock635280; electrical levels borrowed/unmeasured."
+    },
+    "power": {
+      "profile_name": "Synthetic loader boot reason0; remaining ADC borrowed; MCU runtime status still separate rehearsal input",
+      "adc_samples": [
+        0,
+        0,
+        1023,
+        63,
+        534,
+        640,
+        0,
+        825,
+        128,
+        60,
+        0,
+        0
+      ],
+      "boot_reply": 0,
+      "spi0_input_profile": "absent-hot-shoe-flash-fixed-low-miso"
+    },
+    "mcu_packet_hex": "00000000d00700ff008000040000aafc",
+    "usb_connected": true
+  },
+  "service_controllers": {
+    "usb": {
+      "transfer_ticks": 4,
+      "packet_bytes": 64,
+      "out_endpoints": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          1
+        ]
+      ],
+      "in_endpoints": [
+        [
+          128,
+          0
+        ],
+        [
+          130,
+          1
+        ],
+        [
+          131,
+          2
+        ]
+      ],
+      "basis": "Declared catalog input."
+    },
+    "control_bus0": {
+      "profile": "endpoint7-and9-virtual-write-ack",
+      "transfer_ticks": 4,
+      "sensor": {
+        "address": "0x1c",
+        "reply_model": "write-only",
+        "basis": "Declared catalog input."
+      },
+      "basis": "Declared catalog input."
+    },
+    "display_timing": {
+      "phase_profile": "declared-external-phase-clock-unmeasured",
+      "frame_period_ticks": 400000,
+      "stop_delay_ticks": 2,
+      "basis": "Declared catalog input."
+    },
+    "fe80": {
+      "basis": "Declared catalog input.",
+      "upload_setup_phases": [
+        "disabled"
+      ],
+      "periods": [
+        12,
+        18
+      ]
+    }
+  },
+  "control_bus_chips": [
+    {
+      "index": 0,
+      "address": "0x30",
+      "polarity_selector": 0,
+      "channel": 1
+    },
+    {
+      "index": 1,
+      "address": "0x18",
+      "polarity_selector": 1,
+      "channel": 0
+    },
+    {
+      "index": 2,
+      "address": "0x44",
+      "polarity_selector": 0,
+      "channel": 0
+    },
+    {
+      "index": 3,
+      "address": "0x72",
+      "polarity_selector": 0,
+      "channel": 1
+    },
+    {
+      "index": 4,
+      "address": "0x19",
+      "polarity_selector": 1,
+      "channel": 0
+    },
+    {
+      "index": 5,
+      "address": "0xc",
+      "polarity_selector": 1,
+      "channel": 0
+    },
+    {
+      "index": 6,
+      "address": "0x1c",
+      "polarity_selector": 1,
+      "channel": 0
+    }
+  ],
+  "serial_part": {
+    "path": "emulator/parts/banked-lens.json",
+    "sha256": "fed513379d58833b4d86d07e7d411dba52151047dcb0432aefa85a19eae800f8"
+  },
+  "$schema": "../../schemas/emulator-document.schema.json"
+}

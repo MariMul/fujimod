@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FujiMod emulator profile",
+  "type": "object",
+  "required": [
+    "$schema",
+    "schema",
+    "firmware_id",
+    "soc",
+    "board",
+    "firmware"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schema": {
+      "const": 1
+    },
+    "firmware_id": {
+      "type": "string"
+    },
+    "soc": {
+      "$ref": "#/$defs/documentReference"
+    },
+    "board": {
+      "$ref": "#/$defs/documentReference"
+    },
+    "firmware": {
+      "$ref": "#/$defs/documentReference"
+    }
+  },
+  "$defs": {
+    "documentReference": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "size"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "additionalProperties": true
+}

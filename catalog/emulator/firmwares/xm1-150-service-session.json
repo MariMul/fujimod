@@ -1,0 +1,179 @@
+{
+  "schema": 1,
+  "firmware_id": "xm1-150",
+  "source_sha256": "43d67afa1a2bc9ae8481bc0acf02cb085ed0f515122dcbd26addcae102cd1490",
+  "board_id": "xm1",
+  "soc_id": "exr2",
+  "execution_scope": "offline-boot-development",
+  "rom": {
+    "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be",
+    "size": "0x4000",
+    "basis": "Declared catalog input."
+  },
+  "entry_labels": {
+    "0x69cdf8": "application entry",
+    "0x1800": "primary loader",
+    "0x11800": "secondary loader",
+    "0x40020": "primary kernel",
+    "0xd0020": "secondary kernel"
+  },
+  "flash_dat_bias": "0x25c",
+  "loader_validation": {
+    "entry": "0x69cdf8",
+    "sections": [
+      "stream-0016025c",
+      "stream-002c025c"
+    ]
+  },
+  "reset_release": {
+    "register": "0xfffb40cc",
+    "mask": "0x01000000",
+    "source": 120,
+    "target": "0x3fff0000",
+    "basis": "Declared catalog input."
+  },
+  "limits": [],
+  "boot_layout": {
+    "units": [
+      {
+        "unit": "kernel0"
+      },
+      {
+        "unit": "kernel1"
+      }
+    ],
+    "flash_slices": [
+      {
+        "name": "boot",
+        "offset": "0x40000",
+        "size": "0x20000",
+        "address": "0x0",
+        "sha256": "09fd75ed2dc8f444754f0cfa2b19229808efc17660912b32c3bb6b7272076ace"
+      }
+    ]
+  },
+  "control_bus_views": {
+    "path": "emulator/firmware_views/control-bus-xm1-150.json",
+    "sha256": "3a4eaf38005382a198eb51950be971e0127973ee35fc5a90085b8f61a05f249d"
+  },
+  "usb_irq_wiring": {
+    "views": [
+      {
+        "name": "irq",
+        "address": "0x7c91d8",
+        "size": "0xc",
+        "sha256": "5cc548bd54d16b6bd80ce6376a79b9ccbc8a7b17e379bcab9c9b58e7f1ebcbb1",
+        "sampling": "immutable-source"
+      },
+      {
+        "name": "dma_irq",
+        "address": "0x7c946c",
+        "size": "0xc",
+        "sha256": "879883a19c7732f9ec2115a2a01006f101c4762956464fd7107bc25166125600",
+        "sampling": "immutable-source"
+      }
+    ]
+  },
+  "fe80_programs": [
+    {
+      "descriptor": {
+        "address": "0x89e820",
+        "size": "0x10",
+        "sha256": "c2de37e1cf80e829c9d1128bac499f8c6f40a709a4f088f06ade45fecb71fdcf",
+        "sampling": "immutable-source"
+      },
+      "program": {
+        "address": "0x81c630",
+        "size": "0x48e0",
+        "sha256": "34131494b53051b95fe32c3a672fe606a5f0eed75d85f1533eb5a25ff1f0db18",
+        "sampling": "immutable-source"
+      },
+      "period": 12,
+      "setup_phase": "disabled",
+      "basis": "Declared catalog input."
+    },
+    {
+      "descriptor": {
+        "address": "0x89e880",
+        "size": "0x10",
+        "sha256": "a4cd4b8c0fee21b98600cbf1235d742b7b1a5e03e8207eb0494caa5c20f3d86f",
+        "sampling": "immutable-source"
+      },
+      "program": {
+        "address": "0x7a2430",
+        "size": "0xe408",
+        "sha256": "d8bb7f4a49066b185ac27fd093d6d41a2c55048d2f2866b9b05b414e19414d2b",
+        "sampling": "immutable-source"
+      },
+      "period": 18,
+      "setup_phase": "disabled",
+      "basis": "Declared catalog input."
+    },
+    {
+      "descriptor": {
+        "address": "0x820f10",
+        "size": "0x10",
+        "sha256": "0389734db2dc167aa050cc923dacaf8e2b2d5ab0403b24816bda18fc366839d9",
+        "sampling": "immutable-source"
+      },
+      "program": {
+        "address": "0x7b0840",
+        "size": "0x124d8",
+        "sha256": "e6c8c3095d920a4f0a1ec055ed5d801f4ddbd39af5535d51fefe7f84f50c4ce8",
+        "sampling": "immutable-source"
+      },
+      "period": 12,
+      "setup_phase": "disabled",
+      "basis": "Declared catalog input."
+    }
+  ],
+  "fe80_setup_views": [
+    {
+      "address": "0x659734",
+      "size": "0x90",
+      "sha256": "e83e29a4a267c7d49286658acde7bf5bdf28bc6261d5ca178d7e243b4df0326b",
+      "sampling": "immutable-source"
+    },
+    {
+      "address": "0x6598ec",
+      "size": "0xac",
+      "sha256": "b8633872e95807bb6e52e7b4a7f13d44d80933e9926a5bbd16e67ce079ad411d",
+      "sampling": "immutable-source"
+    },
+    {
+      "address": "0x6595d8",
+      "size": "0x64",
+      "sha256": "74f13a56aded33ca3eb7e3da73935d5d53c3850239a71b2110728c1102e78d4a",
+      "sampling": "immutable-source"
+    },
+    {
+      "address": "0x658a98",
+      "size": "0x48",
+      "sha256": "3fdbb4684a385c7a76717b07504dfa0e03f45286e8d16ff26065889382f77489",
+      "sampling": "immutable-source"
+    },
+    {
+      "address": "0x659164",
+      "size": "0x48",
+      "sha256": "6e255158ca14839d71dc4a027171d8250fc71917cde2b536d31b7d60d6d971b5",
+      "sampling": "immutable-source"
+    },
+    {
+      "address": "0x659814",
+      "size": "0x74",
+      "sha256": "a2cf7319d2565a7f082182deefe79edf1ba07f70a33b13b18982caefb6196dc3",
+      "sampling": "immutable-source"
+    },
+    {
+      "address": "0x6597c4",
+      "size": "0x50",
+      "sha256": "2a23b11c25fbfdd18f1da1597c490388ba8c4392272d1fdba84fda2ce528eda1",
+      "sampling": "immutable-source"
+    }
+  ],
+  "storage_fixture": {
+    "path": "emulator/firmware_views/storage-fixtures-xm1-150.json",
+    "sha256": "4f46e1c313fa0c824941e085dfba0797bfb05c894f41fae864876a0b0aff9cf7"
+  },
+  "$schema": "../../schemas/emulator-document.schema.json"
+}

@@ -1,0 +1,340 @@
+{
+  "schema": 1,
+  "firmware_id": "xm1-150",
+  "source_sha256": "43d67afa1a2bc9ae8481bc0acf02cb085ed0f515122dcbd26addcae102cd1490",
+  "views": [
+    {
+      "name": "banks",
+      "address": "0x7c8cbc",
+      "size": "0xcc",
+      "sha256": "4fb52426c8c0a62a755095a079e058e63d2f1c976cf12f0707326c64d012a31b",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "parity_contexts",
+      "address": "0x828568",
+      "size": "0xc",
+      "sha256": "a0642a3dd683cf1411a42421d045dd587db0121c0a29ce765a93ed07fee2c1b4",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "main_header",
+      "address": "0x7cb7f4",
+      "size": "0x10",
+      "sha256": "38a794e7401b001dbf6b6dca49cc69e1427050102dc681eed93757cdf1b93bd7",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "header_registers",
+      "address": "0x7cb7d4",
+      "size": "0x20",
+      "sha256": "57475af57d0a845a4c0e3d69b559c62699d93bca4a0519711b0f501e8d6f1bd1",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "main_defaults",
+      "address": "0x89e8e0",
+      "size": "0x118",
+      "sha256": "756d85262c5202d5952b0f9803e2a4f5bf4bc1d52585b3153fd5f8b0b2016294",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "custom_defaults",
+      "address": "0x7cb804",
+      "size": "0x28",
+      "sha256": "1787a2535e60bbcbc13f515b1f786786a38e5482269e8d4a65f4e4739c10cd81",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "tag0",
+      "address": "0x7cb0e1",
+      "size": "0x1",
+      "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "tag1",
+      "address": "0x7cb0e7",
+      "size": "0x1",
+      "sha256": "5c62e091b8c0565f1bafad0dad5934276143ae2ccef7a5381e8ada5b1a8d26d2",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "main_prepare",
+      "address": "0x6a6c04",
+      "size": "0x50",
+      "sha256": "09520f732b1917df5b6a8c1635defe0942cc5c24b1c267b34019bbb1bb8a6f74",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "main_check",
+      "address": "0x6a6c54",
+      "size": "0x188",
+      "sha256": "2933a6196888ca7b966a5bd13f818746ac643f73b9d8a4251aab46f81b5efdeb",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "custom_prepare",
+      "address": "0x6a8484",
+      "size": "0x50",
+      "sha256": "ec4bfef17a2bb7f9df15b44af19cbf64252a9d2685be38f4ca58051d254991d4",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "custom_check",
+      "address": "0x6a84d4",
+      "size": "0x188",
+      "sha256": "cb22e43aa1a56eb32aed245b5f54934cb88443fd753ea5db37b2785e113cbd1f",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "custom_builder",
+      "address": "0x6a877c",
+      "size": "0x33c",
+      "sha256": "13859d88d2194a5465883230e8d0bc3381c21bcd81240742f197fee5abd2ca4e",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "main_banks",
+      "address": "0x6aafdc",
+      "size": "0xa0",
+      "sha256": "a1bd3199f3b7d32dde8cc0d5c8ebb8b84ca476f7b8b1dfde296ba47295997119",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "custom_banks",
+      "address": "0x6ab254",
+      "size": "0xa0",
+      "sha256": "da51fcd08fef2704e94e239c5013bae646a7a5b9b4674f0db7a20724910a68d6",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "wireless_consumer",
+      "address": "0x647cc0",
+      "size": "0x70",
+      "sha256": "69e110d69ae714e500b440d4589297764a779715184d692273dd6c1cf173f536",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "startup",
+      "address": "0x6a75a4",
+      "size": "0x2a0",
+      "sha256": "29a8d7a83ac00b2a9ea158003a92a84bf77e730fe40c1e553cb787fdd5a1d2ff",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "custom_startup",
+      "address": "0x6a8abc",
+      "size": "0xf4",
+      "sha256": "2ed4c0aa35655eba7aef369baa911378af31c00240472eeea49769cf5966a48f",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "cfg_initializer",
+      "address": "0x69f204",
+      "size": "0x108",
+      "sha256": "d19f6820654a8873854540808c4a9a4fe98e0240fe5a4b24de1966399fa3022c",
+      "sampling": "immutable-source"
+    }
+  ],
+  "sections": [
+    "stream-0016025c"
+  ],
+  "max_instructions": 1000000,
+  "scratch_record": "0x43000000",
+  "cfgdata": {
+    "address": "0x41acd800",
+    "pointer_address": "0x96ca50",
+    "size": "0x420000",
+    "defaults_sha256": "a0246bdafbb983bb805ab38a9deae199eb754c2b604709381cc235485da52b7e",
+    "synthetic_signature": {
+      "offset": "0x202"
+    },
+    "remapping": []
+  },
+  "geometry": {
+    "page_bytes": 2048,
+    "spare_bytes": 512,
+    "pages_per_block": 64,
+    "blocks": 1024
+  },
+  "managed": {
+    "start": "0x380",
+    "logical_capacity": "0x80",
+    "banks_view": "banks"
+  },
+  "configuration_banks": [
+    {
+      "row": 2,
+      "cfg_offset": 0
+    },
+    {
+      "row": 3,
+      "fill": 255
+    }
+  ],
+  "header": {
+    "view": "main_header",
+    "registers_view": "header_registers",
+    "checksum_offset": 15
+  },
+  "custom_defaults": {
+    "entry_view": "custom_builder",
+    "output_address": "0x409c295c",
+    "size": "0x28",
+    "slots": 1,
+    "slot_bytes": "0x28"
+  },
+  "record": {
+    "size": "0x200",
+    "protected_bytes": "0x1ec",
+    "sequence_offset": 0,
+    "seed_sequences": [
+      1,
+      2
+    ],
+    "empty_fill": 255
+  },
+  "limits": [],
+  "journals": [
+    {
+      "name": "main",
+      "kind": 2,
+      "bank_rows": [
+        8,
+        9
+      ],
+      "query_view": "main_banks",
+      "payload_size": "0x140",
+      "default_copies": [
+        {
+          "view": "main_header",
+          "offset": 0
+        },
+        {
+          "view": "main_defaults",
+          "offset": 16
+        }
+      ],
+      "nondefault_edits": [
+        {
+          "offset": "0x1f",
+          "mask": "0xfe",
+          "values": [
+            1
+          ]
+        }
+      ],
+      "record_copies": [
+        {
+          "payload_offset": "0x128",
+          "record_offset": 4,
+          "size": 6
+        },
+        {
+          "payload_offset": "0x12e",
+          "record_offset": "0xc",
+          "size": 6
+        },
+        {
+          "payload_offset": "0x134",
+          "record_offset": "0x14",
+          "size": 6
+        },
+        {
+          "payload_offset": "0x13a",
+          "record_offset": "0x1c",
+          "size": 6
+        },
+        {
+          "payload_offset": 2,
+          "record_offset": "0x24",
+          "size": 2
+        },
+        {
+          "payload_offset": 0,
+          "record_offset": "0x26",
+          "size": 2
+        },
+        {
+          "payload_offset": 16,
+          "record_offset": "0x28",
+          "size": "0x118"
+        }
+      ],
+      "record_tags": [
+        {
+          "view": "tag0",
+          "offset": "0x1e8"
+        },
+        {
+          "view": "tag1",
+          "offset": "0x1e9"
+        }
+      ],
+      "prepare_view": "main_prepare",
+      "check_view": "main_check",
+      "parity_context": "0x828568"
+    },
+    {
+      "name": "custom",
+      "kind": 3,
+      "bank_rows": [
+        10,
+        11
+      ],
+      "query_view": "custom_banks",
+      "payload_size": "0x28",
+      "default_copies": [],
+      "nondefault_edits": [
+        {
+          "offset": "0x1a",
+          "mask": "0x9f",
+          "values": [
+            96
+          ]
+        }
+      ],
+      "record_copies": [
+        {
+          "payload_offset": 0,
+          "record_offset": 4,
+          "size": "0x28"
+        }
+      ],
+      "record_tags": [],
+      "prepare_view": "custom_prepare",
+      "check_view": "custom_check",
+      "parity_context": "0x828570",
+      "record": {
+        "size": "0x34",
+        "protected_bytes": "0x2c"
+      }
+    }
+  ],
+  "raw_records": [
+    {
+      "name": "wireless_record",
+      "bank_rows": [
+        15,
+        16
+      ],
+      "size": "0x800",
+      "seed_sequences": [
+        1,
+        2
+      ],
+      "consumer_view": "wireless_consumer",
+      "nondefault_bytes": [
+        {
+          "offset": 4
+        },
+        {
+          "offset": "0x440"
+        }
+      ],
+      "basis": "Declared catalog input."
+    }
+  ],
+  "$schema": "../../schemas/emulator-document.schema.json"
+}

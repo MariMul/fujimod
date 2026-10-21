@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "execution_scope": "emulator-only",
+  "firmware_id": "x70-110",
+  "soc_file": "emulator/soc/exr2-service-transports.json",
+  "body_file": "emulator/bodies/x70.json",
+  "options_file": "emulator/profiles/rec-ui.json",
+  "remove_options": [
+    "mcu_profile",
+    "user_journals",
+    "producer_data_profile",
+    "producer_data_fixture",
+    "lens_response_profile",
+    "lens_response_ticks",
+    "lens_continuation_profile"
+  ],
+  "factory_options": {
+    "storage_profile": "erased",
+    "settings": "default",
+    "clock_seconds_2000": 0,
+    "rectangle_profile": "exr2-signed-ycbcr-rectangle-overlay-unmeasured"
+  },
+  "frame_source": "continuous-sensor-stream",
+  "boot_ticks": 40000000,
+  "pulse_ticks": 3600000,
+  "settle_ticks": 20000000,
+  "instruction_limit": 2000000000,
+  "maximum_setup_keys": 4,
+  "limits": [],
+  "sensor_stream": {
+    "fps": 30,
+    "lens_motion": false,
+    "source1": true
+  },
+  "shutdown_ticks": 30000000,
+  "shutdown_ui_mode": 14,
+  "power_off": {
+    "mask": 1,
+    "value": 1,
+    "kind": "mcu-status"
+  },
+  "$schema": "../../schemas/emulator-document.schema.json"
+}

@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "firmware_id": "xe2s-111",
+  "execution_scope": "offline-boot-development",
+  "soc": {
+    "path": "emulator/soc/exr2-service-transports.json",
+    "sha256": "d291c1c4243c31dba1c4188b956edcbc6359e7a65bcc3e94c9777fc868600060"
+  },
+  "board": {
+    "path": "emulator/bodies/xe2s-service-session.json",
+    "sha256": "d679ce85898a483531c2bbfd1faf3a6ed9ab11ff44e7c95fe69dfa2d0ac5a83f"
+  },
+  "firmware": {
+    "path": "emulator/firmwares/xe2s-111-service-session.json",
+    "sha256": "9e107e70e8f9c7a1d2e628358b98c3670d4e14ff7d564ac493b0d7b8b90fc19c"
+  },
+  "$schema": "../../schemas/emulator-document.schema.json"
+}

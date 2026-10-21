@@ -1,0 +1,168 @@
+{
+  "schema": 1,
+  "execution_scope": "emulator-only",
+  "firmware_id": "xe2s-111",
+  "source_sha256": "a34859b8e7ad2b915bcb77b337ddca4799cc29141a57de88909ee5746c62d424",
+  "profile": {
+    "path": "emulator/scenarios/xe2s-111-service-session.json",
+    "sha256": "24cca5fc78792323072269cde986c3049790d2414dc6823f1582a6e31304580f"
+  },
+  "defaults_sha256": "af9c783e638931b8bd04272a99e97959b4b444b0ad283d57b1f43d59e3a552a2",
+  "factory_options": {
+    "storage_profile": "erased",
+    "irq_tie_profile": "kernel-active-scan-order",
+    "copy_profile": "vg-32bpp-untile-unrotated",
+    "clear_profile": "declared-vg-ui-primitives-unmeasured",
+    "instructions_per_tick": 24
+  },
+  "boot_instructions": 80000000,
+  "release_instructions": 1000000,
+  "shutdown_instructions": 50000000,
+  "host_options": {
+    "ticks_per_ms": 4000,
+    "instructions_per_ms": 96000,
+    "quantum": 10000
+  },
+  "bulk_endpoints": {
+    "ep_in": 130,
+    "ep_out": 1
+  },
+  "release_inputs": {
+    "gpio": [
+      {
+        "port": 0,
+        "pin": 2,
+        "value": 1,
+        "basis": "Declared catalog input."
+      },
+      {
+        "port": 0,
+        "pin": 3,
+        "value": 1,
+        "basis": "Declared catalog input."
+      }
+    ],
+    "adc": [
+      {
+        "channel": 8,
+        "value": 1023
+      }
+    ],
+    "basis": "Declared catalog input."
+  },
+  "off_inputs": {
+    "gpio": [
+      {
+        "port": 0,
+        "pin": 5,
+        "value": 0,
+        "basis": "Declared catalog input."
+      }
+    ],
+    "mcu_status": 1,
+    "basis": "Declared catalog input."
+  },
+  "poweroff_pc": "0x120df3c",
+  "observers": [
+    {
+      "name": "teardown_completion",
+      "address": "0x120bb74",
+      "size": 52,
+      "sha256": "bc0269689557626d55590213fffd1e37e7d7dc0a0aec84d88eba696278a24f48",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "reset_dispatch",
+      "address": "0x947adc",
+      "size": 296,
+      "sha256": "81d51e4ee467727d64c84e3026b056fd50b8ba44c294d2948631dedcd44a2706",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "guard_result",
+      "address": "0x947ba4",
+      "size": 4,
+      "sha256": "de6517ba44116ab4ebd891fceb5bfa4c773f6dcb15745cd5a613efb577cdaa8a",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "guard_skip",
+      "address": "0x947be8",
+      "size": 4,
+      "sha256": "56fa9c972eb110b5bafe82f644b4daa3ca110f04d4ec07e642afabee3b523190",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "defaults_build_call",
+      "address": "0x947bac",
+      "size": 4,
+      "sha256": "33859b64b81e2b3da4e5dc86ec211ece0b5c1fcc1f34718af47fc906943d9276",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "defaults_main_save_call",
+      "address": "0x947bb0",
+      "size": 4,
+      "sha256": "b699f7af1f643c8bcea992c8c3e7cdde7c579545f69127c6ba2255e3e058e6c2",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "defaults_peripheral_call",
+      "address": "0x947bb4",
+      "size": 4,
+      "sha256": "95ba72993c0e4a4dacc3ada19897bbedc652b19a4afb6d4a8622f8c42853af8f",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "main_journal_append",
+      "address": "0x947834",
+      "size": 4,
+      "sha256": "8555fc688813b325780d6e4460fc947a118432e5287c278381428ddfe87be1a8",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "normal_shutdown_save",
+      "address": "0x94853c",
+      "size": 4,
+      "sha256": "9d02ef97beb9707841f74889c68c012341c54a2487e3a7fa46821735f7b9e61e",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "normal_shutdown",
+      "address": "0x120bf20",
+      "size": 4,
+      "sha256": "3bce1aed5c9366ac32edf95fe939760dc45cd3cae430ac99a2d91239763a58ad",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "profile_write_parameter_bytes",
+      "address": "0x947a3c",
+      "size": 156,
+      "sha256": "f13b632404d5237cc4077523b12fc08279c8051be6f351b4f8ef2695f0e65567",
+      "sampling": "immutable-source",
+      "read_source": true
+    },
+    {
+      "name": "ui_backup_write_header",
+      "address": "0x8a3724",
+      "size": 80,
+      "sha256": "ef6796fbd2999290f21db3b8c87063473b866957fd692a21967f7c39eabe2051",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "header_power_state_store",
+      "address": "0x8b5fcc",
+      "size": 4,
+      "sha256": "2532be18f4c4ac71fd92ac4825726c53e06513cd1bd775fcb7aed877827f3612",
+      "sampling": "immutable-source"
+    },
+    {
+      "name": "header_checksum_store",
+      "address": "0x947558",
+      "size": 4,
+      "sha256": "fa756e8edcea976ed3146687bc8a16ac3d017a9e916a5a0fb9d39cf86d31b994",
+      "sampling": "immutable-source"
+    }
+  ],
+  "$schema": "../../schemas/emulator-document.schema.json"
+}
