@@ -13,6 +13,10 @@ use crate::{Cx, Device};
 use serde::Deserialize;
 use std::sync::{Arc, Mutex};
 
+#[cfg(test)]
+#[path = "tests/output_work.rs"]
+mod work_tests;
+
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GeometryPolicy {
@@ -292,7 +296,7 @@ impl OutputChannel {
         }
         Ok(true)
     }
-    fn latch(&mut self, now: u64, workers: usize) -> Result<(), String> {
+    fn latch(&mut self, now: u64) -> Result<(), String> {
         let frames = self.wiring.frames.0.lock().unwrap();
         let Some(edge) = frames.edge else {
             return Ok(());
@@ -347,9 +351,21 @@ impl OutputChannel {
             layout.stride,
         )?;
         let result = match &frames.pixels {
-            crate::scene::frames::Pixels::Sensor(image) => image
-                .render(layout, workers)
-                .map(|pixels| transfer.pixels.copy_from_slice(&pixels)),
+            crate::scene::frames::Pixels::Sensor(image) => (|| {
+                let frozen = image.freeze(layout)?;
+                transfer.pixels.defer_fallible(move |mut staging| {
+                    let result = frozen
+                        .render(0)
+                        .map(|pixels| staging.copy_from_slice(&pixels));
+                    (staging, result)
+                });
+                // Exact execution reports eager validation/computation errors
+                // at the same access as before; workers report at completion.
+                if crate::work::worker_count() == 0 {
+                    transfer.check_result()?;
+                }
+                Ok(())
+            })(),
             crate::scene::frames::Pixels::Packed(pixels) => {
                 nearest_pairs(pixels, frames.layout, &mut transfer.pixels, layout)
             }
@@ -398,6 +414,10 @@ impl OutputChannel {
                         }
                     }
                 } else {
+                    // A failed bank must not allow its peer to publish first.
+                    for transfer in &channels.dma {
+                        transfer.check_result()?;
+                    }
                     // All participating payloads reach RAM before either IRQ.
                     for transfer in &mut channels.dma {
                         transfer.write(cx)?;
@@ -415,7 +435,7 @@ impl OutputChannel {
                 }
             }
         }
-        self.latch(cx.now(), cx.compute_workers())
+        self.latch(cx.now())
     }
 }
 impl Device for OutputChannel {

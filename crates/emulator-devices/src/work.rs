@@ -136,13 +136,48 @@ impl<T: Send + Sync + 'static> Job<T> {
 #[derive(Default)]
 pub struct Buffer {
     bytes: Vec<u8>,
-    job: Option<Job<Vec<u8>>>,
+    failure: Option<String>,
+    job: Option<Job<BufferResult>>,
+}
+struct BufferResult {
+    bytes: Vec<u8>,
+    failure: Option<String>,
 }
 impl Buffer {
     pub fn defer(&mut self, compute: impl FnOnce(Vec<u8>) -> Vec<u8> + Send + 'static) {
+        self.defer_fallible(move |bytes| (compute(bytes), Ok(())));
+    }
+    /// Retain a modeled failure alongside its staging bytes. The owner checks
+    /// the result before publication; inspection can materialize it safely.
+    pub fn defer_fallible(
+        &mut self,
+        compute: impl FnOnce(Vec<u8>) -> (Vec<u8>, Result<(), String>) + Send + 'static,
+    ) {
         self.job = None;
+        self.failure = None;
         let bytes = std::mem::take(&mut self.bytes);
-        self.job = Some(Job::submit(move || compute(bytes)));
+        self.job = Some(Job::submit(move || {
+            let (bytes, result) = compute(bytes);
+            BufferResult {
+                bytes,
+                failure: result.err(),
+            }
+        }));
+    }
+    pub fn failure(&self) -> Option<&str> {
+        self.job
+            .as_ref()
+            .map_or(self.failure.as_deref(), |job| job.get().failure.as_deref())
+    }
+    pub fn check(&self) -> Result<(), String> {
+        self.failure().map_or(Ok(()), |error| Err(error.to_owned()))
+    }
+    pub(crate) fn restored(bytes: Vec<u8>, failure: Option<String>) -> Self {
+        Self {
+            bytes,
+            failure,
+            job: None,
+        }
     }
     /// Partition only pure row arithmetic. Every row retains its original
     /// image coordinate; integer reduction order within a pixel is unchanged.
@@ -183,31 +218,43 @@ impl Buffer {
         });
     }
     pub fn clear(&mut self) {
-        self.job = None;
+        if let Some(job) = self.job.take() {
+            // A consumed result can return its reusable allocation. Canceling
+            // an unobserved job must not wait for computation to finish.
+            if let Some(result) = job.value.into_inner() {
+                self.bytes = result.bytes;
+            }
+        }
+        self.failure = None;
         self.bytes.clear();
     }
 }
 impl From<Vec<u8>> for Buffer {
     fn from(bytes: Vec<u8>) -> Self {
-        Self { bytes, job: None }
+        Self::restored(bytes, None)
     }
 }
 impl Deref for Buffer {
     type Target = Vec<u8>;
     fn deref(&self) -> &Self::Target {
-        self.job.as_ref().map_or(&self.bytes, Job::get)
+        self.job
+            .as_ref()
+            .map_or(&self.bytes, |job| &job.get().bytes)
     }
 }
 impl DerefMut for Buffer {
     fn deref_mut(&mut self) -> &mut Self::Target {
         if let Some(job) = self.job.take() {
-            self.bytes = job.into_value();
+            let result = job.into_value();
+            self.bytes = result.bytes;
+            self.failure = result.failure;
         }
         &mut self.bytes
     }
 }
 impl serde::Serialize for Buffer {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.check().map_err(serde::ser::Error::custom)?;
         serde::Serialize::serialize(self.as_slice(), serializer)
     }
 }
@@ -276,6 +323,10 @@ mod tests {
                 assert_eq!(row[0], 7);
                 assert!(row[1..].iter().all(|&v| v == 0));
             }
+            let (pointer, capacity) = (bytes.as_ptr(), bytes.capacity());
+            bytes.clear();
+            assert_eq!(bytes.as_ptr(), pointer);
+            assert_eq!(bytes.capacity(), capacity);
         }
         configure(0).unwrap();
     }

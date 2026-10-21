@@ -115,13 +115,54 @@ impl Raster {
 
 /// Reused output storage. The owning model prepares pixels at START, writes
 /// active rows only at `deadline`, publishes status, then calls `interrupt`.
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct Transfer {
-    #[serde(with = "crate::checkpoint::bytes")]
     pub pixels: crate::work::Buffer,
     raster: Option<Raster>,
     row_bytes: usize,
     deadline: Option<u64>,
+}
+impl Serialize for Transfer {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(Serialize)]
+        struct Snapshot<'a> {
+            #[serde(with = "crate::checkpoint::bytes")]
+            pixels: &'a [u8],
+            raster: Option<Raster>,
+            row_bytes: usize,
+            deadline: Option<u64>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            failure: Option<&'a str>,
+        }
+        Snapshot {
+            pixels: &self.pixels,
+            raster: self.raster,
+            row_bytes: self.row_bytes,
+            deadline: self.deadline,
+            failure: self.pixels.failure(),
+        }
+        .serialize(serializer)
+    }
+}
+impl<'de> Deserialize<'de> for Transfer {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct Snapshot {
+            #[serde(with = "crate::checkpoint::bytes")]
+            pixels: Vec<u8>,
+            raster: Option<Raster>,
+            row_bytes: usize,
+            deadline: Option<u64>,
+            failure: Option<String>,
+        }
+        let saved = Snapshot::deserialize(deserializer)?;
+        Ok(Self {
+            pixels: crate::work::Buffer::restored(saved.pixels, saved.failure),
+            raster: saved.raster,
+            row_bytes: saved.row_bytes,
+            deadline: saved.deadline,
+        })
+    }
 }
 impl Transfer {
     pub fn fingerprint(&self) -> serde_json::Value {
@@ -131,8 +172,12 @@ impl Transfer {
             row_bytes,
             deadline,
         } = self;
-        serde_json::json!({"pixels":crate::fingerprint::bytes(pixels),"raster":raster,
-            "row_bytes":row_bytes,"deadline":deadline})
+        let mut value = serde_json::json!({"pixels":crate::fingerprint::bytes(pixels),"raster":raster,
+            "row_bytes":row_bytes,"deadline":deadline});
+        if let Some(failure) = pixels.failure() {
+            value["failure"] = failure.into();
+        }
+        value
     }
     pub fn prepare(
         &mut self,
@@ -161,7 +206,10 @@ impl Transfer {
                     return Err("image DMA staging size differs from raster".into());
                 }
             }
-            (None, None) if self.row_bytes == 0 && self.pixels.is_empty() => {}
+            (None, None)
+                if self.row_bytes == 0
+                    && self.pixels.is_empty()
+                    && self.pixels.failure().is_none() => {}
             _ => return Err("inconsistent image DMA staging/deadline".into()),
         }
         Ok(())
@@ -171,6 +219,10 @@ impl Transfer {
     }
     pub fn ready(&self, now: u64) -> bool {
         self.deadline.is_some_and(|at| now >= at)
+    }
+    /// Join pure work and return its modeled failure without writing RAM.
+    pub fn check_result(&self) -> Result<(), String> {
+        self.pixels.check()
     }
     pub fn cancel(&mut self) {
         self.deadline = None;
@@ -184,6 +236,7 @@ impl Transfer {
         if !self.ready(cx.now()) {
             return Ok(false);
         }
+        self.check_result()?;
         let r = self.raster.ok_or("image DMA has no destination")?;
         // Every physical row span and nonoverlap were checked at preparation;
         // the runtime bus additionally enforces the selected body backing.
