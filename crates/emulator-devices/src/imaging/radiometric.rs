@@ -39,6 +39,19 @@ pub struct Image {
     measurements: Mutex<Vec<([usize; 2], Vec<[usize; 4]>, ExposedFrame)>>,
     histograms: Mutex<Vec<([usize; 2], [usize; 4], [u8; 1024])>>,
 }
+/// Owned input to a raster job. The referenced image contains only values
+/// captured at one exposure edge; later scene, focus, exposure, or film writes
+/// cannot change this readout. Layout is fixed before the job leaves its owner.
+#[derive(Clone)]
+pub(crate) struct FrozenReadout {
+    image: Arc<Image>,
+    layout: ImageLayout,
+}
+impl FrozenReadout {
+    pub(crate) fn render(&self, workers: usize) -> Result<Arc<[u8]>, String> {
+        self.image.render(self.layout, workers)
+    }
+}
 impl Renderer {
     pub fn new(
         calibration: Calibration,
@@ -138,6 +151,13 @@ impl Renderer {
     }
 }
 impl Image {
+    pub(crate) fn freeze(self: &Arc<Self>, layout: ImageLayout) -> Result<FrozenReadout, String> {
+        layout.bytes()?;
+        Ok(FrozenReadout {
+            image: self.clone(),
+            layout,
+        })
+    }
     pub(crate) fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
         Ok(crate::checkpoint::Checkpoint::encode(
             "radiometric-image",
@@ -204,7 +224,7 @@ impl Image {
             grid[0].min(self.exposure.frame.width),
             grid[1].min(self.exposure.frame.height),
         ];
-        let mut cache = self
+        let cache = self
             .measurements
             .lock()
             .map_err(|_| "readout cache poisoned")?;
@@ -214,6 +234,7 @@ impl Image {
         {
             return Ok(frame.clone());
         }
+        drop(cache);
         let mut frame = self.exposure.clone();
         if let Some(projection) = &self.projection {
             projection.prepare_binned_windows(&mut frame, dimensions, grid, windows)?
@@ -222,6 +243,16 @@ impl Image {
         }
         // Bound retained derived pixels; the immutable source is shared.
         let cost = dimensions[0] * dimensions[1];
+        let mut cache = self
+            .measurements
+            .lock()
+            .map_err(|_| "readout cache poisoned")?;
+        if let Some((_, _, cached)) = cache
+            .iter()
+            .find(|(g, w, f)| *g == grid && (*w == windows || f.covers(grid, windows)))
+        {
+            return Ok(cached.clone());
+        }
         while !cache.is_empty()
             && (cache.len() >= 4
                 || cache
@@ -248,12 +279,14 @@ impl Image {
     }
     pub(crate) fn render(&self, layout: ImageLayout, workers: usize) -> Result<Arc<[u8]>, String> {
         layout.bytes()?;
-        let mut cache = self
-            .outputs
-            .lock()
-            .map_err(|_| "film readout cache poisoned")?;
-        if let Some((_, pixels)) = cache.iter().find(|(l, _)| *l == layout) {
-            return Ok(pixels.clone());
+        {
+            let cache = self
+                .outputs
+                .lock()
+                .map_err(|_| "film readout cache poisoned")?;
+            if let Some((_, pixels)) = cache.iter().find(|(l, _)| *l == layout) {
+                return Ok(pixels.clone());
+            }
         }
         let frame = self.measurement([layout.width, layout.height])?;
         let [width, height] = frame.sample_dimensions();
@@ -342,6 +375,13 @@ impl Image {
             }
         }
         let out: Arc<[u8]> = out.into();
+        let mut cache = self
+            .outputs
+            .lock()
+            .map_err(|_| "film readout cache poisoned")?;
+        if let Some((_, pixels)) = cache.iter().find(|(l, _)| *l == layout) {
+            return Ok(pixels.clone());
+        }
         while cache.iter().map(|(_, p)| p.len()).sum::<usize>() + out.len() > 8 * 1024 * 1024
             && !cache.is_empty()
         {
@@ -423,6 +463,11 @@ mod tests {
         scene::{Frame, FramePixels, SensorFrames},
     };
     fn renderer() -> (Renderer, ParameterHandle, ExposureHandle) {
+        renderer_with_projection(None)
+    }
+    fn renderer_with_projection(
+        projection: Option<super::super::optics::Projection>,
+    ) -> (Renderer, ParameterHandle, ExposureHandle) {
         let frames = Arc::new(Mutex::new(SensorFrames::new(
             Frame::new(
                 64,
@@ -454,7 +499,7 @@ mod tests {
             exposure.clone(),
             Arc::new(Mutex::new(4.)),
             parameters.clone(),
-            None,
+            projection,
         )
         .unwrap();
         (r, parameters, exposure)
@@ -518,6 +563,48 @@ mod tests {
         assert!(!Arc::ptr_eq(&first, &changed));
         assert!(changed.outputs.lock().unwrap().is_empty());
         assert_eq!(first.render(layout, 0).unwrap(), pixels);
+    }
+    #[test]
+    fn frozen_readout_keeps_capture_inputs_across_focus_exposure_and_film_updates() {
+        use crate::imaging::optics::{Illumination, Projection, Spec};
+
+        let focus = Arc::new(Mutex::new(0.2));
+        let projection = Projection::new(
+            Spec {
+                focus: "focus".into(),
+                focal_length_mm: 18.5,
+                subject_distance_mm: 2000.,
+                sensor_width_mm: 2.,
+                relative_illumination: Illumination::Uniform,
+            },
+            focus.clone(),
+        )
+        .unwrap();
+        let (mut renderer, parameters, exposure) = renderer_with_projection(Some(projection));
+        let first = renderer.capture().unwrap().unwrap();
+        let layout = ImageLayout {
+            width: 32,
+            height: 24,
+            stride: 72,
+        };
+        let frozen = first.freeze(layout).unwrap();
+        let before_fingerprint = first.fingerprint();
+        let expected = scalar_render(&first, layout);
+        assert_eq!(frozen.render(2).unwrap().as_ref(), expected);
+
+        exposure.lock().unwrap().seconds *= 2.;
+        *focus.lock().unwrap() = 1.2;
+        {
+            let mut parameters = parameters.lock().unwrap();
+            parameters.words[0x200 / 4] = 257 | 193 << 16;
+            parameters.words[0x400 / 4] = 1536;
+        }
+        let updated = renderer.capture().unwrap().unwrap();
+        assert!(!Arc::ptr_eq(&first, &updated));
+        assert_ne!(updated.fingerprint(), before_fingerprint);
+        assert_eq!(first.fingerprint(), before_fingerprint);
+        assert_eq!(frozen.render(0).unwrap().as_ref(), expected);
+        assert_eq!(frozen.render(2).unwrap().as_ref(), expected);
     }
     #[test]
     fn binned_readout_integrates_light_before_film_and_roundtrips_without_rendering() {
