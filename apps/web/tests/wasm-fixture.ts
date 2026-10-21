@@ -85,14 +85,30 @@ export async function wasmFixture(fault = false) {
             ],
             controls: {
               kind: 'x100vi',
-              key_samples: {
-                menu: 0x123,
-                back: 2,
-                menu_back: 3,
-                up: 4,
-                down: 5,
-                left: 6,
-                right: 7,
+              resistor_keys: {
+                layout: {
+                  shutter_half: { port: 0, pin: 0 },
+                  shutter_full: { port: 0, pin: 1 },
+                  rear_dial: [
+                    { port: 5, pin: 7 },
+                    { port: 5, pin: 9 },
+                  ],
+                  front_dial: [
+                    { port: 5, pin: 8 },
+                    { port: 13, pin: 5 },
+                  ],
+                },
+                initial_levels: [
+                  { pin: { port: 0, pin: 0 }, high: true },
+                  { pin: { port: 0, pin: 1 }, high: true },
+                  { pin: { port: 5, pin: 7 }, high: false },
+                  { pin: { port: 5, pin: 9 }, high: false },
+                  { pin: { port: 5, pin: 8 }, high: false },
+                  { pin: { port: 13, pin: 5 }, high: false },
+                ],
+                samples: { menu: 0x123, back: 2, menu_back: 3, up: 4, down: 5, left: 6, right: 7 },
+                detent_return_ns: 60000000,
+                shutter_half_delay_ns: 30000000,
               },
             },
             displays: [
