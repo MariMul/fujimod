@@ -102,7 +102,7 @@ try {
         .getByRole('button', { name: 'Connect camera', exact: true })
         .click();
       // The identity read runs automatically when the camera appears.
-      await page.locator('.wb-card dl').waitFor();
+      await page.locator('.wb-camera dl').waitFor();
       assert.equal(
         await page.evaluate(
           () => window.consoleFixture.log.filter((entry) => entry[0] === 'picker').length,

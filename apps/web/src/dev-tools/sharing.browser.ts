@@ -33,9 +33,9 @@ const fixture = (await browserScript(new URL('./usb-fixture.ts', import.meta.url
 const browser = await chromium.launch({ headless: true });
 const errors: string[] = [];
 async function ready(page: Page) {
-  await page.locator('.wb-card h2').filter({ hasText: 'SYNTHETIC' }).waitFor();
+  await page.locator('.wb-camera h2').filter({ hasText: 'SYNTHETIC' }).waitFor();
   await page
-    .locator('.wb-card .wb-state')
+    .locator('.wb-camera .wb-state')
     .filter({ hasText: /^Idle$/ })
     .waitFor();
 }
@@ -118,13 +118,13 @@ try {
   await ready(owner);
   await owner.getByRole('button', { name: 'Copy link', exact: true }).waitFor();
   await owner
-    .locator('.wb-card')
+    .locator('.wb-camera')
     .getByRole('group', { name: 'Sharing' })
     .getByRole('button', { name: 'Off', exact: true })
     .click();
   await owner.getByRole('button', { name: 'Copy link', exact: true }).waitFor({ state: 'hidden' });
   await owner
-    .locator('.wb-card')
+    .locator('.wb-camera')
     .getByRole('group', { name: 'Sharing' })
     .getByRole('button', { name: 'On', exact: true })
     .click();
@@ -135,7 +135,7 @@ try {
   assert.ok(new URL(link).hash.startsWith('#?remotecontrol='));
   assert.equal(
     await owner
-      .locator('.wb-card')
+      .locator('.wb-camera')
       .getByRole('group', { name: 'Sharing' })
       .getByRole('button', { name: 'On', exact: true })
       .getAttribute('aria-pressed'),
@@ -168,8 +168,11 @@ try {
   await remote.goto(link);
   await ready(remote);
   assert.match(await remote.locator('.wb-cam.selected').innerText(), /Remote · Idle/);
-  assert.equal(await remote.locator('.wb-card').getByRole('group', { name: 'Sharing' }).count(), 0);
-  assert.match(await remote.locator('.wb-card').innerText(), /Serial\s+SYNTHETIC/);
+  assert.equal(
+    await remote.locator('.wb-camera').getByRole('group', { name: 'Sharing' }).count(),
+    0,
+  );
+  assert.match(await remote.locator('.wb-camera').innerText(), /Serial\s+SYNTHETIC/);
   await remote
     .getByRole('region', { name: 'Connection log' })
     .locator('.cl-row')
@@ -243,7 +246,7 @@ try {
     { repo, link },
   );
   await owner
-    .locator('.wb-card .wb-state')
+    .locator('.wb-camera .wb-state')
     .filter({ hasText: 'Inspecting shared camera' })
     .waitFor();
   const progress = owner.getByRole('progressbar', { name: 'Inspection', exact: true });
@@ -309,7 +312,7 @@ try {
     .first()
     .waitFor();
   await owner
-    .locator('.wb-card')
+    .locator('.wb-camera')
     .getByRole('group', { name: 'Sharing' })
     .getByRole('button', { name: 'Off', exact: true })
     .click();

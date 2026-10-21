@@ -33,7 +33,7 @@ test('the splash connects a camera and the workbench selects it', async () => {
   host.querySelector<HTMLButtonElement>('button[aria-label="Connect camera"]')!.click();
   await vi.waitFor(() => {
     flush();
-    expect(host.querySelector('.wb-card h2')!.textContent).toBe('X100V');
+    expect(host.querySelector('.wb-camera h2')!.textContent).toBe('X100V');
   });
   expect(host.querySelector('.wb-cam.selected')!.textContent).toContain('X100V');
   expect(host.querySelector('.wb-state')!.textContent).toBe('Idle');

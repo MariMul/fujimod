@@ -158,22 +158,20 @@
   gap: 12px;
 }
 
-.wb-card {
+/* The selected camera's details, directly in the tools column. */
+.wb-camera {
   display: flex;
   flex-direction: column;
   gap: 7px;
-  padding: 10px;
-  border: 1px solid var(--wb-line);
-  border-radius: 6px;
-  background: var(--wb-panel);
+  padding: 2px 2px 0;
 }
-.wb-card-head {
+.wb-camera-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
-.wb-card h2 {
+.wb-camera h2 {
   margin: 0;
   min-width: 0;
   overflow: hidden;
@@ -213,7 +211,7 @@
 .wb-pill.gone {
   color: var(--wb-dim);
 }
-.wb-card-row {
+.wb-camera-row {
   display: grid;
   grid-template-columns: 58px 1fr;
   align-items: center;

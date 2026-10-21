@@ -13,7 +13,7 @@ test('Dev Tools opened from a bug report shows the camera already in the page mo
   try {
     await vi.waitFor(() => {
       flush();
-      expect(host.querySelector('.wb-card h2')?.textContent).toBe('Selected camera');
+      expect(host.querySelector('.wb-camera h2')?.textContent).toBe('Selected camera');
     });
     expect(
       [...host.querySelectorAll('button')].find(

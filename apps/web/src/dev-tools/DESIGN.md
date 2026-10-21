@@ -74,7 +74,7 @@ mode, Connect camera, and Open simulator. Once a camera is known:
 
 - A camera strip lists every camera with its state and whether it is shared,
   plus Connect camera.
-- The selected camera's card shows its identity (read automatically when it
+- The selected camera's details, at the top of the tools column, show its identity (read automatically when it
   appears), its state, the service-mode caution, and its sharing switch.
 - Tools are grouped under Read (Dump configuration, Read memory), Console
   (Console command), Write (Debug mode: Enable debug mode and Disable debug

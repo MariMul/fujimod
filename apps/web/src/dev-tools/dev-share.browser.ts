@@ -119,9 +119,9 @@ try {
     window.devSharingFixture.state.interfaceDelay = 20;
     window.releaseDevSharingDiscovery();
   });
-  await owner.locator('.wb-card h2').filter({ hasText: 'SYNTHETIC' }).waitFor();
+  await owner.locator('.wb-camera h2').filter({ hasText: 'SYNTHETIC' }).waitFor();
   await owner
-    .locator('.wb-card .wb-state')
+    .locator('.wb-camera .wb-state')
     .filter({ hasText: /^Idle$/ })
     .waitFor();
   const log = owner.getByRole('region', { name: 'Connection log' });
@@ -131,7 +131,7 @@ try {
     .first()
     .waitFor();
   const sharing = owner
-    .locator('.wb-card')
+    .locator('.wb-camera')
     .getByRole('group', { name: 'Sharing' })
     .getByRole('button', { name: 'On', exact: true });
   assert.equal(
@@ -156,7 +156,7 @@ try {
   // The fixture's hotplug events drive nusb presence; an offline share stays registered.
   await owner.evaluate(() => window.devSharingFixture.presence(false));
   await owner
-    .locator('.wb-card .wb-state')
+    .locator('.wb-camera .wb-state')
     .filter({ hasText: /Unplugged/ })
     .waitFor();
   const offlineDeadline = Date.now() + 15000;
@@ -171,7 +171,7 @@ try {
   await count(1);
   await owner.evaluate(() => window.devSharingFixture.presence(true));
   await owner
-    .locator('.wb-card .wb-state')
+    .locator('.wb-camera .wb-state')
     .filter({ hasText: /^Idle$/ })
     .waitFor();
   assert.equal(
@@ -179,7 +179,7 @@ try {
     true,
   );
   await owner
-    .locator('.wb-card')
+    .locator('.wb-camera')
     .getByRole('group', { name: 'Sharing' })
     .getByRole('button', { name: 'Off', exact: true })
     .click();
@@ -190,7 +190,7 @@ try {
     .getByRole('button', { name: 'Read', exact: true })
     .click();
   await owner
-    .locator('.wb-card .wb-state')
+    .locator('.wb-camera .wb-state')
     .filter({ hasText: /^Idle$/ })
     .waitFor();
   await setTimeout(300);
@@ -203,12 +203,12 @@ try {
   // Reconnecting resets per-camera auto-sharing, creating a fresh ticket.
   await owner.evaluate(() => window.devSharingFixture.presence(false));
   await owner
-    .locator('.wb-card .wb-state')
+    .locator('.wb-camera .wb-state')
     .filter({ hasText: /Unplugged/ })
     .waitFor();
   await owner.evaluate(() => window.devSharingFixture.presence(true));
   await owner
-    .locator('.wb-card .wb-state')
+    .locator('.wb-camera .wb-state')
     .filter({ hasText: /^Idle$/ })
     .waitFor();
   const [nextFile] = await count(1);

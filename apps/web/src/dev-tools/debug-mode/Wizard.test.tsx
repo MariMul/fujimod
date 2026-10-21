@@ -260,7 +260,7 @@ test('the service guide connects without selecting firmware or writing anything'
     });
     p.button('Open workbench')!.click();
     flush();
-    expect(p.host.querySelector('.wb-card h2')!.textContent).toBe('X70');
+    expect(p.host.querySelector('.wb-camera h2')!.textContent).toBe('X70');
     expect(session.armResetGuard).not.toHaveBeenCalled();
     expect(session.enterDebugMode).not.toHaveBeenCalled();
     expect(session.leaveDebugMode).not.toHaveBeenCalled();

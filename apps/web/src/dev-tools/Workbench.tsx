@@ -9,7 +9,8 @@ import {
   untrack,
 } from 'solid-js';
 import type { CameraModel } from './camera-model';
-import { CameraCard, CameraStrip } from './CameraCard';
+import { CameraDetails } from './CameraDetails';
+import { CameraStrip } from './CameraStrip';
 import { CameraTools, Wizard, emptyReadings, type Readings } from './CameraTools';
 import { ConsoleLog } from './ConsoleLog';
 import { ToolDeck } from './ToolDeck';
@@ -165,7 +166,7 @@ export function Workbench(props: {
               <Match when={camera()}>
                 {(current) => (
                   <>
-                    <CameraCard camera={current()} model={props.model} />
+                    <CameraDetails camera={current()} model={props.model} />
                     <CameraTools
                       camera={current()}
                       model={props.model}
