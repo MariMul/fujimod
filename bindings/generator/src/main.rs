@@ -1,9 +1,23 @@
 use std::path::PathBuf;
 fn main() {
     let mut args = std::env::args().skip(1);
-    let mode = args
-        .next()
-        .expect("usage: fujimod-bindgen --out|--python-types DIRECTORY");
+    let mode = args.next().expect(
+        "usage: fujimod-bindgen --out|--python-types|--catalog-types|--check-catalog-types ...",
+    );
+    if matches!(mode.as_str(), "--catalog-types" | "--check-catalog-types") {
+        let schemas = PathBuf::from(args.next().expect("catalog schema directory"));
+        let python = PathBuf::from(args.next().expect("Python runtime type module"));
+        let typescript = PathBuf::from(args.next().expect("TypeScript type output file"));
+        assert!(args.next().is_none(), "unexpected argument");
+        fujimod_bindgen::generate_catalog_types(
+            &schemas,
+            &python,
+            &typescript,
+            mode == "--check-catalog-types",
+        )
+        .unwrap_or_else(|error| panic!("{error}"));
+        return;
+    }
     assert!(
         matches!(mode.as_str(), "--out" | "--python-types"),
         "unknown output kind"

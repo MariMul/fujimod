@@ -1,9 +1,9 @@
 # Shared binding generation
 
 This Rust package derives language views from the public Rust service
-declarations. It is a member of the root Cargo workspace and a build dependency
-of both binding crates. The implementation crates stay independent of PyO3 and
-wasm-bindgen.
+declarations and catalog JSON Schemas. It is a member of the root Cargo
+workspace and a build dependency of both binding crates. The implementation
+crates stay independent of PyO3 and wasm-bindgen.
 
 The current generator reads `crates/usb/src/app80/catalog.rs`, its value
 modules, and the definition crate's `Codec` enum. It generates:
@@ -47,3 +47,12 @@ translation and buffer conversion live in shared target adapters. A new field
 shape can require extending the generator once. Unsupported or unclassified
 payload types fail generation with a diagnostic rather than being silently
 omitted. Command validation and wire encoding remain ordinary Rust code.
+
+Catalog documents use their Rust serde structs as the source of truth. The
+catalog crate emits schemas with `schemars`; this generator turns the selected
+document schemas into public TypeScript aliases and Python `TypedDict` types.
+The Python module defines runtime-importable `TypedDict` classes. The Python
+and TypeScript bindings share those field names, requiredness,
+references and tagged unions. The catalog schema check verifies the Rust-to-
+schema step, while `mise run catalog-types-check` verifies the schema-to-
+language step. Regenerate both language views with `mise run catalog-types`.

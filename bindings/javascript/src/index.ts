@@ -1,5 +1,6 @@
 import { serviceValues, definitionValues, valueSchemas } from '../pkg/service-values.js';
 export type * from '../pkg/service-values.js';
+export type * from './catalog-types.js';
 import * as native from '../pkg/fujimod.js';
 export { default as initialize } from '../pkg/fujimod.js';
 export type {

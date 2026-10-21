@@ -91,7 +91,16 @@ run = [
   "npm --prefix bindings/javascript run build",
   "node scripts/ci/javascript-python-types.ts",
   "cargo run --locked -p fujimod-bindgen -- --python-types target/python-types",
+  "mise run catalog-types-check",
 ]
+
+[tasks.catalog-types]
+description = "Generate TypeScript and Python catalog types from Rust schemas"
+run = "cargo run --locked -p fujimod-bindgen -- --catalog-types catalog/schemas bindings/python/python/fujimod/emulator/_catalog_types.py bindings/javascript/src/catalog-types.ts"
+
+[tasks.catalog-types-check]
+description = "Check generated catalog language types against Rust schemas"
+run = "cargo run --locked -p fujimod-bindgen -- --check-catalog-types catalog/schemas bindings/python/python/fujimod/emulator/_catalog_types.py bindings/javascript/src/catalog-types.ts"
 
 [tasks.python-build-test]
 run = [

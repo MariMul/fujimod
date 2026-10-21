@@ -2,8 +2,11 @@
 //! or copied validation bounds belong here.
 use serde::Serialize;
 use std::{collections::BTreeMap, fs, path::Path};
+mod catalog_types;
 mod unions;
 use unions::Union;
+
+pub use catalog_types::generate as generate_catalog_types;
 
 use syn::{Fields, FnArg, ImplItem, Item, ReturnType, Type, Visibility};
 
