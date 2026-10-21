@@ -95,11 +95,7 @@ pub(super) fn windows(grid: [usize; 2], r: &[u32]) -> Vec<[usize; 4]> {
                 (y >> 16 & 8191).saturating_sub(1) as usize,
             )
         };
-        let (gx, gy) = if base == 0x100 {
-            ((gap >> 16 & 511) as usize, (gap & 511) as usize)
-        } else {
-            ((gap & 511) as usize, (gap >> 16 & 511) as usize)
-        };
+        let (gx, gy) = ((gap >> 16 & 511) as usize, (gap & 511) as usize);
         for row in 0..(y >> 12 & 15) as usize + 1 {
             for col in 0..(x >> 12 & 15) as usize + 1 {
                 windows.push([left + col * (w + gx), top + row * (h + gy), w, h]);
@@ -172,8 +168,8 @@ pub fn color_spans(
     for row in 0..(y >> 12 & 15) as usize + 1 {
         for col in 0..(x >> 12 & 15) as usize + 1 {
             let v = sum([
-                left + col * (w + (gaps as usize & 511)),
-                top + row * (h + (gaps >> 16 & 511) as usize),
+                left + col * (w + (gaps >> 16 & 511) as usize),
+                top + row * (h + (gaps as usize & 511)),
                 w,
                 h,
             ])?;
@@ -312,6 +308,53 @@ mod tests {
     use crate::imaging::exposure::Exposure;
     use crate::scene::{Frame, FramePixels, SensorFrames};
     use std::sync::{Arc, Mutex};
+    #[test]
+    fn color_grid_keeps_horizontal_and_vertical_gaps_on_their_register_axes() {
+        let pixels = (0..12)
+            .flat_map(|y| (0..12).flat_map(move |x| [20 + x + y * 12; 3]))
+            .collect();
+        let frame = ExposedFrame::from_frame(
+            Arc::new(Frame::new(12, 12, FramePixels::Rgb24(pixels)).unwrap()),
+            Exposure {
+                seconds: 0.0001,
+                analog_gain: 1.,
+            },
+            8.,
+            Calibration {
+                full_scale: 16380,
+                reference_white: [256; 3],
+                saturation_lux_seconds: 1.,
+                color_sample_weights: [2, 5, 2],
+            },
+        )
+        .unwrap();
+        let mut r = vec![0; 0x1000 / 4];
+        // Two 2x2 cells on each axis; upper gap field is horizontal.
+        r[0x200 / 4] = 1 << 16 | 1 << 12 | 1;
+        r[0x204 / 4] = 3 << 16 | 1 << 12 | 1;
+        r[0x258 / 4] = 3 << 16 | 1;
+        let spans = color_spans(&frame, [12, 12], &r).unwrap();
+        let footprints = windows([12, 12], &r);
+        for (row, y) in [2, 5].into_iter().enumerate() {
+            for (col, x) in [1, 6].into_iter().enumerate() {
+                assert!(footprints.contains(&[x, y, 2, 2]));
+                let sum: u64 = (y..y + 2)
+                    .flat_map(|yy| (x..x + 2).map(move |xx| (xx, yy)))
+                    .map(|(xx, yy)| u64::from(frame.sample(xx, yy, [12, 12])[0]))
+                    .sum();
+                for (channel, weight) in [2, 5, 2].into_iter().enumerate() {
+                    let at = (row * 16 + col) * 4;
+                    assert_eq!(
+                        u32::from_le_bytes(spans[channel].bytes[at..at + 4].try_into().unwrap()),
+                        (sum * weight / 9) as u32
+                    );
+                }
+            }
+        }
+        assert!(!footprints.contains(&[4, 2, 2, 2]));
+        assert!(!footprints.contains(&[1, 7, 2, 2]));
+        assert_eq!(&spans[1].bytes[8..64], &[0; 56]);
+    }
     #[test]
     fn contrast_energies_follow_pixels_and_the_square_of_exposure() {
         let mut r = vec![0; 0x1000 / 4];
