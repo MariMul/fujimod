@@ -220,7 +220,45 @@ export class WasmWorkerRuntime {
         request.seedIdentity,
       );
     const s = this.require();
+    if (
+      this.manifest?.usb &&
+      [
+        'checkpoint',
+        'restore_checkpoint',
+        'undo',
+        'history',
+        'replay_history',
+        'rollback',
+      ].includes(request.action)
+    )
+      throw Error('A USB-connected execution cannot rewind external host transactions.');
     switch (request.action) {
+      case 'usb_status':
+      case 'usb_reset':
+        return s.command(request.action, { node: request.node }).result;
+      case 'usb_setup':
+        return s.command('usb_setup', { node: request.node }, request.bytes).result;
+      case 'usb_out':
+        return s.command(
+          'usb_out',
+          { node: request.node, endpoint: request.endpoint },
+          request.bytes,
+        ).result;
+      case 'usb_in':
+        return s.command('usb_in', {
+          node: request.node,
+          endpoint: request.endpoint,
+          size: request.size,
+        }).bytes;
+      case 'usb_in_token':
+        return s.command('usb_in_token', { node: request.node, endpoint: request.endpoint }).result;
+      case 'usb_step':
+        // One explicit host scheduling quantum; status itself never advances time.
+        s.run(
+          s.status().ticks + BigInt(Math.max(1, Math.floor(this.manifest!.ticksPerSecond / 1000))),
+        );
+        this.rebase();
+        return s.command('usb_status', { node: request.node }).result;
       case 'press':
       case 'release': {
         const { action, ...options } = request;
@@ -506,7 +544,7 @@ export class WasmWorkerRuntime {
     this.started = this.metricWall = performance.now();
     this.startedTicks = this.metricTicks = s.status().ticks;
     this.rebase();
-    if (this.manifest!.construction === 'session') this.captureCheckpoint();
+    if (this.manifest!.construction === 'session' && !this.manifest!.usb) this.captureCheckpoint();
     this.publish(true);
     this.start();
   }
@@ -543,6 +581,7 @@ export class WasmWorkerRuntime {
               s.run(maximum);
               if (
                 this.manifest!.construction === 'session' &&
+                !this.manifest!.usb &&
                 s.status().ticks >= this.nextCheckpoint
               )
                 this.captureCheckpoint();
@@ -616,7 +655,11 @@ export class WasmWorkerRuntime {
       while (s.status().ticks < end) {
         const next = s.status().ticks + quantum;
         s.run(next < end ? next : end);
-        if (this.manifest!.construction === 'session' && s.status().ticks >= this.nextCheckpoint)
+        if (
+          this.manifest!.construction === 'session' &&
+          !this.manifest!.usb &&
+          s.status().ticks >= this.nextCheckpoint
+        )
           this.captureCheckpoint();
         if (s.status().ticks >= this.nextPresentation) {
           this.observeCurrent();

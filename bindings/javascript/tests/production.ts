@@ -1440,3 +1440,42 @@ import { checkExtendedService } from './extended-service.ts';
 await test('production signed fields and full device9 exchanges validate boundaries', async () => {
   await checkExtendedService(usb, defs, installWebUsb);
 });
+
+await test('external WebUSB attachment reuses one Rust owner without navigator discovery', async () => {
+  const fixture = installWebUsb();
+  const [first, second] = await Promise.all([
+    usb.attachWebUsbDevice(fixture.device, 'attached-camera'),
+    usb.attachWebUsbDevice(fixture.device, 'attached-camera'),
+  ]);
+  try {
+    assert.equal(first.id, 'attached-camera');
+    assert.equal(second.id, first.id);
+    assert.equal(fixture.log.filter(([kind]) => kind === 'open').length, 1);
+    assert.equal(fixture.log.some(([kind]) => kind === 'list' || kind === 'picker'), false);
+    const selections = await first.interfaces(), limits = new usb.FirmwareLimits(256, 256, 256, 256), options = new usb.TransferOptions(1000, 1024);
+    try {
+      const session = await first.acquireSession(selections[0], limits, options, 'Attached identity');
+      try {
+        assert.deepEqual(second.sessionOwner, { kind: 'local', tool: 'Attached identity' });
+        const reply = await session.deviceInfo(usb.InfoSelector.Product);
+        assert.equal(reply.text, 'SYNTHETIC');
+        reply.free();
+        await session.close();
+      } finally { session.free(); }
+      assert.equal(second.sessionOwner, null);
+      await first.close();
+      await second.open();
+      assert.equal(fixture.log.filter(([kind]) => kind === 'open').length, 1);
+      await second.close();
+      const events = second.watch();
+      try {
+        assert.equal((await events.next())?.present, true);
+        usb.detachWebUsbDevice(first);
+        assert.equal(second.present, false);
+        assert.equal((await events.next())?.present, false);
+      } finally { events.close(); events.free(); }
+    } finally {
+      selections.forEach((selection) => selection.free()); limits.free(); options.free();
+    }
+  } finally { first.free(); second.free(); fixture.restore(); }
+});

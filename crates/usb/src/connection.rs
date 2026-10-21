@@ -27,14 +27,14 @@ impl Device {
     pub fn vendor_id(&self) -> u16 {
         match self {
             Self::Local(d) => d.vendor_id(),
-            Self::Owned(d) => d.info.vendor_id(),
+            Self::Owned(d) => d.descriptor.vendor_id,
             Self::Proxy(d) => d.descriptor.vendor_id,
         }
     }
     pub fn product_id(&self) -> u16 {
         match self {
             Self::Local(d) => d.product_id(),
-            Self::Owned(d) => d.info.product_id(),
+            Self::Owned(d) => d.descriptor.product_id,
             Self::Proxy(d) => d.descriptor.product_id,
         }
     }
@@ -43,7 +43,10 @@ impl Device {
     pub fn bus_id(&self) -> &str {
         match self {
             Self::Local(d) => d.bus_id(),
-            Self::Owned(d) => d.info.bus_id(),
+            Self::Owned(d) => d
+                .info
+                .as_ref()
+                .map_or(&d.descriptor.id, |info| info.bus_id()),
             Self::Proxy(d) => &d.descriptor.id,
         }
     }
@@ -51,7 +54,7 @@ impl Device {
     pub fn device_address(&self) -> u8 {
         match self {
             Self::Local(d) => d.device_address(),
-            Self::Owned(d) => d.info.device_address(),
+            Self::Owned(d) => d.info.as_ref().map_or(0, |info| info.device_address()),
             Self::Proxy(_) => 0,
         }
     }
@@ -59,28 +62,28 @@ impl Device {
     pub fn port_chain(&self) -> &[u8] {
         match self {
             Self::Local(d) => d.port_chain(),
-            Self::Owned(d) => d.info.port_chain(),
+            Self::Owned(d) => d.info.as_ref().map_or(&[], |info| info.port_chain()),
             Self::Proxy(_) => &[],
         }
     }
     pub fn manufacturer_string(&self) -> Option<&str> {
         match self {
             Self::Local(d) => d.manufacturer_string(),
-            Self::Owned(d) => d.info.manufacturer_string(),
+            Self::Owned(d) => d.descriptor.manufacturer.as_deref(),
             Self::Proxy(d) => d.descriptor.manufacturer.as_deref(),
         }
     }
     pub fn product_string(&self) -> Option<&str> {
         match self {
             Self::Local(d) => d.product_string(),
-            Self::Owned(d) => d.info.product_string(),
+            Self::Owned(d) => d.descriptor.product.as_deref(),
             Self::Proxy(d) => d.descriptor.product.as_deref(),
         }
     }
     pub fn serial_number(&self) -> Option<&str> {
         match self {
             Self::Local(d) => d.serial_number(),
-            Self::Owned(d) => d.info.serial_number(),
+            Self::Owned(d) => d.descriptor.serial.as_deref(),
             Self::Proxy(d) => d.descriptor.serial.as_deref(),
         }
     }

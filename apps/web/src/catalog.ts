@@ -12,6 +12,8 @@ export interface Firmware {
   release_date: string;
   emulate?: Omit<EngineConfig, 'firmwareId'> & {
     maturity?: 'early' | 'supported';
+    /** A separately checked USB-connected session graph. */
+    usb?: { bundle: string };
   };
   device?: {
     panel: DevicePanel;
@@ -43,7 +45,7 @@ export function validateCatalog(value: Catalog): Catalog {
       new URL(entry.download_url).protocol !== 'https:'
     )
       throw Error('Invalid firmware entry.');
-    for (const path of [entry.camera_table, entry.emulate?.bundle])
+    for (const path of [entry.camera_table, entry.emulate?.bundle, entry.emulate?.usb?.bundle])
       if (path && (!/^[a-zA-Z0-9_./-]+$/.test(path) || path.includes('..') || path.startsWith('/')))
         throw Error('Invalid emulator artifact path.');
     if (entry.emulate?.maturity && !['early', 'supported'].includes(entry.emulate.maturity))

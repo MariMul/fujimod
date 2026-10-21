@@ -1,5 +1,6 @@
 use super::*;
 use js_sys::Array;
+use wasm_bindgen::JsCast;
 
 #[wasm_bindgen]
 #[derive(Clone)]
@@ -236,4 +237,85 @@ pub fn discover_proxy(
         }
         Ok(out.into())
     }))
+}
+
+thread_local! {
+    static ATTACHED: std::rc::Rc<async_lock::Mutex<Vec<(web_sys::UsbDevice, std::sync::Weak<fujimod_usb::owner::DeviceOwner>)>>> = Default::default();
+}
+
+/// Attach a host-provided WebUSB implementation without replacing navigator.usb.
+/// The returned Rust owner opens it once and serializes local and remote sessions.
+#[wasm_bindgen(js_name=attachWebUsbDevice, unchecked_return_type="Promise<Device>")]
+pub fn attach_web_usb_device(
+    #[wasm_bindgen(unchecked_param_type = "object")] device: web_sys::UsbDevice,
+    id: String,
+) -> js_sys::Promise {
+    let attached = ATTACHED.with(Clone::clone);
+    wasm_bindgen_futures::future_to_promise(async move {
+        let mut attached = attached.lock().await;
+        attached.retain(|(_, owner)| owner.strong_count() != 0);
+        if let Some(owner) = attached
+            .iter()
+            .find(|(usb, _)| usb == &device)
+            .and_then(|(_, owner)| owner.upgrade())
+        {
+            if owner.descriptor.id != id {
+                return Err(fail(
+                    ErrorKind::InvalidArgument,
+                    "USB device is already attached under another id",
+                ));
+            }
+            owner.reopen().await.map_err(|e| error(e.into()))?;
+            return Ok(JsValue::from(Device {
+                inner: usb::connection::Device::Owned(owner),
+                proxy: None,
+            }));
+        }
+        if device.is_instance_of::<web_sys::UsbDevice>() {
+            return Err(fail(
+                ErrorKind::InvalidArgument,
+                "Physical WebUSB devices require discovery or the device picker",
+            ));
+        }
+        if id.is_empty() {
+            return Err(fail(
+                ErrorKind::InvalidArgument,
+                "Device id must not be empty",
+            ));
+        }
+        let descriptor = fujimod_usb_proxy::protocol::Device {
+            id,
+            vendor_id: device.vendor_id(),
+            product_id: device.product_id(),
+            manufacturer: device.manufacturer_name(),
+            product: device.product_name(),
+            serial: device.serial_number(),
+            interfaces: vec![],
+            status: None,
+        };
+        let raw = nusb::Device::from_js(device.clone())
+            .await
+            .map_err(|e| error(e.into()))?;
+        let owner = fujimod_usb::owner::DeviceOwner::from_device(raw, None, descriptor);
+        attached.push((device, std::sync::Arc::downgrade(&owner)));
+        Ok(JsValue::from(Device {
+            inner: usb::connection::Device::Owned(owner),
+            proxy: None,
+        }))
+    })
+}
+
+/// Report loss of a host-provided USB implementation, publishing the normal
+/// owner presence/session events. Physical USB presence comes from hotplug.
+#[wasm_bindgen(js_name=detachWebUsbDevice)]
+pub fn detach_web_usb_device(device: &Device) -> Result<(), JsValue> {
+    let owner = device.owner()?;
+    if owner.info.is_some() {
+        return Err(fail(
+            ErrorKind::InvalidArgument,
+            "Physical USB presence comes from hotplug",
+        ));
+    }
+    owner.set_present(false);
+    Ok(())
 }

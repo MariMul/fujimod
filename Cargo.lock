@@ -3295,6 +3295,7 @@ name = "fujimod-javascript"
 version = "0.1.0"
 dependencies = [
  "async-channel",
+ "async-lock",
  "fujimod-bindgen",
  "fujimod-defs",
  "fujimod-usb",
@@ -3308,6 +3309,7 @@ dependencies = [
  "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

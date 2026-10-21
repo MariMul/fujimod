@@ -78,6 +78,10 @@ export class WasmEngine implements Engine {
     this.worker.onmessageerror = () =>
       this.transportError('Wasm worker message could not be decoded.');
   }
+  /** Opaque host USB traffic; firmware execution remains inside the worker. */
+  usb(request: Extract<WasmRequest, { node: string }>): Promise<unknown> {
+    return this.rpc(request);
+  }
   private transportError(message: string) {
     this.unavailable = Error(message);
     this.fail(faultFrom(this.unavailable));

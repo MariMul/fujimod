@@ -1023,3 +1023,50 @@ test('debug mode is unknown while the initial camera reply is still pending', as
     f.model.dispose();
   }
 });
+
+test('saved simulations use the same session, log, sharing and removal paths without a USB picker', async () => {
+  const device = new CameraDevice('simulated-saved-camera'),
+    dispose = vi.fn();
+  const simulate = vi.fn(async () => ({ device, dispose }));
+  const f = fixture([], { simulate });
+  try {
+    await Promise.all([
+      f.model.connectSimulated!('saved-camera'),
+      f.model.connectSimulated!('saved-camera'),
+    ]);
+    await idle(f.model);
+    expect(simulate).toHaveBeenCalledExactlyOnceWith('saved-camera');
+    expect(f.model.cameras()[0]).toMatchObject({
+      id: device.id,
+      transport: 'simulated',
+      present: true,
+      identity: { product: 'Identity' },
+    });
+    await f.model.withSession(device.id, 'Read simulated memory', (session) =>
+      session.readMemory(0x100, 1),
+    );
+    await f.model.setSharing(device.id, true);
+    await f.model.withSession(device.id, 'Read while sharing', (session) =>
+      session.readMemory(0x100, 1),
+    );
+    await f.model.setSharing(device.id, false);
+    await f.model.withSession(device.id, 'Read after sharing', (session) =>
+      session.readMemory(0x100, 1),
+    );
+    await f.model.remove(device.id);
+    expect(device.closed).toHaveBeenCalledOnce();
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(f.model.cameras()).toHaveLength(0);
+  } finally {
+    f.model.dispose();
+  }
+});
+
+test('builds without a simulation service omit connectSimulated', () => {
+  const f = fixture([], { simulate: undefined });
+  try {
+    expect(typeof f.model.connectSimulated).toBe('undefined');
+  } finally {
+    f.model.dispose();
+  }
+});

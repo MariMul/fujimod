@@ -82,7 +82,13 @@ export interface ModelShare {
   cameraLost(reason: string): void;
   cameraReturned(exporter: UsbExporter): void;
 }
+declare const __FUJIMOD_SIMULATED_USB__: boolean;
+export interface SimulatedCamera {
+  device: ModelDevice;
+  dispose(): void;
+}
 export interface UsbCameraServices {
+  simulate?(savedCamera: string): Promise<SimulatedCamera>;
   initialize(): Promise<unknown>;
   discover(): Promise<readonly ModelDevice[]>;
   requestDevice(): Promise<ModelDevice | undefined>;
@@ -103,6 +109,10 @@ const defaults: UsbCameraServices = {
       link: shareUrl(location.href, ticket),
     };
   },
+  simulate:
+    typeof __FUJIMOD_SIMULATED_USB__ !== 'undefined' && __FUJIMOD_SIMULATED_USB__
+      ? async (id) => (await import('./simulated-camera')).startSimulatedCamera(id)
+      : undefined,
   now: () => Date.now(),
   pause: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
 };
@@ -125,6 +135,7 @@ interface Entry {
   holder?: SessionHolder;
   session?: ModelSession;
   removed: boolean;
+  disposeSimulation?: () => void;
   identityNeeded: boolean;
   identifying: boolean;
   debugModeNeeded: boolean;
@@ -820,7 +831,7 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
     const entry = requireEntry(id);
     entry.shareAttempt++;
     entry.host?.stop();
-    if (entry.camera.transport === 'usb') entry.device.stopSharing();
+    if (entry.camera.transport !== 'remote') entry.device.stopSharing();
     entry.host = undefined;
     entry.removed = true;
     entry.states.close();
@@ -833,6 +844,7 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
       entry.logs.free();
       for (const selection of entry.selections) selection.free();
       entry.device.free();
+      entry.disposeSimulation?.();
       entries.delete(id);
       publish();
     }
@@ -847,6 +859,7 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
       // A picker can still add a camera if permitted-device discovery failed.
       for (const entry of entries.values()) problem(entry, errorText(error), 'session');
     });
+  const simulations = new Map<string, Promise<void>>();
   const model: CameraModel = {
     cameras() {
       cameraVersion();
@@ -866,6 +879,36 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
       const devices = await services.discoverProxy(link);
       for (const device of devices) await add(device, 'remote');
     },
+    ...(services.simulate
+      ? {
+          connectSimulated(savedCamera: string): Promise<void> {
+            if (disposed) return Promise.reject(Error('Camera model is disposed'));
+            if (entries.has(`simulated-${savedCamera}`)) return Promise.resolve();
+            const pending = simulations.get(savedCamera);
+            if (pending) return pending;
+            const start = (async () => {
+              await initialized;
+              const simulation = await services.simulate!(savedCamera);
+              try {
+                if (disposed) throw Error('Camera model is disposed');
+                await add(simulation.device, 'simulated');
+                const entry = requireEntry(simulation.device.id);
+                entry.disposeSimulation = () => simulation.dispose();
+              } catch (error) {
+                try {
+                  await simulation.device.close();
+                } finally {
+                  simulation.device.free();
+                  simulation.dispose();
+                }
+                throw error;
+              }
+            })().finally(() => simulations.delete(savedCamera));
+            simulations.set(savedCamera, start);
+            return start;
+          },
+        }
+      : {}),
     remove,
     withSession,
     setSharing,

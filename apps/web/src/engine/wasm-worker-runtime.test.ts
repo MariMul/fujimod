@@ -8,7 +8,13 @@ import { testConfig } from './test-fixtures';
 import type { CameraRecord, CameraSave } from '../cameras/store';
 
 function setup(
-  options: { saved?: CameraSave; saveError?: string; shared?: boolean; preview?: boolean } = {},
+  options: {
+    saved?: CameraSave;
+    saveError?: string;
+    shared?: boolean;
+    preview?: boolean;
+    usb?: boolean;
+  } = {},
 ) {
   const fake = testCameraModule(options.shared),
     events: WasmWorkerEvent[] = [],
@@ -23,6 +29,7 @@ function setup(
     ticksPerSecond: 12000000,
     bootTicks: 0,
     output: 0,
+    usb: options.usb ? { kind: 'exr2', node: 'port' } : undefined,
   };
   const runtime = new WasmWorkerRuntime(
     (event) => {
@@ -311,4 +318,54 @@ test('an idempotent power request does not cold boot or advance the guest', asyn
   const before = f.calls.length;
   assert.equal((await f.send({ action: 'power', on: true })).type, 'reply');
   assert.equal(f.calls.length, before);
+});
+
+test('USB worker preserves opaque packets, advances only on usb_step, and refuses rewind', async () => {
+  const f = setup({ usb: true });
+  await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  assert.equal(
+    f.calls.some((call) => call.action === 'checkpoint'),
+    false,
+  );
+  const requests: WasmRequest[] = [
+    { action: 'usb_reset', node: 'port' },
+    { action: 'usb_setup', node: 'port', bytes: Uint8Array.of(0x43, 0, 0, 0, 0, 0, 2, 0) },
+    { action: 'usb_out', node: 'port', endpoint: 1, bytes: Uint8Array.of(0xde, 0xad) },
+    { action: 'usb_in_token', node: 'port', endpoint: 0x82 },
+    { action: 'usb_in', node: 'port', endpoint: 0x82, size: 512 },
+    { action: 'usb_status', node: 'port' },
+  ];
+  const scratch = f.module._camera_alloc(24);
+  const ticks = () => {
+    f.module._camera_status(1, scratch);
+    return new DataView(f.memory.buffer).getBigUint64(scratch, true);
+  };
+  const initialTicks = ticks();
+  const before = f.calls.length;
+  for (const request of requests) assert.equal((await f.send(request)).type, 'reply');
+  assert.deepEqual(
+    f.calls.slice(before),
+    requests.map(({ action, ...request }) => {
+      const { bytes, ...options } = request as {
+        node: string;
+        endpoint?: number;
+        size?: number;
+        bytes?: Uint8Array;
+      };
+      return { action, options, bytes: [...(bytes ?? [])] };
+    }),
+  );
+  assert.equal(ticks(), initialTicks);
+  assert.equal((await f.send({ action: 'usb_step', node: 'port' })).type, 'reply');
+  assert.equal(ticks(), initialTicks + 12000n);
+  f.module._camera_free(scratch, 24);
+  const undo = await f.send({ action: 'undo' });
+  assert.equal(undo.type, 'error');
+  if (undo.type === 'error') assert.match(undo.error, /cannot rewind/);
 });

@@ -139,6 +139,8 @@ export const usb = Object.freeze({
   discover: native.discover,
   discoverProxy: native.discoverProxy,
   requestDevice: native.requestDevice,
+  attachWebUsbDevice: native.attachWebUsbDevice,
+  detachWebUsbDevice: native.detachWebUsbDevice,
   FirmwareLimits: native.FirmwareLimits,
   InterfaceSelection: native.InterfaceSelection,
   TransferOptions: native.TransferOptions,

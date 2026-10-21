@@ -64,7 +64,7 @@ struct State {
     remote_guard: Option<async_lock::MutexGuardArc<()>>,
 }
 pub struct DeviceOwner {
-    pub info: nusb::DeviceInfo,
+    pub info: Option<nusb::DeviceInfo>,
     pub descriptor: Device,
     device: Mutex<nusb::Device>,
     state: Mutex<State>,
@@ -119,6 +119,25 @@ impl Drop for LocalLease {
 impl DeviceOwner {
     pub async fn open(info: nusb::DeviceInfo, id: String) -> Result<Arc<Self>> {
         let device = info.open().await.map_err(error)?;
+        let descriptor = Device {
+            id,
+            vendor_id: info.vendor_id(),
+            product_id: info.product_id(),
+            manufacturer: info.manufacturer_string().map(str::to_owned),
+            product: info.product_string().map(str::to_owned),
+            serial: info.serial_number().map(str::to_owned),
+            interfaces: vec![],
+            status: None,
+        };
+        Ok(Self::from_device(device, Some(info), descriptor))
+    }
+    /// Attach an already opened nusb device. Descriptor interfaces are read by
+    /// nusb from that device; the caller supplies only its identity and strings.
+    pub fn from_device(
+        device: nusb::Device,
+        info: Option<nusb::DeviceInfo>,
+        mut descriptor: Device,
+    ) -> Arc<Self> {
         let interfaces = device
             .configurations()
             .flat_map(|config| {
@@ -143,17 +162,8 @@ impl DeviceOwner {
                 })
             })
             .collect();
-        let descriptor = Device {
-            id,
-            vendor_id: info.vendor_id(),
-            product_id: info.product_id(),
-            manufacturer: info.manufacturer_string().map(str::to_owned),
-            product: info.product_string().map(str::to_owned),
-            serial: info.serial_number().map(str::to_owned),
-            interfaces,
-            status: None,
-        };
-        Ok(Arc::new(Self {
+        descriptor.interfaces = interfaces;
+        Arc::new(Self {
             info,
             descriptor,
             device: Mutex::new(device),
@@ -164,7 +174,7 @@ impl DeviceOwner {
             operation: async_lock::Mutex::new(()),
             claim_lock: Arc::new(async_lock::Mutex::new(())),
             shutdown_lock: async_lock::Mutex::new(()),
-        }))
+        })
     }
     fn snapshot(&self, state: &State) -> OwnerEvent {
         OwnerEvent {
@@ -277,7 +287,10 @@ impl DeviceOwner {
                 // settlement before reopening; never overlap interface changes.
                 let _ = interface.release().await;
             }
-            let device = self.info.open().await.map_err(error)?;
+            let info = self.info.as_ref().ok_or_else(|| {
+                error("Externally attached USB device must be attached again after disconnection")
+            })?;
+            let device = info.open().await.map_err(error)?;
             *self.device.lock().unwrap() = device;
         }
         let mut state = self.state.lock().unwrap();

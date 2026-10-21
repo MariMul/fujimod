@@ -16,12 +16,14 @@ testing = ["fujimod-usb/testing"]
 fujimod-usb.workspace = true
 serde_json.workspace = true
 async-channel = "2"
+async-lock = "3"
 fujimod-usb-proxy = { path = "../../crates/usb-proxy" }
 futures-timer.workspace = true
 fujimod-workflows.workspace = true
 fujimod-defs.workspace = true
 nusb.workspace = true
 js-sys.workspace = true
+web-sys = { version = "0.3", features = ["UsbDevice"] }
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
 futures-channel.workspace = true

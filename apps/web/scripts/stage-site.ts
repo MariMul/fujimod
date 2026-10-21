@@ -77,6 +77,14 @@ export async function stageSite(inputs: SiteInputs, destination = 'public') {
         throw Error(`Emulator qualification failed: ${firmware.id}`);
       for (const name of ['camera.wasm', 'camera.mjs', 'wasm.json', 'runtime-NOTICES.txt'])
         await copy(join(directory, name), config.bundle + name);
+      if (config.usb) {
+        const bundle = config.usb.bundle;
+        if (bundle !== `runtime/${firmware.id}-usb/`)
+          throw Error(`Unexpected USB runtime location: ${firmware.id}`);
+        const usb = join(inputs.runtime, `${firmware.id}-usb`);
+        for (const name of ['camera.wasm', 'camera.mjs', 'wasm.json', 'runtime-NOTICES.txt'])
+          await copy(join(usb, name), bundle + name);
+      }
     }
     const catalogBytes = Buffer.from(JSON.stringify(catalog));
     await writeFile(join(temporary, 'runtime/catalog.json'), catalogBytes);

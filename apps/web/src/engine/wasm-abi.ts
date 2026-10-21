@@ -60,6 +60,23 @@ export interface CameraModule {
   _camera_scene_buffer?: (handle: number, width: number, height: number, out: number) => number;
   _camera_scene_commit?: (handle: number, enabled: number) => number;
 }
+export interface UsbStatus {
+  connected: boolean;
+  endpoint: {
+    options: {
+      packet_bytes: number;
+      out_endpoints: [number, number][];
+      in_endpoints: [number, number][];
+    };
+    registers: number[];
+    rx_length: number[];
+    rx_position: number[];
+    setup_length: number;
+    setup_position: number;
+    tx_packets: number[];
+    active_dma: boolean;
+  };
+}
 export interface WasmManifest {
   schema: 1;
   abi: 1;
@@ -71,6 +88,13 @@ export interface WasmManifest {
   bootTicks: number;
   output: number;
   inputs?: Input[];
+  /** Explicit endpoint and physical boot inputs supplied by the checked graph. */
+  usb?: {
+    kind: 'exr2';
+    node: string;
+    bootInputs?: BootInput[];
+    initialPositions?: Record<string, string>;
+  };
   observations?: { name: string; address: string; size: number }[];
 }
 export interface SessionState {
@@ -88,6 +112,15 @@ export interface SaveResult {
 }
 /** Each command has one JSON request/result and an optional opaque binary span. */
 export interface SessionCommands {
+  usb_status: { request: { node: string }; result: UsbStatus };
+  usb_reset: { request: { node: string }; result: Record<string, never> };
+  usb_setup: { request: { node: string }; result: Record<string, never> };
+  usb_out: { request: { node: string; endpoint: number }; result: Record<string, never> };
+  usb_in: {
+    request: { node: string; endpoint: number; size: number };
+    result: Record<string, never>;
+  };
+  usb_in_token: { request: { node: string; endpoint: number }; result: Record<string, never> };
   state: { request: Record<string, never>; result: SessionState };
   press: {
     request: { id: string; stage?: string };
@@ -238,7 +271,7 @@ export class WasmSession {
   command<K extends keyof SessionCommands>(
     action: K,
     options: SessionCommands[K]['request'],
-    bytes = new Uint8Array(),
+    bytes: Uint8Array = new Uint8Array(),
   ): { result: SessionCommands[K]['result']; bytes: Uint8Array<ArrayBuffer> } {
     return this.timings.measure(`command.${action}`, () =>
       this.executeCommand(action, options, bytes),
