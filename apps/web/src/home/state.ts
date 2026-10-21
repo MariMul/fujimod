@@ -1,11 +1,8 @@
-import type { AssetProgress } from '../engine/download-progress';
+import { sessionState } from '../session/state';
 import type { CameraRecord } from '../cameras/store';
 import { createStore } from 'solid-js';
 import { validateCatalog, type Catalog, type Firmware } from '../catalog';
 import { validateIndex } from '../patch/catalog';
-import type { Connection } from 'fujimod/emulator';
-import type { EngineFault } from '../engine/fault';
-import type { FaultContext } from '../ui/fault';
 import type { CameraSupport } from '../ui/cameras';
 export interface PreviewCredit {
   title: string;
@@ -43,33 +40,13 @@ export function createHomeState() {
     cameraBusy: false,
     storageMessage: '',
     storageError: false,
-    message: '',
-    error: false,
-    live: '',
-    loading: false,
-    loadingAssets: [] as AssetProgress[],
-    webcamActive: false,
-    webcamBusy: false,
-    webcamError: '',
-    progress: undefined as number | undefined,
+    ...sessionState(),
     firmware: undefined as Firmware | undefined,
-    speed: undefined as number | undefined,
-    fault: undefined as EngineFault | undefined,
-    faultContext: { build: 'Development' } as FaultContext,
-    canUndo: false,
-    undoBusy: false,
-    canRestart: false,
-    idle: true,
-    panelVisible: false,
-    toolbarVisible: false,
-    promptVisible: true,
-    camerasVisible: true,
     modSupported: false,
     modDisabled: true,
     modEnabled: true,
     bodyPreview: '',
     previewCredit: undefined as PreviewCredit | undefined,
-    connections: [] as Connection[],
     buildLabel: import.meta.env.DEV || !release ? 'Development' : `Build ${release.release}`,
     buildURL:
       import.meta.env.DEV || !release

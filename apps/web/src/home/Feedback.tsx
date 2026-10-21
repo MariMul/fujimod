@@ -1,6 +1,6 @@
 import type { JSX } from '@solidjs/web';
 import { createEffect, createSignal, onSettled } from 'solid-js';
-import type { HomeRuntime } from './runtime';
+import type { SessionController } from '../session/controller';
 import type { ReportSubmission } from '../engine/report';
 import { simulatorIssue } from '../ui/simulator-feedback';
 import {
@@ -18,14 +18,14 @@ export interface EmulatorFeedbackActions {
   recover(): void;
 }
 export function EmulatorFeedback(props: {
-  runtime?: HomeRuntime;
+  runtime?: SessionController;
   request?: { event: 'feedback' | 'crash' };
   children: (actions: EmulatorFeedbackActions) => JSX.Element;
 }) {
   let dialog!: HTMLDialogElement;
   let describe: ((value: ReportSubmission) => void) | undefined;
   let capture: Promise<{ blob: Blob } | { error: unknown }>;
-  let context: ReturnType<HomeRuntime['context']>;
+  let context: ReturnType<SessionController['context']>;
   let submitted: ReturnType<typeof simulatorIssue> | undefined, pending: PendingReport | undefined;
   let closed = true;
   const [description, setDescription] = createSignal(''),

@@ -2,7 +2,7 @@ import { LoadingAssets } from './LoadingAssets';
 import { CameraLibrary } from '../cameras/Library';
 import { Show, createSignal, onSettled } from 'solid-js';
 import { createHomeState } from './state';
-import { startHome, type HomeRuntime } from './runtime';
+import { startHome, type HomeController } from './controller';
 import { Controls } from '../ui/controls';
 import { CardBrowser } from '../ui/card';
 import { Connections } from '../ui/connections';
@@ -21,7 +21,7 @@ import './loading.css';
 
 export default function Home() {
   const [state, setState] = createHomeState();
-  const [runtime, setRuntime] = createSignal<HomeRuntime>();
+  const [runtime, setRuntime] = createSignal<HomeController>();
   const [dragging, setDragging] = createSignal(false);
   const [feedback, setFeedback] = createSignal<{ event: 'feedback' | 'crash' }>();
   const choice = createFirmwareChoice();

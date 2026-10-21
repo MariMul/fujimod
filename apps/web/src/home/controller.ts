@@ -1,26 +1,20 @@
-import { DownloadProgress, type AssetProgress } from '../engine/download-progress';
-import { WebcamInput } from './webcam';
-import { inputPanel } from '../ui/input-panel';
+import { reconcile } from 'solid-js';
+import { startSession } from '../session/controller';
+import { DownloadProgress } from '../engine/download-progress';
 import { CameraStore, type CameraRecord } from '../cameras/store';
-import { createSignal, reconcile } from 'solid-js';
 import '../style.css';
-import { LocalReports } from '../ui/local-reports';
 import { flags } from '../flags';
 import { cardZip } from '../patch/download';
 import type { PatchResult } from '../patch/patcher';
 import { validateCatalog, type Catalog, type Firmware } from '../catalog';
 import { validateIndex, verifyPatch } from '../patch/catalog';
 import { sha256 } from '../patch/patcher';
-import { EngineError, FAULT_UNDO_SECONDS, faultFrom, type EngineFault } from '../engine/fault';
+import { EngineError, faultFrom } from '../engine/fault';
 import { cachedFetch } from '../asset-cache';
-import type { Engine, CardFile, BootMedia } from '../engine/api';
-import { errorReportZip, type ReportSubmission } from '../engine/report';
-import { LCDViewer } from '../viewer/lcd';
-import type { SimulatorIssueContext } from '../ui/simulator-feedback';
+import type { CardFile, BootMedia } from '../engine/api';
 import type { ReplayScenario } from '../scenarios';
-import type { DevicePanel, PowerCombo } from '../ui/layout';
+import type { DevicePanel } from '../ui/layout';
 
-import { ControlSession } from '../ui/controls';
 import { downloadBlob } from '../ui/download';
 import { firmwareActions, type createFirmwareChoice } from '../ui/firmware-actions';
 import type { HomeState, PreviewCredit } from './state';
@@ -48,38 +42,13 @@ export function startHome(
   choice: ReturnType<typeof createFirmwareChoice>,
 ) {
   performance.mark('camera-module-ready');
-  const viewer = new LCDViewer(refs.viewer, refs.lcd);
-  const panel = new ControlSession(viewer, (error) => showFault(faultFrom(error)), runCombo);
-  const [cardEngine, setCardEngine] = createSignal<Engine>();
-  const stopInputs = panel.listen();
   let catalog: Catalog = state.catalog,
-    release: ReturnType<typeof validateIndex> | undefined = state.release,
-    engine: Engine | undefined;
+    release: ReturnType<typeof validateIndex> | undefined = state.release;
   const cameras = new CameraStore();
-  const webcam = new WebcamInput(
-    async (scene) => {
-      await engine?.setScene(scene);
-    },
-    (active, busy) =>
-      setState((s) => {
-        s.webcamActive = active;
-        s.webcamBusy = busy;
-      }),
-    (error) =>
-      setState((s) => {
-        s.webcamError =
-          error instanceof DOMException && error.name === 'NotAllowedError'
-            ? 'Camera permission was denied.'
-            : error instanceof Error
-              ? error.message
-              : 'Webcam input stopped.';
-      }),
-  );
   let activeCamera: CameraRecord | undefined;
   let generation = 0,
     selectedFile: (() => Promise<File>) | undefined,
-    selectedFirmware: Firmware | undefined,
-    latestFault: EngineFault | undefined;
+    selectedFirmware: Firmware | undefined;
   let firmwareHash: string | undefined;
   let manualSelection = false;
   let build = 'Development';
@@ -87,34 +56,15 @@ export function startHome(
   let replayScenario: ReplayScenario | undefined;
   let modEnabled = true;
   let modFirmwareHash: string | undefined;
-  const localReports = new LocalReports(
-    'emulator',
-    () => ({
-      event: 'feedback',
+  const session = startSession(state, setState, refs, {
+    async createEngine(onError) {
+      const { createEngine } = await import('../engine');
+      return createEngine(onError);
+    },
+    identity: () => ({
       camera: selectedFirmware && { id: selectedFirmware.id, model: selectedFirmware.model },
-      modBuild: build,
-      simulatorBuild: __FUJIMOD_SIMULATOR_BUILD__,
-    }),
-    capture,
-  );
-  const stopReports = localReports.listen();
-  function capture(submission: Promise<ReportSubmission>) {
-    return engine
-      ? engine.errorReport(submission)
-      : submission.then((value) =>
-          errorReportZip({
-            ...value,
-            error: latestFault,
-            browser: { userAgent: navigator.userAgent },
-            identity: { firmwareSha256: firmwareHash },
-            snapshot: { unavailable: 'Runtime did not initialize.' },
-          }),
-        );
-  }
-  function context(event: 'feedback' | 'crash'): SimulatorIssueContext {
-    return {
-      event,
-      simulatorBuild: __FUJIMOD_SIMULATOR_BUILD__,
+      firmwareSha256: firmwareHash,
+      build,
       modBuild: !selectedFirmware
         ? 'Not identified'
         : !modEnabled
@@ -122,10 +72,38 @@ export function startHome(
           : release?.patches[selectedFirmware.sha256]
             ? `${release.release}${release.built_utc ? ` / ${release.built_utc}` : ' / Build date unavailable'}`
             : 'Stock firmware (no mods)',
-      camera: selectedFirmware && { model: selectedFirmware.model, id: selectedFirmware.id },
-      fault: event === 'crash' && latestFault ? structuredClone(latestFault) : undefined,
-    };
-  }
+      canRestart: !!selectedFile,
+      sceneInput: !!selectedFirmware?.emulate?.sceneInput,
+    }),
+    simulatorBuild: __FUJIMOD_SIMULATOR_BUILD__,
+    restart,
+    fault: () => updateModButtons(!selectedFile),
+    ready: () => updateModButtons(false),
+    cameraSaved(event) {
+      if (event.error) {
+        storageStatus(`Camera not saved · ${event.error}`, true);
+        return;
+      }
+      if (activeCamera && event.revision !== undefined) {
+        activeCamera = {
+          ...activeCamera,
+          revision: event.revision,
+          savedAt: event.savedAt,
+          modEnabled,
+        };
+        setState((s) => {
+          if (s.activeCamera) {
+            s.activeCamera.revision = event.revision!;
+            s.activeCamera.savedAt = event.savedAt;
+            s.activeCamera.modEnabled = modEnabled;
+          }
+        });
+      }
+      storageStatus('Saved');
+      void refreshCameras().catch((error) => storageStatus(String(error), true));
+    },
+  });
+  const { showFault, status, progress, finishLoading } = session;
   function updateModButtons(disabled: boolean) {
     setState((s) => {
       s.modDisabled = disabled;
@@ -147,115 +125,6 @@ export function startHome(
     updateModButtons(true);
     await restart();
   }
-  function status(message: string, error = false) {
-    setState((s) => {
-      s.message = message;
-      s.error = error;
-    });
-  }
-  function progress(message: string, percent?: number, assets?: AssetProgress[]) {
-    status(message);
-    setState((s) => {
-      s.loading = true;
-      s.promptVisible = false;
-      s.progress = percent;
-      if (assets)
-        for (const asset of assets) {
-          const index = s.loadingAssets.findIndex((entry) => entry.url === asset.url);
-          if (index < 0) s.loadingAssets.push(asset);
-          else reconcile(asset)(s.loadingAssets[index]);
-        }
-    });
-  }
-  function finishLoading() {
-    setState((s) => {
-      s.loading = false;
-      s.progress = undefined;
-    });
-  }
-  function title(speed?: number) {
-    setState((s) => {
-      s.firmware = selectedFirmware;
-      s.speed = speed;
-    });
-  }
-
-  function showFault(fault: EngineFault) {
-    void webcam.stop(false);
-    latestFault = fault;
-    updateModButtons(!selectedFile);
-    panel.disable();
-    setState((s) => {
-      s.live = 'STOPPED';
-    });
-    finishLoading();
-    status(fault.message, true);
-    const canUndo = !!engine && fault.undoSeconds === FAULT_UNDO_SECONDS;
-    setState((s) => {
-      s.canUndo = canUndo;
-      s.undoBusy = false;
-      s.canRestart = !!selectedFile;
-    });
-    setState((s) => {
-      s.fault = fault;
-      s.faultContext.firmware = selectedFirmware?.id;
-      s.faultContext.build = build;
-      s.faultContext.tick = window.cameraPerformance?.guestTicks;
-    });
-    viewer.fault(true);
-    localReports.crash(new EngineError(fault));
-  }
-  async function undo() {
-    if (!engine || state.undoBusy || latestFault?.undoSeconds !== FAULT_UNDO_SECONDS) return;
-    setState((s) => {
-      s.undoBusy = true;
-    });
-    viewer.fault(true);
-    try {
-      const positions = await engine.rollback(FAULT_UNDO_SECONDS);
-      viewer.fault(false);
-      setState((s) => {
-        s.fault = undefined;
-      });
-      panel.resume();
-      panel.synchronize(positions);
-      setState((s) => {
-        s.live = 'LIVE';
-      });
-      status('Camera resumed');
-    } catch (error) {
-      showFault(faultFrom(error));
-    }
-  }
-  async function runCombo(combo: PowerCombo) {
-    await restartOperation(() => engine!.powerCycle(combo.inputs, progress));
-  }
-  async function restartOperation(operation: () => Promise<void>) {
-    if (!engine) return;
-    if (webcam.requested) await webcam.stop();
-    panel.disable();
-    setState((s) => {
-      s.live = 'RESTARTING';
-    });
-    progress('Booting camera…');
-    try {
-      await operation();
-      viewer.fault(false);
-      setState((s) => {
-        s.fault = undefined;
-      });
-      latestFault = undefined;
-      panel.resume();
-      setCardEngine(engine);
-      setState((s) => {
-        s.live = 'LIVE';
-      });
-    } catch (error) {
-      showFault(faultFrom(error));
-    } finally {
-      finishLoading();
-    }
-  }
   async function loadDevice(body: string) {
     const load = adapters[`../../devices/${body}/index.ts`];
     if (!load) return { panel: { layout: [], combos: [] } as DevicePanel };
@@ -263,62 +132,15 @@ export function startHome(
     return device;
   }
   function reset() {
-    void webcam.stop(false);
-    setState((s) => {
-      s.loadingAssets = [];
-      s.webcamError = '';
-    });
+    session.reset();
     choice.cancel();
     updateModButtons(true);
     setState((s) => {
       s.modSupported = false;
+      s.firmware = selectedFirmware;
     });
-    panel.clear();
-    viewer.clearTouch();
-    setCardEngine(undefined);
-    setState((s) => {
-      s.connections = [];
-    });
-    engine?.dispose();
-    engine = undefined;
     patchWorker?.terminate();
     patchWorker = undefined;
-    viewer.fault(false);
-    setState((s) => {
-      s.fault = undefined;
-    });
-    latestFault = undefined;
-    window.cameraPerformance = undefined;
-    window.profileCamera = undefined;
-    setState((s) => {
-      s.live = '';
-    });
-    setState((s) => {
-      s.idle = true;
-    });
-    setState((s) => {
-      s.panelVisible = false;
-    });
-    setState((s) => {
-      s.toolbarVisible = false;
-    });
-    setState((s) => {
-      s.promptVisible = true;
-    });
-    setState((s) => {
-      s.camerasVisible = true;
-    });
-    finishLoading();
-    title();
-  }
-  async function makeEngine() {
-    const { createEngine } = await import('../engine');
-    let value: Engine;
-    value = createEngine((error) => {
-      if (engine === value) showFault(faultFrom(error));
-    });
-    if (import.meta.env.DEV) window.cameraEngine = value;
-    return value;
   }
   function bootMedia(file: File): BootMedia {
     const index = release,
@@ -389,9 +211,9 @@ export function startHome(
     if (disposed || !file) return;
     performance.mark('camera-file-received');
     // Finish the previous camera's durable write before releasing its worker.
-    if (engine && activeCamera && !latestFault) {
+    if (activeCamera && !session.hasFault()) {
       try {
-        await engine.saveCamera();
+        await session.saveCamera();
       } catch (error) {
         storageStatus(String(error), true);
         return;
@@ -511,124 +333,53 @@ export function startHome(
       setState((s) => {
         s.camerasVisible = false;
       });
-      title();
-      const active = await makeEngine();
-      if (disposed || current !== generation) {
-        active.dispose();
-        return;
-      }
-      engine = active;
-      active.metrics((metrics) => {
-        if (current !== generation) return;
-        window.cameraPerformance = metrics;
-        title(metrics.speed);
-      });
-      window.profileCamera = (limit) => active.profile(limit);
-      active.connections((rows) => {
-        if (current === generation)
-          setState((s) => {
-            s.connections = rows;
-          });
-      });
-      active.cameraSaves((event) => {
-        if (current !== generation) return;
-        if (event.error) {
-          storageStatus(`Camera not saved · ${event.error}`, true);
-          return;
-        }
-        if (activeCamera && event.revision !== undefined) {
-          activeCamera = {
-            ...activeCamera,
-            revision: event.revision,
-            savedAt: event.savedAt,
-            modEnabled,
-          };
-          setState((s) => {
-            if (s.activeCamera) {
-              s.activeCamera.revision = event.revision!;
-              s.activeCamera.savedAt = event.savedAt;
-              s.activeCamera.modEnabled = modEnabled;
-            }
-          });
-        }
-        storageStatus('Saved');
-        void refreshCameras().catch((error) => storageStatus(String(error), true));
-      });
-      active.frames((frame) => {
-        if (current === generation) viewer.frame(frame);
-      });
-      const modSupported =
-        'sdBoot' in device && !!device.sdBoot && !!release?.patches[entry.sha256];
-      updateModButtons(true);
       setState((s) => {
-        s.modSupported = modSupported;
+        s.firmware = selectedFirmware;
       });
-      const bootInputs =
-        modSupported && modEnabled
-          ? (device.panel.combos.find((combo) => combo.boot === 'sd')?.inputs ?? [])
-          : [];
-      const seeds = modSupported && modEnabled ? bootMedia(file) : undefined;
-      if (current !== generation) return;
-      const started = performance.now();
-      performance.mark('camera-engine-boot');
-      const inputs = await active.boot(
+      const emulate = entry.emulate;
+      await session.boot(
         bytes,
-        {
-          ...entry.emulate,
-          firmwareId: entry.id,
-          restart,
-          camera: activeCamera && {
-            id: activeCamera.id,
-            revision: activeCamera.revision,
-            modEnabled,
-          },
-          bootInputs,
-          execution: replayScenario
-            ? {
-                mode: replayScenario.interactive ? 'live' : 'replay',
-                clockSeconds2000: replayScenario.clockSeconds2000,
-              }
-            : undefined,
+        device.panel,
+        () => !disposed && current === generation,
+        () => {
+          const modSupported =
+            'sdBoot' in device && !!device.sdBoot && !!release?.patches[entry.sha256];
+          updateModButtons(true);
+          setState((s) => {
+            s.modSupported = modSupported;
+          });
+          const bootInputs =
+            modSupported && modEnabled
+              ? (device.panel.combos.find((combo) => combo.boot === 'sd')?.inputs ?? [])
+              : [];
+          const media = modSupported && modEnabled ? bootMedia(file) : undefined;
+          return {
+            config: {
+              ...emulate,
+              firmwareId: entry.id,
+              restart,
+              camera: activeCamera && {
+                id: activeCamera.id,
+                revision: activeCamera.revision,
+                modEnabled,
+              },
+              bootInputs,
+              execution: replayScenario
+                ? {
+                    mode: replayScenario.interactive ? 'live' : 'replay',
+                    clockSeconds2000: replayScenario.clockSeconds2000,
+                  }
+                : undefined,
+            },
+            media,
+          };
         },
-        progress,
-        seeds,
       );
       if (current !== generation) return;
-      performance.mark('camera-engine-ready');
-      const positions = Object.fromEntries(
-        inputs.filter((input) => input.initial).map((input) => [input.id, input.initial!]),
-      );
-      panel.render(
-        inputs,
-        active,
-        device.panel.layout.length ? device.panel : inputPanel(inputs),
-        positions,
-      );
-      viewer.configureTouch(inputs, active, (error) => {
-        if (current === generation) showFault(faultFrom(error));
-      });
-      active.powerChanges((on) => {
-        panel.setPowered(on);
-        viewer.powered(on);
-      });
-      panel.synchronize(positions);
-      setCardEngine(active);
-      finishLoading();
-      updateModButtons(false);
-      setState((s) => {
-        s.live = 'LIVE';
-      });
-      refs.viewer.dataset.bootSeconds = ((performance.now() - started) / 1000).toFixed(3);
-      status('Camera ready');
       if (replayScenario) {
         refs.workspace.scrollIntoView({ block: 'start', behavior: 'instant' });
         if (!replayScenario.interactive) {
-          panel.disable();
-          await active.replay(replayScenario.steps);
-          setState((s) => {
-            s.live = 'REPLAY COMPLETE';
-          });
-          status('The scenario completed without an execution fault.');
+          await session.replay(replayScenario.steps);
         }
       }
     } catch (error) {
@@ -694,7 +445,7 @@ export function startHome(
       s.cameraBusy = true;
     });
     try {
-      if (engine && activeCamera && !latestFault) await engine.saveCamera();
+      if (activeCamera && !session.hasFault()) await session.saveCamera();
       ++generation;
       reset();
       activeCamera = undefined;
@@ -787,44 +538,21 @@ export function startHome(
 
   let disposed = false;
   const saveHidden = () => {
-    if (document.visibilityState === 'hidden' && webcam.requested)
-      void webcam.stop().catch(() => {});
-    if (document.visibilityState === 'hidden' && activeCamera && engine && !latestFault)
-      void engine
+    if (document.visibilityState === 'hidden') session.stopHiddenWebcam();
+    if (document.visibilityState === 'hidden' && activeCamera && !session.hasFault())
+      void session
         .saveCamera()
         .catch((error) => storageStatus(`Camera not saved · ${String(error)}`, true));
   };
   document.addEventListener('visibilitychange', saveHidden);
-  const unload = () => {
-    void webcam.stop(false);
-    engine?.dispose();
-  };
+  const unload = session.unload;
   window.addEventListener('beforeunload', unload);
   void initialize();
   return {
-    viewer,
-    panel,
-    cardEngine,
-    capture,
-    context,
-    localReports,
-    undo,
-    restart,
+    ...session,
     selectMod,
     openCamera,
     closeCamera,
-    toggleWebcam: () => {
-      setState((s) => {
-        s.webcamError = '';
-      });
-      if (webcam.requested) void webcam.stop().catch(() => {});
-      else if (engine && selectedFirmware?.emulate?.sceneInput && !state.loading && !state.fault)
-        void webcam.start();
-    },
-    formatCard: () => restartOperation(() => engine!.formatCard(progress)),
-    insertCard: async (value: boolean) => {
-      await engine?.insertCard(value);
-    },
     selectFirmware: (firmware: Firmware) => {
       void tryFirmware(firmware).catch((error) => showFault(faultFrom(error)));
     },
@@ -836,14 +564,11 @@ export function startHome(
       disposed = true;
       ++generation;
       choice.cancel();
-      stopInputs();
-      stopReports();
-      unload();
+      session.dispose();
       patchWorker?.terminate();
-      viewer.dispose();
       window.removeEventListener('beforeunload', unload);
       document.removeEventListener('visibilitychange', saveHidden);
     },
   };
 }
-export type HomeRuntime = ReturnType<typeof startHome>;
+export type HomeController = ReturnType<typeof startHome>;
