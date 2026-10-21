@@ -17,11 +17,53 @@ can use `uv add /path/to/fujimod/bindings/python` and rebuild after Rust changes
 
 ## Native execution
 
-Native wheels also expose `fujimod.emulator`. Build a `Definition` from an
-execution graph, device plan and explicitly identified input assets, then pass
-it with the corresponding bytes to `make_board`. Declared images are loaded
-into mapped memory before execution. Boards support context management and an
-explicit `close()` method so native execution resources are released promptly.
+Native wheels also expose `fujimod.emulator`. For a resolved graph, build a
+`Definition` from its execution graph, device plan and identified assets, then
+pass the matching bytes to `make_board`. Declared images are loaded into mapped
+memory before execution.
+
+For a catalog runtime, `Board.from_inputs` takes explicit paths to the update
+file, real boot ROM and selected Unicorn library. Optional NAND and settings
+files are separate keyword arguments. Body and firmware identifiers select
+the runtime facts; they never select or derive an input path:
+
+```python
+from pathlib import Path
+
+from fujimod.emulator import Board
+
+with Board.from_inputs(
+    body="body-id",
+    firmware="firmware-id",
+    update=Path("/inputs/update.dat"),
+    boot_rom=Path("/inputs/boot.rom"),
+    unicorn=Path("/libraries/libunicorn.dylib"),
+    nand=Path("/inputs/nand.bin"),
+    settings=Path("/inputs/settings.bin"),
+) as board:
+    report = board.boot_to_rec()
+```
+
+Omit `nand` or `settings` when those files are not supplied. The board owns its
+native execution session, exposes processor, memory, checkpoint and state
+operations, and supports `with` or an explicit `close()`. Closing is safe to
+repeat; methods that need an active session raise `RuntimeError` after close.
+`board.session` provides typed ADC, GPIO, logical-input, physical-control and
+display capabilities over that same native owner. Use `set_adc_samples`,
+`gpio_input`, `input_level`, `set_position` and `rotate` to select external
+inputs; use the corresponding state methods to inspect their modeled results.
+`session.scanout` returns a `ScanoutFrame` with raw bytes, optional RGB pixels,
+dimensions and state metadata without advancing guest time. `session.screenshot`
+returns a PNG for catalog runtimes after a display frame is configured.
+`boot_to_rec` returns a typed `BootReport`. Its `status` is `"rec"`,
+`"instruction-limit"` or `"stopped"`; the report also includes instruction and
+guest-time counters, observed mode and menu values, setup status and presses,
+plus an optional failure message.
+
+The update and ROM files are checked against the selected runtime's recorded
+size and SHA-256. A settings file is a 16-byte persistent packet with its
+checksum and marker. NAND accepts an emulator-exported committed image or a
+complete raw medium whose firmware prefix matches the selected update.
 
 The default USB API is awaitable and runs directly on `asyncio`:
 

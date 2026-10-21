@@ -3,17 +3,33 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .board import Board, make_board
+    from .board import Board, BootReport, ScanoutFrame, Session, make_board
     from .definition import Asset, Definition, Image, Xp4Definition
 
-__all__ = ["Asset", "Board", "Definition", "Image", "Xp4Definition", "make_board"]
+__all__ = [
+    "Asset",
+    "Board",
+    "BootReport",
+    "Definition",
+    "Image",
+    "ScanoutFrame",
+    "Session",
+    "Xp4Definition",
+    "make_board",
+]
 
 
 def __getattr__(name: str) -> object:
-    if name in ("Board", "make_board"):
-        from .board import Board, make_board
+    if name in ("Board", "BootReport", "ScanoutFrame", "Session", "make_board"):
+        from .board import Board, BootReport, ScanoutFrame, Session, make_board
 
-        return {"Board": Board, "make_board": make_board}[name]
+        return {
+            "Board": Board,
+            "BootReport": BootReport,
+            "ScanoutFrame": ScanoutFrame,
+            "Session": Session,
+            "make_board": make_board,
+        }[name]
     if name in ("Asset", "Definition", "Image", "Xp4Definition"):
         from .definition import Asset, Definition, Image, Xp4Definition
 

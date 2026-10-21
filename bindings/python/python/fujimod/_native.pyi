@@ -44,6 +44,23 @@ class emulator:
 
     @final
     class Board:
+        @staticmethod
+        def from_inputs(
+            *,
+            body: str,
+            firmware: str,
+            update: str | PathLike[str],
+            boot_rom: str | PathLike[str],
+            unicorn: str | PathLike[str],
+            nand: str | PathLike[str] | None = None,
+            settings: str | PathLike[str] | None = None,
+        ) -> emulator.Board: ...
+        def boot_to_rec(
+            self, /, instruction_limit: SupportsIndex = ...
+        ) -> str: ...
+        def screenshot(self, /) -> bytes: ...
+        @property
+        def boot_quantum(self, /) -> int: ...
         def recording_frame(
             self, node: str, instance: int, diagnostic_hashes: bool
         ) -> tuple[bytes, str, int, int] | None: ...
