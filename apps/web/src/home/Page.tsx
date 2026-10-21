@@ -147,12 +147,13 @@ export default function Home() {
                 create={(camera) => void runtime()?.newCamera(camera)}
               />
             </Show>
+            {/* A MIME type keeps iOS from offering Photo Library and Camera for an unmapped .dat extension. */}
             <input
               ref={file}
               class="visually-hidden"
               id="firmware-file"
               type="file"
-              accept=".dat,.DAT"
+              accept=".dat,.DAT,application/octet-stream"
               aria-label="Choose FPUPDATE.DAT"
               onChange={(event) => {
                 runtime()?.selectFile(event.currentTarget.files?.[0]);

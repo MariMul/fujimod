@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { For, Show, createSignal } from 'solid-js';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import type { CameraSupport } from '../ui/cameras';
 import type { CameraRecord } from './store';
@@ -13,6 +13,8 @@ const units: [Intl.RelativeTimeFormatUnit, number][] = [
   ['hour', 3600],
   ['minute', 60],
 ];
+/** Supported bodies listed before Show All; a search field appears past this. */
+export const COLLAPSED_CAMERAS = 8;
 export function lastUsed(camera: CameraRecord) {
   return camera.savedAt ?? camera.createdAt;
 }
@@ -22,6 +24,7 @@ export function usedLabel(time: number, now: number) {
     if (seconds >= size) return `Used ${relative.format(-Math.floor(seconds / size), unit)}`;
   return 'Used just now';
 }
+const searchKey = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 /** Idle emulator: resume or create a saved camera, or add firmware for a supported body. */
 export function CameraLauncher(props: {
@@ -34,10 +37,15 @@ export function CameraLauncher(props: {
   create: (firmware: CameraRecord) => void;
   now?: number;
 }) {
+  const [query, setQuery] = createSignal('');
+  const [expanded, setExpanded] = createSignal(false);
   const emulated = () =>
     props.supported
       .filter((camera) => camera.emu)
       .sort((a, b) => a.firmware.model.localeCompare(b.firmware.model, 'en', { numeric: true }));
+  const matches = () =>
+    emulated().filter((camera) => searchKey(camera.firmware.model).includes(searchKey(query())));
+  const shown = () => (query() || expanded() ? matches() : matches().slice(0, COLLAPSED_CAMERAS));
   const model = (camera: CameraRecord) =>
     props.supported.find((entry) => entry.firmware.sha256 === camera.firmwareHash)?.firmware ?? {
       model: camera.name,
@@ -52,24 +60,7 @@ export function CameraLauncher(props: {
   return (
     <div class="launcher">
       <div class="launcher-main">
-        <Show
-          when={props.cameras.length > 0}
-          fallback={
-            <>
-              <h3>Run your camera in the browser</h3>
-              <ol class="launcher-steps">
-                <li>Download your camera’s firmware update from Fujifilm.</li>
-                <li>Drop the downloaded .DAT file here.</li>
-              </ol>
-              <div class="launcher-actions">
-                <label class="launcher-button" id="firmware-prompt" for="firmware-file">
-                  Choose File…
-                </label>
-                <span class="launcher-note">Firmware stays in this browser.</span>
-              </div>
-            </>
-          }
-        >
+        <Show when={props.cameras.length > 0}>
           <div class="launcher-list" role="list" aria-label="Your cameras">
             <For each={recent()}>
               {(camera) => (
@@ -108,14 +99,23 @@ export function CameraLauncher(props: {
               )}
             </For>
           </div>
-          <p class="launcher-another">
-            Drop another camera’s firmware here, or{' '}
-            <label id="firmware-prompt" for="firmware-file">
-              choose a file
-            </label>
-            .
-          </p>
         </Show>
+        <h3 class={{ 'launcher-add': props.cameras.length > 0 }}>
+          {props.cameras.length > 0 ? 'Add a camera' : 'Run your camera in the browser'}
+        </h3>
+        <ol class="launcher-steps">
+          <li>Download your camera’s firmware update from Fujifilm.</li>
+          <li>
+            <span class="launcher-drop">Drop the downloaded .DAT file here.</span>
+            <span class="launcher-touch">Choose the downloaded .DAT file.</span>
+          </li>
+        </ol>
+        <div class="launcher-actions">
+          <label class="launcher-button" id="firmware-prompt" for="firmware-file">
+            Choose File…
+          </label>
+          <span class="launcher-note">Firmware stays in this browser.</span>
+        </div>
         <span
           class={{ 'camera-storage-status': true, error: props.error }}
           role="status"
@@ -126,27 +126,51 @@ export function CameraLauncher(props: {
       </div>
       <section class="launcher-supported" aria-labelledby="supported-cameras-heading">
         <h4 id="supported-cameras-heading">Supported cameras</h4>
-        <ul class="launcher-list">
-          <For each={emulated()}>
+        <Show when={emulated().length > COLLAPSED_CAMERAS}>
+          <label class="launcher-search">
+            <Icon name="search" size={14} />
+            <input
+              type="search"
+              placeholder="Search"
+              aria-label="Search supported cameras"
+              value={query()}
+              onInput={(event) => setQuery(event.currentTarget.value)}
+            />
+          </label>
+        </Show>
+        <ul class="launcher-list launcher-table">
+          <For each={shown()}>
             {(camera) => (
-              <li>
+              <li class="launcher-camera">
+                <span class="launcher-camera-name">{camera.firmware.model}</span>
+                <span class="launcher-camera-mod">
+                  <Show when={camera.mod}>
+                    <span class="launcher-tag">FujiMod</span>
+                  </Show>
+                </span>
+                <span class="launcher-version">{camera.firmware.version}</span>
                 <a
-                  class="launcher-row"
+                  class="launcher-download"
                   href={camera.firmware.download_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={`Download ${camera.firmware.model} firmware ${camera.firmware.version} from Fujifilm`}
                 >
-                  <span>{camera.firmware.model}</span>
-                  <span class="launcher-version">
-                    {camera.firmware.version}
-                    <Icon name="external" size={12} />
-                  </span>
+                  Download
+                  <Icon name="external" size={11} />
                 </a>
               </li>
             )}
           </For>
         </ul>
+        <Show when={query() && matches().length === 0}>
+          <p class="launcher-empty">No supported camera matches “{query()}”.</p>
+        </Show>
+        <Show when={!query() && emulated().length > COLLAPSED_CAMERAS}>
+          <button class="launcher-more" onClick={() => setExpanded(!expanded())}>
+            {expanded() ? 'Show Fewer' : `Show All ${emulated().length}`}
+          </button>
+        </Show>
       </section>
     </div>
   );
