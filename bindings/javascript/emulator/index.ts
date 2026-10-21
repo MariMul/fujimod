@@ -17,6 +17,7 @@ export {
   type EnabledJitStatistics,
   type JitOptions,
   type JitStatistics,
+  type LoadedEmulatorModule,
   type ModuleFactoryOptions,
   type ModuleOptions,
 } from './module.ts';

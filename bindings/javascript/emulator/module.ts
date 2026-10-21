@@ -56,17 +56,25 @@ const requiredFunctions = [
   'tcgJitStats',
 ] as const;
 
+export type LoadedEmulatorModule = EmulatorModule &
+  Required<
+    Pick<
+      EmulatorModule,
+      '_camera_session_create' | '_camera_command' | '_camera_scene_buffer' | '_camera_scene_commit'
+    >
+  >;
+
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object';
 }
 
-function moduleFrom(value: unknown): EmulatorModule {
+function moduleFrom(value: unknown): LoadedEmulatorModule {
   if (!record(value) || !(value.HEAPU8 instanceof Uint8Array))
     throw new Error('Generated module has no Wasm heap.');
   for (const name of requiredFunctions) {
     if (typeof value[name] !== 'function') throw new Error(`Missing C ABI export: ${name}.`);
   }
-  return value as unknown as EmulatorModule;
+  return value as unknown as LoadedEmulatorModule;
 }
 
 /** Instantiate a generated module while keeping the Wasm binary independently addressable. */
@@ -75,7 +83,7 @@ export async function instantiateEmulatorModule(
   wasmBinary: ArrayBuffer,
   locateFile: (path: string) => string,
   options: ModuleOptions = {},
-): Promise<EmulatorModule> {
+): Promise<LoadedEmulatorModule> {
   return moduleFrom(await factory({ ...options, wasmBinary, locateFile }));
 }
 
@@ -85,7 +93,7 @@ export async function loadEmulatorModule(
   wasmUrl: string | URL,
   options: ModuleOptions = {},
   fetcher: typeof fetch = fetch,
-): Promise<EmulatorModule> {
+): Promise<LoadedEmulatorModule> {
   const base = globalThis.location?.href;
   const moduleHref =
     moduleUrl instanceof URL
