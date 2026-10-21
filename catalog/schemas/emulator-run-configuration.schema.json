@@ -100,6 +100,28 @@
       ],
       "type": "object"
     },
+    "RunEncoderInput": {
+      "additionalProperties": false,
+      "description": "Initial phase for a body-backed quadrature encoder.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection identity carrying both encoder signals.",
+          "type": "string"
+        },
+        "phase": {
+          "description": "Initial two-bit encoder phase in the range zero through three.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "connection_id",
+        "phase"
+      ],
+      "type": "object"
+    },
     "RunEngine": {
       "description": "A supported processor execution backend.",
       "oneOf": [
@@ -208,12 +230,52 @@
             "$ref": "#/$defs/RunKeyState"
           },
           "type": "array"
+        },
+        "outputs": {
+          "description": "Known GPIO output-latch states addressed through body wiring.",
+          "items": {
+            "$ref": "#/$defs/RunGpioOutputState"
+          },
+          "type": "array"
+        },
+        "unassigned_input_level": {
+          "description": "Startup input level supplied for pads without a named assignment.\nThis is a run assumption, not a measured hardware fact.",
+          "type": "boolean"
         }
       },
       "required": [
         "block_id",
+        "unassigned_input_level",
         "keys",
-        "connections"
+        "connections",
+        "outputs"
+      ],
+      "type": "object"
+    },
+    "RunGpioOutputState": {
+      "additionalProperties": false,
+      "description": "Initial output-latch value for one GPIO signal in a body connection.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection identity for the output signal.",
+          "type": "string"
+        },
+        "high": {
+          "description": "Output level latched at reset.",
+          "type": "boolean"
+        },
+        "signal_index": {
+          "description": "Zero-based signal index in the body connection.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "connection_id",
+        "signal_index",
+        "high"
       ],
       "type": "object"
     },
@@ -278,6 +340,13 @@
           "$ref": "#/$defs/RunCardInput",
           "description": "Initial SD card insertion and protection state."
         },
+        "encoders": {
+          "description": "Initial phases for physical quadrature encoders.",
+          "items": {
+            "$ref": "#/$defs/RunEncoderInput"
+          },
+          "type": "array"
+        },
         "first_start": {
           "anyOf": [
             {
@@ -315,6 +384,7 @@
       },
       "required": [
         "gpio",
+        "encoders",
         "adc",
         "power",
         "mcu",

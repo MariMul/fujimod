@@ -456,6 +456,183 @@
             "used_mask"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A reusable serial or register peripheral endpoint.",
+          "properties": {
+            "interface": {
+              "$ref": "#/$defs/PeripheralPart",
+              "description": "Closed protocol model for the endpoint."
+            },
+            "kind": {
+              "const": "peripheral",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "interface"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "PeripheralPart": {
+      "description": "Reusable endpoint protocols with no processor addresses or startup state.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Focus actuator accepting serial commands.",
+          "properties": {
+            "kind": {
+              "const": "focus-actuator",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Iris actuator accepting serial commands.",
+          "properties": {
+            "kind": {
+              "const": "iris-actuator",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Audio serial output endpoint.",
+          "properties": {
+            "kind": {
+              "const": "audio-serial-output",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Imaging serial output endpoint.",
+          "properties": {
+            "kind": {
+              "const": "imaging-serial-output",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Power-controller register protocol.",
+          "properties": {
+            "kind": {
+              "const": "power-controller",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Serial calibration-register protocol.",
+          "properties": {
+            "kind": {
+              "const": "serial-calibration-registers",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "BIS configuration-register protocol.",
+          "properties": {
+            "kind": {
+              "const": "bis-configuration-registers",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "LSM6DS configuration-register protocol.",
+          "properties": {
+            "kind": {
+              "const": "lsm6ds-configuration-registers",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Serial NOR flash geometry and device identification, when declared.",
+          "properties": {
+            "erase_bytes": {
+              "description": "Erase-unit capacity in bytes, when declared.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "jedec_id": {
+              "description": "JEDEC identification value, when supplied by the part definition.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "serial-nor-flash",
+              "type": "string"
+            },
+            "page_bytes": {
+              "description": "Program-page capacity in bytes, when declared.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
         }
       ]
     },

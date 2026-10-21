@@ -120,14 +120,16 @@
       "base": 4294651904,
       "size": 4096,
       "kind": "interrupt-controller",
-      "clock_id": null
+      "clock_id": null,
+      "processor_core_id": "core0"
     },
     {
       "id": "interrupt-core1",
       "base": 4294656000,
       "size": 4096,
       "kind": "interrupt-controller",
-      "clock_id": null
+      "clock_id": null,
+      "processor_core_id": "core1"
     },
     {
       "id": "system-timers",
@@ -687,22 +689,188 @@
     {
       "core": "core0",
       "line": 101,
-      "source_block": "control-bus0"
+      "source_block": "control-bus0",
+      "output_id": "controller"
     },
     {
       "core": "core0",
       "line": 102,
-      "source_block": "control-bus1"
+      "source_block": "control-bus1",
+      "output_id": "controller"
     },
     {
       "core": "core0",
       "line": 84,
-      "source_block": "usb-core"
+      "source_block": "usb-core",
+      "output_id": "device"
     },
     {
       "core": "core0",
       "line": 85,
-      "source_block": "usb-core"
+      "source_block": "usb-core",
+      "output_id": "host"
+    },
+    {
+      "core": "core0",
+      "line": 8,
+      "source_block": "gpio",
+      "output_id": "port-0-pin-0"
+    },
+    {
+      "core": "core0",
+      "line": 10,
+      "source_block": "gpio",
+      "output_id": "port-0-pin-2"
+    },
+    {
+      "core": "core0",
+      "line": 11,
+      "source_block": "gpio",
+      "output_id": "port-0-pin-3"
+    },
+    {
+      "core": "core0",
+      "line": 20,
+      "source_block": "pulse-outputs",
+      "output_id": "output-0"
+    },
+    {
+      "core": "core0",
+      "line": 21,
+      "source_block": "pulse-outputs",
+      "output_id": "output-1"
+    },
+    {
+      "core": "core0",
+      "line": 22,
+      "source_block": "pulse-outputs",
+      "output_id": "output-2"
+    },
+    {
+      "core": "core0",
+      "line": 23,
+      "source_block": "pulse-outputs",
+      "output_id": "output-3"
+    },
+    {
+      "core": "core0",
+      "line": 24,
+      "source_block": "pulse-outputs",
+      "output_id": "output-4"
+    },
+    {
+      "core": "core0",
+      "line": 25,
+      "source_block": "pulse-outputs",
+      "output_id": "output-5"
+    },
+    {
+      "core": "core0",
+      "line": 26,
+      "source_block": "pulse-outputs",
+      "output_id": "output-6"
+    },
+    {
+      "core": "core0",
+      "line": 27,
+      "source_block": "pulse-outputs",
+      "output_id": "output-7"
+    },
+    {
+      "core": "core0",
+      "line": 28,
+      "source_block": "pulse-outputs",
+      "output_id": "output-8"
+    },
+    {
+      "core": "core0",
+      "line": 29,
+      "source_block": "pulse-outputs",
+      "output_id": "output-9"
+    },
+    {
+      "core": "core0",
+      "line": 30,
+      "source_block": "pulse-outputs",
+      "output_id": "output-10"
+    },
+    {
+      "core": "core0",
+      "line": 31,
+      "source_block": "pulse-outputs",
+      "output_id": "output-11"
+    },
+    {
+      "core": "core0",
+      "line": 14,
+      "source_block": "serial-spi2",
+      "output_id": "complete-0"
+    },
+    {
+      "core": "core0",
+      "line": 12,
+      "source_block": "serial-spi2",
+      "output_id": "complete-1"
+    },
+    {
+      "core": "core0",
+      "line": 39,
+      "source_block": "image-input",
+      "output_id": "phase-0"
+    },
+    {
+      "core": "core0",
+      "line": 41,
+      "source_block": "image-input",
+      "output_id": "phase-1"
+    },
+    {
+      "core": "core0",
+      "line": 36,
+      "source_block": "image-input",
+      "output_id": "raw"
+    },
+    {
+      "core": "core0",
+      "line": 38,
+      "source_block": "image-input",
+      "output_id": "readback"
+    },
+    {
+      "core": "core0",
+      "line": 44,
+      "source_block": "image-output-0",
+      "output_id": "output"
+    },
+    {
+      "core": "core0",
+      "line": 45,
+      "source_block": "image-output-1",
+      "output_id": "output"
+    },
+    {
+      "core": "core0",
+      "line": 68,
+      "source_block": "image-combination",
+      "output_id": "complete"
+    },
+    {
+      "core": "core0",
+      "line": 79,
+      "source_block": "sdio-host",
+      "output_id": "host"
+    },
+    {
+      "core": "core0",
+      "line": 88,
+      "source_block": "companion-fe80",
+      "output_id": "processing"
+    },
+    {
+      "core": "core1",
+      "line": 120,
+      "source_block": "interrupt-core1",
+      "output_id": "software-release"
     }
   ],
   "clocks": [],
@@ -1314,7 +1482,12 @@
     }
   ],
   "reset": {
-    "release": null,
+    "release": {
+      "register": 4294648012,
+      "mask": 16777216,
+      "source": 120,
+      "target": 1073676288
+    },
     "coprocessor_writes": [
       {
         "core": "core1",

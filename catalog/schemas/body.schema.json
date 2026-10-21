@@ -169,6 +169,83 @@
       ],
       "type": "object"
     },
+    "BodyHardware": {
+      "additionalProperties": false,
+      "description": "Additional body-specific physical wiring.",
+      "properties": {
+        "gpio_feedback": {
+          "description": "Connections between GPIO output and input pads.",
+          "items": {
+            "$ref": "#/$defs/GpioFeedback"
+          },
+          "type": "array"
+        },
+        "keypad_samples": {
+          "additionalProperties": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Named keypad positions and their declared analog sample levels.",
+          "type": "object"
+        },
+        "serial_attachments": {
+          "description": "Serial endpoints and their processor-side connections.",
+          "items": {
+            "$ref": "#/$defs/SerialAttachment"
+          },
+          "type": "array"
+        },
+        "thermal_connection_ids": {
+          "description": "Body connections carrying thermal sensor voltages.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "serial_attachments",
+        "gpio_feedback",
+        "keypad_samples",
+        "thermal_connection_ids"
+      ],
+      "type": "object"
+    },
+    "BodyRamRegion": {
+      "additionalProperties": false,
+      "description": "A body-specific mapped RAM extent.",
+      "properties": {
+        "base": {
+          "description": "Physical base address of the region.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "bytes": {
+          "description": "Region capacity in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "description": "Stable region identity within the body.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/MemoryKind",
+          "description": "Memory type exposed by the body."
+        }
+      },
+      "required": [
+        "id",
+        "base",
+        "bytes",
+        "kind"
+      ],
+      "type": "object"
+    },
     "BodyWiring": {
       "additionalProperties": false,
       "description": "A physical wire between a body connection, part, or SoC block.",
@@ -417,8 +494,62 @@
             "address"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Direct interrupt wire to a processor interrupt-controller input.",
+          "properties": {
+            "controller_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "interrupt",
+              "type": "string"
+            },
+            "line": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "controller_id",
+            "line"
+          ],
+          "type": "object"
         }
       ]
+    },
+    "ControlBusAttachment": {
+      "additionalProperties": false,
+      "description": "Control-bus route for one physical part installed in a camera body.",
+      "properties": {
+        "address": {
+          "description": "Seven-bit endpoint address.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "channel": {
+          "description": "Controller channel index.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "controller_id": {
+          "description": "SoC control-bus block identity.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "controller_id",
+        "channel",
+        "address"
+      ],
+      "type": "object"
     },
     "ControlBusChip": {
       "additionalProperties": false,
@@ -622,6 +753,25 @@
       ],
       "type": "object"
     },
+    "GpioFeedback": {
+      "additionalProperties": false,
+      "description": "A declared electrical feedback connection between GPIO pads.",
+      "properties": {
+        "input_connection_id": {
+          "description": "Body connection exposing the input pad.",
+          "type": "string"
+        },
+        "output_connection_id": {
+          "description": "Body connection exposing the output pad.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "output_connection_id",
+        "input_connection_id"
+      ],
+      "type": "object"
+    },
     "IrisOptics": {
       "additionalProperties": false,
       "description": "Aperture positions and their optical output.",
@@ -771,6 +921,31 @@
         "pages"
       ],
       "type": "object"
+    },
+    "MemoryKind": {
+      "description": "Memory technologies exposed by the SoC.",
+      "oneOf": [
+        {
+          "const": "dram",
+          "description": "Dynamic random-access memory.",
+          "type": "string"
+        },
+        {
+          "const": "rom",
+          "description": "Read-only boot memory.",
+          "type": "string"
+        },
+        {
+          "const": "sram",
+          "description": "Static random-access memory.",
+          "type": "string"
+        },
+        {
+          "const": "tcm",
+          "description": "Tightly coupled processor memory.",
+          "type": "string"
+        }
+      ]
     },
     "MicrocontrollerAssembly": {
       "additionalProperties": false,
@@ -949,6 +1124,17 @@
           "description": "Body connection identity carrying sensor control and data signals.",
           "type": "string"
         },
+        "control_bus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ControlBusAttachment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Body-specific serial control-bus endpoint, when documented."
+        },
         "part_id": {
           "description": "Reusable sensor part identity.",
           "type": "string"
@@ -956,6 +1142,37 @@
       },
       "required": [
         "part_id",
+        "connection_id"
+      ],
+      "type": "object"
+    },
+    "SerialAttachment": {
+      "additionalProperties": false,
+      "description": "A physical serial endpoint attached to one SoC controller.",
+      "properties": {
+        "connection_id": {
+          "description": "Connection carrying endpoint data.",
+          "type": "string"
+        },
+        "controller_id": {
+          "description": "SoC serial-controller block identity.",
+          "type": "string"
+        },
+        "part_id": {
+          "description": "Installed part identity.",
+          "type": "string"
+        },
+        "select_connection_id": {
+          "description": "Connection selecting the endpoint, when declared.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "part_id",
+        "controller_id",
         "connection_id"
       ],
       "type": "object"
@@ -1053,6 +1270,11 @@
           "type": "string"
         },
         {
+          "const": "pulse",
+          "description": "Pulse-counter or timer input.",
+          "type": "string"
+        },
+        {
           "const": "power",
           "description": "Power or reset state.",
           "type": "string"
@@ -1123,6 +1345,17 @@
       "minimum": 0,
       "type": "integer"
     },
+    "hardware": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BodyHardware"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Optional body-specific physical attachments and signal routing."
+    },
     "id": {
       "description": "Stable body identity.",
       "type": "string"
@@ -1177,6 +1410,13 @@
         }
       ],
       "description": "Optional power-controller endpoint and its body-specific wiring."
+    },
+    "ram_regions": {
+      "description": "Body-mapped RAM extents when the board exposes a non-default memory map.",
+      "items": {
+        "$ref": "#/$defs/BodyRamRegion"
+      },
+      "type": "array"
     },
     "schema": {
       "description": "Body record version.",

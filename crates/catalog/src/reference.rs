@@ -48,6 +48,9 @@ pub struct Soc {
     pub interrupts: Vec<InterruptRoute>,
     /// Clock domains exposed by the SoC.
     pub clocks: Vec<ClockDomain>,
+    /// Additional family-specific hardware parameters, when specified.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hardware: Option<crate::soc::SocHardware>,
     /// CPU address-space mappings used to construct a processor graph.
     pub mappings: Vec<AddressMapping>,
     /// DMA address-space mappings used to construct a processor graph.
@@ -111,10 +114,24 @@ impl Soc {
                     self.id
                 ));
             }
-            if !routes.insert((route.core.as_str(), route.line)) {
+            if let Some(output_id) = &route.output_id {
+                validate_id(output_id)?;
+            }
+            if !routes.insert((
+                route.source_block.as_str(),
+                route.output_id.as_deref(),
+                route.core.as_str(),
+                route.line,
+            )) {
                 return Err(format!(
-                    "SoC {} repeats interrupt line {} for core {}",
-                    self.id, route.line, route.core
+                    "SoC {} repeats interrupt output {} line {} for core {}",
+                    self.id,
+                    route
+                        .output_id
+                        .as_deref()
+                        .unwrap_or(route.source_block.as_str()),
+                    route.line,
+                    route.core
                 ));
             }
         }
@@ -181,6 +198,16 @@ impl Soc {
                     self.id, block.id
                 ));
             }
+            if let Some(core_id) = &block.processor_core_id {
+                if block.kind != SocBlockKind::InterruptController
+                    || !self.processors.iter().any(|core| core.id == *core_id)
+                {
+                    return Err(format!(
+                        "SoC {} block {} has an invalid processor-core attachment",
+                        self.id, block.id
+                    ));
+                }
+            }
         }
         for mapping in &self.mappings {
             if !cores.contains(mapping.core.as_str()) {
@@ -198,6 +225,9 @@ impl Soc {
                 ));
             }
         }
+        if let Some(hardware) = &self.hardware {
+            hardware.validate(self)?;
+        }
         Ok(())
     }
 }
@@ -211,8 +241,8 @@ pub struct ProcessorCore {
     pub id: String,
     /// Implemented processor model.
     pub model: ProcessorModel,
-    /// Whether this core leaves reset when the SoC starts.
-    pub released: bool,
+    /// Whether this core leaves reset when the SoC starts, when known.
+    pub released: Option<bool>,
     /// Initial architectural register values.
     pub registers: Vec<RegisterValue>,
     /// Optional M-profile hardware state.
@@ -231,6 +261,8 @@ pub enum ProcessorModel {
     CortexA7,
     /// Cortex-A53 family processor.
     CortexA53,
+    /// Cortex-M4 family processor.
+    CortexM4,
 }
 
 /// An initial value for an architectural register.
@@ -346,6 +378,9 @@ pub struct SocBlock {
     pub size: u64,
     /// Block's modeled hardware category.
     pub kind: SocBlockKind,
+    /// Processor core directly served by this block, for per-core interrupt controllers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub processor_core_id: Option<String>,
     /// Clock domain supplying this block, when specified.
     pub clock_id: Option<String>,
 }
@@ -397,6 +432,8 @@ pub struct InterruptRoute {
     pub line: u32,
     /// SoC block producing the interrupt.
     pub source_block: String,
+    /// Named output or channel within the source block, when known.
+    pub output_id: Option<String>,
 }
 
 /// A SoC clock domain.
@@ -566,6 +603,12 @@ pub struct Body {
     pub soc_id: String,
     /// Installed DRAM capacity in bytes.
     pub dram_bytes: u64,
+    /// Optional body-specific physical attachments and signal routing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hardware: Option<crate::assembly::BodyHardware>,
+    /// Body-mapped RAM extents when the board exposes a non-default memory map.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ram_regions: Vec<BodyRamRegion>,
     /// Optional installed NAND geometry.
     pub nand: Option<NandGeometry>,
     /// Optional sensor assembly and its physical characteristics.
@@ -602,6 +645,38 @@ impl Body {
         validate_id(&self.soc_id)?;
         if self.dram_bytes == 0 {
             return Err(format!("body {} has no DRAM capacity", self.id));
+        }
+        if let Some(hardware) = &self.hardware {
+            hardware.validate(self)?;
+        }
+        let mut region_ids = BTreeSet::new();
+        let mut region_extents = Vec::new();
+        let mut dram_region_bytes = 0u64;
+        for region in &self.ram_regions {
+            validate_id(&region.id)?;
+            if region.bytes == 0
+                || region.base.checked_add(region.bytes).is_none()
+                || !region_ids.insert(region.id.as_str())
+                || !matches!(region.kind, MemoryKind::Dram | MemoryKind::Sram)
+            {
+                return Err(format!("body {} has an invalid RAM region", self.id));
+            }
+            if region.kind == MemoryKind::Dram {
+                dram_region_bytes = dram_region_bytes
+                    .checked_add(region.bytes)
+                    .ok_or_else(|| format!("body {} DRAM extent overflows", self.id))?;
+            }
+            region_extents.push((region.base, region.base + region.bytes));
+        }
+        region_extents.sort_unstable();
+        if region_extents.windows(2).any(|pair| pair[0].1 > pair[1].0) {
+            return Err(format!("body {} RAM regions overlap", self.id));
+        }
+        if dram_region_bytes != 0 && dram_region_bytes != self.dram_bytes {
+            return Err(format!(
+                "body {} DRAM regions differ from its capacity",
+                self.id
+            ));
         }
         unique_ids(self.parts.iter().map(String::as_str), "body part")?;
         unique_ids(
@@ -685,6 +760,21 @@ impl Body {
     }
 }
 
+/// A body-specific mapped RAM extent.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub struct BodyRamRegion {
+    /// Stable region identity within the body.
+    pub id: String,
+    /// Physical base address of the region.
+    pub base: u64,
+    /// Region capacity in bytes.
+    pub bytes: u64,
+    /// Memory type exposed by the body.
+    pub kind: MemoryKind,
+}
+
 /// NAND geometry installed in a camera body or storage part.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -709,6 +799,21 @@ pub struct SensorAssembly {
     pub part_id: String,
     /// Body connection identity carrying sensor control and data signals.
     pub connection_id: String,
+    /// Body-specific serial control-bus endpoint, when documented.
+    pub control_bus: Option<ControlBusAttachment>,
+}
+
+/// Control-bus route for one physical part installed in a camera body.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub struct ControlBusAttachment {
+    /// SoC control-bus block identity.
+    pub controller_id: String,
+    /// Controller channel index.
+    pub channel: u8,
+    /// Seven-bit endpoint address.
+    pub address: u8,
 }
 
 /// Sensor image and timing geometry.
@@ -964,6 +1069,8 @@ pub enum ConnectionSignal {
         channel: u8,
         address: u8,
     },
+    /// Direct interrupt wire to a processor interrupt-controller input.
+    Interrupt { controller_id: String, line: u32 },
 }
 
 /// Named control signals carried by SoC blocks.
@@ -1013,6 +1120,8 @@ pub enum WireSignal {
     Microcontroller,
     /// Memory card data and control.
     Storage,
+    /// Pulse-counter or timer input.
+    Pulse,
     /// Power or reset state.
     Power,
 }
@@ -1200,6 +1309,11 @@ pub enum PartModel {
         serial: SerialOutputKind,
         /// Number of panel register bits used by the endpoint.
         used_mask: u32,
+    },
+    /// A reusable serial or register peripheral endpoint.
+    Peripheral {
+        /// Closed protocol model for the endpoint.
+        interface: crate::assembly::PeripheralPart,
     },
 }
 
@@ -1918,12 +2032,44 @@ impl ReferenceCatalog {
                 }
                 Ok(())
             };
+            if let Some(hardware) = &body.hardware {
+                for attachment in &hardware.serial_attachments {
+                    block_kind(
+                        &attachment.controller_id,
+                        SocBlockKind::SerialController,
+                        "serial attachment",
+                    )?;
+                }
+            }
             for chip in &body.control_bus_chips {
                 block_kind(
                     &chip.controller_id,
                     SocBlockKind::ControlBus,
                     "control-bus device",
                 )?;
+            }
+            if let Some(sensor_bus) = body
+                .sensor
+                .as_ref()
+                .and_then(|sensor| sensor.control_bus.as_ref())
+            {
+                block_kind(
+                    &sensor_bus.controller_id,
+                    SocBlockKind::ControlBus,
+                    "sensor",
+                )?;
+                if sensor_bus.address > 0x7f
+                    || body.control_bus_chips.iter().any(|chip| {
+                        chip.controller_id == sensor_bus.controller_id
+                            && chip.channel == sensor_bus.channel
+                            && chip.address == sensor_bus.address
+                    })
+                {
+                    return Err(format!(
+                        "body {} sensor control-bus address is invalid or repeated",
+                        body.id
+                    ));
+                }
             }
             if let Some(lens) = &body.lens {
                 block_kind(
@@ -2009,6 +2155,9 @@ impl ReferenceCatalog {
                         ConnectionSignal::Block { block_id, .. } => (block_id, None),
                         ConnectionSignal::Serial { block_id, .. } => {
                             (block_id, Some(SocBlockKind::ControlBus))
+                        }
+                        ConnectionSignal::Interrupt { controller_id, .. } => {
+                            (controller_id, Some(SocBlockKind::InterruptController))
                         }
                         ConnectionSignal::Gpio { .. } | ConnectionSignal::Adc { .. } => continue,
                     };

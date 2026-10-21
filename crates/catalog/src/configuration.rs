@@ -14,6 +14,8 @@ pub const RUN_CONFIGURATION_SCHEMA_URI: &str =
 pub const RUN_OVERLAY_SCHEMA_URI: &str =
     "https://fujimod.com/schemas/emulator-run-overlay.schema.json";
 
+include!(concat!(env!("OUT_DIR"), "/bundled_configurations.rs"));
+
 /// A validated, named run configuration for one resolved body and firmware.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -46,10 +48,10 @@ impl RunConfiguration {
     /// Resolve a bundled run-configuration by its stable identity.
     pub fn bundled(id: &str) -> Result<Self, String> {
         crate::emulator::validate_id(id)?;
-        let document = match id {
-            "x70-110-rec" => include_str!("../../../configurations/emulator/x70-110-rec/run.json"),
-            _ => return Err(format!("unsupported run configuration: {id}")),
-        };
+        let document = BUNDLED_RUN_CONFIGURATIONS
+            .iter()
+            .find_map(|(candidate, document)| (*candidate == id).then_some(*document))
+            .ok_or_else(|| format!("unsupported run configuration: {id}"))?;
         let configuration: Self = serde_json::from_str(document)
             .map_err(|error| format!("run configuration {id}: {error}"))?;
         configuration.validate(id)?;
@@ -129,6 +131,44 @@ impl RunConfiguration {
                 return Err(format!(
                     "run key input refers to an absent or non-control body connection {}",
                     key.connection_id
+                ));
+            }
+        }
+        for encoder in &self.inputs.encoders {
+            let input = connection(&encoder.connection_id)
+                .filter(|item| item.kind == crate::reference::ConnectionKind::Control)
+                .ok_or_else(|| {
+                    format!(
+                        "run encoder input refers to an absent or non-control connection {}",
+                        encoder.connection_id
+                    )
+                })?;
+            let gpio_signals = input
+                .signals
+                .iter()
+                .filter(|signal| matches!(signal, crate::reference::ConnectionSignal::Gpio { .. }))
+                .count();
+            if gpio_signals != 2 {
+                return Err(format!(
+                    "run encoder input {} must resolve to two GPIO signals",
+                    encoder.connection_id
+                ));
+            }
+        }
+        for output in &self.inputs.gpio.outputs {
+            let target = connection(&output.connection_id).ok_or_else(|| {
+                format!(
+                    "run GPIO output refers to an absent body connection {}",
+                    output.connection_id
+                )
+            })?;
+            if !matches!(
+                target.signals.get(usize::from(output.signal_index)),
+                Some(crate::reference::ConnectionSignal::Gpio { .. })
+            ) {
+                return Err(format!(
+                    "run GPIO output {} signal {} is absent or non-GPIO",
+                    output.connection_id, output.signal_index
                 ));
             }
         }
@@ -313,8 +353,52 @@ impl ResolvedConfiguration {
     /// Load a bundled run configuration and resolve all selected catalog IDs.
     pub fn bundled(id: &str) -> Result<Self, String> {
         let configuration = RunConfiguration::bundled(id)?;
+        let overlays = configuration.overlays.clone();
+        Self::resolve_and_apply(configuration, &overlays)
+    }
+
+    /// Resolve a base run configuration and apply its named input overlays.
+    pub fn with_overlays(configuration_id: &str, overlay_ids: &[String]) -> Result<Self, String> {
+        let configuration = RunConfiguration::bundled(configuration_id)?;
+        let mut selected = configuration.overlays.clone();
+        selected.extend(overlay_ids.iter().cloned());
+        Self::resolve_and_apply(configuration, &selected)
+    }
+
+    fn resolve_and_apply(
+        mut configuration: RunConfiguration,
+        overlay_ids: &[String],
+    ) -> Result<Self, String> {
         let catalog = crate::reference::ReferenceCatalog::bundled()?;
         let reference = catalog.resolve(&configuration.body_id, &configuration.firmware_id)?;
+        configuration.validate_selection(&reference)?;
+        let mut applied = BTreeSet::new();
+        let mut changed = BTreeSet::new();
+        configuration.overlays.clear();
+        for overlay_id in overlay_ids {
+            if !applied.insert(overlay_id.as_str()) {
+                return Err(format!(
+                    "run overlay {overlay_id} is selected more than once"
+                ));
+            }
+            let overlay = RunOverlay::bundled(overlay_id)?;
+            overlay.validate(overlay_id, &configuration.id)?;
+            match overlay.change {
+                RunOverlayChange::UsbConnection { connected } => {
+                    if !changed.insert("usb") {
+                        return Err("run overlays change USB connection more than once".into());
+                    }
+                    configuration.inputs.usb.connected = connected;
+                }
+                RunOverlayChange::Start { start } => {
+                    if !changed.insert("start") {
+                        return Err("run overlays change the start entry more than once".into());
+                    }
+                    configuration.start = start;
+                }
+            }
+            configuration.overlays.push(overlay.id);
+        }
         configuration.validate_selection(&reference)?;
         Ok(Self {
             configuration,
@@ -365,6 +449,8 @@ impl RunInstructionRate {
 pub struct RunInputs {
     /// GPIO reset state and explicitly released controls.
     pub gpio: RunGpioInputs,
+    /// Initial phases for physical quadrature encoders.
+    pub encoders: Vec<RunEncoderInput>,
     /// ADC reset samples.
     pub adc: RunAdcInputs,
     /// Power-controller reset input.
@@ -384,7 +470,10 @@ pub struct RunInputs {
 impl RunInputs {
     fn validate(&self) -> Result<(), String> {
         crate::emulator::validate_id(&self.gpio.block_id)?;
-        if self.gpio.keys.len() > 64 || self.gpio.connections.len() > 64 {
+        if self.gpio.keys.len() > 64
+            || self.gpio.connections.len() > 64
+            || self.gpio.outputs.len() > 256
+        {
             return Err("run GPIO input count exceeds its bound".into());
         }
         let mut keys = BTreeSet::new();
@@ -399,6 +488,23 @@ impl RunInputs {
             crate::emulator::validate_id(&connection.connection_id)?;
             if !connections.insert(connection.connection_id.as_str()) {
                 return Err("run GPIO repeats a connection identity".into());
+            }
+        }
+        let mut outputs = BTreeSet::new();
+        for output in &self.gpio.outputs {
+            crate::emulator::validate_id(&output.connection_id)?;
+            if !outputs.insert((output.connection_id.as_str(), output.signal_index)) {
+                return Err("run GPIO repeats an output signal identity".into());
+            }
+        }
+        if self.encoders.len() > 64 {
+            return Err("run encoder input count exceeds its bound".into());
+        }
+        let mut encoders = BTreeSet::new();
+        for encoder in &self.encoders {
+            crate::emulator::validate_id(&encoder.connection_id)?;
+            if encoder.phase > 3 || !encoders.insert(encoder.connection_id.as_str()) {
+                return Err("run encoder input has a repeated identity or invalid phase".into());
             }
         }
         crate::emulator::validate_id(&self.adc.block_id)?;
@@ -477,10 +583,28 @@ impl RunFirstStart {
 pub struct RunGpioInputs {
     /// SoC GPIO block identity.
     pub block_id: String,
+    /// Startup input level supplied for pads without a named assignment.
+    /// This is a run assumption, not a measured hardware fact.
+    pub unassigned_input_level: bool,
     /// Explicit key/control states; released controls are listed as false.
     pub keys: Vec<RunKeyState>,
     /// External connection states resolved through body wiring.
     pub connections: Vec<RunConnectionState>,
+    /// Known GPIO output-latch states addressed through body wiring.
+    pub outputs: Vec<RunGpioOutputState>,
+}
+
+/// Initial output-latch value for one GPIO signal in a body connection.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub struct RunGpioOutputState {
+    /// Body connection identity for the output signal.
+    pub connection_id: String,
+    /// Zero-based signal index in the body connection.
+    pub signal_index: u8,
+    /// Output level latched at reset.
+    pub high: bool,
 }
 
 /// Initial state of a physical key or body control connection.
@@ -492,6 +616,17 @@ pub struct RunKeyState {
     pub connection_id: String,
     /// Whether the control is pressed at reset.
     pub pressed: bool,
+}
+
+/// Initial phase for a body-backed quadrature encoder.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub struct RunEncoderInput {
+    /// Body connection identity carrying both encoder signals.
+    pub connection_id: String,
+    /// Initial two-bit encoder phase in the range zero through three.
+    pub phase: u8,
 }
 
 /// Initial state of a physical body connection.
@@ -643,6 +778,19 @@ pub struct RunOverlay {
 }
 
 impl RunOverlay {
+    /// Resolve a bundled run overlay by its stable identity.
+    pub fn bundled(id: &str) -> Result<Self, String> {
+        crate::emulator::validate_id(id)?;
+        let document = BUNDLED_RUN_OVERLAYS
+            .iter()
+            .find_map(|(candidate, document)| (*candidate == id).then_some(*document))
+            .ok_or_else(|| format!("unsupported run overlay: {id}"))?;
+        let overlay: Self =
+            serde_json::from_str(document).map_err(|error| format!("run overlay {id}: {error}"))?;
+        overlay.validate(id, &overlay.configuration_id)?;
+        Ok(overlay)
+    }
+
     /// Check the overlay identity and its selected configuration.
     pub fn validate(&self, selected_id: &str, configuration_id: &str) -> Result<(), String> {
         if self.schema != 1
@@ -850,7 +998,16 @@ mod tests {
             }
         );
         assert_eq!(config.scene.frame_period_ticks, 400000);
+        assert!(!config.inputs.gpio.unassigned_input_level);
         assert!(config.inputs.gpio.keys.iter().all(|key| !key.pressed));
+        assert_eq!(config.inputs.gpio.outputs.len(), 3);
+        assert!(config.inputs.gpio.outputs.iter().all(|output| output.high));
+        assert_eq!(config.inputs.encoders.len(), 1);
+        assert_eq!(
+            config.inputs.encoders[0].connection_id,
+            "controls-encoder-3-6-3-7"
+        );
+        assert_eq!(config.inputs.encoders[0].phase, 0);
         assert_eq!(config.inputs.adc.block_id, "adc");
         assert!(config.overlays.is_empty());
         assert!(RunConfiguration::bundled("unknown").is_err());
@@ -882,6 +1039,14 @@ mod tests {
         invalid.inputs.usb.connection_id = "hdmi".into();
         assert!(invalid.validate_selection(&selection).is_err());
 
+        let mut invalid = config.clone();
+        invalid.inputs.encoders[0].connection_id = "s1".into();
+        assert!(invalid.validate_selection(&selection).is_err());
+
+        let mut invalid = config.clone();
+        invalid.inputs.gpio.outputs[0].signal_index = 2;
+        assert!(invalid.validate_selection(&selection).is_err());
+
         let mut invalid = config;
         invalid.inputs.mcu.part_id = invalid.inputs.power.part_id.clone();
         assert!(invalid.validate_selection(&selection).is_err());
@@ -899,6 +1064,18 @@ mod tests {
         assert!(overlay.validate("x70-110-rec-usb", "x70-110-rec").is_ok());
         assert!(overlay.validate("x70-110-rec-usb", "different").is_err());
         assert!(overlay.validate("different", "x70-110-rec").is_err());
+
+        let bundled = RunOverlay::bundled("x70-110-rec-usb").unwrap();
+        assert_eq!(bundled.configuration_id, "x70-110-rec");
+        assert_eq!(
+            bundled.change,
+            RunOverlayChange::UsbConnection { connected: true }
+        );
+        let resolved =
+            ResolvedConfiguration::with_overlays("x70-110-rec", &["x70-110-rec-usb".into()])
+                .unwrap();
+        assert!(resolved.configuration.inputs.usb.connected);
+        assert_eq!(resolved.configuration.overlays, ["x70-110-rec-usb"]);
     }
 
     #[test]

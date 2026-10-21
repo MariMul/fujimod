@@ -12,7 +12,12 @@
   },
   "sensor": {
     "part_id": "x70-image-sensor",
-    "connection_id": "sensor-bus"
+    "connection_id": "sensor-bus",
+    "control_bus": {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 28
+    }
   },
   "lens": {
     "part_id": "banked-programmed-lens",
@@ -121,7 +126,12 @@
       "infinity_position": -111,
       "steps_per_mm": 267.0
     },
-    "home_connections": [],
+    "home_connections": [
+      {
+        "motor": 0,
+        "connection_id": "lens-focus-home"
+      }
+    ],
     "encoder_connection_id": null
   },
   "display": {
@@ -1052,7 +1062,14 @@
     {
       "id": "hot-shoe",
       "kind": "hot-shoe",
-      "signals": []
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 11,
+          "pin": 2,
+          "active_level": true
+        }
+      ]
     },
     {
       "id": "usb",
@@ -1119,6 +1136,11 @@
           "block_id": "control-bus0",
           "channel": 0,
           "address": 85
+        },
+        {
+          "kind": "interrupt",
+          "controller_id": "interrupt-core0",
+          "line": 15
         }
       ]
     },
@@ -1136,6 +1158,18 @@
           "port": 13,
           "pin": 9,
           "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "lens-focus-home",
+      "kind": "lens",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 0,
+          "active_level": true
         }
       ]
     },

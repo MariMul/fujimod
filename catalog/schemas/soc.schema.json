@@ -73,6 +73,283 @@
       ],
       "type": "object"
     },
+    "ApplicationHardware": {
+      "description": "Family-specific application-processor identification.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "ARMv7-A configuration base and cache capacities.",
+          "properties": {
+            "caches": {
+              "$ref": "#/$defs/CacheGeometry",
+              "description": "Declared cache capacities."
+            },
+            "configuration_base": {
+              "description": "Configuration base address presented to each application core.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "armv7a",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "configuration_base",
+            "caches"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "ARMv8-A processor identity, affinities and architectural timer wiring.",
+          "properties": {
+            "affinities": {
+              "additionalProperties": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "description": "MPIDR_EL1 affinity values, keyed by processor identity.",
+              "type": "object"
+            },
+            "counter_clock_id": {
+              "description": "Clock domain supplying the architectural counter.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "armv8a",
+              "type": "string"
+            },
+            "midr_el1": {
+              "description": "MIDR_EL1 processor identification value.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "physical_timer_irq": {
+              "description": "Physical architectural timer interrupt line.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "pmu_clock_id": {
+              "description": "Clock domain supplying the performance monitor.",
+              "type": "string"
+            },
+            "virtual_timer_irq": {
+              "description": "Virtual architectural timer interrupt line.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "midr_el1",
+            "affinities",
+            "counter_clock_id",
+            "pmu_clock_id",
+            "physical_timer_irq",
+            "virtual_timer_irq"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "BlockHardware": {
+      "description": "Hardware parameters for a named SoC register block.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "DMA channel count and request-multiplexer connection.",
+          "properties": {
+            "channels": {
+              "description": "Number of DMA channels.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "dma",
+              "type": "string"
+            },
+            "request_mux_block_id": {
+              "description": "Request-multiplexer register block identity.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "channels",
+            "request_mux_block_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Serial-flash controller's memory-mapped aperture.",
+          "properties": {
+            "aperture_block_id": {
+              "description": "Flash aperture block identity.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "serial_flash",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "aperture_block_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Imaging input buffer's SRAM banks.",
+          "properties": {
+            "bank_bytes": {
+              "description": "Capacity of one SRAM bank.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "imaging_input_buffer",
+              "type": "string"
+            },
+            "sram_region_id": {
+              "description": "SRAM memory-region identity.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "sram_region_id",
+            "bank_bytes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Display-channel pixel packing declared by the controller contract.",
+          "properties": {
+            "kind": {
+              "const": "display",
+              "type": "string"
+            },
+            "picture_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PictureLayout"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Picture-plane packing, when specified."
+            },
+            "video_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/VideoLayout"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Video-plane packing, when specified."
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Serial-controller DMA request lines.",
+          "properties": {
+            "kind": {
+              "const": "serial_dma",
+              "type": "string"
+            },
+            "receive_request": {
+              "description": "Receive request identifier.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "transmit_request": {
+              "description": "Transmit request identifier.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "receive_request",
+            "transmit_request"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "DMA interrupt range presented to a companion processor.",
+          "properties": {
+            "companion_irq_base": {
+              "description": "First companion interrupt line for the DMA controller.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "companion_dma",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "companion_irq_base"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CacheGeometry": {
+      "additionalProperties": false,
+      "description": "Cache capacities declared for an application processor.",
+      "properties": {
+        "l1_data_bytes": {
+          "description": "Per-core level-one data-cache capacity.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "l1_instruction_bytes": {
+          "description": "Per-core level-one instruction-cache capacity.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "l2_bytes": {
+          "description": "Shared level-two cache capacity.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "l1_data_bytes",
+        "l1_instruction_bytes",
+        "l2_bytes"
+      ],
+      "type": "object"
+    },
     "ClockDomain": {
       "additionalProperties": false,
       "description": "A SoC clock domain.",
@@ -100,6 +377,112 @@
       },
       "required": [
         "id"
+      ],
+      "type": "object"
+    },
+    "CompanionHardware": {
+      "additionalProperties": false,
+      "description": "A companion processor's hardware clock and mailbox endpoints.",
+      "properties": {
+        "clock_id": {
+          "description": "Clock domain supplying the companion processor.",
+          "type": "string"
+        },
+        "mailbox": {
+          "$ref": "#/$defs/CompanionMailbox",
+          "description": "Mailbox indices used by the companion link."
+        },
+        "mailbox_block_id": {
+          "description": "SoC mailbox block identity.",
+          "type": "string"
+        },
+        "processor_id": {
+          "description": "Companion processor identity in the SoC processor list.",
+          "type": "string"
+        },
+        "vector_base": {
+          "description": "Vector-table address presented to the companion after reset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "processor_id",
+        "clock_id",
+        "vector_base",
+        "mailbox_block_id",
+        "mailbox"
+      ],
+      "type": "object"
+    },
+    "CompanionMailbox": {
+      "additionalProperties": false,
+      "description": "Mailbox indices used by a companion processor link.",
+      "properties": {
+        "control": {
+          "description": "Control mailbox index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fault": {
+          "description": "Fault mailbox index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reply": {
+          "description": "Reply mailbox index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request": {
+          "description": "Request mailbox index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "description": "Status mailbox index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "request",
+        "control",
+        "reply",
+        "status",
+        "fault"
+      ],
+      "type": "object"
+    },
+    "ControllerInterruptInput": {
+      "additionalProperties": false,
+      "description": "A producer output connected to an input of the programmable interrupt controller.",
+      "properties": {
+        "line": {
+          "description": "Interrupt-controller input line.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output_id": {
+          "description": "Producer output identity, such as a channel or error output.",
+          "type": "string"
+        },
+        "source_block_id": {
+          "description": "Register block producing the interrupt.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_block_id",
+        "output_id",
+        "line"
       ],
       "type": "object"
     },
@@ -299,6 +682,80 @@
       ],
       "type": "object"
     },
+    "InterruptControllerHardware": {
+      "description": "ARM generic interrupt-controller interfaces.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "GICv2 distributor and CPU interface.",
+          "properties": {
+            "cpu_interface_block_id": {
+              "description": "CPU-interface register block identity.",
+              "type": "string"
+            },
+            "distributor_block_id": {
+              "description": "Distributor register block identity.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "gic_v2",
+              "type": "string"
+            },
+            "lines": {
+              "description": "Number of implemented interrupt lines.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "distributor_block_id",
+            "cpu_interface_block_id",
+            "lines"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "GICv3 distributor and per-core redistributors.",
+          "properties": {
+            "distributor_block_id": {
+              "description": "Distributor register block identity.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "gic_v3",
+              "type": "string"
+            },
+            "lines": {
+              "description": "Number of implemented interrupt lines.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "redistributor_block_id": {
+              "description": "Redistributor register block identity.",
+              "type": "string"
+            },
+            "redistributor_stride": {
+              "description": "Distance between adjacent redistributor frames.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "distributor_block_id",
+            "redistributor_block_id",
+            "redistributor_stride",
+            "lines"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "InterruptRoute": {
       "additionalProperties": false,
       "description": "A routed interrupt line.",
@@ -312,6 +769,13 @@
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "output_id": {
+          "description": "Named output or channel within the source block, when known.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "source_block": {
           "description": "SoC block producing the interrupt.",
@@ -439,6 +903,16 @@
       ],
       "type": "object"
     },
+    "PictureLayout": {
+      "description": "Picture-plane pixel packing declared by a display controller.",
+      "oneOf": [
+        {
+          "const": "bgra8888-straight",
+          "description": "Blue, green, red and straight-alpha bytes.",
+          "type": "string"
+        }
+      ]
+    },
     "ProcessorArchitecture": {
       "description": "A processor architecture described by a system-on-chip record.",
       "oneOf": [
@@ -485,8 +959,11 @@
           "type": "array"
         },
         "released": {
-          "description": "Whether this core leaves reset when the SoC starts.",
-          "type": "boolean"
+          "description": "Whether this core leaves reset when the SoC starts, when known.",
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "rprofile": {
           "anyOf": [
@@ -503,7 +980,6 @@
       "required": [
         "id",
         "model",
-        "released",
         "registers"
       ],
       "type": "object"
@@ -524,6 +1000,11 @@
         {
           "const": "cortex-a53",
           "description": "Cortex-A53 family processor.",
+          "type": "string"
+        },
+        {
+          "const": "cortex-m4",
+          "description": "Cortex-M4 family processor.",
           "type": "string"
         }
       ]
@@ -664,6 +1145,13 @@
           "$ref": "#/$defs/SocBlockKind",
           "description": "Block's modeled hardware category."
         },
+        "processor_core_id": {
+          "description": "Processor core directly served by this block, for per-core interrupt controllers.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "size": {
           "description": "Addressable block size in bytes.",
           "format": "uint64",
@@ -759,6 +1247,64 @@
         }
       ]
     },
+    "SocHardware": {
+      "additionalProperties": false,
+      "description": "Additional hardware parameters whose meaning depends on the processor family.",
+      "properties": {
+        "application": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ApplicationHardware"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Application-processor identification and cache topology, when declared."
+        },
+        "blocks": {
+          "additionalProperties": {
+            "$ref": "#/$defs/BlockHardware"
+          },
+          "description": "Additional block parameters, keyed by the block's identity.",
+          "type": "object"
+        },
+        "companion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompanionHardware"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Companion-processor clock and mailbox connections, when present."
+        },
+        "interrupt_controller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InterruptControllerHardware"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Hardware interrupt-controller interfaces."
+        },
+        "interrupt_inputs": {
+          "description": "Inputs to a programmable interrupt controller; core routing is selected by its registers.",
+          "items": {
+            "$ref": "#/$defs/ControllerInterruptInput"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "interrupt_inputs",
+        "blocks"
+      ],
+      "type": "object"
+    },
     "SocReset": {
       "additionalProperties": false,
       "description": "Hardware state applied when a SoC leaves reset.",
@@ -809,6 +1355,16 @@
         "reset_address"
       ],
       "type": "object"
+    },
+    "VideoLayout": {
+      "description": "Video-plane pixel packing declared by a display controller.",
+      "oneOf": [
+        {
+          "const": "yycbcr422",
+          "description": "Two luma samples followed by shared chroma samples.",
+          "type": "string"
+        }
+      ]
     }
   },
   "$id": "https://fujimod.com/schemas/soc.schema.json",
@@ -852,6 +1408,17 @@
         "$ref": "#/$defs/DmaMapping"
       },
       "type": "array"
+    },
+    "hardware": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SocHardware"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Additional family-specific hardware parameters, when specified."
     },
     "id": {
       "description": "Stable SoC identity.",

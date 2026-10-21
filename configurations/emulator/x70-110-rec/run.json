@@ -19,13 +19,50 @@
   "inputs": {
     "gpio": {
       "block_id": "gpio",
+      "unassigned_input_level": false,
       "keys": [
+        {
+          "connection_id": "controls-gpio-2-12",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-2-11",
+          "pressed": false
+        },
         {
           "connection_id": "s1",
           "pressed": false
         },
         {
           "connection_id": "s2",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-0-11",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-3-3",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-2-9",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-3-8",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-3-9",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-0-10",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-1-1",
           "pressed": false
         }
       ],
@@ -45,17 +82,32 @@
         {
           "connection_id": "hot-shoe",
           "connected": false
+        }
+      ],
+      "outputs": [
+        {
+          "connection_id": "display-select",
+          "signal_index": 0,
+          "high": true
         },
         {
-          "connection_id": "external-power",
-          "connected": false
+          "connection_id": "display-select",
+          "signal_index": 1,
+          "high": true
         },
         {
-          "connection_id": "battery-door",
-          "connected": true
+          "connection_id": "lens-select",
+          "signal_index": 0,
+          "high": true
         }
       ]
     },
+    "encoders": [
+      {
+        "connection_id": "controls-encoder-3-6-3-7",
+        "phase": 0
+      }
+    ],
     "adc": {
       "block_id": "adc",
       "samples": [0, 0, 1023, 63, 534, 640, 0, 825, 1023, 60, 0, 0]

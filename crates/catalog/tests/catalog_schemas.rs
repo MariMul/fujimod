@@ -70,9 +70,9 @@ fn reference_and_run_configuration_documents_validate_generated_schemas() {
         let path = schema_root.join(name);
         let mut expected = serde_json::to_vec_pretty(&generated).expect("generated schema");
         expected.push(b'\n');
-        assert_eq!(
-            fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display())),
-            expected,
+        let actual = fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+        assert!(
+            actual == expected,
             "{} differs from the Rust source types",
             path.display()
         );
