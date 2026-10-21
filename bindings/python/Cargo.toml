@@ -13,19 +13,38 @@ test = false
 doctest = false
 
 [features]
+default = ["emulator"]
+emulator = [
+    "dep:cc",
+    "dep:fujimod-emulator",
+    "dep:fujimod-emulator-cpu",
+    "dep:fujimod-emulator-devices",
+    "dep:pkg-config",
+    "dep:sha2",
+    "fujimod-emulator/serde",
+]
+host-profile = ["emulator", "fujimod-emulator/host-profile"]
 testing = ["fujimod-usb/testing"]
 
 [dependencies]
+fujimod-recording.workspace = true
 fujimod-firmware = { path = "../../crates/firmware" }
-pyo3 = { workspace = true, features = ["experimental-async", "multiple-pymethods"] }
+pyo3 = { workspace = true, features = ["experimental-async", "experimental-inspect", "multiple-pymethods"] }
 fujimod-usb.workspace = true
 fujimod-workflows.workspace = true
 fujimod-catalog.workspace = true
 fujimod-corpus = { path = "../../crates/corpus" }
+fujimod-emulator = { path = "../../crates/emulator", optional = true }
+fujimod-emulator-cpu = { path = "../../crates/emulator-cpu", optional = true }
+fujimod-emulator-devices = { path = "../../crates/emulator-devices", optional = true }
+serde.workspace = true
 serde_json.workspace = true
 futures-lite.workspace = true
 futures-channel.workspace = true
 nusb.workspace = true
+sha2 = { workspace = true, optional = true }
 
 [build-dependencies]
 fujimod-bindgen = { path = "../generator" }
+cc = { version = "1", optional = true }
+pkg-config = { version = "0.3", optional = true }

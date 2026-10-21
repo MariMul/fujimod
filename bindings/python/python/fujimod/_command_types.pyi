@@ -1,7 +1,7 @@
 from _fujimod_service_values import ArgumentKind
 
 from ._variants import Sum
-from .defs.service import Codec
+from .catalog.service import Codec
 
 class CommandFailure(Sum):
     class Unsupported(CommandFailure):

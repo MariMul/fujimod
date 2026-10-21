@@ -3,14 +3,17 @@
 import importlib
 
 import pytest
-from fujimod import defs, usb
+from fujimod import catalog, emulator, usb
+from fujimod._native import emulator as native_emulator
 
 
 def test_one_package_supports_direct_submodule_imports() -> None:
-    assert importlib.import_module("fujimod.defs") is defs
-    assert importlib.import_module("fujimod.defs.service") is defs.service
-    assert defs.FirmwareIdentity("synthetic-v1", "ab" * 32).id == "synthetic-v1"
-    assert defs.service.ServiceModes(4).mask == 4
+    assert importlib.import_module("fujimod.catalog") is catalog
+    assert importlib.import_module("fujimod.catalog.service") is catalog.service
+    assert importlib.import_module("fujimod.emulator") is emulator
+    assert importlib.import_module("fujimod._native.emulator") is native_emulator
+    assert catalog.FirmwareIdentity("synthetic-v1", "ab" * 32).id == "synthetic-v1"
+    assert catalog.service.ServiceModes(4).mask == 4
     assert isinstance(usb.app80.Command.FlushConfiguration(), usb.app80.Command)
     assert importlib.import_module("fujimod.usb") is usb
     assert importlib.import_module("fujimod.usb") is usb

@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Self
 
-from _fujimod_js import defs as _jsdefs
+from _fujimod_js import catalog as _jscatalog
 from _fujimod_js import valueSchemas as _schemas
 
 from .._binding_values import bind_values as _bind_values
@@ -19,13 +19,15 @@ if TYPE_CHECKING:
     )
 
 
-_js = _jsdefs.service
+_js = _jscatalog.service
 
 
 if TYPE_CHECKING:
     from _fujimod_service_values import Codec as Codec
 else:
-    Codec = _bind_values(_schemas.definitions, _js, "fujimod.defs.service")[0]["Codec"]
+    Codec = _bind_values(_schemas.definitions, _js, "fujimod.catalog.service")[0][
+        "Codec"
+    ]
 
 
 class ServiceModes(Handle["JsServiceModes"]):

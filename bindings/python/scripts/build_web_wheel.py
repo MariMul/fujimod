@@ -23,9 +23,11 @@ def build(output: Path) -> Path:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
     version = project["version"]
     dist = f"fujimod-{version}.dist-info"
+    package = ROOT / "python" / "fujimod"
     files = {
         str(p.relative_to(ROOT / "python")): p.read_bytes()
-        for p in sorted((ROOT / "python" / "fujimod").rglob("*.py"))
+        for p in sorted(package.rglob("*.py"))
+        if p.relative_to(package).parts[0] != "emulator"
     }
     files[f"{dist}/METADATA"] = (
         f"Metadata-Version: 2.4\nName: fujimod\nVersion: {version}\n"

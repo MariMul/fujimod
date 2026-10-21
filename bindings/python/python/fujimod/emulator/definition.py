@@ -1,4 +1,5 @@
 """Resolved execution facts and content identities supplied by a caller."""
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -29,10 +30,10 @@ class Definition:
     images: tuple[Image, ...] = ()
     scene: dict[str, object] = field(default_factory=dict)
     library: str | Path | None = None
-    engine: Literal['unicorn', 'hypervisor'] = 'unicorn'
+    engine: Literal["unicorn", "hypervisor"] = "unicorn"
     quantum: int = 1000
     translation_cache_bytes: int = 16 << 20
-    mode: Literal['strict', 'discovery'] = 'strict'
+    mode: Literal["strict", "discovery"] = "strict"
     continue_refusals: bool = False
     adapters: dict[str, object] = field(default_factory=dict)
 

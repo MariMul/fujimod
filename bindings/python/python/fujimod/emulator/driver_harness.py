@@ -5,36 +5,101 @@ exact-address instrumentation and optional fetch/store/coverage guards. Host
 preparation supplies every image, memory view and symbol provider explicitly.
 No file lookup or firmware selection occurs in this module.
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable, Iterable, Sequence
+from typing import Literal, TypedDict, TypeGuard
 
 from . import registers as regs
-from .symbols import SymbolLookup
 from .harness_inputs import HarnessInputs
 from .harness_memory import MemoryLayout
+from .processor import Processor
 from .registers import CPSR, LR, NAMES, PC, R0, SP
-
+from .symbols import SymbolLookup
 
 STACK_BELOW = 0x1000
 STACK_ABOVE = 64
 STORE_LIMIT = 1 << 20
 WORD = 1 << 32
-CALL_MODES = (0x10, 0x11, 0x12, 0x13, 0x17, 0x1b, 0x1f)
+CALL_MODES = (0x10, 0x11, 0x12, 0x13, 0x17, 0x1B, 0x1F)
 # KernelInterrupts trace records that are IRQ assertions or deliveries.
-IRQ_REQUEST_RECORDS = ("Software IRQ request", "Peripheral IRQ request", "Architectural IRQ entry")
+IRQ_REQUEST_RECORDS = (
+    "Software IRQ request",
+    "Peripheral IRQ request",
+    "Architectural IRQ entry",
+)
 FINAL_REGISTERS = tuple(f"r{index}" for index in range(13)) + ("sp", "lr", "pc", "cpsr")
-FAULT_RECORDS = ("Architectural MPU permission prefetch abort entry", "Architectural undefined instruction entry")
+FAULT_RECORDS = (
+    "Architectural MPU permission prefetch abort entry",
+    "Architectural undefined instruction entry",
+)
+
+Range = tuple[int, int]
+ByteBuffer = bytes | bytearray | memoryview
+Span = tuple[int, ByteBuffer]
+DataOverride = tuple[int, ByteBuffer, str]
+Target = int | str
+BreakpointKind = Literal["stub", "observe", "stop", "substitute"]
+Handler = Callable[["CallContext"], None]
+StubReturn = int | Callable[["CallContext"], int | None]
 
 
-def _word(value, what):
+class FunctionSummary(TypedDict):
+    entry: int | None
+    name: str | None
+    pcs: int
+    first_pc: int
+    last_pc: int
+
+
+def _is_json_object(value: object) -> TypeGuard[dict[str, object]]:
+    return isinstance(value, dict) and all(isinstance(key, str) for key in value)
+
+
+def _json_object(value: object) -> dict[str, object]:
+    if not _is_json_object(value):
+        raise RuntimeError("Native observation must be a string-keyed object")
+    return value
+
+
+def _json_objects(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        raise RuntimeError("Native observation must be a list of objects")
+    return [_json_object(item) for item in value]
+
+
+def _is_integer_list(value: object) -> TypeGuard[list[int]]:
+    return isinstance(value, list) and all(type(item) is int for item in value)
+
+
+def _integers(value: object) -> list[int]:
+    if not _is_integer_list(value):
+        raise RuntimeError("Native observation must be a list of integers")
+    return value
+
+
+def _integer(value: object) -> int:
+    if type(value) is not int:
+        raise RuntimeError("Native observation field must be an integer")
+    return value
+
+
+def _text(value: object) -> str:
+    if not isinstance(value, str):
+        raise RuntimeError("Native observation field must be text")
+    return value
+
+
+def _word(value: int, what: str) -> int:
     if type(value) is not int or not -(1 << 31) <= value < WORD:
         raise ValueError(what + " must be a 32-bit machine word")
-    return value & 0xffffffff
+    return value & 0xFFFFFFFF
 
 
-def _merge(ranges):
+def _merge(ranges: Sequence[Range]) -> list[Range]:
     merged = []
     for lo, hi in sorted(ranges):
         if merged and lo <= merged[-1][1]:
@@ -44,7 +109,7 @@ def _merge(ranges):
     return merged
 
 
-def _intersect(ranges, limits):
+def _intersect(ranges: Sequence[Range], limits: Sequence[Range]) -> list[Range]:
     result = []
     for lo, hi in ranges:
         for base, top in limits:
@@ -53,43 +118,69 @@ def _intersect(ranges, limits):
     return _merge(result)
 
 
-def _subtract(ranges, holes):
+def _subtract(ranges: Sequence[Range], holes: Sequence[Range]) -> list[Range]:
     result = []
     for lo, hi in ranges:
         pieces = [(lo, hi)]
         for hole_lo, hole_hi in holes:
-            pieces = [part for piece in pieces for part in
-                      ((piece,) if hole_hi <= piece[0] or piece[1] <= hole_lo else
-                       tuple(item for item in ((piece[0], hole_lo), (hole_hi, piece[1])) if item[0] < item[1]))]
+            pieces = [
+                part
+                for piece in pieces
+                for part in (
+                    (piece,)
+                    if hole_hi <= piece[0] or piece[1] <= hole_lo
+                    else tuple(
+                        item
+                        for item in ((piece[0], hole_lo), (hole_hi, piece[1]))
+                        if item[0] < item[1]
+                    )
+                )
+            ]
         result.extend(pieces)
     return _merge(result)
 
 
 class CallContext:
     """Breakpoint view of the caller state: valid only inside its handler."""
-    def __init__(self, harness, cpu, pc, label, kind):
-        self._harness, self._cpu, self.pc, self.label, self.kind = harness, cpu, pc, label, kind
+
+    def __init__(
+        self,
+        harness: DriverHarness,
+        cpu: Processor,
+        pc: int,
+        label: str,
+        kind: BreakpointKind,
+    ) -> None:
+        self._harness, self._cpu, self.pc, self.label, self.kind = (
+            harness,
+            cpu,
+            pc,
+            label,
+            kind,
+        )
         self.returned = None
         self.stopped = None
         self._live = True
 
-    def _check(self):
+    def _check(self) -> None:
         if not self._live:
-            raise RuntimeError("Breakpoint context is only valid while its handler runs")
+            raise RuntimeError(
+                "Breakpoint context is only valid while its handler runs"
+            )
 
-    def reg(self, name):
+    def reg(self, name: str) -> int:
         self._check()
         if name not in NAMES:
             raise ValueError("Unknown register: " + str(name))
         return self._cpu.reg_read(NAMES[name])
 
-    def set_reg(self, name, value):
+    def set_reg(self, name: str, value: int) -> None:
         self._check()
         if name not in NAMES:
             raise ValueError("Unknown register: " + str(name))
         self._cpu.reg_write(NAMES[name], _word(value, "Register value"))
 
-    def arg(self, index):
+    def arg(self, index: int) -> int:
         """Argument ``index``: r0-r3, then caller stack words at SP (hit-time)."""
         self._check()
         if type(index) is not int or not 0 <= index < 16:
@@ -98,32 +189,37 @@ class CallContext:
             return self._cpu.reg_read(regs.GENERAL[index])
         return self.u32(self._cpu.reg_read(SP) + 4 * (index - 4))
 
-    def read(self, address, size):
+    def read(self, address: int, size: int) -> bytes:
         self._check()
         return self._harness.board.read_memory(address, size, self._harness._core)
 
-    def u32(self, address):
+    def u32(self, address: int) -> int:
         return int.from_bytes(self.read(address, 4), "little")
 
-    def write(self, address, data):
+    def write(self, address: int, data: ByteBuffer) -> None:
         """Coherent bus write (also invalidates cached translations)."""
         self._check()
         data = bytes(data)
-        if (self._harness._memory.physical(address) < self._harness._return_address + 4
-                and self._harness._return_address < self._harness._memory.physical(address) + len(data)):
+        if (
+            self._harness._memory.physical(address) < self._harness._return_address + 4
+            and self._harness._return_address
+            < self._harness._memory.physical(address) + len(data)
+        ):
             raise ValueError("Breakpoint write covers the reserved return address")
         self._harness.board.write_memory(address, data, self._harness._core)
 
-    def ret(self, value=None):
+    def ret(self, value: int | None = None) -> None:
         """Observe-style early return: r0=value (if given) and PC=LR on exit."""
         self._check()
         if self.kind != "observe":
-            raise RuntimeError("ret() is only available to observe handlers; stubs return automatically")
+            raise RuntimeError(
+                "ret() is only available to observe handlers; stubs return automatically"
+            )
         if value is not None:
             _word(value, "Return value")
         self.returned = (value,)
 
-    def stop(self, reason=None):
+    def stop(self, reason: str | None = None) -> None:
         """End the call before this instruction runs (like ``stop_at``).
 
         Valid in stub, observe and stop handlers. The instruction does not
@@ -144,8 +240,20 @@ class DriverHarness:
     patches, payloads and callee substitutions remain explicit in every result.
     The board owns device construction and uses the common native Session.
     """
-    def __init__(self, inputs: HarnessInputs, *, ram_fixture, cpu=0, transaction_limit=4096,
-                 patches=(), payloads=(), fetch_guard=False, data_overrides=(), cpu_identity=None):
+
+    def __init__(
+        self,
+        inputs: HarnessInputs,
+        *,
+        ram_fixture: Iterable[Span],
+        cpu: int = 0,
+        transaction_limit: int = 4096,
+        patches: Iterable[Span] = (),
+        payloads: Iterable[Span] = (),
+        fetch_guard: bool = False,
+        data_overrides: Iterable[DataOverride] = (),
+        cpu_identity: dict[int, int] | None = None,
+    ) -> None:
         if not isinstance(inputs, HarnessInputs):
             raise TypeError("inputs must be resolved HarnessInputs")
         self.board = inputs.board
@@ -157,7 +265,9 @@ class DriverHarness:
             raise ValueError("fetch_guard must be a bool")
         identity = self._identity_map(cpu_identity)
         self._symbols: SymbolLookup = inputs.symbols
-        self._profile_identity = None if inputs.identity is None else dict(inputs.identity)
+        self._profile_identity = (
+            None if inputs.identity is None else dict(inputs.identity)
+        )
         self._memory = inputs.memory
         self._observation_memory = inputs.observation_policy()
         self._irq_cores = inputs.irq_cores
@@ -173,8 +283,13 @@ class DriverHarness:
         self._base_identity = tuple(self.board.identity)
         self._select_core(cpu)
         for image in inputs.images:
-            if image.readonly and self.board.read_memory(image.address, len(image.data)) != image.data:
-                raise ValueError("Read-only image differs from declared bytes: " + image.name)
+            if (
+                image.readonly
+                and self.board.read_memory(image.address, len(image.data)) != image.data
+            ):
+                raise ValueError(
+                    "Read-only image differs from declared bytes: " + image.name
+                )
         self.images, self.image_names, self._readonly_images = [], [], []
         for image in inputs.images:
             if not image.readonly:
@@ -183,9 +298,19 @@ class DriverHarness:
             self.image_names.append(image.name)
             self._readonly_images.append(image.readonly)
         self._manifest_ranges = list(inputs.reserved_images)
-        self.patches, self.payloads, self.allocations, self.data_overrides = [], [], [], []
+        self.patches, self.payloads, self.allocations, self.data_overrides = (
+            [],
+            [],
+            [],
+            [],
+        )
         self._fixture_ranges, self._alloc_next = [], self._alloc_base
-        self._breakpoints, self._hits, self._stopped_at, self._hit_limit = {}, [], None, 0
+        self._breakpoints, self._hits, self._stopped_at, self._hit_limit = (
+            {},
+            [],
+            None,
+            0,
+        )
         self._stop_info = None
         self.ram_fixture_spans = []
         self.data_override_events, self.payload_replacements = [], []
@@ -196,8 +321,10 @@ class DriverHarness:
         for override in data_overrides:
             try:
                 address, data, reason = override
-            except (TypeError, ValueError):
-                raise ValueError("A data override is (address, bytes, reason)") from None
+            except TypeError, ValueError:
+                raise ValueError(
+                    "A data override is (address, bytes, reason)"
+                ) from None
             self.data_override(address, data, reason)
         self._declare_payloads(payloads)
         self.load_ram(ram_fixture)
@@ -208,7 +335,7 @@ class DriverHarness:
         return self._memory
 
     # -- helpers ---------------------------------------------------------
-    def _identity_map(self, identity):
+    def _identity_map(self, identity: dict[int, int] | None) -> dict[int, int]:
         if identity is None:
             return {}
         if not isinstance(identity, dict):
@@ -220,42 +347,62 @@ class DriverHarness:
                 raise ValueError("cpu_identity values are unsigned 32-bit words")
         return dict(identity)
 
-    def _select_core(self, core):
+    def _select_core(self, core: int) -> None:
         """Only ``core`` is runnable: the other stays parked for the call."""
         self.board.selected_core = self._core = core
 
     # -- declared state -------------------------------------------------
-    def _apply_patches(self, patches):
+    def _apply_patches(self, patches: Iterable[Span]) -> None:
         prepared = []
         for item in patches:
             try:
                 address, data = item
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 raise ValueError("A patch is (address, bytes)") from None
-            if type(address) is not int or not isinstance(data, (bytes, bytearray, memoryview)) or not len(data):
+            if (
+                type(address) is not int
+                or not isinstance(data, (bytes, bytearray, memoryview))
+                or not len(data)
+            ):
                 raise ValueError("A patch needs an integer address and nonempty bytes")
             data = bytes(data)
-            owner = [index for index, (base, image) in enumerate(self.images)
-                     if base <= address and address + len(data) <= base + len(image)]
+            owner = [
+                index
+                for index, (base, image) in enumerate(self.images)
+                if base <= address and address + len(data) <= base + len(image)
+            ]
             if not owner:
-                raise ValueError("Patch must lie wholly inside one chosen mapped image: " + hex(address))
+                raise ValueError(
+                    "Patch must lie wholly inside one chosen mapped image: "
+                    + hex(address)
+                )
             if self._readonly_images[owner[0]]:
                 raise ValueError("A read-only image cannot be patched")
             prepared.append((address, data, owner[0]))
         ordered = sorted(prepared, key=lambda patch: patch[0])
-        if any(a[0] + len(a[1]) > b[0] for a, b in zip(ordered, ordered[1:])):
+        if any(
+            a[0] + len(a[1]) > b[0] for a, b in zip(ordered, ordered[1:], strict=False)
+        ):
             raise ValueError("Patches must not overlap")
         for address, data, index in ordered:
             base, image = self.images[index]
-            original = image[address - base:address - base + len(data)]
-            patched = image[:address - base] + data + image[address - base + len(data):]
+            original = image[address - base : address - base + len(data)]
+            patched = (
+                image[: address - base] + data + image[address - base + len(data) :]
+            )
             self.board.write_memory(address, data)
             self.images[index] = (base, patched)
-            self.patches.append(dict(address=address, length=len(data), section=self.image_names[index],
-                                     original_sha256=hashlib.sha256(original).hexdigest(),
-                                     patched_sha256=hashlib.sha256(data).hexdigest()))
+            self.patches.append(
+                dict(
+                    address=address,
+                    length=len(data),
+                    section=self.image_names[index],
+                    original_sha256=hashlib.sha256(original).hexdigest(),
+                    patched_sha256=hashlib.sha256(data).hexdigest(),
+                )
+            )
 
-    def data_override(self, address, data, reason):
+    def data_override(self, address: int, data: ByteBuffer, reason: str) -> int:
         """Declare runtime data written inside a chosen mapped image.
 
         For globals/flags that live inside a section and for capture-vs-image
@@ -270,34 +417,59 @@ class DriverHarness:
         """
         if self.board.executing_cpu is not None:
             raise ValueError("data_override requires a paused harness")
-        if type(address) is not int or not isinstance(data, (bytes, bytearray, memoryview)) or not len(data):
-            raise ValueError("A data override needs an integer address and nonempty bytes")
+        if (
+            type(address) is not int
+            or not isinstance(data, (bytes, bytearray, memoryview))
+            or not len(data)
+        ):
+            raise ValueError(
+                "A data override needs an integer address and nonempty bytes"
+            )
         if not isinstance(reason, str) or not reason.strip():
             raise ValueError("A data override needs a reason")
         data = bytes(data)
-        owner = [index for index, (base, image) in enumerate(self.images)
-                 if base <= address and address + len(data) <= base + len(image)]
+        owner = [
+            index
+            for index, (base, image) in enumerate(self.images)
+            if base <= address and address + len(data) <= base + len(image)
+        ]
         if not owner:
-            raise ValueError("Data override must lie wholly inside one chosen mapped image: " + hex(address))
+            raise ValueError(
+                "Data override must lie wholly inside one chosen mapped image: "
+                + hex(address)
+            )
         index = owner[0]
         if self._readonly_images[index]:
             raise ValueError("A read-only image cannot be overridden")
-        spans = [(p["address"], p["address"] + p["length"]) for p in self.patches + self.data_overrides]
+        spans = [
+            (p["address"], p["address"] + p["length"])
+            for p in self.patches + self.data_overrides
+        ]
         if any(address < hi and lo < address + len(data) for lo, hi in spans):
             raise ValueError("Data override overlaps a patch or another override")
         base, image = self.images[index]
-        original = image[address - base:address - base + len(data)]
+        original = image[address - base : address - base + len(data)]
         self.board.write_memory(address, data)
-        self.images[index] = (base, image[:address - base] + data + image[address - base + len(data):])
-        record = dict(address=address, length=len(data), section=self.image_names[index],
-                      reason=reason, original_sha256=hashlib.sha256(original).hexdigest(),
-                      new_sha256=hashlib.sha256(data).hexdigest())
+        self.images[index] = (
+            base,
+            image[: address - base] + data + image[address - base + len(data) :],
+        )
+        record = dict(
+            address=address,
+            length=len(data),
+            section=self.image_names[index],
+            reason=reason,
+            original_sha256=hashlib.sha256(original).hexdigest(),
+            new_sha256=hashlib.sha256(data).hexdigest(),
+        )
         self.data_overrides.append(record)
         self._override_originals[address] = original
-        self.data_override_events.append(dict(record, event="override", call_index=self._calls))
+        self.data_override_events.append(
+            dict(record, event="override", call_index=self._calls)
+        )
         return address
 
-    def data_override_restore(self, address):
+    def data_override_restore(self, address: int) -> int:
         """Put the original image bytes back under the active override at ``address``.
 
         ``address`` is the exact start address of an active override. The image
@@ -319,15 +491,25 @@ class DriverHarness:
         base, image = self.images[index]
         length = record["length"]
         self.board.write_memory(address, original)
-        self.images[index] = (base, image[:address - base] + original + image[address - base + length:])
+        self.images[index] = (
+            base,
+            image[: address - base] + original + image[address - base + length :],
+        )
         self.data_overrides.remove(record)
-        self.data_override_events.append(dict(
-            record, event="restore", call_index=self._calls,
-            restored_sha256=hashlib.sha256(original).hexdigest(),
-            overridden_sha256=record["new_sha256"]))
+        self.data_override_events.append(
+            dict(
+                record,
+                event="restore",
+                call_index=self._calls,
+                restored_sha256=hashlib.sha256(original).hexdigest(),
+                overridden_sha256=record["new_sha256"],
+            )
+        )
         return address
 
-    def replace_payload(self, address, data, *, reason):
+    def replace_payload(
+        self, address: int, data: ByteBuffer, *, reason: str
+    ) -> dict[str, object]:
         """Rewrite bytes inside one already-declared payload, between calls.
 
         ``data`` replaces exactly ``len(data)`` bytes at ``address`` (physical
@@ -346,94 +528,166 @@ class DriverHarness:
         """
         if self.board.executing_cpu is not None:
             raise ValueError("replace_payload requires a paused harness")
-        if type(address) is not int or not isinstance(data, (bytes, bytearray, memoryview)) or not len(data):
-            raise ValueError("A payload replacement needs an integer address and nonempty bytes")
+        if (
+            type(address) is not int
+            or not isinstance(data, (bytes, bytearray, memoryview))
+            or not len(data)
+        ):
+            raise ValueError(
+                "A payload replacement needs an integer address and nonempty bytes"
+            )
         if not isinstance(reason, str) or not reason.strip():
             raise ValueError("A payload replacement needs a reason")
         data, physical = bytes(data), self._memory.physical(address)
-        owner = [item for item in self.payloads
-                 if item["address"] <= physical and physical + len(data) <= item["address"] + item["length"]]
+        owner = [
+            item
+            for item in self.payloads
+            if item["address"] <= physical
+            and physical + len(data) <= item["address"] + item["length"]
+        ]
         if not owner:
-            raise ValueError("Replacement must lie wholly inside one declared payload: " + hex(address))
+            raise ValueError(
+                "Replacement must lie wholly inside one declared payload: "
+                + hex(address)
+            )
         payload = owner[0]
         old = self.board.read_memory(physical, len(data), self._core)
         before = payload["sha256"]
         self.board.write_memory(physical, data, self._core)
         payload["sha256"] = hashlib.sha256(
-            self.board.read_memory(payload["address"], payload["length"], self._core)).hexdigest()
-        record = dict(address=physical, length=len(data), old_sha256=hashlib.sha256(old).hexdigest(),
-                      new_sha256=hashlib.sha256(data).hexdigest(), payload=payload["address"],
-                      payload_sha256_before=before, payload_sha256_after=payload["sha256"],
-                      reason=reason, call_index=self._calls)
+            self.board.read_memory(payload["address"], payload["length"], self._core)
+        ).hexdigest()
+        record = dict(
+            address=physical,
+            length=len(data),
+            old_sha256=hashlib.sha256(old).hexdigest(),
+            new_sha256=hashlib.sha256(data).hexdigest(),
+            payload=payload["address"],
+            payload_sha256_before=before,
+            payload_sha256_after=payload["sha256"],
+            reason=reason,
+            call_index=self._calls,
+        )
         self.payload_replacements.append(record)
         return dict(record)
 
-    def reg(self, name, cpu=None):
+    def reg(self, name: str, cpu: int | None = None) -> int:
         """Read one register (``registers.NAMES`` or banked name) of ``cpu`` between calls."""
         if self.board.executing_cpu is not None:
             raise ValueError("reg requires a paused harness")
         return regs.read_register(self.board.cpus[self._core_arg(cpu)], name)
 
-    def _declare_payloads(self, payloads):
+    def _declare_payloads(self, payloads: Iterable[Span]) -> None:
         prepared = []
         for item in payloads:
             try:
                 address, data = item
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 raise ValueError("A payload is (address, bytes)") from None
-            if type(address) is not int or not isinstance(data, (bytes, bytearray, memoryview)) or not len(data):
-                raise ValueError("A payload needs an integer address and nonempty bytes")
+            if (
+                type(address) is not int
+                or not isinstance(data, (bytes, bytearray, memoryview))
+                or not len(data)
+            ):
+                raise ValueError(
+                    "A payload needs an integer address and nonempty bytes"
+                )
             data, physical = bytes(data), self._memory.physical(address)
             if not self._memory.contains_dram(address, len(data)):
                 raise ValueError("Payload is outside modeled DRAM")
-            if any(physical < hi and lo < physical + len(data) for lo, hi in self._manifest_ranges):
-                raise ValueError("Payload overlaps a mapped firmware section; use patches for mapped bytes: " + hex(physical))
-            if physical < self._return_address + 4 and self._return_address < physical + len(data):
+            if any(
+                physical < hi and lo < physical + len(data)
+                for lo, hi in self._manifest_ranges
+            ):
+                raise ValueError(
+                    "Payload overlaps a mapped firmware section; use patches for mapped bytes: "
+                    + hex(physical)
+                )
+            if (
+                physical < self._return_address + 4
+                and self._return_address < physical + len(data)
+            ):
                 raise ValueError("Payload covers the reserved return address")
             if physical < self._alloc_limit and self._alloc_base < physical + len(data):
                 raise ValueError("Payload overlaps the alloc() scratch window")
-            self._check_stack_window(self._stack_pointer, physical, physical + len(data), "Payload")
-            if any(physical < hi and lo < physical + len(data) for lo, hi in self._fixture_ranges):
+            self._check_stack_window(
+                self._stack_pointer, physical, physical + len(data), "Payload"
+            )
+            if any(
+                physical < hi and lo < physical + len(data)
+                for lo, hi in self._fixture_ranges
+            ):
                 raise ValueError("Payload overlaps a RAM fixture")
             prepared.append((physical, data))
         ordered = sorted(prepared)
-        if any(a[0] + len(a[1]) > b[0] for a, b in zip(ordered, ordered[1:])):
+        if any(
+            a[0] + len(a[1]) > b[0] for a, b in zip(ordered, ordered[1:], strict=False)
+        ):
             raise ValueError("Payloads must not overlap")
         for physical, data in ordered:
             self.board.write_memory(physical, data)
-            self.payloads.append(dict(address=physical, length=len(data), sha256=hashlib.sha256(data).hexdigest()))
+            self.payloads.append(
+                dict(
+                    address=physical,
+                    length=len(data),
+                    sha256=hashlib.sha256(data).hexdigest(),
+                )
+            )
 
     @staticmethod
-    def _check_stack_window(stack_pointer, lo, hi, what, below=STACK_BELOW):
+    def _check_stack_window(
+        stack_pointer: int, lo: int, hi: int, what: str, below: int = STACK_BELOW
+    ) -> None:
         if lo < stack_pointer + STACK_ABOVE and stack_pointer - below < hi:
             raise ValueError(what + " overlaps the caller stack window")
 
-    def _code_ranges(self):
-        return ([(base, base + len(image)) for base, image in self.images]
-                + [(item["address"], item["address"] + item["length"]) for item in self.payloads])
+    def _code_ranges(self) -> list[Range]:
+        return [(base, base + len(image)) for base, image in self.images] + [
+            (item["address"], item["address"] + item["length"])
+            for item in self.payloads
+        ]
 
-    def load_ram(self, spans):
+    def load_ram(self, spans: Iterable[Span]) -> None:
         """Preflight explicit DRAM fixtures before applying any span."""
         self._load_ram(spans, True)
 
-    def _load_ram(self, spans, declare):
+    def _load_ram(self, spans: Iterable[Span], declare: bool) -> None:
         prepared = []
         for address, data in spans:
-            if type(address) is not int or not isinstance(data, (bytes, bytearray, memoryview)):
+            if type(address) is not int or not isinstance(
+                data, (bytes, bytearray, memoryview)
+            ):
                 raise ValueError("RAM fixture needs an integer address and bytes")
             data = bytes(data)
             physical = self._memory.physical(address)
             if not self._memory.contains_dram(address, len(data)):
                 raise ValueError("RAM fixture is outside modeled DRAM")
-            if physical < self._return_address + 4 and self._return_address < physical + len(data):
+            if (
+                physical < self._return_address + 4
+                and self._return_address < physical + len(data)
+            ):
                 raise ValueError("RAM fixture covers the reserved return address")
             for base, image in self.images:
-                lo, hi = max(base, physical), min(base + len(image), physical + len(data))
-                if lo < hi and data[lo - physical:hi - physical] != image[lo - base:hi - base]:
+                lo, hi = (
+                    max(base, physical),
+                    min(base + len(image), physical + len(data)),
+                )
+                if (
+                    lo < hi
+                    and data[lo - physical : hi - physical]
+                    != image[lo - base : hi - base]
+                ):
                     raise ValueError("RAM fixture changes mapped firmware bytes")
-            if data and any(physical < lo + size and lo < physical + len(data)
-                            for lo, size in ((p["address"], p["length"]) for p in self.payloads + self.allocations)):
-                raise ValueError("RAM fixture overlaps a declared payload or allocation")
+            if data and any(
+                physical < lo + size and lo < physical + len(data)
+                for lo, size in (
+                    (p["address"], p["length"])
+                    for p in self.payloads + self.allocations
+                )
+            ):
+                raise ValueError(
+                    "RAM fixture overlaps a declared payload or allocation"
+                )
             prepared.append((physical, data))
         for address, data in prepared:
             if data:
@@ -442,7 +696,9 @@ class DriverHarness:
                     self._fixture_ranges.append((address, address + len(data)))
             self.ram_fixture_spans.append(dict(address=address, bytes=len(data)))
 
-    def alloc(self, size, *, align=8, data=None):
+    def alloc(
+        self, size: int, *, align: int = 8, data: ByteBuffer | None = None
+    ) -> int:
         """Zero-filled (or ``data``-initialized) scratch DRAM; returns its address.
 
         Bump allocation within the explicitly reserved scratch interval. Refused if it would
@@ -450,54 +706,79 @@ class DriverHarness:
         and are listed in every result; ``write()`` may change their bytes
         between calls.
         """
-        if type(size) is not int or not 0 < size <= self._alloc_limit - self._alloc_base:
-            raise ValueError("Allocation size must be a positive integer within the scratch window")
+        if (
+            type(size) is not int
+            or not 0 < size <= self._alloc_limit - self._alloc_base
+        ):
+            raise ValueError(
+                "Allocation size must be a positive integer within the scratch window"
+            )
         if type(align) is not int or align < 1 or align & (align - 1) or align > 0x1000:
             raise ValueError("Allocation alignment must be a power of two up to 4096")
         if data is not None:
             if not isinstance(data, (bytes, bytearray, memoryview)) or len(data) > size:
-                raise ValueError("Allocation data must be bytes no longer than the allocation")
+                raise ValueError(
+                    "Allocation data must be bytes no longer than the allocation"
+                )
             data = bytes(data)
         address = (self._alloc_next + align - 1) & -align
         if address + size > self._alloc_limit:
             raise ValueError("Scratch window exhausted")
-        spans = ([(lo, hi) for lo, hi in self._fixture_ranges] + self._manifest_ranges
-                 + [(p["address"], p["address"] + p["length"]) for p in self.payloads])
+        spans = (
+            [(lo, hi) for lo, hi in self._fixture_ranges]
+            + self._manifest_ranges
+            + [(p["address"], p["address"] + p["length"]) for p in self.payloads]
+        )
         if any(address < hi and lo < address + size for lo, hi in spans):
-            raise ValueError("Scratch allocation would overlap an image, payload or fixture")
-        self.board.write_memory(address, bytes(size) if data is None else data.ljust(size, b"\0"))
+            raise ValueError(
+                "Scratch allocation would overlap an image, payload or fixture"
+            )
+        self.board.write_memory(
+            address, bytes(size) if data is None else data.ljust(size, b"\0")
+        )
         self._alloc_next = address + size
-        self.allocations.append(dict(address=address, length=size, align=align,
-                                     initialized_bytes=0 if data is None else len(data)))
+        self.allocations.append(
+            dict(
+                address=address,
+                length=size,
+                align=align,
+                initialized_bytes=0 if data is None else len(data),
+            )
+        )
         return address
 
     # -- memory API ------------------------------------------------------
-    def _memory_class(self, core, address, size):
+    def _memory_class(self, core: int, address: int, size: int) -> str | None:
         """'dram', 'sram', 'vectors' or 'tcm' when [address, address+size) is
         wholly one modeled RAM region of ``core``; None otherwise (MMIO, unmapped)."""
         return self._memory.classify(core, address, size)
 
-    def _mapped_rw(self, core, lo, hi):
+    def _mapped_rw(self, core: int, lo: int, hi: int) -> bool:
         """True when [lo, hi) lies in merged readable+writable regions of ``core``."""
-        return self._memory_class(core, lo, hi-lo) is not None
+        return self._memory_class(core, lo, hi - lo) is not None
 
-    def _core_arg(self, cpu):
+    def _core_arg(self, cpu: int | None) -> int:
         core = self.cpu if cpu is None else cpu
         if type(core) is not int or not 0 <= core < len(self.board.cpus):
             raise ValueError("cpu must name a declared processor")
         return core
 
-    def read(self, address, size, *, cpu=None):
+    def read(self, address: int, size: int, *, cpu: int | None = None) -> bytes:
         """Read modeled RAM (DRAM, SRAM, vector pages, ``cpu``'s TCM); never MMIO."""
         core = self._core_arg(cpu)
         if self.board.executing_cpu is not None:
             raise ValueError("read requires a paused harness")
         kind = self._memory_class(core, address, size)
-        if kind is None or (kind in ("tcm", "vectors") and not self._mapped_rw(core, address, address + size)):
-            raise ValueError(f"{address:#x}+{size} is not modeled RAM (DRAM, SRAM or core {core} TCM)")
+        if kind is None or (
+            kind in ("tcm", "vectors")
+            and not self._mapped_rw(core, address, address + size)
+        ):
+            raise ValueError(
+                f"{address:#x}+{size} is not modeled RAM (DRAM, SRAM or core {core} TCM)"
+            )
         return self.board.read_memory(address, size, core)
 
-    def write(self, address, data, *, cpu=None):
+    def write(self, address: int, data: ByteBuffer, *, cpu: int | None = None) -> None:
         """Coherent write to modeled RAM between calls (invalidates caches).
 
         DRAM (either alias), SRAM, vector pages and ``cpu``'s TCM. Refused over
@@ -512,24 +793,37 @@ class DriverHarness:
             raise ValueError("write needs nonempty bytes")
         data = bytes(data)
         kind = self._memory_class(core, address, len(data))
-        if kind is None or (kind in ("tcm", "vectors") and not self._mapped_rw(core, address, address + len(data))):
-            raise ValueError(f"{address:#x}+{len(data)} is not modeled RAM (DRAM, SRAM or core {core} TCM)")
+        if kind is None or (
+            kind in ("tcm", "vectors")
+            and not self._mapped_rw(core, address, address + len(data))
+        ):
+            raise ValueError(
+                f"{address:#x}+{len(data)} is not modeled RAM (DRAM, SRAM or core {core} TCM)"
+            )
         if kind == "dram":
             physical = self._memory.physical(address)
             end = physical + len(data)
-            if any(physical < base + len(image) and base < end for base, image in self.images):
-                raise ValueError("write would change a mapped image; use patches or data_override")
-            if any(physical < p["address"] + p["length"] and p["address"] < end for p in self.payloads):
+            if any(
+                physical < base + len(image) and base < end
+                for base, image in self.images
+            ):
+                raise ValueError(
+                    "write would change a mapped image; use patches or data_override"
+                )
+            if any(
+                physical < p["address"] + p["length"] and p["address"] < end
+                for p in self.payloads
+            ):
                 raise ValueError("write would change a declared payload")
             if physical < self._return_address + 4 and self._return_address < end:
                 raise ValueError("write covers the reserved return address")
         self.board.write_memory(address, data, core)
 
-    def attach(self, device):
+    def attach(self, device: object) -> object:
         """Declare a NativeNode before the first CPU operation; no Python models."""
         return self.board.attach(device)
 
-    def _resolve(self, entry):
+    def _resolve(self, entry: Target) -> tuple[str | None, int]:
         label = None
         if isinstance(entry, str):
             try:
@@ -537,19 +831,25 @@ class DriverHarness:
             except ValueError:
                 matches = self._symbols.entries(entry)
                 if len(matches) != 1:
-                    raise ValueError("Choose an exact unique declared function name")
+                    raise ValueError(
+                        "Choose an exact unique declared function name"
+                    ) from None
                 label, entry = entry, matches[0]
         if type(entry) is not int or entry & 1:
-            raise ValueError("Driver entry must be an aligned address in a chosen mapped image or payload")
+            raise ValueError(
+                "Driver entry must be an aligned address in a chosen mapped image or payload"
+            )
         return label, self._memory.physical(entry)
 
-    def _entry(self, entry):
+    def _entry(self, entry: Target) -> int:
         entry = self._resolve(entry)[1]
         if entry & 3 or not any(lo <= entry < hi for lo, hi in self._code_ranges()):
-            raise ValueError("Driver entry must be an aligned address in a chosen mapped image or payload")
+            raise ValueError(
+                "Driver entry must be an aligned address in a chosen mapped image or payload"
+            )
         return entry
 
-    def functions(self, executed):
+    def functions(self, executed: Iterable[int]) -> list[FunctionSummary]:
         """Map executed PCs using the injected function labels and ranges.
 
         Returns ``[{'entry', 'name', 'pcs': n, 'first_pc', 'last_pc'}, ...]``
@@ -563,16 +863,33 @@ class DriverHarness:
                 unknown.append(pc)
             else:
                 found.setdefault(hit, []).append(pc)
-        result = [dict(entry=entry, name=name, pcs=len(pcs), first_pc=min(pcs), last_pc=max(pcs))
-                  for (entry, name), pcs in sorted(found.items())]
+        result: list[FunctionSummary] = [
+            FunctionSummary(
+                entry=entry,
+                name=name,
+                pcs=len(pcs),
+                first_pc=min(pcs),
+                last_pc=max(pcs),
+            )
+            for (entry, name), pcs in sorted(found.items())
+        ]
         if unknown:
-            result.append(dict(entry=None, name=None, pcs=len(unknown), first_pc=min(unknown), last_pc=max(unknown)))
+            result.append(
+                FunctionSummary(
+                    entry=None,
+                    name=None,
+                    pcs=len(unknown),
+                    first_pc=min(unknown),
+                    last_pc=max(unknown),
+                )
+            )
         return result
 
-    def _function_ranges(self, functions):
+    def _function_ranges(self, functions: Iterable[Target]) -> list[Range]:
+        functions = tuple(functions)
         if not functions:
-            return []   # No symbol query unless a function was actually named.
-        result = []
+            return []  # No symbol query unless a function was actually named.
+        result: list[Range] = []
         for item in functions:
             if isinstance(item, str):
                 try:
@@ -580,31 +897,46 @@ class DriverHarness:
                 except ValueError:
                     matches = self._symbols.entries(item)
                     if len(matches) != 1:
-                        raise ValueError("allowed_functions needs an exact unique declared function name: " + item)
+                        raise ValueError(
+                            "allowed_functions needs an exact unique declared function name: "
+                            + item
+                        ) from None
                     entry = matches[0]
             else:
                 entry = item
             if type(entry) is not int:
-                raise ValueError("allowed_functions entry is not a declared function: " + str(item))
+                raise ValueError(
+                    "allowed_functions entry is not a declared function: " + str(item)
+                )
             ranges = self._symbols.ranges(entry)
             if ranges is None:
-                raise ValueError("allowed_functions entry is not a declared function: " + str(item))
+                raise ValueError(
+                    "allowed_functions entry is not a declared function: " + str(item)
+                )
             result.extend(ranges)
         return result
 
     # -- breakpoints -----------------------------------------------------
-    def _register(self, target, kind, label, **action):
+    def _register(
+        self, target: Target, kind: BreakpointKind, label: str | None, **action: object
+    ) -> int:
         name, address = self._resolve(target)
         if not any(lo <= address < hi for lo, hi in self._code_ranges()):
-            raise ValueError("Breakpoint target must be an aligned address in a chosen mapped image or payload")
+            raise ValueError(
+                "Breakpoint target must be an aligned address in a chosen mapped image or payload"
+            )
         if address in self._breakpoints:
             raise ValueError("Breakpoint target is already registered: " + hex(address))
         if len(self._breakpoints) >= 4096:
             raise ValueError("Too many breakpoints")
-        self._breakpoints[address] = dict(kind=kind, label=label or name or f"{address:#010x}", **action)
+        self._breakpoints[address] = dict(
+            kind=kind, label=label or name or f"{address:#010x}", **action
+        )
         return address
 
-    def stub(self, target, returns=0, *, label=None):
+    def stub(
+        self, target: Target, returns: StubReturn = 0, *, label: str | None = None
+    ) -> int:
         """Replace a callee: its first instruction never runs; PC=LR, r0=returns.
 
         ``returns`` is an int (r0), or a callable ``fn(ctx)`` yielding an int
@@ -614,13 +946,15 @@ class DriverHarness:
             _word(returns, "Stub return value")
         return self._register(target, "stub", label, returns=returns)
 
-    def observe(self, target, fn, *, label=None):
+    def observe(self, target: Target, fn: Handler, *, label: str | None = None) -> int:
         """Call ``fn(ctx)`` at ``target``, then run the instruction normally."""
         if not callable(fn):
             raise ValueError("Observer must be callable")
         return self._register(target, "observe", label, fn=fn)
 
-    def stop_at(self, target, fn=None, *, label=None):
+    def stop_at(
+        self, target: Target, fn: Handler | None = None, *, label: str | None = None
+    ) -> int:
         """End the call successfully (returned=False) before ``target`` runs.
 
         The instruction at ``target`` neither executes nor counts in
@@ -640,7 +974,9 @@ class DriverHarness:
             raise ValueError("stop_at handler must be callable")
         return self._register(target, "stop", label, fn=fn)
 
-    def substitute(self, target, fn, *, label=None):
+    def substitute(
+        self, target: Target, fn: Handler, *, label: str | None = None
+    ) -> int:
         """Replace one ARM instruction's effect: ``fn(ctx)`` runs instead of it.
 
         Firmware bytes stay unchanged; the instruction at ``target`` neither
@@ -654,7 +990,7 @@ class DriverHarness:
             raise ValueError("Substitution handler must be callable")
         return self._register(target, "substitute", label, fn=fn)
 
-    def unstub(self, target):
+    def unstub(self, target: Target) -> int:
         """Drop one registered stub; refuses other kinds. Returns its address."""
         address = self._resolve(target)[1]
         record = self._breakpoints.get(address)
@@ -663,7 +999,7 @@ class DriverHarness:
         del self._breakpoints[address]
         return address
 
-    def remove(self, target):
+    def remove(self, target: Target) -> int:
         """Drop whatever breakpoint (stub, observer or stop) is registered at ``target``."""
         address = self._resolve(target)[1]
         if address not in self._breakpoints:
@@ -671,27 +1007,40 @@ class DriverHarness:
         del self._breakpoints[address]
         return address
 
-    def clear_breakpoints(self):
+    def clear_breakpoints(self) -> None:
         self._breakpoints.clear()
 
-    def _breakpoint(self, cpu, core, address):
+    def _breakpoint(self, cpu: Processor, core: int, address: int) -> None:
         board, record = self.board, self._breakpoints.get(address)
         if record is None:
-            board._stop(cpu, core, "Native breakpoint at an unregistered address", pc=hex(address))
+            board._stop(
+                cpu,
+                core,
+                "Native breakpoint at an unregistered address",
+                pc=hex(address),
+            )
             return
         if len(self._hits) >= self._hit_limit:
             board._stop(cpu, core, "Isolated driver breakpoint-hit bound reached")
             return
         kind, lr = record["kind"], cpu.reg_read(LR)
-        hit = dict(pc=address, label=record["label"], kind=kind,
-                   args=tuple(cpu.reg_read(register) for register in regs.GENERAL[:4]),
-                   return_value=None)
+        hit = dict(
+            pc=address,
+            label=record["label"],
+            kind=kind,
+            args=tuple(cpu.reg_read(register) for register in regs.GENERAL[:4]),
+            return_value=None,
+        )
         self._hits.append(hit)
         context = CallContext(self, cpu, address, record["label"], kind)
         value = None
         try:
             if kind == "stub":
-                value = record["returns"](context) if callable(record["returns"]) else record["returns"]
+                value = (
+                    record["returns"](context)
+                    if callable(record["returns"])
+                    else record["returns"]
+                )
                 if value is not None:
                     _word(value, "Stub return value")
             elif record.get("fn") is not None:
@@ -702,39 +1051,62 @@ class DriverHarness:
             context._live = False
         if context.stopped is not None or kind == "stop":
             if cpu.reg_read(PC) != address:
-                board._stop(cpu, core, f"Breakpoint handler {record['label']} changed PC; use stub() or ret()", pc=hex(address))
+                board._stop(
+                    cpu,
+                    core,
+                    f"Breakpoint handler {record['label']} changed PC; use stub() or ret()",
+                    pc=hex(address),
+                )
                 return
             reason = context.stopped[0] if context.stopped is not None else None
             self._stopped_at = address
-            self._stop_info = dict(pc=address, label=record["label"], reason=reason, kind=kind)
+            self._stop_info = dict(
+                pc=address, label=record["label"], reason=reason, kind=kind
+            )
             if reason is not None:
                 hit["stop_reason"] = reason
             # Not cpu.emu_stop(): the native hook must also skip counting and
             # executing the instruction.
             return
         if cpu.reg_read(PC) != address:
-            board._stop(cpu, core, f"Breakpoint handler {record['label']} changed PC; use stub() or ret()", pc=hex(address))
+            board._stop(
+                cpu,
+                core,
+                f"Breakpoint handler {record['label']} changed PC; use stub() or ret()",
+                pc=hex(address),
+            )
             return
         if kind == "substitute":
             if cpu.reg_read(regs.CPSR) & 0x20:
-                board._stop(cpu, core, "Instruction substitution requires ARM state", pc=hex(address))
+                board._stop(
+                    cpu,
+                    core,
+                    "Instruction substitution requires ARM state",
+                    pc=hex(address),
+                )
                 return
             hit["word"] = int.from_bytes(board.read_memory(address, 4, core), "little")
             cpu.reg_write(PC, address + 4)
             return
+        if (kind == "stub" or hit["kind"] == "observe_return") and lr & 1:
+            board._stop(
+                cpu,
+                core,
+                "Stub return address has the Thumb bit set",
+                lr=hex(lr),
+                pc=hex(address),
+            )
+            return
         if kind == "stub" or hit["kind"] == "observe_return":
-            if lr & 1:
-                board._stop(cpu, core, "Stub return address has the Thumb bit set", lr=hex(lr), pc=hex(address))
-                return
             if value is not None:
-                cpu.reg_write(R0, value & 0xffffffff)
-                hit["return_value"] = value & 0xffffffff
+                cpu.reg_write(R0, value & 0xFFFFFFFF)
+                hit["return_value"] = value & 0xFFFFFFFF
             else:
                 hit["return_value"] = cpu.reg_read(R0)
             cpu.reg_write(PC, lr)
 
     # -- execution -------------------------------------------------------
-    def advance(self, ticks):
+    def advance(self, ticks: int) -> dict[str, object]:
         """Advance guest time with both callers parked and native deadlines active."""
         board = self.board
         if type(ticks) is not int or ticks < 0:
@@ -744,13 +1116,19 @@ class DriverHarness:
         if board.failure:
             raise ValueError("Cannot advance a failed isolated driver")
         board.native.driver_advance(board.virtual_ticks + ticks, board.quantum)
-        return dict(virtual_ticks=board.virtual_ticks,
-                    pending_scheduled_completions=self._pending_completions())
+        return dict(
+            virtual_ticks=board.virtual_ticks,
+            pending_scheduled_completions=self._pending_completions(),
+        )
 
-    def _pending_completions(self):
-        return len(self.board.state()['timeline']['events'])
+    def _pending_completions(self) -> int:
+        timeline = _json_object(self.board.state()["timeline"])
+        events = timeline["events"]
+        if not isinstance(events, list):
+            raise RuntimeError("Board timeline events must be a list")
+        return len(events)
 
-    def enable_flat_mpu(self, cpu=None):
+    def enable_flat_mpu(self, cpu: int | None = None) -> None:
         """Program MPU region 0 as 4 GiB, full access, executable; set SCTLR.M.
 
         The default (MPU-disabled) PMSAv7 map makes addresses at or above
@@ -766,60 +1144,99 @@ class DriverHarness:
         selected = target.cpr_read(15, 0, 6, 2, 0, 0, False)
         try:
             target.cpr_write(15, 0, 6, 2, 0, 0, False, 0)
-            for crm, opc2, value in ((1, 0, 0), (1, 2, 0x3f), (1, 4, 0x303)):
+            for crm, opc2, value in ((1, 0, 0), (1, 2, 0x3F), (1, 4, 0x303)):
                 target.cpr_write(15, 0, 6, crm, opc2, 0, False, value)
         finally:
             target.cpr_write(15, 0, 6, 2, 0, 0, False, selected)
-        target.cpr_write(15, 0, 1, 0, 0, 0, False, target.cpr_read(15, 0, 1, 0, 0, 0, False) | 1)
+        target.cpr_write(
+            15, 0, 1, 0, 0, 0, False, target.cpr_read(15, 0, 1, 0, 0, 0, False) | 1
+        )
 
-    def _guard_configuration(self, cpu, core, ranges, deliver_faults):
-        vectors, opcode = [], 0xe59ff018
+    def _guard_configuration(
+        self, cpu: Processor, core: int, ranges: Sequence[Range], deliver_faults: bool
+    ) -> tuple[list[Range], int]:
+        vectors: list[Range] = []
+        opcode = 0xE59FF018
         needed = []
         sctlr = cpu.cpr_read(15, 0, 1, 0, 0, 0, False)
-        base = 0xffff0000 if sctlr & (1 << 13) else 0
+        base = 0xFFFF0000 if sctlr & (1 << 13) else 0
         if core in self._irq_cores:
             needed.append(base + 0x18)
         if deliver_faults:
-            needed.extend((base + 4, base + 0xc, base + 0x10))  # undefined, prefetch/data abort
+            needed.extend((
+                base + 4,
+                base + 0xC,
+                base + 0x10,
+            ))  # undefined, prefetch/data abort
         words = set()
         for vector in needed:
             # Exception entry fetches the vector word, which may live in the
             # loader image (low vectors) or a copied high vector. Permit exactly
             # that word, and only while it is an LDR PC,[PC,#imm] dispatch.
             word = int.from_bytes(self.board.read_memory(vector, 4, core), "little")
-            if not any(lo <= vector and vector + 4 <= hi for lo, hi in ranges) and word & 0xfffff000 == 0xe59ff000:
+            if (
+                not any(lo <= vector and vector + 4 <= hi for lo, hi in ranges)
+                and word & 0xFFFFF000 == 0xE59FF000
+            ):
                 vectors.append((vector, vector + 4))
                 words.add(word)
         if len(words) > 1:
-            raise ValueError("Fetch guard vector words differ; one dispatch opcode is allowed per call")
+            raise ValueError(
+                "Fetch guard vector words differ; one dispatch opcode is allowed per call"
+            )
         if words:
             opcode = words.pop()
         return vectors, opcode
 
-    def _plan_stack(self, core, stack_pointer, stack_bytes, align_sp):
+    def _plan_stack(
+        self, core: int, stack_pointer: int, stack_bytes: int, align_sp: bool
+    ) -> tuple[Literal["dram", "tcm"], Range, int]:
         """Validate SP for ``core``; returns (space, store-log window)."""
         if stack_pointer & 3 or (align_sp and stack_pointer & 7):
-            raise ValueError("Driver stack needs aligned DRAM or TCM with room for arguments")
+            raise ValueError(
+                "Driver stack needs aligned DRAM or TCM with room for arguments"
+            )
         below = max(stack_bytes, STACK_BELOW)
         physical = self._memory.physical(stack_pointer)
         in_dram = self._memory.contains_dram(stack_pointer - below, below + STACK_ABOVE)
         if in_dram:
             window = (physical - below, physical + STACK_ABOVE)
-            if window[0] < self._return_address + 4 and self._return_address < window[1]:
-                raise ValueError("Driver caller stack window covers the reserved return address")
-            if any(physical - 0x1000 < base + len(image) and base < physical + 64 for base, image in self.images):
+            if (
+                window[0] < self._return_address + 4
+                and self._return_address < window[1]
+            ):
+                raise ValueError(
+                    "Driver caller stack window covers the reserved return address"
+                )
+            if any(
+                physical - 0x1000 < base + len(image) and base < physical + 64
+                for base, image in self.images
+            ):
                 raise ValueError("Driver caller stack overlaps a mapped image")
             for item in self.payloads + self.allocations:
-                self._check_stack_window(physical, item["address"], item["address"] + item["length"],
-                                         "Declared payload/allocation", physical - window[0])
+                self._check_stack_window(
+                    physical,
+                    item["address"],
+                    item["address"] + item["length"],
+                    "Declared payload/allocation",
+                    physical - window[0],
+                )
             return "dram", window, physical
         window = (stack_pointer - below, stack_pointer + STACK_ABOVE)
-        if (self._memory_class(core, window[0], window[1] - window[0]) == "tcm"
-                and self._mapped_rw(core, *window)):
+        if self._memory_class(
+            core, window[0], window[1] - window[0]
+        ) == "tcm" and self._mapped_rw(core, *window):
             return "tcm", window, stack_pointer
-        raise ValueError("Driver stack needs aligned DRAM with room for arguments, or the calling core's mapped TCM")
+        raise ValueError(
+            "Driver stack needs aligned DRAM with room for arguments, or the calling core's mapped TCM"
+        )
 
-    def _parse_registers(self, registers, stack_pointer, lr):
+    def _parse_registers(
+        self,
+        registers: dict[str, int] | None,
+        stack_pointer: int | None,
+        lr: int | None,
+    ) -> dict[str, int]:
         parsed = {}
         if registers is None:
             return parsed
@@ -827,22 +1244,48 @@ class DriverHarness:
             raise ValueError("registers is {name: value}")
         for name, value in registers.items():
             if name == "pc":
-                raise ValueError("registers cannot set pc; the call entry is the program counter")
+                raise ValueError(
+                    "registers cannot set pc; the call entry is the program counter"
+                )
             if name not in NAMES and name not in regs.BANKED:
                 raise ValueError("Unknown register: " + str(name))
             parsed[name] = _word(value, "Register " + name)
-        if "sp" in parsed and stack_pointer is not None and parsed["sp"] != stack_pointer:
+        if (
+            "sp" in parsed
+            and stack_pointer is not None
+            and parsed["sp"] != stack_pointer
+        ):
             raise ValueError("registers['sp'] and stack_pointer disagree")
         if "lr" in parsed and lr is not None and parsed["lr"] != lr:
             raise ValueError("registers['lr'] and lr disagree")
         return parsed
 
-    def call(self, entry, args=(), *, max_instructions=10000, stack_pointer=None, cpsr=0xd3,
-             record_stores=False, allowed_stores=None, stack_bytes=STACK_BELOW,
-             registers=None, lr=None, cpu=None, align_sp=True, coverage=False,
-             allowed_code=None, allowed_functions=None, include_stack=False,
-             inject_interrupts=True, deliver_faults=False, cpu_identity=None,
-             count_ranges=None, trace=0, store_limit=STORE_LIMIT):
+    def call(
+        self,
+        entry: Target,
+        args: Sequence[int] = (),
+        *,
+        max_instructions: int = 10000,
+        stack_pointer: int | None = None,
+        cpsr: int = 0xD3,
+        record_stores: bool = False,
+        allowed_stores: Iterable[Range] | None = None,
+        stack_bytes: int = STACK_BELOW,
+        registers: dict[str, int] | None = None,
+        lr: int | None = None,
+        cpu: int | None = None,
+        align_sp: bool = True,
+        coverage: bool = False,
+        allowed_code: Iterable[Range] | None = None,
+        allowed_functions: Iterable[Target] | None = None,
+        include_stack: bool = False,
+        inject_interrupts: bool = True,
+        deliver_faults: bool = False,
+        cpu_identity: dict[int, int] | None = None,
+        count_ranges: Iterable[Range] | None = None,
+        trace: int = 0,
+        store_limit: int = STORE_LIMIT,
+    ) -> dict[str, object]:
         """Run a whole ARM routine to its real LR return or a strict failure.
 
         Arguments use r0-r3 and then the ordinary caller stack. Interrupts are
@@ -911,7 +1354,9 @@ class DriverHarness:
         """
         entry = self._entry(entry)
         args = tuple(args)
-        if len(args) > 16 or any(type(arg) is not int or not -(1 << 31) <= arg < 1 << 32 for arg in args):
+        if len(args) > 16 or any(
+            type(arg) is not int or not -(1 << 31) <= arg < 1 << 32 for arg in args
+        ):
             raise ValueError("Driver arguments must be at most 16 machine words")
         if type(max_instructions) is not int or max_instructions < 1:
             raise ValueError("Driver instruction budget must be positive")
@@ -919,26 +1364,43 @@ class DriverHarness:
             raise ValueError("Store bound must be an integer in 1..16777216")
         core = self._core_arg(cpu)
         parsed = self._parse_registers(registers, stack_pointer, lr)
-        if lr is not None:
-            if type(lr) is not int or not 0 <= lr < WORD or lr & 3:
-                raise ValueError("lr must be an aligned 32-bit ARM address")
+        if lr is not None and (type(lr) is not int or not 0 <= lr < WORD or lr & 3):
+            raise ValueError("lr must be an aligned 32-bit ARM address")
         return_address = self._return_address if lr is None else lr
         initial_lr = parsed.get("lr", self._return_address if lr is None else lr)
         if "cpsr" in parsed:
-            if cpsr != 0xd3 and cpsr != parsed["cpsr"]:
+            if cpsr != 0xD3 and cpsr != parsed["cpsr"]:
                 raise ValueError("registers['cpsr'] and cpsr disagree")
             cpsr = parsed["cpsr"]
-        if (type(cpsr) is not int or not 0 <= cpsr <= 0xffffffff
-                or cpsr & 0x20 or cpsr & 31 not in CALL_MODES):
-            raise ValueError("Driver caller must use an ARM user, FIQ, IRQ, supervisor, abort, undefined or system mode")
-        if cpsr & 31 in (0x10, 0x1f) and "spsr" in parsed:
+        if (
+            type(cpsr) is not int
+            or not 0 <= cpsr <= 0xFFFFFFFF
+            or cpsr & 0x20
+            or cpsr & 31 not in CALL_MODES
+        ):
+            raise ValueError(
+                "Driver caller must use an ARM user, FIQ, IRQ, supervisor, abort, undefined or system mode"
+            )
+        if cpsr & 31 in (0x10, 0x1F) and "spsr" in parsed:
             raise ValueError("User and system modes have no SPSR")
-        sp = parsed.get("sp", self._stack_pointer if stack_pointer is None else stack_pointer)
+        sp = parsed.get(
+            "sp", self._stack_pointer if stack_pointer is None else stack_pointer
+        )
         if type(sp) is not int:
             raise ValueError("stack_pointer must be an integer")
-        if type(stack_bytes) is not int or not 0x100 <= stack_bytes <= 0x100000 or stack_bytes & 7:
-            raise ValueError("Driver stack window must be an aligned size of 256 B..1 MiB")
-        if type(align_sp) is not bool or type(coverage) is not bool or type(include_stack) is not bool:
+        if (
+            type(stack_bytes) is not int
+            or not 0x100 <= stack_bytes <= 0x100000
+            or stack_bytes & 7
+        ):
+            raise ValueError(
+                "Driver stack window must be an aligned size of 256 B..1 MiB"
+            )
+        if (
+            type(align_sp) is not bool
+            or type(coverage) is not bool
+            or type(include_stack) is not bool
+        ):
             raise ValueError("align_sp, coverage and include_stack must be bools")
         if type(inject_interrupts) is not bool or type(deliver_faults) is not bool:
             raise ValueError("inject_interrupts and deliver_faults must be bools")
@@ -954,11 +1416,20 @@ class DriverHarness:
             for item in count_ranges:
                 try:
                     lo, hi = item
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     raise ValueError("count_ranges needs (lo, hi) ranges") from None
-                if type(lo) is not int or type(hi) is not int or not 0 <= lo < hi <= WORD:
-                    raise ValueError("count_ranges needs half-open 32-bit (lo, hi) ranges")
-                probe_ranges.append((self._memory.physical(lo), self._memory.physical(hi - 1) + 1))
+                if (
+                    type(lo) is not int
+                    or type(hi) is not int
+                    or not 0 <= lo < hi <= WORD
+                ):
+                    raise ValueError(
+                        "count_ranges needs half-open 32-bit (lo, hi) ranges"
+                    )
+                probe_ranges.append((
+                    self._memory.physical(lo),
+                    self._memory.physical(hi - 1) + 1,
+                ))
             if len(probe_ranges) > 256:
                 raise ValueError("count_ranges accepts at most 256 ranges")
         space, window, physical_sp = self._plan_stack(core, sp, stack_bytes, align_sp)
@@ -968,11 +1439,19 @@ class DriverHarness:
             raise ValueError("Cannot resume a failed isolated driver")
         if allowed_stores is not None:
             allowed_stores = [tuple(item) for item in allowed_stores]
-            if any(len(item) != 2 or any(type(v) is not int for v in item) or item[0] >= item[1]
-                   for item in allowed_stores):
-                raise ValueError("allowed_stores needs half-open (lo, hi) address ranges")
-            allowed_stores = [(self._memory.physical(lo), self._memory.physical(hi - 1) + 1)
-                              for lo, hi in allowed_stores]
+            if any(
+                len(item) != 2
+                or any(type(v) is not int for v in item)
+                or item[0] >= item[1]
+                for item in allowed_stores
+            ):
+                raise ValueError(
+                    "allowed_stores needs half-open (lo, hi) address ranges"
+                )
+            allowed_stores = [
+                (self._memory.physical(lo), self._memory.physical(hi - 1) + 1)
+                for lo, hi in allowed_stores
+            ]
         identity = dict(enumerate(self._base_identity))
         identity.update(self._identity_map(cpu_identity))
         restricted = None
@@ -981,17 +1460,28 @@ class DriverHarness:
             for item in allowed_code or ():
                 try:
                     lo, hi = item
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     raise ValueError("allowed_code needs (lo, hi) ranges") from None
-                if type(lo) is not int or type(hi) is not int or not 0 <= lo < hi <= WORD:
-                    raise ValueError("allowed_code needs half-open 32-bit (lo, hi) ranges")
-                restricted.append((self._memory.physical(lo), self._memory.physical(hi - 1) + 1))
+                if (
+                    type(lo) is not int
+                    or type(hi) is not int
+                    or not 0 <= lo < hi <= WORD
+                ):
+                    raise ValueError(
+                        "allowed_code needs half-open 32-bit (lo, hi) ranges"
+                    )
+                restricted.append((
+                    self._memory.physical(lo),
+                    self._memory.physical(hi - 1) + 1,
+                ))
             restricted.extend(self._function_ranges(allowed_functions or ()))
             if not restricted:
                 raise ValueError("allowed_code/allowed_functions named no ranges")
         use_guard = self.fetch_guard or restricted is not None
         if args[4:]:
-            data = b"".join((arg & 0xffffffff).to_bytes(4, "little") for arg in args[4:])
+            data = b"".join(
+                (arg & 0xFFFFFFFF).to_bytes(4, "little") for arg in args[4:]
+            )
             if space == "dram":
                 self._load_ram(((physical_sp, data),), False)
             else:
@@ -1005,136 +1495,278 @@ class DriverHarness:
         cpu_obj.reg_write(LR, initial_lr)
         cpu_obj.reg_write(PC, entry)
         for index, register in enumerate(regs.GENERAL[:4]):
-            cpu_obj.reg_write(register, args[index] & 0xffffffff if index < len(args) else 0)
+            cpu_obj.reg_write(
+                register, args[index] & 0xFFFFFFFF if index < len(args) else 0
+            )
         for name, value in parsed.items():
             if name not in regs.BANKED and name not in ("cpsr", "sp", "lr"):
                 cpu_obj.reg_write(NAMES[name], value)
         start, ticks = board.instructions, board.virtual_ticks
         machine.driver_select_core(core)
-        self._hits, self._stopped_at, self._stop_info, self._hit_limit = [], None, None, max_instructions
+        self._hits, self._stopped_at, self._stop_info, self._hit_limit = (
+            [],
+            None,
+            None,
+            max_instructions,
+        )
         call_index, self._calls = self._calls, self._calls + 1
         track = coverage or bool(self.data_overrides)
-        guard_ranges, vectors, opcode = None, [], 0xe59ff018
+        guard_ranges: list[Range] | None = None
+        vectors: list[Range] = []
+        opcode = 0xE59FF018
         if use_guard:
             guard_ranges = self._code_ranges()
             if restricted is not None:
-                payload_ranges = [(p["address"], p["address"] + p["length"]) for p in self.payloads]
-                guard_ranges = _merge(_intersect(restricted, [(base,base+len(data)) for base,data in self.images])
-                    + payload_ranges + [(a,a+4) for a,item in self._breakpoints.items()
-                                        if item['kind'] in ('stub','stop','substitute')])
-            guard_ranges = _subtract(guard_ranges, [(o['address'],o['address']+o['length']) for o in self.data_overrides])
-            vectors, opcode = self._guard_configuration(cpu_obj,core,guard_ranges,deliver_faults)
-        unarmed = [entry] if entry == return_address or self._breakpoints.get(entry,{}).get('kind') == 'stop' else []
-        options = dict(core=core, inject_interrupts=inject_interrupts, deliver_faults=deliver_faults, memory=self._observation_memory, return_address=return_address,
-            breakpoints=sorted(self._breakpoints), unarmed=unarmed,
-            stop_addresses=[a for a,item in self._breakpoints.items() if item['kind']=='stop'],
-            ranges=guard_ranges, vectors=vectors, vector_opcode=opcode,
-            stack=window, allowed_stores=allowed_stores, record_stores=record_stores,
-            include_stack=include_stack, store_limit=store_limit, coverage=track,
-            count_ranges=probe_ranges or [], trace=trace)
-        faults = []
-        observation = None
-        skip_once = None
-        fetch_failure = None
+                payload_ranges = [
+                    (p["address"], p["address"] + p["length"]) for p in self.payloads
+                ]
+                guard_ranges = _merge(
+                    _intersect(
+                        restricted,
+                        [(base, base + len(data)) for base, data in self.images],
+                    )
+                    + payload_ranges
+                    + [
+                        (a, a + 4)
+                        for a, item in self._breakpoints.items()
+                        if item["kind"] in ("stub", "stop", "substitute")
+                    ]
+                )
+            guard_ranges = _subtract(
+                guard_ranges,
+                [
+                    (o["address"], o["address"] + o["length"])
+                    for o in self.data_overrides
+                ],
+            )
+            vectors, opcode = self._guard_configuration(
+                cpu_obj, core, guard_ranges, deliver_faults
+            )
+        unarmed = (
+            [entry]
+            if entry == return_address
+            or self._breakpoints.get(entry, {}).get("kind") == "stop"
+            else []
+        )
+        options = dict(
+            core=core,
+            inject_interrupts=inject_interrupts,
+            deliver_faults=deliver_faults,
+            memory=self._observation_memory,
+            return_address=return_address,
+            breakpoints=sorted(self._breakpoints),
+            unarmed=unarmed,
+            stop_addresses=[
+                a for a, item in self._breakpoints.items() if item["kind"] == "stop"
+            ],
+            ranges=guard_ranges,
+            vectors=vectors,
+            vector_opcode=opcode,
+            stack=window,
+            allowed_stores=allowed_stores,
+            record_stores=record_stores,
+            include_stack=include_stack,
+            store_limit=store_limit,
+            coverage=track,
+            count_ranges=probe_ranges or [],
+            trace=trace,
+        )
+        faults: list[dict[str, object]] = []
+        observation: dict[str, object] | None = None
+        skip_once: int | None = None
+        fetch_failure: dict[str, object] | None = None
         try:
-            for index,value in identity.items():
-                machine.rprofile_identity(index,value)
-            machine.driver_begin(json.dumps(options),board.transaction_limit)
+            for index, value in identity.items():
+                machine.rprofile_identity(index, value)
+            machine.driver_begin(json.dumps(options), board.transaction_limit)
             while not board.failure and self._stopped_at is None:
-                remaining = max_instructions - (board.instructions-start)
+                remaining = max_instructions - (board.instructions - start)
                 if remaining <= 0:
                     # A routine whose final instruction used the exact budget
                     # still returns when its resulting PC is the declared LR.
                     if cpu_obj.reg_read(PC) != return_address:
-                        board._stop(cpu_obj,core,"Isolated driver instruction bound reached")
+                        board._stop(
+                            cpu_obj, core, "Isolated driver instruction bound reached"
+                        )
                     break
                 machine.driver_resume(skip_once)
-                skip_once=None
+                skip_once = None
                 before = board.instructions
                 board.executing_cpu = core
                 try:
-                    machine.run(remaining,board.quantum,None,None)
+                    machine.run(remaining, board.quantum, None, None)
                 except Exception as error:
-                    pc=cpu_obj.reg_read(PC)
-                    if use_guard and not any(lo <= self._memory.physical(pc) < hi for lo,hi in guard_ranges):
-                        fetch_failure=dict(kind='blocked',reason='instruction fetch outside declared code ranges',
-                            pc=pc,size=4,opcode=None,registers=[cpu_obj.reg_read(r) for r in regs.GENERAL[:4]])
-                        board._stop(cpu_obj,core,f"Isolated driver fetch guard: instruction fetch outside declared code ranges at {pc:#x}")
+                    pc = cpu_obj.reg_read(PC)
+                    if (
+                        use_guard
+                        and guard_ranges is not None
+                        and not any(
+                            lo <= self._memory.physical(pc) < hi
+                            for lo, hi in guard_ranges
+                        )
+                    ):
+                        fetch_failure = dict(
+                            kind="blocked",
+                            reason="instruction fetch outside declared code ranges",
+                            pc=pc,
+                            size=4,
+                            opcode=None,
+                            registers=[cpu_obj.reg_read(r) for r in regs.GENERAL[:4]],
+                        )
+                        board._stop(
+                            cpu_obj,
+                            core,
+                            f"Isolated driver fetch guard: instruction fetch outside declared code ranges at {pc:#x}",
+                        )
                     else:
-                        details={}
-                        sctlr=cpu_obj.cpr_read(15,0,1,0,0,0,False)
+                        details = {}
+                        sctlr = cpu_obj.cpr_read(15, 0, 1, 0, 0, 0, False)
                         if not sctlr & 1 and pc >= 0x80000000:
-                            details['hint']='MPU disabled: the default PMSAv7 map makes addresses >= 0x80000000 execute-never; call enable_flat_mpu() or program an MPU region'
-                        board._stop(cpu_obj,core,str(error),**details)
+                            details["hint"] = (
+                                "MPU disabled: the default PMSAv7 map makes addresses >= 0x80000000 execute-never; call enable_flat_mpu() or program an MPU region"
+                            )
+                        board._stop(cpu_obj, core, str(error), **details)
                 finally:
                     board.executing_cpu = None
-                observation = json.loads(machine.driver_state())
-                event = observation['event']
+                observation = _json_object(json.loads(machine.driver_state()))
+                event = observation["event"]
                 if board.failure:
                     break
                 if event is None:
                     if cpu_obj.reg_read(PC) == return_address:
                         break
                     state = board.state()
-                    if state['waiting'][core]:
-                        board._stop(cpu_obj,core,"Isolated driver entered WFI; no RTOS caller continuation supplied")
+                    waiting = state["waiting"]
+                    if not isinstance(waiting, list) or core >= len(waiting):
+                        raise RuntimeError("Board waiting state must be a core list")
+                    if not isinstance(waiting[core], bool):
+                        raise RuntimeError("Board waiting state must contain booleans")
+                    if waiting[core]:
+                        board._stop(
+                            cpu_obj,
+                            core,
+                            "Isolated driver entered WFI; no RTOS caller continuation supplied",
+                        )
                     elif board.instructions == before:
-                        board._stop(cpu_obj,core,"Isolated driver made no instruction progress")
+                        board._stop(
+                            cpu_obj,
+                            core,
+                            "Isolated driver made no instruction progress",
+                        )
                     continue
-                if event['kind'] == 'return':
+                event = _json_object(event)
+                event_kind = _text(event["kind"])
+                if event_kind == "return":
                     break
-                if event['kind'] == 'failure':
-                    details={}
-                    message=event['message']
-                    if 'fetch_guard' in event:
-                        details['fetch_guard']=event['fetch_guard']
-                        message+=f" at {event['fetch_guard']['pc']:#x}"
-                    if message == 'Native synchronous fault in isolated driver':
-                        sctlr=cpu_obj.cpr_read(15,0,1,0,0,0,False)
+                if event_kind == "failure":
+                    details: dict[str, object] = {}
+                    message = _text(event["message"])
+                    fetch_guard = event.get("fetch_guard")
+                    if fetch_guard is not None:
+                        fetch_guard = _json_object(fetch_guard)
+                        details["fetch_guard"] = fetch_guard
+                        message += f" at {_integer(fetch_guard['pc']):#x}"
+                    if message == "Native synchronous fault in isolated driver":
+                        sctlr = cpu_obj.cpr_read(15, 0, 1, 0, 0, 0, False)
                         if not sctlr & 1:
-                            details['hint']='MPU disabled: the default PMSAv7 map makes addresses >= 0x80000000 execute-never; call enable_flat_mpu() or program an MPU region'
-                    board._stop(cpu_obj,core,message,**details)
+                            details["hint"] = (
+                                "MPU disabled: the default PMSAv7 map makes addresses >= 0x80000000 execute-never; call enable_flat_mpu() or program an MPU region"
+                            )
+                    board._stop(cpu_obj, core, message, **details)
                     break
-                pc = event['pc']
-                self._breakpoint(cpu_obj,core,pc)
+                pc = _integer(event["pc"])
+                self._breakpoint(cpu_obj, core, pc)
                 # An observer can resume the same instruction once. A stub or
                 # instruction substitution redirects without executing it.
                 skip_once = pc if cpu_obj.reg_read(PC) == pc else None
-            observation = json.loads(machine.driver_state())
+            observation = _json_object(json.loads(machine.driver_state()))
         finally:
             machine.driver_end()
-            for index,value in enumerate(self._base_identity):
-                machine.rprofile_identity(index,value)
-        board.transactions = observation['bus']['transactions']
-        if observation['bus']['omitted'] and not board.failure:
-            board._stop(cpu_obj,core,"Isolated driver transaction bound reached")
-        faults = [dict(fault,fault_pc=hex(int(fault['fault_pc'],16)&0xffffffff))
-                  for fault in observation['faults']] if deliver_faults else []
-        guard = observation['guard']
+            for index, value in enumerate(self._base_identity):
+                machine.rprofile_identity(index, value)
+        bus = _json_object(observation["bus"])
+        board.transactions = _json_objects(bus["transactions"])
+        omitted = _integer(bus["omitted"])
+        if omitted and not board.failure:
+            board._stop(cpu_obj, core, "Isolated driver transaction bound reached")
+        faults = (
+            [
+                dict(
+                    fault,
+                    fault_pc=hex(int(_text(fault["fault_pc"]), 16) & 0xFFFFFFFF),
+                )
+                for fault in _json_objects(observation["faults"])
+            ]
+            if deliver_faults
+            else []
+        )
+        guard = _json_object(observation["guard"])
         if fetch_failure is not None:
-            guard=dict(guard,halted=True,halt=fetch_failure,checked_fetches=guard['checked_fetches']+1)
-        records = observation['records'] if record_stores else None
-        stores = [(r['physical'],r['width'],r['value'],r['pc']) for r in records] if record_stores else None
-        executed = observation['executed'] if track else None
-        if self.data_overrides:
+            guard = dict(
+                guard,
+                halted=True,
+                halt=fetch_failure,
+                checked_fetches=_integer(guard["checked_fetches"]) + 1,
+            )
+        if record_stores:
+            record_rows = _json_objects(observation["records"])
+            records: list[dict[str, object]] | None = record_rows
+            stores: list[tuple[int, int, int, int]] | None = [
+                (
+                    _integer(record["physical"]),
+                    _integer(record["width"]),
+                    _integer(record["value"]),
+                    _integer(record["pc"]),
+                )
+                for record in record_rows
+            ]
+        else:
+            records = None
+            stores = None
+        executed = _integers(observation["executed"]) if track else None
+        if self.data_overrides and executed is not None:
             for pc in executed:
-                override=next((o for o in self.data_overrides
-                    if self._memory.physical(pc) < o['address']+o['length'] and
-                       o['address'] < self._memory.physical(pc)+4),None)
+                override = next(
+                    (
+                        o
+                        for o in self.data_overrides
+                        if self._memory.physical(pc) < o["address"] + o["length"]
+                        and o["address"] < self._memory.physical(pc) + 4
+                    ),
+                    None,
+                )
                 if override is not None:
-                    board._stop(cpu_obj,core,"Executed instruction fetched from a data_override byte",fetch_pc=hex(pc),
-                                override_address=hex(override['address']),override_reason=override['reason'])
+                    board._stop(
+                        cpu_obj,
+                        core,
+                        "Executed instruction fetched from a data_override byte",
+                        fetch_pc=hex(pc),
+                        override_address=hex(override["address"]),
+                        override_reason=override["reason"],
+                    )
                     break
-        range_instructions = observation['counts'] if probe_ranges is not None else None
-        trace_pcs = observation['trace'] if trace else None
-        trace_truncated = observation['trace_total'] > len(trace_pcs) if trace else None
+        range_instructions = (
+            _integers(observation["counts"]) if probe_ranges is not None else None
+        )
+        trace_pcs = _integers(observation["trace"]) if trace else None
+        trace_truncated = (
+            _integer(observation["trace_total"]) > len(trace_pcs)
+            if trace_pcs is not None
+            else None
+        )
         final = {name: cpu_obj.reg_read(NAMES[name]) for name in FINAL_REGISTERS}
-        returned = (not board.failure and self._stopped_at is None and final["pc"] == return_address)
+        returned = (
+            not board.failure
+            and self._stopped_at is None
+            and final["pc"] == return_address
+        )
         stubbed = sum(item["kind"] in ("stub", "observe_return") for item in self._hits)
         limits = "Isolated declared caller/model state; no full boot, physical timing or hardware success established"
         if self._breakpoints:
-            counts = [sum(r["kind"] == k for r in self._breakpoints.values())
-                      for k in ("stub", "observe", "stop", "substitute")]
+            counts = [
+                sum(r["kind"] == k for r in self._breakpoints.values())
+                for k in ("stub", "observe", "stop", "substitute")
+            ]
             limits += f"; {counts[0]} callees substituted ({stubbed} stub returns taken), {counts[1]} observers, {counts[2]} stop points"
             if counts[3]:
                 replaced = sum(item["kind"] == "substitute" for item in self._hits)
@@ -1145,44 +1777,67 @@ class DriverHarness:
             limits += f"; {len(self.data_overrides)} runtime data overrides inside mapped images"
         if self.payloads:
             limits += f"; {len(self.payloads)} DRAM payload images"
-        if restricted is not None:
+        if restricted is not None and guard_ranges is not None:
             limits += f"; fetch restricted to {len(guard_ranges)} declared code ranges"
         if identity != dict(enumerate(self._default_identity)):
             limits += "; CP14 CPU identity overridden"
         if deliver_faults:
             limits += f"; {len(faults)} native faults delivered through the board's exception entry"
-        irq_trace = observation['bus']['irq_events'] + observation['irq_events']
-        result = dict(entry=entry, cpu=core, returned=returned, return_address=return_address,
-                    return_value=final["r0"] if returned else None,
-                    registers=final, call_index=call_index,
-                    instructions=board.instructions - start, virtual_ticks=board.virtual_ticks - ticks,
-                    failure=board.failure, transactions=list(board.transactions),
-                    irq_events=irq_trace,
-                    irq_requests=[item for item in irq_trace if item.get("name") in IRQ_REQUEST_RECORDS],
-                    pending_scheduled_completions=self._pending_completions(),
-                    breakpoints=list(self._hits), stopped_at=self._stopped_at,
-                    stop=dict(self._stop_info) if self._stop_info else None,
-                    stores=stores, store_records=records,
-                    executed=executed if coverage else None,
-                    range_instructions=range_instructions, trace=trace_pcs, trace_truncated=trace_truncated,
-                    delivered_faults=faults,
-                    cpu_identity=identity,
-                    patches=[dict(item) for item in self.patches],
-                    data_overrides=[dict(item) for item in self.data_overrides],
-                    data_override_events=[dict(item) for item in self.data_override_events],
-                    payloads=[dict(item) for item in self.payloads],
-                    payload_replacements=[dict(item) for item in self.payload_replacements],
-                    allocations=[dict(item) for item in self.allocations],
-                    allowed_code=None if restricted is None else list(guard_ranges),
-                    fetch_guard=guard if use_guard else dict(enabled=False),
-                    runtime="shared", device_graph=json.loads(json.dumps(board.device_graph)),
-                    observed_memory=json.loads(json.dumps(self._observation_memory)),
-                    scene=json.loads(json.dumps(board.input_manifest.get("scene", {}))),
-                    assets=json.loads(json.dumps(board.input_manifest.get("assets", {}))),
-                    transaction_records_omitted=observation["bus"]["omitted"], limits=limits)
+        irq_trace = _json_objects(bus["irq_events"]) + _json_objects(
+            observation["irq_events"]
+        )
+        result: dict[str, object] = {}
+        result.update(
+            entry=entry,
+            cpu=core,
+            returned=returned,
+            return_address=return_address,
+            return_value=final["r0"] if returned else None,
+            registers=final,
+            call_index=call_index,
+            instructions=board.instructions - start,
+            virtual_ticks=board.virtual_ticks - ticks,
+            failure=board.failure,
+            transactions=list(board.transactions),
+            irq_events=irq_trace,
+            irq_requests=[
+                item for item in irq_trace if item.get("name") in IRQ_REQUEST_RECORDS
+            ],
+            pending_scheduled_completions=self._pending_completions(),
+            breakpoints=list(self._hits),
+            stopped_at=self._stopped_at,
+            stop=dict(self._stop_info) if self._stop_info is not None else None,
+            stores=stores,
+            store_records=records,
+            executed=executed if coverage else None,
+            range_instructions=range_instructions,
+            trace=trace_pcs,
+            trace_truncated=trace_truncated,
+            delivered_faults=faults,
+            cpu_identity=identity,
+            patches=[dict(item) for item in self.patches],
+            data_overrides=[dict(item) for item in self.data_overrides],
+            data_override_events=[dict(item) for item in self.data_override_events],
+            payloads=[dict(item) for item in self.payloads],
+            payload_replacements=[dict(item) for item in self.payload_replacements],
+            allocations=[dict(item) for item in self.allocations],
+            allowed_code=(
+                None
+                if restricted is None or guard_ranges is None
+                else list(guard_ranges)
+            ),
+            fetch_guard=guard if use_guard else dict(enabled=False),
+            runtime="shared",
+            device_graph=json.loads(json.dumps(board.device_graph)),
+            observed_memory=json.loads(json.dumps(self._observation_memory)),
+            scene=json.loads(json.dumps(board.input_manifest.get("scene", {}))),
+            assets=json.loads(json.dumps(board.input_manifest.get("assets", {}))),
+            transaction_records_omitted=omitted,
+            limits=limits,
+        )
         if self._profile_identity is not None:
             result["profile"] = dict(self._profile_identity)
         if store_limit != STORE_LIMIT:
             result["store_limit"] = store_limit
-            result["limits"] += f"; explicit store bound {store_limit}"
+            result["limits"] = limits + f"; explicit store bound {store_limit}"
         return result

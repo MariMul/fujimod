@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING
 
-from _fujimod_js import defs as _jsdefs
+from _fujimod_js import catalog as _jscatalog
 
 from .._bridge import Handle, call
 from .._variants import Sum, variant
@@ -43,14 +43,14 @@ def _failure(value: JsDefinitionFailure) -> DefinitionFailure:
     from .._variants import enum_out
     from .service import Codec
 
-    kinds = _jsdefs.DefinitionFailureKind
+    kinds = _jscatalog.DefinitionFailureKind
     if value.kind == kinds.Json:
         return DefinitionFailure.Json(value.line, value.column)
     if value.kind == kinds.Schema:
         return DefinitionFailure.Schema(value.schema)
     if value.kind == kinds.InvalidLayout:
         return DefinitionFailure.InvalidLayout(
-            value.code, enum_out(value.codec, Codec, _jsdefs.service.Codec)
+            value.code, enum_out(value.codec, Codec, _jscatalog.service.Codec)
         )
     return {
         kinds.EmptyIdentity: DefinitionFailure.EmptyIdentity,
@@ -67,7 +67,7 @@ class FirmwareIdentity(Handle["JsFirmwareIdentity"]):
     def __init__(self, id: str, sha256: str) -> None:
         if type(id) is not str or type(sha256) is not str:
             raise TypeError("firmware identity requires strings")
-        self._js = call(_jsdefs.FirmwareIdentity.new, id, sha256)
+        self._js = call(_jscatalog.FirmwareIdentity.new, id, sha256)
 
     @property
     def id(self) -> str:

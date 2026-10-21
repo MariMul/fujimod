@@ -7,7 +7,7 @@ from fujimod.usb import app80
 def check_configuration_values() -> bool:
     import json
 
-    from fujimod import defs
+    from fujimod import catalog
     from fujimod.usb import app80 as a
 
     layouts = [
@@ -44,11 +44,11 @@ def check_configuration_values() -> bool:
         ],
     }
     service = a.Service(
-        defs.service.Definition.from_json(
-            json.dumps(doc), defs.FirmwareIdentity("config-b", "ab" * 32)
+        catalog.service.Definition.from_json(
+            json.dumps(doc), catalog.FirmwareIdentity("config-b", "ab" * 32)
         )
     )
-    modes = defs.service.ServiceModes(4)
+    modes = catalog.service.ServiceModes(4)
 
     def prepare(
         command: app80.Command, codec: str, expected: list[int]

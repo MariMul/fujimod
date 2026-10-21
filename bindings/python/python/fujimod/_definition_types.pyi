@@ -1,7 +1,7 @@
 from _fujimod_service_values import Codec
 
 from ._variants import Sum
-from .defs.service import ServiceModes
+from .catalog.service import ServiceModes
 
 class DefinitionFailure(Sum):
     class Json(DefinitionFailure):

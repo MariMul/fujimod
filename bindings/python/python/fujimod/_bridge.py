@@ -63,7 +63,7 @@ def convert_error(value: object) -> Exception:
     kind = getattr(value, "kind", None)
     kinds = jsusb.ErrorKind
     if kind == kinds.Definition:
-        from .defs import DefinitionError, _failure
+        from .catalog import DefinitionError, _failure
 
         error = DefinitionError(str(getattr(value, "message", value)))
         error.reason = _failure(cast("JsDefinitionError", value).reason)

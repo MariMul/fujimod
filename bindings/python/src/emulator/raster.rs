@@ -1,10 +1,9 @@
 //! Sample-grid scanline fill behind `emulator.graphics._ui_coverage`.
 //!
-//! The scalar loop kept in `tests/test_emulator_graphics_vectorized.py`
-//! (`reference_raster`) defines the behavior. This walks the same sample rows
+//! The scalar sample computation defines the behavior. This walks sample rows
 //! with the same f64 operations in the same order and returns, per pixel, how
 //! many of its `scale * scale` samples are inside, so `count / scale**2`
-//! equals the reference raster's mean. It has no machine or memory access.
+//! equals the scalar raster's mean. It has no machine or memory access.
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;

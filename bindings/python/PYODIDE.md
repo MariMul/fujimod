@@ -7,6 +7,9 @@ and nusb WebUSB. The Python and USB Wasm modules have separate memories. Buffers
 are copied across that boundary before I/O; no Python-memory view survives a
 request. This adapter contains no USB framing or firmware policy.
 
+The browser-only wheel omits `fujimod.emulator`, which is available in native
+Python wheels.
+
 Build the two artifacts from the repository root:
 
 ```sh
@@ -65,7 +68,7 @@ compiled Rust and the real nusb backend against fake WebUSB devices. Tests
 cover buffers, enums, uploads, iterator ownership, structured failures, tracing,
 timeouts and cancellation. No test contacts hardware or validates permission UI.
 
-The wheel also exposes shared firmware definitions as `fujimod.defs` and typed
+The wheel also exposes shared firmware definitions as `fujimod.catalog` and typed
 service controls as `fujimod.usb.app80`, using the
 [same Python interface](README.md#firmware-selected-service-controls) as native
 builds. `registerPyodide` registers both namespaces. JSON validation, ordered

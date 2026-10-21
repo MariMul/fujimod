@@ -7,7 +7,7 @@ from fujimod.usb import app80
 def check_transfer_values() -> bool:
     import json
 
-    from fujimod import defs
+    from fujimod import catalog
     from fujimod.usb import app80 as a
 
     layouts = [
@@ -52,11 +52,11 @@ def check_transfer_values() -> bool:
         entries=entries,
     )
     service = a.Service(
-        defs.service.Definition.from_json(
-            json.dumps(doc), defs.FirmwareIdentity("transfer-b", "ab" * 32)
+        catalog.service.Definition.from_json(
+            json.dumps(doc), catalog.FirmwareIdentity("transfer-b", "ab" * 32)
         )
     )
-    modes = defs.service.ServiceModes(4)
+    modes = catalog.service.ServiceModes(4)
 
     def prepare(command: app80.Command) -> app80.Invocation:
         return service.prepare(modes, command)

@@ -1,4 +1,5 @@
 """Host callback protocols used by generated extension declarations."""
+
 from typing import Protocol
 
 

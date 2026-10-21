@@ -3,7 +3,7 @@
 This directory builds the `fujimod` Python distribution. PyO3 source lives in
 `src/`; the USB implementation lives in the workspace's `crates/usb/`.
 Python source lives in `python/fujimod/` inside this same distribution. Native
-wheels include the private `fujimod._native` extension; Pyodide uses the same
+wheels include the compiled `fujimod._native` extension; Pyodide uses the same
 public `fujimod.usb` namespace through the [WebUSB adapter](PYODIDE.md).
 
 Build from the repository root with maturin:
@@ -14,6 +14,14 @@ maturin build --manifest-path bindings/python/Cargo.toml --out target/wheels
 
 Install the wheel in the consuming project's uv environment. Source consumers
 can use `uv add /path/to/fujimod/bindings/python` and rebuild after Rust changes.
+
+## Native execution
+
+Native wheels also expose `fujimod.emulator`. Build a `Definition` from an
+execution graph, device plan and explicitly identified input assets, then pass
+it with the corresponding bytes to `make_board`. Declared images are loaded
+into mapped memory before execution. Boards support context management and an
+explicit `close()` method so native execution resources are released promptly.
 
 The default USB API is awaitable and runs directly on `asyncio`:
 
@@ -203,14 +211,14 @@ There is no implicit padding, polling, data transfer, retry or cleanup. The
 
 ## Firmware-selected service controls
 
-Both native Python and Pyodide expose the shared JSON loader through `fujimod.defs`.
+Both native Python and Pyodide expose the shared JSON loader through `fujimod.catalog`.
 Definitions and command codecs execute in Rust; Python selects typed inputs:
 
 ```python
-from fujimod import defs, usb
-from fujimod.defs import service as data
+from fujimod import catalog, usb
+from fujimod.catalog import service as data
 
-identity = defs.FirmwareIdentity(firmware_id, firmware_sha256)
+identity = catalog.FirmwareIdentity(firmware_id, firmware_sha256)
 definition = data.Definition.from_json(definition_json, identity)
 service = usb.app80.Service(definition)
 invocation = service.prepare(
@@ -232,8 +240,8 @@ with payload variants. Construct `Command.ProfileByte(action=ProfileAction.Read(
 or `ProfileAction.Write(...)`; reset is the explicit `ProfileAction.Reset()`.
 Quantities use checked `PinBank`, `ProfileIndex` and `WordAddress` types. Selection
 errors raise `app80.CommandError` with a typed `CommandFailure` in `.reason`.
-Definition errors similarly expose `defs.DefinitionFailure` through
-`defs.DefinitionError.reason`.
+Definition errors similarly expose `catalog.DefinitionFailure` through
+`catalog.DefinitionError.reason`.
 Missing, ambiguous and unreviewed controls do not fall back to another body.
 
 The returned `CommandReply` keeps all 33 raw bytes. Save failure and unknown

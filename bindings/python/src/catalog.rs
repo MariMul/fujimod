@@ -7,8 +7,8 @@ use pyo3::{
 };
 
 include!(concat!(env!("OUT_DIR"), "/definition_codec_python.rs"));
-pyo3::create_exception!(fujimod.defs, DefinitionError, PyValueError);
-#[pyclass(frozen, from_py_object, module = "fujimod.defs")]
+pyo3::create_exception!(fujimod.catalog, DefinitionError, PyValueError);
+#[pyclass(frozen, from_py_object, module = "fujimod.catalog")]
 #[derive(Clone)]
 enum DefinitionFailure {
     Json { line: usize, column: usize },
@@ -48,7 +48,7 @@ fn invalid(error: core::DefinitionError) -> PyErr {
     })
 }
 
-#[pyclass(frozen, from_py_object, module = "fujimod.defs")]
+#[pyclass(frozen, from_py_object, module = "fujimod.catalog")]
 #[derive(Clone)]
 pub(crate) struct FirmwareIdentity {
     pub(crate) inner: core::FirmwareIdentity,
@@ -71,7 +71,7 @@ impl FirmwareIdentity {
     }
 }
 
-#[pyclass(frozen, eq, from_py_object, module = "fujimod.defs.service")]
+#[pyclass(frozen, eq, from_py_object, module = "fujimod.catalog.service")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ServiceModes {
     pub(crate) inner: core::ServiceModes,
@@ -90,7 +90,7 @@ impl ServiceModes {
     }
 }
 
-#[pyclass(frozen, from_py_object, module = "fujimod.defs.service")]
+#[pyclass(frozen, from_py_object, module = "fujimod.catalog.service")]
 #[derive(Clone)]
 enum ModeAvailability {
     Modes { modes: ServiceModes },
@@ -108,7 +108,7 @@ impl From<core::ModeAvailability> for ModeAvailability {
         }
     }
 }
-#[pyclass(frozen, from_py_object, module = "fujimod.defs.service")]
+#[pyclass(frozen, from_py_object, module = "fujimod.catalog.service")]
 #[derive(Clone)]
 enum ModeTransition {
     Keep {},
@@ -124,7 +124,7 @@ impl From<core::ModeTransition> for ModeTransition {
         }
     }
 }
-#[pyclass(frozen, module = "fujimod.defs.service")]
+#[pyclass(frozen, module = "fujimod.catalog.service")]
 struct Entry {
     inner: core::Entry,
 }
@@ -167,7 +167,7 @@ impl Entry {
         self.inner.parameter_table()
     }
 }
-#[pyclass(frozen, module = "fujimod.defs.service")]
+#[pyclass(frozen, module = "fujimod.catalog.service")]
 struct Mailbox {
     inner: core::Mailbox,
 }
@@ -186,7 +186,7 @@ impl Mailbox {
         self.inner.configuration_limit().get()
     }
 }
-#[pyclass(frozen, from_py_object, module = "fujimod.defs.service")]
+#[pyclass(frozen, from_py_object, module = "fujimod.catalog.service")]
 #[derive(Clone)]
 pub(crate) struct Definition {
     pub(crate) inner: core::Definition,
@@ -237,12 +237,12 @@ impl Definition {
 }
 
 pub(crate) fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
-    let defs = PyModule::new(py, "fujimod.defs")?;
-    defs.add("__path__", PyList::empty(py))?;
-    defs.add_class::<FirmwareIdentity>()?;
-    defs.add("DefinitionError", py.get_type::<DefinitionError>())?;
-    defs.add_class::<DefinitionFailure>()?;
-    let service = PyModule::new(py, "fujimod.defs.service")?;
+    let catalog = PyModule::new(py, "fujimod.catalog")?;
+    catalog.add("__path__", PyList::empty(py))?;
+    catalog.add_class::<FirmwareIdentity>()?;
+    catalog.add("DefinitionError", py.get_type::<DefinitionError>())?;
+    catalog.add_class::<DefinitionFailure>()?;
+    let service = PyModule::new(py, "fujimod.catalog.service")?;
     service.add_class::<ServiceModes>()?;
     service.add_class::<Codec>()?;
     service.add_class::<ModeAvailability>()?;
@@ -250,13 +250,13 @@ pub(crate) fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult
     service.add_class::<Entry>()?;
     service.add_class::<Mailbox>()?;
     service.add_class::<Definition>()?;
-    defs.add_submodule(&service)?;
-    parent.add_submodule(&defs)?;
+    catalog.add_submodule(&service)?;
+    parent.add_submodule(&catalog)?;
     let modules = py
         .import("sys")?
         .getattr("modules")?
         .cast_into::<PyDict>()?;
-    modules.set_item("fujimod.defs", &defs)?;
-    modules.set_item("fujimod.defs.service", &service)?;
+    modules.set_item("fujimod.catalog", &catalog)?;
+    modules.set_item("fujimod.catalog.service", &service)?;
     Ok(())
 }

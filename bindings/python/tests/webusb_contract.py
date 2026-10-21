@@ -11,7 +11,7 @@ from contract_assertions import expect
 from exposure_contract import check_exposure_values
 from extended_contract import check_extended_values
 from fujimod import usb
-from fujimod.defs import service as definitions
+from fujimod.catalog import service as definitions
 from fujimod.usb import app80, data, memory, research, tracing
 from lens_contract import check_lens_values
 from media_contract import check_media_values
@@ -313,8 +313,8 @@ async def check_service_catalog() -> bool:
     import importlib
     import json
 
-    from fujimod import defs
-    from fujimod.defs import service as definitions
+    from fujimod import catalog
+    from fujimod.catalog import service as definitions
     from js import Promise
     from pyodide.ffi import create_proxy
 
@@ -346,7 +346,7 @@ async def check_service_catalog() -> bool:
             ],
         )
         return definitions.Definition.from_json(
-            json.dumps(document), defs.FirmwareIdentity(expected_id, "ab" * 32)
+            json.dumps(document), catalog.FirmwareIdentity(expected_id, "ab" * 32)
         )
 
     def failure[E: Exception](cls: type[E], action: Callable[[], object]) -> E:
@@ -356,8 +356,8 @@ async def check_service_catalog() -> bool:
             return error
         raise AssertionError(f"{cls.__name__} was not raised")
 
-    assert importlib.import_module("fujimod.defs") is defs
-    assert importlib.import_module("fujimod.defs.service") is definitions
+    assert importlib.import_module("fujimod.catalog") is catalog
+    assert importlib.import_module("fujimod.catalog.service") is definitions
     modes = definitions.ServiceModes(4)
     d = definition()
     assert d.identity.id == "synthetic-b-v2" and d.identity.sha256 == "ab" * 32
@@ -386,19 +386,19 @@ async def check_service_catalog() -> bool:
     assert unreviewed.select(153, modes) is None
     assert isinstance(
         failure(
-            defs.DefinitionError, lambda: definition(expected_id="another-body")
+            catalog.DefinitionError, lambda: definition(expected_id="another-body")
         ).reason,
-        defs.DefinitionFailure.FirmwareMismatch,
+        catalog.DefinitionFailure.FirmwareMismatch,
     )
     assert isinstance(
         failure(
-            defs.DefinitionError, lambda: defs.FirmwareIdentity("wrong", "é" * 32)
+            catalog.DefinitionError, lambda: catalog.FirmwareIdentity("wrong", "é" * 32)
         ).reason,
-        defs.DefinitionFailure.InvalidDigest,
+        catalog.DefinitionFailure.InvalidDigest,
     )
     assert isinstance(
-        failure(defs.DefinitionError, lambda: definitions.ServiceModes(0)).reason,
-        defs.DefinitionFailure.EmptyModes,
+        failure(catalog.DefinitionError, lambda: definitions.ServiceModes(0)).reason,
+        catalog.DefinitionFailure.EmptyModes,
     )
     assert isinstance(
         failure(app80.CommandError, lambda: app80.PinBank(16)).reason,

@@ -13,8 +13,8 @@ from ._corpus_types import (
     DataSymbol,
     DataWitness,
     Family,
-    FunctionDetail,
     FunctionCandidate,
+    FunctionDetail,
     FunctionKey,
     FunctionView,
     NameDonor,
@@ -90,7 +90,8 @@ class Index:
     def candidates(self, function: int, firmware: str) -> list[FunctionCandidate]:
         """Analysis nominations; shape-only matches keep weak grade and all ambiguities."""
         return cast(
-            list[FunctionCandidate], self._query("candidates", id=function, firmware=firmware)
+            list[FunctionCandidate],
+            self._query("candidates", id=function, firmware=firmware),
         )
 
     def string_frequencies(self, strings: Iterable[str]) -> dict[str, dict[str, int]]:

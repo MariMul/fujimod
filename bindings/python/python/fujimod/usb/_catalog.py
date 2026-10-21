@@ -10,7 +10,7 @@ from _fujimod_js import valueSchemas as _schemas
 from .._binding_values import bind_values as _bind_values
 from .._bridge import Handle, buffer_in, buffer_out, call, jsusb, snapshot, unwrap
 from .._variants import Sum, enum_out, unwrap_variant, variant
-from ..defs import service as definitions
+from ..catalog import service as definitions
 from . import Session
 from .app80 import CommandCode
 
@@ -53,16 +53,16 @@ variant(CommandFailure, "OversizeArguments")
 
 
 def _command_failure(value: JsCommandFailure) -> CommandFailure:
-    from _fujimod_js import defs
+    from _fujimod_js import catalog
 
     kinds = _js.CommandFailureKind
     if value.kind == kinds.Unsupported:
         return CommandFailure.Unsupported(
-            enum_out(value.codec, definitions.Codec, defs.service.Codec)
+            enum_out(value.codec, definitions.Codec, catalog.service.Codec)
         )
     if value.kind == kinds.Ambiguous:
         return CommandFailure.Ambiguous(
-            enum_out(value.codec, definitions.Codec, defs.service.Codec)
+            enum_out(value.codec, definitions.Codec, catalog.service.Codec)
         )
     if value.kind == kinds.Unavailable:
         return CommandFailure.Unavailable(value.code)

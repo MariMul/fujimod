@@ -3,8 +3,8 @@
 import json
 from collections.abc import Callable
 
-from fujimod import defs
-from fujimod.defs import service as peripheral_definitions
+from fujimod import catalog
+from fujimod.catalog import service as peripheral_definitions
 from fujimod.usb import app80
 
 
@@ -47,7 +47,7 @@ def check_peripheral_values() -> bool:
     )
     definition = peripheral_definitions.Definition.from_json(
         json.dumps(document),
-        defs.FirmwareIdentity("synthetic-peripheral-v2", "ab" * 32),
+        catalog.FirmwareIdentity("synthetic-peripheral-v2", "ab" * 32),
     )
     service = app80.Service(definition)
     modes = peripheral_definitions.ServiceModes(4)

@@ -6,8 +6,8 @@ import json
 
 import pytest
 from contract_assertions import expect
-from fujimod import defs, usb
-from fujimod.defs import service as data
+from fujimod import catalog, usb
+from fujimod.catalog import service as data
 from fujimod.usb import app80, testing
 from test_app80 import config_read, config_write
 from test_async import dispatched, run
@@ -19,7 +19,7 @@ def definition(
     rows: list[tuple[int, str, list[int], int | None]] | None = None,
     *,
     firmware_id: str = "synthetic-b-v2",
-    expected: defs.FirmwareIdentity | None = None,
+    expected: catalog.FirmwareIdentity | None = None,
 ) -> data.Definition:
     if rows is None:
         rows = [(153, "flush_configuration", [7], 4)]
@@ -50,7 +50,7 @@ def definition(
     identity = (
         expected
         if expected is not None
-        else defs.FirmwareIdentity(firmware_id, "ab" * 32)
+        else catalog.FirmwareIdentity(firmware_id, "ab" * 32)
     )
     return data.Definition.from_json(json.dumps(document), identity)
 
@@ -71,8 +71,8 @@ def exchange(
 
 
 def test_shared_data_namespace_keeps_enum_metadata_and_explicit_identity() -> None:
-    assert importlib.import_module("fujimod.defs") is defs
-    assert importlib.import_module("fujimod.defs.service") is data
+    assert importlib.import_module("fujimod.catalog") is catalog
+    assert importlib.import_module("fujimod.catalog.service") is data
     d = definition([(153, "flush_configuration", [7], None)])
     assert (d.identity.id, d.identity.sha256) == ("synthetic-b-v2", "ab" * 32)
     assert (d.mailbox.page, d.mailbox.offset, d.mailbox.configuration_limit) == (
@@ -93,18 +93,20 @@ def test_shared_data_namespace_keeps_enum_metadata_and_explicit_identity() -> No
     assert isinstance(selected.enabled_modes, data.ModeAvailability.Modes)
     with pytest.raises(TypeError):
         d.select(153, 4)
-    with pytest.raises(defs.DefinitionError) as failed:
+    with pytest.raises(catalog.DefinitionError) as failed:
         data.ServiceModes(0)
-    assert isinstance(failed.value.reason, defs.DefinitionFailure.EmptyModes)
-    with pytest.raises(defs.DefinitionError) as failed:
-        data.Definition.from_json("{}", defs.FirmwareIdentity("elsewhere", "cd" * 32))
-    assert isinstance(failed.value.reason, defs.DefinitionFailure.Json)
-    with pytest.raises(defs.DefinitionError) as failed:
-        defs.FirmwareIdentity("wrong", "é" * 32)
-    assert isinstance(failed.value.reason, defs.DefinitionFailure.InvalidDigest)
-    with pytest.raises(defs.DefinitionError) as failed:
-        definition(expected=defs.FirmwareIdentity("another-body", "ab" * 32))
-    assert isinstance(failed.value.reason, defs.DefinitionFailure.FirmwareMismatch)
+    assert isinstance(failed.value.reason, catalog.DefinitionFailure.EmptyModes)
+    with pytest.raises(catalog.DefinitionError) as failed:
+        data.Definition.from_json(
+            "{}", catalog.FirmwareIdentity("elsewhere", "cd" * 32)
+        )
+    assert isinstance(failed.value.reason, catalog.DefinitionFailure.Json)
+    with pytest.raises(catalog.DefinitionError) as failed:
+        catalog.FirmwareIdentity("wrong", "é" * 32)
+    assert isinstance(failed.value.reason, catalog.DefinitionFailure.InvalidDigest)
+    with pytest.raises(catalog.DefinitionError) as failed:
+        definition(expected=catalog.FirmwareIdentity("another-body", "ab" * 32))
+    assert isinstance(failed.value.reason, catalog.DefinitionFailure.FirmwareMismatch)
     with pytest.raises(AttributeError):
         entry.codec = data.Codec.Research
 
