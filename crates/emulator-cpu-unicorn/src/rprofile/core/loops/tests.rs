@@ -217,3 +217,51 @@ fn address_stops_and_unbounded_runs_do_not_skip_loops() {
         );
     }
 }
+
+#[test]
+fn counted_loops_preserve_guest_pmu_time_and_complete_cpu_fingerprints() {
+    let simulate = |mode, budget| {
+        let cpu = processor_with_options(&Memory::default(), Options::default());
+        cpu.map_zeroed(0, 0x4000, 7).unwrap();
+        words(
+            &cpu,
+            0x1000,
+            &[0xe2500001, 0x1afffffd, 0xee194f1d, 0xe320f003],
+        );
+        set(&cpu, arm::CPSR, 0xd3);
+        set(&cpu, arm::CORE[0], 100);
+        cpu.set_guest_clock(Clock {
+            now: 100,
+            phase: 2,
+            ratio: fujimod_emulator_cpu::timeline::Ratio::new(7, 3).unwrap(),
+        })
+        .unwrap();
+        let pmu = |opc2| arm::Coprocessor {
+            cp: 15,
+            crn: 9,
+            crm: 12,
+            opc1: 0,
+            opc2,
+            secure: 0,
+            wide: false,
+        };
+        cpu.coprocessor(pmu(0), Some(1)).unwrap();
+        cpu.coprocessor(pmu(1), Some(0x80000000)).unwrap();
+        cpu.set_loop_mode(mode).unwrap();
+        cpu.set_loop_window(true).unwrap();
+        super::super::tests::run(&cpu, 0x1000, budget).unwrap();
+        (
+            cpu.fingerprint().unwrap(),
+            cpu.instruction_progress(),
+            cpu.exit_counters().unwrap()["loop_accelerated_instructions"],
+        )
+    };
+    for budget in [1, 2, 3, 4, 7, 8, 99, 199, 200, 201, 202] {
+        let off = simulate(LoopMode::Disabled, budget);
+        let on = simulate(LoopMode::Accelerate, budget);
+        assert_eq!((&off.0, off.1), (&on.0, on.1), "budget={budget}");
+        if budget > 8 {
+            assert!(on.2 > 0);
+        }
+    }
+}
