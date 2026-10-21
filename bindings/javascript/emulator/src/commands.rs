@@ -50,6 +50,11 @@ struct Profile {
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct DeviceStates {
+    kind: String,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Position {
     id: String,
     position: String,
@@ -298,6 +303,13 @@ impl Session {
                     })?;
                 }
                 json!({"ticksPerSecond":preview.tick_hz.to_string(),"state":self.core.frame_state(&preview.node)?})
+            }
+            "device_states" => {
+                let o: DeviceStates = options(c.options)?;
+                if o.kind.is_empty() {
+                    return Err("device kind must not be empty".into());
+                }
+                json!({"states":self.core.board.device_states(&o.kind)?})
             }
             "memory_read" => {
                 let o: MemoryRead = options(c.options)?;

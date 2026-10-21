@@ -134,6 +134,10 @@ export interface SessionCommands {
     request: Record<string, never>;
     result: { ticksPerSecond: string; state: { frames: number } };
   };
+  device_states: {
+    request: { kind: string };
+    result: { states: unknown[] };
+  };
   memory_read: {
     request: { address: string; size: number };
     result: { address: string; size: number };
