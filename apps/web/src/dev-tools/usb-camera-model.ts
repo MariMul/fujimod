@@ -127,6 +127,9 @@ interface Entry {
   removed: boolean;
   identityNeeded: boolean;
   identifying: boolean;
+  debugModeNeeded: boolean;
+  readingDebugMode: boolean;
+  presenceGeneration: number;
   host?: ModelShare;
   sharing?: Promise<void>;
   shareAttempt: number;
@@ -334,6 +337,10 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
       }
       entry.session = undefined;
       entry.holder = undefined;
+      if (session && (tool === 'Enable debug mode' || tool === 'Disable debug mode')) {
+        entry.debugModeNeeded = true;
+        entry.camera.debugMode = 'unknown';
+      }
       if (!entry.removed && !disposed) {
         refreshSession(entry);
         publish();
@@ -341,6 +348,7 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
           queueMicrotask(() => {
             void identity(entry);
           });
+        await refreshDebugMode(entry);
       }
     }
     if (!outcome) throw Error('Camera session did not finish');
@@ -352,18 +360,72 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
     }
     return outcome.value;
   }
+  const readDebugMode = async (entry: Entry, session: ToolSession) => {
+    const generation = entry.presenceGeneration;
+    const current = () =>
+      !entry.removed &&
+      !disposed &&
+      entry.camera.present &&
+      entry.device.status.present &&
+      generation === entry.presenceGeneration;
+    try {
+      const data = await session.readConfiguration(0xf7, 1);
+      if (data.length !== 1) throw Error(`Expected one debug-mode byte, received ${data.length}`);
+      if (!current()) return;
+      entry.camera.debugMode = data[0] === 0 ? 'off' : 'on';
+      if (entry.camera.transport === 'usb' && data[0] === 0) entry.camera.serviceMode = true;
+    } catch (error) {
+      if (!current()) return;
+      entry.camera.debugMode = 'unknown';
+      connection(entry, `Debug mode read failed: ${errorText(error)}`, Level.Error);
+    }
+    publish();
+  };
+  const refreshDebugMode = async (entry: Entry) => {
+    if (
+      !entry.debugModeNeeded ||
+      entry.readingDebugMode ||
+      entry.identifying ||
+      entry.identityNeeded ||
+      entry.removed ||
+      disposed
+    )
+      return;
+    refreshSession(entry);
+    if (!entry.camera.present || entry.camera.uncertain || entry.camera.session) return;
+    entry.readingDebugMode = true;
+    entry.debugModeNeeded = false;
+    try {
+      await withSession(entry.camera.id, 'Debug mode', (session) => readDebugMode(entry, session));
+    } catch {
+      if (!entry.removed && entry.camera.present) {
+        refreshSession(entry);
+        // A peer can acquire after the idle check and before Rust grants this lease.
+        entry.debugModeNeeded = Boolean(entry.camera.session) && !entry.camera.uncertain;
+        entry.camera.debugMode = 'unknown';
+        publish();
+      }
+    } finally {
+      entry.readingDebugMode = false;
+    }
+  };
   const identity = async (entry: Entry) => {
     if (entry.identifying || !entry.identityNeeded || entry.removed || disposed) return;
     refreshSession(entry);
     if (!entry.camera.present || entry.camera.uncertain || entry.camera.session) return;
     entry.identifying = true;
     entry.identityNeeded = false;
+    entry.debugModeNeeded = false;
     try {
       const result = await withSession(entry.camera.id, 'identity', async (session) => {
         const result: CameraIdentity = {};
-        for (const [selector, field] of selectors)
-          result[field] = (await session.deviceInfo(selector)).text;
-        return result;
+        try {
+          for (const [selector, field] of selectors)
+            result[field] = (await session.deviceInfo(selector)).text;
+          return result;
+        } finally {
+          await readDebugMode(entry, session);
+        }
       });
       if (!entry.removed) {
         entry.camera.identity = result;
@@ -375,6 +437,7 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
     } finally {
       entry.identifying = false;
       if (entry.identityNeeded) void identity(entry);
+      else void refreshDebugMode(entry);
     }
   };
   async function watchState(entry: Entry) {
@@ -386,6 +449,7 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
           wasUncertain = entry.camera.uncertain;
         entry.camera.present = state.present;
         if (wasPresent !== state.present) {
+          entry.presenceGeneration++;
           if (state.present) {
             entry.camera.goneAt = undefined;
             entry.identityNeeded = true;
@@ -403,6 +467,9 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
             }
           } else {
             entry.camera.goneAt = services.now();
+            entry.camera.debugMode = undefined;
+            entry.camera.serviceMode = undefined;
+            entry.debugModeNeeded = false;
             entry.shareStatus = { ...entry.shareStatus, online: false, reason: 'unplugged' };
             connection(entry, 'Camera disconnected');
             if (entry.host) {
@@ -423,6 +490,7 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
           problem(entry, 'USB completion unknown. Reconnect the camera.', 'session');
         publish();
         void identity(entry);
+        void refreshDebugMode(entry);
       }
     } catch (error) {
       if (!entry.removed && !disposed) problem(entry, errorText(error), 'session');
@@ -563,6 +631,9 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
       removed: false,
       identityNeeded: state.present,
       identifying: false,
+      debugModeNeeded: false,
+      readingDebugMode: false,
+      presenceGeneration: 0,
       shareAttempt: 0,
       peers: new Map(),
       activities: new Map(),

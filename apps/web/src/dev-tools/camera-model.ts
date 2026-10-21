@@ -38,6 +38,17 @@ export interface Camera {
   goneAt?: number;
   /** Filled by the automatic identity read when the camera appears. */
   identity?: CameraIdentity;
+  /**
+   * The debug-mode flag (RAM configuration byte 0xF7), read with the identity
+   * and after each debug-mode change. Absent until read; 'unknown' if the read failed.
+   */
+  debugMode?: 'on' | 'off' | 'unknown';
+  /**
+   * True once the camera is known to be in service mode: the diagnostic link
+   * with debug mode off is only available in service mode. Service mode cannot
+   * change without a restart, so this holds until the camera goes away.
+   */
+  serviceMode?: boolean;
   session?: SessionHolder;
   /** A session ended without a known completion; reopen before new sessions. */
   uncertain: boolean;

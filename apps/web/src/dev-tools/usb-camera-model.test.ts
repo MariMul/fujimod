@@ -56,6 +56,12 @@ class CameraDevice implements ModelDevice {
   releases = vi.fn();
   failRead = false;
   failClose = false;
+  debugByte = 1;
+  failDebugRead = false;
+  debugReply?: Uint8Array;
+  debugReadOverride?: () => Promise<Uint8Array>;
+  onSessionClose?: (tool: string | undefined) => void;
+  configurationReads = vi.fn<(...args: Parameters<ModelSession['readConfiguration']>) => void>();
   constructor(readonly id: string) {
     this.status = {
       id,
@@ -144,6 +150,7 @@ class CameraDevice implements ModelDevice {
       close: async () => {
         this.releases();
         this.update({ sessionOwner: null });
+        this.onSessionClose?.(tool);
         if (this.failClose) throw Error('close failed');
         return new Uint8Array();
       },
@@ -157,7 +164,12 @@ class CameraDevice implements ModelDevice {
         this.emit(0xd1);
         return Uint8Array.of(1, 2, 3, 4);
       },
-      readConfiguration: async () => Uint8Array.of(5),
+      readConfiguration: async (...args) => {
+        this.configurationReads(...args);
+        if (this.failDebugRead) throw Error('configuration read failed');
+        if (this.debugReadOverride) return this.debugReadOverride();
+        return this.debugReply ?? Uint8Array.of(this.debugByte);
+      },
       submitConsole: async (data) => {
         this.emit(0xd0, data);
         this.emit(0xd1);
@@ -697,6 +709,214 @@ test('identity log rows name all seven wire selectors and decode their returned 
         .slice(7)
         .map((row) => row.message),
     ).toEqual(Array(4).fill('Device info · Product'));
+  } finally {
+    f.model.dispose();
+  }
+});
+
+test('identity reads RAM byte 0xF7 in the same session; only USB with debug off implies service mode', async () => {
+  const off = new CameraDevice('off');
+  off.debugByte = 0;
+  const on = new CameraDevice('on');
+  const nonzero = new CameraDevice('nonzero');
+  nonzero.debugByte = 0x80;
+  const f = fixture([off, on, nonzero]);
+  try {
+    await idle(f.model, 3);
+    expect(f.model.cameras().map((camera) => camera.debugMode)).toEqual(['off', 'on', 'on']);
+    expect(f.model.cameras().map((camera) => camera.serviceMode)).toEqual([
+      true,
+      undefined,
+      undefined,
+    ]);
+    for (const device of [off, on, nonzero]) {
+      expect(device.acquire).toHaveBeenCalledExactlyOnceWith('identity');
+      expect(device.configurationReads).toHaveBeenCalledExactlyOnceWith(
+        usb.ConfigurationView.Ram,
+        0,
+        247,
+        1,
+      );
+      expect(device.releases).toHaveBeenCalledOnce();
+    }
+    const remote = new CameraDevice('remote');
+    remote.debugByte = 0;
+    f.remote(remote);
+    await f.model.connectRemote('https://example.com/share');
+    await idle(f.model, 4);
+    expect(f.model.cameras()[3]).toMatchObject({ transport: 'remote', debugMode: 'off' });
+    expect(f.model.cameras()[3].serviceMode).toBeUndefined();
+  } finally {
+    f.model.dispose();
+  }
+});
+
+test('debug changes refresh only after close and latch service mode for the current boot', async () => {
+  const device = new CameraDevice('one');
+  device.debugByte = 0;
+  const f = fixture([device]);
+  try {
+    await idle(f.model);
+    expect(f.model.cameras()[0].serviceMode).toBe(true);
+    const value = await f.model.withSession(device.id, 'Enable debug mode', async () => {
+      device.debugByte = 1;
+      expect(device.configurationReads).toHaveBeenCalledTimes(1);
+      expect(device.releases).toHaveBeenCalledTimes(1);
+      return 'enabled';
+    });
+    expect(value).toBe('enabled');
+    expect(f.model.cameras()[0]).toMatchObject({ debugMode: 'on', serviceMode: true });
+    expect(device.acquire.mock.calls.slice(-2)).toEqual([['Enable debug mode'], ['Debug mode']]);
+    expect(device.configurationReads.mock.invocationCallOrder[1]).toBeGreaterThan(
+      device.releases.mock.invocationCallOrder[1],
+    );
+    await f.model.withSession(device.id, 'Disable debug mode', async () => {
+      device.debugByte = 0;
+    });
+    expect(f.model.cameras()[0]).toMatchObject({ debugMode: 'off', serviceMode: true });
+    expect(device.configurationReads.mock.invocationCallOrder[2]).toBeGreaterThan(
+      device.releases.mock.invocationCallOrder[3],
+    );
+    await f.model.withSession(device.id, 'Read memory', (session) => session.readMemory(0, 1));
+    expect(device.configurationReads).toHaveBeenCalledTimes(3);
+    device.update({ present: false });
+    await vi.waitFor(() => expect(f.model.cameras()[0].present).toBe(false));
+    expect(f.model.cameras()[0].serviceMode).toBeUndefined();
+    expect(f.model.cameras()[0].debugMode).toBeUndefined();
+    device.debugByte = 1;
+    device.update({ present: true });
+    await vi.waitFor(() => expect(f.model.cameras()[0].debugMode).toBe('on'));
+    expect(f.model.cameras()[0].serviceMode).toBeUndefined();
+  } finally {
+    f.model.dispose();
+  }
+});
+
+test.each(['failure', 'empty', 'long'] as const)(
+  'a %s flag read leaves identity available and debug mode unknown',
+  async (kind) => {
+    const device = new CameraDevice('one');
+    if (kind === 'failure') device.failDebugRead = true;
+    else device.debugReply = new Uint8Array(kind === 'empty' ? 0 : 2);
+    const f = fixture([device]);
+    try {
+      await idle(f.model);
+      expect(f.model.cameras()[0].debugMode).toBe('unknown');
+      expect(f.model.cameras()[0].serviceMode).toBeUndefined();
+      expect(device.acquire).toHaveBeenCalledExactlyOnceWith('identity');
+      expect(device.releases).toHaveBeenCalledOnce();
+      expect(
+        f.model
+          .log()
+          .some(
+            (row) =>
+              row.layer === Layer.Connection && row.message.startsWith('Debug mode read failed:'),
+          ),
+      ).toBe(true);
+    } finally {
+      f.model.dispose();
+    }
+  },
+);
+
+test('a failed refresh preserves known service mode and the original debug action result', async () => {
+  const device = new CameraDevice('one');
+  device.debugByte = 0;
+  const f = fixture([device]);
+  try {
+    await idle(f.model);
+    expect(
+      await f.model.withSession(device.id, 'Enable debug mode', async () => {
+        device.failDebugRead = true;
+        return 'done';
+      }),
+    ).toBe('done');
+    expect(f.model.cameras()[0]).toMatchObject({ debugMode: 'unknown', serviceMode: true });
+    await expect(
+      f.model.withSession(device.id, 'Disable debug mode', async () => {
+        throw Error('action failed');
+      }),
+    ).rejects.toThrow('action failed');
+    expect(device.configurationReads).toHaveBeenCalledTimes(3);
+    expect(f.model.cameras()[0]).toMatchObject({ debugMode: 'unknown', serviceMode: true });
+  } finally {
+    f.model.dispose();
+  }
+});
+
+test('a remote session delays the refresh without sending a competing USB request', async () => {
+  const device = new CameraDevice('one');
+  const f = fixture([device]);
+  try {
+    await idle(f.model);
+    device.onSessionClose = (tool) => {
+      if (tool === 'Enable debug mode')
+        device.update({ sessionOwner: { kind: 'remote', controller: 'peer' } });
+    };
+    await f.model.withSession(device.id, 'Enable debug mode', async () => {});
+    expect(device.configurationReads).toHaveBeenCalledTimes(1);
+    expect(device.acquire.mock.calls).toEqual([['identity'], ['Enable debug mode']]);
+    expect(f.model.cameras()[0].debugMode).toBe('unknown');
+    device.debugByte = 0;
+    device.update({ sessionOwner: null });
+    await vi.waitFor(() => expect(f.model.cameras()[0].debugMode).toBe('off'));
+    expect(device.configurationReads).toHaveBeenCalledTimes(2);
+    expect(device.acquire.mock.calls.at(-1)).toEqual(['Debug mode']);
+  } finally {
+    f.model.dispose();
+  }
+});
+
+test('a flag result from before unplug/replug cannot latch service mode for the new boot', async () => {
+  const device = new CameraDevice('one');
+  let finish!: (data: Uint8Array) => void;
+  device.debugReadOverride = () =>
+    device.configurationReads.mock.calls.length === 1
+      ? new Promise((resolve) => {
+          finish = resolve;
+        })
+      : Promise.resolve(Uint8Array.of(1));
+  const f = fixture([device]);
+  try {
+    await vi.waitFor(() => expect(device.configurationReads).toHaveBeenCalledTimes(1));
+    device.update({ present: false });
+    await vi.waitFor(() => expect(f.model.cameras()[0].present).toBe(false));
+    device.update({ present: true });
+    await vi.waitFor(() => expect(f.model.cameras()[0].present).toBe(true));
+    finish(Uint8Array.of(0));
+    await vi.waitFor(() => expect(device.configurationReads).toHaveBeenCalledTimes(2));
+    await idle(f.model);
+    expect(f.model.cameras()[0].debugMode).toBe('on');
+    expect(f.model.cameras()[0].serviceMode).toBeUndefined();
+  } finally {
+    f.model.dispose();
+  }
+});
+
+test('a remote winning the follow-up acquisition race keeps the refresh pending until release', async () => {
+  const device = new CameraDevice('one');
+  const f = fixture([device]);
+  try {
+    await idle(f.model);
+    const acquire = device.acquireSession.bind(device);
+    let refused = false;
+    vi.spyOn(device, 'acquireSession').mockImplementation(async (...args) => {
+      if (args[3] === 'Debug mode' && !refused) {
+        refused = true;
+        device.update({ sessionOwner: { kind: 'remote', controller: 'peer' } });
+        throw Error('Camera is in use');
+      }
+      return acquire(...args);
+    });
+    await f.model.withSession(device.id, 'Disable debug mode', async () => {
+      device.debugByte = 0;
+    });
+    expect(refused).toBe(true);
+    expect(device.configurationReads).toHaveBeenCalledTimes(1);
+    expect(f.model.cameras()[0].debugMode).toBe('unknown');
+    device.update({ sessionOwner: null });
+    await vi.waitFor(() => expect(f.model.cameras()[0].debugMode).toBe('off'));
+    expect(device.configurationReads).toHaveBeenCalledTimes(2);
   } finally {
     f.model.dispose();
   }
