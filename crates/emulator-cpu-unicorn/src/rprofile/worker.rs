@@ -52,7 +52,18 @@ pub struct CpuWorker {
     active_run: Cell<Option<RunToken>>,
     stopped_progress: Cell<Option<u64>>,
     stopped_pc: Cell<Option<u32>>,
-    pending_callback: RefCell<Option<(u64, usize, CallbackCall, Option<u64>, Option<u32>)>>,
+    stopped_pstate: Cell<Option<u32>>,
+    loop_window: Cell<Option<bool>>,
+    pending_callback: RefCell<
+        Option<(
+            u64,
+            usize,
+            CallbackCall,
+            Option<u64>,
+            Option<u32>,
+            Option<u32>,
+        )>,
+    >,
     run_result: RefCell<Option<Result<Exit, ExecutionError>>>,
     callback_depth: Cell<u32>,
     deferred_instruction_limit: Cell<Option<u64>>,
@@ -128,6 +139,8 @@ pub fn spawn(config: Config) -> Result<CpuWorker, String> {
                 active_run: Cell::new(None),
                 stopped_progress: Cell::new(None),
                 stopped_pc: Cell::new(None),
+                stopped_pstate: Cell::new(None),
+                loop_window: Cell::new(Some(false)),
                 pending_callback: RefCell::new(None),
                 run_result: RefCell::new(None),
                 callback_depth: Cell::new(0),
@@ -169,12 +182,14 @@ enum Event {
         call: CallbackCall,
         progress: Option<u64>,
         pc: Option<u32>,
+        pstate: Option<u32>,
     },
     RunComplete {
         id: u64,
         result: Result<Exit, ExecutionError>,
         progress: Option<u64>,
         pc: Option<u32>,
+        pstate: Option<u32>,
     },
 }
 
@@ -499,6 +514,13 @@ fn read_stopped_pc(cpu: &core::Core) -> Option<u32> {
     }
     Some(u32::from_le_bytes(bytes))
 }
+fn read_stopped_pstate(cpu: &core::Core) -> Option<u32> {
+    let mut bytes = [0; 4];
+    if cpu.read_register(Register::Pstate, &mut bytes).ok()? != bytes.len() {
+        return None;
+    }
+    Some(u32::from_le_bytes(bytes))
+}
 impl WorkerLoop {
     fn notify_wakeup(&self) {
         if let Some(wakeup) = self.wakeup.borrow().as_ref() {
@@ -528,7 +550,8 @@ impl WorkerLoop {
         }
         let progress = cpu.instruction_progress();
         let pc = read_stopped_pc(cpu);
-        let result = self.wait_callback_parked(cpu, callback, call, progress, pc);
+        let pstate = read_stopped_pstate(cpu);
+        let result = self.wait_callback_parked(cpu, callback, call, progress, pc, pstate);
         if let Err(error) = cpu.owner_callback_parked(false) {
             *self.callback_error.borrow_mut() = Some(error);
             cpu.stop().ok();
@@ -544,6 +567,7 @@ impl WorkerLoop {
         call: CallbackCall,
         progress: Option<u64>,
         pc: Option<u32>,
+        pstate: Option<u32>,
     ) -> CallbackResult {
         let id = self.next_event.get();
         self.next_event.set(id.wrapping_add(1).max(1));
@@ -555,6 +579,7 @@ impl WorkerLoop {
                 call,
                 progress,
                 pc,
+                pstate,
             })
             .is_err()
         {
@@ -615,6 +640,7 @@ impl WorkerLoop {
                         progress: unsafe { self.core.get().as_ref() }
                             .and_then(|cpu| cpu.instruction_progress()),
                         pc: unsafe { self.core.get().as_ref() }.and_then(read_stopped_pc),
+                        pstate: unsafe { self.core.get().as_ref() }.and_then(read_stopped_pstate),
                     });
                     self.notify_wakeup();
                 }
@@ -794,11 +820,13 @@ fn serve(
                 }
                 let progress = cpu.instruction_progress();
                 let pc = read_stopped_pc(&cpu);
+                let pstate = read_stopped_pstate(&cpu);
                 let _ = events.send(Event::RunComplete {
                     id,
                     result,
                     progress,
                     pc,
+                    pstate,
                 });
                 context.notify_wakeup();
             }
@@ -1214,6 +1242,7 @@ impl CpuWorker {
                 call,
                 progress,
                 pc,
+                pstate,
             } => {
                 if self.pending_callback.borrow().is_some() {
                     return Err(ExecutionError::Backend(
@@ -1224,7 +1253,9 @@ impl CpuWorker {
                     .set(self.callback_events.get().saturating_add(1));
                 self.stopped_progress.set(progress);
                 self.stopped_pc.set(pc);
-                *self.pending_callback.borrow_mut() = Some((id, callback, call, progress, pc));
+                self.stopped_pstate.set(pstate);
+                *self.pending_callback.borrow_mut() =
+                    Some((id, callback, call, progress, pc, pstate));
                 Ok(RunStatus::CallbackPending)
             }
             Event::RunComplete {
@@ -1232,10 +1263,13 @@ impl CpuWorker {
                 result,
                 progress,
                 pc,
+                pstate,
             } if id == run.sequence() => {
                 self.running.set(false);
                 self.stopped_progress.set(progress);
                 self.stopped_pc.set(pc);
+                self.stopped_pstate.set(pstate);
+                self.loop_window.set(Some(false));
                 *self.run_result.borrow_mut() = Some(result.clone());
                 Ok(RunStatus::Complete(result))
             }
@@ -1292,7 +1326,12 @@ impl Cpu for CpuWorker {
         self.unit(Operation::SetLoopMode(mode))
     }
     fn set_loop_window(&self, stable: bool) -> Result<(), String> {
-        self.unit(Operation::SetLoopWindow(stable))
+        if self.loop_window.get() == Some(stable) {
+            return Ok(());
+        }
+        self.unit(Operation::SetLoopWindow(stable))?;
+        self.loop_window.set(Some(stable));
+        Ok(())
     }
     fn identity(&self) -> Identity {
         self.identity
@@ -1346,6 +1385,16 @@ impl Cpu for CpuWorker {
             out[..4].copy_from_slice(&pc.to_le_bytes());
             return Ok(4);
         }
+        if matches!(register, Register::Pstate | arm::CPSR)
+            && out.len() >= 4
+            && (self.callback_depth.get() != 0
+                || self.pending_callback.borrow().is_some()
+                || self.run_result.borrow().is_some())
+            && let Some(pstate) = self.stopped_pstate.get()
+        {
+            out[..4].copy_from_slice(&pstate.to_le_bytes());
+            return Ok(4);
+        }
         match self.rpc(Operation::ReadRegister(register, out.len()))? {
             Value::Bytes(bytes) => {
                 if bytes.len() > out.len() {
@@ -1360,6 +1409,10 @@ impl Cpu for CpuWorker {
     fn write_register(&self, register: Register, bytes: &[u8]) -> Result<(), String> {
         if matches!(register, Register::Pc | arm::PC) {
             self.stopped_pc.set(None);
+            self.stopped_pstate.set(None);
+        }
+        if matches!(register, Register::Pstate | arm::CPSR) {
+            self.stopped_pstate.set(None);
         }
         self.unit(Operation::WriteRegister(register, bytes.to_vec()))
     }
@@ -1517,6 +1570,8 @@ impl Cpu for CpuWorker {
         self.pause_requested.store(0, Ordering::Release);
         self.stopped_progress.set(None);
         self.stopped_pc.set(None);
+        self.stopped_pstate.set(None);
+        self.loop_window.set(None);
         self.pending_callback.borrow_mut().take();
         self.run_result.borrow_mut().take();
         if self.commands.send(Message::Run { id, request }).is_err() {
@@ -1543,7 +1598,8 @@ impl Cpu for CpuWorker {
 
     fn service_pending_callback(&self, run: RunToken) -> Result<(), ExecutionError> {
         self.validate_run(run)?;
-        let Some((id, callback, call, progress, pc)) = self.pending_callback.borrow_mut().take()
+        let Some((id, callback, call, progress, pc, pstate)) =
+            self.pending_callback.borrow_mut().take()
         else {
             return Err(ExecutionError::Backend(
                 "R-profile worker has no parked callback to service".into(),
@@ -1551,6 +1607,7 @@ impl Cpu for CpuWorker {
         };
         self.stopped_progress.set(progress);
         self.stopped_pc.set(pc);
+        self.stopped_pstate.set(pstate);
         self.deferred_instruction_limit.set(None);
         let result = self.service_callback(callback, call);
         let deferred = self.deferred_instruction_limit.take();
@@ -1578,6 +1635,7 @@ impl Cpu for CpuWorker {
             );
             self.stopped_progress.set(None);
             self.stopped_pc.set(None);
+            self.stopped_pstate.set(None);
             self.running.set(false);
             *self.run_result.borrow_mut() = Some(Err(error.clone()));
             return Err(error);
@@ -1594,13 +1652,14 @@ impl Cpu for CpuWorker {
         };
         self.stopped_progress.set(None);
         self.stopped_pc.set(None);
+        self.stopped_pstate.set(None);
         applied_result
     }
 
     fn cancel_pending_callback(&self, run: RunToken) -> Result<(), ExecutionError> {
         self.validate_run(run)?;
         self.pause_requested.store(1, Ordering::Release);
-        let Some((id, _, _, _, _)) = self.pending_callback.borrow_mut().take() else {
+        let Some((id, _, _, _, _, _)) = self.pending_callback.borrow_mut().take() else {
             return Ok(());
         };
         if self
@@ -1618,12 +1677,14 @@ impl Cpu for CpuWorker {
             );
             self.stopped_progress.set(None);
             self.stopped_pc.set(None);
+            self.stopped_pstate.set(None);
             self.running.set(false);
             *self.run_result.borrow_mut() = Some(Err(error.clone()));
             return Err(error);
         }
         self.stopped_progress.set(None);
         self.stopped_pc.set(None);
+        self.stopped_pstate.set(None);
         Ok(())
     }
 
@@ -1719,6 +1780,8 @@ impl Cpu for CpuWorker {
         self.unit(Operation::Restore(snapshot.token))?;
         self.stopped_progress.set(None);
         self.stopped_pc.set(None);
+        self.stopped_pstate.set(None);
+        self.loop_window.set(None);
         Ok(())
     }
     unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String> {
@@ -2177,6 +2240,8 @@ mod tests {
             cpu: *const CpuWorker,
             cached_pc: Cell<Option<u32>>,
             cached_read_rpcs: Cell<Option<usize>>,
+            cached_pstate: Cell<Option<u32>>,
+            cached_pstate_rpcs: Cell<Option<usize>>,
         }
         unsafe fn read(_: u64, size: u32, data: *mut std::ffi::c_void) -> u64 {
             assert_eq!(size, 4);
@@ -2188,6 +2253,15 @@ mod tests {
             let after_cached = cpu.rpc_calls.get();
             probe.cached_pc.set(Some(u32::from_le_bytes(cached)));
             probe.cached_read_rpcs.set(Some(after_cached - before));
+            let mut pstate = [0; 4];
+            let mut cpsr = [0; 4];
+            assert_eq!(cpu.read_register(Register::Pstate, &mut pstate).unwrap(), 4);
+            assert_eq!(cpu.read_register(arm::CPSR, &mut cpsr).unwrap(), 4);
+            assert_eq!(pstate, cpsr);
+            probe.cached_pstate.set(Some(u32::from_le_bytes(pstate)));
+            probe
+                .cached_pstate_rpcs
+                .set(Some(cpu.rpc_calls.get() - after_cached));
             0x7654_3210
         }
         unsafe fn write(_: u64, _: u32, _: u64, _: *mut std::ffi::c_void) {}
@@ -2201,10 +2275,14 @@ mod tests {
                 .unwrap();
             cpu.write_register(arm::CORE[1], &0x8000u32.to_le_bytes())
                 .unwrap();
+            cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes())
+                .unwrap();
             let mut probe = Probe {
                 cpu: &cpu,
                 cached_pc: Cell::new(None),
                 cached_read_rpcs: Cell::new(None),
+                cached_pstate: Cell::new(None),
+                cached_pstate_rpcs: Cell::new(None),
             };
             unsafe {
                 cpu.map_mmio(
@@ -2259,6 +2337,8 @@ mod tests {
             let cached_pc = probe.cached_pc.get().expect("callback PC snapshot");
             assert_eq!(cached_pc, 0x1000, "{policy:?}");
             assert_eq!(probe.cached_read_rpcs.get(), Some(0), "{policy:?}");
+            assert_eq!(probe.cached_pstate.get(), Some(0xd3), "{policy:?}");
+            assert_eq!(probe.cached_pstate_rpcs.get(), Some(0), "{policy:?}");
 
             let completed_pc_rpcs = cpu.rpc_calls.get();
             let mut completed_pc = [0; 4];
@@ -2269,6 +2349,66 @@ mod tests {
             assert_ne!(u32::from_le_bytes(completed_pc), 0x1000, "{policy:?}");
             assert_eq!(cpu.rpc_calls.get(), completed_pc_rpcs, "{policy:?}");
 
+            let completed_pstate_rpcs = cpu.rpc_calls.get();
+            let mut completed_pstate = [0; 4];
+            assert_eq!(
+                cpu.read_register(Register::Pstate, &mut completed_pstate)
+                    .unwrap(),
+                4
+            );
+            assert_eq!(u32::from_le_bytes(completed_pstate), 0xd3, "{policy:?}");
+            let mut completed_cpsr = [0; 4];
+            assert_eq!(
+                cpu.read_register(arm::CPSR, &mut completed_cpsr).unwrap(),
+                4
+            );
+            assert_eq!(completed_pstate, completed_cpsr, "{policy:?}");
+            assert_eq!(cpu.rpc_calls.get(), completed_pstate_rpcs, "{policy:?}");
+
+            let changed_pstate = 0x8000_00d3u32;
+            cpu.write_register(arm::CPSR, &changed_pstate.to_le_bytes())
+                .unwrap();
+            assert_eq!(cpu.stopped_pstate.get(), None, "{policy:?}");
+            let after_cpsr_write = cpu.rpc_calls.get();
+            let mut changed_pstate_bytes = [0; 4];
+            assert_eq!(
+                cpu.read_register(Register::Pstate, &mut changed_pstate_bytes)
+                    .unwrap(),
+                4
+            );
+            assert_eq!(
+                u32::from_le_bytes(changed_pstate_bytes),
+                changed_pstate,
+                "{policy:?}"
+            );
+            assert_eq!(cpu.rpc_calls.get(), after_cpsr_write + 1, "{policy:?}");
+            let after_cpsr_alias_read = cpu.rpc_calls.get();
+            let mut changed_cpsr = [0; 4];
+            assert_eq!(cpu.read_register(arm::CPSR, &mut changed_cpsr).unwrap(), 4);
+            assert_eq!(changed_cpsr, changed_pstate.to_le_bytes(), "{policy:?}");
+            assert_eq!(cpu.rpc_calls.get(), after_cpsr_alias_read + 1, "{policy:?}");
+
+            let pstate_alias_value = 0x4000_00d3u32;
+            cpu.write_register(Register::Pstate, &pstate_alias_value.to_le_bytes())
+                .unwrap();
+            let after_pstate_alias_write = cpu.rpc_calls.get();
+            let mut pstate_alias_read = [0; 4];
+            assert_eq!(
+                cpu.read_register(arm::CPSR, &mut pstate_alias_read)
+                    .unwrap(),
+                4
+            );
+            assert_eq!(
+                pstate_alias_read,
+                pstate_alias_value.to_le_bytes(),
+                "{policy:?}"
+            );
+            assert_eq!(
+                cpu.rpc_calls.get(),
+                after_pstate_alias_write + 1,
+                "{policy:?}"
+            );
+
             let pc_before_write = cpu.rpc_calls.get();
             cpu.write_register(Register::Pc, &completed_pc).unwrap();
             assert_eq!(cpu.rpc_calls.get(), pc_before_write + 1, "{policy:?}");
@@ -2277,12 +2417,27 @@ mod tests {
             assert_eq!(cpu.read_register(arm::PC, &mut actual_pc).unwrap(), 4);
             assert_eq!(cpu.rpc_calls.get(), pc_after_write + 1, "{policy:?}");
             assert_eq!(actual_pc, completed_pc, "{policy:?}");
+            assert_eq!(cpu.stopped_pstate.get(), None, "{policy:?}");
+            let after_pc_write = cpu.rpc_calls.get();
+            let mut pstate_after_pc_write = [0; 4];
+            assert_eq!(
+                cpu.read_register(Register::Pstate, &mut pstate_after_pc_write)
+                    .unwrap(),
+                4
+            );
+            assert_eq!(
+                u32::from_le_bytes(pstate_after_pc_write),
+                pstate_alias_value,
+                "{policy:?}"
+            );
+            assert_eq!(cpu.rpc_calls.get(), after_pc_write + 1, "{policy:?}");
 
             let before_restore = cpu.rpc_calls.get();
             cpu.restore(snapshot.as_ref()).unwrap();
             let after_restore = cpu.rpc_calls.get();
             assert_eq!(after_restore, before_restore + 1, "{policy:?}");
             assert_eq!(cpu.stopped_pc.get(), None, "{policy:?}");
+            assert_eq!(cpu.stopped_pstate.get(), None, "{policy:?}");
             let mut restored_pc = [0; 4];
             assert_eq!(
                 cpu.read_register(Register::Pc, &mut restored_pc).unwrap(),
@@ -2290,6 +2445,76 @@ mod tests {
             );
             assert_eq!(cpu.rpc_calls.get(), after_restore + 1, "{policy:?}");
             assert_eq!(u32::from_le_bytes(restored_pc), 0x1000, "{policy:?}");
+            let mut restored_pstate = [0; 4];
+            assert_eq!(
+                cpu.read_register(Register::Pstate, &mut restored_pstate)
+                    .unwrap(),
+                4
+            );
+            assert_eq!(u32::from_le_bytes(restored_pstate), 0xd3, "{policy:?}");
+            assert_eq!(cpu.rpc_calls.get(), after_restore + 2, "{policy:?}");
+
+            let restarted = cpu
+                .start_run(Run {
+                    begin: 0x1000,
+                    until: None,
+                    watchdog_us: 0,
+                    instructions: Some(0),
+                })
+                .unwrap();
+            assert_eq!(cpu.stopped_pstate.get(), None, "{policy:?}");
+            let before_restart_read = cpu.rpc_calls.get();
+            let mut restarted_pstate = [0; 4];
+            assert_eq!(
+                cpu.read_register(arm::CPSR, &mut restarted_pstate).unwrap(),
+                4
+            );
+            assert_eq!(cpu.rpc_calls.get(), before_restart_read + 1, "{policy:?}");
+            assert_eq!(u32::from_le_bytes(restarted_pstate), 0xd3, "{policy:?}");
+            assert!(matches!(
+                poll_to_completion(&cpu, restarted).unwrap(),
+                Exit::Stopped
+            ));
+            let after_restart_completion = cpu.rpc_calls.get();
+            assert_eq!(read_u32(&cpu, Register::Pstate), 0xd3, "{policy:?}");
+            assert_eq!(cpu.rpc_calls.get(), after_restart_completion, "{policy:?}");
+        }
+    }
+
+    #[test]
+    fn loop_window_cache_tracks_core_run_reset_without_extra_rpcs() {
+        for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+            let cpu = worker(SharedMemory::default());
+            cpu.set_execution_policy(policy).unwrap();
+
+            let initial = cpu.rpc_calls.get();
+            cpu.set_loop_window(false).unwrap();
+            assert_eq!(cpu.rpc_calls.get(), initial, "{policy:?}");
+
+            cpu.set_loop_window(true).unwrap();
+            let after_enable = cpu.rpc_calls.get();
+            assert_eq!(after_enable, initial + 1, "{policy:?}");
+            cpu.set_loop_window(true).unwrap();
+            assert_eq!(cpu.rpc_calls.get(), after_enable, "{policy:?}");
+
+            let run = cpu
+                .start_run(Run {
+                    begin: 0x1000,
+                    until: None,
+                    watchdog_us: 0,
+                    instructions: Some(0),
+                })
+                .unwrap();
+            assert_eq!(cpu.loop_window.get(), None, "{policy:?}");
+            assert!(matches!(
+                poll_to_completion(&cpu, run).unwrap(),
+                Exit::Stopped
+            ));
+            assert_eq!(cpu.loop_window.get(), Some(false), "{policy:?}");
+            let after_run = cpu.rpc_calls.get();
+            cpu.set_loop_window(false).unwrap();
+            cpu.set_loop_window(false).unwrap();
+            assert_eq!(cpu.rpc_calls.get(), after_run, "{policy:?}");
         }
     }
 
