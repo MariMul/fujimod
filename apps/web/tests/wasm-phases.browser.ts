@@ -23,6 +23,25 @@ for (const type of [chromium, webkit].filter(
     await page.goto(url);
     await page.waitForFunction(() => document.body.dataset.proof, undefined, { timeout: 1200000 });
     const result = JSON.parse(await page.locator('pre').innerText());
+    for (const [index, photo] of (result.photos ?? []).entries()) {
+      const encoded = await page.evaluate(async (url: string) => {
+        const blob = await (await fetch(url)).blob();
+        return new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () =>
+            typeof reader.result === 'string'
+              ? resolve(reader.result)
+              : reject(Error('Missing JPEG data.'));
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        });
+      }, photo.url);
+      await writeFile(
+        new URL(`${type.name()}-photo-${index + 1}.jpg`, output),
+        Buffer.from(encoded.slice(encoded.indexOf(',') + 1), 'base64'),
+      );
+      delete photo.url;
+    }
     await page.screenshot({ path: new URL(`${type.name()}.png`, output).pathname, fullPage: true });
     await writeFile(
       new URL(`${type.name()}.json`, output),

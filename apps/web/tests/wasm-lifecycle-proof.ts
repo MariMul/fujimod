@@ -4,6 +4,7 @@ import type { CardEntry } from 'fujimod/emulator';
 import { CameraStore } from '../src/cameras/store';
 import { LCDViewer } from '../src/viewer/lcd';
 import { engineReport } from './wasm-report';
+import { pixelQuality } from './pixel-quality';
 const host = document.createElement('main'),
   canvas = document.createElement('canvas'),
   output = document.createElement('pre');
@@ -159,32 +160,7 @@ try {
   for (let n = 0; n < 20; n++) {
     await advance(12_000_000);
     const actual = canvas.getContext('2d')!.getImageData(0, 0, 720, 480).data;
-    const sums = Array.from({ length: 3 }, () => [0, 0, 0, 0, 0, 0]);
-    let count = 0;
-    for (let y = 64; y < 416; y++)
-      for (let x = 24; x < 696; x++) {
-        const at = (y * 720 + x) * 4;
-        count++;
-        for (let c = 0; c < 3; c++) {
-          const a = expected[at + c]!,
-            b = actual[at + c]!,
-            v = sums[c]!;
-          v[0] += Math.abs(a - b);
-          v[1] += a;
-          v[2] += b;
-          v[3] += a * a;
-          v[4] += b * b;
-          v[5] += a * b;
-        }
-      }
-    quality = {
-      mae: sums.map((v) => v[0]! / count),
-      correlation: sums.map(
-        (v) =>
-          (v[5]! - (v[1]! * v[2]!) / count) /
-          Math.sqrt((v[3]! - v[1]! ** 2 / count) * (v[4]! - v[2]! ** 2 / count)),
-      ),
-    };
+    quality = pixelQuality(expected, actual, 720, { left: 24, top: 64, right: 696, bottom: 416 });
     if (Math.max(...quality.mae) <= 3 && Math.min(...quality.correlation) >= 0.98) break;
   }
   result.playbackQuality = quality;

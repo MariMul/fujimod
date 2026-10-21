@@ -1,6 +1,8 @@
 import { createEngine } from '../src/engine';
+import { EngineError } from '../src/engine/fault';
 import type { CardEntry } from 'fujimod/emulator';
 import { LCDViewer } from '../src/viewer/lcd';
+import { pixelQuality } from './pixel-quality';
 
 const canvas = document.createElement('canvas'),
   output = document.createElement('pre');
@@ -11,7 +13,15 @@ const viewer = new LCDViewer(document.body, canvas);
 const result: Record<string, unknown> = { phases: [], firstUse: [] };
 const phases = result.phases as Record<string, unknown>[];
 const firstUse = result.firstUse as Record<string, unknown>[];
+const photos: { path: string; bytes: number; sha256: string; url: string }[] = [];
+result.photos = photos;
 const errors: string[] = [];
+const exposureControls = [
+  { id: 'shutter_speed_dial', position: 'A' },
+  { id: 'aperture_ring', position: 'A' },
+  { id: 'exposure_compensation_dial', position: '0' },
+];
+result.exposureControls = exposureControls;
 const engine = createEngine((error) => errors.push(String(error)));
 window.cameraEngine = engine;
 let delivered = 0;
@@ -67,17 +77,25 @@ async function phase(
   try {
     await operation();
   } catch (failure) {
-    error = String(failure);
+    error =
+      failure instanceof EngineError
+        ? `${failure.message} ${JSON.stringify(failure.fault.details)}`
+        : String(failure);
   }
-  const end = performance.now(),
-    after = await profile();
-  const guestSeconds = Number(BigInt(after.ticks) - BigInt(before?.ticks ?? '0')) / 12_000_000;
+  const end = performance.now();
+  const after = await profile().catch((failure) => {
+    error ??= String(failure);
+    return undefined;
+  });
+  const guestSeconds = after
+    ? Number(BigInt(after.ticks) - BigInt(before?.ticks ?? '0')) / 12_000_000
+    : null;
   const measurement = {
     name,
     stage,
     guestSeconds,
     wallSeconds: (end - wall) / 1000,
-    speed: guestSeconds / ((end - wall) / 1000),
+    speed: guestSeconds === null ? null : guestSeconds / ((end - wall) / 1000),
     completed: !error,
     error,
     before,
@@ -87,52 +105,30 @@ async function phase(
   else (stage === 'warm' ? phases : firstUse).push(measurement);
   console.log(JSON.stringify({ phase: name, ...measurement, before: undefined, after: undefined }));
   show();
+  if (!after) throw Error(error ?? 'Native profile unavailable.');
 }
 async function repeated(name: string, operation: () => Promise<void>) {
   await phase(name, operation, 'first');
   await phase(name, operation, 'warm');
 }
-function quality(expected: Uint8ClampedArray, actual: Uint8ClampedArray) {
-  const sums = Array.from({ length: 3 }, () => [0, 0, 0, 0, 0, 0]);
-  let count = 0;
-  for (let y = 64; y < 416; y++)
-    for (let x = 24; x < 696; x++) {
-      count++;
-      for (let c = 0; c < 3; c++) {
-        const at = (y * 720 + x) * 4 + c,
-          a = expected[at]!,
-          b = actual[at]!,
-          v = sums[c]!;
-        v[0] += Math.abs(a - b);
-        v[1] += a;
-        v[2] += b;
-        v[3] += a * a;
-        v[4] += b * b;
-        v[5] += a * b;
-      }
-    }
-  return {
-    mae: sums.map((v) => v[0]! / count),
-    correlation: sums.map(
-      (v) =>
-        (v[5]! - (v[1]! * v[2]!) / count) /
-        Math.sqrt((v[3]! - v[1]! ** 2 / count) * (v[4]! - v[2]! ** 2 / count)),
-    ),
-  };
-}
 try {
   // The caller-supplied DAT is selected before power-on. Runtime loading, verification,
   // construction, boot execution, initial checkpoint and first delivered LCD are timed.
   const dat = await (await fetch('/__wasm-camera/firmware.dat')).arrayBuffer();
-  const config = {
-    firmwareId: 'x70-110',
-    bundle: '/__wasm-camera/',
-    sceneInput: true,
-    execution: { mode: 'replay' as const, clockSeconds2000: 845000000 },
-  };
   await phase(
     'cold boot to REC',
     async () => {
+      const manifestResponse = await fetch('/__wasm-camera/wasm.json');
+      check(manifestResponse.ok, 'Camera manifest unavailable.');
+      const manifest = (await manifestResponse.json()) as {
+        session: { firmwareId: string; clockSeconds2000: number };
+      };
+      const config = {
+        firmwareId: manifest.session.firmwareId,
+        bundle: '/__wasm-camera/',
+        sceneInput: true,
+        execution: { mode: 'replay' as const, clockSeconds2000: manifest.session.clockSeconds2000 },
+      };
       engine.prepare(config);
       await engine.boot(dat, config, () => {});
       await until(ready);
@@ -140,6 +136,8 @@ try {
     },
     'cold',
   );
+  for (const setting of exposureControls) await engine.setPosition(setting.id, setting.position);
+  await advance(12_000_000);
   await repeated('REC live view', async () => {
     const frames = delivered;
     await advance(120_000_000);
@@ -191,12 +189,13 @@ try {
   check(ready(await profile()), 'Capture cold-start prerequisite failed.');
   // Capture is independently qualified with the physical manual-focus position.
   await engine.setPosition('focus_mode_selector', 'M');
-  await engine.setPosition('shutter_speed_dial', '125');
+  for (const setting of exposureControls) await engine.setPosition(setting.id, setting.position);
   await advance(6_000_000);
   await engine.setScene(null);
   let jpeg: Uint8Array<ArrayBuffer> | undefined;
   const capture = async () => {
     const seen = new Set(files((await engine.cardTree()).entries).map((f) => f.path));
+    let path: string | undefined;
     await engine.press('shutter_button', 'half');
     await engine.press('shutter_button', 'full');
     await until(async () => {
@@ -207,6 +206,7 @@ try {
         );
         if (!photo) return false;
         jpeg = (await engine.readCardFile(photo.path)).slice();
+        path = photo.path;
         return (
           jpeg.length > 100000 &&
           jpeg[0] === 255 &&
@@ -221,6 +221,13 @@ try {
       }
     }, 180_000_000);
     result.jpeg = { bytes: jpeg!.length, sha256: await hash(jpeg!.slice().buffer), focus: 'M' };
+    check(path, 'Closed JPEG path unavailable.');
+    photos.push({
+      path: path!,
+      bytes: jpeg!.length,
+      sha256: await hash(jpeg!.slice().buffer),
+      url: URL.createObjectURL(new Blob([jpeg!.slice().buffer])),
+    });
   };
   const releaseCapture = async () => {
     await engine.release('shutter_button');
@@ -236,7 +243,12 @@ try {
     await tap('playback_button');
     await until((p) => {
       if (u32(p.observations.mode!) !== 4 || u32(p.observations.busy!)) return false;
-      const q = quality(expected, canvas.getContext('2d')!.getImageData(0, 0, 720, 480).data);
+      const q = pixelQuality(
+        expected,
+        canvas.getContext('2d')!.getImageData(0, 0, 720, 480).data,
+        720,
+        { left: 24, top: 64, right: 696, bottom: 416 },
+      );
       result.playbackQuality = q;
       return Math.max(...q.mae) <= 3 && Math.min(...q.correlation) >= 0.98;
     }, 240_000_000);
