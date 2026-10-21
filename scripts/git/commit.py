@@ -9,7 +9,8 @@ hunks in files that also contain other work. Nothing else in the shared index
 or working tree is included.
 
 The commit is built in a private index on the checked-out branch's HEAD, after
-fast-forwarding that branch to its ``origin`` counterpart. The branch moves only
+``sync.py`` brings that branch to its ``origin`` counterpart, merging origin's
+changes into anyone's edits. Paths recorded as sync conflicts are refused. The branch moves only
 if it is still at that HEAD, then the commit is pushed (fast-forward only). If
 origin moved meanwhile, the commit is rebuilt on the new head and retried.
 Afterward each committed path's shared index entry is updated when nobody else
@@ -21,15 +22,13 @@ import os
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
 
+from repository import Failure
+from repository import Repository as GitRepository
+from sync import load_conflicts, sync
+
 ATTEMPTS = 5
-LOCK_WAIT_SECONDS = 120
-
-
-class Failure(Exception):
-    pass
 
 
 class Arguments(argparse.Namespace):
@@ -39,70 +38,7 @@ class Arguments(argparse.Namespace):
     paths: list[str]
 
 
-class Repository:
-    def __init__(self, root: Path) -> None:
-        self.root = root
-
-    def git(
-        self,
-        *arguments: str,
-        env: dict[str, str] | None = None,
-        input: str | None = None,
-        check: bool = True,
-    ) -> subprocess.CompletedProcess[str]:
-        deadline = time.monotonic() + LOCK_WAIT_SECONDS
-        while True:
-            result = subprocess.run(
-                ["git", *arguments],
-                cwd=self.root,
-                env=env,
-                input=input,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            # Another Git process in the shared checkout holds the index briefly.
-            if "index.lock': File exists" not in result.stderr:
-                break
-            if time.monotonic() > deadline:
-                break
-            time.sleep(0.5)
-        if check and result.returncode:
-            command = " ".join(arguments)
-            raise Failure(f"git {command} failed:\n{result.stderr.strip()}")
-        return result
-
-    def output(self, *arguments: str) -> str:
-        return self.git(*arguments).stdout.strip()
-
-    def branch(self) -> str:
-        result = self.git("symbolic-ref", "-q", "HEAD", check=False)
-        if result.returncode:
-            raise Failure("HEAD is detached; check out the branch to commit to")
-        return result.stdout.strip()
-
-    def fast_forward(self, name: str) -> None:
-        """Bring the checkout to origin's branch; Git refuses if it would touch local edits."""
-        self.git("fetch", "-q", "origin", name)
-        remote = self.output("rev-parse", "FETCH_HEAD")
-        current = self.output("rev-parse", "HEAD")
-        if remote == current:
-            return
-        if (
-            self.git(
-                "merge-base", "--is-ancestor", current, remote, check=False
-            ).returncode
-            == 0
-        ):
-            self.git("merge", "--ff-only", "-q", remote)
-        elif self.git(
-            "merge-base", "--is-ancestor", remote, current, check=False
-        ).returncode:
-            raise Failure(
-                f"local {name} {current[:10]} and origin {remote[:10]} have diverged; "
-                "resolve that before committing"
-            )
-
+class Repository(GitRepository):
     def build(
         self, parent: str, paths: list[str], patch: Path | None, message: str
     ) -> str:
@@ -127,8 +63,17 @@ class Repository:
             raise Failure("nothing to commit: the chosen paths and hunks match HEAD")
         return self.git("commit-tree", tree, "-p", parent, input=message).stdout.strip()
 
-    def names(self, *arguments: str) -> list[str]:
-        return self.git(*arguments, "--name-only", "-z").stdout.split("\0")[:-1]
+    def touched(self, paths: list[str], patch: Path | None) -> set[str]:
+        names = set(paths)
+        if patch:
+            numstat = self.output("apply", "--numstat", "-z", str(patch))
+            # Each record is "added<TAB>deleted<TAB>path".
+            names.update(
+                record.split("\t")[-1]
+                for record in numstat.split("\0")
+                if "\t" in record
+            )
+        return names
 
     def reconcile_index(self, parent: str, commit: str) -> list[str]:
         """Point shared index entries at the new commit where they still equal the old HEAD."""
@@ -151,8 +96,17 @@ class Repository:
     ) -> tuple[str, list[str]]:
         ref = self.branch()
         name = ref.removeprefix("refs/heads/")
+        conflicted = sorted(
+            set(load_conflicts(self)).intersection(self.touched(paths, patch))
+        )
+        if conflicted:
+            raise Failure(
+                "origin changed these paths under your edits; merge them by hand, then "
+                "run `python fujimod/scripts/git/sync.py --resolved PATH`: "
+                + ", ".join(conflicted)
+            )
         for _ in range(ATTEMPTS):
-            self.fast_forward(name)
+            sync(self)
             parent = self.output("rev-parse", "HEAD")
             result = self.build(parent, paths, patch, message)
             # Moves the branch only if no other commit landed since HEAD was read.
@@ -197,16 +151,7 @@ def main() -> None:
     message = args.message if args.message.endswith("\n") else args.message + "\n"
     patch = args.patch.resolve() if args.patch else None
     try:
-        root = Path(
-            subprocess.run(
-                ["git", "rev-parse", "--show-toplevel"],
-                cwd=args.repo,
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.strip()
-        )
-        repository = Repository(root)
+        repository = Repository(GitRepository.toplevel(args.repo))
         result, skipped = repository.commit(args.paths, patch, message)
     except (Failure, subprocess.CalledProcessError) as error:
         print(f"commit: {error}", file=sys.stderr)
