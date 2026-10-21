@@ -135,6 +135,22 @@ struct ImageSnapshot {
     pixels: ImagePixelsSnapshot,
     radiance: Option<crate::imaging::exposure::ExposedFrame>,
 }
+
+fn reuse_spans(target: &mut Vec<StatisticsSpan>, source: &[StatisticsSpan]) {
+    target.resize_with(source.len(), || StatisticsSpan {
+        destination: 0,
+        offset: 0,
+        bytes: Vec::new(),
+    });
+    target.truncate(source.len());
+    for (target, source) in target.iter_mut().zip(source) {
+        target.destination = source.destination;
+        target.offset = source.offset;
+        target.bytes.resize(source.bytes.len(), 0);
+        target.bytes.copy_from_slice(&source.bytes);
+    }
+}
+
 pub struct Block18000 {
     options: Options,
     wiring: Wiring,
@@ -147,6 +163,7 @@ pub struct Block18000 {
     pending: Option<Transfer>,
     raster_completion: Option<RasterCompletion>,
     seen_frame: u64,
+    input_spans: Vec<StatisticsSpan>,
     spans: Vec<StatisticsSpan>,
     histogram_bytes: [u8; 1024],
     pixel_cache: super::pixel_statistics::Cache,
@@ -162,7 +179,8 @@ impl Block18000 {
         if let Some(arithmetic) = &options.contrast {
             arithmetic.validate()?;
         }
-        let mut spans = wiring.frames.0.lock().unwrap().spans.clone();
+        let input_spans = wiring.frames.0.lock().unwrap().spans.clone();
+        let mut spans = input_spans.clone();
         if !options.external_statistics && spans.iter().any(|s| s.destination == 9) {
             return Err("histogram bins are computed from the connected image raster".into());
         }
@@ -208,6 +226,7 @@ impl Block18000 {
             pending: None,
             raster_completion: None,
             seen_frame: 0,
+            input_spans,
             spans,
             histogram_bytes: [0; 1024],
             pixel_cache: Default::default(),
@@ -324,7 +343,7 @@ impl Block18000 {
         let Ok(route) = self.wiring.routes.latch(IRQ) else {
             return Ok(());
         };
-        let frame_spans = frame.spans.clone();
+        reuse_spans(&mut self.input_spans, &frame.spans);
         drop(frame);
         let image = {
             let image = self.wiring.images.0.lock().unwrap();
@@ -436,7 +455,8 @@ impl Block18000 {
                 if self.options.metering.is_some() {
                     return Err("radiometric and packed-pixel metering cannot replace the same statistics bank".into());
                 }
-                let mut spans: Vec<_> = frame_spans
+                let mut spans: Vec<_> = self
+                    .input_spans
                     .iter()
                     .filter(|s| ![0, 1, 2, 3, 6].contains(&s.destination))
                     .cloned()
@@ -449,7 +469,7 @@ impl Block18000 {
                 radiometric_spans = Some(spans);
             }
         }
-        let base = radiometric_spans.as_deref().unwrap_or(&frame_spans);
+        let base = radiometric_spans.as_deref().unwrap_or(&self.input_spans);
         let contrast = self.options.contrast.is_some() && !self.options.external_statistics;
         let metering = self.options.metering.is_some() && !self.options.external_statistics;
         let computed = [(0, 2048), (1, 80), (2, 3072)];
