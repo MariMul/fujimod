@@ -1,0 +1,64 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "x100vi-131",
+  "body_id": "x100vi",
+  "version": "1.31",
+  "update": {
+    "size": 109251576,
+    "sha256": "0d48d2ae26ac7ebab9b0e4cac56324807ec1ea8ae30df06b0b9e79066dc0a14a"
+  },
+  "boot_rom": null,
+  "installation": {
+    "flash_offset": 700,
+    "entry_labels": {
+      "0x9920c": "EL1 handoff"
+    },
+    "loader_validation": null,
+    "image_sections": [
+      {
+        "name": "unit-0",
+        "address": 528384,
+        "size": 123584,
+        "sha256": "05caba32b0b698706d3af4ccc87fd90b1ae66ee7f4a072b5bb2b6e0df0c54a09",
+        "native_flash_offset": 786432
+      },
+      {
+        "name": "unit-3",
+        "address": 6819840,
+        "size": 7587656,
+        "sha256": "8b200f477797764f843379338fc8611a7269a663e32a74e540e7fa99289b6edc",
+        "native_flash_offset": 45481984
+      },
+      {
+        "name": "unit-4",
+        "address": 16388096,
+        "size": 688086,
+        "sha256": "da5ad2a9b725b51d0f4162bbf5cd680194a84c898bb1e49008853d418c0d5a28",
+        "native_flash_offset": 50331648
+      },
+      {
+        "name": "unit-6",
+        "address": 18616320,
+        "size": 11673600,
+        "sha256": "77456fe5c9808ce5e638b1a5f6f12d9e8e40c1751e1f9b4640134fde662e09d4",
+        "native_flash_offset": 10223616
+      },
+      {
+        "name": "unit-7",
+        "address": 45674496,
+        "size": 22253568,
+        "sha256": "14b0557bd724fa74b51ff641fcd5481da5b3ac64146d4fc69375086dafcfb174",
+        "native_flash_offset": 17694720
+      },
+      {
+        "name": "unit-8",
+        "address": 94887936,
+        "size": 22253568,
+        "sha256": "b752cb7b3b146377ed36346055feeac14bdc9e87857012c62c5c42653c075db7",
+        "native_flash_offset": 27394048
+      }
+    ]
+  },
+  "generated_facts": null
+}
