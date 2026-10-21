@@ -1021,3 +1021,21 @@ fn continuation_observes_due_device_publications_without_changing_the_timeline()
     assert_eq!(board.state()["timeline"]["now"], 7);
     assert_eq!(board.instruction_counts(), vec![4]);
 }
+
+#[test]
+fn serialized_interactive_cores_share_execution_before_the_host_deadline() {
+    let (mut board, _) = per_core_irq_board_with_backend(true);
+    board
+        .set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
+    for core in 0..2 {
+        assert!(!board.cpu(core).unwrap().features().asynchronous_runs);
+        board.write_register(core, Register::Pstate, 0xd3).unwrap();
+    }
+    // Both cores spin without MMIO or architectural exits. The device edge
+    // at tick 7 must not let the next core monopolize the rest of this run.
+    board.run_until(200, 8).unwrap();
+    let counts = board.instruction_counts();
+    assert!(counts.iter().all(|&count| count >= 64), "{counts:?}");
+    assert_eq!(board.state()["timeline"]["now"], 200);
+}

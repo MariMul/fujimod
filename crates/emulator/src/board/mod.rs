@@ -749,7 +749,9 @@ impl Board {
                 s.timeline.phase(),
                 until.unwrap_or(u64::MAX),
             )?;
-            let peer = s.execution_policy == ExecutionPolicy::Exact && s.runnable_peer(core);
+            // Concurrent Interactive processors already took the window above.
+            // A serialized backend still owes runnable peers a bounded turn.
+            let peer = s.runnable_peer(core);
             let solo_pause = if peer {
                 u64::MAX
             } else if let Some(pause) = pause_after {
@@ -955,7 +957,7 @@ impl State {
             .any(|(c, &released)| c != core && released && !self.waiting[c])
     }
     fn scheduler_room(&self, core: usize) -> u64 {
-        if self.execution_policy == ExecutionPolicy::Interactive {
+        if self.parallel.is_some() {
             return u64::MAX;
         }
         if !self.runnable_peer(core) {
