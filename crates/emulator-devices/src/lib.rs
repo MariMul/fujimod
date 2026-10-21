@@ -24,6 +24,7 @@ pub mod record;
 pub mod scene;
 pub mod signals;
 pub mod storage;
+pub mod work;
 pub mod xp4;
 pub mod xp5;
 

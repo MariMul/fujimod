@@ -118,7 +118,7 @@ impl Raster {
 #[derive(Default, Serialize, Deserialize)]
 pub struct Transfer {
     #[serde(with = "crate::checkpoint::bytes")]
-    pub pixels: Vec<u8>,
+    pub pixels: crate::work::Buffer,
     raster: Option<Raster>,
     row_bytes: usize,
     deadline: Option<u64>,

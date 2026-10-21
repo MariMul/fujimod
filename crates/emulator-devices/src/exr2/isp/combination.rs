@@ -120,7 +120,7 @@ impl Combination {
         self.state
             .dma
             .prepare(cx.now(), delay, prepared.destination, row_bytes)?;
-        self.state.dma.pixels = prepared.pixels;
+        self.state.dma.pixels = prepared.pixels.into();
         Ok(())
     }
     fn validate_state(&self, state: State) -> Result<State, String> {
