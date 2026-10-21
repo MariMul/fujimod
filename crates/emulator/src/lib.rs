@@ -4,5 +4,5 @@ pub mod inputs;
 pub mod board;
 pub mod session;
 
-pub const RUSTC_VERSION: &str = env!("CAMERA_NATIVE_RUSTC_VERSION");
-pub const TARGET: &str = env!("CAMERA_NATIVE_TARGET");
+pub const RUSTC_VERSION: &str = env!("FUJIMOD_EMULATOR_RUSTC_VERSION");
+pub const TARGET: &str = env!("FUJIMOD_EMULATOR_TARGET");

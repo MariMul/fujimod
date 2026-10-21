@@ -38,7 +38,7 @@ impl Library {
     pub fn open(&self, model: Model, translation_cache_bytes: u32) -> Result<Core, String> {
         if model == Model::CortexM4 && self.api.extensions.features & 4 == 0 {
             return Err(
-                "M-profile requires stoppable Thumb IT entry hooks; rebuild tools/build_unicorn.py"
+                "M-profile requires stoppable Thumb IT hooks from pinned Unicorn; see the crate README"
                     .into(),
             );
         }

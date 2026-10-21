@@ -8,11 +8,11 @@ fn main() {
         .expect("rustc version");
     assert!(output.status.success(), "rustc version command failed");
     println!(
-        "cargo:rustc-env=CAMERA_NATIVE_RUSTC_VERSION={}",
+        "cargo:rustc-env=FUJIMOD_EMULATOR_RUSTC_VERSION={}",
         String::from_utf8(output.stdout).unwrap().trim()
     );
     println!(
-        "cargo:rustc-env=CAMERA_NATIVE_TARGET={}",
+        "cargo:rustc-env=FUJIMOD_EMULATOR_TARGET={}",
         std::env::var("TARGET").unwrap()
     );
     println!("cargo:rerun-if-changed=build.rs");

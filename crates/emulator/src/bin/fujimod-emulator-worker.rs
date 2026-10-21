@@ -36,10 +36,10 @@ enum Mode {
     Discovery,
 }
 impl Mode {
-    fn runtime(&self) -> runtime::bus::Mode {
+    fn runtime(&self) -> board::bus::Mode {
         match self {
-            Self::Strict => runtime::bus::Mode::Strict,
-            Self::Discovery => runtime::bus::Mode::Discovery,
+            Self::Strict => board::bus::Mode::Strict,
+            Self::Discovery => board::bus::Mode::Discovery,
         }
     }
 }
@@ -498,7 +498,7 @@ impl Worker {
                 };
                 board::register_all(&mut graph, &windows, &mut resources, &mut |window| {
                     let missing = format!("{}@{:#x}", window.kind, window.base);
-                    if mode == runtime::bus::Mode::Strict {
+                    if mode == board::bus::Mode::Strict {
                         Err(format!("unknown device {missing}"))
                     } else {
                         unmodeled_devices.push(missing);
@@ -544,7 +544,7 @@ impl Worker {
         let dma_mappings = config
             .ram
             .iter()
-            .map(|r| runtime::memory::BusMapping::ram(r.base, r.size))
+            .map(|r| board::memory::BusMapping::ram(r.base, r.size))
             .collect();
         let graph = factory::Graph {
             decoders: vec![],

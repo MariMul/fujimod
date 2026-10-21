@@ -31,7 +31,7 @@ pub struct MemRegion {
     pub perms: u32,
 }
 
-/// Acceleration exports of the forked 2.1.4 build (tools/build_unicorn.py).
+/// Acceleration exports added by the pinned Unicorn source build.
 /// Missing exports require the explicit slow-Unicorn opt-in before loading.
 pub struct Extensions {
     pub write_hook_pc_sync: Option<unsafe extern "C" fn(Engine, bool) -> Error>,

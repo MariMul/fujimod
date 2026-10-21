@@ -29,10 +29,6 @@ fujimod-catalog = { path = "../catalog" }
 serde_json = "1"
 sha2 = { version = "0.10", optional = true }
 
-[profile.release]
-lto = "thin"
-codegen-units = 1
-
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
 
@@ -41,18 +37,6 @@ sha2 = { version = "0.10", features = ["asm-aarch64"], optional = true }
 
 [target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
 fujimod-emulator-cpu-hvf = { path = "../emulator-cpu-hvf" }
-
-# Optimized native profiling without selecting Cargo's release profile.
-# Tests retain the default development assertions and overflow checks.
-[profile.performance]
-inherits = "dev"
-opt-level = 3
-debug = 0
-debug-assertions = false
-overflow-checks = false
-codegen-units = 16
-lto = "off"
-incremental = false
 
 [target.'cfg(unix)'.dependencies]
 libc = { version = "0.2", optional = true }

@@ -12,9 +12,27 @@ simulation = ["dep:fujimod-simulation"]
 catalog = ["dep:fujimod-catalog"]
 usb = ["catalog", "dep:fujimod-usb"]
 workflows = ["usb", "dep:fujimod-workflows"]
+emulator = [
+  "dep:fujimod-emulator",
+  "emulator-devices",
+  "emulator-cpu",
+  "emulator-cpu-unicorn",
+  "emulator-cpu-hvf",
+]
+emulator-devices = ["dep:fujimod-emulator-devices"]
+emulator-cpu = ["dep:fujimod-emulator-cpu"]
+emulator-cpu-unicorn = ["emulator-cpu", "dep:fujimod-emulator-cpu-unicorn"]
+emulator-cpu-hvf = ["emulator-cpu", "dep:fujimod-emulator-cpu-hvf"]
 
 [dependencies]
 fujimod-simulation = { workspace = true, optional = true }
 fujimod-catalog = { workspace = true, optional = true }
 fujimod-usb = { workspace = true, optional = true }
 fujimod-workflows = { workspace = true, optional = true }
+fujimod-emulator = { workspace = true, optional = true }
+fujimod-emulator-devices = { workspace = true, optional = true }
+fujimod-emulator-cpu = { workspace = true, optional = true }
+fujimod-emulator-cpu-unicorn = { workspace = true, optional = true }
+
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
+fujimod-emulator-cpu-hvf = { workspace = true, optional = true }

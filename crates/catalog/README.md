@@ -1,11 +1,12 @@
-# Shared FujiMod definitions
+# FujiMod catalogs
 
-`fujimod-defs` loads validated firmware data without USB or emulator dependencies.
-The facade exposes it as `fujimod::defs`; enabling `usb` also exposes `defs`.
-Definitions stay in JSON rather than becoming another set of Rust constants.
-Callers supply the selected firmware ID and SHA-256 when loading a definition.
-Matching those values qualifies the data; identifying a connected camera and
-checking execution eligibility remain responsibilities of its workflow.
+`fujimod-catalog` loads validated firmware, camera, service, and emulator catalog
+data without USB or execution dependencies. The facade exposes it as
+`fujimod::catalog`; enabling `usb` also exposes `catalog`. Definitions stay in
+JSON rather than becoming another set of Rust constants. Callers supply the
+selected identity and SHA-256 when loading a definition. Matching those values
+qualifies the data; identifying a connected camera and checking execution
+eligibility remain responsibilities of its workflow.
 
 The first schema is `service::Definition` for App80. It contains firmware
 identity, an explicit ff80 mailbox location/limit, and the ordered service table.

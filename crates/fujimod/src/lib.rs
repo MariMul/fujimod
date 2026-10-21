@@ -10,3 +10,22 @@ pub use fujimod_catalog as catalog;
 
 #[cfg(feature = "simulation")]
 pub use fujimod_simulation as simulation;
+
+#[cfg(feature = "emulator")]
+pub use fujimod_emulator as emulator;
+
+#[cfg(feature = "emulator-devices")]
+pub use fujimod_emulator_devices as emulator_devices;
+
+#[cfg(feature = "emulator-cpu")]
+pub use fujimod_emulator_cpu as emulator_cpu;
+
+#[cfg(feature = "emulator-cpu-unicorn")]
+pub use fujimod_emulator_cpu_unicorn as emulator_cpu_unicorn;
+
+#[cfg(all(
+    feature = "emulator-cpu-hvf",
+    target_os = "macos",
+    target_arch = "aarch64"
+))]
+pub use fujimod_emulator_cpu_hvf as emulator_cpu_hvf;
