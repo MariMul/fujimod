@@ -267,6 +267,9 @@ export function startHome(
         (device.panel.schema !== DEVICE_PANEL_SCHEMA || device.panel.body !== entry.body)
       )
         throw Error('The emulator control layout does not match this firmware body or schema.');
+      const layout = activeCamera?.layout ?? device?.panel;
+      if (layout && (layout.schema !== DEVICE_PANEL_SCHEMA || layout.body !== entry.body))
+        throw Error('The emulator control layout does not match this firmware body or schema.');
       if (!restart && !reload && !camera) {
         const patchEntry = release?.firmwares.find((item) => item.sha256 === hash);
         let fpUpdate = false;
@@ -347,7 +350,7 @@ export function startHome(
       const emulate = entry.emulate;
       await session.boot(
         bytes,
-        device.panel,
+        layout!,
         () => !disposed && current === generation,
         () => {
           const modSupported =
@@ -358,7 +361,7 @@ export function startHome(
           });
           const bootInputs =
             modSupported && modEnabled
-              ? (device.panel.combos.find((combo) => combo.boot === 'sd')?.inputs ?? [])
+              ? (layout!.combos.find((combo) => combo.boot === 'sd')?.inputs ?? [])
               : [];
           const media = modSupported && modEnabled ? bootMedia(file) : undefined;
           return {
@@ -563,6 +566,23 @@ export function startHome(
     }
   }
 
+  async function saveLayout(layout: DevicePanel) {
+    const camera = activeCamera;
+    if (!camera) return;
+    storageStatus('Saving');
+    try {
+      const updated = await cameras.saveLayout(camera.id, layout);
+      if (activeCamera?.id !== camera.id) return;
+      activeCamera = updated;
+      setState((s) => {
+        if (s.activeCamera?.id === camera.id) reconcile(updated)(s.activeCamera);
+      });
+      storageStatus('Saved');
+    } catch (error) {
+      storageStatus(`Camera not saved · ${String(error)}`, true);
+    }
+  }
+
   let disposed = false;
   const saveHidden = () => {
     if (document.visibilityState === 'hidden') session.stopHiddenWebcam();
@@ -578,6 +598,7 @@ export function startHome(
   return {
     ...session,
     selectMod,
+    saveLayout,
     openCamera,
     newCamera,
     closeCamera,

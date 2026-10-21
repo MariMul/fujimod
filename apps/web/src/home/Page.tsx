@@ -86,6 +86,7 @@ export default function Home() {
               lcd = element;
             }}
             selectFile={(selected) => runtime()?.selectFile(selected)}
+            onLayoutChange={(panel) => runtime()?.saveLayout(panel)}
             toolbar={
               <EmulatorFeedback runtime={runtime()} request={feedback()}>
                 {(actions) => (

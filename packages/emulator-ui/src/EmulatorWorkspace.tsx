@@ -2,6 +2,7 @@ import type { JSX } from '@solidjs/web';
 import { Show, createSignal } from 'solid-js';
 import type { SessionState } from './session/state';
 import type { SessionController } from './session/controller';
+import type { DevicePanel } from './ui/layout';
 import { ViewerOverlays } from './viewer/Overlays';
 import { LoadingAssets } from './LoadingAssets';
 import { Controls } from './ui/controls';
@@ -21,6 +22,7 @@ export function EmulatorWorkspace(props: {
   selectFile(file?: File): void;
   toolbar: JSX.Element;
   children: JSX.Element;
+  onLayoutChange?: (panel: DevicePanel) => void | Promise<void>;
 }) {
   const [dragging, setDragging] = createSignal(false);
   return (
@@ -92,7 +94,7 @@ export function EmulatorWorkspace(props: {
         hidden={!props.state.panelVisible}
       >
         <div id="controls">
-          <Controls session={props.runtime?.panel} />
+          <Controls session={props.runtime?.panel} onLayoutChange={props.onLayoutChange} />
         </div>
         <hr />
         <CardBrowser

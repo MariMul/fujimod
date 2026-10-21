@@ -42,7 +42,8 @@ it as JSON. User layouts are stored with the saved camera.
 2. Complete: move the UI into [`@fujimod/emulator-ui`](../../packages/emulator-ui/README.md).
    The homepage imports its workspace, session, viewer, controls, status,
    faults and reports. The Wasm engine implementation stays in the web app.
-3. Layout schema version, import/export, binding checks, then the editor.
+3. Complete: layout schema version, import/export, binding checks and the live
+   editor with per-camera persistence.
 4. `RemoteEngine` over WebRTC, and the native process serving the UI.
 
 ## Refactor rules

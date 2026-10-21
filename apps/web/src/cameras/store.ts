@@ -4,6 +4,7 @@ import {
   removeDurable,
   type DurableReference,
 } from '../storage/durable';
+import type { DevicePanel } from '@fujimod/emulator-ui/ui/layout';
 /** Owned cameras are independent of the disposable firmware boot cache. */
 export interface CameraRecord {
   id: string;
@@ -16,6 +17,7 @@ export interface CameraRecord {
   poweredOn?: boolean;
   revision: number;
   modEnabled: boolean;
+  layout?: DevicePanel;
 }
 export interface CameraSave {
   durable: ArrayBuffer;
@@ -209,5 +211,21 @@ export class CameraStore {
     if (published.previous?.schema === 1)
       await removeDurable(published.previous.durable).catch(() => {});
     return published.record;
+  }
+  saveLayout(id: string, layout: DevicePanel): Promise<CameraRecord> {
+    return transaction(['cameras'], 'readwrite', (tx, result, fail) => {
+      const cameras = tx.objectStore('cameras');
+      const request = cameras.get(id);
+      request.onsuccess = () => {
+        const record = request.result as CameraRecord | undefined;
+        if (!record) {
+          fail(Error('This camera is no longer in browser storage.'));
+          return;
+        }
+        const updated = { ...record, layout };
+        cameras.put(updated);
+        result(updated);
+      };
+    });
   }
 }

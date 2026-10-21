@@ -2,10 +2,19 @@ import { For, Show, Switch, Match, createSignal, createEffect, onSettled, untrac
 import type { Engine } from '../engine/api';
 import type { Input } from 'fujimod/emulator';
 import type { LCDViewer } from '../viewer/lcd';
-import type { ControlNode, DevicePanel, PowerCombo } from './layout';
+import {
+  CONTROL_VARIANTS,
+  exportDevicePanel,
+  importDevicePanel,
+  unknownDevicePanelInputIds,
+  type ControlNode,
+  type DevicePanel,
+  type PowerCombo,
+} from './layout';
 import { Icon } from './icons';
 import type { DetentSound } from '../feedback/detent-sound';
 import { DetentFeedback } from '../feedback/detent';
+import { downloadBlob } from './download';
 
 /** Input protocol and gesture lifetime; Solid owns the panel's rendered state. */
 export class ControlSession {
@@ -27,6 +36,8 @@ export class ControlSession {
   ready = false;
   powered = true;
   powerID?: string;
+  editingLayout = false;
+  selectedLayoutPath?: string;
   active: string[] = [];
   glowing = false;
   stopShutter?: (release?: boolean) => void;
@@ -418,6 +429,74 @@ export class ControlSession {
     if (this.powerID && positions[this.powerID]) this.powered = positions[this.powerID] === 'ON';
     this.availability();
   }
+  setLayoutEditing(editing: boolean) {
+    this.editingLayout = editing;
+    if (!editing) this.selectedLayoutPath = undefined;
+    this.changed();
+  }
+  selectLayoutNode(path: string) {
+    if (!this.editingLayout || this.nodeAtPath(path)?.kind !== 'control') return;
+    if (this.selectedLayoutPath === path) return;
+    this.selectedLayoutPath = path;
+    this.changed();
+  }
+  selectedLayoutNode(): ControlNode | undefined {
+    return this.selectedLayoutPath ? this.nodeAtPath(this.selectedLayoutPath) : undefined;
+  }
+  replacePanel(data: DevicePanel) {
+    this.data = data;
+    this.selectedLayoutPath = undefined;
+    this.syncPanel();
+    this.changed();
+  }
+  updateSelectedLayoutNode(update: Partial<ControlNode>): DevicePanel | undefined {
+    if (!this.data || !this.selectedLayoutPath) return undefined;
+    const path = this.selectedLayoutPath.split('.').map(Number);
+    if (path.some((index) => !Number.isSafeInteger(index) || index < 0)) return undefined;
+    const replace = (nodes: ControlNode[], depth: number): ControlNode[] =>
+      nodes.map((node, index) => {
+        if (index !== path[depth]) return node;
+        if (depth === path.length - 1) return { ...node, ...update };
+        return { ...node, children: replace(node.children ?? [], depth + 1) };
+      });
+    const data = { ...this.data, layout: replace(this.data.layout, 0) };
+    this.data = data;
+    this.syncPanel();
+    this.changed();
+    return data;
+  }
+  private nodeAtPath(path: string): ControlNode | undefined {
+    if (!this.data) return undefined;
+    let nodes = this.data.layout,
+      node: ControlNode | undefined;
+    for (const part of path.split('.')) {
+      const index = Number(part);
+      if (!Number.isSafeInteger(index) || index < 0) return undefined;
+      node = nodes[index];
+      if (!node) return undefined;
+      nodes = node.children ?? [];
+    }
+    return node;
+  }
+  private syncPanel() {
+    this.powerID = undefined;
+    this.detentSounds = this.data?.detentSounds ?? {};
+    const visit = (nodes: ControlNode[]) => {
+      for (const node of nodes) {
+        if (node.operation === 'power' && node.id) {
+          this.powerID = node.id;
+          this.positions.set(node.id, this.powered ? 'ON' : 'OFF');
+        }
+        if (node.variant === 'segment' && node.id && !this.positions.has(node.id)) {
+          const first =
+            this.inputs.get(node.id)?.positions?.[0]?.id ?? Object.keys(node.labels ?? {})[0];
+          if (first !== undefined) this.positions.set(node.id, first);
+        }
+        visit(node.children ?? []);
+      }
+    };
+    visit(this.data?.layout ?? []);
+  }
   clear() {
     this.releaseAll();
     this.ready = false;
@@ -425,6 +504,8 @@ export class ControlSession {
     this.powered = true;
     this.powerID = undefined;
     this.data = undefined;
+    this.editingLayout = false;
+    this.selectedLayoutPath = undefined;
     this.changed();
     this.inputs.clear();
     this.detentSounds = {};
@@ -620,14 +701,13 @@ function Dial(props: { session: ControlSession; id: string; node: ControlNode })
     </div>
   );
 }
-function Node(props: { session: ControlSession; node: ControlNode }) {
-  const node = untrack(() => props.node),
-    id = node.id ?? '';
-  const input = untrack(() => props.session.inputs.get(id));
-  const positions =
-    input?.positions ?? Object.keys(node.labels ?? {}).map((id) => ({ id, label: id }));
-  const keys =
-    node.kind === 'command'
+function Node(props: { session: ControlSession; node: ControlNode; path: string }) {
+  const id = () => props.node.id ?? '';
+  const input = () => props.session.inputs.get(id());
+  const positions = () =>
+    input()?.positions ?? Object.keys(props.node.labels ?? {}).map((id) => ({ id, label: id }));
+  const keys = () =>
+    props.node.kind === 'command'
       ? [
           ['left', '◀', 'side l'],
           ['center', '', 'tab'],
@@ -638,30 +718,32 @@ function Node(props: { session: ControlSession; node: ControlNode }) {
           ['down', '▼', 'a d'],
           ['left', '◀', 'a l'],
           ['right', '▶', 'a r'],
-          ['center', node.face?.join('\n') ?? '', 'ok'],
+          ['center', props.node.face?.join('\n') ?? '', 'ok'],
         ];
+  const layoutPath = () => (props.node.kind === 'control' ? props.path : undefined);
+  const selected = () => props.session.read().selectedLayoutPath === props.path;
   return (
     <Switch>
-      <Match when={node.kind === 'divider'}>
+      <Match when={props.node.kind === 'divider'}>
         <hr />
       </Match>
-      <Match when={node.kind === 'space'}>
+      <Match when={props.node.kind === 'space'}>
         <div class="sp" />
       </Match>
-      <Match when={node.kind === 'command' || node.kind === 'dpad'}>
-        <div class={node.kind === 'command' ? 'cmd' : 'dpad'}>
-          <Show when={node.kind === 'command'}>
-            <div class="cap">{node.caption}</div>
+      <Match when={props.node.kind === 'command' || props.node.kind === 'dpad'}>
+        <div class={props.node.kind === 'command' ? 'cmd' : 'dpad'}>
+          <Show when={props.node.kind === 'command'}>
+            <div class="cap">{props.node.caption}</div>
           </Show>
           <div
-            class={node.kind === 'command' ? 'knurl' : 'dpad-keys'}
-            style={node.kind === 'dpad' ? { display: 'contents' } : {}}
+            class={props.node.kind === 'command' ? 'knurl' : 'dpad-keys'}
+            style={props.node.kind === 'dpad' ? { display: 'contents' } : {}}
           >
-            <For each={keys}>
+            <For each={keys()}>
               {(key) => (
                 <Key
                   session={props.session}
-                  id={node.bindings![key[0]]}
+                  id={props.node.bindings![key[0]]}
                   node={{ face: key[1].split('\n') }}
                   class={key[2]}
                 />
@@ -670,61 +752,92 @@ function Node(props: { session: ControlSession; node: ControlNode }) {
           </div>
         </div>
       </Match>
-      <Match when={node.kind !== 'control'}>
-        <div class={node.className ?? ''}>
-          <For each={node.children ?? []}>
-            {(child) => <Node node={child} session={props.session} />}
+      <Match when={props.node.kind !== 'control'}>
+        <div class={props.node.className ?? ''}>
+          <For each={props.node.children ?? []}>
+            {(child, index) => (
+              <Node node={child} session={props.session} path={`${props.path}.${index()}`} />
+            )}
           </For>
         </div>
       </Match>
-      <Match when={node.variant === 'key' || node.variant === 'record'}>
+      <Match when={props.node.variant === 'key' || props.node.variant === 'record'}>
         <Show
-          when={node.caption}
-          fallback={<Key session={props.session} id={id} node={node} class={node.className} />}
+          when={props.node.caption}
+          fallback={
+            <div
+              class={`control-node ${props.node.className ?? ''}`}
+              data-id={id()}
+              data-layout-path={layoutPath()}
+              data-layout-selected={selected() ? 'true' : undefined}
+              style={{ display: 'contents' }}
+            >
+              <Key
+                session={props.session}
+                id={id()}
+                node={props.node}
+                class={props.node.className}
+              />
+            </div>
+          }
         >
-          <div class={`control-node ${node.className ?? ''}`}>
-            <div class="cap">{node.caption}</div>
-            <Key session={props.session} id={id} node={node} class={node.className} />
+          <div
+            class={`control-node ${props.node.className ?? ''}`}
+            data-id={id()}
+            data-layout-path={layoutPath()}
+            data-layout-selected={selected() ? 'true' : undefined}
+          >
+            <div class="cap">{props.node.caption}</div>
+            <Key session={props.session} id={id()} node={props.node} class={props.node.className} />
           </div>
         </Show>
       </Match>
       <Match when={true}>
-        <div class={`control-node ${node.className ?? ''}`} data-id={id}>
-          <Show when={node.caption}>
-            <div class="cap">{node.caption}</div>
+        <div
+          class={`control-node ${props.node.className ?? ''}`}
+          data-id={id()}
+          data-layout-path={layoutPath()}
+          data-layout-selected={selected() ? 'true' : undefined}
+        >
+          <Show when={props.node.caption}>
+            <div class="cap">{props.node.caption}</div>
           </Show>
           <Switch>
-            <Match when={node.variant === 'segment'}>
-              <div class="seg wide" role="group" aria-label={input?.label ?? node.caption ?? id}>
-                <For each={positions}>
+            <Match when={props.node.variant === 'segment'}>
+              <div
+                class="seg wide"
+                role="group"
+                aria-label={input()?.label ?? props.node.caption ?? id()}
+              >
+                <For each={positions()}>
                   {(position) => (
                     <button
                       type="button"
                       data-value={position.id}
                       class={[
                         '',
-                        { on: props.session.read().positions.get(id) === position.id },
-                        props.session.classes(id),
+                        { on: props.session.read().positions.get(id()) === position.id },
+                        props.session.classes(id()),
                       ]}
                       aria-pressed={
-                        props.session.read().positions.get(id) === position.id ? 'true' : 'false'
+                        props.session.read().positions.get(id()) === position.id ? 'true' : 'false'
                       }
-                      aria-label={`${input?.label ?? node.caption} ${node.labels?.[position.id] ?? position.label}`}
-                      disabled={props.session.disabled(id)}
-                      aria-disabled={props.session.disabled(id) ? 'true' : 'false'}
-                      onClick={() => props.session.position(id, position.id)}
+                      aria-label={`${input()?.label ?? props.node.caption ?? id()} ${props.node.labels?.[position.id] ?? position.label}`}
+                      disabled={props.session.disabled(id())}
+                      aria-disabled={props.session.disabled(id()) ? 'true' : 'false'}
+                      onClick={() => props.session.position(id(), position.id)}
                     >
-                      {node.labels?.[position.id] ?? position.label}
+                      {props.node.labels?.[position.id] ?? position.label}
                     </button>
                   )}
                 </For>
               </div>
             </Match>
-            <Match when={node.variant === 'shutter'}>
-              <Shutter session={props.session} id={id} />
+            <Match when={props.node.variant === 'shutter'}>
+              <Shutter session={props.session} id={id()} />
             </Match>
             <Match when={true}>
-              <Dial session={props.session} id={id} node={node} />
+              <Dial session={props.session} id={id()} node={props.node} />
             </Match>
           </Switch>
         </div>
@@ -779,14 +892,185 @@ function Combo(props: { session: ControlSession; item: PowerCombo }) {
     </button>
   );
 }
-export function Controls(props: { session?: ControlSession }) {
+export function Controls(props: {
+  session?: ControlSession;
+  onLayoutChange?: (panel: DevicePanel) => void | Promise<void>;
+}) {
+  const [importError, setImportError] = createSignal('');
+  const selected = () => props.session?.read().selectedLayoutNode();
+  const unknownIds = () => {
+    const session = props.session;
+    const panel = session?.read().data;
+    return panel && session ? unknownDevicePanelInputIds(panel, [...session.inputs.values()]) : [];
+  };
+  function stopControlEvent(event: Event) {
+    const session = props.session;
+    if (!session?.read().editingLayout || !(event.target instanceof Element)) return;
+    const control = event.target.closest<HTMLElement>('[data-layout-path]');
+    if (!control) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const path = control.dataset.layoutPath;
+    if (path && (event.type === 'pointerdown' || event.type === 'click'))
+      session.selectLayoutNode(path);
+  }
+  function updateSelected(update: Partial<ControlNode>) {
+    const panel = props.session?.updateSelectedLayoutNode(update);
+    if (panel) void props.onLayoutChange?.(panel);
+  }
+  function exportLayout() {
+    const panel = props.session?.read().data;
+    if (!panel) return;
+    downloadBlob(
+      new Blob([exportDevicePanel(panel)], { type: 'application/json' }),
+      `${panel.body}.layout.json`,
+    );
+  }
+  async function importLayout(event: Event) {
+    const picker = event.currentTarget;
+    if (!(picker instanceof HTMLInputElement)) return;
+    const file = picker.files?.[0];
+    picker.value = '';
+    if (!file || !props.session) return;
+    const panel = props.session.read().data;
+    if (!panel) return;
+    try {
+      const imported = importDevicePanel(await file.text(), panel.body, [
+        ...props.session.inputs.values(),
+      ]);
+      props.session.replacePanel(imported.panel);
+      setImportError('');
+      void props.onLayoutChange?.(imported.panel);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : String(error));
+    }
+  }
   return (
     <Show when={props.session}>
       {(session) => (
         <Show when={session().read().data}>
           {(data) => (
-            <>
-              <For each={data().layout}>{(node) => <Node session={session()} node={node} />}</For>
+            <div
+              class={['control-surface', { 'editing-layout': session().read().editingLayout }]}
+              ref={(element) => {
+                element.addEventListener('pointerdown', stopControlEvent, true);
+                element.addEventListener('click', stopControlEvent, true);
+                element.addEventListener('keydown', stopControlEvent, true);
+              }}
+            >
+              <Show when={session().read().ready}>
+                <div class="layout-toolbar">
+                  <button
+                    type="button"
+                    aria-label="Edit layout"
+                    aria-pressed={session().read().editingLayout ? 'true' : 'false'}
+                    onClick={() => {
+                      setImportError('');
+                      session().setLayoutEditing(!session().read().editingLayout);
+                    }}
+                  >
+                    Edit layout
+                  </button>
+                  <Show when={session().read().editingLayout}>
+                    <button type="button" onClick={exportLayout}>
+                      Export
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        document.getElementById(`layout-import-${data().body}`)?.click()
+                      }
+                    >
+                      Import
+                    </button>
+                    <button type="button" onClick={() => session().setLayoutEditing(false)}>
+                      Done
+                    </button>
+                    <input
+                      id={`layout-import-${data().body}`}
+                      class="visually-hidden"
+                      type="file"
+                      accept=".json,application/json"
+                      aria-label="Import"
+                      onChange={importLayout}
+                    />
+                  </Show>
+                </div>
+              </Show>
+              <Show when={session().read().editingLayout}>
+                <div class="layout-editor">
+                  <Show when={selected()}>
+                    {(node) => (
+                      <div class="layout-inspector">
+                        <label>
+                          Caption
+                          <input
+                            aria-label="Caption"
+                            value={node().caption ?? ''}
+                            onInput={(event) =>
+                              updateSelected({ caption: event.currentTarget.value })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Variant
+                          <select
+                            aria-label="Variant"
+                            value={node().variant ?? ''}
+                            onChange={(event) =>
+                              updateSelected({
+                                variant: event.currentTarget.value
+                                  ? (event.currentTarget.value as (typeof CONTROL_VARIANTS)[number])
+                                  : undefined,
+                              })
+                            }
+                          >
+                            <option value="" />
+                            <For each={CONTROL_VARIANTS}>
+                              {(variant) => <option value={variant}>{variant}</option>}
+                            </For>
+                          </select>
+                        </label>
+                        <label>
+                          Bound input
+                          <select
+                            aria-label="Bound input"
+                            value={node().id ?? ''}
+                            onChange={(event) =>
+                              updateSelected({ id: event.currentTarget.value || undefined })
+                            }
+                          >
+                            <option value="" />
+                            <For each={[...session().inputs.values()]}>
+                              {(input) => (
+                                <option value={input.id}>
+                                  {input.label} · {input.id}
+                                </option>
+                              )}
+                            </For>
+                          </select>
+                        </label>
+                      </div>
+                    )}
+                  </Show>
+                  <Show when={unknownIds().length}>
+                    <div class="layout-unknown" role="status" aria-label="Unknown IDs">
+                      <span>Unknown IDs</span>
+                      <ul>
+                        <For each={unknownIds()}>{(id) => <li>{id}</li>}</For>
+                      </ul>
+                    </div>
+                  </Show>
+                  <Show when={importError()}>
+                    {(error) => <output aria-label="Import error">{error()}</output>}
+                  </Show>
+                </div>
+              </Show>
+              <div class="control-layout" style={{ display: 'contents' }}>
+                <For each={data().layout}>
+                  {(node, index) => <Node session={session()} node={node} path={`${index()}`} />}
+                </For>
+              </div>
               <hr />
               <Show when={data().combos.length}>
                 <div class="cap">POWER-ON COMBOS</div>
@@ -796,7 +1080,7 @@ export function Controls(props: { session?: ControlSession }) {
                   </For>
                 </div>
               </Show>
-            </>
+            </div>
           )}
         </Show>
       )}

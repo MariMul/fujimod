@@ -23,6 +23,7 @@
     "precheck": "npm run build:usb",
     "test:debug-mode:browser": "node src/dev-tools/debug-mode/browser.ts",
     "test:dev-tools:browser": "node src/dev-tools/browser.ts",
+    "test:layout-editor:browser": "node src/home/layout-editor.browser.ts",
     "test:prerender": "node scripts/test-prerender.ts",
     "deploy": "node scripts/deploy.ts"
   },

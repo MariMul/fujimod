@@ -899,6 +899,80 @@ a:focus-visible,
 .control-node {
   min-width: 0;
 }
+.layout-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+.layout-toolbar button {
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  background: var(--key);
+  padding: 5px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.layout-toolbar button[aria-pressed='true'] {
+  border-color: var(--blue);
+}
+.layout-editor {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 9px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+}
+.layout-inspector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.layout-inspector label {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: var(--dim);
+  font-size: 10px;
+}
+.layout-inspector label:first-child {
+  grid-column: 1 / -1;
+}
+.layout-inspector input,
+.layout-inspector select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--edge);
+  border-radius: 5px;
+  background: var(--key);
+  color: inherit;
+  padding: 5px 6px;
+  font: inherit;
+  font-size: 11px;
+}
+.layout-unknown {
+  color: var(--warn);
+  font-size: 11px;
+}
+.layout-unknown ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 4px 0 0;
+  padding-left: 16px;
+}
+.control-surface.editing-layout [data-layout-path] {
+  outline: 1px dashed #626267;
+  outline-offset: 2px;
+  cursor: pointer;
+}
+.control-surface.editing-layout [data-layout-selected='true'] {
+  outline: 2px solid var(--blue);
+}
+.control-surface.editing-layout [data-layout-selected='true'] > .key {
+  outline: 2px solid var(--blue);
+}
 .control-node.side-key .cap {
   text-align: center;
 }

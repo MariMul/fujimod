@@ -17,7 +17,11 @@ afterEach(() => {
   dispose?.();
   document.body.replaceChildren();
 });
-function mount(inputs: Input[], data: DevicePanel) {
+function mount(
+  inputs: Input[],
+  data: DevicePanel,
+  onLayoutChange?: (panel: DevicePanel) => void | Promise<void>,
+) {
   const host = document.createElement('div');
   document.body.append(host);
   const engine = {
@@ -38,7 +42,7 @@ function mount(inputs: Input[], data: DevicePanel) {
     async () => {},
   );
   session.render(inputs, engine as unknown as Engine, data);
-  dispose = render(() => <Controls session={session} />, host);
+  dispose = render(() => <Controls session={session} onLayoutChange={onLayoutChange} />, host);
   flush();
   return { host, engine, viewer, session };
 }
@@ -178,5 +182,98 @@ test('a mounted empty panel reacts to the guest input inventory arriving later',
     combos: [],
   });
   flush();
-  expect(host.querySelectorAll('button').length).toBe(1);
+  expect(host.querySelectorAll('button[data-id="q"]').length).toBe(1);
+});
+
+test('selects and edits a live control through the shared renderer without sending input', () => {
+  const onLayoutChange = vi.fn();
+  const { host, engine, session } = mount(
+    [
+      { id: 'q', label: 'Q', kind: 'button', supported: true },
+      {
+        id: 'focus',
+        label: 'Focus',
+        kind: 'switch',
+        supported: true,
+        positions: [
+          { id: 'manual', label: 'M' },
+          { id: 'single', label: 'S' },
+        ],
+      },
+    ],
+    {
+      schema: 1,
+      body: 'x70',
+      layout: [{ kind: 'control', id: 'q', variant: 'key' }],
+      combos: [],
+    },
+    onLayoutChange,
+  );
+
+  host.querySelector<HTMLButtonElement>('[aria-label="Edit layout"]')!.click();
+  flush();
+  host.querySelector<HTMLButtonElement>('[data-layout-path="0"] [data-id="q"]')!.click();
+  flush();
+  expect(host.querySelector<HTMLInputElement>('[aria-label="Caption"]')?.value).toBe('');
+  expect(host.querySelector<HTMLSelectElement>('[aria-label="Bound input"]')?.value).toBe('q');
+
+  const caption = host.querySelector<HTMLInputElement>('[aria-label="Caption"]')!;
+  caption.value = 'Focus mode';
+  caption.dispatchEvent(new Event('input', { bubbles: true }));
+  const variant = host.querySelector<HTMLSelectElement>('[aria-label="Variant"]')!;
+  variant.value = 'segment';
+  variant.dispatchEvent(new Event('change', { bubbles: true }));
+  const binding = host.querySelector<HTMLSelectElement>('[aria-label="Bound input"]')!;
+  binding.value = 'focus';
+  binding.dispatchEvent(new Event('change', { bubbles: true }));
+  flush();
+
+  expect(session.data?.layout[0]).toMatchObject({
+    kind: 'control',
+    id: 'focus',
+    variant: 'segment',
+    caption: 'Focus mode',
+  });
+  expect(host.querySelector('[data-id="focus"].control-node .seg button')).not.toBeNull();
+  expect(engine.press).not.toHaveBeenCalled();
+  expect(onLayoutChange).toHaveBeenLastCalledWith(session.data);
+});
+
+test('imports through the layout editor and lists unknown input IDs', async () => {
+  const onLayoutChange = vi.fn();
+  const { host, session } = mount(
+    [{ id: 'q', label: 'Q', kind: 'button', supported: true }],
+    {
+      schema: 1,
+      body: 'x70',
+      layout: [{ kind: 'control', id: 'q', variant: 'key' }],
+      combos: [],
+    },
+    onLayoutChange,
+  );
+  host.querySelector<HTMLButtonElement>('[aria-label="Edit layout"]')!.click();
+  flush();
+  const imported: DevicePanel = {
+    schema: 1,
+    body: 'x70',
+    layout: [{ kind: 'control', id: 'missing-input', variant: 'key', caption: 'Missing' }],
+    combos: [],
+  };
+  const file = new File([JSON.stringify(imported)], 'layout.json', {
+    type: 'application/json',
+  });
+  Object.defineProperty(file, 'text', { value: async () => JSON.stringify(imported) });
+  const picker = host.querySelector<HTMLInputElement>('[aria-label="Import"]')!;
+  Object.defineProperty(picker, 'files', { configurable: true, value: [file] });
+  picker.dispatchEvent(new Event('change', { bubbles: true }));
+
+  await vi.waitFor(() => {
+    flush();
+    expect(host.querySelector('[aria-label="Unknown IDs"]')?.textContent).toContain(
+      'missing-input',
+    );
+  });
+  expect(host.querySelector('[data-id="missing-input"] .cap')?.textContent).toBe('Missing');
+  expect(session.data).toEqual(imported);
+  expect(onLayoutChange).toHaveBeenLastCalledWith(imported);
 });

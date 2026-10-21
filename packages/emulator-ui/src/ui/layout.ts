@@ -13,13 +13,13 @@ const controlKinds = [
   'command',
   'dpad',
 ] as const;
-const variants = ['dial', 'ticks', 'segment', 'shutter', 'key', 'record'] as const;
+export const CONTROL_VARIANTS = ['dial', 'ticks', 'segment', 'shutter', 'key', 'record'] as const;
 
 export interface ControlNode {
   kind: (typeof controlKinds)[number];
   className?: string;
   id?: string;
-  variant?: (typeof variants)[number];
+  variant?: (typeof CONTROL_VARIANTS)[number];
   caption?: string;
   operation?: 'power';
   face?: string[];
@@ -88,7 +88,7 @@ function isControlNode(value: unknown): value is ControlNode {
     isOptionalString(value.caption) &&
     isOptionalString(value.hint) &&
     isOptionalString(value.icon) &&
-    (value.variant === undefined || isOneOf(value.variant, variants)) &&
+    (value.variant === undefined || isOneOf(value.variant, CONTROL_VARIANTS)) &&
     (value.operation === undefined || value.operation === 'power') &&
     (value.face === undefined || isStringArray(value.face)) &&
     (value.labels === undefined || isStringRecord(value.labels)) &&
@@ -160,6 +160,14 @@ function boundInputIds(panel: DevicePanel): string[] {
   return [...ids];
 }
 
+export function unknownDevicePanelInputIds(
+  panel: DevicePanel,
+  inputs: readonly Pick<Input, 'id'>[],
+): string[] {
+  const knownIds = new Set(inputs.map((input) => input.id));
+  return boundInputIds(panel).filter((id) => !knownIds.has(id));
+}
+
 export function exportDevicePanel(panel: DevicePanel): string {
   if (!isDevicePanel(panel)) throw Error('Cannot export an invalid device panel.');
   return `${JSON.stringify(panel, null, 2)}\n`;
@@ -175,9 +183,8 @@ export function importDevicePanel(
     throw Error('Invalid device panel JSON or unsupported schema version.');
   if (value.body !== expectedBody)
     throw Error(`Device panel body mismatch: expected ${expectedBody}, received ${value.body}.`);
-  const knownIds = new Set(inputs.map((input) => input.id));
   return {
     panel: value,
-    unknownInputIds: boundInputIds(value).filter((id) => !knownIds.has(id)),
+    unknownInputIds: unknownDevicePanelInputIds(value, inputs),
   };
 }
