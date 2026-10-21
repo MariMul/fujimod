@@ -9,13 +9,13 @@ that one owner, and nothing else opens, claims or closes the device.
 
 Per camera:
 
-| Field | Values |
-|---|---|
-| `presence` | `present`, or `gone` after unplugging. A gone camera keeps its log context and returns when the same camera is plugged in again. |
-| `identity` | Unknown until first read, then vendor, product, serial and version. |
-| `session` | `idle`, or `held` by a local action (named by its tool) or a remote peer. A session is short-lived: acquire, open ff80, run its operations, close, and release once the interface is fully released. |
-| `sharing` | `off`, or `on` with its link and connected peers. Independent of every other field; peers are only possible session holders. |
-| `uncertain` | Set when a session ends without a known completion, such as a remote vanishing mid-session. Only that camera needs reopening. |
+| Field       | Values                                                                                                                                                                                               |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `presence`  | `present`, or `gone` after unplugging. A gone camera keeps its log context and returns when the same camera is plugged in again.                                                                     |
+| `identity`  | Unknown until first read, then vendor, product, serial and version.                                                                                                                                  |
+| `session`   | `idle`, or `held` by a local action (named by its tool) or a remote peer. A session is short-lived: acquire, open ff80, run its operations, close, and release once the interface is fully released. |
+| `sharing`   | `off`, or `on` with its link and connected peers. Independent of every other field; peers are only possible session holders.                                                                         |
+| `uncertain` | Set when a session ends without a known completion, such as a remote vanishing mid-session. Only that camera needs reopening.                                                                        |
 
 Per page:
 
@@ -66,3 +66,22 @@ a share suspends automatic sharing for that camera until it reconnects. A shared
 camera keeps its offline registration while unplugged. Page unload withdraws all
 registrations synchronously. These attachments never change device connectivity
 or take the local session lock.
+
+## Workbench layout
+
+Until a camera is known, Dev Tools shows the start screen: how to enter service
+mode, Connect camera, and Open simulator. Once a camera is known:
+
+- A camera strip lists every camera with its state and whether it is shared,
+  plus Connect camera.
+- The selected camera's card shows its identity (read automatically when it
+  appears), its state, the service-mode caution, and its sharing switch.
+- Tools are grouped under Read (Dump configuration, Read memory), Console
+  (Console command), Write (Debug mode: Enable debug mode and Disable debug
+  mode, marked as changing a camera setting, with the debug-mode explanation)
+  and Export (Download diagnostic bundle).
+- The console log fills the right side. Its camera column and camera filters
+  appear only once more than one camera is known.
+
+Controls are neutral and compact; green marks state and the one primary
+action, amber marks writes.

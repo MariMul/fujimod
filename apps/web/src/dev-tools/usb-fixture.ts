@@ -6,8 +6,13 @@ export function installConsoleFixture() {
     { endpointNumber: 1, direction: 'out', type: 'bulk', packetSize: 64 },
     { endpointNumber: 2, direction: 'in', type: 'bulk', packetSize: 64 },
   ];
-  const picker = navigator.usb!.requestDevice.bind(navigator.usb);
-  navigator.usb!.requestDevice = (options) => {
+  const usb = (
+    navigator as Navigator & {
+      usb: { requestDevice(options: unknown): Promise<unknown> };
+    }
+  ).usb;
+  const picker = usb.requestDevice.bind(usb);
+  usb.requestDevice = (options: unknown) => {
     if (!navigator.userActivation.isActive)
       throw new DOMException('Device picker requires user activation', 'SecurityError');
     return picker(options);

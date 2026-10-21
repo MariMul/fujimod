@@ -1,6 +1,6 @@
 import { Show, For, createSignal, onSettled, untrack } from 'solid-js';
 import DevTools from '../dev-tools/Page';
-import type { CameraBackend, CameraChoice } from '../dev-tools/camera';
+import type { CameraModel } from '../dev-tools/camera-model';
 import { downloadBlob } from '../ui/download';
 import { uploadReport, type UploadReport, type UploadReceipt } from './upload';
 import { reportPlatform, type ReportPlatform } from './file-guide';
@@ -14,7 +14,7 @@ import {
   type ReportLink,
 } from './report-link';
 import { prepareDownload } from './download';
-import { ReportUsb, type ReportConnection } from './usb';
+import { ReportUsb, type CameraChoice, type ReportConnection } from './usb';
 import '../style.css';
 import './style.css';
 export default function BugReport(props: {
@@ -22,6 +22,8 @@ export default function BugReport(props: {
   hash?: string;
   supported?: boolean;
   upload?: UploadReport;
+  /** The Dev Tools camera model to open; the page's own by default. */
+  devToolsModel?: CameraModel;
 }) {
   const connection = untrack(() => props.connection) ?? new ReportUsb();
   const supported =
@@ -37,7 +39,7 @@ export default function BugReport(props: {
   const [busy, setBusy] = createSignal(false),
     [ready, setReady] = createSignal(false);
   const [connected, setConnected] = createSignal(false),
-    [tools, setTools] = createSignal<CameraBackend>();
+    [devTools, setDevTools] = createSignal(false);
   const upload = untrack(() => props.upload) ?? uploadReport;
   const [platform, setPlatform] = createSignal<ReportPlatform>();
   const [entries, setEntries] = createSignal<ReportEntry[]>([]);
@@ -171,7 +173,7 @@ export default function BugReport(props: {
   }
   return (
     <Show
-      when={tools()}
+      when={devTools()}
       fallback={
         <main class="shell bug-report">
           <header>
@@ -396,13 +398,11 @@ export default function BugReport(props: {
                       class="pill"
                       disabled={busy()}
                       onClick={() => {
-                        try {
-                          const backend = connection.devTools();
-                          handedOff = true;
-                          setTools(backend);
-                        } catch (cause) {
-                          problem(cause);
-                        }
+                        handedOff = true;
+                        connection.handOff().then(
+                          () => setDevTools(true),
+                          (cause: unknown) => problem(cause),
+                        );
                       }}
                     >
                       Open Dev Tools
@@ -421,7 +421,7 @@ export default function BugReport(props: {
         </main>
       }
     >
-      {(backend) => <DevTools backend={backend()} supported={true} connectOnMount={true} />}
+      <DevTools model={untrack(() => props.devToolsModel)} supported={supported} />
     </Show>
   );
 }

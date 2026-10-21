@@ -9,8 +9,6 @@ import {
   onSettled,
 } from 'solid-js';
 import { CameraStore, type CameraRecord } from '../../cameras/store';
-import { CameraTarget } from '../camera';
-import { ConnectionState, type DevToolsController } from '../controller';
 import {
   procedureFor,
   procedures,
@@ -20,6 +18,13 @@ import {
 } from './procedures';
 import './wizard.css';
 
+/** What the wizard needs to know about the selected camera's connection. */
+export enum WizardConnection {
+  Unsupported = 'unsupported',
+  Disconnected = 'disconnected',
+  Choosing = 'choosing',
+  Connected = 'connected',
+}
 /** Firmware-selected workflows on the connected USB session. */
 export interface DebugModeOperations {
   armResetGuard(firmwareId: string, progress: (line: string) => void): Promise<void>;
@@ -73,7 +78,8 @@ async function choices(): Promise<Choice[]> {
 }
 export function DebugModeWizard(props: {
   purpose?: 'service' | 'debug';
-  tools: DevToolsController;
+  connection: WizardConnection;
+  onConnect: () => void;
   operations?: DebugModeOperations;
   onClose: () => void;
 }) {
@@ -87,10 +93,8 @@ export function DebugModeWizard(props: {
   onSettled(() => {
     void choices().then(setCameras);
   });
-  const connection = () => props.tools.connection();
-  const connected = createMemo(
-    () => connection() === ConnectionState.Connected && props.tools.target() === CameraTarget.Usb,
-  );
+  const connection = () => props.connection;
+  const connected = createMemo(() => connection() === WizardConnection.Connected);
   const [guarded, setGuarded] = createSignal<DebugModeOperations>();
   const guardReady = () =>
     Boolean(props.operations) && guarded() === props.operations && connected();
@@ -122,7 +126,7 @@ export function DebugModeWizard(props: {
   );
   function allowAccess() {
     setStep(Step.Connect);
-    void props.tools.connect(CameraTarget.Usb);
+    props.onConnect();
   }
   async function enter() {
     if (!props.operations || !guardReady() || running()) return;
@@ -289,7 +293,7 @@ export function DebugModeWizard(props: {
         </Match>
         <Match when={step() === Step.Connect}>
           <div class="dm-panel">
-            <Show when={connection() === ConnectionState.Choosing}>
+            <Show when={connection() === WizardConnection.Choosing}>
               <div class="dm-pointer" aria-hidden="true">
                 ↑
               </div>
@@ -310,13 +314,7 @@ export function DebugModeWizard(props: {
                   {props.purpose === 'service' ? 'Open workbench' : 'Continue'}
                 </button>
               </Match>
-              <Match
-                when={[
-                  ConnectionState.Choosing,
-                  ConnectionState.Selecting,
-                  ConnectionState.Opening,
-                ].includes(connection())}
-              >
+              <Match when={connection() === WizardConnection.Choosing}>
                 <p class="dm-lead">
                   In the browser’s dialog at the top, choose the unknown FUJIFILM device, then press
                   Connect.
@@ -326,7 +324,7 @@ export function DebugModeWizard(props: {
                   restart it.
                 </p>
               </Match>
-              <Match when={connection() === ConnectionState.Unsupported}>
+              <Match when={connection() === WizardConnection.Unsupported}>
                 <p class="dm-lead">
                   This browser can’t connect to USB devices. Use Chrome or Edge.
                 </p>

@@ -8,9 +8,7 @@ import { tar, link, hash } from './fixtures.test-helper';
 import type { UploadReport } from './upload';
 import type { ReportConnection } from './usb';
 vi.mock('../dev-tools/Page', () => ({
-  default: (props: { connectOnMount: boolean }) => (
-    <p>Dev Tools {props.connectOnMount ? 'connected' : ''}</p>
-  ),
+  default: () => <p>Dev Tools connected</p>,
 }));
 const receipt = {
   id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -105,14 +103,14 @@ test('inline report lists real entries locally and uploads only on explicit acti
 });
 test('failed upload retains USB report; retry reuses ID and deletes only after durable acknowledgment', async () => {
   const remove = vi.fn(async () => {}),
-    devTools = vi.fn(() => ({}));
+    handOff = vi.fn(async () => {});
   const upload = vi.fn().mockRejectedValueOnce(Error('Offline')).mockResolvedValue(receipt);
   const connection = {
     initialize: async () => {},
     choose: async () => ({ name: 'Camera', interfaces: [{ id: 0, label: 'USB' }] }),
     read: async () => new Blob([tar]),
     remove,
-    devTools,
+    handOff,
     dispose: vi.fn(),
   } as unknown as ReportConnection;
   const { host, dispose } = mount({ hash: hash(), supported: true, connection, upload });
@@ -141,8 +139,11 @@ test('failed upload retains USB report; retry reuses ID and deletes only after d
     });
     expect(upload.mock.calls[0][3]).toBe(upload.mock.calls[1][3]);
     button(host, 'Open Dev Tools').click();
-    flush();
-    expect(host.textContent).toContain('Dev Tools connected');
+    await vi.waitFor(() => {
+      flush();
+      expect(host.textContent).toContain('Dev Tools connected');
+    });
+    expect(handOff).toHaveBeenCalledOnce();
   } finally {
     dispose();
   }

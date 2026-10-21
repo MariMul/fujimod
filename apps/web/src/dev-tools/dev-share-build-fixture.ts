@@ -2,7 +2,7 @@ import { build } from 'vite';
 import solid from '@solidjs/vite-plugin';
 import { fileURLToPath } from 'node:url';
 
-// Isolate Vite from Vitest's NODE_ENV=test while bundling the actual page.
+// Isolate Vite from Vitest's NODE_ENV=test while bundling the module that starts automatic sharing.
 const result = await build({
   configFile: false,
   mode: process.argv[2],
@@ -12,9 +12,11 @@ const result = await build({
     write: false,
     minify: true,
     rollupOptions: {
-      input: fileURLToPath(new URL('./Page.tsx', import.meta.url)),
+      input: fileURLToPath(new URL('./usb-camera-model.ts', import.meta.url)),
       external: (id) =>
-        !id.endsWith('/Page.tsx') && !id.endsWith('/dev-share.ts') && id !== './dev-share',
+        !id.endsWith('/usb-camera-model.ts') &&
+        !id.endsWith('/dev-share.ts') &&
+        id !== './dev-share',
       preserveEntrySignatures: 'strict',
     },
   },

@@ -1,5 +1,5 @@
 import { createSignal, runWithOwner } from 'solid-js';
-import { startDevShare, type DevShareOptions } from './dev-share';
+import type { DevShareOptions } from './dev-share';
 import {
   initialize,
   usb,
@@ -763,9 +763,12 @@ export function pageCameraModel(): CameraModel {
   if (page.__fujimodCameraModel) return page.__fujimodCameraModel;
   const model = runWithOwner(null, () => createUsbCameraModel());
   page.__fujimodCameraModel = model;
+  // Loaded only in development and local-preview builds; production bundles omit it.
   if (import.meta.env.DEV || import.meta.env.MODE === 'local-preview') {
     const runtime = runtimes.get(model)!;
-    runtime.stop = runWithOwner(null, () => startDevShare(model, runtime));
+    void import('./dev-share').then(({ startDevShare }) => {
+      runtime.stop = runWithOwner(null, () => startDevShare(model, runtime));
+    });
   }
   return model;
 }

@@ -1,95 +1,48 @@
 import { render } from '@solidjs/web';
-import { createSignal, flush } from 'solid-js';
+import { flush } from 'solid-js';
 import { expect, test, vi } from 'vite-plus/test';
-import { DeckTool, ToolDeck } from './ToolDeck';
+import { ToolDeck } from './ToolDeck';
 
-test('the whole tile invokes its named action and debug instructions stay separate', () => {
+test('the splash explains service mode and offers the two ways in', () => {
   const host = document.createElement('div');
-  const onOpen = vi.fn();
-  const dispose = render(() => <ToolDeck connected usbSupported onOpen={onOpen} />, host);
+  const onServiceMode = vi.fn(),
+    onConnect = vi.fn();
+  const dispose = render(
+    () => <ToolDeck usbSupported onServiceMode={onServiceMode} onConnect={onConnect} />,
+    host,
+  );
   try {
     flush();
     expect(host.querySelector('.td-enter h2')!.textContent).toBe('Enter service mode');
+    expect(host.querySelector('.td-enter')!.textContent).toContain('restores factory settings');
     host.querySelector<HTMLButtonElement>('.td-enter button')!.click();
-    expect(onOpen).toHaveBeenLastCalledWith(DeckTool.EnterServiceMode);
-    for (const [title, tool] of [
-      ['Connect camera', DeckTool.ConnectCamera],
-      ['Console', DeckTool.Console],
-      ['Enter debug mode', DeckTool.EnterDebugMode],
-      ['Share camera', DeckTool.Share],
-      ['Leave debug mode', DeckTool.LeaveDebugMode],
-    ] as const) {
-      const tile = host.querySelector<HTMLButtonElement>(`button[aria-label="${title}"]`)!;
-      expect(tile.classList.contains('td-action')).toBe(true);
-      expect(tile.querySelector('.td-title')!.tagName).toBe('SPAN');
-      expect(tile.querySelector('.td-title')!.textContent).toBe(title);
-      expect(tile.querySelector('h2, button, a')).toBeNull();
-      tile.click();
-      expect(onOpen).toHaveBeenLastCalledWith(tool);
-    }
-    const bug = host.querySelector<HTMLAnchorElement>('a[aria-label="Bug reports"]')!;
-    expect(bug.getAttribute('href')).toBe('../bug/');
-    expect(bug.classList.contains('td-action')).toBe(true);
-    expect(bug.querySelector('button, a')).toBeNull();
+    expect(onServiceMode).toHaveBeenCalledOnce();
+    host.querySelector<HTMLButtonElement>('button[aria-label="Connect camera"]')!.click();
+    expect(onConnect).toHaveBeenCalledOnce();
     const simulator = host.querySelector<HTMLAnchorElement>('a[aria-label="Open simulator"]')!;
     expect(simulator.getAttribute('href')).toBe('../?scenario=x70-lcd#workspace');
-    expect(simulator.classList.contains('td-tile')).toBe(true);
-    expect(host.querySelectorAll('.td-connects > button')).toHaveLength(1);
-    expect(host.querySelectorAll('.td-grid > .td-action')).toHaveLength(5);
+    expect(host.querySelector<HTMLAnchorElement>('.td-footer-link')!.getAttribute('href')).toBe(
+      '../bug/',
+    );
   } finally {
     dispose();
   }
 });
 
-test('locked and busy tiles are disabled, display the reason, and cannot invoke actions', () => {
+test('without WebUSB the camera tile is locked with its reason', () => {
   const host = document.createElement('div');
-  const onOpen = vi.fn();
-  const [connected, setConnected] = createSignal(false);
-  const [busy, setBusy] = createSignal(false);
+  const onConnect = vi.fn();
   const dispose = render(
-    () => (
-      <ToolDeck
-        connected={connected()}
-        busy={busy()}
-        usbSupported={false}
-        shareLocked="Sharing isn’t available here"
-        onOpen={onOpen}
-      />
-    ),
+    () => <ToolDeck usbSupported={false} onServiceMode={() => {}} onConnect={onConnect} />,
     host,
   );
-  const tile = (title: string) =>
-    host.querySelector<HTMLButtonElement>(`button[aria-label="${title}"]`)!;
   try {
     flush();
-    expect(tile('Connect camera').disabled).toBe(true);
-    expect(tile('Connect camera').textContent).toContain(
-      'This browser can’t connect to USB. Use Chrome or Edge.',
-    );
-    for (const title of ['Share camera', 'Leave debug mode']) {
-      expect(tile(title).disabled).toBe(true);
-      expect(tile(title).textContent).toContain('Connect a camera');
-      tile(title).click();
-    }
-    tile('Connect camera').click();
-    setConnected(true);
-    setBusy(true);
-    flush();
-    expect(tile('Share camera').disabled).toBe(true);
-    expect(tile('Share camera').textContent).toContain('Sharing isn’t available here');
-    expect(tile('Leave debug mode').disabled).toBe(false);
-    for (const title of ['Connect camera']) {
-      expect(tile(title).disabled).toBe(true);
-      expect(tile(title).getAttribute('aria-busy')).toBe('true');
-      expect(tile(title).textContent).toContain('Connecting…');
-      tile(title).click();
-    }
-    expect(onOpen).not.toHaveBeenCalled();
-    setBusy(false);
-    flush();
-    const simulator = host.querySelector<HTMLAnchorElement>('a[aria-label="Open simulator"]')!;
-    expect(simulator.getAttribute('href')).toBe('../?scenario=x70-lcd#workspace');
-    expect(onOpen).not.toHaveBeenCalled();
+    const tile = host.querySelector<HTMLButtonElement>('button[aria-label="Connect camera"]')!;
+    expect(tile.disabled).toBe(true);
+    expect(tile.textContent).toContain('This browser can’t connect to USB. Use Chrome or Edge.');
+    tile.click();
+    expect(onConnect).not.toHaveBeenCalled();
   } finally {
     dispose();
   }

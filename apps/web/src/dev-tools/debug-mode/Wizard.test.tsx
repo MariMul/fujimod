@@ -1,92 +1,42 @@
 import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
-import DevTools from '../Page';
-import { Progress, type CameraBackend, type DebugModeSession } from '../camera';
+import type { ToolSession } from '../camera-model';
+import { Wizard } from '../CameraTools';
+import { Workbench } from '../Workbench';
+import { createTestCameraModel, testCamera } from '../test-camera-model';
+import type { DebugModeSession } from './operations';
 
 afterEach(() => vi.unstubAllGlobals());
 
-function page(debugSession?: DebugModeSession) {
+function page(debug?: Partial<DebugModeSession>, initialWizard?: Wizard) {
   const host = document.createElement('div');
   document.body.append(host);
-  const pick = vi.fn(async () => ({ name: 'X70', interfaces: [{ id: 0, label: 'Debug' }] }));
-  let disconnect = () => {};
-  const backend: CameraBackend = {
-    initialize: async () => {},
-    pick,
-    open: async () => ({
-      debugSession,
-      submit: async () => {},
-      poll: async () => ({ progress: Progress.Complete, status: 0, output: new Uint8Array() }),
-      usable: () => true,
-      close: async () => {},
-      abandon: () => {},
-    }),
-    drain: () => [],
-    onDisconnect: (callback) => {
-      disconnect = callback;
-      return () => {};
-    },
-    dispose: () => {},
-  };
-  const dispose = render(() => <DevTools backend={backend} supported={true} />, host);
+  const next = vi.fn(() => testCamera('X70'));
+  const test = createTestCameraModel({
+    next,
+    session: () => ({ debug: debug as ToolSession['debug'] }),
+  });
+  const dispose = render(
+    () => <Workbench model={test.model} usbSupported initialWizard={initialWizard} />,
+    host,
+  );
   const button = (name: string) =>
     [...host.querySelectorAll('button')].find(
       (node) => (node.getAttribute('aria-label') ?? node.textContent?.trim()) === name,
     );
-  return { host, pick, button, dispose, disconnect: () => disconnect() };
+  return {
+    host,
+    next,
+    button,
+    dispose,
+    unplug: () => test.update('X70', (camera) => ({ ...camera, present: false })),
+  };
 }
 
-test('Dev Tools opens on the service-mode deck with disconnected tools locked', async () => {
-  const { host, button, dispose } = page();
-  try {
-    await vi.waitFor(() => {
-      flush();
-      expect(host.textContent).toContain('Enter debug mode');
-    });
-    expect(host.querySelector('.dt-console')!.hasAttribute('hidden')).toBe(true);
-    const card = (title: string) => button(title)!;
-    expect(card('Leave debug mode').textContent).toContain('Connect a camera');
-    expect(card('Share camera').textContent).toContain('Connect a camera');
-    expect(card('Leave debug mode').disabled).toBe(true);
-    expect(card('Share camera').disabled).toBe(true);
-    expect(button('Show instructions')).toBeTruthy();
-    expect(button('Connect camera')).toBeTruthy();
-    const simulator = host.querySelector<HTMLAnchorElement>('a[aria-label="Open simulator"]');
-    expect(simulator?.textContent?.trim()).toBe('Open simulator');
-    expect(simulator?.getAttribute('href')).toBe('../?scenario=x70-lcd#workspace');
-  } finally {
-    dispose();
-  }
-});
-
-test('the hero Connect camera CTA starts a USB connection', async () => {
-  const { pick, button, dispose } = page();
-  try {
-    await vi.waitFor(() => {
-      flush();
-      expect(button('Connect camera')).toBeTruthy();
-      expect(button('Connect camera')!.disabled).toBe(false);
-    });
-    expect(pick).not.toHaveBeenCalled();
-    button('Connect camera')!.click();
-    await vi.waitFor(() => {
-      flush();
-      expect(pick).toHaveBeenCalledTimes(1);
-    });
-  } finally {
-    dispose();
-  }
-});
-
 test('the wizard explains the procedure, then connects only after the service-mode check', async () => {
-  const { host, pick, button, dispose } = page();
+  const { host, next, button, dispose } = page(undefined, Wizard.Enable);
   try {
-    await vi.waitFor(() => {
-      flush();
-      expect(button('Show instructions')).toBeTruthy();
-    });
-    button('Enter debug mode')!.click();
     flush();
     expect(host.textContent).toContain('Restart the camera into service mode.');
     expect(host.textContent).toContain('Remove the battery to restart normally.');
@@ -104,15 +54,14 @@ test('the wizard explains the procedure, then connects only after the service-mo
     expect(host.textContent).toContain('do not use the OFF switch');
     const allow = button('Allow camera access') as HTMLButtonElement;
     expect(allow.disabled).toBe(true);
-    const check = host.querySelector<HTMLInputElement>('.dm-check input')!;
-    check.click();
+    host.querySelector<HTMLInputElement>('.dm-check input')!.click();
     flush();
     expect(allow.disabled).toBe(false);
-    expect(pick).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
     allow.click();
     await vi.waitFor(() => {
       flush();
-      expect(pick).toHaveBeenCalledTimes(1);
+      expect(next).toHaveBeenCalledTimes(1);
     });
   } finally {
     dispose();
@@ -165,11 +114,6 @@ function workflowSession() {
 }
 
 async function connectWizard(p: ReturnType<typeof page>) {
-  await vi.waitFor(() => {
-    flush();
-    expect(p.button('Show instructions')).toBeTruthy();
-  });
-  p.button('Enter debug mode')!.click();
   flush();
   p.button('Begin')!.click();
   await vi.waitFor(() => {
@@ -183,7 +127,7 @@ async function connectWizard(p: ReturnType<typeof page>) {
   p.button('Allow camera access')!.click();
 }
 
-test('USB workflows arm the guard before enabling Enter, then enable Leave and show results', async () => {
+test('enabling arms the reset guard first, then the Write tool disables debug mode', async () => {
   const { session, table } = workflowSession();
   let armed!: (value: Awaited<ReturnType<DebugModeSession['armResetGuard']>>) => void;
   session.armResetGuard.mockImplementationOnce(
@@ -192,7 +136,7 @@ test('USB workflows arm the guard before enabling Enter, then enable Leave and s
         armed = resolve;
       }),
   );
-  const p = page(session);
+  const p = page(session, Wizard.Enable);
   try {
     await connectWizard(p);
     await vi.waitFor(() => {
@@ -209,7 +153,6 @@ test('USB workflows arm the guard before enabling Enter, then enable Leave and s
     expect(p.host.textContent).toContain('Reset guard armed');
     p.button('Continue')!.click();
     flush();
-    expect(p.host.querySelector<HTMLButtonElement>('.dm-huge')!.disabled).toBe(false);
     p.host.querySelector<HTMLButtonElement>('.dm-huge')!.click();
     await vi.waitFor(() => {
       flush();
@@ -219,10 +162,9 @@ test('USB workflows arm the guard before enabling Enter, then enable Leave and s
     expect(session.enterDebugMode).toHaveBeenCalledWith(table, 'x70-110', 'a'.repeat(64));
     p.button('Done')!.click();
     flush();
-    expect(p.button('Leave debug mode')!.disabled).toBe(false);
-    p.button('Leave debug mode')!.click();
+    expect(p.button('Disable debug mode')!.disabled).toBe(false);
+    p.button('Disable debug mode')!.click();
     flush();
-    expect(p.host.querySelector<HTMLButtonElement>('.dm-huge')!.disabled).toBe(false);
     p.host.querySelector<HTMLButtonElement>('.dm-huge')!.click();
     await vi.waitFor(() => {
       flush();
@@ -235,10 +177,10 @@ test('USB workflows arm the guard before enabling Enter, then enable Leave and s
   }
 });
 
-test('a failed reset guard keeps Enter disabled and can be retried', async () => {
+test('a failed reset guard keeps enabling unavailable and can be retried', async () => {
   const { session } = workflowSession();
   session.armResetGuard.mockRejectedValueOnce(new Error('Service mode did not verify'));
-  const p = page(session);
+  const p = page(session, Wizard.Enable);
   try {
     await connectWizard(p);
     await vi.waitFor(() => {
@@ -258,7 +200,7 @@ test('a failed reset guard keeps Enter disabled and can be retried', async () =>
   }
 });
 
-test('disconnecting during guard preparation does not enable Enter', async () => {
+test('unplugging during guard preparation does not offer enabling', async () => {
   const { session } = workflowSession();
   let armed!: (value: Awaited<ReturnType<DebugModeSession['armResetGuard']>>) => void;
   session.armResetGuard.mockImplementationOnce(
@@ -267,14 +209,14 @@ test('disconnecting during guard preparation does not enable Enter', async () =>
         armed = resolve;
       }),
   );
-  const p = page(session);
+  const p = page(session, Wizard.Enable);
   try {
     await connectWizard(p);
     await vi.waitFor(() => {
       flush();
       expect(session.armResetGuard).toHaveBeenCalledTimes(1);
     });
-    p.disconnect();
+    p.unplug();
     flush();
     armed({ guardWasSet: false, debugFlagBefore: 0, progress: ['Reset guard armed'] });
     await Promise.resolve();
@@ -286,30 +228,22 @@ test('disconnecting during guard preparation does not enable Enter', async () =>
   }
 });
 
-test('the wizard preview URL opens directly to its instructions', async () => {
-  const previous = location.href;
-  history.replaceState({}, '', '/dev-tools/?tool=enter-debug-mode');
-  const p = page();
+test('a wizard deep link opens directly to its instructions', () => {
+  const p = page(undefined, Wizard.Enable);
   try {
-    await vi.waitFor(() => {
-      flush();
-      expect(p.button('Begin')).toBeTruthy();
-    });
+    flush();
+    expect(p.button('Begin')).toBeTruthy();
     expect(p.host.querySelector('.td-enter')).toBeNull();
   } finally {
     p.dispose();
-    history.replaceState({}, '', previous);
   }
 });
 
-test('the universal service guide connects without selecting firmware or invoking a debug write', async () => {
+test('the service guide connects without selecting firmware or writing anything', async () => {
   const { session } = workflowSession();
   const p = page(session);
   try {
-    await vi.waitFor(() => {
-      flush();
-      expect(p.button('Show instructions')).toBeTruthy();
-    });
+    flush();
     p.button('Show instructions')!.click();
     flush();
     p.button('Begin')!.click();
@@ -326,7 +260,7 @@ test('the universal service guide connects without selecting firmware or invokin
     });
     p.button('Open workbench')!.click();
     flush();
-    expect(p.host.querySelector('.dt-console')!.hasAttribute('hidden')).toBe(false);
+    expect(p.host.querySelector('.wb-card h2')!.textContent).toBe('X70');
     expect(session.armResetGuard).not.toHaveBeenCalled();
     expect(session.enterDebugMode).not.toHaveBeenCalled();
     expect(session.leaveDebugMode).not.toHaveBeenCalled();
