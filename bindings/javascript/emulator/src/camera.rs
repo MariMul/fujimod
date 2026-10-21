@@ -1,0 +1,358 @@
+//! Shared EXR II construction from the checked runtime/device plans. Python
+//! transition adapters refuse before CPU construction on every target.
+use super::session::{Firmware, Session, decode, library_path};
+use fujimod_emulator::board::{
+    bus::{Bus, Mode},
+    factory,
+};
+use fujimod_emulator_devices::exr2::board::{MemoryChoices, Plan, RefuseAdapters, Resources};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::{collections::BTreeMap, sync::Arc};
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Config {
+    schema: u32,
+    graph: Graph,
+    firmware_id: String,
+    boot_source: BootSource,
+    #[serde(default)]
+    initial_positions: BTreeMap<String, String>,
+    #[serde(default)]
+    boot_inputs: Vec<super::lifecycle::BootInput>,
+    clock_seconds2000: Option<u64>,
+}
+// Select the same constructor identity as the native client without retaining
+// transport byte arrays or reparsing those arrays into a second asset tree.
+#[derive(Deserialize)]
+struct DefinitionEnvelope {
+    graph: Definition,
+}
+#[derive(Deserialize, Serialize)]
+struct Definition {
+    execution: serde_json::Value,
+    devices: serde_json::Value,
+    #[serde(default = "empty_object")]
+    scene: serde_json::Value,
+}
+fn empty_object() -> serde_json::Value {
+    serde_json::json!({})
+}
+#[derive(Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+enum BootSource {
+    Internal,
+    Sd,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Graph {
+    schema: u32,
+    firmware_id: String,
+    boot_source: BootSource,
+    clock_seconds2000: Option<u64>,
+    execution: factory::Graph,
+    devices: Plan,
+    #[serde(default)]
+    scene: fujimod_emulator::session::preparation::Spec,
+    #[serde(default)]
+    assets: BTreeMap<String, Asset>,
+    firmware: Firmware,
+    quantum: usize,
+    translation_cache_bytes: u32,
+    #[serde(default)]
+    coprocessors: Vec<Coprocessor>,
+    #[serde(default)]
+    gpio: Vec<Gpio>,
+    #[serde(default)]
+    watch_pcs: Vec<u64>,
+    card: Option<Card>,
+    scene_input: Option<Scene>,
+    controls: Option<fujimod_emulator_devices::parts::switch_panel::Spec>,
+    contact_driver: Option<fujimod_emulator::session::contact_driver::Spec>,
+    preview: Option<Preview>,
+}
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+enum Asset {
+    Bytes {
+        bytes: Vec<u8>,
+    },
+    Dat {
+        offset: u64,
+        size: u64,
+        inverted: bool,
+    },
+    Repeat {
+        pattern: Vec<u8>,
+        size: usize,
+    },
+}
+impl Asset {
+    fn build(self, dat: &[u8]) -> Result<Vec<u8>, String> {
+        match self {
+            Self::Bytes { bytes } if bytes.len() <= 128 << 20 => Ok(bytes),
+            Self::Dat {
+                offset,
+                size,
+                inverted,
+            } if size <= 128 << 20 => {
+                let bytes =
+                    fujimod_firmware::extent(dat, offset, size).map_err(|e| e.to_string())?;
+                Ok(if inverted {
+                    fujimod_firmware::invert(bytes)
+                } else {
+                    bytes.to_vec()
+                })
+            }
+            Self::Repeat { pattern, size }
+                if size <= 128 << 20 && !pattern.is_empty() && size % pattern.len() == 0 =>
+            {
+                Ok(pattern.repeat(size / pattern.len()))
+            }
+            _ => Err("invalid or oversized scene asset".into()),
+        }
+    }
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Coprocessor {
+    core: usize,
+    register: fujimod_emulator_cpu::arm::Coprocessor,
+    value: Option<u64>,
+    #[serde(default)]
+    set_bits: u64,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Gpio {
+    node: String,
+    port: u8,
+    pin: u8,
+    high: bool,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Card {
+    pub node: String,
+    pub format: fujimod_emulator_devices::storage::fat::Options,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Scene {
+    pub images: String,
+    pub sensor: Option<String>,
+    pub white_luminance: Option<f64>,
+    pub node: String,
+}
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Preview {
+    pub node: String,
+    pub tick_hz: u64,
+    pub period_ticks: u64,
+    pub cadence: fujimod_emulator_devices::scene::StatisticsCadence,
+}
+pub(super) struct Metadata {
+    pub card: Option<Card>,
+    pub storage: fujimod_emulator::session::durable::Spec,
+    pub identity: [u8; 32],
+    pub scene: Option<Scene>,
+    pub scanout: Option<String>,
+    pub preview: Option<Preview>,
+}
+
+impl Session {
+    pub fn create_camera(config: &[u8], dat: &[u8]) -> Result<Self, String> {
+        let identity: DefinitionEnvelope =
+            serde_json::from_slice(config).map_err(|e| e.to_string())?;
+        let definition = serde_json::to_value(identity.graph).map_err(|e| e.to_string())?;
+        let c: Config = serde_json::from_slice(config).map_err(|e| e.to_string())?;
+        let g = c.graph;
+        if c.schema != 1
+            || g.schema != 1
+            || c.firmware_id != g.firmware_id
+            || c.boot_source != g.boot_source
+            || g.quantum == 0
+        {
+            return Err("session graph identity, boot source or schema mismatch".into());
+        }
+        if c.clock_seconds2000.is_some() && c.clock_seconds2000 != g.clock_seconds2000 {
+            return Err("RTC override differs from the resolved graph clock".into());
+        }
+        if let Some(preview) = &g.preview {
+            if preview.tick_hz == 0 || preview.period_ticks == 0 {
+                return Err("preview clock requires positive frequency and period".into());
+            }
+            preview.cadence.validate()?;
+        }
+        let images = decode(&g.firmware, dat)?;
+        g.execution.validate()?;
+        g.devices.validate_reset_outputs(
+            &g.execution
+                .processors
+                .iter()
+                .map(|p| p.released)
+                .collect::<Vec<_>>(),
+        )?;
+        g.devices.validate_memory_outputs(
+            &g.execution
+                .decoders
+                .iter()
+                .map(|d| MemoryChoices {
+                    initial: d.initial,
+                    choices: d.choices.len(),
+                })
+                .collect::<Vec<_>>(),
+        )?;
+        let mut resources = Resources::default();
+        let scanouts = g
+            .devices
+            .nodes
+            .iter()
+            .filter(|n| {
+                n.boot_entries.contains(&g.devices.boot_entry)
+                    && matches!(
+                        n.model,
+                        fujimod_emulator_devices::exr2::board::Model::Scanout { .. }
+                    )
+            })
+            .map(|n| n.name.clone())
+            .collect::<Vec<_>>();
+        let scanout = match scanouts.as_slice() {
+            [] => None,
+            [name] => Some(name.clone()),
+            _ => return Err("session has multiple scanout devices".into()),
+        };
+        let assets = g
+            .assets
+            .into_iter()
+            .map(|(name, a)| Ok((name, a.build(dat)?)))
+            .collect::<Result<_, String>>()?;
+        resources.inputs = g.scene.build(&assets)?;
+        let storage = fujimod_emulator::session::durable::Spec {
+            cards: g
+                .card
+                .as_ref()
+                .map(|c| vec![c.node.clone()])
+                .unwrap_or_default(),
+            nands: g
+                .devices
+                .nodes
+                .iter()
+                .filter(|n| {
+                    n.boot_entries.contains(&g.devices.boot_entry)
+                        && matches!(
+                            n.model,
+                            fujimod_emulator_devices::exr2::board::Model::Nand { .. }
+                        )
+                })
+                .map(|n| n.name.clone())
+                .collect(),
+        };
+        let identity: [u8;32]=Sha256::digest(serde_json::to_vec(&serde_json::json!({"firmwareId":g.firmware_id,"firmware":g.firmware.sha256,"storage":storage})).map_err(|e|e.to_string())?).into();
+        let assembly = g.devices.build(resources, 0, &mut RefuseAdapters)?;
+        let bus = Bus::from_graph(Mode::Strict, assembly.graph)?;
+        let mut board = g.execution.build(
+            factory::Options {
+                engine: factory::Engine::Unicorn,
+                unicorn: library_path(),
+                translation_cache_bytes: g.translation_cache_bytes,
+            },
+            bus,
+            None,
+        )?;
+        for irq in assembly.core_interrupts {
+            board.configure_core_interrupts(irq.core, irq.device, Box::new(irq.inputs))?;
+        }
+        for image in images {
+            board.write_physical(image.base, &image.bytes)?;
+        }
+        for c in g.coprocessors {
+            let cpu = board.cpu(c.core)?;
+            let value = match c.value {
+                Some(value) => value,
+                None => cpu.coprocessor(c.register, None)?,
+            };
+            cpu.coprocessor(c.register, Some(value | c.set_bits))?;
+        }
+        board.watch_pcs(&g.watch_pcs)?;
+        let mut core = fujimod_emulator::session::Session {
+            definition,
+            controls: None,
+            contact_driver: None,
+            board,
+            nodes: assembly.node_ids,
+            resources: assembly.resources,
+            contacts: assembly.contacts,
+            recording_frames: Default::default(),
+        };
+        for p in g.gpio {
+            core.gpio(&p.node, p.port, p.pin, p.high)?;
+        }
+        if let Some(spec) = g.controls {
+            core.configure_controls(spec)?;
+        }
+        if let Some(spec) = g.contact_driver {
+            core.configure_contact_driver(spec)?;
+        }
+        if let Some(preview) = &g.preview {
+            core.frame_state(&preview.node)?;
+        }
+        if let Some(card) = &g.card {
+            core.card_state(&card.node)?;
+        }
+        if let Some(scene) = &g.scene_input {
+            core.node(&scene.node)?;
+            if scene.sensor.is_some()
+                && !scene
+                    .white_luminance
+                    .is_some_and(|v| v.is_finite() && v > 0.)
+            {
+                return Err(
+                    "sensor scene requires declared positive finite white luminance in cd/m²"
+                        .into(),
+                );
+            }
+            if !core.resources.inputs.images.contains_key(&scene.images)
+                || scene
+                    .sensor
+                    .as_ref()
+                    .is_some_and(|s| !core.resources.inputs.sensors.contains_key(s))
+            {
+                return Err("session scene input is not in the declared graph".into());
+            }
+        }
+        let mut session = Self {
+            core,
+            reset_image: None,
+            powered_on: true,
+            generation: 0,
+            quantum: g.quantum,
+            input: None,
+            frames: Default::default(),
+            history: None,
+            error: String::new(),
+            failed: false,
+            result_json: vec![],
+            result_bytes: vec![],
+            scene_upload: vec![],
+            scene_dimensions: None,
+            camera: Some(Metadata {
+                card: g.card,
+                storage,
+                identity,
+                scene: g.scene_input,
+                scanout,
+                preview: g.preview,
+            }),
+        };
+        session.reset_image = Some(Arc::new(session.core.checkpoint(None)?));
+        for (id, position) in c.initial_positions {
+            session.core.set_position(&id, &position)?;
+        }
+        session.boot_holds(&c.boot_inputs)?;
+        Ok(session)
+    }
+}

@@ -3382,6 +3382,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-emulator-javascript"
+version = "0.1.0"
+dependencies = [
+ "ciborium",
+ "fujimod-emulator",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-cpu-unicorn",
+ "fujimod-emulator-devices",
+ "fujimod-firmware",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "fujimod-firmware"
 version = "0.1.0"
 dependencies = [

@@ -16,6 +16,7 @@ members = [
   "crates/workflows",
   "bindings/python",
   "bindings/javascript",
+  "bindings/javascript/emulator",
   "bindings/generator",
 ]
 resolver = "3"
@@ -36,9 +37,11 @@ fujimod-emulator = { path = "crates/emulator", version = "0.1.0" }
 fujimod-emulator-devices = { path = "crates/emulator-devices", version = "0.1.0" }
 fujimod-emulator-cpu = { path = "crates/emulator-cpu", version = "0.1.0" }
 fujimod-emulator-cpu-unicorn = { path = "crates/emulator-cpu-unicorn", version = "0.1.0" }
+fujimod-firmware = { path = "crates/firmware", version = "0.1.0" }
 fujimod-emulator-cpu-hvf = { path = "crates/emulator-cpu-hvf", version = "0.1.0" }
 serde = "1"
 serde_json = "1"
+ciborium = "0.2"
 fujimod-usb = { path = "crates/usb", version = "0.1.0" }
 fujimod-workflows = { path = "crates/workflows", version = "0.1.0" }
 nusb = "0.2.8"
