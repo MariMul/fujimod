@@ -49,6 +49,27 @@ pub struct Board {
     read_limit: usize,
 }
 impl Board {
+    fn begin_continuation(
+        &mut self,
+        stores: Option<Vec<(u64, u64)>>,
+        devices: Option<Vec<String>>,
+    ) -> PyResult<()> {
+        if stores.is_none() && devices.is_none() {
+            return Ok(());
+        }
+        let session = self.session()?;
+        let devices = devices
+            .unwrap_or_default()
+            .iter()
+            .map(|name| session.node(name))
+            .collect::<Result<_, _>>()
+            .map_err(error)?;
+        let maps = serde_json::from_value(session.definition["execution"]["mappings"].clone())
+            .map_err(|e| error(e.to_string()))?;
+        self.board_mut()?
+            .continuation_begin(stores.unwrap_or_default(), devices, maps)
+            .map_err(error)
+    }
     fn run_graph(
         &mut self,
         py: Python<'_>,
@@ -866,7 +887,28 @@ impl Board {
         let result = run::instructions(py, owner.board_mut()?, count, quantum);
         owner.outcome(result)
     }
-    #[pyo3(signature = (count, quantum, pause_after=None, pause_at_tick=None))]
+    fn read_set_begin(&self) -> PyResult<()> {
+        self.board()?.read_set_begin().map_err(error)
+    }
+    fn read_set_end(&self) -> PyResult<String> {
+        let reads = self.board()?.read_set_end().map_err(error)?;
+        let session = self.session()?;
+        let names = reads
+            .devices
+            .iter()
+            .map(|id| {
+                session
+                    .nodes
+                    .iter()
+                    .find(|(_, node)| *node == id)
+                    .map(|(name, _)| name.clone())
+                    .ok_or_else(|| error("Read set names an absent device".into()))
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        serde_json::to_string(&serde_json::json!({"stores":reads.stores,"devices":names}))
+            .map_err(|e| error(e.to_string()))
+    }
+    #[pyo3(signature = (count, quantum, pause_after=None, pause_at_tick=None, store_watches=None, device_watches=None))]
     fn run(
         slf: &Bound<'_, Self>,
         py: Python<'_>,
@@ -874,11 +916,17 @@ impl Board {
         quantum: usize,
         pause_after: Option<u64>,
         pause_at_tick: Option<u64>,
+        store_watches: Option<Vec<(u64, u64)>>,
+        device_watches: Option<Vec<String>>,
     ) -> PyResult<()> {
         {
             let owner = slf.try_borrow()?;
             if let Some(Backend::Xp4(session)) = &owner.backend {
-                if pause_after.is_some() || pause_at_tick.is_some() {
+                if pause_after.is_some()
+                    || pause_at_tick.is_some()
+                    || store_watches.is_some()
+                    || device_watches.is_some()
+                {
                     return Err(PyValueError::new_err(
                         "XP4 execution does not support pause boundaries",
                     ));
@@ -886,10 +934,13 @@ impl Board {
                 return session.run_board(count, quantum);
             }
         }
-        slf.try_borrow_mut()?
-            .run_graph(py, count, quantum, pause_after, pause_at_tick)
+        let mut owner = slf.try_borrow_mut()?;
+        owner.begin_continuation(store_watches, device_watches)?;
+        let result = owner.run_graph(py, count, quantum, pause_after, pause_at_tick);
+        let cleanup = owner.board_mut()?.continuation_end().map_err(error);
+        result.and(cleanup.map(|_| ()))
     }
-    #[pyo3(signature = (end, quantum, pause_after=None, pause_at_tick=None))]
+    #[pyo3(signature = (end, quantum, pause_after=None, pause_at_tick=None, store_watches=None, device_watches=None))]
     fn run_window(
         &mut self,
         py: Python<'_>,
@@ -897,12 +948,15 @@ impl Board {
         quantum: usize,
         pause_after: Option<u64>,
         pause_at_tick: Option<u64>,
+        store_watches: Option<Vec<(u64, u64)>>,
+        device_watches: Option<Vec<String>>,
     ) -> PyResult<()> {
         if self.driver.is_some() {
             return Err(error(
                 "Instruction windows require a whole-board run".into(),
             ));
         }
+        self.begin_continuation(store_watches, device_watches)?;
         let result = run::window(
             py,
             self.board_mut()?,
@@ -911,7 +965,8 @@ impl Board {
             pause_after,
             pause_at_tick,
         );
-        self.outcome(result)
+        let cleanup = self.board_mut()?.continuation_end().map_err(error);
+        self.outcome(result).and(cleanup.map(|_| ()))
     }
     fn reg_read(&self, core: usize, register: &str) -> PyResult<u64> {
         if let Some(Backend::Xp4(session)) = &self.backend {

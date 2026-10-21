@@ -85,6 +85,7 @@ pub struct Bus {
     #[cfg(feature = "host-profile")]
     host_profile: Option<super::host_profile::Profile>,
     transactions: Option<Transactions>,
+    continuation: Option<std::rc::Rc<std::cell::RefCell<super::continuation::Stops>>>,
     windows: Vec<Window>,
     // Sparse 1 MiB groups of 4 KiB pages. Several independent register blocks
     // can occupy one page; only that page's candidates participate in dispatch.
@@ -231,6 +232,35 @@ impl Bus {
     }
 
     /// Read only the selected native device kind; no access or tick is issued.
+    pub(super) fn device_ids(&self, kind: &str) -> Vec<usize> {
+        self.windows
+            .iter()
+            .enumerate()
+            .filter(|(_, w)| w.device.name() == kind)
+            .map(|(id, _)| id)
+            .collect()
+    }
+    pub(super) fn continuation(
+        &mut self,
+        stops: Option<std::rc::Rc<std::cell::RefCell<super::continuation::Stops>>>,
+    ) {
+        self.continuation = stops;
+    }
+    fn publication_before(&self, id: usize) -> Option<Value> {
+        self.continuation
+            .as_ref()
+            .filter(|s| s.borrow().devices.contains(&id))
+            .map(|_| self.windows[id].device.save())
+    }
+    fn publication_after(&self, id: usize, before: Option<Value>) {
+        if let Some(before) = before {
+            if before != self.windows[id].device.save() {
+                if let Some(stops) = &self.continuation {
+                    stops.borrow_mut().fired = true;
+                }
+            }
+        }
+    }
     pub fn device_states(&self, kind: &str) -> Vec<Value> {
         self.windows
             .iter()
@@ -272,6 +302,7 @@ impl Bus {
             #[cfg(feature = "host-profile")]
             host_profile: None,
             transactions: None,
+            continuation: None,
             windows: vec![],
             pages: BTreeMap::new(),
             dependents: vec![],
@@ -637,6 +668,7 @@ impl Bus {
         let mut reason = None;
         let mut continuation = None;
         if let Some(id) = index {
+            let publication = self.publication_before(id);
             #[cfg(feature = "host-profile")]
             let started = self.host_profile.as_ref().map(|p| p.start());
             self.touch(id);
@@ -692,6 +724,7 @@ impl Bus {
                 },
                 started,
             );
+            self.publication_after(id, publication);
             supported = match outcome {
                 Ok(supported) => supported,
                 Err(message) => {
@@ -768,6 +801,7 @@ impl Bus {
         if device >= self.len() {
             return Err("event targets absent device".into());
         }
+        let publication = self.publication_before(device);
         self.touch(device);
         let due = self
             .deadline(device, host.now())
@@ -783,6 +817,7 @@ impl Bus {
         }
         let outcome = Self::outcome(&mut cx);
         drop(cx);
+        self.publication_after(device, publication);
         #[cfg(feature = "host-profile")]
         self.record_host_time(
             device,

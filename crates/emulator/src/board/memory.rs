@@ -67,6 +67,7 @@ enum Access {
 }
 #[derive(Default)]
 pub struct Memory {
+    pub(super) continuation: RefCell<Option<std::rc::Weak<RefCell<super::continuation::Stops>>>>,
     regions: Vec<(u64, Backing)>,
     mappings: RefCell<Vec<BusMapping>>,
     trackers: Vec<fujimod_emulator_cpu::memory::pages::Tracker>,
@@ -78,6 +79,15 @@ pub(super) struct Checkpoint {
     mappings: Vec<BusMapping>,
 }
 impl Memory {
+    pub(super) fn physical_ranges(
+        &self,
+        address: u64,
+        bytes: usize,
+    ) -> Result<Vec<(u64, u64)>, String> {
+        self.chunks(address, bytes, Access::Host)?
+            .map(|chunk| chunk.map(|(physical, _, len)| (physical, physical + len as u64)))
+            .collect()
+    }
     fn observe_transfer(&self, source: &str, address: u64, bytes: usize) {
         if let Some(observer) = self
             .observation
@@ -227,6 +237,7 @@ impl Memory {
             mappings: RefCell::new(mappings),
             trackers,
             observation: Default::default(),
+            continuation: Default::default(),
         })
     }
     pub(super) fn regions(&self) -> &[(u64, Backing)] {
@@ -345,6 +356,16 @@ impl Memory {
     ) -> Result<(), String> {
         self.write(cpus, domain, address, bytes, Access::Write)?;
         self.observe_transfer("model-bus-write", address, bytes.len());
+        if let Some(stops) = self
+            .continuation
+            .borrow()
+            .as_ref()
+            .and_then(std::rc::Weak::upgrade)
+        {
+            for (physical, _, len) in self.chunks(address, bytes.len(), Access::Host)?.flatten() {
+                stops.borrow_mut().store(physical, len as u64);
+            }
+        }
         Ok(())
     }
 }

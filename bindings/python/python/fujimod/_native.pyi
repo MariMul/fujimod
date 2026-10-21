@@ -218,6 +218,8 @@ class emulator:
         def rprofile_identity(
             self, /, core: SupportsIndex, value: SupportsIndex | None
         ) -> int: ...
+        def read_set_begin(self, /) -> None: ...
+        def read_set_end(self, /) -> str: ...
         def run(
             self,
             /,
@@ -225,6 +227,8 @@ class emulator:
             quantum: SupportsIndex,
             pause_after: SupportsIndex | None = None,
             pause_at_tick: SupportsIndex | None = None,
+            store_watches: list[tuple[int, int]] | None = None,
+            device_watches: list[str] | None = None,
         ) -> None: ...
         def run_for_instructions(
             self, /, count: SupportsIndex, quantum: SupportsIndex
@@ -237,6 +241,8 @@ class emulator:
             quantum: SupportsIndex,
             pause_after: SupportsIndex | None = None,
             pause_at_tick: SupportsIndex | None = None,
+            store_watches: list[tuple[int, int]] | None = None,
+            device_watches: list[str] | None = None,
         ) -> None: ...
         def scanout(
             self,

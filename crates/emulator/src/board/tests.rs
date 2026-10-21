@@ -993,3 +993,31 @@ fn external_device_inputs_preserve_time_and_keep_effects_due_after_refusal() {
         0
     );
 }
+
+#[test]
+fn continuation_observes_due_device_publications_without_changing_the_timeline() {
+    let (mut board, _) = build_rprofile(bus::Mode::Strict, true);
+    // Finish the initial MMIO write, which schedules a tick at 7.
+    board.run_for_instructions(2, 100).unwrap();
+    board
+        .continuation_begin(vec![], [0].into(), vec![])
+        .unwrap();
+    // Reads also publish this probe's access ledger, so the next stop is the
+    // completed read at tick 3, before its following branch instruction.
+    board.run_until(20, 100).unwrap();
+    assert!(board.continuation_end().unwrap());
+    assert_eq!(board.instruction_counts(), vec![3]);
+    // Park the CPU with architectural WFI. A due effect must wake the host
+    // even without any guest stores or MMIO accesses.
+    board
+        .write_memory(0, 0x10010, &0xe320f003u32.to_le_bytes())
+        .unwrap();
+    board.write_register(0, Register::Pc, 0x10010).unwrap();
+    board
+        .continuation_begin(vec![], [0].into(), vec![])
+        .unwrap();
+    board.run_until(20, 100).unwrap();
+    assert!(board.continuation_end().unwrap());
+    assert_eq!(board.state()["timeline"]["now"], 7);
+    assert_eq!(board.instruction_counts(), vec![4]);
+}

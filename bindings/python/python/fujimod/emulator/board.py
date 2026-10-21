@@ -105,8 +105,12 @@ class Board:
         *,
         pause_after: int | None = None,
         pause_at_tick: int | None = None,
+        store_watches: list[tuple[int, int]] | None = None,
+        device_watches: list[str] | None = None,
     ) -> None:
-        self._native.run(limit, self.quantum, pause_after, pause_at_tick)
+        # Stores name half-open canonical physical ranges. Device names are
+        # nodes in the resolved graph. Watches last only for this host call.
+        self._native.run(limit, self.quantum, pause_after, pause_at_tick, store_watches, device_watches)
 
     def run_until(self, tick: int) -> None:
         self._native.run_until(tick, self.quantum)

@@ -1,6 +1,7 @@
 //! Board execution and device scheduling above the CPU backend boundary.
 pub mod aprofile;
 pub mod bus;
+pub mod continuation;
 pub mod decoder;
 #[cfg(test)]
 mod decoder_tests;
@@ -62,6 +63,7 @@ fn prepare_device_workers(policy: ExecutionPolicy) -> Result<(), String> {
     Ok(())
 }
 struct State {
+    continuation: Rc<RefCell<continuation::Stops>>,
     execution_policy: ExecutionPolicy,
     // Host run boundary, not a device deadline or persistent modeled state.
     clock_limit: Option<u64>,
@@ -124,6 +126,8 @@ pub struct Board {
     physical_memory: Rc<memory::Memory>,
     host_pause: Rc<Cell<bool>>,
     isolated_core: Cell<Option<usize>>,
+    continuation: Option<Box<continuation::StoreWatch>>,
+    read_set: RefCell<Option<continuation::ReadSet>>,
     watches: Vec<Box<observe::Watch>>,
     entries: Rc<RefCell<observe::Entries>>,
 }
@@ -247,7 +251,9 @@ impl Board {
         }
         let count = bus.len();
         let memory = Rc::new(memory);
+        let continuation = Rc::new(RefCell::new(continuation::Stops::default()));
         let state = Rc::new(RefCell::new(State {
+            continuation,
             execution_policy: ExecutionPolicy::Exact,
             clock_limit: None,
             memory: memory.clone(),
@@ -288,6 +294,8 @@ impl Board {
         let mut board = Self {
             host_pause: Default::default(),
             isolated_core: Cell::new(None),
+            continuation: None,
+            read_set: RefCell::new(None),
             watches: vec![],
             entries: Default::default(),
             cpus: Rc::new(cpus.into_iter().map(Rc::from).collect()),
@@ -388,9 +396,11 @@ impl Board {
         set(self.cpu(core)?, register, value)
     }
     pub fn read_memory(&self, core: usize, address: u64, bytes: &mut [u8]) -> Result<(), String> {
+        self.track_cpu_read(core, address, bytes.len())?;
         self.cpu(core)?.read_memory(address, bytes)
     }
     pub fn read_physical(&self, address: u64, bytes: &mut [u8]) -> Result<(), String> {
+        self.track_physical_read(address, bytes.len())?;
         self.physical_memory.read_host(address, bytes)
     }
     pub fn write_physical(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
@@ -507,8 +517,10 @@ impl Board {
             base: physical,
         });
         let data = (&*binding as *const Binding).cast_mut().cast();
+        let fast_reads = self.state.borrow().bus.fast_reads(physical, bytes).into_iter()
+            .map(|(offset, value)| fujimod_emulator_cpu::FastMmioRead::atomic_u32(offset, value)).collect();
         unsafe {
-            cpu.map_mmio(address, bytes, Mmio { read, write, data })?;
+            cpu.map_mmio_fast(address, bytes, Mmio { read, write, data }, fast_reads)?;
         }
         self.bindings.push(binding);
         self.mmio.push((core, address, bytes));
@@ -619,7 +631,9 @@ impl Board {
             if let Some(error) = s.error.take() {
                 return Err(error);
             }
-            if self.host_pause.get() || self.isolated_core.get().is_some_and(|core| s.waiting[core])
+            if s.continuation.borrow().fired
+                || self.host_pause.get()
+                || self.isolated_core.get().is_some_and(|core| s.waiting[core])
             {
                 return Ok(());
             }
@@ -798,6 +812,7 @@ impl Board {
     }
     pub fn state(&self) -> Value {
         let s = self.state.borrow();
+        self.track_all_devices(&s.bus);
         json!({"execution_mode":s.bus.mode().name(),"execution_policy":s.execution_policy.name(),"counts_as_boot":s.bus.mode()==bus::Mode::Strict,
             "timeline":s.timeline.save(),"instructions":s.instructions,"released":s.released,"waiting":s.waiting,"waiting_event":s.waiting_event,"events":s.events,"next_core":self.next_core.get(),"slice_left":self.slice_left.get(),"quantum":self.quantum.get(),"failure":s.error,
             "memory_decoders":s.decoders.state(),"dma_mappings":s.memory.state(),"bus":s.bus.state(),"gic":s.interrupts.as_ref().map(|g|g.gic.save()),"core_interrupt_devices":s.core_interrupts.iter().map(|c|c.as_ref().map(|c|c.device)).collect::<Vec<_>>(),"outputs":s.outputs,"implementation_cluster":s.implementation_cluster,"unmodeled_system":s.unmodeled_system.iter().map(|(&(core,register,pc),&(reads,writes))|json!({"core":core,"register":register,"pc":pc,"reads":reads,"writes":writes})).collect::<Vec<_>>(),"aprofile":s.aprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()).unwrap_or_else(|e|json!({"error":e})))).collect::<Vec<_>>(),"mprofile":s.mprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()))).collect::<Vec<_>>()})
@@ -821,6 +836,7 @@ impl Board {
 }
 impl Drop for Board {
     fn drop(&mut self) {
+        let _ = self.continuation_end();
         // The board exclusively owns processors; bindings hold only Weak
         // handles. CPUs drop before their still-valid callback contexts.
         for (core, hook) in self.hooks.drain(..) {
@@ -1082,6 +1098,11 @@ impl State {
             memory_access: *memory_access,
         };
         let result = f(bus, &mut host);
+        if self::continuation::fired(&self.continuation) {
+            if let Some(core) = host.active_core {
+                continuation::finish_instruction(&*cpus[core])?;
+            }
+        }
         if bus.needs_frontier_pcs() {
             let pcs = cpus
                 .iter()

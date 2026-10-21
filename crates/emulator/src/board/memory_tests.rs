@@ -131,6 +131,13 @@ struct Dma {
     reads: Readings,
 }
 impl Device for Dma {
+    fn save(&self) -> Value {
+        json!(*self.reads.lock().unwrap())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.save())
+    }
+
     fn name(&self) -> &'static str {
         "test-physical-dma"
     }
@@ -359,4 +366,80 @@ fn guest_dma_flushes_peer_code_hidden_under_another_cores_tcm() {
     board.write_register(0, Register::Pc, 0x10000).unwrap();
     board.run_until(7, 1).unwrap();
     assert_eq!(board.read_register(0, arm::CORE[4]).unwrap(), 9);
+}
+
+#[test]
+fn continuation_store_dma_and_publication_stops_preserve_execution() {
+    use factory::MemoryMap;
+    let run = |watched: bool| {
+        let (mut board, _) = board(vec![true, true]);
+        // CPU0 writes the shared alias; CPU1 performs a real peripheral DMA.
+        words(&board, 0, 0x30000, &[0xe3a0002a, 0xe5810000, 0xeafffffc]);
+        words(&board, 1, 0x30080, &[0xe3a0002b, 0xe5810000, 0xeafffffc]);
+        board.write_register(0, arm::CORE[1], 0x20000).unwrap();
+        board.write_register(1, Register::Pc, 0x30080).unwrap();
+        board.write_register(1, arm::CORE[1], 0x8000000).unwrap();
+        let maps: Vec<_> = (0..2)
+            .map(|core| MemoryMap {
+                core,
+                address: 0x20000,
+                physical: 0x10000,
+                size: 0x1000,
+                permissions: 7,
+            })
+            .collect();
+        let mut stops = 0;
+        while board.instruction_counts().iter().sum::<u64>() < 90 {
+            if watched {
+                board
+                    .continuation_begin(vec![(0x10000, 0x10004)], [0].into(), maps.clone())
+                    .unwrap();
+            }
+            board.run_window(90, 7, None, None).unwrap();
+            if watched {
+                stops += usize::from(board.continuation_end().unwrap());
+            }
+        }
+        if watched {
+            assert!(stops > 8, "stores must yield repeatedly");
+        }
+        (
+            board.instruction_counts(),
+            board.state()["timeline"]["now"].clone(),
+            board.fingerprint().unwrap(),
+        )
+    };
+    assert_eq!(run(false), run(true));
+}
+
+#[test]
+fn continuation_stops_after_a_completed_store_and_tracks_physical_alias_reads() {
+    use factory::MemoryMap;
+    let (mut board, _) = board(vec![true, false]);
+    words(
+        &board,
+        0,
+        0x30000,
+        &[0xe3a0002a, 0xe5810000, 0xe3a00063, 0xeafffffe],
+    );
+    board.write_register(0, arm::CORE[1], 0x20000).unwrap();
+    board.read_set_begin().unwrap();
+    board.read_physical(0x40010000, &mut [0; 4]).unwrap();
+    let reads = board.read_set_end().unwrap();
+    assert_eq!(reads.stores, vec![(0x10000, 0x10004)]);
+    let maps = vec![MemoryMap {
+        core: 0,
+        address: 0x20000,
+        physical: 0x10000,
+        size: 0x1000,
+        permissions: 7,
+    }];
+    board
+        .continuation_begin(reads.stores, reads.devices, maps)
+        .unwrap();
+    board.run_for_instructions(20, 7).unwrap();
+    assert!(board.continuation_end().unwrap());
+    assert_eq!(board.instruction_counts(), vec![2, 0]);
+    assert_eq!(word(&board, 0, 0x20000), 42);
+    assert_eq!(board.read_register(0, Register::Pc).unwrap(), 0x30008);
 }

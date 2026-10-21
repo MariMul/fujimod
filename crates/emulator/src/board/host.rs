@@ -5,12 +5,14 @@ use fujimod_emulator_devices::Device;
 impl Board {
     pub fn device_states(&self, kind: &str) -> Result<serde_json::Value, String> {
         let state = self.state.try_borrow().map_err(|_| "board is executing")?;
+        self.track_device_kind(kind, &state.bus);
         Ok(serde_json::json!(state.bus.device_states(kind)))
     }
 
     /// CPU/IRQ/scheduler observation without serializing device DMA payloads.
     pub fn observation(&self) -> Result<serde_json::Value, String> {
         let s = self.state.try_borrow().map_err(|_| "board is executing")?;
+        self.track_device_kind("exr2-interrupt-controller", &s.bus);
         Ok(serde_json::json!({
             "execution_mode":s.bus.mode().name(), "execution_policy":s.execution_policy.name(),
             "counts_as_boot":s.bus.mode()==super::bus::Mode::Strict,
@@ -28,6 +30,7 @@ impl Board {
         observe: impl FnOnce(&T) -> Result<R, String>,
     ) -> Result<R, String> {
         let state = self.state.try_borrow().map_err(|_| "board is executing")?;
+        self.track_device_read(id);
         observe(state.bus.device::<T>(id)?)
     }
 
