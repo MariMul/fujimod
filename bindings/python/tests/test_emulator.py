@@ -144,7 +144,7 @@ def test_board_runs_authored_program_and_releases_native_state() -> None:
         execution=_execution_graph(),
         devices=_device_plan(),
         assets=(asset,),
-        images=(Image(asset.id, 0x10000),),
+        images=(Image(asset.id, 0x10000, core=0),),
         library=library,
         engine="unicorn",
         quantum=1,
