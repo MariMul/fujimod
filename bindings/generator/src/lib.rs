@@ -130,9 +130,9 @@ impl Api {
             }
         }
         let mut api = Self::from_sources(sources.iter().map(|(_, text)| text.as_str()))?;
-        let defs = fs::read_to_string(root.join("crates/defs/src/service.rs"))
+        let catalog = fs::read_to_string(root.join("crates/catalog/src/service.rs"))
             .map_err(|e| e.to_string())?;
-        api.codec = syn::parse_file(&defs)
+        api.codec = syn::parse_file(&catalog)
             .map_err(|e| e.to_string())?
             .items
             .iter()
@@ -325,7 +325,7 @@ impl Api {
             ("service_values_javascript.rs", self.javascript()),
             (
                 "definition_codec_python.rs",
-                python_choice(&self.codec, "fujimod.defs.service", "pub(crate)"),
+                python_choice(&self.codec, "fujimod.catalog.service", "pub(crate)"),
             ),
             (
                 "definition_codec_javascript.rs",
@@ -353,7 +353,7 @@ impl Api {
         );
         println!(
             "cargo:rerun-if-changed={}",
-            root.join("crates/defs/src/service.rs").display()
+            root.join("crates/catalog/src/service.rs").display()
         );
         Self::read(root)
             .and_then(|api| api.write(out))
@@ -544,7 +544,7 @@ impl Api {
             out +=
                 "});\nexport const definitionValues=Object.freeze({Codec:native.ServiceCodec});\n";
             let service = serde_json::to_string(&self.service).unwrap();
-            let defs = serde_json::to_string(&Values {
+            let catalog = serde_json::to_string(&Values {
                 unions: vec![],
                 choices: vec![self.codec.clone()],
                 quantities: vec![],
@@ -553,7 +553,7 @@ impl Api {
             out += &format!(
                 "export const valueSchemas=Object.freeze({{service:{},definitions:{}}});\n",
                 serde_json::to_string(&service).unwrap(),
-                serde_json::to_string(&defs).unwrap()
+                serde_json::to_string(&catalog).unwrap()
             );
         }
         out

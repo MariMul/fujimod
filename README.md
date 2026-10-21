@@ -24,8 +24,11 @@ The `fujimod` facade exposes components through optional features; enable `usb`
 for `fujimod::usb`. The [mod installation crate](crates/mod-install/README.md)
 provides checked uploads and borrowed callback batches. The [USB crate](crates/usb/README.md) provides the initial
 asynchronous service/debug protocol implementation.
-The [definitions crate](crates/defs/README.md) loads caller-selected firmware
-data through `fujimod::catalog`, shared by USB and future emulator/SDK components.
+The [catalog crate](crates/catalog/README.md) loads caller-selected firmware
+data through `fujimod::catalog`, shared by USB and the emulator.
+Enable the `emulator` feature for `fujimod::emulator`; execution, device models
+and processor backends live in separate crates under `crates/emulator*`.
+The Python package exposes the same execution core through `fujimod.emulator`.
 
 ```sh
 cargo test --workspace --all-features
