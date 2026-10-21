@@ -24,6 +24,9 @@ impl Cpu for Core {
     }
     fn set_execution_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
         let e = &self.execution;
+        if e.memory.run_reserved(e.id.get()) {
+            return Err("execution policy requires a stopped processor".into());
+        }
         e.memory.require_stopped()?;
         if e.active.get() {
             return Err("execution policy requires a stopped processor".into());
@@ -365,6 +368,7 @@ impl Cpu for Core {
                     .into(),
             );
         }
+        let _run = e.memory.reserve_run(e.id.get(), e.policy.get())?;
         e.memory.flush()?;
         e.cap.set(
             request

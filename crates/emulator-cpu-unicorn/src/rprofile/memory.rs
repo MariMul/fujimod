@@ -2,8 +2,8 @@
 //! Only the CPU backend uses this execution mechanism. It never supplies a
 //! device with program inspection or private RAM predicates.
 use super::core::Execution;
-use fujimod_emulator_cpu::Cpu;
 use fujimod_emulator_cpu::exclusive;
+use fujimod_emulator_cpu::{Cpu, ExecutionPolicy};
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
@@ -96,6 +96,7 @@ struct State {
     invalidations: Vec<Invalidation>,
     dirty_pages: Vec<usize>,
     active: HashSet<usize>,
+    run_policies: HashMap<usize, ExecutionPolicy>,
     parked: HashMap<usize, usize>,
 }
 /// Thread-safe ownership for memory identities and cross-processor code
@@ -137,6 +138,15 @@ pub struct Memory {
     shared: SharedMemory,
     local: Rc<Local>,
     pub(super) monitors: exclusive::Shared,
+}
+pub(super) struct RunReservation<'a> {
+    memory: &'a Memory,
+    core: usize,
+}
+impl Drop for RunReservation<'_> {
+    fn drop(&mut self) {
+        self.memory.finish_run(self.core);
+    }
 }
 impl Default for Memory {
     fn default() -> Self {
@@ -188,6 +198,41 @@ impl Memory {
         }
         Ok(())
     }
+    pub(super) fn reserve_run(
+        &self,
+        core: usize,
+        policy: ExecutionPolicy,
+    ) -> Result<RunReservation<'_>, String> {
+        let mut state = self.state();
+        if state.run_policies.contains_key(&core) {
+            return Err("R-profile processor is already running".into());
+        }
+        if !state.run_policies.is_empty()
+            && (policy == ExecutionPolicy::Exact
+                || state
+                    .run_policies
+                    .values()
+                    .any(|active| *active != ExecutionPolicy::Interactive))
+        {
+            return Err(
+                "concurrent R-profile processor runs require interactive execution policy".into(),
+            );
+        }
+        state.run_policies.insert(core, policy);
+        Ok(RunReservation { memory: self, core })
+    }
+    pub(super) fn run_reserved(&self, core: usize) -> bool {
+        self.state().run_policies.contains_key(&core)
+    }
+    fn finish_run(&self, core: usize) {
+        if self.local.active.get() == Some(core) {
+            self.end();
+        }
+        let mut state = self.state();
+        state.active.remove(&core);
+        state.run_policies.remove(&core);
+        state.parked.remove(&core);
+    }
     pub(super) fn register(&self, core: Weak<Execution>) -> usize {
         let mut s = self.state();
         let id = s.cores.len();
@@ -197,6 +242,9 @@ impl Memory {
     }
     pub(super) fn start(&self, core: usize) -> Result<(), String> {
         let mut state = self.state();
+        if !state.run_policies.contains_key(&core) {
+            return Err("R-profile processor run was not reserved".into());
+        }
         if !state.active.insert(core) {
             return Err("R-profile processor is already running".into());
         }
@@ -719,6 +767,8 @@ mod tests {
         let shared = SharedMemory::default();
         let a = shared.processor();
         let b = shared.processor();
+        let _a_run = a.reserve_run(1, ExecutionPolicy::Interactive).unwrap();
+        let _b_run = b.reserve_run(2, ExecutionPolicy::Interactive).unwrap();
         a.start(1).unwrap();
         b.start(2).unwrap();
 
@@ -743,6 +793,8 @@ mod tests {
         let shared = SharedMemory::default();
         let a = shared.processor();
         let b = shared.processor();
+        let _a_run = a.reserve_run(1, ExecutionPolicy::Interactive).unwrap();
+        let _b_run = b.reserve_run(2, ExecutionPolicy::Interactive).unwrap();
         a.start(1).unwrap();
         b.start(2).unwrap();
 
@@ -755,5 +807,38 @@ mod tests {
 
         a.end();
         b.end();
+    }
+
+    #[test]
+    fn overlapping_runs_require_interactive_policy_on_every_core() {
+        let shared = SharedMemory::default();
+        let a = shared.processor();
+        let b = shared.processor();
+
+        let a_exact = a.reserve_run(1, ExecutionPolicy::Exact).unwrap();
+        assert!(
+            b.reserve_run(2, ExecutionPolicy::Exact)
+                .err()
+                .unwrap()
+                .contains("require interactive execution policy")
+        );
+        drop(a_exact);
+
+        let a_interactive = a.reserve_run(1, ExecutionPolicy::Interactive).unwrap();
+        assert!(
+            b.reserve_run(2, ExecutionPolicy::Exact)
+                .err()
+                .unwrap()
+                .contains("require interactive execution policy")
+        );
+        let b_interactive = b.reserve_run(2, ExecutionPolicy::Interactive).unwrap();
+        a.start(1).unwrap();
+        b.start(2).unwrap();
+        assert!(a.require_stopped().is_err());
+        a.end();
+        b.end();
+        assert!(a.require_stopped().is_ok());
+        drop(b_interactive);
+        drop(a_interactive);
     }
 }

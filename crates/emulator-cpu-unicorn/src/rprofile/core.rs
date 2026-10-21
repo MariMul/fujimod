@@ -360,6 +360,9 @@ impl Execution {
         }
     }
     fn synchronize(&self) -> Result<(), String> {
+        if self.policy.get() == ExecutionPolicy::Exact {
+            return Ok(());
+        }
         let callbacks: Vec<_> = self
             .observers
             .borrow()

@@ -99,6 +99,10 @@ fn sticky_pause_stops_instead_of_retrying_a_pending_restart() {
     execution.cap.set(10);
     execution.restarted.set(Some(0x1000));
     execution.pause_requested.store(1, Ordering::Release);
+    let _run = execution
+        .memory
+        .reserve_run(execution.id.get(), execution.policy.get())
+        .unwrap();
 
     let exit = cpu
         .execute(
@@ -117,6 +121,23 @@ fn sticky_pause_stops_instead_of_retrying_a_pending_restart() {
     // this marker, so the worker must not retry it while the pause is sticky.
     assert_eq!(execution.restarted.get(), Some(0x1000));
     assert!(!execution.active.get());
+}
+
+#[test]
+fn execution_policy_cannot_change_during_a_run_reservation() {
+    let cpu = processor(&Memory::default());
+    let execution = &cpu.execution;
+    let run = execution
+        .memory
+        .reserve_run(execution.id.get(), ExecutionPolicy::Exact)
+        .unwrap();
+    assert!(
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap_err()
+            .contains("requires a stopped processor")
+    );
+    drop(run);
+    cpu.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
 }
 
 struct StopBeforeProgress {
@@ -1050,6 +1071,58 @@ fn guest_code_store_through_an_alias_restarts_only_the_unentered_store() {
         ),
         (Some(3), 10, 0x1004)
     );
+}
+
+#[test]
+fn exact_serial_exclusives_keep_shared_ram_effects_without_sync_callbacks() {
+    unsafe fn synchronized(data: *mut c_void) {
+        let calls = unsafe { &*data.cast::<Cell<u32>>() };
+        calls.set(calls.get() + 1);
+    }
+
+    let backing = Backing::aligned_zeros(0x2000, 4096).unwrap();
+    let memory = Memory::default();
+    let a = processor(&memory);
+    let b = processor(&memory);
+    for (cpu, address) in [(&a, 0x1000), (&b, 0x9000)] {
+        unsafe {
+            cpu.map_physical(
+                address,
+                0,
+                0x2000,
+                7,
+                NonNull::new(backing.as_ptr()).unwrap(),
+            )
+            .unwrap();
+        }
+    }
+    words(&a, 0x1000, &[0xe1910f9f, 0xe1813f92]); // ldrex r0,[r1]; strex r3,r2,[r1]
+    words(&b, 0x9000, &[0xe5812000]); // str r2,[r1]
+    a.write_memory(0x1800, &0x7654_3210u32.to_le_bytes())
+        .unwrap();
+    set(&a, arm::CORE[1], 0x1800);
+    set(&a, arm::CORE[2], 7);
+    set(&b, arm::CORE[1], 0x9800);
+    set(&b, arm::CORE[2], 0x3333);
+    let sync_calls = Cell::<u32>::new(0);
+    let hook = unsafe {
+        a.install_hook(Hook::Synchronization {
+            callback: synchronized,
+            data: (&sync_calls as *const Cell<u32>).cast_mut().cast(),
+        })
+    }
+    .unwrap();
+
+    run(&a, 0x1000, 1).unwrap();
+    run(&b, 0x9000, 1).unwrap();
+    resume(&a, 1).unwrap();
+
+    let mut bytes = [0; 4];
+    a.read_memory(0x1800, &mut bytes).unwrap();
+    assert_eq!(u32::from_le_bytes(bytes), 0x3333);
+    assert_eq!(get(&a, arm::CORE[3]), 1);
+    assert_eq!(sync_calls.get(), 0);
+    a.remove_hook(hook).unwrap();
 }
 
 struct SynchronizationProgress {

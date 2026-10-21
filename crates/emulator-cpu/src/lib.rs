@@ -437,6 +437,8 @@ pub enum Hook {
     },
     /// Request an owner barrier before a processor operation that cannot
     /// overlap another guest core safely, such as a watched store or exclusive.
+    /// This boundary is used by Interactive execution, where guest cores may
+    /// overlap. Exact execution serializes processor runs and skips the hook.
     Synchronization {
         callback: unsafe fn(*mut c_void),
         data: *mut c_void,

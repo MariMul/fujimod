@@ -1033,6 +1033,9 @@ impl Cpu for CpuWorker {
         self.identity
     }
     fn set_execution_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
+        if self.running.get() {
+            return Err("execution policy requires a stopped processor".into());
+        }
         self.unit(Operation::SetExecutionPolicy(policy))
     }
     fn checkpoint_backings(&self) -> Result<Vec<(NonNull<u8>, usize)>, String> {
@@ -1894,6 +1897,90 @@ mod tests {
     }
 
     #[test]
+    fn exact_worker_runs_refuse_concurrent_peers_before_guest_entry() {
+        struct ReadProbe(Cell<u32>);
+        unsafe fn read(_: u64, _: u32, data: *mut std::ffi::c_void) -> u64 {
+            unsafe { &*data.cast::<ReadProbe>() }.0.set(1);
+            0x1234
+        }
+        unsafe fn write(_: u64, _: u32, _: u64, _: *mut std::ffi::c_void) {}
+
+        let memory = SharedMemory::default();
+        let first = worker(memory.clone());
+        let second = worker(memory);
+        first.map_zeroed(0x1000, 4096, 7).unwrap();
+        second.map_zeroed(0x1000, 4096, 7).unwrap();
+        write_words(&first, 0x1000, &[0xe5910000]); // ldr r0,[r1]
+        write_words(&second, 0x1000, &[0xe3a00007]); // mov r0,#7
+        first
+            .write_register(arm::CORE[1], &0x8000u32.to_le_bytes())
+            .unwrap();
+        let mut probe = ReadProbe(Cell::new(0));
+        unsafe {
+            first
+                .map_mmio(
+                    0x8000,
+                    4096,
+                    Mmio {
+                        read,
+                        write,
+                        data: (&mut probe as *mut ReadProbe).cast(),
+                    },
+                )
+                .unwrap();
+        }
+
+        let first_run = first
+            .start_run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(1),
+            })
+            .unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        loop {
+            match first.poll_run(first_run).unwrap() {
+                RunStatus::CallbackPending => break,
+                RunStatus::Running => {
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "first exact run did not park"
+                    );
+                    std::thread::yield_now();
+                }
+                RunStatus::Complete(result) => {
+                    panic!("first exact run completed before its MMIO callback: {result:?}")
+                }
+            }
+        }
+        assert!(first
+            .set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap_err()
+            .contains("requires a stopped processor"));
+
+        let second_run = second
+            .start_run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(1),
+            })
+            .unwrap();
+        let error = poll_to_completion(&second, second_run).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("require interactive execution policy")
+        );
+
+        first.cancel_pending_callback(first_run).unwrap();
+        assert!(poll_to_completion(&first, first_run).is_err());
+        assert_eq!(probe.0.get(), 0);
+        assert_eq!(read_u32(&second, arm::CORE[0]), 0);
+    }
+
+    #[test]
     fn synchronization_hook_parks_before_ldrex_and_resumes_the_instruction() {
         struct Probe(Cell<u32>);
         unsafe fn barrier(data: *mut std::ffi::c_void) {
@@ -1902,6 +1989,8 @@ mod tests {
 
         let memory = SharedMemory::default();
         let cpu = worker(memory.clone());
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
         cpu.map_zeroed(0x1000, 4096, 7).unwrap();
         let data = Backing::aligned_zeros(4096, 4096).unwrap();
         unsafe {
