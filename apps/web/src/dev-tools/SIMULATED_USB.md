@@ -35,7 +35,11 @@ so USB execution refuses Undo/history and does not create automatic checkpoints.
 
 Builds expose `connectSimulated` only when their catalog includes a USB runtime.
 The site staging script copies its module, binary, manifest and notices. The
-browser check `simulated-camera.browser.ts` expects that catalog and a local
-DAT mount; it creates a saved camera, selects its tile, checks identity through
-the Rust owner and its decoded log, verifies no navigation, and removes it.
-Generated receipts and screenshots go to `build/simulated-camera/`.
+browser check `simulated-camera.browser.ts` requires a USB bundle for every
+emulated catalog firmware and a matching `/local/firmware/<id>.dat` mount. For
+each entry it creates a saved camera in a fresh browser context, selects its
+tile, checks the guest model through the Rust owner and its decoded log, verifies
+no navigation, and removes it. Missing bundles and failed connections fail the
+check. `FUJIMOD_TEST_FIRMWARE=<id>` selects one entry during bring-up; omit it
+for full catalog verification. Per-firmware receipts and screenshots, plus the
+complete `results.json`, go to `build/simulated-camera/`.
