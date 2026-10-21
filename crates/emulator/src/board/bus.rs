@@ -1,6 +1,6 @@
 //! Common device dispatch, discovery ledger and causal wakeups.
-use fujimod_emulator_devices::bus::{FastReadValue, FastReadWord};
 use fujimod_emulator_devices::graph::{Mapping, validate_mappings};
+use fujimod_emulator_devices::bus::{FastReadValue, FastReadWord};
 use fujimod_emulator_devices::{Cx, Device, Host};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -473,7 +473,11 @@ impl Bus {
     /// Pure read snapshots that fall inside this CPU's physical MMIO mapping.
     /// Device declarations are relative to their registered windows; return
     /// offsets relative to the requested mapping for the CPU backend.
-    pub(super) fn fast_reads(&self, physical_base: u64, bytes: usize) -> Vec<(u64, FastReadValue)> {
+    pub(super) fn fast_reads(
+        &self,
+        physical_base: u64,
+        bytes: usize,
+    ) -> Vec<(u64, FastReadValue)> {
         let Some(physical_end) = physical_base.checked_add(bytes as u64) else {
             return Vec::new();
         };
@@ -622,10 +626,11 @@ impl Bus {
         if self.transactions.is_some() {
             return Err("Another bus transaction observer is active".into());
         }
-        if ranges.is_empty() || limit == 0 || ranges.iter().any(|&(begin, end)| begin >= end) {
-            return Err(
-                "Bus transaction watch requires bounded address windows and records".into(),
-            );
+        if ranges.is_empty()
+            || limit == 0
+            || ranges.iter().any(|&(begin, end)| begin >= end)
+        {
+            return Err("Bus transaction watch requires bounded address windows and records".into());
         }
         self.transactions = Some(Transactions {
             limit,
@@ -641,11 +646,7 @@ impl Bus {
     }
 
     pub fn transaction_watch_end(&mut self) -> Result<TransactionBatch, String> {
-        if !self
-            .transactions
-            .as_ref()
-            .is_some_and(|log| log.ranges.is_some())
-        {
+        if !self.transactions.as_ref().is_some_and(|log| log.ranges.is_some()) {
             return Err("No scoped bus transaction observer is active".into());
         }
         let log = self.transactions.take().unwrap();
