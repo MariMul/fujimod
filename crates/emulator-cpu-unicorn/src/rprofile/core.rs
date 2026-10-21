@@ -16,7 +16,6 @@ use std::{ffi::c_void, ptr::NonNull};
 
 mod backend;
 mod exclusive;
-mod loops;
 mod mapping;
 mod pmu;
 mod run;
@@ -64,8 +63,6 @@ pub(super) struct Execution {
     owned: RefCell<Vec<Backing>>,
     mmio_hooks: RefCell<BTreeMap<u64, (usize, HookId)>>,
     fast_reads: RefCell<Vec<FastMmioRead>>,
-    loop_reads: RefCell<Vec<(u64, FastMmioRead)>>,
-    loops: loops::Loops,
     count: Cell<u64>,
     cap: Cell<u64>,
     synced: Cell<i64>,
@@ -134,8 +131,6 @@ impl Core {
             owned: RefCell::new(Vec::new()),
             mmio_hooks: RefCell::new(BTreeMap::new()),
             fast_reads: RefCell::new(Vec::new()),
-            loop_reads: RefCell::new(Vec::new()),
-            loops: loops::Loops::default(),
             count: Cell::new(0),
             cap: Cell::new(0),
             synced: Cell::new(0),
@@ -339,7 +334,7 @@ impl Execution {
                 && self.observers.borrow().values().any(|observer| {
                     matches!(observer.hook, Hook::Instruction { range, .. } if includes(range, address))
                 })
-                || special(word) || self.loop_candidate(address, word)
+                || special(word)
             {
                 InstructionDisposition::ObserveAndEndBlock
             } else {
@@ -464,7 +459,6 @@ impl Execution {
         let word = u32::from_le_bytes(bytes);
         let cpsr = self.scalar(arm::CPSR)?;
         let thumb = self.thumb.get();
-        if !thumb && self.execute_loop(address, word)? { return Ok(()); }
         let condition = if thumb {
             let it = ((cpsr >> 25) & 3) | ((cpsr >> 8) & 0xfc);
             if it == 0 { 14 } else { it >> 4 }
