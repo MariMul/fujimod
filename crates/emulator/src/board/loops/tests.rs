@@ -19,10 +19,7 @@ impl Device for Flag {
     }
     fn fast_reads(&self, _: u64, _: u64) -> Vec<FastReadWord> {
         if self.declared {
-            vec![FastReadWord {
-                offset: 0,
-                value: self.value.clone(),
-            }]
+            vec![FastReadWord::atomic_u32(0, self.value.clone())]
         } else {
             vec![]
         }

@@ -154,10 +154,11 @@ unsafe extern "C" fn mmio_read(_: ffi::Engine, offset: u64, size: u32, data: *mu
         return 0;
     }
     let offset = context.offset + offset;
+    let tick = rprofile::approximate_guest_tick();
     context
         .fast_reads
         .iter()
-        .find_map(|read| read.read(offset, size))
+        .find_map(|read| read.read_at(offset, size, tick))
         .unwrap_or_else(|| unsafe {
             (context.callbacks.read)(offset, size, context.callbacks.data)
         })

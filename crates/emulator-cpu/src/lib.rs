@@ -153,33 +153,96 @@ pub struct Mmio {
     pub write: unsafe fn(u64, u32, u64, *mut c_void),
     pub data: *mut c_void,
 }
-/// A device-published read-only register snapshot that can be read directly
-/// by an execution backend. The device remains responsible for publishing
-/// only values valid at the current guest-time boundary.
+/// A device-published, side-effect-free register value that can be read
+/// directly by an execution backend. Clocked values are evaluated against an
+/// approximate guest tick and may decline reads outside their valid interval.
 #[derive(Clone)]
 pub struct FastMmioRead {
     pub register_offset: u64,
-    pub value: Arc<AtomicU32>,
+    kind: FastMmioReadKind,
     enabled: Arc<AtomicBool>,
+}
+#[derive(Clone)]
+enum FastMmioReadKind {
+    AtomicU32(Arc<AtomicU32>),
+    ClockedU32(Arc<dyn Fn(u64) -> Option<u32> + Send + Sync>),
 }
 impl FastMmioRead {
     pub fn atomic_u32(register_offset: u64, value: Arc<AtomicU32>) -> Self {
         Self {
             register_offset,
-            value,
+            kind: FastMmioReadKind::AtomicU32(value),
+            enabled: Arc::new(AtomicBool::new(false)),
+        }
+    }
+    pub fn clocked_u32(
+        register_offset: u64,
+        read: Arc<dyn Fn(u64) -> Option<u32> + Send + Sync>,
+    ) -> Self {
+        Self {
+            register_offset,
+            kind: FastMmioReadKind::ClockedU32(read),
             enabled: Arc::new(AtomicBool::new(false)),
         }
     }
     pub fn set_enabled(&self, enabled: bool) {
         self.enabled.store(enabled, Ordering::Release);
     }
-    /// Return a snapshot only for the exact declared 32-bit register access.
+    /// Return a constant snapshot only for the exact declared 32-bit access.
+    /// Clocked reads are excluded from instruction-loop proofs.
     pub fn read(&self, offset: u64, size: u32) -> Option<u64> {
-        if self.enabled.load(Ordering::Acquire) && offset == self.register_offset && size == 4 {
-            Some(u64::from(self.value.load(Ordering::Acquire)))
-        } else {
-            None
+        if offset != self.register_offset || size != 4 {
+            return None;
         }
+        match &self.kind {
+            FastMmioReadKind::AtomicU32(value) => Some(u64::from(value.load(Ordering::Acquire))),
+            FastMmioReadKind::ClockedU32(_) => None,
+        }
+    }
+    /// Return a fast value for an exact 32-bit access in the enabled policy.
+    /// Clocked descriptors receive the backend's approximate guest tick.
+    pub fn read_at(&self, offset: u64, size: u32, tick: Option<u64>) -> Option<u64> {
+        if !self.enabled.load(Ordering::Acquire)
+            || offset != self.register_offset
+            || size != 4
+        {
+            return None;
+        }
+        match &self.kind {
+            FastMmioReadKind::AtomicU32(value) => Some(u64::from(value.load(Ordering::Acquire))),
+            FastMmioReadKind::ClockedU32(read) => read(tick?).map(u64::from),
+        }
+    }
+}
+#[cfg(test)]
+mod fast_mmio_read_tests {
+    use super::*;
+
+    #[test]
+    fn clocked_reads_are_not_constant_loop_inputs_and_decline_past_validity() {
+        let read = FastMmioRead::clocked_u32(
+            0x20,
+            Arc::new(|tick| (tick < 20).then_some(tick as u32)),
+        );
+        assert_eq!(read.read(0x20, 4), None);
+        assert_eq!(read.read_at(0x20, 4, Some(19)), None);
+        read.set_enabled(true);
+        assert_eq!(read.read(0x20, 4), None);
+        assert_eq!(read.read_at(0x20, 4, None), None);
+        assert_eq!(read.read_at(0x20, 4, Some(19)), Some(19));
+        assert_eq!(read.read_at(0x20, 4, Some(20)), None);
+        assert_eq!(read.read_at(0x21, 4, Some(19)), None);
+        assert_eq!(read.read_at(0x20, 2, Some(19)), None);
+    }
+
+    #[test]
+    fn atomic_snapshots_remain_constant_inputs_for_exact_loop_proofs() {
+        let value = Arc::new(AtomicU32::new(7));
+        let read = FastMmioRead::atomic_u32(0x30, value);
+        assert_eq!(read.read(0x30, 4), Some(7));
+        assert_eq!(read.read_at(0x30, 4, None), None);
+        read.set_enabled(true);
+        assert_eq!(read.read_at(0x30, 4, None), Some(7));
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

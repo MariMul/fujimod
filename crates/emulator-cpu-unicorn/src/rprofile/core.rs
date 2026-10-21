@@ -352,6 +352,12 @@ impl Execution {
     }
     fn block(&self, block: Block) -> Result<(), String> {
         self.settle(0, true)?;
+        let tick = self
+            .clock
+            .get()
+            .map(|clock| clock.after(self.count.get()).map(|current| current.now))
+            .transpose()?;
+        crate::rprofile::publish_guest_tick(tick);
         self.at_block.set(true);
         let result = self.enter_block(block);
         self.at_block.set(false);

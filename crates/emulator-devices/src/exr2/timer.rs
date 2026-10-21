@@ -9,8 +9,10 @@
 
 use crate::record::{Action, Record, Result, Value};
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, RwLock};
 
 pub const BASE: u64 = 0xfff91000;
+const COUNTER_OFFSETS: [u64; 4] = [0, 0x10, 0x20, 0x30];
 const MAIN_ASSUMPTION: &str = "0x23 periodic mode; shared IRQ0x20 fanout inferred";
 const APPLICATION_ASSUMPTION: &str =
     "Up-count/reload inferred; IRQ routed to firmware-enabled banks; prescaler units unknown";
@@ -52,6 +54,87 @@ pub struct SystemTimer {
     pub phase: u64,
     pub polled: [PolledTimer; 2],
     pub application: ApplicationTimer,
+}
+
+#[derive(Clone)]
+struct TimerReadSnapshot {
+    state: SystemTimer,
+    valid_until: Option<u64>,
+}
+impl TimerReadSnapshot {
+    fn new(state: &SystemTimer) -> std::result::Result<Self, String> {
+        let valid_until = state
+            .next_event_tick(state.last_tick)
+            .map_err(|error| error.0)?;
+        Ok(Self {
+            state: state.clone(),
+            valid_until,
+        })
+    }
+
+    fn read_count(&self, counter: u64, now: u64) -> Option<u32> {
+        if now < self.state.last_tick || self.valid_until.is_some_and(|at| now >= at) {
+            return None;
+        }
+        let elapsed = now - self.state.last_tick;
+        let read = |phase: u64, control: u64| {
+            let counts = (phase as u128 + elapsed as u128) / divider(control) as u128;
+            u64::try_from(counts).ok()
+        };
+        let value = match counter {
+            0 => {
+                if self.state.control == 0 || self.state.reload == 0 {
+                    self.state.count
+                } else {
+                    let counts = read(self.state.phase, self.state.control)?;
+                    if self.state.control == 0x63 {
+                        ((self.state.count as u128 + counts as u128)
+                            % (self.state.reload as u128 + 1)) as u64
+                    } else if self.state.control == 0x23 {
+                        let remaining = if self.state.count != 0 {
+                            self.state.count
+                        } else {
+                            self.state.reload
+                        };
+                        if counts < remaining {
+                            remaining - counts
+                        } else {
+                            self.state.reload - ((counts - remaining) % self.state.reload)
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+            }
+            1 | 2 => {
+                let timer = &self.state.polled[counter as usize - 1];
+                if timer.control == 0 {
+                    timer.count
+                } else {
+                    let counts = read(timer.phase, timer.control)?;
+                    if timer.application_mode {
+                        if timer.reload == 0 {
+                            return None;
+                        }
+                        ((timer.count as u128 + counts as u128) % timer.reload as u128) as u64
+                    } else {
+                        timer.count.wrapping_add(counts) & 0xffff_ffff
+                    }
+                }
+            }
+            3 => {
+                let timer = &self.state.application;
+                if timer.control == 0 || timer.reload == 0 {
+                    timer.count
+                } else {
+                    let counts = read(timer.phase, timer.control)?;
+                    ((timer.count as u128 + counts as u128) % timer.reload as u128) as u64
+                }
+            }
+            _ => return None,
+        };
+        u32::try_from(value).ok()
+    }
 }
 
 pub fn divider(control: u64) -> u64 {
@@ -486,6 +569,7 @@ pub struct Wiring {
 pub struct Timers {
     state: SystemTimer,
     controllers: [Option<super::irq::Inputs>; 2],
+    read_snapshot: Arc<RwLock<Arc<TimerReadSnapshot>>>,
 }
 impl Timers {
     pub fn new(options: Options, wiring: Wiring) -> std::result::Result<Self, String> {
@@ -505,7 +589,21 @@ impl Timers {
         }
         let mut state = SystemTimer::new(options.main_targets)?;
         state.last_tick = wiring.start_tick;
-        Ok(Self { state, controllers })
+        let read_snapshot = Arc::new(RwLock::new(Arc::new(TimerReadSnapshot::new(&state)?)));
+        Ok(Self {
+            state,
+            controllers,
+            read_snapshot,
+        })
+    }
+    fn publish_read_snapshot(&self) -> std::result::Result<(), String> {
+        let snapshot = Arc::new(TimerReadSnapshot::new(&self.state)?);
+        let mut published = self
+            .read_snapshot
+            .write()
+            .map_err(|_| "timer read snapshot is poisoned")?;
+        *published = snapshot;
+        Ok(())
     }
     fn enabled(&self) -> [u128; 2] {
         std::array::from_fn(|core| {
@@ -522,6 +620,10 @@ impl Timers {
             cx.fail(error.0);
             return false;
         }
+        if let Err(error) = self.publish_read_snapshot() {
+            cx.fail(error);
+            return false;
+        }
         true
     }
     fn address(address: u64, size: u8, write: bool) -> bool {
@@ -533,9 +635,64 @@ impl Timers {
             && offset.is_multiple_of(4)
             && (offset & 15 != 12 || write && matches!(offset, 0x1c | 0x2c))
     }
+
+    fn validate_state(&self, state: &SystemTimer) -> std::result::Result<(), String> {
+        let valid = |count: u64, reload: u64, control: u64, phase: u64| {
+            count <= u32::MAX as u64
+                && reload <= u32::MAX as u64
+                && control <= u32::MAX as u64
+                && phase < divider(control)
+        };
+        if state.targets != self.state.targets
+            || !matches!(state.control, 0 | 0x23 | 0x63)
+            || !valid(state.count, state.reload, state.control, state.phase)
+            || state.polled.iter().any(|timer| {
+                !valid(timer.count, timer.reload, timer.control, timer.phase)
+                    || timer.control != 0
+                        && (!(3..0x74).step_by(0x10).any(|value| value == timer.control)
+                            || timer.application_mode && timer.reload == 0)
+            })
+            || !valid(
+                state.application.count,
+                state.application.reload,
+                state.application.control,
+                state.application.phase,
+            )
+            || state.application.control != 0
+                && (!(3..0x74)
+                    .step_by(0x10)
+                    .any(|value| value == state.application.control)
+                    || state.application.reload == 0)
+        {
+            return Err("invalid timer state".into());
+        }
+        state
+            .next_event_tick(state.last_tick)
+            .map_err(|error| error.0)?;
+        Ok(())
+    }
 }
 impl crate::Device for Timers {
-    crate::checkpoint_fields!(state: SystemTimer);
+    fn checkpoint(&self) -> std::result::Result<crate::checkpoint::Checkpoint, String> {
+        crate::checkpoint::Checkpoint::encode(self.name(), &self.state)
+    }
+
+    fn validate_checkpoint(
+        &self,
+        saved: &crate::checkpoint::Checkpoint,
+    ) -> std::result::Result<(), String> {
+        self.validate_state(&saved.decode(self.name())?)
+    }
+
+    fn restore_checkpoint(
+        &mut self,
+        saved: &crate::checkpoint::Checkpoint,
+    ) -> std::result::Result<(), String> {
+        let state: SystemTimer = saved.decode(self.name())?;
+        self.validate_state(&state)?;
+        self.state = state;
+        self.publish_read_snapshot()
+    }
 
     fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
         Ok(self.save())
@@ -585,6 +742,9 @@ impl crate::Device for Timers {
         if let Err(error) = self.state.next_event_tick(self.state.last_tick) {
             cx.fail(error.0);
         }
+        if let Err(error) = self.publish_read_snapshot() {
+            cx.fail(error);
+        }
     }
     fn next_deadline(&self, now: u64) -> Option<u64> {
         match self.state.next_event_tick(self.state.last_tick) {
@@ -604,50 +764,45 @@ impl crate::Device for Timers {
     fn pollable(&self, address: u64, size: u8) -> bool {
         Self::address(address, size, false)
     }
+    fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<crate::bus::FastReadWord> {
+        let Some(window_end) = window_base.checked_add(window_size) else {
+            return Vec::new();
+        };
+        COUNTER_OFFSETS
+            .into_iter()
+            .filter_map(|register| {
+                let address = BASE.checked_add(register)?;
+                let end = address.checked_add(4)?;
+                (address >= window_base && end <= window_end).then(|| {
+                    let counter = register / 0x10;
+                    let snapshot = self.read_snapshot.clone();
+                    crate::bus::FastReadWord::clocked_u32(
+                        address - window_base,
+                        Arc::new(move |now| {
+                            let snapshot = snapshot.read().ok()?.clone();
+                            snapshot.read_count(counter, now)
+                        }),
+                    )
+                })
+            })
+            .collect()
+    }
     fn save(&self) -> serde_json::Value {
         serde_json::to_value(&self.state).expect("timer state")
     }
     fn restore(&mut self, value: &serde_json::Value) -> std::result::Result<(), String> {
         let state: SystemTimer =
             serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        let valid = |count: u64, reload: u64, control: u64, phase: u64| {
-            count <= u32::MAX as u64
-                && reload <= u32::MAX as u64
-                && control <= u32::MAX as u64
-                && phase < divider(control)
-        };
-        if state.targets != self.state.targets
-            || !matches!(state.control, 0 | 0x23 | 0x63)
-            || !valid(state.count, state.reload, state.control, state.phase)
-            || state.polled.iter().any(|t| {
-                !valid(t.count, t.reload, t.control, t.phase)
-                    || t.control != 0
-                        && (!(3..0x74).step_by(0x10).any(|x| x == t.control)
-                            || t.application_mode && t.reload == 0)
-            })
-            || !valid(
-                state.application.count,
-                state.application.reload,
-                state.application.control,
-                state.application.phase,
-            )
-            || state.application.control != 0
-                && (!(3..0x74)
-                    .step_by(0x10)
-                    .any(|x| x == state.application.control)
-                    || state.application.reload == 0)
-        {
-            return Err("invalid timer state".into());
-        }
-        state.next_event_tick(state.last_tick).map_err(|e| e.0)?;
+        self.validate_state(&state)?;
         self.state = state;
-        Ok(())
+        self.publish_read_snapshot()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bus::FastReadValue;
     use crate::{Cx, Device, Host};
     #[derive(Default)]
     struct Clock {
@@ -703,6 +858,116 @@ mod tests {
         let value = timer.read(&mut cx, BASE + offset, 4);
         assert_eq!(cx.refusal(), None);
         value
+    }
+    fn fast_counter(timer: &Timers, offset: u64) -> Arc<dyn Fn(u64) -> Option<u32> + Send + Sync> {
+        timer
+            .fast_reads(BASE, 0x40)
+            .into_iter()
+            .find(|word| word.offset == offset)
+            .and_then(|word| match word.value {
+                FastReadValue::ClockedU32(read) => Some(read),
+                FastReadValue::AtomicU32(_) => None,
+            })
+            .expect("timer counter has a clocked fast read")
+    }
+    #[derive(Default)]
+    struct NoEffects;
+    impl Effects for NoEffects {
+        fn irq(&mut self, _: u8, _: u8) -> Result<()> {
+            Ok(())
+        }
+        fn record(&mut self, _: impl FnOnce() -> Action) {}
+    }
+    fn settled_counter(timer: &Timers, offset: u64, now: u64) -> u32 {
+        let mut state = timer.state.clone();
+        state
+            .advance_to(now, [0; 2], &mut NoEffects)
+            .expect("counter settles before its deadline");
+        state.read(BASE + offset).expect("counter register reads")
+    }
+
+    #[test]
+    fn clocked_reads_match_up_down_and_divided_counters_before_real_deadlines() {
+        let check = |timer: Timers, offset: u64, end: u64| {
+            let read = fast_counter(&timer, offset);
+            for now in (100..end).step_by(7) {
+                assert_eq!(read(now), Some(settled_counter(&timer, offset, now)));
+            }
+            assert_eq!(read(end), None, "counter at {offset:#x} deadline");
+        };
+
+        let (mut main, mut main_host) = (
+            timers(100),
+            Clock {
+                now: 100,
+                ..Clock::default()
+            },
+        );
+        put(&mut main, &mut main_host, 4, 5);
+        put(&mut main, &mut main_host, 8, 0x23);
+        check(main, 0, 120);
+
+        let (mut polled, mut polled_host) = (
+            timers(100),
+            Clock {
+                now: 100,
+                ..Clock::default()
+            },
+        );
+        put(&mut polled, &mut polled_host, 0x10, 0);
+        put(&mut polled, &mut polled_host, 0x14, 9);
+        put(&mut polled, &mut polled_host, 0x18, 0x33);
+        check(polled, 0x10, 172);
+
+        let (mut application, mut application_host) = (
+            timers(100),
+            Clock {
+                now: 100,
+                ..Clock::default()
+            },
+        );
+        put(&mut application, &mut application_host, 0x30, 0);
+        put(&mut application, &mut application_host, 0x34, 11);
+        put(&mut application, &mut application_host, 0x38, 0x53);
+        check(application, 0x30, 452);
+    }
+
+    #[test]
+    fn clocked_reads_refresh_after_write_stop_deadline_and_restore() {
+        let (mut timer, mut host) = (
+            timers(100),
+            Clock {
+                now: 100,
+                ..Clock::default()
+            },
+        );
+        put(&mut timer, &mut host, 0x30, 0);
+        put(&mut timer, &mut host, 0x34, 7);
+        put(&mut timer, &mut host, 0x38, 0x33);
+        let read = fast_counter(&timer, 0x30);
+        assert_eq!(read(123), Some(2));
+
+        host.now = 123;
+        put(&mut timer, &mut host, 0x38, 0);
+        assert_eq!(read(123), Some(2));
+        assert_eq!(read(500), Some(2));
+
+        let mut saved = timer.save();
+        saved["last_tick"] = serde_json::json!(1000);
+        saved["application"]["reload"] = serde_json::json!(9);
+        saved["application"]["count"] = serde_json::json!(4);
+        saved["application"]["control"] = serde_json::json!(0x23);
+        saved["application"]["phase"] = serde_json::json!(2);
+        timer.restore(&saved).unwrap();
+        assert_eq!(read(1005), Some(5));
+        assert_eq!(read(1018), None);
+
+        let checkpoint = timer.checkpoint().unwrap();
+        host.now = 1005;
+        put(&mut timer, &mut host, 0x38, 0);
+        timer.restore_checkpoint(&checkpoint).unwrap();
+        assert_eq!(read(1005), Some(5));
+        assert_eq!(read(1018), None);
     }
     #[test]
     fn periodic_deadline_preserves_fractional_phase_and_early_ticks_are_pure() {

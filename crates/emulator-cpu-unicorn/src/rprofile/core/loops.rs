@@ -351,7 +351,9 @@ impl Execution {
             let physical = self.cpu.translate(u64::from(address), Access::Read).ok()?;
             return self.loop_reads.borrow().iter().find_map(|(base, read)| {
                 (physical == base + read.register_offset)
-                    .then(|| read.value.load(std::sync::atomic::Ordering::Acquire))
+                    .then(|| read.read(read.register_offset, 4))
+                    .flatten()
+                    .map(|value| value as u32)
             });
         }
         None

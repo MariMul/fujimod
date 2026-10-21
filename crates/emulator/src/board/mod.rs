@@ -526,8 +526,13 @@ impl Board {
             .bus
             .fast_reads(physical, bytes)
             .into_iter()
-            .map(|(offset, value)| {
-                fujimod_emulator_cpu::FastMmioRead::atomic_u32(offset, value)
+            .map(|(offset, value)| match value {
+                fujimod_emulator_devices::bus::FastReadValue::AtomicU32(value) => {
+                    fujimod_emulator_cpu::FastMmioRead::atomic_u32(offset, value)
+                }
+                fujimod_emulator_devices::bus::FastReadValue::ClockedU32(read) => {
+                    fujimod_emulator_cpu::FastMmioRead::clocked_u32(offset, read)
+                }
             })
             .collect();
         unsafe {

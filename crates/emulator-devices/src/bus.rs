@@ -7,14 +7,36 @@
 use crate::record::Record;
 use std::sync::{Arc, atomic::AtomicU32};
 
-/// One device-owned, side-effect-free 32-bit register snapshot. `offset` is
-/// relative to one declared device window. The device publishes changes to
-/// `value`; runtimes may use it only while servicing the device's event
-/// boundaries and must retain the ordinary read law as the fallback.
+/// One device-owned, side-effect-free 32-bit register read. `offset` is
+/// relative to one declared device window. Clocked readers may decline a
+/// read when their published state is no longer valid at the supplied tick.
 #[derive(Clone)]
 pub struct FastReadWord {
     pub offset: u64,
-    pub value: Arc<AtomicU32>,
+    pub value: FastReadValue,
+}
+#[derive(Clone)]
+pub enum FastReadValue {
+    AtomicU32(Arc<AtomicU32>),
+    ClockedU32(Arc<dyn Fn(u64) -> Option<u32> + Send + Sync>),
+}
+impl FastReadWord {
+    pub fn atomic_u32(offset: u64, value: Arc<AtomicU32>) -> Self {
+        Self {
+            offset,
+            value: FastReadValue::AtomicU32(value),
+        }
+    }
+
+    pub fn clocked_u32(
+        offset: u64,
+        read: Arc<dyn Fn(u64) -> Option<u32> + Send + Sync>,
+    ) -> Self {
+        Self {
+            offset,
+            value: FastReadValue::ClockedU32(read),
+        }
+    }
 }
 
 /// A board-wired per-core interrupt controller's physical inputs and output.
@@ -216,14 +238,12 @@ impl<'a> Cx<'a> {
 /// A register-level device behind one or more address windows.
 pub trait Device: Send + std::any::Any {
     fn name(&self) -> &'static str;
-    /// Optional pure status-word snapshots for one of this device's register
-    /// windows. This query is observational: it must not settle time or change
-    /// modeled state. Publish each changed value with `Release` after a guest
-    /// write, due event, or validated restore. Interactive runtimes may bypass
-    /// `read` only between the device's real deadlines. These values also
-    /// declare side-effect-free inputs to exact CPU loop proofs: they stay
-    /// stable until the next device deadline, guest/peer access or DMA event.
-    /// Ordinary exact execution keeps using the regular read callback.
+    /// Optional side-effect-free 32-bit reads for one register window. This
+    /// query is observational: it must not settle time or change modeled
+    /// state. Interactive runtimes may bypass `read` only while the declaration
+    /// remains valid; ordinary exact execution keeps using the read callback.
+    /// Atomic values may also serve as exact loop-proof inputs when they stay
+    /// stable through the proof window. Clocked values never do.
     fn fast_reads(&self, _window_base: u64, _window_size: u64) -> Vec<FastReadWord> {
         Vec::new()
     }

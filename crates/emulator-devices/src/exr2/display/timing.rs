@@ -651,9 +651,11 @@ impl crate::Device for DisplayTiming {
             .filter_map(|(bank, base)| {
                 let address = base.checked_add(0x30)?;
                 let end = address.checked_add(4)?;
-                (address >= window_base && end <= window_end).then(|| FastReadWord {
-                    offset: address - window_base,
-                    value: self.status_snapshots[bank].clone(),
+                (address >= window_base && end <= window_end).then(|| {
+                    FastReadWord::atomic_u32(
+                        address - window_base,
+                        self.status_snapshots[bank].clone(),
+                    )
                 })
             })
             .collect()
@@ -813,9 +815,13 @@ mod native_tests {
             .fast_reads(BASES[1], 0x1000)
             .into_iter()
             .find(|read| read.offset == 0x30)
-            .unwrap()
-            .value;
-        assert_eq!(status.load(Ordering::Acquire), 2);
+            .and_then(|read| match read.value {
+                crate::bus::FastReadValue::AtomicU32(value) => Some(value),
+                crate::bus::FastReadValue::ClockedU32(_) => None,
+            })
+            .unwrap();
+        let status_value = || status.load(Ordering::Acquire);
+        assert_eq!(status_value(), 2);
         for (offset, _) in MASKS {
             let value = match offset {
                 4 => 0x10001,
@@ -836,19 +842,16 @@ mod native_tests {
         assert_eq!(timing.save(), saved);
         for tick in [11, 14, 17] {
             advance(&mut timing, &mut host, tick);
-            assert_eq!(
-                status.load(Ordering::Acquire),
-                if tick == 17 { 2 } else { 0 }
-            );
+            assert_eq!(status_value(), if tick == 17 { 2 } else { 0 });
         }
         assert_eq!(host.irqs, [(1, 55), (1, 56), (1, 55)]);
         let checkpoint = timing.checkpoint().unwrap();
         host.now = 23;
         write(&mut timing, &mut host, BASES[1] + 0x34, 0);
-        assert_eq!(status.load(Ordering::Acquire), 0);
+        assert_eq!(status_value(), 0);
         host.now = 17;
         timing.restore_checkpoint(&checkpoint).unwrap();
-        assert_eq!(status.load(Ordering::Acquire), 2);
+        assert_eq!(status_value(), 2);
         let saved = timing.save();
         timing.restore(&saved).unwrap();
         assert_eq!(timing.save(), saved);
