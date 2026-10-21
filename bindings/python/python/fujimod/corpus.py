@@ -29,6 +29,11 @@ from ._native import corpus as _core
 CorpusIndex = _core.CorpusIndex
 
 
+def align_sequences(left: list[str], right: list[str]) -> list[tuple[int | None, int | None]]:
+    """Return paired token indexes, retaining unmatched tokens on either side."""
+    return _core.align_sequences(left, right)
+
+
 class Index:
     def __init__(self) -> None:
         self._native = CorpusIndex()

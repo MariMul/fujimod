@@ -5,6 +5,13 @@ families, and locator queries. Boundaries, mapped bytes, pointer windows, names,
 types, readable C, notes, and external reference information are caller inputs.
 This crate contains no camera maps or firmware-derived fixtures.
 
+`align_sequences(left, right)` aligns arbitrary string tokens using the same
+longest-block implementation as family call alignment. It preserves every
+token, uses no popularity/junk heuristic, and resolves ties at the earliest
+left position then the earliest right position. Results pair optional indexes;
+an absent index marks an insertion or deletion. Python exposes the same function
+through `fujimod.corpus`, releasing the GIL during Rust alignment.
+
 `Index::add_unit(UnitInput, Vec<Region>)` accepts any boundary provider; all byte
 ranges are half-open. The JSON input contract is
 [`schema/unit.schema.json`](schema/unit.schema.json). Regions are passed separately

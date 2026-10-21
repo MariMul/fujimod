@@ -2,7 +2,7 @@ use crate::*;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 // SequenceMatcher's no-junk longest-block alignment. Tie order is earliest A, then B.
-fn blocks(a: &[u32], b: &[u32]) -> Vec<(usize, usize, usize)> {
+pub(crate) fn blocks(a: &[u32], b: &[u32]) -> Vec<(usize, usize, usize)> {
     let mut positions = HashMap::<u32, Vec<usize>>::new();
     for (j, &t) in b.iter().enumerate() {
         positions.entry(t).or_default().push(j);

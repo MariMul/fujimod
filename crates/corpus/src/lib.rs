@@ -6,6 +6,8 @@ pub use candidates::FunctionCandidate;
 mod inspect;
 pub use inspect::*;
 mod matching;
+mod alignment;
+pub use alignment::align_sequences;
 mod quality;
 pub use quality::NameSupport;
 mod model;
