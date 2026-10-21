@@ -129,6 +129,40 @@ fn fill_commits_at_the_due_tick_routes_by_irq_enable_and_host_reads_are_pure() {
     assert_eq!(gpu.save(), complete);
     assert_eq!(host.writes, 1);
 }
+
+#[test]
+fn viewer_diagnostics_bound_pending_pixels_without_weakening_checkpoint_or_fingerprint() {
+    let mut options = options();
+    options.ram_bytes = 4 * 1024 * 1024;
+    options.max_fill_bytes = 2 * 1024 * 1024;
+    let (mut gpu, mut host, mut controllers) = setup_with_options(options);
+    enable(&mut controllers, &mut host, 1);
+    for (o, v) in [
+        (0x10, 128),
+        (0x14, 128 + 2 * 1024 * 1024),
+        (0x18, 0x12345678),
+        (0x1c, super::super::FILL_CONTROL.into()),
+    ] {
+        assert_eq!(put(&mut gpu, &mut host, o, v), None);
+    }
+    let diagnostic = gpu.save();
+    assert!(serde_json::to_vec(&diagnostic).unwrap().len() < 8192);
+    assert_eq!(diagnostic["engine"]["pending_completions"], 1);
+    assert!(diagnostic["engine"].get("completions").is_none());
+    let saved = gpu.checkpoint().unwrap();
+    let identity = gpu.fingerprint().unwrap();
+    assert_eq!(host.writes, 0);
+    let pending = gpu.state.completions.values_mut().next().unwrap();
+    std::sync::Arc::make_mut(&mut pending.output[0].1)[0] ^= 1;
+    assert_ne!(gpu.fingerprint().unwrap(), identity);
+    gpu.restore_checkpoint(&saved).unwrap();
+    assert_eq!(gpu.fingerprint().unwrap(), identity);
+    assert_eq!(gpu.save(), diagnostic);
+    host.now = gpu.next_deadline(host.now).unwrap();
+    gpu.advance(&mut Cx::new(&mut host, 0, 0, 2));
+    assert_eq!(host.writes, 1);
+    assert_eq!(&host.bytes[128..132], &0x12345678u32.to_le_bytes());
+}
 #[test]
 fn ambiguous_irq_unknown_commands_and_invalid_width_do_not_gain_dma_or_deadlines() {
     let (mut gpu, mut host, mut controllers) = setup();

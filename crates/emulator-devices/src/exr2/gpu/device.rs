@@ -161,7 +161,7 @@ impl Inputs for Connected<'_, '_> {
 impl Device for VectorGpu {
     crate::checkpoint_fields!(state: CommandProcessor, due: BTreeMap<u64,u64>);
     fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
-        Ok(self.save())
+        Ok(serde_json::json!({"engine":self.state,"deadlines":self.due}))
     }
 
     fn name(&self) -> &'static str {
@@ -235,7 +235,23 @@ impl Device for VectorGpu {
         }
     }
     fn save(&self) -> serde_json::Value {
-        serde_json::json!({"engine":self.state,"deadlines":self.due})
+        // Host presentation samples this on every continuation. Pending DMA
+        // pixels belong to the exact typed checkpoint and fingerprint, not
+        // the diagnostic JSON returned to a viewer.
+        let s = &self.state;
+        serde_json::json!({"engine":{
+            "regs":s.regs,"path":s.path,"fill":s.fill,"written":s.written,
+            "clear_ack_offsets":s.clear_ack_offsets,"command_pending":s.command_pending,
+            "busy":s.busy,"jobs_started":s.jobs_started,"jobs_completed":s.jobs_completed,
+            "bytes_completed":s.bytes_completed,"irqs_raised":s.irqs_raised,
+            "acknowledgments":s.acknowledgments,"last_job":s.last_job,
+            "ram_bytes":s.ram_bytes,"max_fill_bytes":s.max_fill_bytes,
+            "max_copy_bytes":s.max_copy_bytes,"max_clear_bytes":s.max_clear_bytes,
+            "max_command_capture_bytes":s.max_command_capture_bytes,
+            "bytes_per_tick":s.bytes_per_tick,"copy_profile":s.copy_profile,
+            "clear_profile":s.clear_profile,"pending_completions":s.completions.len(),
+            "next_token":s.next_token,"next_job":s.next_job
+        },"deadlines":self.due})
     }
 }
 

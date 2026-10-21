@@ -2,7 +2,7 @@
 //! geometry drives RAW reads and IRQ61 output. Nearest six-by-six CFA color
 //! uses programmed black, WB/exposure, radial shading and the measured film
 //! law. Spatial filtering remains unmodeled.
-use super::dma::{Raster, Transfer};
+use super::dma::{Raster, Transfer, physical};
 use super::{Irq, word};
 use crate::imaging::{
     film::{Film, still_offset},
@@ -24,6 +24,7 @@ pub struct StillProcessor {
     film: Film,
     source: Arc<[u8]>,
     dma: Transfer,
+    raw_dma: Transfer,
     delay: u64,
     irq: Irq,
 }
@@ -40,6 +41,7 @@ impl StillProcessor {
             film: Film::default(),
             source: Arc::from([]),
             dma: Transfer::default(),
+            raw_dma: Transfer::default(),
             delay: options.completion_ticks,
             irq,
         })
@@ -47,7 +49,7 @@ impl StillProcessor {
     fn valid(o: usize) -> bool {
         matches!(o,0|0xb4..=0xf8|0x1400..=0x4bfc|0x8000..=0x805c|0x10000..=0x100fc|0x11000..=0x11ffc|0x14000..=0x160fc)
     }
-    fn start(&mut self, cx: &Cx<'_>) -> Result<(), String> {
+    fn start(&mut self, cx: &Cx<'_>, control: u32) -> Result<(), String> {
         let r = |o: usize| self.r[(0x10000 + o) / 4];
         let packing = if r(8) & 0x100 != 0 {
             Packing::Packed12
@@ -79,6 +81,41 @@ impl StillProcessor {
         {
             return Err("still processor RAW/output geometry overlaps or has an odd width".into());
         }
+        // RAW writeback uses the third window and its own address/pitch. The
+        // declared spatial approximation preserves these latched U16 samples;
+        // RAW denoising and defect correction are not modeled. Backward,
+        // sample-aligned overlap supports the register-programmed sliding window.
+        let raw_output = if control == 3 {
+            let raster = Raster {
+                address: r(0x60) as u64,
+                width: (r(0x40) >> 16) as usize,
+                height: (r(0x40) & 65535) as usize,
+                pitch: 2 * r(0x4c) as usize,
+            };
+            raster.validate(raster.width * 2)?;
+            if !matches!(packing, Packing::U16)
+                || raster.width != src.width
+                || raster.height != src.height
+                || raster.pitch > 32768
+                || raster.address % 2 != 0
+                || src.address % 2 != 0
+                || dst.overlaps(raster)?
+            {
+                return Err("still RAW writeback requires matching U16 dimensions and separate color output".into());
+            }
+            if src.overlaps(raster)? {
+                let source = physical(src.address, src.pitch * src.height)?;
+                let destination = physical(raster.address, raster.pitch * raster.height)?;
+                if raster.pitch != src.pitch || destination > source {
+                    return Err(
+                        "still RAW writeback overlap requires a backward equal-pitch window".into(),
+                    );
+                }
+            }
+            Some(raster)
+        } else {
+            None
+        };
         let mut black = None;
         for o in (0x8004..0x8014).step_by(4) {
             for v in [self.r[o / 4] & 8191, self.r[o / 4] >> 16 & 8191] {
@@ -110,26 +147,39 @@ impl StillProcessor {
         self.source = vec![0; src.pitch * src.height].into();
         cx.ram_read(src.address, Arc::get_mut(&mut self.source).unwrap())?;
         self.dma.prepare(cx.now(), self.delay, dst, dst.width * 2)?;
-        let result = self.cfa.render(
-            &RawView {
-                bytes: &self.source,
-                width: src.width,
-                height: src.height,
-                pitch: src.pitch,
-                packing,
-            },
-            &self.film,
-            black.unwrap() as u16,
-            gains,
-            exposure,
-            |x, y| shading.as_ref().map_or(2048, |s| s.gain(x, y)),
-            crop,
-            dst.width,
-            dst.height,
-            &mut self.dma.pixels,
-        );
+        if let Some(raster) = raw_output {
+            self.raw_dma
+                .prepare(cx.now(), self.delay, raster, raster.width * 2)?;
+            for y in 0..raster.height {
+                self.raw_dma.pixels[y * raster.width * 2..(y + 1) * raster.width * 2]
+                    .copy_from_slice(&self.source[y * src.pitch..y * src.pitch + raster.width * 2]);
+            }
+        }
+        let raw = RawView {
+            bytes: &self.source,
+            width: src.width,
+            height: src.height,
+            pitch: src.pitch,
+            packing,
+        };
+        let render = |raster: Raster, pixels: &mut [u8]| {
+            self.cfa.render(
+                &raw,
+                &self.film,
+                black.unwrap() as u16,
+                gains,
+                exposure,
+                |x, y| shading.as_ref().map_or(2048, |s| s.gain(x, y)),
+                crop,
+                raster.width,
+                raster.height,
+                pixels,
+            )
+        };
+        let result = render(dst, &mut self.dma.pixels);
         if result.is_err() {
             self.dma.cancel();
+            self.raw_dma.cancel();
         }
         result
     }
@@ -140,12 +190,14 @@ impl Device for StillProcessor {
         cfa: Cfa,
         film: Film,
         dma: Transfer,
+        raw_dma: Transfer,
         ; blobs: [source]
     );
     fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
         Ok(
             serde_json::json!({"r":self.r,"cfa":self.cfa,"film":self.film,
-            "source":crate::fingerprint::bytes(&self.source),"dma":self.dma.fingerprint()}),
+            "source":crate::fingerprint::bytes(&self.source),"dma":self.dma.fingerprint(),
+            "raw_dma":self.raw_dma.fingerprint()}),
         )
     }
 
@@ -174,7 +226,7 @@ impl Device for StillProcessor {
             self.r[o / 4] &= !(v as u32);
             return;
         }
-        if self.dma.deadline().is_some() {
+        if self.dma.deadline().is_some() || self.raw_dma.deadline().is_some() {
             cx.fail("still processor reconfiguration during DMA");
             return;
         }
@@ -183,11 +235,11 @@ impl Device for StillProcessor {
             return;
         }
         if o == 0x10004 {
-            if v != 1 {
-                cx.fail("unknown still processor START");
+            if !matches!(v, 1 | 3) {
+                cx.fail(format!("unknown still processor START {v:#x}"));
                 return;
             }
-            if let Err(e) = self.start(cx) {
+            if let Err(e) = self.start(cx, v as u32) {
                 cx.fail(e);
                 return;
             }
@@ -195,11 +247,19 @@ impl Device for StillProcessor {
         self.r[o / 4] = v as u32;
     }
     fn next_deadline(&self, _: u64) -> Option<u64> {
-        self.dma.deadline()
+        self.dma
+            .deadline()
+            .into_iter()
+            .chain(self.raw_dma.deadline())
+            .min()
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         match self.dma.write(cx) {
             Ok(true) => {
+                if let Err(e) = self.raw_dma.write(cx) {
+                    cx.fail(e);
+                    return;
+                }
                 self.r[0x10084 / 4] |= 1;
                 Transfer::interrupt(cx, self.irq)
             }
@@ -211,16 +271,17 @@ impl Device for StillProcessor {
         self.advance(cx)
     }
     fn save(&self) -> serde_json::Value {
-        serde_json::json!((&self.r, &self.dma))
+        serde_json::json!((&self.r, &self.dma, &self.raw_dma))
     }
     fn restore(&mut self, v: &serde_json::Value) -> Result<(), String> {
-        let (r, d): (Vec<u32>, Transfer) =
+        let (r, d, raw): (Vec<u32>, Transfer, Transfer) =
             serde_json::from_value(v.clone()).map_err(|e| e.to_string())?;
         if r.len() != self.r.len() {
             return Err("still register bank size".into());
         }
         self.r = r;
         self.dma = d;
+        self.raw_dma = raw;
         self.film = Film::default();
         Ok(())
     }
