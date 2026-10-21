@@ -39,6 +39,8 @@ Optional persistent inputs:
   byte `0xaa` at offset 14 and an eight-bit zero sum. User settings stored in
   NAND belong in the NAND image.
 - `--instruction-limit COUNT`: a positive instruction budget, default two billion.
+- `--execution-policy interactive|exact`: execution accounting policy, default
+  `interactive`; choose `exact` to stop at instruction boundaries.
 
 The command prints a JSON report and exits 0 at REC, 2 at an instruction limit
 or execution frontier, and 1 for invalid inputs or screenshot errors. A requested

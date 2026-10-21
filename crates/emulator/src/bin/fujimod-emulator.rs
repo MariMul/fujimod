@@ -1,8 +1,9 @@
 //! Native boot command; every binary input is selected by path.
 use fujimod_emulator::boot::{self, Options};
+use fujimod_emulator_cpu::ExecutionPolicy;
 use std::{collections::BTreeMap, ffi::OsString, path::PathBuf, process::ExitCode};
 
-const HELP: &str = "Usage: fujimod-emulator boot --body BODY --firmware FIRMWARE \\\n  --update UPDATE.DAT --boot-rom ROM.BIN --unicorn LIBRARY \\\n  [--nand IMAGE] [--settings MCU.BIN] [--screenshot LCD.PNG] \\\n  [--instruction-limit COUNT]\n\n\
+const HELP: &str = "Usage: fujimod-emulator boot --body BODY --firmware FIRMWARE \\\n  --update UPDATE.DAT --boot-rom ROM.BIN --unicorn LIBRARY \\\n  [--nand IMAGE] [--settings MCU.BIN] [--screenshot LCD.PNG] \\\n  [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\n\
 Supported boot: x70 / x70-110. The ROM dump is required.\n\
 Without --nand or --settings, persistent settings start blank.\n\
 NAND accepts a committed emulator image or a full raw medium matching the update.\n\
@@ -12,7 +13,7 @@ Prints a JSON boot report; exits 0 at REC, 2 at a stopped frontier.\n";
 
 fn parse(
     args: impl Iterator<Item = OsString>,
-) -> Result<Option<(Options, Option<PathBuf>, u64)>, String> {
+) -> Result<Option<(Options, Option<PathBuf>, u64, ExecutionPolicy)>, String> {
     let mut args = args.peekable();
     if args.peek().is_some_and(|a| a == "--help" || a == "-h") {
         return Ok(None);
@@ -33,6 +34,7 @@ fn parse(
             "--settings",
             "--screenshot",
             "--instruction-limit",
+            "--execution-policy",
         ]
         .contains(&key.as_str())
         {
@@ -82,14 +84,25 @@ fn parse(
     if limit == 0 {
         return Err("instruction limit must be positive".into());
     }
-    Ok(Some((options, screenshot, limit)))
+    let execution_policy = values
+        .remove("--execution-policy")
+        .map(|value| {
+            value
+                .to_str()
+                .ok_or_else(|| "execution policy must be UTF-8".to_owned())
+                .and_then(ExecutionPolicy::parse)
+        })
+        .transpose()?
+        .unwrap_or(ExecutionPolicy::Interactive);
+    Ok(Some((options, screenshot, limit, execution_policy)))
 }
 fn run() -> Result<bool, String> {
-    let Some((options, path, limit)) = parse(std::env::args_os().skip(1))? else {
+    let Some((options, path, limit, execution_policy)) = parse(std::env::args_os().skip(1))? else {
         print!("{HELP}");
         return Ok(true);
     };
     let mut session = boot::open(options)?;
+    session.board.set_execution_policy(execution_policy)?;
     let report = boot::to_rec(&mut session, limit)?;
     println!(
         "{}",
@@ -115,14 +128,12 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn args<'a>(args: &'a [&'a str]) -> impl Iterator<Item = OsString> + 'a {
+        args.iter().map(OsString::from)
+    }
     #[test]
     fn explicit_inputs_and_unique_options_are_required() {
-        let args = |args: &[&str]| {
-            args.iter()
-                .map(OsString::from)
-                .collect::<Vec<_>>()
-                .into_iter()
-        };
         assert!(parse(args(&["--help"])).unwrap().is_none());
         assert!(parse(args(&["boot", "--body", "x70"])).is_err());
         assert!(parse(args(&["boot", "--body", "x70", "--body", "x70"])).is_err());
@@ -144,7 +155,7 @@ mod tests {
             ]))
             .is_err()
         );
-        let (options, _, limit) = parse(args(&[
+        let (options, _, limit, execution_policy) = parse(args(&[
             "boot",
             "--body",
             "x70",
@@ -161,6 +172,40 @@ mod tests {
         .unwrap();
         assert_eq!(options.boot_rom, PathBuf::from("rom.bin"));
         assert_eq!(limit, 2_000_000_000);
+        assert_eq!(execution_policy, ExecutionPolicy::Interactive);
         assert!(options.nand.is_none());
+    }
+
+    #[test]
+    fn execution_policy_accepts_interactive_and_exact_and_rejects_unknown_values() {
+        let base = [
+            "boot",
+            "--body",
+            "x70",
+            "--firmware",
+            "x70-110",
+            "--update",
+            "a.dat",
+            "--boot-rom",
+            "rom.bin",
+            "--unicorn",
+            "lib.so",
+        ];
+        for (value, expected) in [
+            ("interactive", ExecutionPolicy::Interactive),
+            ("exact", ExecutionPolicy::Exact),
+        ] {
+            let mut input = base.to_vec();
+            input.extend(["--execution-policy", value]);
+            let (_, _, _, policy) = parse(args(&input)).unwrap().unwrap();
+            assert_eq!(policy, expected);
+        }
+
+        let mut input = base.to_vec();
+        input.extend(["--execution-policy", "approximate"]);
+        assert_eq!(
+            parse(args(&input)).unwrap_err(),
+            "unknown CPU execution policy: approximate"
+        );
     }
 }
