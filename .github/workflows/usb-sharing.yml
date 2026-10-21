@@ -1,8 +1,5 @@
 name: USB sharing Worker
 on:
-  push:
-    branches: [main]
-    paths: ['apps/usb-sharing/**', '.github/workflows/usb-sharing.yml']
   pull_request:
     paths: ['apps/usb-sharing/**', '.github/workflows/usb-sharing.yml']
 permissions:

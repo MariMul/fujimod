@@ -1,17 +1,5 @@
 name: Web checks
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/web/**'
-      - 'bindings/javascript/**'
-      - 'bindings/generator/**'
-      - 'crates/usb/**'
-      - 'crates/defs/**'
-      - 'crates/simulation/**'
-      - 'Cargo.*'
-      - 'bindings/python/python/fujimod/presentation/controls.json'
-      - '.github/workflows/web.yml'
   pull_request:
     paths:
       - 'apps/web/**'
