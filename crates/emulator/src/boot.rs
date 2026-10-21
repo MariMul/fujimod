@@ -9,7 +9,10 @@ use crate::{
     },
     session::{Session, preparation},
 };
-use fujimod_catalog::emulator::Content;
+use fujimod_catalog::{
+    configuration::{RunConfiguration, RunEngine, RunExecutionMode, RunStart},
+    emulator::Content,
+};
 use fujimod_emulator_cpu::arm::Coprocessor;
 use fujimod_emulator_devices::exr2::board::{MemoryChoices, Plan, RefuseAdapters, Resources};
 use serde::{Deserialize, Serialize};
@@ -24,8 +27,7 @@ use std::{
 /// Every binary input location is supplied by the embedding program.
 #[derive(Clone, Debug)]
 pub struct Options {
-    pub body: String,
-    pub firmware: String,
+    pub configuration_id: String,
     pub update: PathBuf,
     pub boot_rom: PathBuf,
     pub unicorn: PathBuf,
@@ -119,16 +121,56 @@ struct Definition {
     observation: Observation,
     first_start: FirstStart,
 }
-fn definition(body: &str, firmware: &str) -> Result<Definition, String> {
+fn definition(configuration: &RunConfiguration) -> Result<Definition, String> {
+    let body = configuration.body_id.as_str();
+    let firmware = configuration.firmware_id.as_str();
     let raw = match (body, firmware) {
         ("x70", "x70-110") => include_str!("../../../catalog/emulator/runtimes/x70-110.json"),
         _ => return Err(format!("unsupported body/firmware: {body}/{firmware}")),
     };
-    let spec: Definition =
+    let mut spec: Definition =
         serde_json::from_str(raw).map_err(|e| format!("runtime catalog: {e}"))?;
-    if spec.schema != 1 || spec.body != body || spec.firmware != firmware || spec.quantum == 0 {
-        return Err("runtime catalog identity or quantum differs".into());
+    if spec.schema != 1 || spec.body != body || spec.firmware != firmware {
+        return Err("runtime catalog identity differs from selected run configuration".into());
     }
+    if configuration.execution.quantum == 0 {
+        return Err("run configuration instruction quantum must be positive".into());
+    }
+    if configuration.start != RunStart::Rom {
+        return Err("native boot only supports ROM-start configurations".into());
+    }
+    if !configuration.overlays.is_empty() {
+        return Err("native boot does not support run-configuration overlays".into());
+    }
+    spec.quantum = configuration.execution.quantum;
+    spec.execution["instructions_per_tick"] = json!([
+        configuration.execution.instructions_per_tick.numerator,
+        configuration.execution.instructions_per_tick.denominator
+    ]);
+    spec.generated_assets = configuration
+        .scene
+        .generated_assets
+        .iter()
+        .map(|asset| Generated {
+            name: asset.id.clone(),
+            pattern: asset.pattern.clone(),
+            size: asset.size,
+        })
+        .collect();
+    spec.scene["images"]["live_image"] =
+        serde_json::to_value(&configuration.scene.images.live_image)
+            .map_err(|error| format!("run configuration image scene: {error}"))?;
+    spec.scene["statistics"]["live_statistics"] =
+        serde_json::to_value(&configuration.scene.statistics.live_statistics)
+            .map_err(|error| format!("run configuration statistics scene: {error}"))?;
+    let nodes = spec.devices["nodes"]
+        .as_array_mut()
+        .ok_or("runtime devices are missing their nodes")?;
+    let live_frames = nodes
+        .iter_mut()
+        .find(|node| node["name"] == "live_frames")
+        .ok_or("runtime has no live-frame input node")?;
+    live_frames["model"]["options"]["period_ticks"] = json!(configuration.scene.frame_period_ticks);
     Ok(spec)
 }
 
@@ -193,7 +235,8 @@ fn settings(plan: &mut Value, mcu: &Mcu, bytes: &[u8]) -> Result<(), String> {
 /// Construct an unexecuted strict board, loading the real ROM at its reset map.
 /// No directory search, downloaded image, captured default or firmware patch is used.
 pub fn open(options: Options) -> Result<Session, String> {
-    let mut spec = definition(&options.body, &options.firmware)?;
+    let configuration = RunConfiguration::bundled(&options.configuration_id)?;
+    let mut spec = definition(&configuration)?;
     let update = checked(&options.update, &spec.update)?;
     let rom = checked(&options.boot_rom, &spec.boot_rom.content)?;
     if spec.flash_offset >= update.len() {
@@ -264,10 +307,16 @@ pub fn open(options: Options) -> Result<Session, String> {
         .map_err(|e| e.to_string())?
         .build(&assets)?;
     let assembly = plan.build(resources, 0, &mut RefuseAdapters)?;
-    let bus = Bus::from_graph(Mode::Strict, assembly.graph)?;
+    let bus_mode = match configuration.execution.mode {
+        RunExecutionMode::Strict => Mode::Strict,
+    };
+    let engine = match configuration.execution.engine {
+        RunEngine::Unicorn => factory::Engine::Unicorn,
+    };
+    let bus = Bus::from_graph(bus_mode, assembly.graph)?;
     let mut board = graph.build(
         factory::Options {
-            engine: factory::Engine::Unicorn,
+            engine,
             unicorn: Some(options.unicorn),
             translation_cache_bytes: 16 << 20,
         },
@@ -288,7 +337,7 @@ pub fn open(options: Options) -> Result<Session, String> {
         cpu.coprocessor(reset.register, Some(old | reset.set_bits))?;
     }
     Ok(Session {
-        definition: json!({"body":options.body,"firmware":options.firmware,"quantum":spec.quantum,"execution":spec.execution,"devices":spec.devices,"scene":spec.scene,
+        definition: json!({"configuration_id":options.configuration_id,"quantum":spec.quantum,"execution":spec.execution,"devices":spec.devices,"scene":spec.scene,
             "inputs":{"update":spec.update,"boot_rom":spec.boot_rom.content,"nand":options.nand.is_some(),"settings":options.settings.is_some()},"substitutions":[]}),
         board,
         controls: None,
@@ -391,6 +440,14 @@ fn advance_ticks(
     }
     Ok(())
 }
+
+fn session_configuration(session: &Session) -> Result<RunConfiguration, String> {
+    let id = session.definition["configuration_id"]
+        .as_str()
+        .ok_or("session has no boot configuration")?;
+    RunConfiguration::bundled(id)
+}
+
 fn accept_setup(session: &mut Session, spec: &Definition, end: u64) -> Result<(), String> {
     let s = &spec.first_start;
     let base = u64::from(word(session, s.calibration_pointer)?);
@@ -423,13 +480,8 @@ pub fn to_rec(session: &mut Session, instruction_limit: u64) -> Result<Report, S
     if instruction_limit == 0 {
         return Err("instruction limit must be positive".into());
     }
-    let body = session.definition["body"]
-        .as_str()
-        .ok_or("session has no boot body")?;
-    let firmware = session.definition["firmware"]
-        .as_str()
-        .ok_or("session has no boot firmware")?;
-    let spec = definition(body, firmware)?;
+    let configuration = session_configuration(session)?;
+    let spec = definition(&configuration)?;
     let end = session
         .board
         .instruction_counts()
@@ -495,14 +547,8 @@ pub fn to_rec(session: &mut Session, instruction_limit: u64) -> Result<Report, S
 
 /// Capture composed native scanout without advancing guest time.
 pub fn screenshot(session: &Session) -> Result<Vec<u8>, String> {
-    let spec = definition(
-        session.definition["body"]
-            .as_str()
-            .ok_or("session has no boot body")?,
-        session.definition["firmware"]
-            .as_str()
-            .ok_or("session has no boot firmware")?,
-    )?;
+    let configuration = session_configuration(session)?;
+    let spec = definition(&configuration)?;
     let frame = session
         .scanout(
             &spec.observation.scanout,

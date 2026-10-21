@@ -2,7 +2,8 @@ use super::*;
 
 #[test]
 fn runtime_catalog_builds_checked_graph_without_language_adapters() {
-    let spec = definition("x70", "x70-110").unwrap();
+    let configuration = RunConfiguration::bundled("x70-110-rec").unwrap();
+    let spec = definition(&configuration).unwrap();
     let graph: factory::Graph = serde_json::from_value(spec.execution).unwrap();
     graph.validate().unwrap();
     let plan = Plan::parse(&serde_json::to_vec(&spec.devices).unwrap()).unwrap();
@@ -36,13 +37,66 @@ fn runtime_catalog_builds_checked_graph_without_language_adapters() {
     let mut resources = Resources::default();
     resources.inputs = inputs;
     plan.build(resources, 0, &mut RefuseAdapters).unwrap();
-    assert!(definition("unknown", "x70-110").is_err());
-    assert!(definition("x70", "unknown").is_err());
+    assert!(RunConfiguration::bundled("unknown").is_err());
+}
+
+#[test]
+fn checked_run_configuration_selects_runtime_and_supplies_scene_and_quantum() {
+    let configuration = RunConfiguration::bundled("x70-110-rec").unwrap();
+    let spec = definition(&configuration).unwrap();
+    assert_eq!(spec.body, configuration.body_id);
+    assert_eq!(spec.firmware, configuration.firmware_id);
+    assert_eq!(spec.quantum, configuration.execution.quantum);
+    assert_eq!(
+        spec.execution["instructions_per_tick"],
+        serde_json::json!([
+            configuration.execution.instructions_per_tick.numerator,
+            configuration.execution.instructions_per_tick.denominator
+        ])
+    );
+    assert_eq!(
+        spec.generated_assets.len(),
+        configuration.scene.generated_assets.len()
+    );
+    assert_eq!(
+        spec.scene["images"]["live_image"]["asset"],
+        configuration.scene.images.live_image.asset
+    );
+    assert_eq!(
+        spec.scene["statistics"]["live_statistics"][0]["asset"],
+        configuration.scene.statistics.live_statistics[0].asset
+    );
+    let live_frames = spec.devices["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["name"] == "live_frames")
+        .unwrap();
+    assert_eq!(
+        live_frames["model"]["options"]["period_ticks"],
+        configuration.scene.frame_period_ticks
+    );
+}
+
+#[test]
+fn unsupported_run_configuration_start_and_overlays_are_refused() {
+    let mut configuration = RunConfiguration::bundled("x70-110-rec").unwrap();
+    configuration.start = RunStart::Loader;
+    assert!(definition(&configuration).is_err());
+
+    let mut configuration = RunConfiguration::bundled("x70-110-rec").unwrap();
+    configuration.overlays.push("x70-110-rec-usb".into());
+    assert!(definition(&configuration).is_err());
+
+    let mut configuration = RunConfiguration::bundled("x70-110-rec").unwrap();
+    configuration.execution.quantum = 0;
+    assert!(definition(&configuration).is_err());
 }
 
 #[test]
 fn settings_validate_marker_checksum_and_route_extent() {
-    let mut spec = definition("x70", "x70-110").unwrap();
+    let configuration = RunConfiguration::bundled("x70-110-rec").unwrap();
+    let mut spec = definition(&configuration).unwrap();
     let mut input = vec![0; 16];
     input[14] = 0xaa;
     input[15] = 0x56;
