@@ -132,6 +132,22 @@ impl Engines {
             #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
             return Err("Hypervisor engine requires macOS ARM64".into());
         }
+        #[cfg(not(target_os = "emscripten"))]
+        if let Some(config) = processor.rprofile {
+            return Ok(Box::new(
+                fujimod_emulator_cpu_unicorn::rprofile::worker::spawn(
+                    fujimod_emulator_cpu_unicorn::rprofile::worker::Config {
+                        library: options
+                            .unicorn
+                            .clone()
+                            .ok_or("Unicorn library must be explicitly selected")?,
+                        translation_cache_bytes: options.translation_cache_bytes,
+                        options: config,
+                        memory: memory.shared(),
+                    },
+                )?,
+            ));
+        }
         let raw = self
             .unicorn
             .as_ref()
