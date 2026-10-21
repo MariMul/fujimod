@@ -10,12 +10,13 @@ request. This adapter contains no USB framing or firmware policy.
 Build the two artifacts from the repository root:
 
 ```sh
+npm ci
 npm --prefix bindings/javascript ci
 npm --prefix bindings/javascript run build
-python3 bindings/python/scripts/build_web_wheel.py
+node bindings/python/scripts/build-web-wheel.ts
 ```
 
-The wheel builder requires Python 3.11+. It creates the `fujimod` distribution
+The wheel builder uses the pinned Node toolchain. It creates the `fujimod` distribution
 with the `py3-none-pyemscripten_2026_0_wasm32` tag in `target/web-wheels/`, for
 Pyodide 314.x. It does not ship a desktop binary or claim desktop compatibility.
 Native wheels are built with maturin from the same package. Keep the Python

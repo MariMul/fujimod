@@ -140,7 +140,7 @@ jobs:
       - name: Pyodide contracts in Node and Chromium
         if: ${{ !cancelled() }}
         run: |
-          uv run --locked python bindings/python/scripts/build_web_wheel.py --out target/web-wheels
+          node bindings/python/scripts/build-web-wheel.ts --out target/web-wheels
           npm --prefix bindings/javascript run test:pyodide:browser
       - if: ${{ !cancelled() }}
         run: mise run web-coverage
