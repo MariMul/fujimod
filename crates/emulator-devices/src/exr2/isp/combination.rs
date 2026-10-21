@@ -1,14 +1,27 @@
-//! FFF480 reset/idle configuration. Active image combination is unsupported:
-//! no DMA or arithmetic law is assumed by this register model.
+//! FFF480 reset, interrupt status and explicitly selected image arithmetic.
+//! The pyramid law is a declared approximation; other operations refuse.
+use super::{
+    Irq,
+    dma::{Clock, Transfer},
+};
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+mod pyramid;
 pub const BASE: u64 = 0xfff48000;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Arithmetic {
+    Unmodeled,
+    PyramidBlendUnmeasured,
+}
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
     pub reset_ticks: u64,
+    pub clock: Clock,
+    pub arithmetic: Arithmetic,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -16,22 +29,29 @@ struct State {
     registers: BTreeMap<u16, u32>,
     reset_due: Option<u64>,
     resets: u64,
+    dma: Transfer,
+    interrupt_asserted: bool,
 }
 pub struct Combination {
     options: Options,
+    irq: Irq,
     state: State,
 }
 impl Combination {
-    pub fn new(options: Options) -> Result<Self, String> {
-        if options.reset_ticks == 0 {
-            return Err("image combination requires a positive reset delay".into());
+    pub fn new(options: Options, irq: Irq) -> Result<Self, String> {
+        if options.reset_ticks == 0 || irq.core > 1 || irq.line >= 128 {
+            return Err("invalid image combination reset delay or physical IRQ".into());
         }
+        options.clock.delay(1)?;
         Ok(Self {
             options,
+            irq,
             state: State {
-                registers: BTreeMap::from([(0, 1), (0xc4, 0x331)]),
+                registers: BTreeMap::from([(0, 1)]),
                 reset_due: None,
                 resets: 0,
+                dma: Transfer::default(),
+                interrupt_asserted: false,
             },
         })
     }
@@ -48,23 +68,58 @@ impl Combination {
     fn word(&self, o: u16) -> u32 {
         self.state.registers.get(&o).copied().unwrap_or(0)
     }
-}
-impl Combination {
+    fn sync_irq(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
+        let pending = self.word(0xc0) & self.word(0xc8) != 0;
+        if pending && !self.state.interrupt_asserted {
+            self.irq.raise(cx)?;
+        }
+        self.state.interrupt_asserted = pending;
+        Ok(())
+    }
+    fn start(&mut self, cx: &Cx<'_>, control: u32) -> Result<(), String> {
+        if self.state.reset_due.is_some() || self.state.dma.deadline().is_some() {
+            return Err("combination start while reset or DMA is pending".into());
+        }
+        if self.options.arithmetic != Arithmetic::PyramidBlendUnmeasured || control & 7 != 2 {
+            return Err(format!(
+                "image combination FFF48004 operation {} has no raster/DMA law",
+                control & 7
+            ));
+        }
+        let prepared = pyramid::prepare(cx, |o| if o == 4 { control } else { self.word(o) })?;
+        let row_bytes = prepared.destination.width * 2;
+        let delay = self.options.clock.delay(prepared.bytes)?;
+        self.state
+            .dma
+            .prepare(cx.now(), delay, prepared.destination, row_bytes)?;
+        self.state.dma.pixels = prepared.pixels;
+        Ok(())
+    }
     fn validate_state(&self, state: State) -> Result<State, String> {
+        state.dma.validate()?;
         if state.registers.iter().any(|(o, v)| {
             Self::offset(BASE + u64::from(*o), 4).is_none()
                 || match o {
                     0 => *v > 1,
-                    4 => *v & !0x3377 != 0 || *v & 7 > 4,
-                    0xc0 | 0xc4 | 0xc8 => *v & !0x331 != 0,
+                    4 => *v & !0x3377 != 0,
+                    0xc4 => *v != 0,
+                    0xc0 | 0xc8 => *v & !0x331 != 0,
                     _ => false,
                 }
         }) || state.reset_due.is_some()
-            && (state.resets == u64::MAX || state.registers.get(&0) != Some(&0))
+            && (state.resets == u64::MAX
+                || state.registers.get(&0) != Some(&0)
+                || state.dma.deadline().is_some())
+            || state.dma.deadline().is_some()
+                && (self.options.arithmetic != Arithmetic::PyramidBlendUnmeasured
+                    || state.registers.get(&4).copied().unwrap_or(0) & 7 != 2)
+            || state.interrupt_asserted
+                != (state.registers.get(&0xc0).copied().unwrap_or(0)
+                    & state.registers.get(&0xc8).copied().unwrap_or(0)
+                    != 0)
         {
             return Err("invalid image combination register/deadline state".into());
         }
-
         Ok(state)
     }
 }
@@ -76,14 +131,16 @@ impl Device for Combination {
         self.validate_state(saved.decode(self.name())?).map(|_| ())
     }
     fn restore_checkpoint(&mut self, saved: &crate::checkpoint::Checkpoint) -> Result<(), String> {
-        let state = self.validate_state(saved.decode(self.name())?)?;
-        self.state = state;
+        self.state = self.validate_state(saved.decode(self.name())?)?;
         Ok(())
     }
     fn fingerprint(&self) -> Result<Value, String> {
-        Ok(json!({"options":self.options,"state":self.state}))
+        Ok(
+            json!({"options":self.options,"irq":self.irq,"registers":self.state.registers,
+            "reset_due":self.state.reset_due,"resets":self.state.resets,
+            "dma":self.state.dma.fingerprint(),"interrupt_asserted":self.state.interrupt_asserted}),
+        )
     }
-
     fn name(&self) -> &'static str {
         "image-combination"
     }
@@ -103,10 +160,16 @@ impl Device for Combination {
             cx.fail("image combination requires a 32-bit word");
             return;
         };
+        if self.state.dma.deadline().is_some() && !matches!(o, 0 | 0xc4 | 0xc8) {
+            cx.fail("combination reconfiguration during DMA");
+            return;
+        }
         match o {
             0 => {
                 if value != 0 {
-                    cx.fail("image combination active processing has no raster/DMA law");
+                    cx.fail(
+                        "image combination reset register accepts zero only; starts use FFF48004",
+                    );
                     return;
                 }
                 if self.state.resets == u64::MAX {
@@ -117,7 +180,11 @@ impl Device for Combination {
                     cx.fail("image combination reset deadline overflow");
                     return;
                 };
+                self.state.dma.cancel();
                 self.state.reset_due = Some(due);
+                self.state.registers.insert(4, self.word(4) & !7);
+                self.state.registers.insert(0xc0, 0);
+                self.state.interrupt_asserted = false;
             }
             0xc0 => {
                 cx.fail("image combination status is read-only");
@@ -128,14 +195,25 @@ impl Device for Combination {
                     cx.fail("unknown image combination interrupt bits");
                     return;
                 }
-                if o == 0xc8 {
+                if o == 0xc4 {
                     self.state.registers.insert(0xc0, self.word(0xc0) & !value);
-                    return;
+                } else {
+                    self.state.registers.insert(o, value);
                 }
+                if let Err(e) = self.sync_irq(cx) {
+                    cx.fail(e);
+                }
+                return;
             }
             4 => {
-                if value & !0x3377 != 0 || value & 7 > 4 {
+                if value & !0x3377 != 0 {
                     cx.fail("unknown image combination mode/selectors");
+                    return;
+                }
+                if value & 7 != 0
+                    && let Err(e) = self.start(cx, value)
+                {
+                    cx.fail(e);
                     return;
                 }
             }
@@ -143,8 +221,8 @@ impl Device for Combination {
         }
         self.state.registers.insert(o, value);
     }
-    fn next_deadline(&self, _now: u64) -> Option<u64> {
-        self.state.reset_due
+    fn next_deadline(&self, _: u64) -> Option<u64> {
+        self.state.reset_due.or(self.state.dma.deadline())
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         if self.state.reset_due.is_some_and(|due| due <= cx.now()) {
@@ -152,6 +230,20 @@ impl Device for Combination {
             self.state.reset_due = None;
             self.state.resets += 1;
         }
+        match self.state.dma.write(cx) {
+            Ok(true) => {
+                self.state.registers.insert(4, self.word(4) & !7);
+                self.state.registers.insert(0xc0, self.word(0xc0) | 1);
+                if let Err(e) = self.sync_irq(cx) {
+                    cx.fail(e);
+                }
+            }
+            Err(e) => cx.fail(e),
+            _ => {}
+        }
+    }
+    fn event(&mut self, cx: &mut Cx<'_>, _: u64) {
+        self.advance(cx);
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
         Self::offset(address, size).is_some()
@@ -161,8 +253,7 @@ impl Device for Combination {
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        let state = self.validate_state(state)?;
-        self.state = state;
+        self.state = self.validate_state(state)?;
         Ok(())
     }
 }
@@ -171,17 +262,59 @@ impl Device for Combination {
 mod tests {
     use super::*;
     use crate::exr2::isp::tests::support::{TestHost, advance, read, write};
+    fn model(reset_ticks: u64) -> Combination {
+        Combination::new(
+            Options {
+                reset_ticks,
+                clock: Clock::Fixed { ticks: 10 },
+                arithmetic: Arithmetic::Unmodeled,
+            },
+            Irq { core: 0, line: 68 },
+        )
+        .unwrap()
+    }
+    #[test]
+    fn interrupt_acknowledgment_and_enable_are_independent_registers() {
+        let mut host = TestHost::new();
+        let mut d = model(16);
+        d.state.registers.insert(0xc0, 0x331);
+        write(&mut d, &mut host, BASE + 0xc8, 1);
+        assert_eq!(read(&mut d, &mut host, BASE + 0xc0), 0x331);
+        assert_eq!(read(&mut d, &mut host, BASE + 0xc8), 1);
+        write(&mut d, &mut host, BASE + 0xc4, 0x31);
+        assert_eq!(read(&mut d, &mut host, BASE + 0xc0), 0x300);
+        write(&mut d, &mut host, BASE + 0xc8, 0);
+        assert_eq!(read(&mut d, &mut host, BASE + 0xc0), 0x300);
+        assert_eq!(host.irqs, [(0, 68)]);
+    }
+
+    #[test]
+    fn adv_start_is_refused_at_the_start_register_without_fake_completion() {
+        // Unsupported operation codes fail atomically without scheduling work.
+        let mut host = TestHost::new();
+        let mut d = model(16);
+        write(&mut d, &mut host, BASE + 4, 0x2000);
+        write(&mut d, &mut host, BASE + 0xc8, 1);
+        let saved = d.save();
+        let mut cx = host.cx();
+        d.write(&mut cx, BASE + 4, 4, 0x2002);
+        assert!(cx.take_refusal().unwrap().contains("FFF48004 operation 2"));
+        assert_eq!(d.save(), saved);
+        assert_eq!(d.next_deadline(0), None);
+        assert!(host.effects.is_empty());
+    }
+
     #[test]
     fn reset_roundtrip_and_early_ticks_preserve_exact_deadline_without_pixels() {
         let mut host = TestHost::new();
-        let mut d = Combination::new(Options { reset_ticks: 100 }).unwrap();
+        let mut d = model(100);
         write(&mut d, &mut host, BASE, 0);
         let saved = d.save();
         let checkpoint = d.checkpoint().unwrap();
         advance(&mut d, &mut host, 99);
         assert_eq!(d.save(), saved);
         assert_eq!(read(&mut d, &mut host, BASE), 0);
-        let mut restored = Combination::new(Options { reset_ticks: 100 }).unwrap();
+        let mut restored = model(100);
         restored.restore_checkpoint(&checkpoint).unwrap();
         advance(&mut restored, &mut host, 100);
         advance(&mut d, &mut host, 100);
@@ -191,7 +324,114 @@ mod tests {
         let before = d.save();
         let mut cx = host.cx();
         d.write(&mut cx, BASE, 4, 1);
-        assert!(cx.take_refusal().unwrap().contains("raster/DMA law"));
+        assert!(cx.take_refusal().unwrap().contains("starts use FFF48004"));
         assert_eq!(d.save(), before);
+    }
+    fn processing_fixture(enabled: bool) -> (Combination, TestHost) {
+        let (mut host, words) = pyramid::tests::fixture();
+        host.ram[0x80000..0x80180].fill(0xee);
+        let mut d = Combination::new(
+            Options {
+                reset_ticks: 16,
+                clock: Clock::Fixed { ticks: 100 },
+                arithmetic: Arithmetic::PyramidBlendUnmeasured,
+            },
+            Irq { core: 0, line: 68 },
+        )
+        .unwrap();
+        for (&offset, &value) in &words {
+            if offset != 4 {
+                write(&mut d, &mut host, BASE + u64::from(offset), value);
+            }
+        }
+        write(&mut d, &mut host, BASE + 0xc8, u32::from(enabled));
+        write(&mut d, &mut host, BASE + 4, words[&4]);
+        (d, host)
+    }
+
+    #[test]
+    fn pyramid_dma_is_latched_and_checkpointed_before_status_and_physical_irq() {
+        use crate::exr2::isp::tests::support::advance_from_checkpoint;
+        let (mut d, mut host) = processing_fixture(true);
+        assert_eq!(d.next_deadline(0), Some(100));
+        assert!(host.effects.is_empty());
+        let saved = d.fingerprint().unwrap();
+        for _ in 0..3 {
+            assert_eq!(read(&mut d, &mut host, BASE + 0xc0), 0);
+            assert_eq!(d.fingerprint().unwrap(), saved);
+        }
+        // Guest source changes after START do not replace the latched job.
+        host.ram[0x10000..0x50000].fill(0);
+        advance(&mut d, &mut host, 99);
+        assert_eq!(d.fingerprint().unwrap(), saved);
+        assert_eq!(&host.ram[0x80000..0x80180], &[0xee; 384]);
+        advance_from_checkpoint(&mut d, &mut host, 100);
+        assert_eq!(
+            &host.ram[0x80000..0x80008],
+            &[60, 65, 80, 90, 85, 90, 100, 110]
+        );
+        for row in 0..8 {
+            assert_eq!(
+                &host.ram[0x80020 + row * 48..0x80030 + row * 48],
+                &[0xee; 16]
+            );
+        }
+        assert_eq!(host.irqs, [(0, 68)]);
+        assert_eq!(
+            host.effects,
+            [
+                "dma", "dma", "dma", "dma", "dma", "dma", "dma", "dma", "irq"
+            ]
+        );
+        assert_eq!(read(&mut d, &mut host, BASE + 0xc0), 1);
+        assert_eq!(read(&mut d, &mut host, BASE + 4), 0x2000);
+        assert_eq!(d.next_deadline(100), None);
+    }
+
+    #[test]
+    fn masked_completion_latches_status_and_enable_delivers_one_interrupt() {
+        let (mut d, mut host) = processing_fixture(false);
+        advance(&mut d, &mut host, 100);
+        assert!(host.irqs.is_empty());
+        assert_eq!(read(&mut d, &mut host, BASE + 0xc0), 1);
+        write(&mut d, &mut host, BASE + 0xc8, 1);
+        write(&mut d, &mut host, BASE + 0xc8, 1);
+        assert_eq!(host.irqs, [(0, 68)]);
+        write(&mut d, &mut host, BASE + 0xc4, 1);
+        assert_eq!(read(&mut d, &mut host, BASE + 0xc0), 0);
+        assert_eq!(read(&mut d, &mut host, BASE + 0xc8), 1);
+        advance(&mut d, &mut host, 1000);
+        assert_eq!(host.irqs, [(0, 68)]);
+    }
+
+    #[test]
+    fn reset_cancels_pending_pixels_and_configuration_cannot_mutate_a_job() {
+        let (mut d, mut host) = processing_fixture(true);
+        let before = d.fingerprint().unwrap();
+        {
+            let mut cx = host.cx();
+            d.write(&mut cx, BASE + 0x34, 4, 0);
+            assert!(
+                cx.take_refusal()
+                    .unwrap()
+                    .contains("reconfiguration during DMA")
+            );
+        }
+        assert_eq!(d.fingerprint().unwrap(), before);
+        let mut malformed = d.save();
+        malformed["dma"]["pixels"] = json!([]);
+        assert!(d.restore(&malformed).is_err());
+        assert_eq!(d.fingerprint().unwrap(), before);
+        host.now = 50;
+        write(&mut d, &mut host, BASE, 0);
+        assert_eq!(d.next_deadline(50), Some(66));
+        advance(&mut d, &mut host, 65);
+        assert_eq!(read(&mut d, &mut host, BASE), 0);
+        advance(&mut d, &mut host, 66);
+        advance(&mut d, &mut host, 100);
+        assert_eq!(read(&mut d, &mut host, BASE), 1);
+        assert_eq!(read(&mut d, &mut host, BASE + 0xc0), 0);
+        assert!(host.effects.is_empty());
+        assert_eq!(&host.ram[0x80000..0x80180], &[0xee; 384]);
     }
 }

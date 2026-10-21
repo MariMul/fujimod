@@ -152,6 +152,20 @@ impl Transfer {
         self.deadline = Some(deadline);
         Ok(())
     }
+    /// Validate owned staging and addressed rows before accepting a checkpoint.
+    pub fn validate(&self) -> Result<(), String> {
+        match (self.deadline, self.raster) {
+            (Some(_), Some(raster)) => {
+                raster.validate(self.row_bytes)?;
+                if self.pixels.len() != self.row_bytes * raster.height {
+                    return Err("image DMA staging size differs from raster".into());
+                }
+            }
+            (None, None) if self.row_bytes == 0 && self.pixels.is_empty() => {}
+            _ => return Err("inconsistent image DMA staging/deadline".into()),
+        }
+        Ok(())
+    }
     pub fn deadline(&self) -> Option<u64> {
         self.deadline
     }

@@ -221,6 +221,7 @@ pub enum Model {
     },
     ImageCombination {
         options: isp::combination::Options,
+        irq: isp::Irq,
     },
     I2c {
         options: i2c::Options,

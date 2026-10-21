@@ -359,14 +359,14 @@ impl Builder<'_> {
                 }
                 Box::new(dma::audio::SerialDma::new(options)?)
             }
-            Model::ImageCombination { options } => {
+            Model::ImageCombination { options, irq } => {
                 if windows.len() != 1
                     || windows[0].base != isp::combination::BASE
                     || windows[0].size != 0x500
                 {
                     return Err("image combination requires its register window".into());
                 }
-                Box::new(isp::combination::Combination::new(options)?)
+                Box::new(isp::combination::Combination::new(options, route(irq)?)?)
             }
             Model::I2c {
                 options,
