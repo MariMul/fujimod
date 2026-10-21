@@ -230,6 +230,12 @@ impl Core {
 impl Execution {
     pub(super) fn set_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
         let enabled = policy == ExecutionPolicy::Interactive;
+        if self.policy.get() != policy {
+            // Translation can bake policy-specific exits into a block (for
+            // example, loop candidates). Flush on every real transition,
+            // including targets where parallel TCG stays disabled.
+            self.cpu.invalidate_code(None)?;
+        }
         self.cpu
             .set_parallel_cpus(cfg!(not(target_os = "emscripten")) && enabled)?;
         self.policy.set(policy);
