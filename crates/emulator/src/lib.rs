@@ -1,5 +1,7 @@
 //! Checked board execution, observation and session mechanisms.
 pub mod architecture;
+#[cfg(feature = "serde")]
+pub mod boot;
 pub mod inputs;
 pub mod board;
 pub mod session;
