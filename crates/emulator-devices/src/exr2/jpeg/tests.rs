@@ -152,7 +152,7 @@ fn encode_capacity_failure_does_not_claim_stream_or_write_ram() {
         s.state = State::Ready;
         s.width = 16;
         s.height = 8;
-        s.pixels = vec![128; 256];
+        s.pixels = vec![128; 256].into();
     }
     let mut e = encoder(stream.clone());
     configure(&mut e, &mut h, true);
@@ -276,4 +276,15 @@ fn implicit_and_explicit_packed_input_modes_encode_the_same_addressed_pixels() {
         encodings.push(h.ram[0x9000..0x9000 + count].to_vec());
     }
     assert_eq!(encodings[0], encodings[1]);
+}
+
+#[test]
+fn worker_codec_retains_exact_stream_bytes_error_state_and_completion() {
+    crate::work::configure(2).unwrap();
+    memory_encode_reserves_prefix_and_decoder_publishes_pixels_before_irq();
+    warp_stream_requires_both_starts_and_releases_only_at_completion();
+    encode_capacity_failure_does_not_claim_stream_or_write_ram();
+    programmed_restart_nine_reaches_the_real_codestream_and_decoder();
+    implicit_and_explicit_packed_input_modes_encode_the_same_addressed_pixels();
+    crate::work::configure(0).unwrap();
 }

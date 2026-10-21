@@ -156,6 +156,7 @@ impl Buffer {
         if workers == 0 || rows * row_bytes < 65536 {
             self.defer(move |mut out| {
                 out.resize(rows * row_bytes, 0);
+                out.fill(0);
                 compute(0..rows, &mut out);
                 out
             });
@@ -246,7 +247,7 @@ mod tests {
     }
     #[test]
     fn row_partitions_preserve_global_coordinates_and_run_off_the_owner() {
-        configure(4).unwrap();
+        configure(2).unwrap();
         let owner = thread::current().id();
         let mut buffer = Buffer::default();
         buffer.defer_rows(1024, 257, move |rows, out| {
@@ -259,6 +260,23 @@ mod tests {
             buffer.as_slice(),
             (0..1024 * 257).map(|i| (i % 251) as u8).collect::<Vec<_>>()
         );
+        configure(0).unwrap();
+    }
+    #[test]
+    fn reused_row_storage_clears_unwritten_padding_in_both_execution_paths() {
+        for count in [0, 2] {
+            configure(count).unwrap();
+            let mut bytes = Buffer::from(vec![99; 1024 * 128]);
+            bytes.defer_rows(1024, 128, |rows, out| {
+                for local_y in 0..rows.len() {
+                    out[local_y * 1024] = 7;
+                }
+            });
+            for row in bytes.chunks_exact(1024) {
+                assert_eq!(row[0], 7);
+                assert!(row[1..].iter().all(|&v| v == 0));
+            }
+        }
         configure(0).unwrap();
     }
     #[test]

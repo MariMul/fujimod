@@ -132,6 +132,31 @@ impl Cfa {
         height: usize,
         out: &mut [u8],
     ) -> Result<(), String> {
+        Self::validate_render(raw, gains, exposure, crop, width, height, out.len())?;
+        self.render_rows(
+            raw,
+            film,
+            black,
+            gains,
+            exposure,
+            spatial_gain,
+            crop,
+            width,
+            height,
+            0..height,
+            out,
+        );
+        Ok(())
+    }
+    pub(crate) fn validate_render(
+        raw: &RawView<'_>,
+        gains: [u16; 3],
+        exposure: u16,
+        crop: [usize; 4],
+        width: usize,
+        height: usize,
+        output_bytes: usize,
+    ) -> Result<(), String> {
         raw.validate()?;
         let [left, top, crop_width, crop_height] = crop;
         if raw.width < 6
@@ -139,7 +164,7 @@ impl Cfa {
             || width == 0
             || !width.is_multiple_of(2)
             || height == 0
-            || out.len() != width * height * 2
+            || output_bytes != width * height * 2
             || gains.contains(&0)
             || exposure == 0
             || crop_width == 0
@@ -151,9 +176,26 @@ impl Cfa {
         {
             return Err("nearest CFA color requires complete tiles and programmed gains".into());
         }
+        Ok(())
+    }
+    pub(crate) fn render_rows(
+        &self,
+        raw: &RawView<'_>,
+        film: &Film,
+        black: u16,
+        gains: [u16; 3],
+        exposure: u16,
+        spatial_gain: impl Fn(usize, usize) -> u16,
+        crop: [usize; 4],
+        width: usize,
+        height: usize,
+        rows: std::ops::Range<usize>,
+        out: &mut [u8],
+    ) {
+        let [left, top, crop_width, crop_height] = crop;
         let xs: Vec<_> = (0..width).map(|x| left + x * crop_width / width).collect();
         let mut pixels = FilmPixels::new(film);
-        for y in 0..height {
+        for (local_y, y) in rows.enumerate() {
             let yy = top + y * crop_height / height;
             for x in (0..width).step_by(2) {
                 let mut pixel = |x: usize| {
@@ -168,11 +210,10 @@ impl Cfa {
                     });
                     pixels.develop(w)
                 };
-                out[(y * width + x) * 2..(y * width + x) * 2 + 4]
+                out[(local_y * width + x) * 2..(local_y * width + x) * 2 + 4]
                     .copy_from_slice(&Film::pack(pixel(x), pixel(x + 1)));
             }
         }
-        Ok(())
     }
 }
 #[cfg(test)]

@@ -16,7 +16,7 @@ pub struct Stream {
     pub state: State,
     pub width: usize,
     pub height: usize,
-    pub pixels: Vec<u8>,
+    pub pixels: crate::work::Buffer,
 }
 pub type StreamHandle = Arc<Mutex<Stream>>;
 impl Stream {

@@ -165,6 +165,7 @@ fn size(v: i32) -> usize {
     (32 - v.unsigned_abs().leading_zeros()) as usize
 }
 
+#[derive(Clone)]
 pub struct Codec {
     dc: [Huffman; 2],
     ac: [Huffman; 2],
@@ -306,6 +307,20 @@ impl Codec {
             || capacity > 64 * 1024 * 1024
         {
             return Err("JPEG input escapes bounded packed422 class".into());
+        }
+        if crate::work::worker_count() != 0 {
+            let codec = self.clone();
+            let source: std::sync::Arc<[u8]> = source.into();
+            let staging = std::mem::take(output);
+            let (staging, result) = crate::work::Job::submit(move || {
+                let mut staging = staging;
+                // Workers have no owner executor, so this runs the serial kernel.
+                let result = codec.encode(&source, width, height, restart, &mut staging, capacity);
+                (staging, result)
+            })
+            .into_value();
+            *output = staging;
+            return result;
         }
         output.resize(capacity, 0);
         let mut w = Writer {

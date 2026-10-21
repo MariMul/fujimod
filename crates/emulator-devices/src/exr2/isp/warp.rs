@@ -92,11 +92,12 @@ impl Warp {
         }
         self.source = vec![0; src.pitch * src.height].into();
         cx.ram_read(src.address, Arc::get_mut(&mut self.source).unwrap())?;
+        let source = self.source.clone();
         if r[1] == 0x40 {
             let mut stream = self.stream.lock().unwrap();
             stream.pixels.resize(w * h * 2, 0);
-            crate::imaging::resample::endpoint(
-                &self.source,
+            let plan = crate::imaging::resample::Endpoint::new(
+                self.source.len(),
                 src.width,
                 src.height,
                 src.pitch,
@@ -104,8 +105,11 @@ impl Warp {
                 h,
                 last,
                 mode,
-                &mut stream.pixels,
+                w * h * 2,
             )?;
+            stream.pixels.defer_rows(w * 2, h, move |rows, out| {
+                plan.render_rows(&source, rows, out)
+            });
             stream.width = w;
             stream.height = h;
             stream.state = State::Ready;
@@ -121,8 +125,8 @@ impl Warp {
             }
             self.dma
                 .prepare(cx.now(), self.options.completion_ticks, active, w * 2)?;
-            if let Err(e) = crate::imaging::resample::endpoint(
-                &self.source,
+            let plan = match crate::imaging::resample::Endpoint::new(
+                self.source.len(),
                 src.width,
                 src.height,
                 src.pitch,
@@ -130,11 +134,17 @@ impl Warp {
                 h,
                 last,
                 mode,
-                &mut self.dma.pixels,
+                w * h * 2,
             ) {
-                self.dma.cancel();
-                return Err(e);
-            }
+                Ok(plan) => plan,
+                Err(error) => {
+                    self.dma.cancel();
+                    return Err(error);
+                }
+            };
+            self.dma.pixels.defer_rows(w * 2, h, move |rows, out| {
+                plan.render_rows(&source, rows, out)
+            });
         }
         Ok(())
     }

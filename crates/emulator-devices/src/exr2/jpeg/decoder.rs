@@ -135,16 +135,28 @@ impl Decoder {
         {
             return Err("JPEG output exceeds allocation or overlaps input".into());
         }
-        self.rgb = vec![
-            0;
-            decoder
-                .output_buffer_size()
-                .ok_or("JPEG output size unknown")?
-        ]
-        .into();
-        decoder
-            .decode_into(Arc::get_mut(&mut self.rgb).unwrap())
-            .map_err(|e| format!("invalid JPEG image: {e:?}"))?;
+        let size = decoder
+            .output_buffer_size()
+            .ok_or("JPEG output size unknown")?;
+        let source = self.source.clone();
+        let (rgb, decoded) = crate::work::Job::submit(move || {
+            let options = DecoderOptions::new_safe()
+                .set_use_unsafe(false)
+                .set_strict_mode(true)
+                .set_max_width(8192)
+                .set_max_height(8192)
+                .jpeg_set_out_colorspace(ColorSpace::RGB);
+            let mut decoder =
+                zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(source.as_ref()), options);
+            let mut rgb = vec![0; size];
+            let decoded = decoder
+                .decode_into(&mut rgb)
+                .map_err(|e| format!("invalid JPEG image: {e:?}"));
+            (rgb, decoded)
+        })
+        .into_value();
+        self.rgb = rgb.into();
+        decoded?;
         self.dma.prepare(
             cx.now(),
             self.options.completion_ticks,
@@ -156,21 +168,28 @@ impl Decoder {
             },
             pitch * 2,
         )?;
-        self.dma.pixels.fill(0);
-        let factor = 1usize << shift;
-        for y in 0..h {
-            for x in (0..w).step_by(2) {
-                let a = rgb_to_ycc(rgb_pixel(&self.rgb, sw, factor, x, y));
-                let b = rgb_to_ycc(rgb_pixel(&self.rgb, sw, factor, x + 1, y));
-                let at = (y * pitch + x) * 2;
-                self.dma.pixels[at..at + 4].copy_from_slice(&[
-                    a[0],
-                    b[0],
-                    (a[1] as u16 + b[1] as u16).div_ceil(2) as u8,
-                    (a[2] as u16 + b[2] as u16).div_ceil(2) as u8,
-                ]);
-            }
-        }
+        let rgb = self.rgb.clone();
+        self.dma
+            .pixels
+            .defer_rows(pitch * 2, rows, move |output_rows, pixels| {
+                let factor = 1usize << shift;
+                for (local_y, y) in output_rows.enumerate() {
+                    if y >= h {
+                        continue;
+                    }
+                    for x in (0..w).step_by(2) {
+                        let a = rgb_to_ycc(rgb_pixel(&rgb, sw, factor, x, y));
+                        let b = rgb_to_ycc(rgb_pixel(&rgb, sw, factor, x + 1, y));
+                        let at = (local_y * pitch + x) * 2;
+                        pixels[at..at + 4].copy_from_slice(&[
+                            a[0],
+                            b[0],
+                            (a[1] as u16 + b[1] as u16).div_ceil(2) as u8,
+                            (a[2] as u16 + b[2] as u16).div_ceil(2) as u8,
+                        ]);
+                    }
+                }
+            });
         self.pending = Some(Pending::Decode(count as u32));
         Ok(())
     }

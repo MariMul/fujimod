@@ -162,26 +162,47 @@ impl StillProcessor {
             pitch: src.pitch,
             packing,
         };
-        let render = |raster: Raster, pixels: &mut [u8]| {
-            self.cfa.render(
-                &raw,
-                &self.film,
-                black.unwrap() as u16,
-                gains,
-                exposure,
-                |x, y| shading.as_ref().map_or(2048, |s| s.gain(x, y)),
-                crop,
-                raster.width,
-                raster.height,
-                pixels,
-            )
-        };
-        let result = render(dst, &mut self.dma.pixels);
-        if result.is_err() {
+        if let Err(error) = Cfa::validate_render(
+            &raw,
+            gains,
+            exposure,
+            crop,
+            dst.width,
+            dst.height,
+            dst.width * dst.height * 2,
+        ) {
             self.dma.cancel();
             self.raw_dma.cancel();
+            return Err(error);
         }
-        result
+        let source = self.source.clone();
+        let cfa = self.cfa.clone();
+        let film = self.film.clone();
+        self.dma
+            .pixels
+            .defer_rows(dst.width * 2, dst.height, move |rows, out| {
+                let raw = RawView {
+                    bytes: &source,
+                    width: src.width,
+                    height: src.height,
+                    pitch: src.pitch,
+                    packing,
+                };
+                cfa.render_rows(
+                    &raw,
+                    &film,
+                    black.unwrap() as u16,
+                    gains,
+                    exposure,
+                    |x, y| shading.as_ref().map_or(2048, |s| s.gain(x, y)),
+                    crop,
+                    dst.width,
+                    dst.height,
+                    rows,
+                    out,
+                );
+            });
+        Ok(())
     }
 }
 impl Device for StillProcessor {

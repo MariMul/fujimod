@@ -192,3 +192,12 @@ fn raw_writeback_supports_eight_rows_plus_64_byte_displacement() {
     }
     assert_eq!(h.irqs, [(0, 61)]);
 }
+
+#[test]
+fn worker_still_retains_sample_latching_joint_dma_and_restore() {
+    crate::work::configure(2).unwrap();
+    still_isp_reconstructs_addressed_pixels_and_refuses_unequal_black();
+    raw_and_color_dma_complete_together_with_overlap_padding_and_exact_restore();
+    raw_writeback_supports_eight_rows_plus_64_byte_displacement();
+    crate::work::configure(0).unwrap();
+}

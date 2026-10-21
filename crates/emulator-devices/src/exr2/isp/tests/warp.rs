@@ -47,3 +47,10 @@ fn warp_memory_dma_keeps_alignment_rows_and_acknowledges_status() {
     advance(&mut d, &mut h, 7);
     assert_eq!(read(&mut d, &mut h, 0xfff65000), 0x10000);
 }
+
+#[test]
+fn worker_warp_retains_deadlines_padding_status_and_checkpoint_bytes() {
+    crate::work::configure(2).unwrap();
+    warp_memory_dma_keeps_alignment_rows_and_acknowledges_status();
+    crate::work::configure(0).unwrap();
+}

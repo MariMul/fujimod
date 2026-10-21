@@ -64,37 +64,81 @@ pub fn endpoint(
     mode: u32,
     out: &mut [u8],
 ) -> Result<(), String> {
-    if mode > 2
-        || sw == 0
-        || !sw.is_multiple_of(2)
-        || sh == 0
-        || dw == 0
-        || !dw.is_multiple_of(2)
-        || dh == 0
-        || last[0] >= sw
-        || last[1] >= sh
-        || pitch < sw * 2
-        || source.len() != pitch * sh
-        || out.len() != dw * dh * 2
-    {
-        return Err("invalid packed422 endpoint geometry".into());
-    }
-    let step = 1usize << mode;
-    let sx = |x: usize| x * (last[0] / step) / (dw - 1).max(1) * step;
-    for y in 0..dh {
-        let sy = y * (last[1] / step) / (dh - 1).max(1) * step;
-        for x in (0..dw).step_by(2) {
-            let at = (y * dw + x) * 2;
-            out[at..at + 4].copy_from_slice(&[
-                sample(source, pitch, sx(x), sy, 0),
-                sample(source, pitch, sx(x + 1), sy, 0),
-                sample(source, pitch, sx(x), sy, 1),
-                sample(source, pitch, sx(x), sy, 2),
-            ]);
-        }
-    }
+    let plan = Endpoint::new(source.len(), sw, sh, pitch, dw, dh, last, mode, out.len())?;
+    plan.render_rows(source, 0..dh, out);
     Ok(())
 }
+
+/// Validated endpoint geometry. The pure row kernel cannot inspect registers,
+/// live memory or a stream; callers may run it on disjoint worker-owned rows.
+#[derive(Clone, Copy)]
+pub(crate) struct Endpoint {
+    pitch: usize,
+    dw: usize,
+    dh: usize,
+    last: [usize; 2],
+    mode: u32,
+}
+impl Endpoint {
+    pub(crate) fn new(
+        source_bytes: usize,
+        sw: usize,
+        sh: usize,
+        pitch: usize,
+        dw: usize,
+        dh: usize,
+        last: [usize; 2],
+        mode: u32,
+        output_bytes: usize,
+    ) -> Result<Self, String> {
+        if mode > 2
+            || sw == 0
+            || !sw.is_multiple_of(2)
+            || sh == 0
+            || dw == 0
+            || !dw.is_multiple_of(2)
+            || dh == 0
+            || last[0] >= sw
+            || last[1] >= sh
+            || pitch < sw * 2
+            || source_bytes != pitch * sh
+            || output_bytes != dw * dh * 2
+        {
+            return Err("invalid packed422 endpoint geometry".into());
+        }
+        Ok(Self {
+            pitch,
+            dw,
+            dh,
+            last,
+            mode,
+        })
+    }
+    pub(crate) fn render_rows(&self, source: &[u8], rows: std::ops::Range<usize>, out: &mut [u8]) {
+        let Self {
+            pitch,
+            dw,
+            dh,
+            last,
+            mode,
+        } = *self;
+        let step = 1usize << mode;
+        let sx = |x: usize| x * (last[0] / step) / (dw - 1).max(1) * step;
+        for (local_y, y) in rows.enumerate() {
+            let sy = y * (last[1] / step) / (dh - 1).max(1) * step;
+            for x in (0..dw).step_by(2) {
+                let at = (local_y * dw + x) * 2;
+                out[at..at + 4].copy_from_slice(&[
+                    sample(source, pitch, sx(x), sy, 0),
+                    sample(source, pitch, sx(x + 1), sy, 0),
+                    sample(source, pitch, sx(x), sy, 1),
+                    sample(source, pitch, sx(x), sy, 2),
+                ]);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -337,7 +337,7 @@ mod tests {
             .sensors
             .insert("sensor".into(), sensor.clone());
         *phases.lock().unwrap() = [Some(FrameEdge { tick: 5, index: 1 }), None];
-        stream.lock().unwrap().pixels = vec![9, 8, 7, 6];
+        stream.lock().unwrap().pixels = vec![9, 8, 7, 6].into();
         let before = resources.fingerprint().unwrap();
         let saved = resources.checkpoint().unwrap();
         assert!(Arc::ptr_eq(
@@ -358,7 +358,7 @@ mod tests {
         assert_eq!(resources.fingerprint().unwrap(), before);
         assert!(!logic.high());
         assert_eq!(position.value(), 23);
-        assert_eq!(stream.lock().unwrap().pixels, [9, 8, 7, 6]);
+        assert_eq!(stream.lock().unwrap().pixels.as_slice(), [9, 8, 7, 6]);
         assert_eq!(sensor.lock().unwrap().edge.unwrap().tick, 5);
     }
 }
