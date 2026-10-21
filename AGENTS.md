@@ -28,7 +28,10 @@ agents or conversations. Approved creations are logged in
 `mise run hooks-install`.
 
 Commit with `mise run commit -- -m "Describe the change" path/one path/two`
-(`scripts/git/commit.py`). It commits only the named paths from a private index,
-fast-forwards to `origin/main` first, and pushes. For a file that also holds
-someone else's edits, pass a diff of only your hunks with `--patch FILE`. Never
-stage or reset somebody else's hunks.
+(`scripts/git/commit.py`). It catches up with `origin/main` (merging upstream
+changes into local edits, `scripts/git/sync.py`), commits only the named paths
+from a private index, pushes, and resets the shared index to the new `HEAD`. It
+never changes files on disk. For a file that also holds someone else's edits,
+pass a diff of only your hunks with `--patch FILE`. The shared index only
+mirrors `HEAD`: do not stage, `git commit`, `merge`, `rebase`, `stash` or
+`pull` in a shared checkout.

@@ -71,14 +71,34 @@ def test_sync_merges_upstream_changes_into_a_local_edit(
     assert changes == ["-one", "+ONE"]
 
 
-def test_sync_merges_staged_edits_in_the_index(repos: tuple[Path, Path, Path]) -> None:
+def test_staged_edits_become_unstaged_and_are_merged(
+    repos: tuple[Path, Path, Path],
+) -> None:
     _, shared, other = repos
     (shared / "a.txt").write_text("ONE\ntwo\nthree\nfour\nfive\n")
     run("git", "add", "a.txt", cwd=shared)
     push(other, {"a.txt": "one\ntwo\nthree\nfour\nFIVE\n"})
     sync(Repository(shared))
-    assert run("git", "show", ":a.txt", cwd=shared) == "ONE\ntwo\nthree\nfour\nFIVE\n"
-    assert run("git", "status", "--porcelain", cwd=shared).splitlines() == ["M  a.txt"]
+    assert (shared / "a.txt").read_text() == "ONE\ntwo\nthree\nfour\nFIVE\n"
+    assert run("git", "status", "--porcelain", cwd=shared).splitlines() == [" M a.txt"]
+
+
+def test_stale_index_entries_never_revert_committed_work(
+    repos: tuple[Path, Path, Path],
+) -> None:
+    _, shared, other = repos
+    repository = Repository(shared)
+    (shared / "b.txt").write_text("committed\n")
+    repository.commit(["b.txt"], None, "Commit b\n")
+    # An index left at the old content, as when another process held index.lock.
+    old = run("git", "rev-parse", "HEAD^:b.txt", cwd=shared).strip()
+    run("git", "update-index", "--cacheinfo", f"100644,{old},b.txt", cwd=shared)
+    run("git", "pull", "-q", cwd=other)
+    head = push(other, {"b.txt": "committed\nmore\n"})
+    sync(repository)
+    assert run("git", "rev-parse", "HEAD", cwd=shared).strip() == head
+    assert (shared / "b.txt").read_text() == "committed\nmore\n"
+    assert run("git", "status", "--porcelain", cwd=shared) == ""
 
 
 def test_overlapping_edit_is_kept_recorded_and_refused_until_resolved(
@@ -110,7 +130,7 @@ def test_commit_succeeds_when_origin_changed_an_edited_file(
     (shared / "a.txt").write_text("ONE\ntwo\nthree\nfour\nfive\n")
     (shared / "b.txt").write_text("mine\n")
     push(other, {"a.txt": "one\ntwo\nthree\nfour\nFIVE\n"})
-    result, _ = Repository(shared).commit(["b.txt"], None, "Mine\n")
+    result = Repository(shared).commit(["b.txt"], None, "Mine\n")
     assert run("git", "rev-parse", "main", cwd=remote).strip() == result
     assert run("git", "rev-parse", "HEAD", cwd=shared).strip() == result
     assert (shared / "a.txt").read_text() == "ONE\ntwo\nthree\nfour\nFIVE\n"

@@ -4,14 +4,16 @@
     python sync.py --resolved PATH...
     python sync.py --install-service [--repo PATH] [--interval SECONDS]
 
-When origin is ahead, the branch, index and working tree move to origin's
-commit. A path someone has edited (in the working tree or the index) that
-origin also changed is merged three ways with ``git merge-file``: the old
-commit's version is the base, the local edit is ours and origin's version is
-theirs, so the edit survives on top of the new commit. Only a path whose
-merge overlaps, or that is binary, LFS, added or deleted on one side, keeps
-its local content untouched; it is recorded as a sync conflict, reported, and
-refused by the commit tool until its owner merges it and runs ``--resolved``.
+When origin is ahead, the branch and working tree move to origin's commit and
+the shared index is reset to it. The index of a shared checkout only mirrors
+HEAD: commits are built in a private index, so nobody stages here, and an entry
+that differs from HEAD is stale. A file someone has edited that origin also
+changed is merged three ways with ``git merge-file``: the old commit's version
+is the base, the file on disk is ours and origin's version is theirs, so the edit
+survives on top of the new commit. Only a file whose merge overlaps, or that is
+binary, LFS, added or deleted on one side, keeps its local content untouched;
+it is recorded as a sync conflict, reported, and refused by the commit tool
+until its owner merges it and runs ``--resolved``.
 
 ``--install-service`` installs a macOS launchd agent that runs the sync every
 ``--interval`` seconds; a run with origin unchanged costs one ``ls-remote``.
@@ -105,15 +107,6 @@ def entry(repository: Repository, tree: str, path: str) -> tuple[str, str] | Non
     return mode, obj
 
 
-def index_entry(repository: Repository, path: str) -> tuple[str, str] | None:
-    line = repository.output("ls-files", "-s", "-z", "--", path).rstrip("\0")
-    if not line:
-        return None
-    meta, _ = line.split("\t", 1)
-    mode, obj, _ = meta.split()
-    return mode, obj
-
-
 def blob(repository: Repository, obj: str) -> bytes:
     return subprocess.run(
         ["git", "cat-file", "blob", obj],
@@ -161,15 +154,6 @@ def hash_blob(repository: Repository, content: bytes) -> str:
     )
 
 
-def set_index(repository: Repository, path: str, value: tuple[str, str] | None) -> None:
-    if value is None:
-        repository.git("update-index", "--force-remove", "--", path)
-    else:
-        repository.git(
-            "update-index", "--add", "--cacheinfo", f"{value[0]},{value[1]},{path}"
-        )
-
-
 def ancestor(repository: Repository, older: str, newer: str) -> bool:
     return (
         repository.git(
@@ -187,30 +171,34 @@ def remote_head(repository: Repository, ref: str) -> str:
 
 
 def sync(repository: Repository) -> Result:
+    with locked(repository):
+        return update(repository)
+
+
+def update(repository: Repository) -> Result:
+    """Bring the branch to origin; the caller holds the sync lock."""
     ref = repository.branch()
     name = ref.removeprefix("refs/heads/")
-    with locked(repository):
-        repository.git("fetch", "-q", "origin", name)
-        remote = repository.output("rev-parse", "FETCH_HEAD")
-        current = repository.output("rev-parse", "HEAD")
-        if remote == current or ancestor(repository, remote, current):
-            return Result(current)
-        if not ancestor(repository, current, remote):
-            raise Failure(
-                f"local {name} {current[:10]} and origin {remote[:10]} have diverged; "
-                "resolve that before syncing"
-            )
-        return advance(repository, ref, current, remote)
+    repository.git("fetch", "-q", "origin", name)
+    remote = repository.output("rev-parse", "FETCH_HEAD")
+    current = repository.output("rev-parse", "HEAD")
+    if remote == current or ancestor(repository, remote, current):
+        return Result(current)
+    if not ancestor(repository, current, remote):
+        raise Failure(
+            f"local {name} {current[:10]} and origin {remote[:10]} have diverged; "
+            "resolve that before syncing"
+        )
+    return advance(repository, ref, current, remote)
 
 
 def advance(repository: Repository, ref: str, current: str, remote: str) -> Result:
+    # Compare files on disk with the current commit, not with stale index entries.
+    repository.reset_index()
     changed = repository.names("diff", "--no-renames", current, remote)
     edited = set(repository.names("diff", "--no-renames", current)).intersection(
         changed
     )
-    staged = set(
-        repository.names("diff", "--cached", "--no-renames", current)
-    ).intersection(changed)
     # Untracked files where origin adds a path.
     present = {
         path
@@ -227,24 +215,11 @@ def advance(repository: Repository, ref: str, current: str, remote: str) -> Resu
         old = entry(repository, current, path)
         new = entry(repository, remote, path)
         if GITLINK in (old or ("",))[0] or GITLINK in (new or ("",))[0]:
-            # Submodule pointers move in the index only; the submodule syncs itself.
-            if path in staged:
-                result.conflicts.append(path)
-            else:
-                set_index(repository, path, new)
-            continue
-        if path not in edited and path not in staged and path not in present:
+            continue  # Submodule pointers move with the index; the submodule syncs itself.
+        if path not in edited and path not in present:
             (clean_present if new else clean_deleted).append(path)
             continue
-        merged = merge_path(
-            repository,
-            path,
-            old,
-            new,
-            path in staged,
-            path in edited or path in present,
-        )
-        if merged:
+        if merge_path(repository, path, old, new):
             result.merged.append(path)
         else:
             result.conflicts.append(path)
@@ -262,28 +237,19 @@ def advance(repository: Repository, ref: str, current: str, remote: str) -> Resu
             "--pathspec-file-nul",
             input="\0".join(clean_present) + "\0",
         )
-    if clean_deleted:
-        repository.git(
-            "rm",
-            "-q",
-            "--pathspec-from-file=-",
-            "--pathspec-file-nul",
-            input="\0".join(clean_deleted) + "\0",
-        )
+    for path in clean_deleted:
+        Path(repository.root, path).unlink(missing_ok=True)
     if repository.git("update-ref", ref, remote, current, check=False).returncode:
         raise Failure(
             f"{ref} moved during sync; files were updated to {remote[:10]} but the "
             "branch was not. Run the sync again."
         )
+    repository.reset_index()
     # A recorded conflict whose file now matches the branch needs no merge.
     for path in list(conflicts):
         head = entry(repository, remote, path)
         file = Path(repository.root, path)
-        if (
-            head
-            and file.is_file()
-            and hash_blob(repository, file.read_bytes()) == head[1]
-        ):
+        if head and file.is_file() and repository.file_object(path) == head[1]:
             del conflicts[path]
     save_conflicts(repository, conflicts)
     return result
@@ -294,61 +260,27 @@ def merge_path(
     path: str,
     old: tuple[str, str] | None,
     new: tuple[str, str] | None,
-    staged: bool,
-    edited: bool,
 ) -> bool:
-    """Merge one locally changed path onto origin's version; False leaves it untouched."""
+    """Merge one locally changed file onto origin's version; False leaves it untouched."""
     file = Path(repository.root, path)
-    if old is None or new is None or (edited and not file.is_file()):
-        # Added or deleted on one side: someone has to decide.
-        if (
-            old is None
-            and new is not None
+    if old is None or new is None or not file.is_file():
+        # Added or deleted on one side: someone has to decide, unless both agree.
+        return (
+            new is not None
             and file.is_file()
-            and not staged
-            and hash_blob(repository, file.read_bytes()) == new[1]
-        ):
-            set_index(repository, path, new)
-            return True
-        if new is not None and not staged:
-            set_index(repository, path, new)
-        return False
+            and repository.file_object(path) == new[1]
+        )
     base, theirs = blob(repository, old[1]), blob(repository, new[1])
-    ours = file.read_bytes() if edited else None
-    index = index_entry(repository, path)
-    staged_content = blob(repository, index[1]) if staged and index else None
-    if not is_text(
-        repository,
-        path,
-        base,
-        theirs,
-        *(c for c in (ours, staged_content) if c is not None),
-    ):
-        if not staged:
-            set_index(repository, path, new)
+    ours = file.read_bytes()
+    if not is_text(repository, path, base, theirs, ours):
+        return repository.file_object(path) == new[1]
+    merged = merge(base, ours, theirs)
+    if merged is None:
         return False
-    merged_file = merge(base, ours, theirs) if ours is not None else None
-    merged_index = (
-        merge(base, staged_content, theirs) if staged_content is not None else None
-    )
-    if (ours is not None and merged_file is None) or (
-        staged_content is not None and merged_index is None
-    ):
-        if not staged:
-            set_index(repository, path, new)
-        return False
-    if merged_file is not None:
-        if file.read_bytes() != ours:
-            return False  # Edited again while merging; leave it for the next sync.
-        file.write_bytes(merged_file)
-        os.chmod(file, 0o755 if new[0] == "100755" else 0o644)
-    else:
-        # Only the index differs locally: the working tree takes origin's content.
-        file.write_bytes(theirs)
-    if merged_index is not None:
-        set_index(repository, path, (new[0], hash_blob(repository, merged_index)))
-    else:
-        set_index(repository, path, new)
+    if file.read_bytes() != ours:
+        return False  # Edited again while merging; leave it for the next sync.
+    file.write_bytes(merged)
+    os.chmod(file, 0o755 if new[0] == "100755" else 0o644)
     return True
 
 
@@ -397,6 +329,7 @@ def main() -> None:
     args = parser.parse_args()
     try:
         repository = Repository(Repository.toplevel(args.repo))
+        repository.clear_stale_index_lock()
         if args.resolved:
             resolve(repository, args.resolved)
             return

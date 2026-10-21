@@ -1,5 +1,7 @@
+import os
 import subprocess
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -37,14 +39,15 @@ def test_commit_takes_only_named_paths_and_pushes(repos: tuple[Path, Path]) -> N
     (checkout / "a.txt").write_text("one\ntwo\nthree\nfour\n")
     (checkout / "b.txt").write_text("someone else\n")
     run("git", "add", "b.txt", cwd=checkout)
-    result, skipped = Repository(checkout).commit(["a.txt"], None, "Add four\n")
+    result = Repository(checkout).commit(["a.txt"], None, "Add four\n")
     assert run("git", "rev-parse", "main", cwd=remote).strip() == result
     files = run("git", "show", "--name-only", "--format=", result, cwd=checkout).split()
     assert files == ["a.txt"]
+    # The shared index mirrors HEAD; the other edit stays on disk, unstaged.
     assert run("git", "status", "--porcelain", cwd=checkout).splitlines() == [
-        "M  b.txt"
+        " M b.txt"
     ]
-    assert skipped == []
+    assert (checkout / "b.txt").read_text() == "someone else\n"
 
 
 def test_patch_commits_chosen_hunks_and_keeps_the_rest(
@@ -55,7 +58,7 @@ def test_patch_commits_chosen_hunks_and_keeps_the_rest(
     patch = tmp_path / "mine.diff"
     patch.write_text(run("git", "diff", cwd=checkout))
     (checkout / "a.txt").write_text("ONE\ntwo\nthree\nother work\n")
-    result, _ = Repository(checkout).commit([], patch, "Capitalize\n")
+    result = Repository(checkout).commit([], patch, "Capitalize\n")
     assert run("git", "show", f"{result}:a.txt", cwd=checkout) == "ONE\ntwo\nthree\n"
     assert (checkout / "a.txt").read_text() == "ONE\ntwo\nthree\nother work\n"
     assert run("git", "diff", cwd=checkout).count("+other work") == 1
@@ -71,7 +74,7 @@ def test_commit_rebuilds_on_a_newer_origin(
     run("git", "commit", "-qm", "other", cwd=other)
     run("git", "push", "-q", "origin", "main", cwd=other)
     (checkout / "b.txt").write_text("mine\n")
-    result, _ = Repository(checkout).commit(["b.txt"], None, "Mine\n")
+    result = Repository(checkout).commit(["b.txt"], None, "Mine\n")
     parent = run("git", "rev-parse", f"{result}^", cwd=checkout).strip()
     assert parent == run("git", "rev-parse", "main", cwd=other).strip()
     assert (checkout / "c.txt").read_text() == "c\n"
@@ -97,6 +100,18 @@ def test_commit_waits_for_a_busy_index(repos: tuple[Path, Path]) -> None:
     lock.write_text("")
     threading.Timer(1.0, lock.unlink).start()
     (checkout / "a.txt").write_text("waited\n")
-    result, _ = Repository(checkout).commit(["a.txt"], None, "Wait\n")
+    result = Repository(checkout).commit(["a.txt"], None, "Wait\n")
     assert run("git", "rev-parse", "main", cwd=remote).strip() == result
     assert run("git", "status", "--porcelain", cwd=checkout) == ""
+
+
+def test_a_stale_index_lock_is_removed(repos: tuple[Path, Path]) -> None:
+    remote, checkout = repos
+    lock = checkout / ".git" / "index.lock"
+    lock.write_text("")
+    old = time.time() - 120
+    os.utime(lock, (old, old))
+    (checkout / "a.txt").write_text("after a crash\n")
+    result = Repository(checkout).commit(["a.txt"], None, "Recover\n")
+    assert run("git", "rev-parse", "main", cwd=remote).strip() == result
+    assert not lock.exists()

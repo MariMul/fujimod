@@ -10,11 +10,11 @@ or working tree is included.
 
 The commit is built in a private index on the checked-out branch's HEAD, after
 ``sync.py`` brings that branch to its ``origin`` counterpart, merging origin's
-changes into anyone's edits. Paths recorded as sync conflicts are refused. The branch moves only
-if it is still at that HEAD, then the commit is pushed (fast-forward only). If
-origin moved meanwhile, the commit is rebuilt on the new head and retried.
-Afterward each committed path's shared index entry is updated when nobody else
-staged that path.
+changes into anyone's edits. Paths recorded as sync conflicts are refused. One
+lock serializes syncs and commits in the checkout: the branch moves, the commit
+is pushed (fast-forward only) and the shared index is reset to the new HEAD
+before the next one starts. If origin moved meanwhile, the commit is rebuilt
+on the new head and retried. Files on disk are never changed by committing.
 """
 
 import argparse
@@ -26,7 +26,7 @@ from pathlib import Path
 
 from repository import Failure
 from repository import Repository as GitRepository
-from sync import load_conflicts, sync
+from sync import load_conflicts, locked, update
 
 ATTEMPTS = 5
 
@@ -75,25 +75,7 @@ class Repository(GitRepository):
             )
         return names
 
-    def reconcile_index(self, parent: str, commit: str) -> list[str]:
-        """Point shared index entries at the new commit where they still equal the old HEAD."""
-        names = self.names("diff", parent, commit)
-        staged = set(self.names("diff", "--cached", parent))
-        clean = [name for name in names if name not in staged]
-        if clean:
-            self.git(
-                "reset",
-                "-q",
-                commit,
-                "--pathspec-from-file=-",
-                "--pathspec-file-nul",
-                input="\0".join(clean) + "\0",
-            )
-        return sorted(staged.intersection(names))
-
-    def commit(
-        self, paths: list[str], patch: Path | None, message: str
-    ) -> tuple[str, list[str]]:
+    def commit(self, paths: list[str], patch: Path | None, message: str) -> str:
         ref = self.branch()
         name = ref.removeprefix("refs/heads/")
         conflicted = sorted(
@@ -105,31 +87,27 @@ class Repository(GitRepository):
                 "run `python fujimod/scripts/git/sync.py --resolved PATH`: "
                 + ", ".join(conflicted)
             )
-        for _ in range(ATTEMPTS):
-            sync(self)
-            parent = self.output("rev-parse", "HEAD")
-            result = self.build(parent, paths, patch, message)
-            # Moves the branch only if no other commit landed since HEAD was read.
-            if self.git("update-ref", ref, result, parent, check=False).returncode:
-                continue
-            pushed = self.git("push", "-q", "origin", f"{result}:{ref}", check=False)
-            if pushed.returncode == 0:
-                try:
-                    return result, self.reconcile_index(parent, result)
-                except Failure as error:
-                    # The commit is pushed; only the shared index is stale for its paths.
-                    print(
-                        f"commit: pushed {result[:10]}, but updating the shared index "
-                        f"failed; run `git reset -q HEAD -- PATHS` for its paths:\n{error}",
-                        file=sys.stderr,
+        with locked(self):
+            for _ in range(ATTEMPTS):
+                update(self)
+                parent = self.output("rev-parse", "HEAD")
+                result = self.build(parent, paths, patch, message)
+                if self.git("update-ref", ref, result, parent, check=False).returncode:
+                    raise Failure(
+                        f"{name} moved outside the commit tool during a commit"
                     )
-                    return result, []
-            # Origin moved: step the branch back unless something else moved it, then rebuild.
-            if self.git("update-ref", ref, parent, result, check=False).returncode:
-                raise Failure(
-                    f"push failed and {name} moved locally; {result} is committed "
-                    f"but not pushed:\n{pushed.stderr.strip()}"
+                pushed = self.git(
+                    "push", "-q", "origin", f"{result}:{ref}", check=False
                 )
+                if pushed.returncode == 0:
+                    self.reset_index()
+                    return result
+                # Origin moved: step the branch back, then sync and rebuild.
+                if self.git("update-ref", ref, parent, result, check=False).returncode:
+                    raise Failure(
+                        f"push failed and {name} moved locally; {result} is committed "
+                        f"but not pushed:\n{pushed.stderr.strip()}"
+                    )
         raise Failure(f"{name} kept moving; gave up after {ATTEMPTS} attempts")
 
 
@@ -152,16 +130,11 @@ def main() -> None:
     patch = args.patch.resolve() if args.patch else None
     try:
         repository = Repository(GitRepository.toplevel(args.repo))
-        result, skipped = repository.commit(args.paths, patch, message)
+        result = repository.commit(args.paths, patch, message)
     except (Failure, subprocess.CalledProcessError) as error:
         print(f"commit: {error}", file=sys.stderr)
         sys.exit(1)
     print(repository.git("show", "--stat", "--format=%h %s", result).stdout, end="")
-    if skipped:
-        print(
-            "Shared index left unchanged for paths someone else staged: "
-            + ", ".join(skipped)
-        )
 
 
 if __name__ == "__main__":
