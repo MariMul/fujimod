@@ -44,6 +44,12 @@ struct Observer {
     hook: Hook,
     native: Option<HookId>,
 }
+struct StorePublication {
+    access: Access,
+    address: u64,
+    size: i32,
+    value: i64,
+}
 pub(super) struct Execution {
     // Drop the engine before its callback data, accounting ring and backing.
     pub(super) cpu: Rc<UnicornCore>,
@@ -80,10 +86,10 @@ pub(super) struct Execution {
     exception: Cell<Option<arm::Exception>>,
     failure: RefCell<Option<String>>,
     observers: RefCell<BTreeMap<usize, Observer>>,
+    pending_stores: RefCell<Vec<StorePublication>>,
     next_observer: Cell<usize>,
     instruction_observers: Cell<usize>,
     block_observers: Cell<usize>,
-    store_dispatcher: Cell<Option<HookId>>,
     at_block: Cell<bool>,
     at_instruction: Cell<bool>,
 }
@@ -152,10 +158,10 @@ impl Core {
             exception: Cell::new(None),
             failure: RefCell::new(None),
             observers: RefCell::new(BTreeMap::new()),
+            pending_stores: RefCell::new(Vec::new()),
             next_observer: Cell::new(0),
             instruction_observers: Cell::new(0),
             block_observers: Cell::new(0),
-            store_dispatcher: Cell::new(None),
             at_block: Cell::new(false),
             at_instruction: Cell::new(false),
         });
@@ -199,7 +205,6 @@ impl Core {
                 range: HookRange::All,
             })?;
             e.cpu.hook_watched(stores, true)?;
-            e.store_dispatcher.set(Some(stores));
         }
         e.cpu.precise_store_pc(true)?;
         for bank in 0..2 {
@@ -337,26 +342,6 @@ impl Execution {
             }
         }
     }
-    fn rearm_store_dispatcher(&self) -> Result<(), String> {
-        let finite = self.observers.borrow().values().any(|observer| {
-            observer.native.is_none()
-                && matches!(
-                    observer.hook,
-                    Hook::Memory {
-                        read: false,
-                        write: true,
-                        ..
-                    }
-                )
-        });
-        // A finite observer can tighten the run at this store. Its instruction
-        // must end the block before any following instruction executes.
-        let hook = self
-            .store_dispatcher
-            .get()
-            .ok_or("missing R-profile store dispatcher")?;
-        self.cpu.hook_watched(hook, !finite)
-    }
     fn classify(&self, address: u64, word: u32) -> Result<Translation, String> {
         let watch = self.memory.note_code(self.id.get(), address, 4)?;
         Ok(Translation {
@@ -382,9 +367,26 @@ impl Execution {
             .transpose()?;
         crate::rprofile::publish_guest_tick(tick);
         self.at_block.set(true);
-        let result = self.enter_block(block);
+        let result = self.publish_stores().and_then(|_| self.enter_block(block));
         self.at_block.set(false);
         result
+    }
+    fn publish_stores(&self) -> Result<(), String> {
+        let stores = std::mem::take(&mut *self.pending_stores.borrow_mut());
+        for store in stores {
+            for observer in self.observers.borrow().values() {
+                if let Hook::CompletedStore {
+                    callback,
+                    data,
+                    range,
+                } = observer.hook
+                    && includes(range, store.address)
+                {
+                    unsafe { callback(store.access, store.address, store.size, store.value, data) };
+                }
+            }
+        }
+        Ok(())
     }
     fn enter_block(&self, block: Block) -> Result<(), String> {
         let thumb = block
@@ -711,6 +713,8 @@ unsafe fn classify(data: *mut c_void, address: u64, word: u32) -> Translation {
 unsafe fn restart(data: *mut c_void, pc: u64) {
     let e = unsafe { context(data) };
     e.guarded(|| {
+        // The instruction has not completed; its isolated retry will publish.
+        e.pending_stores.borrow_mut().clear();
         let tail = if e.policy.get() == ExecutionPolicy::Interactive {
             e.last_span.get().map_or(0, |span| span.tail(pc, false))
         } else {
@@ -739,19 +743,19 @@ unsafe fn store(access: Access, address: u64, size: i32, value: i64, data: *mut 
         if e.memory.guest_store(e.id.get(), address, size as usize)? {
             e.cpu.request_restart()?;
         }
-        for observer in e.observers.borrow().values() {
-            if observer.native.is_none()
-                && let Hook::Memory {
-                    callback,
-                    data,
-                    read: false,
-                    write: true,
-                    range,
-                } = observer.hook
-                && includes(range, address)
-            {
-                unsafe { callback(access, address, size, value, data) };
-            }
+        if e.observers.borrow().values().any(|observer| {
+            matches!(observer.hook, Hook::CompletedStore { range, .. } if includes(range, address))
+        }) {
+            e.pending_stores.borrow_mut().push(StorePublication {
+                access,
+                address,
+                size,
+                value,
+            });
+            // A pre-store hook cannot stop halfway through a translated block.
+            // Isolate the instruction, discard the unexecuted publication in
+            // restart(), then deliver its retry at the following boundary.
+            e.cpu.request_restart()?;
         }
         Ok(())
     });

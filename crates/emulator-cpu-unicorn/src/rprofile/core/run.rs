@@ -19,6 +19,12 @@ impl Core {
             } else {
                 e.settle(0, true)
             };
+            let settlement = if result.is_ok() && e.exception.get().is_none() {
+                settlement.and_then(|_| e.publish_stores())
+            } else {
+                e.pending_stores.borrow_mut().clear();
+                settlement
+            };
             e.active.set(false);
             e.memory.end();
             settlement?;

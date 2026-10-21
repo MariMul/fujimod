@@ -231,11 +231,9 @@ impl Board {
                     .cast();
                 for (begin, end) in union(spans) {
                     let hook = unsafe {
-                        cpu.install_hook(Hook::Memory {
+                        cpu.install_hook(Hook::CompletedStore {
                             callback: written,
                             data,
-                            read: false,
-                            write: true,
                             range: HookRange::Inclusive {
                                 begin,
                                 end: end - 1,

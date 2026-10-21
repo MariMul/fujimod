@@ -475,15 +475,19 @@ impl Cpu for Core {
             // Observe only after backend-owned architectural entry. The
             // callback cannot replace exception classification or entry.
             Hook::Exception { .. } => None,
-            Hook::Memory {
-                read: false,
-                write: true,
-                range: HookRange::Inclusive { begin, end },
-                ..
-            } if begin <= end && end <= u32::MAX as u64 => {
+            Hook::CompletedStore { range, .. } => {
                 // The permanent coherence hook already dispatches stores on
                 // watched pages. Reuse it instead of creating native hooks
                 // whose deferred deletion accumulates on parked processors.
+                let (begin, end) = match range {
+                    HookRange::All => (0, u32::MAX as u64),
+                    HookRange::Inclusive { begin, end }
+                        if begin <= end && end <= u32::MAX as u64 =>
+                    {
+                        (begin, end)
+                    }
+                    _ => return Err("invalid completed-store observer range".into()),
+                };
                 e.cpu.watch_stores(begin, end - begin + 1)?;
                 None
             }
@@ -492,7 +496,6 @@ impl Cpu for Core {
         e.observers
             .borrow_mut()
             .insert(key, Observer { hook, native });
-        e.rearm_store_dispatcher()?;
         e.next_observer.set(next);
         Ok(HookId {
             owner: self.identity(),
@@ -525,7 +528,6 @@ impl Cpu for Core {
         }
         drop(observers);
         e.observers.borrow_mut().remove(&hook.key);
-        e.rearm_store_dispatcher()?;
         Ok(())
     }
     unsafe fn translation_hooks(&self, _: Option<TranslationHooks>) -> Result<(), String> {
@@ -549,19 +551,12 @@ impl Cpu for Core {
     }
     fn hook_watched(&self, hook: HookId, watched: bool) -> Result<(), String> {
         let observers = self.execution.observers.borrow();
-        let observer = observers
+        let native = observers
             .get(&hook.key)
             .filter(|_| hook.owner == self.identity())
+            .and_then(|o| o.native)
             .ok_or("R-profile watched hook is not a memory hook")?;
-        if !matches!(observer.hook, Hook::Memory { .. }) {
-            return Err("R-profile watched hook is not a memory hook".into());
-        }
-        match observer.native {
-            Some(native) => self.execution.cpu.hook_watched(native, watched),
-            // The shared dispatcher keeps finite observers at instruction
-            // boundaries regardless of caller filtering.
-            None => Ok(()),
-        }
+        self.execution.cpu.hook_watched(native, watched)
     }
     fn precise_store_pc(&self, on: bool) -> Result<(), String> {
         if !on {

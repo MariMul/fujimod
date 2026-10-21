@@ -228,6 +228,7 @@ enum HookKind {
     Instruction(HookRange),
     Block(HookRange),
     Exception,
+    CompletedStore(HookRange),
     Memory {
         read: bool,
         write: bool,
@@ -698,6 +699,11 @@ fn dispatch(context: &WorkerLoop, cpu: &core::Core, operation: Operation) -> Res
                     write,
                     range,
                 },
+                HookKind::CompletedStore(range) => Hook::CompletedStore {
+                    callback: memory,
+                    data,
+                    range,
+                },
                 HookKind::Fault => Hook::Fault {
                     callback: fault,
                     data,
@@ -813,7 +819,10 @@ impl CpuWorker {
                     CallbackResult::Unit
                 }
                 (
-                    CallbackEntry::Hook(Hook::Memory { callback, data, .. }),
+                    CallbackEntry::Hook(
+                        Hook::Memory { callback, data, .. }
+                        | Hook::CompletedStore { callback, data, .. },
+                    ),
                     CallbackCall::Memory {
                         access,
                         address,
@@ -1166,6 +1175,7 @@ impl Cpu for CpuWorker {
             Hook::Memory {
                 read, write, range, ..
             } => HookKind::Memory { read, write, range },
+            Hook::CompletedStore { range, .. } => HookKind::CompletedStore(range),
             Hook::Fault { .. } => HookKind::Fault,
         };
         self.callbacks

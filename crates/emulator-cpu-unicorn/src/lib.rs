@@ -690,6 +690,9 @@ impl Cpu for Core {
                 )
             }
             Hook::Fault { .. } => (0x3f0, fault as *const (), HookRange::All),
+            Hook::CompletedStore { .. } => {
+                return Err("completed-store hooks require the R-profile execution adapter".into());
+            }
         };
         let mut data = Box::new(HookData {
             hook,

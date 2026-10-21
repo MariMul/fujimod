@@ -367,6 +367,13 @@ pub enum Hook {
         callback: unsafe fn(arm::Exception, *mut c_void),
         data: *mut c_void,
     },
+    /// Publish a store after its instruction completes, before another guest
+    /// instruction enters. Access is always Write; failed stores do not publish.
+    CompletedStore {
+        callback: unsafe fn(Access, u64, i32, i64, *mut c_void),
+        data: *mut c_void,
+        range: HookRange,
+    },
     Memory {
         callback: unsafe fn(Access, u64, i32, i64, *mut c_void),
         data: *mut c_void,

@@ -15,11 +15,9 @@ fn finite_store_observers_do_not_accumulate_native_hooks_on_a_parked_core() {
     set(&cpu, arm::CORE[1], 0x2000);
     set(&cpu, arm::PC, 0x1000);
     let calls = RefCell::new(Vec::<(u64, i64)>::new());
-    let hook = Hook::Memory {
+    let hook = Hook::CompletedStore {
         callback: observed,
         data: (&calls as *const RefCell<Vec<(u64, i64)>>).cast_mut().cast(),
-        read: false,
-        write: true,
         range: HookRange::Inclusive {
             begin: 0x2000,
             end: 0x2003,
@@ -35,7 +33,6 @@ fn finite_store_observers_do_not_accumulate_native_hooks_on_a_parked_core() {
     }
     assert_eq!(cpu.fingerprint().unwrap(), before);
     let id = unsafe { cpu.install_hook(hook) }.unwrap();
-    cpu.hook_watched(id, true).unwrap();
     assert!(matches!(
         resume(&cpu, 100).unwrap(),
         Exit::Hint(Hint::WaitForInterrupt)
@@ -46,6 +43,47 @@ fn finite_store_observers_do_not_accumulate_native_hooks_on_a_parked_core() {
     resume(&cpu, 100).unwrap();
     assert_eq!(*calls.borrow(), vec![(0x2000, 7)]);
     assert_eq!(cpu.execution.cpu.hooks.borrow().len(), native_hooks);
+}
+
+#[test]
+fn completed_store_observers_see_written_ram_before_the_next_instruction() {
+    unsafe fn stop(_: Access, address: u64, _: i32, _: i64, data: *mut c_void) {
+        let cpu = unsafe { &*data.cast::<Core>() };
+        let mut bytes = [0; 4];
+        cpu.read_memory(address, &mut bytes).unwrap();
+        assert_eq!(u32::from_le_bytes(bytes), 42);
+        cpu.tighten_instruction_limit(cpu.instruction_progress().unwrap())
+            .unwrap();
+    }
+    for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+        let cpu = processor(&Memory::default());
+        cpu.map_zeroed(0, 0x4000, 7).unwrap();
+        words(
+            &cpu,
+            0x1000,
+            &[0xe3a0002a, 0xe5810000, 0xe3a00063, 0xeafffffe],
+        );
+        cpu.set_execution_policy(policy).unwrap();
+        set(&cpu, arm::CPSR, 0xd3);
+        set(&cpu, arm::CORE[1], 0x2000);
+        set(&cpu, arm::PC, 0x1000);
+        let id = unsafe {
+            cpu.install_hook(Hook::CompletedStore {
+                callback: stop,
+                data: (&cpu as *const Core).cast_mut().cast(),
+                range: HookRange::Inclusive {
+                    begin: 0x2000,
+                    end: 0x2003,
+                },
+            })
+        }
+        .unwrap();
+        resume(&cpu, 20).unwrap();
+        assert_eq!(cpu.instruction_progress(), Some(2));
+        assert_eq!(get(&cpu, arm::PC), 0x1008);
+        assert_eq!(get(&cpu, arm::CORE[0]), 42);
+        cpu.remove_hook(id).unwrap();
+    }
 }
 
 fn processor(memory: &Memory) -> Core {
