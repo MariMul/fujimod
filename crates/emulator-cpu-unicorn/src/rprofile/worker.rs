@@ -37,6 +37,7 @@ pub struct CpuWorker {
     // Host diagnostics stay outside the emulated CPU and its snapshots.
     rpc_counts: [Cell<u64>; WorkerRpcCounter::COUNT],
     callback_events: Cell<u64>,
+    callback_counts: [Cell<u64>; WorkerCallbackCounter::COUNT],
     commands: Sender<Message>,
     events: RefCell<Receiver<Event>>,
     worker: RefCell<Option<JoinHandle<()>>>,
@@ -124,6 +125,7 @@ pub fn spawn(config: Config) -> Result<CpuWorker, String> {
                 rpc_calls: Cell::new(0),
                 rpc_counts: std::array::from_fn(|_| Cell::new(0)),
                 callback_events: Cell::new(0),
+                callback_counts: std::array::from_fn(|_| Cell::new(0)),
                 commands,
                 events: RefCell::new(events),
                 worker: RefCell::new(Some(worker)),
@@ -222,6 +224,59 @@ enum CallbackCall {
         size: i32,
         value: i64,
     },
+}
+
+#[derive(Clone, Copy)]
+#[repr(usize)]
+enum WorkerCallbackCounter {
+    MmioRead,
+    MmioWrite,
+    Instruction,
+    Block,
+    Exception,
+    Synchronization,
+    Memory,
+    Fault,
+}
+
+impl WorkerCallbackCounter {
+    const COUNT: usize = Self::Fault as usize + 1;
+    const ALL: [Self; Self::COUNT] = [
+        Self::MmioRead,
+        Self::MmioWrite,
+        Self::Instruction,
+        Self::Block,
+        Self::Exception,
+        Self::Synchronization,
+        Self::Memory,
+        Self::Fault,
+    ];
+
+    fn for_call(call: &CallbackCall) -> Self {
+        match call {
+            CallbackCall::MmioRead { .. } => Self::MmioRead,
+            CallbackCall::MmioWrite { .. } => Self::MmioWrite,
+            CallbackCall::Instruction { .. } => Self::Instruction,
+            CallbackCall::Block(_) => Self::Block,
+            CallbackCall::Exception(_) => Self::Exception,
+            CallbackCall::Synchronization => Self::Synchronization,
+            CallbackCall::Memory { .. } => Self::Memory,
+            CallbackCall::Fault { .. } => Self::Fault,
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::MmioRead => "worker_callback_mmio_read",
+            Self::MmioWrite => "worker_callback_mmio_write",
+            Self::Instruction => "worker_callback_instruction",
+            Self::Block => "worker_callback_block",
+            Self::Exception => "worker_callback_exception",
+            Self::Synchronization => "worker_callback_synchronization",
+            Self::Memory => "worker_callback_memory",
+            Self::Fault => "worker_callback_fault",
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -506,6 +561,7 @@ struct WorkerLoop {
     next_event: Cell<u64>,
     callback_error: RefCell<Option<String>>,
     wakeup: RefCell<Option<RunWakeup>>,
+    shutdown: Cell<bool>,
 }
 fn read_stopped_pc(cpu: &core::Core) -> Option<u32> {
     let mut bytes = [0; 4];
@@ -645,6 +701,7 @@ impl WorkerLoop {
                     self.notify_wakeup();
                 }
                 Message::Shutdown => {
+                    self.shutdown.set(true);
                     if let Some(cpu) = unsafe { self.core.get().as_ref() } {
                         cpu.stop().ok();
                     }
@@ -767,6 +824,7 @@ fn serve(
         next_event: Cell::new(1),
         callback_error: RefCell::new(None),
         wakeup: RefCell::new(None),
+        shutdown: Cell::new(false),
     });
     let library = match Library::load(&config.library) {
         Ok(library) => library,
@@ -829,6 +887,9 @@ fn serve(
                     pstate,
                 });
                 context.notify_wakeup();
+                if context.shutdown.get() {
+                    break;
+                }
             }
             Message::ReleaseSnapshot(token) => {
                 context.snapshots.borrow_mut().remove(&token);
@@ -1251,6 +1312,9 @@ impl CpuWorker {
                 }
                 self.callback_events
                     .set(self.callback_events.get().saturating_add(1));
+                let callback_counter = WorkerCallbackCounter::for_call(&call);
+                let count = &self.callback_counts[callback_counter as usize];
+                count.set(count.get().saturating_add(1));
                 self.stopped_progress.set(progress);
                 self.stopped_pc.set(pc);
                 self.stopped_pstate.set(pstate);
@@ -1900,6 +1964,9 @@ impl Cpu for CpuWorker {
                     counters.insert(counter.name(), self.rpc_counts[counter as usize].get());
                 }
                 counters.insert("worker_callback_events", self.callback_events.get());
+                for counter in WorkerCallbackCounter::ALL {
+                    counters.insert(counter.name(), self.callback_counts[counter as usize].get());
+                }
                 Ok(counters)
             }
             _ => Err("R-profile CPU worker returned unexpected exit counters".into()),
@@ -2014,6 +2081,9 @@ mod tests {
                 "{policy:?}"
             );
             assert_eq!(after["worker_callback_events"], 0, "{policy:?}");
+            for counter in WorkerCallbackCounter::ALL {
+                assert_eq!(after[counter.name()], 0, "{policy:?}: {}", counter.name());
+            }
             assert!(!after.contains_key("worker_rpc_exit_counters"));
             assert_eq!(after, cpu.exit_counters().unwrap(), "{policy:?}");
         }
@@ -2231,6 +2301,95 @@ mod tests {
             let after = cpu.rpc_calls.get();
             assert_eq!(cpu.instruction_progress(), Some(progress), "{policy:?}");
             assert_eq!(cpu.rpc_calls.get(), after, "{policy:?}");
+            let counters = cpu.exit_counters().unwrap();
+            assert_eq!(counters["worker_callback_events"], 1, "{policy:?}");
+            assert_eq!(counters["worker_callback_mmio_read"], 1, "{policy:?}");
+            assert_eq!(counters["worker_callback_mmio_write"], 0, "{policy:?}");
+            assert_eq!(counters["worker_callback_synchronization"], 0, "{policy:?}");
+        }
+    }
+
+    #[test]
+    fn callback_kind_counters_distinguish_exact_and_interactive_barriers() {
+        unsafe fn barrier(data: *mut std::ffi::c_void) {
+            let calls = unsafe { &*data.cast::<Cell<u32>>() };
+            calls.set(calls.get() + 1);
+        }
+
+        for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+            let memory = SharedMemory::default();
+            let cpu = worker(memory);
+            cpu.set_execution_policy(policy).unwrap();
+            cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+            let data = Backing::aligned_zeros(4096, 4096).unwrap();
+            unsafe {
+                cpu.map_physical(
+                    0x8000,
+                    0x8000,
+                    4096,
+                    7,
+                    NonNull::new(data.as_ptr()).unwrap(),
+                )
+                .unwrap();
+            }
+            write_words(&cpu, 0x1000, &[0xe1910f9f]); // ldrex r0,[r1]
+            cpu.write_memory(0x8000, &0x7654_3210u32.to_le_bytes())
+                .unwrap();
+            cpu.write_register(arm::CORE[1], &0x8000u32.to_le_bytes())
+                .unwrap();
+            let calls = Cell::new(0u32);
+            unsafe {
+                cpu.install_hook(Hook::Synchronization {
+                    callback: barrier,
+                    data: (&calls as *const Cell<u32>).cast_mut().cast(),
+                })
+                .unwrap();
+            }
+
+            let snapshot = cpu.snapshot(None).unwrap();
+            let before = cpu.exit_counters().unwrap();
+            assert!(matches!(
+                cpu.run(Run {
+                    begin: 0x1000,
+                    until: None,
+                    watchdog_us: 0,
+                    instructions: Some(1),
+                })
+                .unwrap(),
+                Exit::Stopped
+            ));
+            let after = cpu.exit_counters().unwrap();
+            let expected = u64::from(policy == ExecutionPolicy::Interactive);
+            assert_eq!(calls.get() as u64, expected, "{policy:?}");
+            assert_eq!(
+                after["worker_callback_synchronization"]
+                    - before["worker_callback_synchronization"],
+                expected,
+                "{policy:?}"
+            );
+            assert_eq!(
+                after["worker_callback_events"] - before["worker_callback_events"],
+                expected,
+                "{policy:?}"
+            );
+            assert_eq!(
+                after["worker_callback_mmio_read"] - before["worker_callback_mmio_read"],
+                0,
+                "{policy:?}"
+            );
+            cpu.restore(snapshot.as_ref()).unwrap();
+            let restored = cpu.exit_counters().unwrap();
+            for counter in WorkerCallbackCounter::ALL {
+                assert_eq!(
+                    restored[counter.name()],
+                    after[counter.name()],
+                    "{policy:?}"
+                );
+            }
+            assert_eq!(
+                restored["worker_callback_events"], after["worker_callback_events"],
+                "{policy:?}"
+            );
         }
     }
 
@@ -2836,6 +2995,87 @@ mod tests {
             Err(ExecutionError::Backend(_))
         ));
         assert_eq!(probe.0.get(), 0);
+    }
+
+    #[test]
+    fn dropping_worker_with_pending_mmio_callback_exits() {
+        const CHILD: &str = "FUJIMOD_RPROFILE_PENDING_CALLBACK_DROP_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            struct ReadProbe(Cell<u32>);
+            unsafe fn read(_: u64, _: u32, data: *mut std::ffi::c_void) -> u64 {
+                unsafe { &*data.cast::<ReadProbe>() }.0.set(1);
+                0x7654_3210
+            }
+            unsafe fn write(_: u64, _: u32, _: u64, _: *mut std::ffi::c_void) {}
+
+            let cpu = worker(SharedMemory::default());
+            cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+            write_words(&cpu, 0x1000, &[0xe5910000]); // ldr r0,[r1]
+            cpu.write_register(arm::CORE[1], &0x8000u32.to_le_bytes())
+                .unwrap();
+            let mut probe = ReadProbe(Cell::new(0));
+            unsafe {
+                cpu.map_mmio(
+                    0x8000,
+                    4096,
+                    Mmio {
+                        read,
+                        write,
+                        data: (&mut probe as *mut ReadProbe).cast(),
+                    },
+                )
+                .unwrap();
+            }
+            let run = cpu
+                .start_run(Run {
+                    begin: 0x1000,
+                    until: None,
+                    watchdog_us: 0,
+                    instructions: Some(1),
+                })
+                .unwrap();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+            loop {
+                match cpu.poll_run(run).unwrap() {
+                    RunStatus::CallbackPending => break,
+                    RunStatus::Running => {
+                        assert!(
+                            std::time::Instant::now() < deadline,
+                            "MMIO callback was not parked before worker drop"
+                        );
+                        std::thread::yield_now();
+                    }
+                    RunStatus::Complete(result) => {
+                        panic!("run completed before callback park: {result:?}")
+                    }
+                }
+            }
+            assert_eq!(probe.0.get(), 0, "owner callback ran before drop");
+            drop(cpu);
+            assert_eq!(probe.0.get(), 0, "worker serviced MMIO while shutting down");
+            return;
+        }
+
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+            .arg("--exact")
+            .arg("rprofile::worker::tests::dropping_worker_with_pending_mmio_callback_exits")
+            .arg("--nocapture")
+            .env(CHILD, "1")
+            .spawn()
+            .unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                assert!(status.success(), "worker shutdown child failed: {status}");
+                break;
+            }
+            if std::time::Instant::now() >= deadline {
+                child.kill().unwrap();
+                let _ = child.wait();
+                panic!("worker drop hung while an MMIO callback was pending");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
     }
 
     #[test]
