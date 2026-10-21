@@ -1,3 +1,4 @@
+import type { AssetProgress } from '../engine/download-progress';
 import type { CameraRecord } from '../cameras/store';
 import { createStore } from 'solid-js';
 import { validateCatalog, type Catalog, type Firmware } from '../catalog';
@@ -46,6 +47,10 @@ export function createHomeState() {
     error: false,
     live: '',
     loading: false,
+    loadingAssets: [] as AssetProgress[],
+    webcamActive: false,
+    webcamBusy: false,
+    webcamError: '',
     progress: undefined as number | undefined,
     firmware: undefined as Firmware | undefined,
     speed: undefined as number | undefined,

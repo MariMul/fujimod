@@ -1,3 +1,4 @@
+import type { LoadingProgress } from './download-progress';
 import { HostTimings } from './host-timings';
 import type {
   BootInput,
@@ -53,7 +54,7 @@ export class WasmEngine implements Engine {
   private cardListeners = new Listeners<CardState>();
   private connectionListeners = new Listeners<Connection[]>();
   private saveListeners = new Listeners<SaveEvent>();
-  private progress?: (message: string, percent?: number) => void;
+  private progress?: LoadingProgress;
   private fault?: EngineFault;
   private disposed = false;
   private unavailable?: Error;
@@ -117,7 +118,7 @@ export class WasmEngine implements Engine {
         return;
       }
       case 'progress':
-        this.progress?.(event.message, event.percent);
+        this.progress?.(event.message, event.percent, event.assets);
         return;
       case 'state':
         if (event.state.poweredOn !== this.latestPower) {
@@ -218,7 +219,7 @@ export class WasmEngine implements Engine {
   async boot(
     dat: ArrayBuffer,
     config: EngineConfig,
-    progress: (message: string, percent?: number) => void,
+    progress: LoadingProgress,
     media?: BootMedia,
   ): Promise<Input[]> {
     this.progress = progress;
@@ -297,15 +298,12 @@ export class WasmEngine implements Engine {
     return zipFiles(files);
   }
 
-  async restartWithCardFiles(
-    files: CardFile[],
-    progress: (message: string, percent?: number) => void,
-  ) {
+  async restartWithCardFiles(files: CardFile[], progress: LoadingProgress) {
     this.progress = progress;
     progress('Restarting camera…');
     await this.rpc({ action: 'restart_card', files });
   }
-  async formatCard(progress: (message: string, percent?: number) => void) {
+  async formatCard(progress: LoadingProgress) {
     this.progress = progress;
     progress('Formatting card…');
     await this.rpc({ action: 'card_format' });
@@ -313,7 +311,7 @@ export class WasmEngine implements Engine {
   insertCard(present: boolean) {
     return this.rpc({ action: 'card_insert', present });
   }
-  async powerCycle(inputs: BootInput[], progress: (message: string, percent?: number) => void) {
+  async powerCycle(inputs: BootInput[], progress: LoadingProgress) {
     this.progress = progress;
     progress('Restarting camera…');
     await this.rpc({ action: 'power_cycle', inputs });

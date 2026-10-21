@@ -54,7 +54,7 @@ try {
     try {
       const noJs = await browser.newContext({ javaScriptEnabled: false });
       for (const [route, text] of [
-        ['/', 'Drop a firmware DAT'],
+        ['/', 'drop FPUPDATE.DAT firmware file'],
         ['/dev-tools/', 'Dev Tools'],
         ['/bug/', undefined],
       ]) {
@@ -151,10 +151,9 @@ try {
         false,
       );
       await page.goto(base + '/dev-tools/');
-      await page
-        .locator('.dt-status')
-        .filter({ hasText: /Disconnected|WebUSB unavailable/ })
-        .waitFor();
+      const connect = page.getByRole('button', { name: 'Connect camera', exact: true });
+      await connect.waitFor();
+      assert.equal(await connect.isEnabled(), await page.evaluate(() => 'usb' in navigator));
       await page.goto(base + '/bug/');
       await page
         .getByRole('alert')

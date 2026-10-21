@@ -1,3 +1,4 @@
+import { DownloadProgress, type LoadingProgress } from './download-progress';
 import { HostTimings } from './host-timings';
 import type { CardFile, EngineConfig, ReplayStep, Scene, Checkpoint, BootInput } from './api';
 import { CameraStore } from '../cameras/store';
@@ -20,10 +21,14 @@ interface Loaded {
   identity: string;
   loadTimings?: ReturnType<HostTimings['snapshot']>;
 }
-export async function loadWasm(bundle: string): Promise<Loaded> {
+export async function loadWasm(
+  bundle: string,
+  progress: LoadingProgress = () => {},
+): Promise<Loaded> {
   const timing = new HostTimings();
+  const downloads = new DownloadProgress(progress);
   const response = await timing.measureAsync('manifestFetch', () =>
-    fetch(new URL('wasm.json', bundle)),
+    downloads.fetch(new URL('wasm.json', bundle).href, () => fetch(new URL('wasm.json', bundle))),
   );
   if (!response.ok) throw Error('Wasm runtime manifest is unavailable.');
   const manifest: WasmManifest = await timing.measureAsync('manifestParse', () => response.json());
@@ -56,19 +61,22 @@ export async function loadWasm(bundle: string): Promise<Loaded> {
   // Load the independent module text and binary concurrently.
   const [wasmBinary, { default: create }] = await Promise.all([
     timing.measureAsync('binaryFetch', async () => {
-      const response = await fetch(new URL(manifest.wasm, bundle));
+      const url = new URL(manifest.wasm, bundle).href;
+      const response = await downloads.fetch(url, () => fetch(url));
       if (!response.ok) throw Error('Wasm binary is unavailable.');
       return response.arrayBuffer();
     }),
-    timing.measureAsync(
-      'moduleImport',
-      async () =>
-        (await import(/* @vite-ignore */ new URL(manifest.module, bundle).href)) as {
-          default: (options: {
-            wasmBinary: ArrayBuffer;
-            locateFile: (path: string) => string;
-          }) => Promise<CameraModule>;
-        },
+    timing.measureAsync('moduleImport', async () =>
+      downloads.module(
+        new URL(manifest.module, bundle).href,
+        async () =>
+          (await import(/* @vite-ignore */ new URL(manifest.module, bundle).href)) as {
+            default: (options: {
+              wasmBinary: ArrayBuffer;
+              locateFile: (path: string) => string;
+            }) => Promise<CameraModule>;
+          },
+      ),
     ),
   ]);
   const module = await timing.measureAsync('instantiate', () =>
@@ -192,7 +200,9 @@ export class WasmWorkerRuntime {
     if (this.bundle && this.bundle !== bundle)
       throw Error('A worker owns exactly one Wasm runtime.');
     this.bundle = bundle;
-    return (this.loaded ??= this.loader(bundle));
+    return (this.loaded ??= this.loader(bundle, (message, percent, assets) =>
+      this.send({ type: 'progress', message, percent, assets }),
+    ));
   }
   private require() {
     if (!this.session) throw Error('Wasm session is not ready.');

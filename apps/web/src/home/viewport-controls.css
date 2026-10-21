@@ -1,35 +1,27 @@
 .viewport-status {
   position: absolute;
-  top: 0;
-  inset-inline: 0;
+  top: 8px;
+  left: 8px;
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 14px;
-  min-height: 48px;
-  padding: 0 18px;
-  border-bottom: 1px solid rgb(255 255 255 / 6%);
-  background: rgb(12 14 16 / 80%);
+  gap: 8px;
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: rgb(12 14 16 / 65%);
   color: #dedee0;
-  font-size: 12px;
+  font-size: 10px;
   pointer-events: none;
 }
 .viewport-tools {
   position: absolute;
-  bottom: 18px;
-  right: 16px;
+  bottom: 8px;
+  right: 8px;
   z-index: 6;
   display: flex;
   align-items: center;
-  gap: 8px;
   max-width: calc(100% - 24px);
-  padding: 6px;
-  border: 1px solid #414349;
-  border-radius: 14px;
-  background: rgb(18 20 23 / 96%);
-  box-shadow:
-    0 8px 28px rgb(0 0 0 / 28%),
-    inset 0 1px rgb(255 255 255 / 4%);
+  gap: 6px;
   color: #d3d3d7;
 }
 .viewport-tools button,
@@ -77,16 +69,49 @@
 .viewport-settings summary {
   display: grid;
   place-items: center;
-  width: 44px;
+  box-sizing: border-box;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid #414349;
+  border-radius: 9px;
+  background: rgb(18 20 23 / 85%);
   list-style: none;
 }
 .viewport-settings summary::-webkit-details-marker {
   display: none;
 }
+.viewport-tools .webcam-toggle {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid #414349;
+  border-radius: 9px;
+  background: rgb(18 20 23 / 85%);
+}
+.viewport-tools .webcam-toggle[aria-pressed='true'] {
+  color: #fff;
+  border-color: #30d158;
+  background: #17462a;
+}
+.webcam-error {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  width: min(258px, calc(100vw - 32px));
+  padding: 10px;
+  border-radius: 9px;
+  background: #17191d;
+  font-size: 12px;
+}
 .viewport-settings-panel {
   position: absolute;
   right: 0;
-  bottom: calc(100% + 18px);
+  bottom: calc(100% + 8px);
   width: 258px;
   max-width: calc(100vw - 48px);
   border: 1px solid #414349;
@@ -125,17 +150,4 @@
 }
 .viewport-menu-actions button .i {
   flex: none;
-}
-@media (max-width: 520px) {
-  .viewport-tools {
-    gap: 4px;
-    padding: 5px;
-    bottom: 12px;
-  }
-  .viewport-settings summary {
-    width: 36px;
-  }
-  .viewport-status {
-    padding-inline: 12px;
-  }
 }

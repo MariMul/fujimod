@@ -1,3 +1,5 @@
+import { DownloadProgress, type AssetProgress } from '../engine/download-progress';
+import { WebcamInput } from './webcam';
 import { inputPanel } from '../ui/input-panel';
 import { CameraStore, type CameraRecord } from '../cameras/store';
 import { createSignal, reconcile } from 'solid-js';
@@ -54,6 +56,25 @@ export function startHome(
     release: ReturnType<typeof validateIndex> | undefined = state.release,
     engine: Engine | undefined;
   const cameras = new CameraStore();
+  const webcam = new WebcamInput(
+    async (scene) => {
+      await engine?.setScene(scene);
+    },
+    (active, busy) =>
+      setState((s) => {
+        s.webcamActive = active;
+        s.webcamBusy = busy;
+      }),
+    (error) =>
+      setState((s) => {
+        s.webcamError =
+          error instanceof DOMException && error.name === 'NotAllowedError'
+            ? 'Camera permission was denied.'
+            : error instanceof Error
+              ? error.message
+              : 'Webcam input stopped.';
+      }),
+  );
   let activeCamera: CameraRecord | undefined;
   let generation = 0,
     selectedFile: (() => Promise<File>) | undefined,
@@ -132,12 +153,18 @@ export function startHome(
       s.error = error;
     });
   }
-  function progress(message: string, percent?: number) {
+  function progress(message: string, percent?: number, assets?: AssetProgress[]) {
     status(message);
     setState((s) => {
       s.loading = true;
       s.promptVisible = false;
       s.progress = percent;
+      if (assets)
+        for (const asset of assets) {
+          const index = s.loadingAssets.findIndex((entry) => entry.url === asset.url);
+          if (index < 0) s.loadingAssets.push(asset);
+          else s.loadingAssets[index] = asset;
+        }
     });
   }
   function finishLoading() {
@@ -154,6 +181,7 @@ export function startHome(
   }
 
   function showFault(fault: EngineFault) {
+    void webcam.stop(false);
     latestFault = fault;
     updateModButtons(!selectedFile);
     panel.disable();
@@ -204,6 +232,7 @@ export function startHome(
   }
   async function restartOperation(operation: () => Promise<void>) {
     if (!engine) return;
+    if (webcam.requested) await webcam.stop();
     panel.disable();
     setState((s) => {
       s.live = 'RESTARTING';
@@ -234,6 +263,11 @@ export function startHome(
     return device;
   }
   function reset() {
+    void webcam.stop(false);
+    setState((s) => {
+      s.loadingAssets = [];
+      s.webcamError = '';
+    });
     choice.cancel();
     updateModButtons(true);
     setState((s) => {
@@ -365,7 +399,11 @@ export function startHome(
     }
     if (camera?.id === activeCamera?.id) camera = activeCamera;
     const current = ++generation;
+    const firmwareAssets = preparedBytes ? [...state.loadingAssets] : [];
     reset();
+    setState((s) => {
+      s.loadingAssets = firmwareAssets;
+    });
     activeCamera = camera;
     storageStatus('');
     setState((s) => {
@@ -713,7 +751,10 @@ export function startHome(
       // Only an explicit replay URL starts firmware without a user selection.
       const localDat =
         replayScenario && __FUJIMOD_LOCAL_DAT__
-          ? cachedFetch(replayScenario.firmwarePath)
+          ? new DownloadProgress(progress).fetch(
+              new URL(replayScenario.firmwarePath, location.href).href,
+              () => cachedFetch(replayScenario!.firmwarePath),
+            )
           : undefined;
       const first = cameras.find((camera) => camera.firmware.model_asset);
       if (first?.firmware.model_asset) {
@@ -746,6 +787,8 @@ export function startHome(
 
   let disposed = false;
   const saveHidden = () => {
+    if (document.visibilityState === 'hidden' && webcam.requested)
+      void webcam.stop().catch(() => {});
     if (document.visibilityState === 'hidden' && activeCamera && engine && !latestFault)
       void engine
         .saveCamera()
@@ -753,6 +796,7 @@ export function startHome(
   };
   document.addEventListener('visibilitychange', saveHidden);
   const unload = () => {
+    void webcam.stop(false);
     engine?.dispose();
   };
   window.addEventListener('beforeunload', unload);
@@ -769,6 +813,14 @@ export function startHome(
     selectMod,
     openCamera,
     closeCamera,
+    toggleWebcam: () => {
+      setState((s) => {
+        s.webcamError = '';
+      });
+      if (webcam.requested) void webcam.stop().catch(() => {});
+      else if (engine && selectedFirmware?.emulate?.sceneInput && !state.loading && !state.fault)
+        void webcam.start();
+    },
     formatCard: () => restartOperation(() => engine!.formatCard(progress)),
     insertCard: async (value: boolean) => {
       await engine?.insertCard(value);

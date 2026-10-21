@@ -90,12 +90,24 @@ work without a web app source change.
 
 The homepage opens **Your cameras** without loading emulator code, creating its
 worker or downloading its runtime. The engine is imported only after launching
-supplied firmware or opening a saved camera. A visible loading bar covers file
-verification, the lazy import and runtime downloads with indeterminate progress;
-guest execution supplies measured boot progress. The bar clears only when the
-camera is ready or loading fails. The real-download browser gate is
-`src/home/lazy-loading.browser.ts`; it holds module and runtime requests to
-verify both loading phases in Chromium and WebKit.
+supplied firmware or opening a saved camera. Loading shows each runtime asset's
+status and consumed bytes, with percentage, transfer rate and estimated remaining
+time when a decoded total is available. Completed assets stay visible during
+initialization. Waiting for headers, module imports and guest setup use
+indeterminate progress. The overlay clears when the camera is ready or loading
+fails. `src/home/lazy-loading.browser.ts` holds the real engine import and Wasm
+binary download to check deferred loading in Chromium and WebKit.
+`src/home/downloads.browser.ts` checks measured transfer progress during a
+bandwidth-limited cold boot and the deterministic preview route.
+
+Firmwares declaring catalog `emulate.sceneInput` expose the webcam button beside
+Viewer settings. It requests video only and sends bounded RGB frames through
+`Engine.setScene`, waiting for each submission before capturing another. Disabling
+it restores the dunes scene. Reset, restart, faults, page hide and unload stop
+capture and release all tracks. `src/home/webcam.browser.ts` checks the virtual
+Chromium camera against actual guest LCD pixels, then verifies capture stops and
+the default scene returns. Both browser checks take `FUJIMOD_WEB_URL` and
+`FUJIMOD_TEST_DAT`.
 
 Uploading a supported DAT creates a separate virtual camera record. Its firmware
 stays in IndexedDB. The C ABI supports live execution, same-owner Undo and portable durable media

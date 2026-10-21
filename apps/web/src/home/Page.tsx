@@ -1,3 +1,4 @@
+import { LoadingAssets } from './LoadingAssets';
 import { CameraLibrary } from '../cameras/Library';
 import { Show, createSignal, onSettled } from 'solid-js';
 import { createHomeState } from './state';
@@ -70,7 +71,9 @@ export default function Home() {
             <PersonalNote />
             <FeatureCatalog />
           </Show>
-          <h2 class="section-heading" id="emulator-heading">Emulator</h2>
+          <h2 class="section-heading" id="emulator-heading">
+            Emulator
+          </h2>
           <CameraLibrary
             cameras={state.savedCameras}
             active={state.activeCamera}
@@ -85,7 +88,12 @@ export default function Home() {
             }}
             upload={() => file.click()}
           />
-          <section ref={workspace} class={['stage', { idle: state.idle }]} id="workspace" aria-labelledby="emulator-heading">
+          <section
+            ref={workspace}
+            class={['stage', { idle: state.idle }]}
+            id="workspace"
+            aria-labelledby="emulator-heading"
+          >
             <div
               ref={viewer}
               class={['viewer lcd-mode', { dragging: dragging() }]}
@@ -121,6 +129,12 @@ export default function Home() {
                       state.firmware ? `${state.firmware.model} · ${state.firmware.version}` : ''
                     }
                     speed={state.speed}
+                    webcamSupported={!!state.firmware?.emulate?.sceneInput}
+                    webcamActive={state.webcamActive}
+                    webcamBusy={state.webcamBusy}
+                    webcamDisabled={state.loading || !!state.fault}
+                    webcamError={state.webcamError}
+                    toggleWebcam={() => runtime()?.toggleWebcam()}
                     modSupported={state.modSupported}
                     modEnabled={state.modEnabled}
                     modDisabled={state.modDisabled}
@@ -135,8 +149,8 @@ export default function Home() {
                 for="firmware-file"
                 hidden={!state.promptVisible}
               >
-                <strong>Drop a firmware DAT</strong>
-                <span>or click to choose it</span>
+                <strong>drop FPUPDATE.DAT firmware file</strong>
+                <span>you can download it from Fujifilm</span>
               </label>
               <input
                 ref={file}
@@ -144,20 +158,28 @@ export default function Home() {
                 id="firmware-file"
                 type="file"
                 accept=".dat,.DAT"
-                aria-label="Choose firmware DAT"
+                aria-label="Choose FPUPDATE.DAT"
                 onChange={(event) => {
                   runtime()?.selectFile(event.currentTarget.files?.[0]);
                   event.currentTarget.value = '';
                 }}
               />
               <div id="camera-loading" class="camera-loading" hidden={!state.loading}>
-                <p>
-                  It takes a bit to boot a camera
-                  <br />
-                  in the browser.
-                </p>
+                <Show
+                  when={
+                    !state.loadingAssets.some(
+                      (asset) => asset.status === 'loading' || asset.status === 'waiting',
+                    )
+                  }
+                >
+                  <p>{state.message}</p>
+                </Show>
+                <LoadingAssets assets={state.loadingAssets} />
                 <progress
                   id="boot-progress"
+                  hidden={state.loadingAssets.some(
+                    (asset) => asset.status === 'loading' || asset.status === 'waiting',
+                  )}
                   max="100"
                   value={state.progress}
                   aria-label={state.message || 'Loading camera'}

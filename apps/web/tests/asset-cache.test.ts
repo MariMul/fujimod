@@ -19,7 +19,9 @@ test('large local input is revalidated on disk; changed source bytes replace it'
   };
   assert.equal(await (await cachedFetch('/local/firmware.dat', fetch, storage)).text(), 'first');
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(await (await cachedFetch('/local/firmware.dat', fetch, storage)).text(), 'first');
+  const cached = await cachedFetch('/local/firmware.dat', fetch, storage);
+  assert.equal(cached.headers.get('content-length'), '5');
+  assert.equal(await cached.text(), 'first');
   source = 'second';
   tag = 'two';
   assert.equal(await (await cachedFetch('/local/firmware.dat', fetch, storage)).text(), 'second');

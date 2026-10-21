@@ -14,9 +14,19 @@ function mount() {
     active: true,
     modEnabled: true,
     saved: true,
+    webcamActive: false,
+    webcamSupported: true,
+    webcamBusy: false,
+    webcamDisabled: false,
+    webcamError: '',
   });
   const open = vi.fn(),
     recover = vi.fn();
+  const toggleWebcam = vi.fn(() =>
+    setState((s) => {
+      s.webcamActive = !s.webcamActive;
+    }),
+  );
   const selectMod = vi.fn((enabled: boolean) =>
     setState((s) => {
       s.modEnabled = enabled;
@@ -29,6 +39,12 @@ function mount() {
       <ViewportControls
         active={state.active}
         title="Camera"
+        webcamSupported={state.webcamSupported}
+        webcamBusy={state.webcamBusy}
+        webcamDisabled={state.webcamDisabled}
+        webcamError={state.webcamError}
+        webcamActive={state.webcamActive}
+        toggleWebcam={toggleWebcam}
         modSupported={true}
         modEnabled={state.modEnabled}
         modDisabled={false}
@@ -61,10 +77,25 @@ function mount() {
     open,
     recover,
     selectMod,
+    toggleWebcam,
     button,
     click,
   };
 }
+
+test('the visible webcam button toggles capture and reflects its state', () => {
+  const t = mount();
+  const button = t.host.querySelector<HTMLButtonElement>('#webcam-toggle')!;
+  expect(button.getAttribute('aria-label')).toBe('Enable webcam input');
+  button.click();
+  flush();
+  expect(t.toggleWebcam).toHaveBeenCalledOnce();
+  expect(button.getAttribute('aria-pressed')).toBe('true');
+  expect(button.getAttribute('aria-label')).toBe('Disable webcam input');
+  button.click();
+  flush();
+  expect(button.getAttribute('aria-pressed')).toBe('false');
+});
 
 test('every firmware choice dispatches its value and closes the menu', () => {
   const t = mount();
@@ -108,4 +139,28 @@ test('feedback, saved reports, escape and outside-click dismissal work from one 
   expect(t.host.querySelector('[aria-label="Navigation mode"]')).toBeNull();
   expect(t.host.querySelector('#firmware-mode')).toBeNull();
   expect(t.host.querySelector('#feedback-open')).not.toBeNull();
+});
+
+test('webcam support, pending permission, disabled state and errors follow the selected camera', () => {
+  const t = mount();
+  t.setState((s) => {
+    s.webcamBusy = true;
+    s.webcamError = 'Camera permission was denied.';
+  });
+  flush();
+  const button = t.host.querySelector<HTMLButtonElement>('#webcam-toggle')!;
+  expect(button.getAttribute('aria-busy')).toBe('true');
+  expect(button.getAttribute('aria-label')).toBe('Disable webcam input');
+  expect(t.host.querySelector('[role=status]')?.textContent).toBe('Camera permission was denied.');
+  t.setState((s) => {
+    s.webcamDisabled = true;
+  });
+  flush();
+  button.click();
+  expect(t.toggleWebcam).not.toHaveBeenCalled();
+  t.setState((s) => {
+    s.webcamSupported = false;
+  });
+  flush();
+  expect(t.host.querySelector('#webcam-toggle')).toBeNull();
 });

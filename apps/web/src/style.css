@@ -1239,9 +1239,9 @@ footer a {
 }
 #lcd-source.flat {
   position: absolute;
-  inset: 64px 16px 24px;
+  inset: 16px;
   width: calc(100% - 32px);
-  height: calc(100% - 88px);
+  height: calc(100% - 32px);
   object-fit: contain;
 }
 .err {
@@ -1271,7 +1271,7 @@ footer a {
   }
   .viewer.lcd-mode {
     height: auto;
-    padding-top: 64px;
+    padding-top: 0;
   }
   #lcd-source.flat {
     position: relative;

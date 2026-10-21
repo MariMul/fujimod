@@ -7,6 +7,7 @@ import type {
   Scene,
   TouchPhase,
 } from './api';
+import type { AssetProgress } from './download-progress';
 import type { EngineFault } from './fault';
 import type { CameraPerformance } from './performance';
 import type { SessionState } from './wasm-abi';
@@ -51,7 +52,7 @@ export type WasmWorkerRequest =
 export type WasmWorkerEvent =
   | { type: 'reply'; serial: number; result?: unknown }
   | { type: 'error'; serial?: number; error: string; fault?: EngineFault }
-  | { type: 'progress'; message: string; percent?: number }
+  | { type: 'progress'; message: string; percent?: number; assets?: AssetProgress[] }
   | { type: 'state'; state: SessionState }
   | { type: 'metrics'; metrics: CameraPerformance }
   | { type: 'saved'; savedAt?: number; revision?: number; error?: string }

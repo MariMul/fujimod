@@ -138,3 +138,26 @@ test('a guest fault keeps the transport available for rollback and diagnostic ex
   f.engine.dispose();
   await assert.rejects(pending, /closed/);
 });
+
+test('Wasm download events preserve per-asset progress at the engine boundary', async () => {
+  const f = setup();
+  const updates: unknown[] = [];
+  const boot = f.engine.boot(new ArrayBuffer(2), testConfig(false), (...args) =>
+    updates.push(args),
+  );
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  const assets = [
+    {
+      url: '/runtime/camera.wasm',
+      label: 'Camera emulator',
+      loaded: 1024,
+      total: 4096,
+      status: 'loading' as const,
+    },
+  ];
+  f.reply({ type: 'progress', message: 'Camera emulator', percent: 25, assets });
+  assert.deepEqual(updates.at(-1), ['Camera emulator', 25, assets]);
+  f.resolve([]);
+  await boot;
+  f.engine.dispose();
+});

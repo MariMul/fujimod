@@ -70,7 +70,10 @@ function localArtifacts(env: Record<string, string>): Plugin {
           res.end();
           return;
         }
-        if (gzip) res.setHeader('Content-Encoding', 'gzip');
+        if (gzip) {
+          res.setHeader('Content-Encoding', 'gzip');
+          res.setHeader('X-Decoded-Content-Length', info.size);
+        }
         // Mobile Safari fetches video in byte ranges and stalls without them.
         const range = gzip ? null : /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
         const first = range ? (range[1] ? Number(range[1]) : info.size - Number(range[2])) : 0;
@@ -143,15 +146,30 @@ function simulatedUsbAvailable(env: Record<string, string>): boolean {
   const runtime = resolve(env.FUJIMOD_RUNTIME || 'public/runtime');
   const path = resolve(runtime, 'catalog.json');
   if (!existsSync(path)) return false;
-  const catalog = JSON.parse(readFileSync(path, 'utf8')) as { firmwares?: { emulate?: { usb?: { bundle: string } } }[] };
-  return Boolean(catalog.firmwares?.some((entry) => {
-    const bundle = entry.emulate?.usb?.bundle;
-    if (!bundle || !/^runtime\/[a-zA-Z0-9_-]+\/$/.test(bundle)) return false;
-    const path = resolve(runtime, bundle.slice('runtime/'.length), 'wasm.json');
-    if (!existsSync(path)) return false;
-    const manifest = JSON.parse(readFileSync(path, 'utf8')) as { schema?: number; abi?: number; construction?: string; usb?: { kind?: string; node?: string } };
-    return manifest.schema === 1 && manifest.abi === 1 && manifest.construction === 'session' && manifest.usb?.kind === 'exr2' && Boolean(manifest.usb.node);
-  }));
+  const catalog = JSON.parse(readFileSync(path, 'utf8')) as {
+    firmwares?: { emulate?: { usb?: { bundle: string } } }[];
+  };
+  return Boolean(
+    catalog.firmwares?.some((entry) => {
+      const bundle = entry.emulate?.usb?.bundle;
+      if (!bundle || !/^runtime\/[a-zA-Z0-9_-]+\/$/.test(bundle)) return false;
+      const path = resolve(runtime, bundle.slice('runtime/'.length), 'wasm.json');
+      if (!existsSync(path)) return false;
+      const manifest = JSON.parse(readFileSync(path, 'utf8')) as {
+        schema?: number;
+        abi?: number;
+        construction?: string;
+        usb?: { kind?: string; node?: string };
+      };
+      return (
+        manifest.schema === 1 &&
+        manifest.abi === 1 &&
+        manifest.construction === 'session' &&
+        manifest.usb?.kind === 'exr2' &&
+        Boolean(manifest.usb.node)
+      );
+    }),
+  );
 }
 export default defineConfig(({ mode, command }) => ({
   base: '/',

@@ -9,6 +9,12 @@ export function ViewportControls(props: {
   active: boolean;
   title: string;
   speed?: number;
+  webcamSupported?: boolean;
+  webcamActive?: boolean;
+  webcamBusy?: boolean;
+  webcamDisabled?: boolean;
+  webcamError?: string;
+  toggleWebcam?: () => void;
   modSupported: boolean;
   modEnabled: boolean;
   modDisabled: boolean;
@@ -45,6 +51,34 @@ export function ViewportControls(props: {
         role="group"
         aria-label="Viewport controls"
       >
+        <Show when={props.active && props.webcamSupported}>
+          <button
+            id="webcam-toggle"
+            class="webcam-toggle"
+            type="button"
+            aria-label={
+              props.webcamActive || props.webcamBusy
+                ? 'Disable webcam input'
+                : 'Enable webcam input'
+            }
+            title={
+              props.webcamActive || props.webcamBusy
+                ? 'Disable webcam input'
+                : 'Enable webcam input'
+            }
+            aria-pressed={props.webcamActive ? 'true' : 'false'}
+            aria-busy={props.webcamBusy ? 'true' : 'false'}
+            disabled={props.webcamDisabled}
+            onClick={() => props.toggleWebcam?.()}
+          >
+            <Icon name="camera" size={18} />
+          </button>
+          <Show when={props.webcamError}>
+            <span class="webcam-error" role="status">
+              {props.webcamError}
+            </span>
+          </Show>
+        </Show>
         <details
           ref={settings}
           class="viewport-settings"

@@ -100,7 +100,13 @@ export async function cachedFetch(
       const current = await fetcher(url, { method: 'HEAD', cache: 'no-store' });
       if (current.ok && current.headers.get('etag') === saved.etag)
         return new Response(saved.bytes, {
-          headers: { etag: saved.etag, 'content-type': saved.contentType },
+          headers: {
+            etag: saved.etag,
+            'content-type': saved.contentType,
+            'content-length': String(
+              saved.bytes instanceof Blob ? saved.bytes.size : saved.bytes.byteLength,
+            ),
+          },
         });
     }
   } catch {

@@ -28,16 +28,12 @@ async function waitForGate(promise: Promise<void>, label: string) {
     clearTimeout(timer);
   }
 }
-async function loading(page: Page, determinate: boolean) {
-  assert.equal(await page.locator('#boot-progress').isVisible(), true);
-  const value = await page.locator('#boot-progress').getAttribute('value');
-  if (determinate)
-    assert.ok(
-      value !== null && Number(value) > 0 && Number(value) < 100,
-      value ?? 'Missing progress value',
-    );
-  else assert.equal(value, null, 'Downloads have no fabricated percentage');
-  const bounds = await page.locator('#boot-progress').boundingBox();
+async function loading(page: Page) {
+  const bar = page.locator('#camera-loading progress:visible').first();
+  assert.equal(await bar.isVisible(), true);
+  const value = await bar.getAttribute('value');
+  assert.equal(value, null, 'Waiting for headers has no fabricated percentage');
+  const bounds = await bar.boundingBox();
   assert.ok(bounds && bounds.width > 100 && bounds.height > 0);
 }
 for (const type of [chromium, webkit]) {
@@ -54,7 +50,7 @@ for (const type of [chromium, webkit]) {
       await modulePermit.promise;
       await route.continue();
     });
-    await context.route('**/_native.so', async (route) => {
+    await context.route('**/camera.wasm', async (route) => {
       runtimeReady.release();
       await runtimePermit.promise;
       await route.continue();
@@ -83,29 +79,36 @@ for (const type of [chromium, webkit]) {
       [],
       'The idle page must not load emulator modules or runtime assets',
     );
-    assert.deepEqual(workers, [], 'The idle page must not create an emulator worker');
+    assert.equal(workers.length, 0, 'The idle page must not create an emulator worker');
     assert.equal(await page.locator('#boot-progress').isVisible(), false);
     console.log(`${type.name()}: idle page has no emulator downloads or worker`);
     const chooser = page.waitForEvent('filechooser');
     await page.locator('#firmware-prompt').click();
     await (await chooser).setFiles(dat);
     await waitForGate(moduleReady.promise, 'the lazy engine import');
-    await loading(page, false);
-    assert.deepEqual(workers, []);
+    await loading(page);
+    assert.equal(workers.length, 0);
     await page.locator('#workspace').scrollIntoViewIfNeeded();
     await page.screenshot({ path: new URL(`${type.name()}-module.png`, output).pathname });
     modulePermit.release();
     await waitForGate(runtimeReady.promise, 'the runtime download');
-    await loading(page, false);
-    assert.equal(workers.length, 1);
+    assert.equal(
+      await page
+        .locator('.loading-assets li[data-asset$="camera.wasm"]')
+        .getAttribute('data-state'),
+      'waiting',
+    );
+    await loading(page);
+    assert.equal(workers.filter((url) => url.includes('wasm-worker')).length, 1);
     await page.screenshot({ path: new URL(`${type.name()}-download.png`, output).pathname });
     runtimePermit.release();
-    await page.waitForFunction(
-      () => Number(document.querySelector('#boot-progress')?.getAttribute('value')) > 10,
-    );
-    await loading(page, true);
-    await page.screenshot({ path: new URL(`${type.name()}-boot.png`, output).pathname });
     await page.waitForFunction(() => document.querySelector('#live-label')?.textContent === 'LIVE');
+    assert.equal(
+      await page
+        .locator('.loading-assets li[data-asset$="camera.wasm"]')
+        .getAttribute('data-state'),
+      'complete',
+    );
     assert.equal(await page.locator('#boot-progress').isVisible(), false);
     assert.equal(await page.locator('#camera-loading').isVisible(), false);
     assert.equal(
@@ -122,13 +125,13 @@ for (const type of [chromium, webkit]) {
     await writeFile(
       new URL(`${type.name()}.json`, output),
       JSON.stringify(
-        { requests, workers, errors, phases: ['idle', 'module', 'download', 'boot', 'ready'] },
+        { requests, workers, errors, phases: ['idle', 'module', 'download', 'ready'] },
         null,
         2,
       ),
     );
     console.log(
-      `${type.name()}: lazy import, indeterminate download, measured boot progress and live LCD passed`,
+      `${type.name()}: lazy import, waiting download, completed assets and live LCD passed`,
     );
   } finally {
     modulePermit.release();
