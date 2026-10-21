@@ -2,13 +2,29 @@
 //! and vertical passes, then pixel-center rational bilinear sampling. These
 //! software numerical laws are not measured Fuji filter precision.
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Samples {
+    Scalar16,
+    YyCbCr422,
+    Luma8,
+}
+impl Samples {
+    pub fn bytes_per_pixel(self) -> usize {
+        match self {
+            Self::Scalar16 | Self::YyCbCr422 => 2,
+            Self::Luma8 => 1,
+        }
+    }
+}
+
 pub struct Geometry {
     pub width: usize,
     pub height: usize,
     pub pitch: usize,
     pub output_width: usize,
     pub output_height: usize,
-    pub scalar: bool,
+    pub input: Samples,
+    pub output: Samples,
 }
 pub fn filter(
     source: &[u8],
@@ -26,19 +42,22 @@ pub fn filter(
         pitch,
         output_width: dw,
         output_height: dh,
-        scalar,
+        input,
+        output,
     } = g;
     let [num, den] = ratio;
     if w == 0
         || h == 0
         || dw == 0
         || dh == 0
-        || pitch < w * 2
+        || pitch < w * input.bytes_per_pixel()
         || source.len() != pitch * h
-        || out.len() != dw * dh * 2
+        || out.len() != dw * dh * output.bytes_per_pixel()
         || a.len() < w * h
         || b.len() < w * h
-        || !scalar && (!w.is_multiple_of(2) || !dw.is_multiple_of(2))
+        || input != output && !(input == Samples::YyCbCr422 && output == Samples::Luma8)
+        || input == Samples::YyCbCr422 && !w.is_multiple_of(2)
+        || output == Samples::YyCbCr422 && !dw.is_multiple_of(2)
         || num == 0
         || den == 0
         || num > 512
@@ -52,17 +71,19 @@ pub fn filter(
     {
         return Err("invalid bounded separable raster geometry/filter".into());
     }
-    for channel in 0..if scalar { 1 } else { 3 } {
+    for channel in 0..if output == Samples::YyCbCr422 { 3 } else { 1 } {
         let sw = if channel == 0 { w } else { w / 2 };
         let ow = if channel == 0 { dw } else { dw / 2 };
         for y in 0..h {
             for x in 0..sw {
-                a[y * sw + x] = if scalar {
+                a[y * sw + x] = if input == Samples::Scalar16 {
                     u16::from_le_bytes(
                         source[y * pitch + x * 2..y * pitch + x * 2 + 2]
                             .try_into()
                             .unwrap(),
                     )
+                } else if input == Samples::Luma8 {
+                    source[y * pitch + x] as u16
                 } else {
                     source[y * pitch
                         + if channel == 0 {
@@ -117,9 +138,11 @@ pub fn filter(
                     |y: usize| a[y * sw + x0] as u64 * (unit - fx) + a[y * sw + x1] as u64 * fx;
                 let value = ((sample(y0) * (unit - fy) + sample(y1) * fy + unit * unit / 2)
                     / (unit * unit)) as u16;
-                if scalar {
+                if output == Samples::Scalar16 {
                     out[(y * dw + x) * 2..(y * dw + x) * 2 + 2]
                         .copy_from_slice(&value.to_le_bytes());
+                } else if output == Samples::Luma8 {
+                    out[y * dw + x] = value as u8;
                 } else {
                     let at = y * dw * 2
                         + if channel == 0 {
@@ -150,7 +173,8 @@ mod tests {
                 pitch: 8,
                 output_width: 4,
                 output_height: 1,
-                scalar: false,
+                input: Samples::YyCbCr422,
+                output: Samples::YyCbCr422,
             },
             &[1, 2, 1],
             &[1],
@@ -177,7 +201,8 @@ mod tests {
                 pitch: 8,
                 output_width: 2,
                 output_height: 1,
-                scalar: true,
+                input: Samples::Scalar16,
+                output: Samples::Scalar16,
             },
             &[1],
             &[1],
@@ -188,5 +213,38 @@ mod tests {
         )
         .unwrap();
         assert_eq!(out, [0xf4, 1, 0xc4, 9]);
+    }
+}
+
+#[cfg(test)]
+mod conversion_tests {
+    use super::*;
+
+    #[test]
+    fn packed_half_size_luma_excludes_chroma_and_retains_byte_range() {
+        let source = [
+            0, 20, 1, 250, 100, 120, 3, 240, 40, 60, 10, 20, 140, 160, 30, 40,
+        ];
+        let mut out = [0; 2];
+        filter(
+            &source,
+            Geometry {
+                width: 4,
+                height: 2,
+                pitch: 8,
+                output_width: 2,
+                output_height: 1,
+                input: Samples::YyCbCr422,
+                output: Samples::Luma8,
+            },
+            &[1],
+            &[1],
+            [2, 1],
+            &mut out,
+            &mut [0; 8],
+            &mut [0; 8],
+        )
+        .unwrap();
+        assert_eq!(out, [30, 130]);
     }
 }

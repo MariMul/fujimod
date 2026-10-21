@@ -13,7 +13,7 @@ use serde_json::Value;
 
 pub const BASE: u64 = 0xfff43000;
 pub const IRQ: u32 = 0x45;
-const SOURCE_SAMPLES: usize = 720 * 480;
+const SOURCE_SAMPLES: usize = 1024 * 480;
 const SOURCE_BYTES: usize = SOURCE_SAMPLES * 2;
 const OUTPUT_BYTES: usize = 4 * 1024 * 1024;
 const ORDER: [usize; 12] = [
@@ -52,6 +52,7 @@ enum RasterKind {
     PackedFilter,
     FilteredRational,
     ScalarFilteredHalf,
+    LumaFilteredHalf,
 }
 
 #[derive(Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -345,6 +346,27 @@ impl Decompressor {
         {
             return Ok(RasterKind::ScalarFilteredHalf);
         }
+        // The packing controls select packed 422 input and byte-plane output.
+        // Register 80 describes 128/64 transfer blocks, not sample formats.
+        // This law shares the declared replicated-edge FIR and half-size
+        // pixel-center sampling, retaining only the luma component.
+        if r(8) == 0x10
+            && r(0x30) == 0x40
+            && r(0x34) == 0x082030
+            && r(0x38) == 0x081e3844
+            && r(0x3c) == 0x01000200
+            && r(0x80) == 0x20003000
+            && (16..=1024).contains(&sw)
+            && (2..=480).contains(&sh)
+            && dw * 2 == sw
+            && dh * 2 == sh
+            && r(0x14) >= sw * 2
+            && r(0x14) <= 2048
+            && r(0x24) >= dw
+            && r(0x24) <= 2048
+        {
+            return Ok(RasterKind::LumaFilteredHalf);
+        }
         Err("MOVRSZ descriptor has no selected numerical law".into())
     }
     fn resize_alias_conflicts(
@@ -359,7 +381,10 @@ impl Decompressor {
         {
             return Ok(false);
         }
-        if kind != RasterKind::ScalarFilteredHalf {
+        if !matches!(
+            kind,
+            RasterKind::ScalarFilteredHalf | RasterKind::LumaFilteredHalf
+        ) {
             return Ok(true);
         }
         let raster = |address, pitch, dimensions: u32| super::isp::dma::Raster {
@@ -370,7 +395,16 @@ impl Decompressor {
         };
         let a = raster(source.start, regs[0x14 / 4] as usize, regs[0x18 / 4]);
         let b = raster(dest.start, regs[0x24 / 4] as usize, regs[0x28 / 4]);
-        a.active_rows_overlap(a.width * 2, b, b.width * 2)
+        a.active_rows_overlap(
+            a.width * 2,
+            b,
+            b.width
+                * if kind == RasterKind::LumaFilteredHalf {
+                    1
+                } else {
+                    2
+                },
+        )
     }
     fn start_resize(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
         let r = self
@@ -437,7 +471,7 @@ impl Decompressor {
                 RasterKind::PackedFilter => {
                     ([2, 10, 62, 108, 62, 10, 2], [8, 32, 48, 32, 8], [1, 1])
                 }
-                RasterKind::ScalarFilteredHalf => {
+                RasterKind::ScalarFilteredHalf | RasterKind::LumaFilteredHalf => {
                     ([8, 30, 56, 68, 56, 30, 8], [8, 32, 48, 32, 8], [2, 1])
                 }
                 RasterKind::FilteredRational => (
@@ -450,6 +484,18 @@ impl Decompressor {
                 ),
                 RasterKind::BoxHalf => unreachable!(),
             };
+            use crate::imaging::separable::Samples;
+            let input = if sf == 0 && df == 0 {
+                Samples::Scalar16
+            } else {
+                Samples::YyCbCr422
+            };
+            let output = if kind == RasterKind::LumaFilteredHalf {
+                Samples::Luma8
+            } else {
+                input
+            };
+            let row_bytes = w * output.bytes_per_pixel();
             crate::imaging::separable::filter(
                 &self.source[..sp * sh],
                 crate::imaging::separable::Geometry {
@@ -458,16 +504,17 @@ impl Decompressor {
                     pitch: sp,
                     output_width: w,
                     output_height: h,
-                    scalar: sf == 0 && df == 0,
+                    input,
+                    output,
                 },
                 &horizontal,
                 &vertical,
                 ratio,
-                &mut self.output[..w * h * 2],
+                &mut self.output[..row_bytes * h],
                 &mut self.a,
                 &mut self.b,
             )?;
-            return Ok((w * 2, h, pitch));
+            return Ok((row_bytes, h, pitch));
         }
         let get = |x: usize, y: usize| -> u32 {
             if sf == 1 {

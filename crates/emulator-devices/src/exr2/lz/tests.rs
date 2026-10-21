@@ -524,3 +524,111 @@ fn rerouting_or_ambiguous_irq_refuses_without_destination_writes() {
     assert_eq!(h.writes, 0);
     assert!(h.irqs.is_empty());
 }
+
+fn luma_conversion_words() -> [u32; 12] {
+    [
+        0x10,
+        0x10000,
+        2048,
+        480 << 16 | 768,
+        0x180000,
+        720,
+        240 << 16 | 384,
+        0x40,
+        0x082030,
+        0x081e3844,
+        0x01000200,
+        0x20003000,
+    ]
+}
+fn configure_luma(d: &mut Decompressor, h: &mut Ram, words: [u32; 12]) {
+    for (offset, value) in ORDER.into_iter().zip(words) {
+        put(d, h, offset, value).unwrap();
+    }
+    put(d, h, 0x8c, 1).unwrap();
+}
+
+#[test]
+fn packed_luma_half_resize_latches_source_preserves_padding_and_completes_before_irq() {
+    let (mut d, mut h, mut c) = setup();
+    reset(&mut d, &mut h);
+    enabled(&mut c, &mut h, 1, true);
+    // A two-row ramp with a 16-level horizontal step has a hand-calculated
+    // half-size result. Arbitrary chroma and padding cannot become luma.
+    for y in 0..480 {
+        for x in (0..768).step_by(2) {
+            let base = y / 2 + if x >= 384 { 16 } else { 0 };
+            let at = 0x10000 + y * 2048 + x * 2;
+            h.bytes[at..at + 4].copy_from_slice(&[
+                base as u8,
+                base as u8,
+                (x + y) as u8,
+                (x * 3 + y * 7) as u8,
+            ]);
+        }
+    }
+    configure_luma(&mut d, &mut h, luma_conversion_words());
+    put(&mut d, &mut h, 4, 1).unwrap();
+    let due = d.next_deadline(h.now).unwrap();
+    let checkpoint = d.checkpoint().unwrap();
+    let (mut restored, _, _) = setup();
+    restored.restore_checkpoint(&checkpoint).unwrap();
+    assert_eq!(restored.next_deadline(h.now), Some(due));
+    // START owns the latched source. Later external RAM changes survive DMA.
+    h.bytes[0x10000..0x100000].fill(0xa7);
+    tick(&mut restored, &mut h, due - 1).unwrap();
+    assert_eq!((h.writes, restored.r(0x88)), (0, 0));
+    assert!(h.irqs.is_empty());
+    tick(&mut restored, &mut h, due).unwrap();
+    for y in 0..240 {
+        let row = &h.bytes[0x180000 + y * 720..0x180000 + (y + 1) * 720];
+        for (x, &actual) in row[..384].iter().enumerate() {
+            let increment = match x {
+                0..190 => 0,
+                190 => 1,
+                191 => 4,
+                192 => 12,
+                _ => 16,
+            };
+            assert_eq!(actual, (y + increment) as u8, "{x},{y}");
+        }
+        assert!(row[384..].iter().all(|&byte| byte == 0xcc));
+    }
+    assert!(h.bytes[0x10000..0x100000].iter().all(|&byte| byte == 0xa7));
+    assert_eq!((h.writes, h.irq_writes), (240, 240));
+    assert_eq!(h.irqs, [(1, IRQ)]);
+    assert_eq!((restored.r(0x88), restored.r(0x4c)), (1, 0));
+    assert_eq!(restored.next_deadline(h.now), None);
+    let completed = restored.fingerprint().unwrap();
+    tick(&mut restored, &mut h, due + 1).unwrap();
+    assert_eq!(restored.fingerprint().unwrap(), completed);
+    assert_eq!(h.writes, 240);
+}
+
+#[test]
+fn luma_conversion_rejects_unknown_packing_geometry_and_flags_without_dma() {
+    for (offset, value) in [
+        (8, 0x11),
+        (0x14, 1520),
+        (0x24, 368),
+        (0x18, 479 << 16 | 768),
+        (0x80, 0x30003000),
+    ] {
+        let (mut d, mut h, mut c) = setup();
+        reset(&mut d, &mut h);
+        enabled(&mut c, &mut h, 0, true);
+        let mut words = luma_conversion_words();
+        words[ORDER
+            .iter()
+            .position(|&candidate| candidate == offset)
+            .unwrap()] = value;
+        configure_luma(&mut d, &mut h, words);
+        assert!(put(&mut d, &mut h, 4, 1).is_err(), "{offset:x}");
+        assert_eq!(d.next_deadline(h.now), None);
+        let later = h.now + 1_000_000;
+        tick(&mut d, &mut h, later).unwrap();
+        assert_eq!((h.writes, d.r(0x88)), (0, 0));
+        assert!(h.irqs.is_empty());
+        assert!(h.bytes.iter().all(|&byte| byte == 0xcc));
+    }
+}
