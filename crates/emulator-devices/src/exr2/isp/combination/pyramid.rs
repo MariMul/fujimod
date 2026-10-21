@@ -5,26 +5,9 @@
 //! are explicit approximations. The tile widths bound internal working windows;
 //! this implementation evaluates their full-raster equivalent. No firmware
 //! state, instruction identity or callback participates in preparation.
-use super::super::dma::{MAX_BYTES, Raster, physical};
+use super::super::dma::{MAX_BYTES, Raster};
+use super::{Prepared, read_rows};
 use crate::Cx;
-
-pub(super) struct Prepared {
-    pub destination: Raster,
-    pub pixels: Vec<u8>,
-    pub bytes: usize,
-}
-
-fn read_rows(cx: &Cx<'_>, raster: Raster, row_bytes: usize) -> Result<Vec<u8>, String> {
-    raster.validate(row_bytes)?;
-    let mut pixels = vec![0; row_bytes * raster.height];
-    for y in 0..raster.height {
-        cx.ram_read(
-            physical(raster.address + (y * raster.pitch) as u64, row_bytes)?,
-            &mut pixels[y * row_bytes..(y + 1) * row_bytes],
-        )?;
-    }
-    Ok(pixels)
-}
 
 pub(super) fn prepare(cx: &Cx<'_>, word: impl Fn(u16) -> u32) -> Result<Prepared, String> {
     let control = word(4);
@@ -52,11 +35,8 @@ pub(super) fn prepare(cx: &Cx<'_>, word: impl Fn(u16) -> u32) -> Result<Prepared
         || format & !0x70007000 != 0
         || input_alignment > 16
         || output_alignment > 16
-        || [0x40, 0x44, 0x48, 0x4c, 0x50, 0x5c, 0x60, 0x64, 0xd4]
-            .into_iter()
-            .chain((0x70..0xbc).step_by(4))
-            .chain((0x300..0x500).step_by(4))
-            .any(|offset| word(offset) != 0)
+        || word(0x40) != 0
+        || word(0x4c) != 0
     {
         return Err("unsupported combination pyramid geometry, format or transform".into());
     }
@@ -228,5 +208,21 @@ pub(super) mod tests {
             assert!(prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0)).is_err());
             assert!(host.effects.is_empty());
         }
+    }
+    #[test]
+    fn inactive_signed_coefficients_and_other_mode_tables_do_not_change_pyramid_pixels() {
+        let (mut host, mut words) = fixture();
+        let before = prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0))
+            .unwrap()
+            .pixels;
+        words.insert(0x60, 0x03000100);
+        words.insert(0xd4, 0x43210000);
+        words.insert(0x300, 0xffffffff);
+        assert_eq!(
+            prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0))
+                .unwrap()
+                .pixels,
+            before
+        );
     }
 }

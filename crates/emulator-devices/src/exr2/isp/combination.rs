@@ -1,20 +1,40 @@
 //! FFF480 reset, interrupt status and explicitly selected image arithmetic.
-//! The pyramid law is a declared approximation; other operations refuse.
+//! The selected pixel laws are declared approximations; other operations refuse.
 use super::{
     Irq,
-    dma::{Clock, Transfer},
+    dma::{Clock, Raster, Transfer, physical},
 };
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+mod linear;
+mod masked;
 mod pyramid;
 pub const BASE: u64 = 0xfff48000;
+struct Prepared {
+    pub destination: Raster,
+    pub pixels: Vec<u8>,
+    pub bytes: usize,
+}
+
+fn read_rows(cx: &Cx<'_>, raster: Raster, row_bytes: usize) -> Result<Vec<u8>, String> {
+    raster.validate(row_bytes)?;
+    let mut pixels = vec![0; row_bytes * raster.height];
+    for y in 0..raster.height {
+        cx.ram_read(
+            physical(raster.address + (y * raster.pitch) as u64, row_bytes)?,
+            &mut pixels[y * row_bytes..(y + 1) * row_bytes],
+        )?;
+    }
+    Ok(pixels)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Arithmetic {
     Unmodeled,
-    PyramidBlendUnmeasured,
+    PackedImageUnmeasured,
 }
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -80,13 +100,21 @@ impl Combination {
         if self.state.reset_due.is_some() || self.state.dma.deadline().is_some() {
             return Err("combination start while reset or DMA is pending".into());
         }
-        if self.options.arithmetic != Arithmetic::PyramidBlendUnmeasured || control & 7 != 2 {
+        if self.options.arithmetic != Arithmetic::PackedImageUnmeasured
+            || !matches!(control & 7, 2..=4)
+        {
             return Err(format!(
                 "image combination FFF48004 operation {} has no raster/DMA law",
                 control & 7
             ));
         }
-        let prepared = pyramid::prepare(cx, |o| if o == 4 { control } else { self.word(o) })?;
+        let word = |o| if o == 4 { control } else { self.word(o) };
+        let prepared = match control & 7 {
+            2 => pyramid::prepare(cx, word),
+            3 => masked::prepare(cx, word),
+            4 => linear::prepare(cx, word),
+            _ => unreachable!(),
+        }?;
         let row_bytes = prepared.destination.width * 2;
         let delay = self.options.clock.delay(prepared.bytes)?;
         self.state
@@ -111,8 +139,8 @@ impl Combination {
                 || state.registers.get(&0) != Some(&0)
                 || state.dma.deadline().is_some())
             || state.dma.deadline().is_some()
-                && (self.options.arithmetic != Arithmetic::PyramidBlendUnmeasured
-                    || state.registers.get(&4).copied().unwrap_or(0) & 7 != 2)
+                && (self.options.arithmetic != Arithmetic::PackedImageUnmeasured
+                    || !matches!(state.registers.get(&4).copied().unwrap_or(0) & 7, 2..=4))
             || state.interrupt_asserted
                 != (state.registers.get(&0xc0).copied().unwrap_or(0)
                     & state.registers.get(&0xc8).copied().unwrap_or(0)
@@ -328,13 +356,22 @@ mod tests {
         assert_eq!(d.save(), before);
     }
     fn processing_fixture(enabled: bool) -> (Combination, TestHost) {
-        let (mut host, words) = pyramid::tests::fixture();
-        host.ram[0x80000..0x80180].fill(0xee);
+        let (host, words) = pyramid::tests::fixture();
+        configured_fixture(enabled, host, words)
+    }
+    fn configured_fixture(
+        enabled: bool,
+        mut host: TestHost,
+        words: BTreeMap<u16, u32>,
+    ) -> (Combination, TestHost) {
+        let address = words[&0x30] as usize;
+        let bytes = words[&0x34] as usize * 2 * (words[&0x38] >> 16) as usize;
+        host.ram[address..address + bytes].fill(0xee);
         let mut d = Combination::new(
             Options {
                 reset_ticks: 16,
                 clock: Clock::Fixed { ticks: 100 },
-                arithmetic: Arithmetic::PyramidBlendUnmeasured,
+                arithmetic: Arithmetic::PackedImageUnmeasured,
             },
             Irq { core: 0, line: 68 },
         )
@@ -433,5 +470,23 @@ mod tests {
         assert_eq!(read(&mut d, &mut host, BASE + 0xc0), 0);
         assert!(host.effects.is_empty());
         assert_eq!(&host.ram[0x80000..0x80180], &[0xee; 384]);
+    }
+    #[test]
+    fn signed_sum_and_mask_blend_publish_only_after_their_restorable_dma_deadline() {
+        use crate::exr2::isp::tests::support::advance_from_checkpoint;
+        for (host, words) in [linear::tests::fixture(), masked::tests::fixture()] {
+            let address = words[&0x30] as usize;
+            let (mut d, mut host) = configured_fixture(true, host, words);
+            assert_eq!(d.next_deadline(0), Some(100));
+            advance(&mut d, &mut host, 99);
+            assert_eq!(host.ram[address], 0xee);
+            assert!(host.effects.is_empty());
+            advance_from_checkpoint(&mut d, &mut host, 100);
+            assert_ne!(host.ram[address], 0xee);
+            assert_eq!(host.irqs, [(0, 68)]);
+            assert_eq!(host.effects.last(), Some(&"irq"));
+            assert_eq!(read(&mut d, &mut host, BASE + 0xc0), 1);
+            assert_eq!(d.next_deadline(100), None);
+        }
     }
 }
