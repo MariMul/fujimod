@@ -249,16 +249,18 @@ export function CameraTools(props: {
             <button
               class="wb-btn"
               disabled={!available() || props.camera.transport !== 'usb'}
+              aria-label="Enable debug mode"
               onClick={() => props.onWizard(Wizard.Enable)}
             >
-              Enable debug mode
+              Enable
             </button>
             <button
               class="wb-btn"
               disabled={!available() || props.camera.transport !== 'usb'}
+              aria-label="Disable debug mode"
               onClick={() => props.onWizard(Wizard.Disable)}
             >
-              Disable debug mode
+              Disable
             </button>
           </div>
         </div>

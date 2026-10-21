@@ -1,5 +1,5 @@
 import { getRequestEvent } from '@solidjs/web';
-import { onSettled, untrack } from 'solid-js';
+import { createSignal, onSettled, untrack } from 'solid-js';
 import type { ReportSubmission } from '../engine/report';
 import { errorReportZip } from '../engine/report';
 import { LocalReports } from '../ui/local-reports';
@@ -59,9 +59,9 @@ async function report(model: CameraModel, submission: Promise<ReportSubmission>)
 
 export default function DevTools(props: { model?: CameraModel; supported?: boolean }) {
   const model = untrack(() => props.model) ?? pageCameraModel();
-  const usbSupported =
-    untrack(() => props.supported) ??
-    (typeof window !== 'undefined' && isSecureContext && 'usb' in navigator);
+  // Server renders have no navigator, so decide once mounted; hydration keeps the
+  // server's initial value otherwise.
+  const [usbSupported, setUsbSupported] = createSignal(untrack(() => props.supported) ?? false);
   const reports = new LocalReports(
     'dev-tools',
     () => ({
@@ -75,6 +75,8 @@ export default function DevTools(props: { model?: CameraModel; supported?: boole
     (submission) => report(model, submission),
   );
   onSettled(() => {
+    if (untrack(() => props.supported) === undefined)
+      setUsbSupported(isSecureContext && 'usb' in navigator);
     const unlisten = reports.listen();
     // A share link opens the shared camera as a remote camera.
     if (
@@ -97,7 +99,7 @@ export default function DevTools(props: { model?: CameraModel; supported?: boole
           </a>
         </nav>
       </header>
-      <Workbench model={model} usbSupported={usbSupported} initialWizard={initialWizard()} />
+      <Workbench model={model} usbSupported={usbSupported()} initialWizard={initialWizard()} />
     </div>
   );
 }

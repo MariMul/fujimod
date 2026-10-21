@@ -21,7 +21,9 @@ function mount(model: Parameters<typeof Workbench>[0]['model']) {
   return host;
 }
 const button = (host: HTMLElement, name: string) =>
-  [...host.querySelectorAll('button')].find((node) => node.textContent?.trim() === name)!;
+  [...host.querySelectorAll('button')].find(
+    (node) => (node.getAttribute('aria-label') ?? node.textContent?.trim()) === name,
+  )!;
 
 test('the splash connects a camera and the workbench selects it', async () => {
   const test = createTestCameraModel({ next: () => testCamera('X100V') });

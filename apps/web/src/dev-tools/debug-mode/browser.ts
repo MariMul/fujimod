@@ -14,16 +14,12 @@ for (const browserType of [chromium, webkit]) {
       if (message.type() === 'warning' && /hydration/i.test(message.text()))
         errors.push(message.text());
     });
-    await page.goto(new URL('dev-tools/?tool=enter-debug-mode', base).href);
-    await page
-      .locator('.dt-status')
-      .filter({ hasText: /Disconnected|WebUSB unavailable/ })
-      .waitFor();
+    await page.goto(new URL('dev-tools/?tool=enable', base).href);
     await page.getByRole('button', { name: 'Begin', exact: true }).click();
     await page.getByRole('button', { name: 'X70 · 1.10 Supported', exact: true }).click();
     const allow = page.getByRole('button', { name: 'Allow camera access', exact: true });
     assert.equal(await allow.isDisabled(), true);
-    await page.getByRole('checkbox').check();
+    await page.locator('.dm-check input').check();
     assert.equal(await allow.isEnabled(), true);
     // Stop before connecting: this test never requests or opens a USB device.
     const catalog = validateCatalog(

@@ -84,9 +84,11 @@ try {
         }),
       );
       await page.goto(url);
-      await page.waitForFunction(
-        () => document.querySelector('.dt-status')?.textContent === 'Disconnected',
-      );
+      await page.getByRole('heading', { name: 'Enter service mode', exact: true }).waitFor();
+      await page.screenshot({
+        path: new URL(mobile ? 'start-mobile.png' : 'start-desktop.png', directory).pathname,
+        fullPage: true,
+      });
       await page.evaluate(async () => {
         window.consoleFixture = (
           (await import('/__test__/' + 'console.mjs')) as typeof import('./usb-fixture.ts')
@@ -96,181 +98,69 @@ try {
         .locator('.td-connects')
         .getByRole('button', { name: 'Connect camera', exact: true })
         .click();
-      await page.waitForFunction(
-        () => document.querySelector('.dt-status')?.textContent === 'Sharing',
-        null,
-        { timeout: 10000 },
-      );
+      // The identity read runs automatically when the camera appears.
+      await page.locator('.wb-card dl').waitFor();
       assert.equal(
         await page.evaluate(
           () => window.consoleFixture.log.filter((entry) => entry[0] === 'picker').length,
         ),
         1,
       );
-      console.log('Shared camera ready, sending console command');
-      await page.getByLabel('Console command', { exact: true }).fill('help');
-      await page.getByRole('button', { name: 'Send ↵', exact: true }).click();
-      await page
-        .getByText('Fuji console ready', { exact: false })
-        .first()
-        .waitFor({ timeout: 10000 })
-        .catch(async (error) => {
-          console.error(
-            await page.locator('body').innerText(),
-            await page.evaluate(() => window.consoleFixture.log),
-          );
-          throw error;
-        });
-      const capture = await page.evaluate(() => {
-        const log = window.consoleFixture.log;
-        const sent = log.filter(
-          (e) =>
-            e[0] === 'out' && new DataView((e[2] as Uint8Array).buffer).getUint32(16, true) === 6,
-        );
-        const viewport = document.querySelector('.dt-viewport')!;
-        return {
-          sent: Array.from((sent[0][2] as Uint8Array).subarray(24, -4)),
-          frames: log.filter((e) => e[0] === 'control').length,
-          overflow: document.documentElement.scrollWidth > innerWidth,
-          scrollable: viewport.scrollWidth > viewport.clientWidth,
-          whiteSpace: getComputedStyle(document.querySelector('.is-console .dt-message')!)
-            .whiteSpace,
-          logTop: viewport.getBoundingClientRect().top,
-          logFraction: viewport.clientHeight / innerHeight,
-          rowHeight: document.querySelector('.dt-row')!.getBoundingClientRect().height,
-          pageHeight: document.documentElement.scrollHeight,
-          screenHeight: innerHeight,
-          panes: document.querySelectorAll('[aria-label="Connection log"]').length,
-        };
-      });
-      assert.deepEqual(capture.sent, [...new TextEncoder().encode('help\n')]);
-      assert.equal(capture.overflow, false);
-      if (mobile) assert.equal(capture.scrollable, true);
-      assert.equal(capture.whiteSpace, 'pre');
-      assert.equal(capture.panes, 1);
-      if (!mobile) assert.ok(capture.logTop < 100, 'log begins directly below compact controls');
-      assert.ok(capture.logFraction > (mobile ? 0.35 : 0.75), 'log gets most of the viewport');
-      assert.ok(capture.rowHeight <= 22, 'single-line log rows remain dense');
-      if (!mobile)
-        assert.ok(capture.pageHeight <= capture.screenHeight, 'composer stays on screen');
-      // Collapsed messages are capped at 120ch; expand the actual long response
-      // before requiring the log viewport to scroll horizontally on desktop.
-      const longResponse = page
-        .locator('.is-console .dt-row')
-        .filter({ hasText: '0123456789abcdef' })
-        .first();
-      await longResponse.click();
-      await page.locator('.is-console .dt-detail pre').first().waitFor();
-      const expectedOutput = new TextEncoder().encode(
-        'Fuji console ready\n' + '0123456789abcdef '.repeat(28) + '\n',
-      );
-      assert.equal(
-        await page.locator('.is-console .dt-detail pre').first().textContent(),
-        Array.from(expectedOutput, (byte) => byte.toString(16).padStart(2, '0')).join(' '),
-      );
-      assert.equal(
-        await page
-          .locator('.dt-viewport')
-          .evaluate((viewport) => viewport.scrollWidth > viewport.clientWidth),
-        true,
-      );
-      await longResponse.click();
-      await page.getByRole('button', { name: 'USB', exact: true }).click();
-      await page.getByText('Control Open submitted', { exact: false }).first().waitFor();
-      await page.screenshot({
-        path: new URL(mobile ? 'mobile.png' : 'desktop.png', directory).pathname,
-        fullPage: true,
-      });
-      // Every local read uses a new ff80 session while the share stays online.
-      for (const name of ['Read device identity', 'Dump configuration', 'Read memory']) {
-        await page.getByRole('button', { name, exact: true }).click();
-        await page.waitForFunction(
-          () => document.querySelector('.dt-reads [role="status"]')?.textContent !== 'Reading…',
-        );
-        assert.equal(await page.locator('.dt-reads [role="status"]').innerText(), 'Read complete');
-        assert.equal(await page.locator('.dt-status').innerText(), 'Sharing');
-      }
-      console.log('Shared local reads complete');
-      const downloadEvent = page.waitForEvent('download');
+      await page.locator('.wb-state', { hasText: 'Idle' }).waitFor();
+      const log = page.getByRole('region', { name: 'Connection log' });
+      assert.ok((await log.innerText()).includes('Device info'), 'identity exchange is logged');
+      // One camera: no camera column and no camera filters.
+      assert.equal(await page.locator('.cl-camera').count(), 0);
+      assert.equal(await page.getByRole('group', { name: 'Log cameras' }).count(), 0);
+
+      console.log(`${mobile ? 'mobile' : 'desktop'}: camera ready, dumping configuration`);
+      await page.getByRole('button', { name: 'Dump configuration', exact: true }).click();
+      await page.getByRole('button', { name: 'Dump configuration', exact: true }).waitFor();
+      await page.locator('.wb-state', { hasText: 'Idle' }).waitFor();
+
+      await page.getByLabel('Address', { exact: true }).fill('0x00001000');
+      await page.getByLabel('Bytes', { exact: true }).fill('32');
+      await page.getByRole('button', { name: 'Read', exact: true }).click();
+      await page.locator('.wb-state', { hasText: 'Idle' }).waitFor();
+      assert.equal(await page.locator('.wb-status').count(), 0, 'reads report no error');
+
+      await page.getByLabel('Command', { exact: true }).fill('help');
+      await page.getByRole('button', { name: 'Send', exact: true }).click();
+      await log.getByText('Fuji console ready', { exact: false }).first().waitFor();
+
+      // The bundle is a zip of a JSON manifest plus binary files.
+      const downloaded = page.waitForEvent('download');
       await page.getByRole('button', { name: 'Download diagnostic bundle', exact: true }).click();
-      const path = await (await downloadEvent).path();
-      assert.ok(path);
-      const bundle = JSON.parse(await readFile(path, 'utf8'));
-      assert.equal(bundle.readings.length, 25);
-      assert.equal(bundle.readings.at(-1).data.length, 256);
-      await page.getByRole('button', { name: 'Sharing details', exact: true }).click();
-      await page.locator('.dt-share-camera').click();
-      const link = await page.evaluate(() => navigator.clipboard.readText());
-      if (await page.getByRole('button', { name: 'Close share dialog', exact: true }).isVisible())
-        await page.getByRole('button', { name: 'Close share dialog', exact: true }).click();
-      const remoteContext = await browser.newContext();
-      await remoteContext.grantPermissions(['local-network-access'], {
-        origin: new URL(url).origin,
+      const bundle = await readFile((await (await downloaded).path())!);
+      assert.equal(bundle.readUInt32LE(0), 0x04034b50, 'bundle is a zip');
+      const text = bundle.toString('latin1');
+      for (const name of ['manifest.json', 'configuration.bin', 'memory-1-0x00001000.bin'])
+        assert.ok(text.includes(name), `bundle contains ${name}`);
+      assert.ok(text.includes('"capacity": 4096'), 'manifest records the geometry');
+
+      // The Connection layer filters like every other layer.
+      const connection = page.getByRole('group', { name: 'Log layers' }).getByRole('button', {
+        name: 'Connection',
+        exact: true,
       });
-      await remoteContext.addInitScript(() => {
-        Object.defineProperty(navigator, 'usb', {
-          configurable: true,
-          value: Object.assign(new EventTarget(), {
-            getDevices() {
-              throw Error('Physical USB forbidden in remote test');
-            },
-            requestDevice() {
-              throw Error('Physical USB forbidden in remote test');
-            },
-          }),
-        });
-      });
-      const remote = await remoteContext.newPage();
-      await remote.goto(link);
-      await remote.waitForFunction(
-        () => document.querySelector('.dt-status')?.textContent === 'Connected',
-        null,
-        { timeout: 60000 },
-      );
-      console.log('Remote controller claimed the shared camera');
-      const transfers = await page.evaluate(() => window.consoleFixture.log.length);
-      await page.getByRole('button', { name: 'Read memory', exact: true }).click();
-      await page.waitForFunction(() =>
-        document
-          .querySelector('.dt-reads [role="status"]')
-          ?.textContent?.includes('in use by a remote controller'),
-      );
-      await page.getByLabel('Console command', { exact: true }).fill('help');
-      await page.getByLabel('Console command', { exact: true }).press('Enter');
-      await page
-        .locator('.level-error')
-        .filter({ hasText: 'in use by a remote controller' })
-        .first()
-        .waitFor();
-      assert.equal(await page.evaluate(() => window.consoleFixture.log.length), transfers);
-      await remote.getByRole('button', { name: 'Disconnect', exact: true }).click();
-      await remote.waitForFunction(
-        () => document.querySelector('.dt-status')?.textContent === 'Disconnected',
-      );
-      await page.getByRole('button', { name: 'Read memory', exact: true }).click();
-      await page.waitForFunction(
-        () => document.querySelector('.dt-reads [role="status"]')?.textContent === 'Read complete',
-      );
-      await remoteContext.close();
+      await connection.click();
+      assert.equal(await connection.getAttribute('aria-pressed'), 'false');
+      await connection.click();
+
+      const geometry = await page.evaluate(() => ({
+        overflow: document.documentElement.scrollWidth > innerWidth,
+        tools: document.querySelector('.wb-tools')!.getBoundingClientRect().width,
+      }));
+      assert.equal(geometry.overflow, false);
+      if (!mobile) assert.equal(Math.round(geometry.tools), 320);
       await page.screenshot({
-        path: new URL(mobile ? 'shared-mobile.png' : 'shared-desktop.png', directory).pathname,
+        path: new URL(mobile ? 'workbench-mobile.png' : 'workbench-desktop.png', directory)
+          .pathname,
         fullPage: true,
       });
-      await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
-      // This command completed normally: the existing controller closes a clean
-      // session. Its interrupted-operation path abandons host ownership instead.
-      await page.waitForFunction(
-        () => document.querySelector('.dt-status')?.textContent === 'Disconnected',
-      );
-      assert.equal(
-        await page.evaluate(
-          () => window.consoleFixture.log.filter((e) => e[0] === 'control' && e[1] === 0xc4).length,
-        ),
-        7,
-      );
       assert.deepEqual(errors, []);
       console.log(
-        `PASS ${mobile ? 'mobile' : 'desktop'}: production WebUSB console, layered logs, horizontal scroll, clean session disconnect`,
+        `PASS ${mobile ? 'mobile' : 'desktop'}: connect, automatic identity, configuration dump, memory read, console command, binary bundle, log filters`,
       );
     } finally {
       await browser.close();
@@ -280,11 +170,11 @@ try {
   try {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     await page.goto(url);
-    await page.getByText('WebUSB unavailable', { exact: true }).waitFor();
-    // Without a connection there is no Console tool, so command entry is absent
-    // rather than present-but-disabled.
-    assert.equal(await page.getByLabel('Console command', { exact: true }).count(), 0);
-    console.log('PASS WebKit: unsupported WebUSB is visible and command entry is unavailable');
+    const tile = page.getByRole('button', { name: 'Connect camera', exact: true });
+    await tile.waitFor();
+    assert.equal(await tile.isDisabled(), true);
+    assert.ok((await tile.textContent())?.includes('Use Chrome or Edge'));
+    console.log('PASS WebKit: without WebUSB the camera tile is locked with its reason');
   } finally {
     await browser.close();
   }

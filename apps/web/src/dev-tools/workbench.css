@@ -17,7 +17,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--wb-bg);
+  background: none;
   color: var(--wb-text);
   font: 13px/1.4 var(--wb-sans);
 }
@@ -261,7 +261,7 @@
 .wb-muted {
   color: var(--wb-dim);
 }
-.wb-text {
+.wb .wb-text {
   padding: 0;
   border: 0;
   background: none;
@@ -270,7 +270,7 @@
   text-decoration: none;
   cursor: pointer;
 }
-.wb-text:hover {
+.wb .wb-text:hover {
   color: var(--wb-text);
 }
 .wb-link {
