@@ -32,6 +32,8 @@ pub struct Config {
 /// Owner-thread CPU proxy. This value is intentionally thread-affine because
 /// it holds callback pointers into the board and pumps them on its creator.
 pub struct CpuWorker {
+    #[cfg(test)]
+    rpc_calls: Cell<usize>,
     commands: Sender<Message>,
     events: RefCell<Receiver<Event>>,
     worker: RefCell<Option<JoinHandle<()>>>,
@@ -101,6 +103,8 @@ pub fn spawn(config: Config) -> Result<CpuWorker, String> {
         Ok((identity, mut features, pause_requested)) => {
             features.asynchronous_runs = true;
             Ok(CpuWorker {
+                #[cfg(test)]
+                rpc_calls: Cell::new(0),
                 commands,
                 events: RefCell::new(events),
                 worker: RefCell::new(Some(worker)),
@@ -229,13 +233,15 @@ enum Operation {
     SetInterrupt(Interrupt, bool),
     Snapshot(Option<u64>),
     Restore(u64),
-    InstallHook(usize, HookKind),
-    RemoveHook(HookId),
+    InstallHooks(Vec<(usize, HookKind)>),
+    RemoveHooks(Vec<(HookId, usize)>),
     ObserveBackings(Vec<BackingRange>),
     WatchStores(u64, u64),
     HookWatched(HookId, bool),
     PreciseStorePc(bool),
     ExitCounters,
+    #[cfg(test)]
+    CallbackContexts,
 }
 
 #[derive(Clone, Copy)]
@@ -269,7 +275,7 @@ enum Value {
     Backings(Vec<(usize, usize)>),
     MemoryRegions(Vec<MemoryRegion>),
     Fingerprint(serde_json::Value),
-    Hook(HookId),
+    Hooks(Vec<HookId>),
     Snapshot(u64),
     Identity(u32),
     Counters(Vec<(&'static str, u64)>),
@@ -568,6 +574,8 @@ fn serve(
 
 fn dispatch(context: &WorkerLoop, cpu: &core::Core, operation: Operation) -> Result<Value, String> {
     let result = match operation {
+        #[cfg(test)]
+        Operation::CallbackContexts => Value::U64(context.callback_contexts.borrow().len() as u64),
         Operation::SetLoopMode(mode) => {
             cpu.set_loop_mode(mode)?;
             Value::Unit
@@ -735,48 +743,65 @@ fn dispatch(context: &WorkerLoop, cpu: &core::Core, operation: Operation) -> Res
             cpu.restore(snapshot.as_ref())?;
             Value::Unit
         }
-        Operation::InstallHook(callback, kind) => {
-            let data = context.callback_context(callback);
-            let hook = match kind {
-                HookKind::Instruction(range) => Hook::Instruction {
-                    callback: instruction,
-                    data,
-                    range,
-                },
-                HookKind::Block(range) => Hook::Block {
-                    callback: block,
-                    data,
-                    range,
-                },
-                HookKind::Exception => Hook::Exception {
-                    callback: exception,
-                    data,
-                },
-                HookKind::Synchronization => Hook::Synchronization {
-                    callback: synchronization,
-                    data,
-                },
-                HookKind::Memory { read, write, range } => Hook::Memory {
-                    callback: memory,
-                    data,
-                    read,
-                    write,
-                    range,
-                },
-                HookKind::CompletedStore(range) => Hook::CompletedStore {
-                    callback: memory,
-                    data,
-                    range,
-                },
-                HookKind::Fault => Hook::Fault {
-                    callback: fault,
-                    data,
-                },
-            };
-            Value::Hook(unsafe { cpu.install_hook(hook)? })
+        Operation::InstallHooks(hooks) => {
+            let mut installed = Vec::with_capacity(hooks.len());
+            for (callback, kind) in hooks {
+                let data = context.callback_context(callback);
+                let hook = match kind {
+                    HookKind::Instruction(range) => Hook::Instruction {
+                        callback: instruction,
+                        data,
+                        range,
+                    },
+                    HookKind::Block(range) => Hook::Block {
+                        callback: block,
+                        data,
+                        range,
+                    },
+                    HookKind::Exception => Hook::Exception {
+                        callback: exception,
+                        data,
+                    },
+                    HookKind::Synchronization => Hook::Synchronization {
+                        callback: synchronization,
+                        data,
+                    },
+                    HookKind::Memory { read, write, range } => Hook::Memory {
+                        callback: memory,
+                        data,
+                        read,
+                        write,
+                        range,
+                    },
+                    HookKind::CompletedStore(range) => Hook::CompletedStore {
+                        callback: memory,
+                        data,
+                        range,
+                    },
+                    HookKind::Fault => Hook::Fault {
+                        callback: fault,
+                        data,
+                    },
+                };
+                match unsafe { cpu.install_hook(hook) } {
+                    Ok(hook) => installed.push((hook, callback)),
+                    Err(error) => {
+                        context.callback_contexts.borrow_mut().remove(&callback);
+                        for (hook, callback) in installed {
+                            cpu.remove_hook(hook)?;
+                            context.callback_contexts.borrow_mut().remove(&callback);
+                        }
+                        return Err(error);
+                    }
+                }
+            }
+            Value::Hooks(installed.into_iter().map(|(hook, _)| hook).collect())
         }
-        Operation::RemoveHook(hook) => {
-            cpu.remove_hook(hook)?;
+        Operation::RemoveHooks(hooks) => {
+            for (hook, callback) in hooks {
+                cpu.remove_hook(hook)?;
+                context.callback_contexts.borrow_mut().remove(&callback);
+            }
             Value::Unit
         }
         Operation::ObserveBackings(ranges) => {
@@ -812,6 +837,8 @@ fn dispatch(context: &WorkerLoop, cpu: &core::Core, operation: Operation) -> Res
 
 impl CpuWorker {
     fn rpc(&self, operation: Operation) -> Result<Value, String> {
+        #[cfg(test)]
+        self.rpc_calls.set(self.rpc_calls.get() + 1);
         let (reply, response) = mpsc::channel();
         self.commands
             .send(Message::Request { operation, reply })
@@ -1355,44 +1382,75 @@ impl Cpu for CpuWorker {
         self.unit(Operation::Restore(snapshot.token))
     }
     unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String> {
-        let callback = self.next_callback()?;
-        let kind = match hook {
-            Hook::Instruction { range, .. } => HookKind::Instruction(range),
-            Hook::Block { range, .. } => HookKind::Block(range),
-            Hook::Exception { .. } => HookKind::Exception,
-            Hook::Synchronization { .. } => HookKind::Synchronization,
-            Hook::Memory {
-                read, write, range, ..
-            } => HookKind::Memory { read, write, range },
-            Hook::CompletedStore { range, .. } => HookKind::CompletedStore(range),
-            Hook::Fault { .. } => HookKind::Fault,
-        };
-        self.callbacks
-            .borrow_mut()
-            .insert(callback, CallbackEntry::Hook(hook));
-        let remote = match self.rpc(Operation::InstallHook(callback, kind))? {
-            Value::Hook(hook) => hook,
-            _ => {
-                self.callbacks.borrow_mut().remove(&callback);
-                return Err("R-profile CPU worker returned unexpected hook".into());
-            }
-        };
-        self.hooks
-            .borrow_mut()
-            .insert(remote.key, RemoteHook { remote, callback });
-        Ok(remote)
+        Ok(unsafe { self.install_hooks(&[hook]) }?.remove(0))
     }
     fn remove_hook(&self, hook: HookId) -> Result<(), String> {
-        let remote = self
-            .hooks
-            .borrow()
-            .get(&hook.key)
-            .filter(|remote| hook.owner == self.identity && remote.remote == hook)
-            .map(|remote| (remote.remote, remote.callback))
-            .ok_or("hook belongs to a different CPU or was removed")?;
-        self.unit(Operation::RemoveHook(remote.0))?;
-        self.hooks.borrow_mut().remove(&hook.key);
-        self.callbacks.borrow_mut().remove(&remote.1);
+        self.remove_hooks(&[hook])
+    }
+    unsafe fn install_hooks(&self, hooks: &[Hook]) -> Result<Vec<HookId>, String> {
+        if hooks.is_empty() {
+            return Ok(vec![]);
+        }
+        let mut pending = Vec::with_capacity(hooks.len());
+        for &hook in hooks {
+            let callback = self.next_callback()?;
+            let kind = match hook {
+                Hook::Instruction { range, .. } => HookKind::Instruction(range),
+                Hook::Block { range, .. } => HookKind::Block(range),
+                Hook::Exception { .. } => HookKind::Exception,
+                Hook::Synchronization { .. } => HookKind::Synchronization,
+                Hook::Memory {
+                    read, write, range, ..
+                } => HookKind::Memory { read, write, range },
+                Hook::CompletedStore { range, .. } => HookKind::CompletedStore(range),
+                Hook::Fault { .. } => HookKind::Fault,
+            };
+            pending.push((callback, kind, hook));
+        }
+        let remote = match self.rpc(Operation::InstallHooks(
+            pending
+                .iter()
+                .map(|&(callback, kind, _)| (callback, kind))
+                .collect(),
+        ))? {
+            Value::Hooks(hooks) if hooks.len() == pending.len() => hooks,
+            _ => return Err("R-profile CPU worker returned unexpected hooks".into()),
+        };
+        for (&remote, (callback, _, hook)) in remote.iter().zip(pending) {
+            self.callbacks
+                .borrow_mut()
+                .insert(callback, CallbackEntry::Hook(hook));
+            self.hooks
+                .borrow_mut()
+                .insert(remote.key, RemoteHook { remote, callback });
+        }
+        Ok(remote)
+    }
+    fn remove_hooks(&self, hooks: &[HookId]) -> Result<(), String> {
+        if hooks.is_empty() {
+            return Ok(());
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        let remote = hooks
+            .iter()
+            .map(|hook| {
+                self.hooks
+                    .borrow()
+                    .get(&hook.key)
+                    .filter(|remote| {
+                        hook.owner == self.identity
+                            && remote.remote == *hook
+                            && seen.insert(hook.key)
+                    })
+                    .map(|remote| (remote.remote, remote.callback))
+                    .ok_or_else(|| "hook belongs to a different CPU or was removed".to_string())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        self.unit(Operation::RemoveHooks(remote.clone()))?;
+        for (hook, callback) in remote {
+            self.hooks.borrow_mut().remove(&hook.key);
+            self.callbacks.borrow_mut().remove(&callback);
+        }
         Ok(())
     }
     unsafe fn translation_hooks(&self, _: Option<TranslationHooks>) -> Result<(), String> {
@@ -1501,6 +1559,52 @@ mod tests {
                 RunStatus::Complete(result) => return result,
             }
         }
+    }
+
+    #[test]
+    fn observer_groups_use_one_rpc_and_retire_callback_contexts() {
+        unsafe fn stored(_: Access, _: u64, _: i32, _: i64, data: *mut std::ffi::c_void) {
+            let calls = unsafe { &*data.cast::<Cell<usize>>() };
+            calls.set(calls.get() + 1);
+        }
+        let cpu = worker(SharedMemory::default());
+        cpu.map_zeroed(0x1000, 8192, 7).unwrap();
+        write_words(&cpu, 0x1000, &[0xe5810000, 0xe5810000]);
+        cpu.write_register(arm::CORE[1], &0x2000u32.to_le_bytes()).unwrap();
+        let calls = Cell::new(0usize);
+        let hook = |address| Hook::CompletedStore {
+            callback: stored,
+            data: (&calls as *const Cell<usize>).cast_mut().cast(),
+            range: HookRange::Inclusive { begin: address, end: address + 3 },
+        };
+        let observers = (0..64).map(|i| hook(0x2000 + i * 4)).collect::<Vec<_>>();
+        let before = cpu.rpc_calls.get();
+        let installed = unsafe { cpu.install_hooks(&observers) }.unwrap();
+        assert_eq!(cpu.rpc_calls.get() - before, 1);
+        one_step(&cpu, 0x1000).unwrap();
+        assert_eq!(calls.get(), 1);
+        assert_eq!(read_u32(&cpu, arm::PC), 0x1004);
+        // Repeated or foreign tokens refuse before retiring any member.
+        assert!(cpu.remove_hooks(&[installed[0], installed[0]]).is_err());
+        let before = cpu.rpc_calls.get();
+        cpu.remove_hooks(&installed).unwrap();
+        assert_eq!(cpu.rpc_calls.get() - before, 1);
+        assert!(cpu.callbacks.borrow().is_empty());
+        assert!(cpu.hooks.borrow().is_empty());
+        assert!(matches!(cpu.rpc(Operation::CallbackContexts).unwrap(), Value::U64(0)));
+        one_step(&cpu, 0x1004).unwrap();
+        assert_eq!(calls.get(), 1);
+
+        // A failed group rolls back its earlier installations on both threads.
+        let invalid = Hook::CompletedStore {
+            callback: stored,
+            data: (&calls as *const Cell<usize>).cast_mut().cast(),
+            range: HookRange::Inclusive { begin: 2, end: 1 },
+        };
+        assert!(unsafe { cpu.install_hooks(&[hook(0x2000), invalid]) }.is_err());
+        assert!(cpu.callbacks.borrow().is_empty());
+        assert!(cpu.hooks.borrow().is_empty());
+        assert!(matches!(cpu.rpc(Operation::CallbackContexts).unwrap(), Value::U64(0)));
     }
 
     #[test]

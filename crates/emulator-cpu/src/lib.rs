@@ -731,6 +731,31 @@ pub trait Cpu {
     /// bounded reentrancy rules.
     unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String>;
     fn remove_hook(&self, hook: HookId) -> Result<(), String>;
+    /// Install one observer group without running the processor between hooks.
+    /// On failure, remove the observers already installed by this call.
+    ///
+    /// # Safety
+    /// Every callback context must satisfy install_hook's lifetime contract.
+    unsafe fn install_hooks(&self, hooks: &[Hook]) -> Result<Vec<HookId>, String> {
+        let mut installed = Vec::with_capacity(hooks.len());
+        for &hook in hooks {
+            match unsafe { self.install_hook(hook) } {
+                Ok(id) => installed.push(id),
+                Err(error) => {
+                    self.remove_hooks(&installed)?;
+                    return Err(error);
+                }
+            }
+        }
+        Ok(installed)
+    }
+    /// Retire an observer group before its callback contexts are released.
+    fn remove_hooks(&self, hooks: &[HookId]) -> Result<(), String> {
+        for &hook in hooks {
+            self.remove_hook(hook)?;
+        }
+        Ok(())
+    }
     /// # Safety
     /// The callback context must outlive installation, as for install_hook.
     unsafe fn translation_hooks(&self, hooks: Option<TranslationHooks>) -> Result<(), String>;

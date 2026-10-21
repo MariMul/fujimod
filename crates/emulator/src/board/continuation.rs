@@ -38,7 +38,7 @@ pub(super) fn finish_instruction(cpu: &dyn Cpu) -> Result<(), String> {
 }
 pub(super) struct StoreWatch {
     contexts: Vec<Box<Context>>,
-    hooks: Vec<(usize, HookId)>,
+    hooks: Vec<(usize, Vec<HookId>)>,
 }
 struct Context {
     state: Weak<RefCell<State>>,
@@ -229,18 +229,21 @@ impl Board {
                 let data = (&**watch.contexts.last().unwrap() as *const Context)
                     .cast_mut()
                     .cast();
-                for (begin, end) in union(spans) {
-                    let hook = unsafe {
-                        cpu.install_hook(Hook::CompletedStore {
-                            callback: written,
-                            data,
-                            range: HookRange::Inclusive {
-                                begin,
-                                end: end - 1,
-                            },
-                        })
-                    }?;
-                    watch.hooks.push((core, hook));
+                let hooks = union(spans)
+                    .into_iter()
+                    .map(|(begin, end)| Hook::CompletedStore {
+                        callback: written,
+                        data,
+                        range: HookRange::Inclusive {
+                            begin,
+                            end: end - 1,
+                        },
+                    })
+                    .collect::<Vec<_>>();
+                if !hooks.is_empty() {
+                    watch
+                        .hooks
+                        .push((core, unsafe { cpu.install_hooks(&hooks) }?));
                 }
             }
             Ok(())
@@ -252,8 +255,8 @@ impl Board {
     }
     pub fn continuation_end(&mut self) -> Result<bool, String> {
         if let Some(watch) = self.continuation.as_mut() {
-            for (core, hook) in watch.hooks.drain(..) {
-                self.cpus[core].remove_hook(hook)?;
+            for (core, hooks) in &watch.hooks {
+                self.cpus[*core].remove_hooks(hooks)?;
             }
         }
         self.continuation = None;
