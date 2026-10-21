@@ -57,6 +57,7 @@ T = TypeVar('T')
 def wait_steps(board: WaitBoard, predicate: Callable[[], T], description: str, *,
                instruction_limit: int = (1 << 63), deadline: int | None = None,
                until_tick: int | None = None,
+               max_run_instructions: int | None = None,
                after_run: Callable[[], object] | None = None,
                metrics: WaitMetrics | None = None) -> Generator[None, None, T]:
     """Yield at passive watch stops, returning the predicate's truthy result.
@@ -70,6 +71,8 @@ def wait_steps(board: WaitBoard, predicate: Callable[[], T], description: str, *
         raise ValueError('Wait instruction limit must be nonnegative')
     if until_tick is not None and (type(until_tick) is not int or until_tick < 0):
         raise ValueError('Wait tick must be a nonnegative integer')
+    if max_run_instructions is not None and (type(max_run_instructions) is not int or max_run_instructions <= 0):
+        raise ValueError('Wait continuation ceiling must be positive')
     start, tick, wall = board.instructions, board.virtual_ticks, perf_counter()
     report = metrics if metrics is not None else WaitMetrics(description)
     try:
@@ -94,7 +97,7 @@ def wait_steps(board: WaitBoard, predicate: Callable[[], T], description: str, *
             boundaries = [t for t in (deadline, until_tick) if t is not None and t > board.virtual_ticks]
             boundary = min(boundaries) if boundaries else None
             before = board.instructions, board.virtual_ticks
-            board.run(remaining, pause_at_tick=boundary,
+            board.run(remaining if max_run_instructions is None else min(remaining, max_run_instructions), pause_at_tick=boundary,
                       store_watches=stores, device_watches=devices)
             report.continuations += 1
             if after_run is not None:
@@ -113,10 +116,12 @@ def wait_steps(board: WaitBoard, predicate: Callable[[], T], description: str, *
 def wait_until(board: WaitBoard, predicate: Callable[[], T], description: str, *,
                instruction_limit: int = (1 << 63), deadline: int | None = None,
                until_tick: int | None = None,
+               max_run_instructions: int | None = None,
                after_run: Callable[[], object] | None = None,
                metrics: WaitMetrics | None = None) -> T:
     steps = wait_steps(board, predicate, description, instruction_limit=instruction_limit,
-                       deadline=deadline, until_tick=until_tick, after_run=after_run, metrics=metrics)
+                       deadline=deadline, until_tick=until_tick, max_run_instructions=max_run_instructions,
+                       after_run=after_run, metrics=metrics)
     while True:
         try:
             next(steps)

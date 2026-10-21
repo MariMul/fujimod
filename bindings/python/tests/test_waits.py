@@ -103,3 +103,13 @@ def test_quiescent_false_wait_refuses_instead_of_spinning():
     board.run = lambda *args, **kwargs: None
     with pytest.raises(RuntimeError, match='no progress'):
         wait_until(board, lambda: board.read(4) > 10, 'quiescent')
+
+
+def test_an_explicit_continuation_ceiling_does_not_replace_the_total_allowance():
+    board = Board()
+    wait_until(board, lambda: board.read(4) >= 3, 'bounded',
+               instruction_limit=8, max_run_instructions=1)
+    assert [row[0] for row in board.calls] == [1, 1, 1]
+    assert board.instructions == 3
+    with pytest.raises(ValueError, match='ceiling'):
+        wait_until(board, lambda: False, 'invalid', max_run_instructions=0)
