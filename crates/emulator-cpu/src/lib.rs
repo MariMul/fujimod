@@ -6,7 +6,7 @@
 use std::any::Any;
 use std::ffi::c_void;
 use std::ptr::NonNull;
-use std::sync::Arc;
+use std::sync::{Arc, Condvar, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 pub mod arm;
@@ -91,6 +91,72 @@ pub struct Run {
     /// None runs until a requested stop or an architectural exit. Some(0)
     /// performs no execution and leaves the processor's PC unchanged.
     pub instructions: Option<usize>,
+}
+/// One bounded asynchronous run, scoped to the processor that started it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RunToken {
+    owner: Identity,
+    sequence: u64,
+}
+impl RunToken {
+    pub const fn new(owner: Identity, sequence: u64) -> Self {
+        Self { owner, sequence }
+    }
+    pub const fn owner(self) -> Identity {
+        self.owner
+    }
+    pub const fn sequence(self) -> u64 {
+        self.sequence
+    }
+}
+/// Nonblocking state for a run started with [`Cpu::start_run`].
+#[derive(Clone, Debug)]
+pub enum RunStatus {
+    Running,
+    /// A guest callback is held until the owner explicitly services it.
+    CallbackPending,
+    /// Completion remains observable until the next run starts.
+    Complete(Result<Exit, ExecutionError>),
+}
+#[derive(Default)]
+struct WakeupState {
+    generation: Mutex<u64>,
+    changed: Condvar,
+}
+/// Lossless event notification shared by the owner and asynchronous CPUs.
+#[derive(Clone, Default)]
+pub struct RunWakeup(Arc<WakeupState>);
+impl RunWakeup {
+    pub fn generation(&self) -> u64 {
+        *self
+            .0
+            .generation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+    pub fn notify(&self) {
+        let mut generation = self
+            .0
+            .generation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *generation = generation.wrapping_add(1);
+        self.0.changed.notify_all();
+    }
+    pub fn wait_for_change(&self, observed: u64) {
+        let mut generation = self
+            .0
+            .generation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        while *generation == observed {
+            generation = self
+                .0
+                .changed
+                .wait(generation)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
+    }
 }
 /// Instruction accounting behavior selected by the execution owner.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -320,6 +386,8 @@ impl From<&str> for ExecutionError {
 }
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Features {
+    /// Runs can be started, polled and paused without blocking the owner.
+    pub asynchronous_runs: bool,
     /// Architectural counters consume an explicit guest-clock anchor per run.
     pub guest_clock: bool,
     pub instruction_limit: bool,
@@ -365,6 +433,12 @@ pub enum Hook {
     },
     Exception {
         callback: unsafe fn(arm::Exception, *mut c_void),
+        data: *mut c_void,
+    },
+    /// Request an owner barrier before a processor operation that cannot
+    /// overlap another guest core safely, such as a watched store or exclusive.
+    Synchronization {
+        callback: unsafe fn(*mut c_void),
         data: *mut c_void,
     },
     /// Publish a store after its instruction completes, before another guest
@@ -415,6 +489,7 @@ pub struct BlockAccounting {
     pub ring: *mut u64,
     pub mask: u64,
     pub enabled: u64,
+    pub pause_requested: *const AtomicU32,
 }
 /// An in-process CPU snapshot; architectural portable checkpoints are a
 /// runtime/profile responsibility. A snapshot cannot restore a different CPU.
@@ -429,7 +504,7 @@ pub trait Snapshot: Any {
 pub struct BackingObserver {
     pub backing: NonNull<u8>,
     pub bytes: usize,
-    pub bitmap: NonNull<u64>,
+    pub bitmap: NonNull<AtomicU64>,
     pub page_shift: u32,
 }
 
@@ -585,6 +660,42 @@ pub trait Cpu {
     fn protect(&self, address: u64, bytes: usize, permissions: u32) -> Result<(), String>;
     fn invalidate_code(&self, range: Option<(u64, u64)>) -> Result<(), String>;
     fn run(&self, request: Run) -> Result<Exit, ExecutionError>;
+    /// Start a run without waiting for its next callback or completion.
+    fn start_run(&self, _request: Run) -> Result<RunToken, ExecutionError> {
+        Err(ExecutionError::Backend(
+            "backend does not support asynchronous runs".into(),
+        ))
+    }
+    /// Observe one asynchronous run without dispatching pending callbacks.
+    fn poll_run(&self, _run: RunToken) -> Result<RunStatus, ExecutionError> {
+        Err(ExecutionError::Backend(
+            "backend does not support asynchronous runs".into(),
+        ))
+    }
+    /// Request a pause at the next backend block boundary.
+    fn request_pause(&self, _run: RunToken) -> Result<(), ExecutionError> {
+        Err(ExecutionError::Backend(
+            "backend does not support asynchronous pauses".into(),
+        ))
+    }
+    /// Dispatch exactly one callback parked by [`Cpu::poll_run`].
+    fn service_pending_callback(&self, _run: RunToken) -> Result<(), ExecutionError> {
+        Err(ExecutionError::Backend(
+            "backend does not support owner-serviced callbacks".into(),
+        ))
+    }
+    /// Reject one callback parked by [`Cpu::poll_run`] without invoking its
+    /// owner callback. This lets a failed cluster barrier drain worker threads
+    /// without permitting additional device or memory effects.
+    fn cancel_pending_callback(&self, _run: RunToken) -> Result<(), ExecutionError> {
+        Err(ExecutionError::Backend(
+            "backend does not support callback cancellation".into(),
+        ))
+    }
+    /// Install the owner's shared wakeup before starting asynchronous runs.
+    fn set_run_wakeup(&self, _wakeup: RunWakeup) -> Result<(), String> {
+        Err("backend does not support asynchronous run wakeups".into())
+    }
     /// Lower the current run's total entered-instruction limit, including
     /// entries already measured in that run. Never extends the original cap.
     fn tighten_instruction_limit(&self, _total_entries: u64) -> Result<(), String> {

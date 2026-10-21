@@ -5,6 +5,7 @@ use super::*;
 use fujimod_emulator_cpu::memory::pages::Image;
 use sha2::{Digest, Sha256};
 use std::any::Any;
+use std::sync::atomic::Ordering;
 
 struct Saved {
     context: Box<dyn Snapshot>,
@@ -51,7 +52,8 @@ impl Execution {
                 let last = (stop - base - 1) >> observer.page_shift;
                 for page in first..=last {
                     unsafe {
-                        *observer.bitmap.as_ptr().add(page / 64) |= 1 << (page % 64);
+                        (*observer.bitmap.as_ptr().add(page / 64))
+                            .fetch_or(1 << (page % 64), Ordering::Relaxed);
                     }
                 }
             }
@@ -289,7 +291,7 @@ impl Core {
         }
         e.clock.set(saved.clock);
         e.clock_overshoot.set(saved.clock_overshoot);
-        e.set_policy(saved.policy);
+        e.set_policy(saved.policy)?;
         e.pmu.set(saved.pmu);
         unsafe {
             **e.ring.get() = saved.ring;

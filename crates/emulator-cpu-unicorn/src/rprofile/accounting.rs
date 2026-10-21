@@ -149,6 +149,7 @@ mod tests {
             ring: ring.as_mut_ptr(),
             mask: 3,
             enabled: 1,
+            pause_requested: std::ptr::null(),
         }
     }
     #[test]

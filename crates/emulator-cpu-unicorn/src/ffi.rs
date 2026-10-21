@@ -9,6 +9,8 @@ use std::path::Path;
 pub type Engine = *mut c_void;
 pub type Context = *mut c_void;
 pub type Error = c_int;
+pub const FEATURE_PAUSE_ACCOUNTING_LAYOUT: u32 = 1 << 3;
+pub const FEATURE_PARALLEL_TCG: u32 = 1 << 4;
 pub const fn ctl(kind: u32, count: u32, direction: u32) -> u32 {
     kind | (count << 26) | (direction << 30)
 }
@@ -45,6 +47,7 @@ pub struct Extensions {
     >,
     pub retry_block: Option<unsafe extern "C" fn(Engine, u32) -> Error>,
     pub request_restart: Option<unsafe extern "C" fn(Engine) -> Error>,
+    pub set_parallel_cpus: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     // uc_embedder_features bits (0 without the export): 1 = block hook size bit 31
     // is the Thumb state while a translation filter is installed.
     // Bit 4: stoppable Thumb instruction entries with synchronized ITSTATE.
@@ -59,6 +62,11 @@ impl Extensions {
     /// same slow path as the Python selector; a path alone is not an opt-in.
     #[cfg(not(target_os = "emscripten"))]
     fn require_acceleration(&self) -> Result<(), String> {
+        if self.features & FEATURE_PAUSE_ACCOUNTING_LAYOUT == 0 {
+            return Err(
+                "The Unicorn accounting ABI predates asynchronous pause support; rebuild the matching Unicorn library".into(),
+            );
+        }
         if std::env::var("CAMERA_FORCE_SLOW_UNICORN").as_deref() == Ok("1") {
             return Ok(());
         }
@@ -79,6 +87,10 @@ impl Extensions {
             (
                 self.request_restart.is_some(),
                 "uc_embedder_request_restart",
+            ),
+            (
+                self.set_parallel_cpus.is_some() && self.features & FEATURE_PARALLEL_TCG != 0,
+                "uc_embedder_set_parallel_cpus",
             ),
             (self.accounting.is_some(), "uc_embedder_accounting"),
             (
@@ -110,6 +122,7 @@ pub struct Accounting {
     pub ring: *mut u64,
     pub mask: u64,
     pub enabled: u64,
+    pub pause_requested: *const u32,
 }
 pub type InsnFilter = unsafe extern "C" fn(*mut c_void, u64, u32) -> c_int;
 pub type Restart = unsafe extern "C" fn(*mut c_void, u64);
@@ -155,6 +168,9 @@ macro_rules! api {
                     }.ok().map(|f| *f),
                     request_restart: unsafe {
                         library.get::<unsafe extern "C" fn(Engine) -> Error>(b"uc_embedder_request_restart\0")
+                    }.ok().map(|f| *f),
+                    set_parallel_cpus: unsafe {
+                        library.get::<unsafe extern "C" fn(Engine, bool) -> Error>(b"uc_embedder_set_parallel_cpus\0")
                     }.ok().map(|f| *f),
                     accounting: unsafe {
                         library.get::<unsafe extern "C" fn(Engine) -> *mut Accounting>(b"uc_embedder_accounting\0")
@@ -234,6 +250,7 @@ mod linked {
         ) -> Error;
         fn uc_embedder_retry_block(engine: Engine, count: u32) -> Error;
         fn uc_embedder_request_restart(engine: Engine) -> Error;
+        fn uc_embedder_set_parallel_cpus(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_accounting(engine: Engine) -> *mut Accounting;
         fn uc_embedder_exit_counters(engine: Engine) -> *const u64;
         fn uc_embedder_features() -> u32;
@@ -248,6 +265,7 @@ mod linked {
             insn_filter: Some(uc_embedder_set_insn_filter),
             retry_block: Some(uc_embedder_retry_block),
             request_restart: Some(uc_embedder_request_restart),
+            set_parallel_cpus: Some(uc_embedder_set_parallel_cpus),
             accounting: Some(uc_embedder_accounting),
             exit_counters: Some(uc_embedder_exit_counters),
             features: unsafe { uc_embedder_features() },

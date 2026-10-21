@@ -12,6 +12,8 @@ use std::cell::{Cell, RefCell, UnsafeCell};
 use std::collections::BTreeMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::{ffi::c_void, ptr::NonNull};
 
 mod backend;
@@ -76,6 +78,7 @@ pub(super) struct Execution {
     cap: Cell<u64>,
     synced: Cell<i64>,
     last_span: Cell<Option<Span>>,
+    pause_requested: Arc<AtomicU32>,
     settled_head: Cell<u64>,
     thumb: Cell<bool>,
     restarted: Cell<Option<u64>>,
@@ -148,6 +151,7 @@ impl Core {
             cap: Cell::new(0),
             synced: Cell::new(0),
             last_span: Cell::new(None),
+            pause_requested: Arc::new(AtomicU32::new(0)),
             settled_head: Cell::new(0),
             thumb: Cell::new(false),
             restarted: Cell::new(None),
@@ -171,6 +175,7 @@ impl Core {
             r.ring = (*e.ring.get()).as_mut_ptr();
             r.mask = 63;
             r.enabled = 1;
+            r.pause_requested = Arc::as_ptr(&e.pause_requested);
             r.head = 0;
             r.budget = 0;
         }
@@ -213,14 +218,25 @@ impl Core {
         }
         Ok(Self { execution: e })
     }
+    pub(super) fn pause_handle(&self) -> Arc<AtomicU32> {
+        self.execution.pause_requested.clone()
+    }
+    pub(super) fn owner_callback_parked(&self, parked: bool) -> Result<(), String> {
+        self.execution
+            .memory
+            .set_parked(self.execution.id.get(), parked)
+    }
 }
 impl Execution {
-    pub(super) fn set_policy(&self, policy: ExecutionPolicy) {
-        self.policy.set(policy);
+    pub(super) fn set_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
         let enabled = policy == ExecutionPolicy::Interactive;
+        self.cpu
+            .set_parallel_cpus(cfg!(not(target_os = "emscripten")) && enabled)?;
+        self.policy.set(policy);
         for read in self.fast_reads.borrow().iter() {
             read.set_enabled(enabled);
         }
+        Ok(())
     }
     pub(super) fn accounting_mode(&self) -> u64 {
         if self.thumb.get() {
@@ -342,6 +358,21 @@ impl Execution {
             }
         }
     }
+    fn synchronize(&self) -> Result<(), String> {
+        let callbacks: Vec<_> = self
+            .observers
+            .borrow()
+            .values()
+            .filter_map(|observer| match observer.hook {
+                Hook::Synchronization { callback, data } => Some((callback, data)),
+                _ => None,
+            })
+            .collect();
+        for (callback, data) in callbacks {
+            unsafe { callback(data) };
+        }
+        Ok(())
+    }
     fn classify(&self, address: u64, word: u32) -> Result<Translation, String> {
         let watch = self.memory.note_code(self.id.get(), address, 4)?;
         Ok(Translation {
@@ -395,6 +426,11 @@ impl Execution {
         self.thumb.set(thumb);
         unsafe { (*self.record.as_ptr()).enabled = self.accounting_mode() };
         let restarted = self.restarted.get() == Some(block.address);
+        if self.pause_requested.load(Ordering::Acquire) != 0 {
+            self.user_stop.set(true);
+            self.reset_budget();
+            return self.cpu.stop();
+        }
         for observer in self.observers.borrow().values() {
             if let Hook::Block {
                 callback,
@@ -509,6 +545,9 @@ impl Execution {
         };
         if condition < 14 && !arm::condition_passes(condition, cpsr) {
             return Ok(());
+        }
+        if (thumb && thumb_atomic(word)) || (!thumb && atomic(word)) {
+            self.synchronize()?;
         }
         if self.irq.get()
             && super::predict_irq_mask(
@@ -740,6 +779,7 @@ unsafe fn store(access: Access, address: u64, size: i32, value: i64, data: *mut 
         if size <= 0 {
             return Err("invalid R-profile store width".into());
         }
+        e.synchronize()?;
         if e.memory.guest_store(e.id.get(), address, size as usize)? {
             e.cpu.request_restart()?;
         }

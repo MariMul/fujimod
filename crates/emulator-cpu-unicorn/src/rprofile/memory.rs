@@ -5,7 +5,7 @@ use super::core::Execution;
 use fujimod_emulator_cpu::Cpu;
 use fujimod_emulator_cpu::exclusive;
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
 use std::sync::{Arc, Mutex};
 
@@ -95,7 +95,8 @@ struct State {
     watches: Vec<(usize, u64)>,
     invalidations: Vec<Invalidation>,
     dirty_pages: Vec<usize>,
-    active: Option<usize>,
+    active: HashSet<usize>,
+    parked: HashMap<usize, usize>,
 }
 /// Thread-safe ownership for memory identities and cross-processor code
 /// coherence. It contains no CPU handles; each processor creates its own
@@ -154,8 +155,36 @@ impl Memory {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
     pub(super) fn require_stopped(&self) -> Result<(), String> {
-        if self.state().active.is_some() {
+        if !Self::quiescent(&self.state()) {
             return Err("R-profile memory mapping requires all processors to be stopped".into());
+        }
+        Ok(())
+    }
+    fn quiescent(state: &State) -> bool {
+        Self::quiescent_except(state, None)
+    }
+    fn quiescent_except(state: &State, allowed: Option<usize>) -> bool {
+        state
+            .active
+            .iter()
+            .all(|core| Some(*core) == allowed || state.parked.get(core).copied().unwrap_or(0) != 0)
+    }
+    pub(super) fn set_parked(&self, core: usize, parked: bool) -> Result<(), String> {
+        let mut state = self.state();
+        if !state.active.contains(&core) {
+            return Err("cannot park an R-profile processor outside a run".into());
+        }
+        if parked {
+            *state.parked.entry(core).or_default() += 1;
+        } else {
+            let depth = state
+                .parked
+                .get_mut(&core)
+                .ok_or("R-profile processor is not parked")?;
+            *depth -= 1;
+            if *depth == 0 {
+                state.parked.remove(&core);
+            }
         }
         Ok(())
     }
@@ -168,18 +197,19 @@ impl Memory {
     }
     pub(super) fn start(&self, core: usize) -> Result<(), String> {
         let mut state = self.state();
-        if state.active.is_some() {
-            return Err("nested R-profile execution is refused".into());
+        if !state.active.insert(core) {
+            return Err("R-profile processor is already running".into());
         }
-        state.active = Some(core);
+        state.parked.remove(&core);
         self.local.active.set(Some(core));
         Ok(())
     }
     pub(super) fn end(&self) {
         let active = self.local.active.replace(None);
         let mut state = self.state();
-        if state.active == active {
-            state.active = None;
+        if let Some(active) = active {
+            state.active.remove(&active);
+            state.parked.remove(&active);
         }
     }
     pub(super) fn validate_mapping(
@@ -480,10 +510,7 @@ impl Memory {
             let next = {
                 let local = self.local.cores.borrow();
                 let mut s = self.state();
-                let position = s
-                    .watches
-                    .iter()
-                    .rposition(|(id, _)| local.contains_key(id));
+                let position = s.watches.iter().rposition(|(id, _)| local.contains_key(id));
                 position.map(|position| {
                     let (id, page) = s.watches.swap_remove(position);
                     (local.get(&id).and_then(Weak::upgrade), page)
@@ -616,20 +643,33 @@ impl Memory {
             .any(|invalidation| local.contains_key(&invalidation.core))
     }
     pub(super) fn prepare_external_write(&self) -> Result<(), String> {
-        let active = self.state().active;
-        let core = active.and_then(|id| self.local.cores.borrow().get(&id).and_then(Weak::upgrade));
-        if let Some(core) = core {
-            core.prepare_flush()?;
-        } else if active.is_some() {
-            return Err("code write cannot interrupt a processor owned by another worker".into());
-        } else {
-            self.flush()?;
+        let state = self.state();
+        if !Self::quiescent_except(&state, self.local.active.get()) {
+            return Err(
+                "code write requires all running processors to reach an owner barrier".into(),
+            );
         }
+        let active = state.active.clone();
+        drop(state);
+        for id in active {
+            if let Some(core) = self.local.cores.borrow().get(&id).and_then(Weak::upgrade) {
+                core.prepare_flush()?;
+            }
+        }
+        self.flush()?;
         Ok(())
     }
     pub(super) fn flush(&self) -> Result<(), String> {
-        if self.state().active.is_some() {
-            return Err("code invalidation requires stopped processors".into());
+        if let Some(core) = self.local.active.get() {
+            let state = self.state();
+            if !state.active.contains(&core)
+                || state.parked.get(&core).copied().unwrap_or(0) == 0
+                    && !Self::quiescent_except(&state, Some(core))
+            {
+                return Err(
+                    "code invalidation requires the local processor to be stopped or at an owner barrier".into(),
+                );
+            }
         }
         let local = self.local.cores.borrow();
         loop {
@@ -641,17 +681,18 @@ impl Memory {
                     .rposition(|invalidation| local.contains_key(&invalidation.core));
                 position.map(|position| {
                     let invalidation = s.invalidations.swap_remove(position);
-                    (invalidation, local.get(&invalidation.core).and_then(Weak::upgrade))
+                    (
+                        invalidation,
+                        local.get(&invalidation.core).and_then(Weak::upgrade),
+                    )
                 })
             };
             let Some((invalidation, core)) = next else {
                 break;
             };
             if let Some(core) = core {
-                core.cpu.invalidate_code(Some((
-                    invalidation.address,
-                    invalidation.address + 4096,
-                )))?;
+                core.cpu
+                    .invalidate_code(Some((invalidation.address, invalidation.address + 4096)))?;
             }
             let mut s = self.state();
             if !s
@@ -666,5 +707,53 @@ impl Memory {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stopped_mapping_barrier_accepts_parked_cores_only() {
+        let shared = SharedMemory::default();
+        let a = shared.processor();
+        let b = shared.processor();
+        a.start(1).unwrap();
+        b.start(2).unwrap();
+
+        a.set_parked(1, true).unwrap();
+        assert!(a.require_stopped().is_err());
+        b.set_parked(2, true).unwrap();
+        assert!(a.require_stopped().is_ok());
+
+        // A worker may invalidate its own stopped translation cache while a
+        // peer is still executing; shared mapping changes still need a barrier.
+        b.set_parked(2, false).unwrap();
+        assert!(a.require_stopped().is_err());
+        assert!(a.flush().is_ok());
+
+        a.end();
+        b.end();
+        assert!(a.require_stopped().is_ok());
+    }
+
+    #[test]
+    fn callback_write_requires_every_peer_to_be_parked() {
+        let shared = SharedMemory::default();
+        let a = shared.processor();
+        let b = shared.processor();
+        a.start(1).unwrap();
+        b.start(2).unwrap();
+
+        // A synchronous callback can invalidate the source CPU's local cache
+        // while it is active, once every other CPU has reached the barrier.
+        b.set_parked(2, true).unwrap();
+        a.prepare_external_write().unwrap();
+        b.set_parked(2, false).unwrap();
+        assert!(a.prepare_external_write().is_err());
+
+        a.end();
+        b.end();
     }
 }

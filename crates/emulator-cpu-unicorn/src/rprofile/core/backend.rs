@@ -3,15 +3,20 @@ use super::*;
 impl Cpu for Core {
     fn set_loop_mode(&self, mode: fujimod_emulator_cpu::loops::LoopMode) -> Result<(), String> {
         let e = &self.execution;
-        e.memory.require_stopped()?;
+        if e.active.get() {
+            return Err("loop mode requires a stopped processor".into());
+        }
         e.cpu.invalidate_code(None)?;
         e.loops.mode.set(mode);
         e.loops.bypass.set(None);
         Ok(())
     }
     fn set_loop_window(&self, stable: bool) -> Result<(), String> {
-        self.execution.memory.require_stopped()?;
-        self.execution.loops.window.set(stable);
+        let e = &self.execution;
+        if e.active.get() {
+            return Err("loop window requires a stopped processor".into());
+        }
+        e.loops.window.set(stable);
         Ok(())
     }
     fn identity(&self) -> Identity {
@@ -23,7 +28,7 @@ impl Cpu for Core {
         if e.active.get() {
             return Err("execution policy requires a stopped processor".into());
         }
-        e.set_policy(policy);
+        e.set_policy(policy)?;
         e.clock_overshoot.set(0);
         unsafe { (*e.record.as_ptr()).enabled = e.accounting_mode() };
         Ok(())
@@ -475,6 +480,9 @@ impl Cpu for Core {
             // Observe only after backend-owned architectural entry. The
             // callback cannot replace exception classification or entry.
             Hook::Exception { .. } => None,
+            // Owner synchronization is raised explicitly by the R-profile
+            // execution adapter at sensitive memory operations.
+            Hook::Synchronization { .. } => None,
             Hook::CompletedStore { range, .. } => {
                 // The permanent coherence hook already dispatches stores on
                 // watched pages. Reuse it instead of creating native hooks

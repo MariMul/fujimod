@@ -3,8 +3,9 @@
 //! after an initial capture; equal or zero candidates retain shared pages.
 use crate::BackingObserver;
 use std::{
-    cell::{RefCell, UnsafeCell},
+    cell::RefCell,
     ptr::NonNull,
+    sync::atomic::{AtomicU64, Ordering},
     sync::{Arc, OnceLock},
 };
 
@@ -16,11 +17,10 @@ pub struct Image {
     pages: Arc<[Arc<Page>]>,
 }
 /// Stable bitmap allocation retained until every observing processor is gone.
-/// Access is serialized by the execution owner; no Rust borrow of the bitmap
-/// remains live while the engine writes its conservative page flags.
+/// Native processor threads and the owner may flag pages concurrently.
 pub struct Tracker {
     len: usize,
-    dirty: UnsafeCell<Box<[u64]>>,
+    dirty: Box<[AtomicU64]>,
     base: RefCell<Option<Image>>,
 }
 fn zero() -> &'static Arc<Page> {
@@ -49,7 +49,9 @@ impl Tracker {
     pub fn new(len: usize) -> Self {
         Self {
             len,
-            dirty: UnsafeCell::new(vec![0; len.div_ceil(PAGE_BYTES * 64)].into_boxed_slice()),
+            dirty: (0..len.div_ceil(PAGE_BYTES * 64))
+                .map(|_| AtomicU64::new(0))
+                .collect(),
             base: RefCell::new(None),
         }
     }
@@ -57,7 +59,7 @@ impl Tracker {
         (self.len != 0).then(|| BackingObserver {
             backing,
             bytes: self.len,
-            bitmap: NonNull::new(unsafe { (&mut *self.dirty.get()).as_mut_ptr() }).unwrap(),
+            bitmap: NonNull::new(self.dirty.as_ptr() as *mut AtomicU64).unwrap(),
             page_shift: 12,
         })
     }
@@ -66,18 +68,19 @@ impl Tracker {
             return Err("dirty range escapes backing".into());
         }
         if bytes != 0 {
-            let flags = unsafe { &mut *self.dirty.get() };
             for page in offset / PAGE_BYTES..=(offset + bytes - 1) / PAGE_BYTES {
-                flags[page / 64] |= 1 << (page % 64);
+                self.dirty[page / 64].fetch_or(1 << (page % 64), Ordering::Relaxed);
             }
         }
         Ok(())
     }
     fn dirty(&self, page: usize) -> bool {
-        unsafe { (&*self.dirty.get())[page / 64] & (1 << (page % 64)) != 0 }
+        self.dirty[page / 64].load(Ordering::Relaxed) & (1 << (page % 64)) != 0
     }
     fn set_base(&self, image: &Image) {
-        unsafe { (&mut *self.dirty.get()).fill(0) };
+        for flag in self.dirty.iter() {
+            flag.store(0, Ordering::Relaxed);
+        }
         *self.base.borrow_mut() = Some(image.clone());
     }
     /// # Safety

@@ -116,6 +116,16 @@ pub struct Core {
     mmio_contexts: RefCell<Vec<Box<MmioData>>>,
     mmio: RefCell<BTreeMap<u64, MmioMapping>>,
 }
+impl Core {
+    pub(crate) fn set_parallel_cpus(&self, enabled: bool) -> Result<(), String> {
+        let set = self
+            .api
+            .extensions
+            .set_parallel_cpus
+            .ok_or("CPU backend has no per-engine parallel TCG control")?;
+        check(&self.api, unsafe { set(self.raw, enabled) })
+    }
+}
 #[derive(Default)]
 struct Inspection {
     depth: Cell<usize>,
@@ -393,6 +403,7 @@ impl Cpu for Core {
     fn features(&self) -> Features {
         let e = &self.api.extensions;
         Features {
+            asynchronous_runs: false,
             guest_clock: false,
             architectural_exits: false,
             tighten_instruction_limit: false,
@@ -402,7 +413,13 @@ impl Cpu for Core {
             translation_filter: e.insn_filter.is_some()
                 && e.retry_block.is_some()
                 && e.request_restart.is_some(),
-            block_accounting: e.features & 2 != 0 && e.accounting.is_some(),
+            // The R-profile backend writes the appended pause pointer. Require
+            // its ABI bit before exposing the accounting record to that backend.
+            block_accounting: e.features & 2 != 0
+                && e.features & ffi::FEATURE_PAUSE_ACCOUNTING_LAYOUT != 0
+                && e.features & ffi::FEATURE_PARALLEL_TCG != 0
+                && e.set_parallel_cpus.is_some()
+                && e.accounting.is_some(),
             watched_stores: e.hook_watched.is_some() && e.watch.is_some(),
             backing_observation: e.observe_backings.is_some(),
             store_pc_control: e.write_hook_pc_sync.is_some(),
@@ -692,6 +709,11 @@ impl Cpu for Core {
             Hook::Fault { .. } => (0x3f0, fault as *const (), HookRange::All),
             Hook::CompletedStore { .. } => {
                 return Err("completed-store hooks require the R-profile execution adapter".into());
+            }
+            Hook::Synchronization { .. } => {
+                return Err(
+                    "owner synchronization hooks require the R-profile execution adapter".into(),
+                );
             }
         };
         let mut data = Box::new(HookData {
