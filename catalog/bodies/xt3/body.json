@@ -72,7 +72,8 @@
   ],
   "parts": [
     "xt3-serial-nor",
-    "xt3-power-registers"
+    "xt3-power-registers",
+    "xt3-image-sensor"
   ],
   "wiring": [
     {
@@ -84,6 +85,11 @@
       "source_id": "spi1",
       "target_id": "xt3-power-registers",
       "signal": "serial_data"
+    },
+    {
+      "source_id": "xt3-image-sensor",
+      "target_id": "imaging-receiver",
+      "signal": "image_data"
     }
   ],
   "hardware": {
