@@ -97,8 +97,8 @@ impl StillProcessor {
                 || raster.width != src.width
                 || raster.height != src.height
                 || raster.pitch > 32768
-                || raster.address % 2 != 0
-                || src.address % 2 != 0
+                || !raster.address.is_multiple_of(2)
+                || !src.address.is_multiple_of(2)
                 || dst.overlaps(raster)?
             {
                 return Err("still RAW writeback requires matching U16 dimensions and separate color output".into());
