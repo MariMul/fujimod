@@ -481,7 +481,7 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
             (reply?.envelope.length ?? 0),
           received: (input ? request.transferred : 0) + (reply?.transferred ?? 0),
         },
-        data: (reply?.data ?? (input ? request.data : new Uint8Array())).slice(),
+        data: (reply?.data ?? (request.kind === 0xd0 ? new Uint8Array() : request.data)).slice(),
         detail,
       });
     };

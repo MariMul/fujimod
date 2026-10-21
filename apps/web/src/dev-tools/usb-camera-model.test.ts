@@ -609,6 +609,16 @@ test('one command row merges request/reply totals and payloads, with errors on e
       { sent: 12, received: 8 },
       { sent: 12, received: 2 },
     ]);
+    d.emit(0xe0, null, { operation: 'Write data', data: Uint8Array.of(7, 8), transferred: 2 });
+    await vi.waitFor(() =>
+      expect(f.model.log().filter((row) => row.layer === Layer.Ff80)).toHaveLength(6),
+    );
+    const upload = f.model
+      .log()
+      .filter((row) => row.layer === Layer.Ff80)
+      .at(-1)!;
+    expect(upload.data).toEqual(Uint8Array.of(7, 8));
+    expect(upload.sizes).toEqual({ sent: 14, received: 0 });
   } finally {
     f.model.dispose();
   }
