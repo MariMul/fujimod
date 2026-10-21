@@ -31,13 +31,17 @@ supplied by explicit caller paths and verified against the selected identities.
 No reference record locates or downloads those inputs. A real ROM reset entry
 remains distinct from a loader or SD entry.
 
-SoC, body, part and firmware records have separate JSON Schemas with
-typed fields and closed objects. Run configurations and overlays have their own
-schemas alongside their implementation. Schema IDs are stable URIs; CI resolves
-them to the schemas in the same checkout, validates every document, and checks
-identity uniqueness and cross-layer references without network resolution.
-Device/model option variants are checked by their implementation schemas and
-Rust constructors; an untyped object is not a substitute for a schema.
+Rust serde structs in `fujimod-catalog` are the source of truth for SoC, part,
+body, firmware, run-configuration and overlay documents. They deny unknown
+fields, and their doc comments become descriptions in schemas generated with
+schemars. Catalog schemas are generated, never authored separately.
+
+CI checks committed schemas against newly generated output, validates every
+document, and checks identity uniqueness and cross-layer references without
+network resolution. Schema IDs are stable URIs resolved to this checkout.
+TypeScript and Python catalog binding types are generated from the same Rust
+definitions. Device/model variants have explicit typed fields checked again by
+their constructors; an untyped object is not a substitute for a schema.
 
 Catalog resolution is shared by Rust and the language bindings. Applications
 select IDs and supply inputs; they do not reconstruct paths or maintain parallel
