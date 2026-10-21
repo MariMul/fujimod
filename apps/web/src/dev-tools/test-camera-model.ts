@@ -55,7 +55,17 @@ export function createTestCameraModel(options: {
       try {
         return await operation(options.session?.(id) as ToolSession);
       } finally {
-        update(id, (current) => ({ ...current, session: undefined }));
+        // Like the USB model, re-read the debug flag after a debug-mode change.
+        update(id, (current) => ({
+          ...current,
+          session: undefined,
+          debugMode:
+            tool === 'Enable debug mode'
+              ? 'on'
+              : tool === 'Disable debug mode'
+                ? 'off'
+                : current.debugMode,
+        }));
       }
     },
     async setSharing(id, on) {
@@ -99,6 +109,7 @@ export function testCamera(id: string, overrides: Partial<Camera> = {}): Camera 
     present: true,
     uncertain: false,
     identity: { manufacturer: 'FUJIFILM', product: id, internalVersion: '1.66' },
+    debugMode: 'off',
     ...overrides,
   };
 }

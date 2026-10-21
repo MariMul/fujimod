@@ -93,6 +93,9 @@ try {
         window.consoleFixture = (
           (await import('/__test__/' + 'console.mjs')) as typeof import('./usb-fixture.ts')
         ).installConsoleFixture();
+        // Debug mode off: on the ff80 link that can only mean service mode, like the
+        // owner's X100V.
+        window.consoleFixture.state.configuration.set('0:247', 0);
       });
       await page
         .locator('.td-connects')
@@ -107,6 +110,10 @@ try {
         1,
       );
       await page.locator('.wb-state', { hasText: 'Idle' }).waitFor();
+      await page.locator('.wb-service', { hasText: 'restores factory settings' }).waitFor();
+      assert.equal(await page.locator('.wb-debug-state').innerText(), 'Debug mode: Off');
+      assert.equal(await page.getByRole('button', { name: 'Disable debug mode' }).count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Enable debug mode' }).count(), 1);
       const log = page.getByRole('region', { name: 'Connection log' });
       assert.ok((await log.innerText()).includes('Device info'), 'identity exchange is logged');
       // One camera: no camera column and no camera filters.
@@ -160,7 +167,7 @@ try {
       });
       assert.deepEqual(errors, []);
       console.log(
-        `PASS ${mobile ? 'mobile' : 'desktop'}: connect, automatic identity, configuration dump, memory read, console command, binary bundle, log filters`,
+        `PASS ${mobile ? 'mobile' : 'desktop'}: connect, automatic identity, service-mode banner, configuration dump, memory read, console command, binary bundle, log filters`,
       );
     } finally {
       await browser.close();

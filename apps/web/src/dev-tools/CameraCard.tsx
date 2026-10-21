@@ -61,7 +61,9 @@ export function CameraStrip(props: {
                 </Show>
               </span>
               <span class="wb-cam-meta">
-                {camera.transport === 'usb' ? 'USB' : 'Remote'} · {state().label}
+                {camera.transport === 'usb' ? 'USB' : 'Remote'} ·{' '}
+                {camera.serviceMode ? 'Service mode · ' : ''}
+                {state().label}
               </span>
             </button>
           );
@@ -159,10 +161,6 @@ export function CameraCard(props: { camera: Camera; model: CameraModel }) {
         )}
       </Show>
       <Show when={props.camera.transport === 'usb' && props.camera.present}>
-        <p class="wb-note">
-          In service mode, switching the camera off restores factory settings. Remove the battery to
-          leave service mode.
-        </p>
         <div class="wb-sharing">
           <label class="wb-switch">
             <input

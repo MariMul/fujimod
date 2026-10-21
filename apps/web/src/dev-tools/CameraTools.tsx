@@ -245,23 +245,39 @@ export function CameraTools(props: {
             inspect and control the camera’s internal software. USB must be plugged in twice for
             regular file transfer.
           </p>
-          <div class="wb-pair">
-            <button
-              class="wb-btn"
-              disabled={!available() || props.camera.transport !== 'usb'}
-              aria-label="Enable debug mode"
-              onClick={() => props.onWizard(Wizard.Enable)}
-            >
-              Enable
-            </button>
-            <button
-              class="wb-btn"
-              disabled={!available() || props.camera.transport !== 'usb'}
-              aria-label="Disable debug mode"
-              onClick={() => props.onWizard(Wizard.Disable)}
-            >
-              Disable
-            </button>
+          <div class="wb-debug-state">
+            Debug mode:{' '}
+            <strong>
+              {props.camera.debugMode === 'on'
+                ? 'On'
+                : props.camera.debugMode === 'off'
+                  ? 'Off'
+                  : props.camera.debugMode === 'unknown'
+                    ? 'Could not be read'
+                    : 'Reading…'}
+            </strong>
+          </div>
+          <div class={{ 'wb-pair': true, 'wb-single': props.camera.debugMode !== 'unknown' }}>
+            <Show when={props.camera.debugMode === 'off' || props.camera.debugMode === 'unknown'}>
+              <button
+                class="wb-btn"
+                disabled={!available() || props.camera.transport !== 'usb'}
+                aria-label="Enable debug mode"
+                onClick={() => props.onWizard(Wizard.Enable)}
+              >
+                Enable
+              </button>
+            </Show>
+            <Show when={props.camera.debugMode === 'on' || props.camera.debugMode === 'unknown'}>
+              <button
+                class="wb-btn"
+                disabled={!available() || props.camera.transport !== 'usb'}
+                aria-label="Disable debug mode"
+                onClick={() => props.onWizard(Wizard.Disable)}
+              >
+                Disable
+              </button>
+            </Show>
           </div>
         </div>
       </section>

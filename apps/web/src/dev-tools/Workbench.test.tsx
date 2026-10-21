@@ -94,7 +94,7 @@ test('a camera held by a remote shows who holds it and disables every tool', () 
   const host = mount(test.model);
   flush();
   expect(host.querySelector('.wb-state')!.textContent).toBe('In use by fujimod-capture');
-  for (const name of ['Dump configuration', 'Read', 'Enable debug mode', 'Disable debug mode'])
+  for (const name of ['Dump configuration', 'Read', 'Enable debug mode'])
     expect(button(host, name).disabled).toBe(true);
 });
 
@@ -158,23 +158,50 @@ test('the diagnostic bundle records partial configuration reads as incomplete', 
   expect(text).toContain('"bytes": 4');
 });
 
-test('Write tools open the debug-mode workflows and are unavailable for remote cameras', () => {
+test('the debug-mode tool shows the flag and offers only the action that applies', () => {
   const test = createTestCameraModel({});
-  test.add(testCamera('X100V'));
+  test.add(testCamera('X100V', { debugMode: undefined }));
   const host = mount(test.model);
   flush();
   expect(host.querySelector('.wb-tool.wb-write .wb-writes')!.textContent).toBe(
     'Changes a camera setting',
   );
-  test.update('X100V', (camera) => ({ ...camera, transport: 'remote' }));
+  expect(host.querySelector('.wb-debug-state')!.textContent).toBe('Debug mode: Reading…');
+  expect(button(host, 'Enable debug mode')).toBeUndefined();
+  test.update('X100V', (camera) => ({ ...camera, debugMode: 'off' }));
   flush();
-  expect(button(host, 'Enable debug mode').disabled).toBe(true);
+  expect(host.querySelector('.wb-debug-state')!.textContent).toBe('Debug mode: Off');
+  expect(button(host, 'Enable debug mode').disabled).toBe(false);
+  expect(button(host, 'Disable debug mode')).toBeUndefined();
+  test.update('X100V', (camera) => ({ ...camera, debugMode: 'unknown' }));
+  flush();
+  expect(button(host, 'Enable debug mode')).toBeTruthy();
+  expect(button(host, 'Disable debug mode')).toBeTruthy();
+  test.update('X100V', (camera) => ({ ...camera, debugMode: 'on', transport: 'remote' }));
+  flush();
+  expect(button(host, 'Enable debug mode')).toBeUndefined();
   expect(button(host, 'Disable debug mode').disabled).toBe(true);
   test.update('X100V', (camera) => ({ ...camera, transport: 'usb' }));
   flush();
   button(host, 'Disable debug mode').click();
   flush();
   expect(host.textContent).toContain('Turns the Debug Mode setting off');
+});
+
+test('a camera known to be in service mode gets a banner, and only then', () => {
+  const test = createTestCameraModel({});
+  test.add(testCamera('X100V'));
+  const host = mount(test.model);
+  flush();
+  expect(host.querySelector('.wb-service')).toBeNull();
+  expect(host.querySelector('.wb-cam-meta')!.textContent).not.toContain('Service mode');
+  test.update('X100V', (camera) => ({ ...camera, serviceMode: true }));
+  flush();
+  expect(host.querySelector('.wb-service')!.textContent).toContain('restores factory settings');
+  expect(host.querySelector('.wb-cam-meta')!.textContent).toContain('Service mode');
+  test.update('X100V', (camera) => ({ ...camera, present: false }));
+  flush();
+  expect(host.querySelector('.wb-service')).toBeNull();
 });
 
 test('a remote tool waiting for the owner shows the spoken countdown', async () => {

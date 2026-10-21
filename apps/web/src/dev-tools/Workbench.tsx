@@ -122,6 +122,15 @@ export function Workbench(props: {
             onConnect={() => void connect()}
           />
         </Show>
+        <Show when={camera()?.serviceMode && camera()?.present}>
+          <div class="wb-service" role="alert">
+            <strong>Service mode</strong>
+            <span>
+              Switching this camera off restores factory settings. Remove the battery to leave
+              service mode.
+            </span>
+          </div>
+        </Show>
         <div class="wb-bench">
           <aside class="wb-tools" aria-label="Tools">
             <Show when={connectError()}>
