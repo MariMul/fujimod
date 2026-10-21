@@ -700,21 +700,25 @@
         {
           "mode": 236,
           "horizontal": 706,
+          "vertical": 9348,
           "lines": 856
         },
         {
           "mode": 236,
           "horizontal": 734,
+          "vertical": 1671,
           "lines": 1671
         },
         {
           "mode": 236,
           "horizontal": 737,
+          "vertical": 8955,
           "lines": 820
         },
         {
           "mode": 236,
           "horizontal": 750,
+          "vertical": 1760,
           "lines": 1760
         }
       ],

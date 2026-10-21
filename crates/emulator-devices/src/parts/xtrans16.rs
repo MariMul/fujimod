@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 pub struct RollingReference {
     pub mode: u8,
     pub horizontal: u32,
+    pub vertical: u32,
     pub lines: u32,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -97,12 +98,18 @@ impl Sensor {
         }
         // The input receiver's padded vertical raster can include a long
         // idle interval. Selected sensor drive modes declare their own reset
-        // reference, independent of that receiver raster's padding.
+        // reference, independent of that receiver raster's padding. Matching
+        // the entire scan tuple keeps shorter rasters on their actual counter;
+        // reusing a padded-mode reference can falsely clamp SHR to one line.
         let reference = self
             .options
             .rolling_references
             .iter()
-            .find(|r| s.registers[0] & 0xfc == r.mode && s.horizontal == r.horizontal)
+            .find(|r| {
+                s.registers[0] & 0xfc == r.mode
+                    && s.horizontal == r.horizontal
+                    && s.vertical == r.vertical
+            })
             .map_or(s.vertical, |r| r.lines);
         let extension = u64::from(word(2)) + 1;
         let exposure_rows = u64::from(reference) * extension;
@@ -243,6 +250,7 @@ mod tests {
                 rolling_references: vec![RollingReference {
                     mode: 0xec,
                     horizontal: 706,
+                    vertical: 9348,
                     lines: 856,
                 }],
             },
@@ -271,15 +279,16 @@ mod tests {
         assert_eq!(*period.lock().unwrap(), 2_399_887);
         assert_eq!(*period.lock().unwrap(), scan_period);
         assert!((exposure.lock().unwrap().seconds - 856. * 706. / 33_000_000.).abs() < 1e-12);
-        // More blanking changes cadence without changing the reset reference
-        // or integration. A mode change can change integration independently.
-        let seconds = exposure.lock().unwrap().seconds;
-        s.timing(706, 12000, None).unwrap();
-        assert_eq!(*period.lock().unwrap(), 3_080_727);
-        assert_eq!(exposure.lock().unwrap().seconds, seconds);
-        s.command(&[0x81, 0, 0, 0, 0, 0, 0, 0]).unwrap();
-        assert_eq!(*period.lock().unwrap(), 3_080_727);
-        assert!(exposure.lock().unwrap().seconds > seconds);
+        // A reset reference belongs to the complete declared scan tuple.
+        // Another raster retains its own counter extent and frame cadence.
+        s.timing(706, 935, None).unwrap();
+        s.command(&[0x81, 5, 0x9e, 0, 0, 0, 0, 0, 0x81, 6, 3, 0, 0, 0, 0, 0])
+            .unwrap();
+        assert_eq!(*period.lock().unwrap(), 240040);
+        assert!((exposure.lock().unwrap().seconds - 9. * 706. / 33_000_000.).abs() < 1e-12);
+        s.command(&[0x81, 2, 1, 0, 0, 0, 0, 0]).unwrap();
+        assert_eq!(*period.lock().unwrap(), 480080);
+        assert!((exposure.lock().unwrap().seconds - 944. * 706. / 33_000_000.).abs() < 1e-12);
     }
     #[test]
     fn register_shutter_gain_and_restore_change_physical_exposure() {
@@ -321,6 +330,7 @@ mod tests {
                 rolling_references: vec![RollingReference {
                     mode: 0xec,
                     horizontal: 660,
+                    vertical: 9000,
                     lines: 1000,
                 }],
             },
@@ -350,7 +360,7 @@ mod tests {
         assert!((wire.lock().unwrap().seconds - 0.0012).abs() < 1e-12);
         let saved = s.save();
         s.command(&command(&[(0, 0xec)])).unwrap();
-        assert!((wire.lock().unwrap().seconds - 0.018).abs() < 1e-12);
+        assert!((wire.lock().unwrap().seconds - 0.06548).abs() < 1e-12);
         s.restore(&saved).unwrap();
         assert!((wire.lock().unwrap().seconds - 0.0012).abs() < 1e-12);
     }
