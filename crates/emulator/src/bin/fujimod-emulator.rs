@@ -3,10 +3,10 @@ use fujimod_emulator::boot::{self, Options};
 use fujimod_emulator_cpu::ExecutionPolicy;
 use std::{collections::BTreeMap, ffi::OsString, path::PathBuf, process::ExitCode};
 
-const HELP: &str = "Usage: fujimod-emulator boot --body BODY --firmware FIRMWARE \\\n  --update UPDATE.DAT --boot-rom ROM.BIN --unicorn LIBRARY \\\n  [--nand IMAGE] [--settings MCU.BIN] [--screenshot LCD.PNG] \\\n  [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\n\
-Supported boot: x70 / x70-110. The ROM dump is required.\n\
+const HELP: &str = "Usage: fujimod-emulator boot --configuration ID \\\n  --update UPDATE.DAT --boot-rom ROM.BIN --unicorn LIBRARY \\\n  [--nand IMAGE] [--settings MCU.BIN] [--screenshot LCD.PNG] \\\n  [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\n\
+Boot configuration: x70-110-rec. The ROM dump is required.\n\
 Without --nand or --settings, persistent settings start blank.\n\
-NAND accepts a committed emulator image or a full raw medium matching the update.\n\
+NAND accepts a committed image or 128 MiB main-area image without OOB/spare.\n\
 Settings accepts a sixteen-byte MCU persistent packet.\n\
 First-start menus are accepted through MENU/OK ADC input.\n\
 Prints a JSON boot report; exits 0 at REC, 2 at a stopped frontier.\n";
@@ -21,12 +21,14 @@ fn parse(
     if args.next().as_deref() != Some(std::ffi::OsStr::new("boot")) {
         return Err(HELP.into());
     }
+    if args.peek().is_some_and(|a| a == "--help" || a == "-h") {
+        return Ok(None);
+    }
     let mut values = BTreeMap::new();
     while let Some(key) = args.next() {
         let key = key.to_str().ok_or("option name is not UTF-8")?.to_owned();
         if ![
-            "--body",
-            "--firmware",
+            "--configuration",
             "--update",
             "--boot-rom",
             "--unicorn",
@@ -53,12 +55,9 @@ fn parse(
             .ok_or_else(|| format!("required option: {key}"))
     };
     let options = Options {
-        body: take("--body")?
+        configuration_id: take("--configuration")?
             .into_string()
-            .map_err(|_| "body must be UTF-8")?,
-        firmware: take("--firmware")?
-            .into_string()
-            .map_err(|_| "firmware must be UTF-8")?,
+            .map_err(|_| "configuration ID must be UTF-8")?,
         update: take("--update")?.into(),
         boot_rom: take("--boot-rom")?.into(),
         unicorn: take("--unicorn")?.into(),
@@ -135,15 +134,23 @@ mod tests {
     #[test]
     fn explicit_inputs_and_unique_options_are_required() {
         assert!(parse(args(&["--help"])).unwrap().is_none());
-        assert!(parse(args(&["boot", "--body", "x70"])).is_err());
-        assert!(parse(args(&["boot", "--body", "x70", "--body", "x70"])).is_err());
+        assert!(parse(args(&["boot", "--help"])).unwrap().is_none());
+        assert!(parse(args(&["boot", "--configuration", "x70-110-rec"])).is_err());
         assert!(
             parse(args(&[
                 "boot",
-                "--body",
-                "x70",
-                "--firmware",
-                "x70-110",
+                "--configuration",
+                "x70-110-rec",
+                "--configuration",
+                "x70-110-rec"
+            ]))
+            .is_err()
+        );
+        assert!(
+            parse(args(&[
+                "boot",
+                "--configuration",
+                "x70-110-rec",
                 "--update",
                 "a.dat",
                 "--boot-rom",
@@ -157,10 +164,8 @@ mod tests {
         );
         let (options, _, limit, execution_policy) = parse(args(&[
             "boot",
-            "--body",
-            "x70",
-            "--firmware",
-            "x70-110",
+            "--configuration",
+            "x70-110-rec",
             "--update",
             "a.dat",
             "--boot-rom",
@@ -170,20 +175,20 @@ mod tests {
         ]))
         .unwrap()
         .unwrap();
+        assert_eq!(options.configuration_id, "x70-110-rec");
         assert_eq!(options.boot_rom, PathBuf::from("rom.bin"));
         assert_eq!(limit, 2_000_000_000);
         assert_eq!(execution_policy, ExecutionPolicy::Interactive);
         assert!(options.nand.is_none());
+        assert!(parse(args(&["boot", "--body", "x70", "--firmware", "x70-110"])).is_err());
     }
 
     #[test]
     fn execution_policy_accepts_interactive_and_exact_and_rejects_unknown_values() {
         let base = [
             "boot",
-            "--body",
-            "x70",
-            "--firmware",
-            "x70-110",
+            "--configuration",
+            "x70-110-rec",
             "--update",
             "a.dat",
             "--boot-rom",

@@ -11,12 +11,17 @@ Build the [Unicorn backend](../emulator-cpu-unicorn/README.md), then:
 cargo build --locked --release -p fujimod-emulator --features serde \
   --bin fujimod-emulator
 target/release/fujimod-emulator boot \
-  --body x70 --firmware x70-110 \
+  --configuration x70-110-rec \
   --update /path/to/FPUPDATE.DAT \
   --boot-rom /path/to/bootrom.bin \
   --unicorn "$PWD/target/unicorn-native/libunicorn.2.dylib" \
   --screenshot /path/to/lcd.png
 ```
+
+The ID resolves a checked run configuration, which selects the body and
+firmware identities and supplies the execution policy and scene inputs. The
+selected pair must have a supported native runtime. This command currently
+accepts ROM-start configurations without overlays.
 
 Use the shared library filename produced on your platform. Firmware and ROM
 size and SHA-256 must match the selected catalog entry. Supplying your own
@@ -33,7 +38,8 @@ It includes pending-operation state and never counts a discovery run as a boot.
 Optional persistent inputs:
 
 - `--nand IMAGE`: a committed NAND JSON image exported by the emulator, or a
-  complete 128 MiB raw medium whose firmware prefix matches the selected update.
+  complete 128 MiB main-area image (without OOB/spare bytes) whose firmware prefix
+  matches the selected update.
   The committed format verifies geometry and firmware base identity.
 - `--settings MCU.BIN`: the 16-byte MCU persistent packet, including marker
   byte `0xaa` at offset 14 and an eight-bit zero sum. User settings stored in
@@ -47,8 +53,10 @@ or execution frontier, and 1 for invalid inputs or screenshot errors. A requeste
 PNG captures the currently composed LCD without advancing the guest. Input
 files are read only; firmware-written settings remain in the session's medium.
 
-Rust embedding uses `fujimod_emulator::boot::{Options, open, to_rec, screenshot}`.
+Rust embedding uses `fujimod_emulator::boot::{Options, open, to_rec, screenshot}`;
+set `Options.configuration_id` to select the run configuration.
 `open` returns an unexecuted `session::Session`; its `board` owns execution and
 its other methods supply external inputs and passive observations. `to_rec`
 returns a stopped report while retaining the session for inspection. No Python
-runtime is required.
+runtime is required. The Python package exposes the same construction through
+`fujimod.emulator.Board.from_inputs`.

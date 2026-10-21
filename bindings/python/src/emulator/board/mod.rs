@@ -1,4 +1,5 @@
 //! Python client and transitional devices on the shared runtime.
+mod boot;
 mod checkpoint;
 mod context;
 mod loops;

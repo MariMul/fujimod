@@ -22,6 +22,8 @@ python-source = "python"
 [tool.uv]
 # Rebuild local installs when either the binding or its Rust implementation changes.
 cache-keys = [
+  { file = "../../catalog/**/*.json" },
+  { file = "../../configurations/**/*.json" },
   { file = "../../crates/recording/Cargo.toml" },
   { file = "../../crates/recording/src/**/*.rs" },
   { file = "../../crates/recording/assets/**/*.json" },
@@ -45,6 +47,7 @@ cache-keys = [
   { file = "../../crates/usb-proxy/src/**/*.rs" },
   { file = "../../crates/usb/Cargo.toml" },
   { file = "../../crates/catalog/Cargo.toml" },
+  { file = "../../crates/catalog/build.rs" },
   { file = "../../crates/catalog/src/**/*.rs" },
   { file = "../../crates/emulator/Cargo.toml" },
   { file = "../../crates/emulator/src/**/*.rs" },
