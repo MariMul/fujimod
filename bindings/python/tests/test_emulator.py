@@ -11,7 +11,14 @@ from typing import cast
 import pytest
 from fujimod import catalog, emulator, usb
 from fujimod._native import emulator as native
-from fujimod.emulator import Asset, Board, Definition, Image, make_board
+from fujimod.emulator import (
+    Asset,
+    Board,
+    Definition,
+    ExecutionPolicy,
+    Image,
+    make_board,
+)
 from fujimod.emulator.board import Session, _boot_report
 
 NATIVE_EXPORTS = frozenset({
@@ -214,6 +221,40 @@ def test_board_from_inputs_validates_identifiers_and_paths_first() -> None:
             boot_rom=cast(str, object()),
             unicorn="libunicorn.dylib",
         )
+
+
+def test_board_execution_policy_is_typed_and_requires_an_open_board() -> None:
+    class Native:
+        policy = "exact"
+
+        def execution_policy(self) -> str:
+            return self.policy
+
+        def set_execution_policy(self, policy: str) -> None:
+            self.policy = policy
+
+        def close(self) -> None:
+            pass
+
+    board = Board.__new__(Board)
+    board._native = cast(native.Board, Native())
+    board._closed = False
+
+    assert board.execution_policy == "exact"
+    board.set_execution_policy("interactive")
+    assert board.execution_policy == "interactive"
+    board.set_execution_policy("exact")
+    assert board.execution_policy == "exact"
+    with pytest.raises(ValueError, match="'exact' or 'interactive'"):
+        board.set_execution_policy(cast(ExecutionPolicy, "approximate"))
+    with pytest.raises(TypeError, match="must be text"):
+        board.set_execution_policy(cast(ExecutionPolicy, 1))
+
+    board.close()
+    with pytest.raises(RuntimeError, match="runtime is closed"):
+        _ = board.execution_policy
+    with pytest.raises(RuntimeError, match="runtime is closed"):
+        board.set_execution_policy("interactive")
 
 
 def test_boot_report_decodes_the_stopped_guest_observation() -> None:

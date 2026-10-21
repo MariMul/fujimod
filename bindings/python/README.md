@@ -55,6 +55,12 @@ inputs; use the corresponding state methods to inspect their modeled results.
 `session.scanout` returns a `ScanoutFrame` with raw bytes, optional RGB pixels,
 dimensions and state metadata without advancing guest time. `session.screenshot`
 returns a PNG for catalog runtimes after a display frame is configured.
+Graph-backed boards expose a typed `execution_policy` property and
+`set_execution_policy`, which accepts `"exact"` or `"interactive"`. `exact`
+preserves requested instruction boundaries; `interactive` allows
+backend-defined block-boundary overshoot. Set the policy explicitly when
+needed; construction does not start guest execution or override the native
+default. Policy changes require a stopped board.
 `boot_to_rec` returns a typed `BootReport`. Its `status` is `"rec"`,
 `"instruction-limit"` or `"stopped"`; the report also includes instruction and
 guest-time counters, observed mode and menu values, setup status and presses,

@@ -6,7 +6,13 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from fujimod import usb
-    from fujimod.emulator import Board, BootReport, ScanoutFrame, Session
+    from fujimod.emulator import (
+        Board,
+        BootReport,
+        ExecutionPolicy,
+        ScanoutFrame,
+        Session,
+    )
     from fujimod.usb import app80
 
     def generated_values() -> None:
@@ -36,6 +42,9 @@ if TYPE_CHECKING:
         assert_type(board, Board)
         assert_type(board.boot_to_rec(), BootReport)
         assert_type(board.closed, bool)
+        assert_type(board.execution_policy, ExecutionPolicy)
+        board.set_execution_policy("exact")
+        board.set_execution_policy("interactive")
         session = board.session
         assert_type(session, Session)
         assert_type(session.adc_samples("adc0"), tuple[int, ...])

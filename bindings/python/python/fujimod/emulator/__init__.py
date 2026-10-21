@@ -3,7 +3,14 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .board import Board, BootReport, ScanoutFrame, Session, make_board
+    from .board import (
+        Board,
+        BootReport,
+        ExecutionPolicy,
+        ScanoutFrame,
+        Session,
+        make_board,
+    )
     from .definition import Asset, Definition, Image, Xp4Definition
 
 __all__ = [
@@ -11,6 +18,7 @@ __all__ = [
     "Board",
     "BootReport",
     "Definition",
+    "ExecutionPolicy",
     "Image",
     "ScanoutFrame",
     "Session",
@@ -20,12 +28,27 @@ __all__ = [
 
 
 def __getattr__(name: str) -> object:
-    if name in ("Board", "BootReport", "ScanoutFrame", "Session", "make_board"):
-        from .board import Board, BootReport, ScanoutFrame, Session, make_board
+    if name in (
+        "Board",
+        "BootReport",
+        "ExecutionPolicy",
+        "ScanoutFrame",
+        "Session",
+        "make_board",
+    ):
+        from .board import (
+            Board,
+            BootReport,
+            ExecutionPolicy,
+            ScanoutFrame,
+            Session,
+            make_board,
+        )
 
         return {
             "Board": Board,
             "BootReport": BootReport,
+            "ExecutionPolicy": ExecutionPolicy,
             "ScanoutFrame": ScanoutFrame,
             "Session": Session,
             "make_board": make_board,

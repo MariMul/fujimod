@@ -16,6 +16,7 @@ from .definition import Definition, Xp4Definition
 from .processor import Processor
 
 BootStatus = Literal["rec", "instruction-limit", "stopped"]
+ExecutionPolicy = Literal["exact", "interactive"]
 
 
 class BootReport(TypedDict):
@@ -277,6 +278,29 @@ class Board:
     def closed(self) -> bool:
         """Whether :meth:`close` has released this board's native session."""
         return self._closed
+
+    @property
+    def execution_policy(self) -> ExecutionPolicy:
+        """Current instruction-accounting policy for a graph-backed board."""
+        self._ensure_open()
+        policy = self._native.execution_policy()
+        if policy not in ("exact", "interactive"):
+            raise RuntimeError("Native board returned an unknown execution policy")
+        return policy
+
+    def set_execution_policy(self, policy: ExecutionPolicy) -> None:
+        """Select instruction accounting for the next board execution.
+
+        ``exact`` stops at requested instruction boundaries. ``interactive``
+        permits backend-defined block-boundary overshoot. The board must be
+        stopped before the policy can change.
+        """
+        self._ensure_open()
+        if type(policy) is not str:
+            raise TypeError("execution policy must be text")
+        if policy not in ("exact", "interactive"):
+            raise ValueError("execution policy must be 'exact' or 'interactive'")
+        self._native.set_execution_policy(policy)
 
     @property
     def native(self) -> _native.Board:
