@@ -1006,9 +1006,10 @@ impl State {
     }
     fn sync(&mut self, cpu: &dyn Cpu, core: usize) -> Result<(), String> {
         if let Some(progress) = cpu.instruction_progress() {
-            let delta = progress
-                .checked_sub(self.accounted[core])
-                .ok_or("processor entry count moved backward")?;
+            let delta = progress.checked_sub(self.accounted[core]).ok_or_else(|| {
+                format!("CPU{core} entry count moved backward: {progress} < {} (policy {}, parallel {})",
+                    self.accounted[core], self.execution_policy.name(), self.parallel.is_some())
+            })?;
             let elapsed = self
                 .parallel
                 .as_mut()
