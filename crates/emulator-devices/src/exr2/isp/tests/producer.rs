@@ -64,6 +64,7 @@ fn producer_with_metering(
             ack_ticks: 2,
             stop_ticks: 3,
             histogram: hist,
+            external_statistics: false,
             diagnostic_reads: true,
         },
         producer::Wiring {
@@ -221,6 +222,92 @@ fn switching_from_sensor_statistics_restores_the_external_span_layout() {
         ]
     );
     assert_eq!(&m.bytes[0x4000..0x4004], &[9; 4]);
+}
+
+#[test]
+fn external_statistics_preserve_a_span_overlapping_the_histogram_destination() {
+    let images = ImageFrames::from_pixels(
+        ImageLayout {
+            width: 4,
+            height: 2,
+            stride: 8,
+        },
+        vec![5; 16],
+    )
+    .unwrap();
+    let spans = vec![
+        StatisticsSpan {
+            destination: 0,
+            offset: 0,
+            bytes: vec![3; 4],
+        },
+        StatisticsSpan {
+            destination: 8,
+            offset: 512,
+            bytes: vec![0x5a; 1024],
+        },
+    ];
+    let frames = StatisticsFrames::new(spans).unwrap();
+    let mut d = Block18000::new(
+        producer::Options {
+            pixels_per_tick: None,
+            contrast: None,
+            metering: None,
+            clock: super::super::dma::Clock::Fixed { ticks: 5 },
+            ack_ticks: 2,
+            stop_ticks: 3,
+            histogram: true,
+            external_statistics: true,
+            diagnostic_reads: true,
+        },
+        producer::Wiring {
+            grid: None,
+            frames: frames.clone(),
+            images: images.clone(),
+            routes: routes(0x2e),
+        },
+    )
+    .unwrap();
+    let mut m = Memory::default();
+    for index in 0..9 {
+        write(
+            &mut d,
+            &mut m,
+            0xfff18500 + index * 4,
+            0x4000 + index * 0x4000,
+        );
+    }
+    write(&mut d, &mut m, 0xfff18520, 0xa000);
+    for (offset, value) in [
+        (0x524, 0x200),
+        (0x88c, 0),
+        (0x8f4, 1),
+        (0x8a0, 0x80003000),
+        (0x8f8, 0),
+        (0x8c4, 2),
+        (0x8f8, 0x10000000),
+        (0x884, 1),
+        (4, 0x33173317),
+        (0x604, 3),
+        (0x608, 0x10001),
+        (0x700, 0xa000),
+        (0x704, 0x200),
+        (0x984, 1),
+        (0x9f8, 0x10000000),
+        (8, 1),
+    ] {
+        write(&mut d, &mut m, 0xfff18000 + offset, value);
+    }
+    advance(&mut d, &mut m, 2);
+    let edge = FrameEdge { index: 1, tick: 10 };
+    images.publish(edge, &[5; 16]).unwrap();
+    frames.publish(edge).unwrap();
+    advance(&mut d, &mut m, 10);
+    advance(&mut d, &mut m, 15);
+
+    assert!(m.effects.contains(&Effect::Dma(0xa200, 1024)));
+    assert!(!m.effects.contains(&Effect::Dma(0xa000, 1024)));
+    assert_eq!(&m.bytes[0xa200..0xa600], &[0x5a; 1024]);
 }
 
 #[test]

@@ -21,6 +21,9 @@ pub struct Options {
     pub ack_ticks: u64,
     pub stop_ticks: u64,
     pub histogram: bool,
+    /// Preserve complete external statistics spans, including histogram data.
+    #[serde(default)]
+    pub external_statistics: bool,
     pub contrast: Option<super::contrast::Arithmetic>,
     pub metering: Option<super::metering::Arithmetic>,
     #[serde(default)]
@@ -45,6 +48,7 @@ struct Transfer {
     route: Irq,
     destinations: [u32; 10],
     histogram: bool,
+    computed_histogram: bool,
 }
 pub struct Block18000 {
     options: Options,
@@ -73,10 +77,10 @@ impl Block18000 {
             arithmetic.validate()?;
         }
         let mut spans = wiring.frames.0.lock().unwrap().spans.clone();
-        if spans.iter().any(|s| s.destination == 9) {
+        if !options.external_statistics && spans.iter().any(|s| s.destination == 9) {
             return Err("histogram bins are computed from the connected image raster".into());
         }
-        if options.contrast.is_some() {
+        if options.contrast.is_some() && !options.external_statistics {
             if spans.iter().any(|s| s.destination < 2) {
                 return Err(
                     "computed contrast banks cannot have external replacement bytes".into(),
@@ -93,7 +97,7 @@ impl Block18000 {
                 bytes: vec![0; 80],
             });
         }
-        if options.metering.is_some() {
+        if options.metering.is_some() && !options.external_statistics {
             if spans.iter().any(|s| s.destination == 2) {
                 return Err("computed metering cannot have external replacement bytes".into());
             }
@@ -103,7 +107,7 @@ impl Block18000 {
                 bytes: vec![0; 3072],
             });
         }
-        if spans.is_empty() && !options.histogram {
+        if spans.is_empty() && !options.histogram && !options.external_statistics {
             return Err("statistics requires a declared source of bank data".into());
         }
         Ok(Self {
@@ -226,6 +230,7 @@ impl Block18000 {
         }
         let live = self.live();
         let histogram = self.histogram();
+        let computed_histogram = histogram && !self.options.external_statistics;
         let grid = {
             let image = self.wiring.images.0.lock().unwrap();
             if image.radiance.is_some() {
@@ -253,9 +258,13 @@ impl Block18000 {
         destinations[..9].copy_from_slice(&self.registers[0x500 / 4..0x524 / 4]);
         destinations[9] = self.registers[0x700 / 4];
         if histogram {
-            if !self.options.histogram || self.registers[0x704 / 4] != 0x200 {
+            if (!(self.options.histogram || self.options.external_statistics))
+                || self.registers[0x704 / 4] != 0x200
+            {
                 return Err("unsupported histogram count mode; 0x200 selects 256 u32 bins".into());
             }
+        }
+        if computed_histogram {
             let image = self.wiring.images.0.lock().unwrap();
             if image.edge != Some(edge) {
                 return Err("histogram image and statistics frame edges differ".into());
@@ -302,7 +311,7 @@ impl Block18000 {
             dma::span(destinations[9] as u64, self.histogram_bytes.len())?;
         }
         let mut radiometric_spans = None;
-        if live {
+        if live && !self.options.external_statistics {
             let image = self.wiring.images.0.lock().unwrap();
             if (image.radiance.is_some()
                 || self.options.contrast.is_some()
@@ -341,8 +350,8 @@ impl Block18000 {
             }
         }
         let base = radiometric_spans.as_deref().unwrap_or(&frame.spans);
-        let contrast = self.options.contrast.is_some();
-        let metering = self.options.metering.is_some();
+        let contrast = self.options.contrast.is_some() && !self.options.external_statistics;
+        let metering = self.options.metering.is_some() && !self.options.external_statistics;
         let computed = [(0, 2048), (1, 80), (2, 3072)];
         let selected = || {
             computed.iter().copied().filter(
@@ -378,7 +387,7 @@ impl Block18000 {
                 });
             }
         }
-        if live && contrast {
+        if live && contrast && !self.options.external_statistics {
             let image = self.wiring.images.0.lock().unwrap();
             let (grid, bands) = super::contrast::banks(
                 self.registers.as_slice(),
@@ -389,7 +398,7 @@ impl Block18000 {
             self.spans[base.len()].bytes.copy_from_slice(&grid);
             self.spans[base.len() + 1].bytes.copy_from_slice(&bands);
         }
-        if live && metering {
+        if live && metering && !self.options.external_statistics {
             let image = self.wiring.images.0.lock().unwrap();
             let bytes = super::metering::banks(
                 self.registers.as_slice(),
@@ -407,7 +416,7 @@ impl Block18000 {
                     return Err("unaligned statistics DMA destination".into());
                 }
                 let bounds = dma::span(address, span.bytes.len())?;
-                if histogram {
+                if computed_histogram {
                     let hist = dma::span(destinations[9] as u64, self.histogram_bytes.len())?;
                     if bounds.start < hist.end && hist.start < bounds.end {
                         return Err("statistics and histogram DMA destinations overlap".into());
@@ -458,7 +467,7 @@ impl Block18000 {
                         .filter(|s| destinations[s.destination] != 0)
                         .map(|s| s.bytes.len())
                         .sum::<usize>()
-                        + if histogram {
+                        + if computed_histogram {
                             self.histogram_bytes.len()
                         } else {
                             0
@@ -468,6 +477,7 @@ impl Block18000 {
             route,
             destinations,
             histogram,
+            computed_histogram,
         });
         Ok(())
     }
@@ -498,7 +508,7 @@ impl Block18000 {
                         )?;
                     }
                 }
-                if p.histogram {
+                if p.computed_histogram {
                     dma::write(cx, p.destinations[9] as u64, &self.histogram_bytes)?;
                 }
                 self.pending = None;
@@ -738,7 +748,9 @@ impl Device for Block18000 {
                     0x9a0 => matches!(v, 0x80003000 | 0x80403000),
                     0x8c4 | 0x9c4 => v == 2,
                     0x8f8 | 0x9f8 => matches!(v, 0 | 0x10000000),
-                    0x704 => self.options.histogram && v == 0x200,
+                    0x704 => {
+                        (self.options.histogram || self.options.external_statistics) && v == 0x200
+                    }
                     0x700 => v & 3 == 0 && dma::physical(v as u64, 1024).is_ok(),
                     _ => false,
                 };
