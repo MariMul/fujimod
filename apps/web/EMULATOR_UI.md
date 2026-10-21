@@ -34,6 +34,91 @@ list. Import checks every bound control against that list and reports unknown
 ones. The editor edits the same tree in place on the live panel and exports
 it as JSON. User layouts are stored with the saved camera.
 
+### Default layouts
+
+`defaultLayout(inputs, body)` builds a usable panel from any body's input list.
+It replaces `inputPanel` (`ui/input-panel.ts` is deleted).
+
+- Only supported inputs appear. Touch inputs and inputs whose id ends in
+  `_latch` (battery and cover latches) never appear.
+- Inputs are grouped by the id prefix before `.`:
+  - `up`, `down`, `left`, `right` members form a D-pad. Its center is the
+    group's `press` member, otherwise `menu_ok_button` when supported, which
+    then does not appear again as a key.
+  - `decrease` and `increase` members (or `wide` and `tele`) form a command
+    control, with `press` in the center when present.
+- Order: positional controls and the shutter in a two-column grid, then D-pads
+  and command controls, then keys in rows of four.
+- Each control gets a short face from its label (`controlFace`), checked
+  against every catalog body:
+  1. Drop an alias after ` / ` for ungrouped ids; for grouped ids the group
+     name is before ` / `.
+  2. Drop a trailing `button`, `switch` or `Switch`.
+  3. `X (meaning)` becomes face `X`; `Function (Fn7)` becomes `Fn7`.
+  4. Manual glyphs become icons: `a` and `▶` play, `b` delete, `t` and `●`
+     record, `N` flash. `Movie-record` is the record control.
+  5. A face containing `/` becomes two lines (`DISP`/`BACK`, `MENU`/`OK`,
+     `AF-L`/`AE-L`).
+  6. Any other name becomes an uppercase caption above a plain key, from the
+     caption table when the id is in it, otherwise the name's first word.
+  Faces have at most two lines of six characters and captions at most ten
+  characters. The full label is the control's accessible name.
+- Dials, rings, switches and levers take captions from one table keyed by
+  shared input id (`exposure_compensation_dial` → `EV`,
+  `shutter_speed_dial` → `SPEED`, `power_switch` and `on_off_switch` →
+  `POWER`, `mode_dial` → `MODE`, …), otherwise the label without its kind
+  word, uppercase.
+- `compatibleVariants(input)` decides which presentations an input allows
+  (relative inputs: `ticks`, `dial`; positions: `dial`, `segment`, `ticks`;
+  stages: `shutter`; buttons: `key`, `record`). It reads `relative`, positions
+  and stages before `kind`: the X-E2S command dial is a relative input of kind
+  `button`. The default layout and the editor both use it.
+
+### Editor
+
+- Entry: **Edit layout** in the viewer's ⋯ menu. The panel shows no editor
+  controls until then.
+- While editing, the viewer is not sticky on narrow screens and the panel
+  scrolls into view. An editor bar at the top of the panel holds Export,
+  Import and Done, and stays visible while the panel scrolls.
+- Tapping any control (dial, segment, key, shutter, D-pad, command control)
+  selects it and does not reach the emulator. The inspector under the editor
+  bar edits its caption, presentation (`compatibleVariants`) and bound input.
+  D-pads and command controls show one input picker per slot. The input picker
+  lists every input; unsupported ones are disabled.
+- Unknown ids are listed after an import, and for the active layout when it
+  has any.
+
+### Code
+
+- `ui/layout.ts`: the `DevicePanel` types, import/export and checks, plus pure
+  tree functions `nodeAt(panel, path)` and `replaceAt(panel, path, node)` with
+  `type NodePath = readonly number[]`.
+- `ui/default-layout.ts`: `defaultLayout`, `controlFace`, `compatibleVariants`,
+  the caption table and `groupInputs(inputs): InputGroup[]`, where an
+  `InputGroup` is a pad, a command control or a single input.
+- `ui/layout-editor.ts`: `LayoutEditor` owns the edited panel and selection:
+  `editing`, `selected`, `begin()`, `end()`, `select(path)`,
+  `update(path, patch)`, `bind(path, slot, inputId)`, `importJson(text,
+  inputs)`, `exportJson()` and an `onChange(panel)` listener. Editing state
+  lives only here; `ControlSession` keeps input and rendering state.
+- `ui/LayoutInspector.tsx`: the editor bar and inspector.
+- `ui/controls.tsx`: the one renderer. `Node` takes an optional editor and its
+  path for selection; nothing else differs while editing.
+- The homepage controller creates one `LayoutEditor` per active camera and
+  saves its changes to the camera store.
+
+### Checks
+
+- `default-layout.test.ts` runs `defaultLayout` over a fixture of every catalog
+  body's input list. It checks that no unsupported, touch or latch input
+  appears, that each D-pad and command group becomes one control, that face
+  limits hold, and the D-pad centers on the X20 (`selector_button.press`) and
+  X70 (`menu_ok_button`).
+- A phone-sized (390×844) browser check on the X-A2 and X70 enters through the
+  ⋯ menu, selects a key, the D-pad and a dial, edits a caption, exports,
+  imports and reloads.
+
 ## Order
 
 1. Complete: split `src/home/runtime.ts` into the Engine-only session controller
@@ -42,8 +127,8 @@ it as JSON. User layouts are stored with the saved camera.
 2. Complete: move the UI into [`@fujimod/emulator-ui`](../../packages/emulator-ui/README.md).
    The homepage imports its workspace, session, viewer, controls, status,
    faults and reports. The Wasm engine implementation stays in the web app.
-3. Complete: layout schema version, import/export, binding checks and the live
-   editor with per-camera persistence.
+3. Layout schema version, import/export and binding checks are complete. Next:
+   the default layouts, editor and checks described above.
 4. `RemoteEngine` over WebRTC, and the native process serving the UI.
 
 ## Refactor rules
