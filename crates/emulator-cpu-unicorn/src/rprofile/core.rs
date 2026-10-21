@@ -69,6 +69,7 @@ pub(super) struct Execution {
     count: Cell<u64>,
     cap: Cell<u64>,
     synced: Cell<i64>,
+    last_span: Cell<Option<Span>>,
     settled_head: Cell<u64>,
     thumb: Cell<bool>,
     restarted: Cell<Option<u64>>,
@@ -139,6 +140,7 @@ impl Core {
             count: Cell::new(0),
             cap: Cell::new(0),
             synced: Cell::new(0),
+            last_span: Cell::new(None),
             settled_head: Cell::new(0),
             thumb: Cell::new(false),
             restarted: Cell::new(None),
@@ -406,6 +408,7 @@ impl Execution {
                 address: block.address,
                 instructions: n,
             };
+            self.last_span.set(Some(span));
             self.synced.set(match self.policy.get() {
                 ExecutionPolicy::Exact => self.accounting().admit(span, room)?,
                 ExecutionPolicy::Interactive => self.accounting().admit_coarse(span, room)?,
@@ -679,7 +682,12 @@ unsafe fn classify(data: *mut c_void, address: u64, word: u32) -> Translation {
 unsafe fn restart(data: *mut c_void, pc: u64) {
     let e = unsafe { context(data) };
     e.guarded(|| {
-        e.settle(e.tail(pc, false), true)?;
+        let tail = if e.policy.get() == ExecutionPolicy::Interactive {
+            e.last_span.get().map_or(0, |span| span.tail(pc, false))
+        } else {
+            e.tail(pc, false)
+        };
+        e.settle(tail, true)?;
         e.reset_budget();
         e.restarted.set(Some(pc));
         Ok(())

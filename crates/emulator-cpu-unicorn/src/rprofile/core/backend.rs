@@ -345,6 +345,7 @@ impl Cpu for Core {
         }
         e.clock_overshoot.set(0);
         e.count.set(0);
+        e.last_span.set(None);
         if request.until.is_some() {
             e.loops.window.set(false);
         }

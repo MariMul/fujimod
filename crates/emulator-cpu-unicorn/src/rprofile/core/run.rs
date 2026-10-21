@@ -48,12 +48,14 @@ impl Core {
                 e.memory.flush()?;
             }
             let loop_resume = e.loops.resume.replace(false);
-            if (remap.is_some() || flush || loop_resume)
+            let restarted = e.restarted.get();
+            if (remap.is_some() || flush || loop_resume || restarted.is_some())
                 && !e.user_stop.get()
                 && e.hint.get().is_none()
                 && e.count.get() < e.cap.get()
             {
-                begin = u64::from(e.scalar(arm::PC)?) | u64::from(e.scalar(arm::CPSR)? & 32 != 0);
+                begin = restarted.unwrap_or(u64::from(e.scalar(arm::PC)?))
+                    | u64::from(e.scalar(arm::CPSR)? & 32 != 0);
                 continue;
             }
             return Ok(e.hint.get().map_or(exit, Exit::Hint));
