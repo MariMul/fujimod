@@ -15,9 +15,9 @@ use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::ptr::NonNull;
 use std::rc::Rc;
-use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
 
 /// Inputs needed to construct one native R-profile processor on its owner
@@ -47,9 +47,11 @@ pub struct CpuWorker {
     next_run: Cell<u64>,
     running: Cell<bool>,
     active_run: Cell<Option<RunToken>>,
-    pending_callback: RefCell<Option<(u64, usize, CallbackCall)>>,
+    stopped_progress: Cell<Option<u64>>,
+    pending_callback: RefCell<Option<(u64, usize, CallbackCall, Option<u64>)>>,
     run_result: RefCell<Option<Result<Exit, ExecutionError>>>,
     callback_depth: Cell<u32>,
+    deferred_instruction_limit: Cell<Option<u64>>,
     _owner: PhantomData<Rc<()>>,
 }
 
@@ -118,9 +120,11 @@ pub fn spawn(config: Config) -> Result<CpuWorker, String> {
                 next_run: Cell::new(1),
                 running: Cell::new(false),
                 active_run: Cell::new(None),
+                stopped_progress: Cell::new(None),
                 pending_callback: RefCell::new(None),
                 run_result: RefCell::new(None),
                 callback_depth: Cell::new(0),
+                deferred_instruction_limit: Cell::new(None),
                 _owner: PhantomData,
             })
         }
@@ -143,6 +147,8 @@ enum Message {
     CallbackResponse {
         id: u64,
         result: CallbackResult,
+        tighten: Option<u64>,
+        applied: Option<Sender<Result<(), String>>>,
     },
     ReleaseSnapshot(u64),
     SetRunWakeup(RunWakeup),
@@ -154,10 +160,12 @@ enum Event {
         id: u64,
         callback: usize,
         call: CallbackCall,
+        progress: Option<u64>,
     },
     RunComplete {
         id: u64,
         result: Result<Exit, ExecutionError>,
+        progress: Option<u64>,
     },
 }
 
@@ -323,7 +331,8 @@ impl WorkerLoop {
             cpu.stop().ok();
             return CallbackResult::Error;
         }
-        let result = self.wait_callback_parked(callback, call);
+        let progress = cpu.instruction_progress();
+        let result = self.wait_callback_parked(cpu, callback, call, progress);
         if let Err(error) = cpu.owner_callback_parked(false) {
             *self.callback_error.borrow_mut() = Some(error);
             cpu.stop().ok();
@@ -332,12 +341,23 @@ impl WorkerLoop {
         result
     }
 
-    fn wait_callback_parked(&self, callback: usize, call: CallbackCall) -> CallbackResult {
+    fn wait_callback_parked(
+        &self,
+        cpu: &core::Core,
+        callback: usize,
+        call: CallbackCall,
+        progress: Option<u64>,
+    ) -> CallbackResult {
         let id = self.next_event.get();
         self.next_event.set(id.wrapping_add(1).max(1));
         if self
             .events
-            .send(Event::Callback { id, callback, call })
+            .send(Event::Callback {
+                id,
+                callback,
+                call,
+                progress,
+            })
             .is_err()
         {
             return CallbackResult::Error;
@@ -352,7 +372,22 @@ impl WorkerLoop {
                 Message::CallbackResponse {
                     id: response_id,
                     result,
+                    tighten,
+                    applied,
                 } if response_id == id => {
+                    let apply = if !matches!(result, CallbackResult::Error) {
+                        tighten.map_or(Ok(()), |total| cpu.tighten_instruction_limit(total))
+                    } else {
+                        Ok(())
+                    };
+                    if let Some(applied) = applied {
+                        let _ = applied.send(apply.clone());
+                    }
+                    if let Err(error) = apply {
+                        *self.callback_error.borrow_mut() = Some(error);
+                        cpu.stop().ok();
+                        return CallbackResult::Error;
+                    }
                     if matches!(result, CallbackResult::Error) {
                         *self.callback_error.borrow_mut() =
                             Some("owner callback failed while servicing R-profile CPU".into());
@@ -379,6 +414,8 @@ impl WorkerLoop {
                         result: Err(ExecutionError::Backend(
                             "nested R-profile worker execution is refused".into(),
                         )),
+                        progress: unsafe { self.core.get().as_ref() }
+                            .and_then(|cpu| cpu.instruction_progress()),
                     });
                     self.notify_wakeup();
                 }
@@ -556,7 +593,12 @@ fn serve(
                 if let Some(error) = context.callback_error.borrow_mut().take() {
                     result = Err(ExecutionError::Backend(error));
                 }
-                let _ = events.send(Event::RunComplete { id, result });
+                let progress = cpu.instruction_progress();
+                let _ = events.send(Event::RunComplete {
+                    id,
+                    result,
+                    progress,
+                });
                 context.notify_wakeup();
             }
             Message::ReleaseSnapshot(token) => {
@@ -960,17 +1002,28 @@ impl CpuWorker {
 
     fn record_event(&self, run: RunToken, event: Event) -> Result<RunStatus, ExecutionError> {
         match event {
-            Event::Callback { id, callback, call } => {
+            Event::Callback {
+                id,
+                callback,
+                call,
+                progress,
+            } => {
                 if self.pending_callback.borrow().is_some() {
                     return Err(ExecutionError::Backend(
                         "R-profile worker sent a second callback before the first was serviced".into(),
                     ));
                 }
-                *self.pending_callback.borrow_mut() = Some((id, callback, call));
+                self.stopped_progress.set(progress);
+                *self.pending_callback.borrow_mut() = Some((id, callback, call, progress));
                 Ok(RunStatus::CallbackPending)
             }
-            Event::RunComplete { id, result } if id == run.sequence() => {
+            Event::RunComplete {
+                id,
+                result,
+                progress,
+            } if id == run.sequence() => {
                 self.running.set(false);
+                self.stopped_progress.set(progress);
                 *self.run_result.borrow_mut() = Some(result.clone());
                 Ok(RunStatus::Complete(result))
             }
@@ -1237,6 +1290,7 @@ impl Cpu for CpuWorker {
         self.next_run.set(id.wrapping_add(1).max(1));
         let run = RunToken::new(self.identity, id);
         self.pause_requested.store(0, Ordering::Release);
+        self.stopped_progress.set(None);
         self.pending_callback.borrow_mut().take();
         self.run_result.borrow_mut().take();
         if self.commands.send(Message::Run { id, request }).is_err() {
@@ -1263,31 +1317,60 @@ impl Cpu for CpuWorker {
 
     fn service_pending_callback(&self, run: RunToken) -> Result<(), ExecutionError> {
         self.validate_run(run)?;
-        let Some((id, callback, call)) = self.pending_callback.borrow_mut().take() else {
+        let Some((id, callback, call, progress)) = self.pending_callback.borrow_mut().take() else {
             return Err(ExecutionError::Backend(
                 "R-profile worker has no parked callback to service".into(),
             ));
         };
+        self.stopped_progress.set(progress);
+        self.deferred_instruction_limit.set(None);
         let result = self.service_callback(callback, call);
+        let deferred = self.deferred_instruction_limit.take();
+        let tighten = (!matches!(result, CallbackResult::Error))
+            .then_some(deferred)
+            .flatten();
+        let (applied, applied_rx) = if tighten.is_some() {
+            let (tx, rx) = mpsc::channel();
+            (Some(tx), Some(rx))
+        } else {
+            (None, None)
+        };
         if self
             .commands
-            .send(Message::CallbackResponse { id, result })
+            .send(Message::CallbackResponse {
+                id,
+                result,
+                tighten,
+                applied,
+            })
             .is_err()
         {
             let error = ExecutionError::Backend(
                 "R-profile CPU worker disconnected during callback".into(),
             );
+            self.stopped_progress.set(None);
             self.running.set(false);
             *self.run_result.borrow_mut() = Some(Err(error.clone()));
             return Err(error);
         }
-        Ok(())
+        let applied_result = if let Some(applied) = applied_rx {
+            match applied.recv() {
+                Ok(result) => result.map_err(ExecutionError::Backend),
+                Err(_) => Err(ExecutionError::Backend(
+                    "R-profile CPU worker disconnected while applying callback limit".into(),
+                )),
+            }
+        } else {
+            Ok(())
+        };
+        self.stopped_progress.set(None);
+        applied_result
     }
 
     fn cancel_pending_callback(&self, run: RunToken) -> Result<(), ExecutionError> {
         self.validate_run(run)?;
         self.pause_requested.store(1, Ordering::Release);
-        let Some((id, _, _)) = self.pending_callback.borrow_mut().take() else {
+        let Some((id, _, _, _)) = self.pending_callback.borrow_mut().take() else {
             return Ok(());
         };
         if self
@@ -1295,16 +1378,20 @@ impl Cpu for CpuWorker {
             .send(Message::CallbackResponse {
                 id,
                 result: CallbackResult::Error,
+                tighten: None,
+                applied: None,
             })
             .is_err()
         {
             let error = ExecutionError::Backend(
                 "R-profile CPU worker disconnected while canceling callback".into(),
             );
+            self.stopped_progress.set(None);
             self.running.set(false);
             *self.run_result.borrow_mut() = Some(Err(error.clone()));
             return Err(error);
         }
+        self.stopped_progress.set(None);
         Ok(())
     }
 
@@ -1328,9 +1415,24 @@ impl Cpu for CpuWorker {
         }
     }
     fn tighten_instruction_limit(&self, total: u64) -> Result<(), String> {
+        if self.callback_depth.get() != 0 {
+            let total = self
+                .deferred_instruction_limit
+                .get()
+                .map_or(total, |current| current.min(total));
+            self.deferred_instruction_limit.set(Some(total));
+            return Ok(());
+        }
         self.unit(Operation::TightenInstructionLimit(total))
     }
     fn instruction_progress(&self) -> Option<u64> {
+        if (self.callback_depth.get() != 0
+            || self.pending_callback.borrow().is_some()
+            || self.run_result.borrow().is_some())
+            && let Some(progress) = self.stopped_progress.get()
+        {
+            return Some(progress);
+        }
         match self.rpc(Operation::Progress).ok()? {
             Value::OptionalU64(progress) => progress,
             _ => None,
@@ -1382,7 +1484,9 @@ impl Cpu for CpuWorker {
             .as_any()
             .downcast_ref::<RemoteSnapshot>()
             .ok_or("CPU snapshot belongs to a different backend")?;
-        self.unit(Operation::Restore(snapshot.token))
+        self.unit(Operation::Restore(snapshot.token))?;
+        self.stopped_progress.set(None);
+        Ok(())
     }
     unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String> {
         Ok(unsafe { self.install_hooks(&[hook]) }?.remove(0))
@@ -1630,11 +1734,20 @@ mod tests {
         one_step(&first, 0x1000).unwrap();
         assert_eq!(read_u32(&first, arm::CORE[0]), 7);
         let snapshot = first.snapshot(None).unwrap();
-        one_step(&first, 0x1004).unwrap();
+        first
+            .run(Run {
+                begin: 0x1004,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(2),
+            })
+            .unwrap();
         assert_eq!(read_u32(&first, arm::CORE[0]), 8);
+        assert_eq!(first.instruction_progress(), Some(2));
         first.restore(snapshot.as_ref()).unwrap();
         assert_eq!(read_u32(&first, arm::CORE[0]), 7);
         assert_eq!(read_u32(&first, arm::PC), 0x1004);
+        assert_eq!(first.instruction_progress(), Some(1));
         assert!(second.restore(snapshot.as_ref()).is_err());
 
         one_step(&second, 0x1000).unwrap();
@@ -1647,12 +1760,17 @@ mod tests {
             cpu: *const CpuWorker,
             calls: u32,
             progress: Option<u64>,
+            pc: Option<u32>,
         }
         unsafe fn read(_: u64, size: u32, data: *mut std::ffi::c_void) -> u64 {
             assert_eq!(size, 4);
             let probe = unsafe { &mut *data.cast::<Probe>() };
+            let cpu = unsafe { &*probe.cpu };
             probe.calls += 1;
-            probe.progress = Some(unsafe { &*probe.cpu }.instruction_progress().unwrap());
+            probe.progress = Some(cpu.instruction_progress().unwrap());
+            let mut pc = [0; 4];
+            assert_eq!(cpu.read_register(arm::PC, &mut pc).unwrap(), 4);
+            probe.pc = Some(u32::from_le_bytes(pc));
             0x1234_5678
         }
         unsafe fn write(_: u64, _: u32, _: u64, _: *mut std::ffi::c_void) {}
@@ -1666,6 +1784,7 @@ mod tests {
             cpu: &cpu,
             calls: 0,
             progress: None,
+            pc: None,
         };
         unsafe {
             cpu.map_mmio(
@@ -1683,6 +1802,191 @@ mod tests {
         assert_eq!(read_u32(&cpu, arm::CORE[0]), 0x1234_5678);
         assert_eq!(probe.calls, 1);
         assert!(probe.progress.is_some());
+        assert!(probe.pc.is_some());
+    }
+
+    #[test]
+    fn callback_progress_and_limit_updates_are_batched_for_both_policies() {
+        struct Probe {
+            cpu: *const CpuWorker,
+            progress: Cell<Option<u64>>,
+            rpc_deltas: Cell<Option<(usize, usize)>>,
+        }
+        unsafe fn read(_: u64, size: u32, data: *mut std::ffi::c_void) -> u64 {
+            assert_eq!(size, 4);
+            let probe = unsafe { &*data.cast::<Probe>() };
+            let cpu = unsafe { &*probe.cpu };
+            let before = cpu.rpc_calls.get();
+            let progress = cpu.instruction_progress().unwrap();
+            let after_progress = cpu.rpc_calls.get();
+            cpu.tighten_instruction_limit(progress).unwrap();
+            let after_tighten = cpu.rpc_calls.get();
+            probe.progress.set(Some(progress));
+            probe.rpc_deltas.set(Some((
+                after_progress - before,
+                after_tighten - after_progress,
+            )));
+            0x7654_3210
+        }
+        unsafe fn write(_: u64, _: u32, _: u64, _: *mut std::ffi::c_void) {}
+
+        for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+            let cpu = worker(SharedMemory::default());
+            cpu.set_execution_policy(policy).unwrap();
+            cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+            let mut code = vec![0xe2822001; 8];
+            code.extend([0xe5910000]); // ldr r0,[r1]
+            code.extend([0xe2833001; 8]);
+            code.push(0xe320f003); // wfi
+            write_words(&cpu, 0x1000, &code);
+            cpu.write_register(arm::CORE[1], &0x8000u32.to_le_bytes())
+                .unwrap();
+            let mut probe = Probe {
+                cpu: &cpu,
+                progress: Cell::new(None),
+                rpc_deltas: Cell::new(None),
+            };
+            unsafe {
+                cpu.map_mmio(
+                    0x8000,
+                    4096,
+                    Mmio {
+                        read,
+                        write,
+                        data: (&mut probe as *mut Probe).cast(),
+                    },
+                )
+                .unwrap();
+            }
+
+            let exit = cpu
+                .run(Run {
+                    begin: 0x1000,
+                    until: None,
+                    watchdog_us: 0,
+                    instructions: Some(100),
+                })
+                .unwrap();
+            let progress = probe.progress.get().expect("callback progress snapshot");
+            assert!(progress >= 8, "{policy:?}: {progress}");
+            assert_eq!(probe.rpc_deltas.get(), Some((0, 0)), "{policy:?}");
+            assert_eq!(read_u32(&cpu, arm::CORE[0]), 0x7654_3210, "{policy:?}");
+            assert_eq!(read_u32(&cpu, arm::CORE[2]), 8, "{policy:?}");
+            assert_eq!(read_u32(&cpu, arm::CORE[3]), 0, "{policy:?}");
+            assert_eq!(read_u32(&cpu, arm::PC), 0x1024, "{policy:?}");
+            assert!(matches!(exit, Exit::Stopped), "{policy:?}: {exit:?}");
+            let after = cpu.rpc_calls.get();
+            assert_eq!(cpu.instruction_progress(), Some(progress), "{policy:?}");
+            assert_eq!(cpu.rpc_calls.get(), after, "{policy:?}");
+        }
+    }
+
+    #[test]
+    fn stopped_progress_snapshots_cover_pending_and_completed_cluster_peers() {
+        struct ReadCount(Cell<u32>);
+        unsafe fn read(_: u64, size: u32, data: *mut std::ffi::c_void) -> u64 {
+            assert_eq!(size, 4);
+            unsafe { &*data.cast::<ReadCount>() }.0.set(1);
+            0x1234
+        }
+        unsafe fn write(_: u64, _: u32, _: u64, _: *mut std::ffi::c_void) {}
+
+        let memory = SharedMemory::default();
+        let backing = Backing::aligned_zeros(4096, 4096).unwrap();
+        let pointer = NonNull::new(backing.as_ptr()).unwrap();
+        let first = worker(memory.clone());
+        let second = worker(memory);
+        first
+            .set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        second
+            .set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        unsafe {
+            first
+                .map_physical(0x1000, 0x1000, 4096, 7, pointer)
+                .unwrap();
+            second
+                .map_physical(0x1000, 0x1000, 4096, 7, pointer)
+                .unwrap();
+        }
+        write_words(&first, 0x1000, &[0xe5910000, 0xe320f003]);
+        write_words(&first, 0x1100, &[0xeafffffe]); // b .
+        first
+            .write_register(arm::CORE[1], &0x8000u32.to_le_bytes())
+            .unwrap();
+        let mut read_count = ReadCount(Cell::new(0));
+        unsafe {
+            first
+                .map_mmio(
+                    0x8000,
+                    4096,
+                    Mmio {
+                        read,
+                        write,
+                        data: (&mut read_count as *mut ReadCount).cast(),
+                    },
+                )
+                .unwrap();
+        }
+
+        let first_run = first
+            .start_run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(1),
+            })
+            .unwrap();
+        let second_run = second
+            .start_run(Run {
+                begin: 0x1100,
+                until: None,
+                watchdog_us: 0,
+                instructions: None,
+            })
+            .unwrap();
+        second.request_pause(second_run).unwrap();
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        loop {
+            match first.poll_run(first_run).unwrap() {
+                RunStatus::CallbackPending => break,
+                RunStatus::Running => {
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "MMIO callback did not park"
+                    );
+                    std::thread::yield_now();
+                }
+                RunStatus::Complete(result) => {
+                    panic!("first worker completed before callback: {result:?}")
+                }
+            }
+        }
+        assert!(matches!(
+            poll_to_completion(&second, second_run).unwrap(),
+            Exit::Stopped
+        ));
+        let first_rpcs = first.rpc_calls.get();
+        let second_rpcs = second.rpc_calls.get();
+        let first_progress = first
+            .instruction_progress()
+            .expect("parked callback progress");
+        let second_progress = second
+            .instruction_progress()
+            .expect("completed peer progress");
+        assert!(first_progress >= 1);
+        assert!(second_progress <= 1);
+        assert_eq!(first.rpc_calls.get(), first_rpcs);
+        assert_eq!(second.rpc_calls.get(), second_rpcs);
+
+        first.service_pending_callback(first_run).unwrap();
+        assert!(matches!(
+            poll_to_completion(&first, first_run).unwrap(),
+            Exit::Stopped
+        ));
+        assert_eq!(read_count.0.get(), 1);
     }
 
     #[test]
