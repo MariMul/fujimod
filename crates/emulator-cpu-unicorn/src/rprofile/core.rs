@@ -288,16 +288,17 @@ impl Execution {
     }
     fn progress(&self) -> Option<u64> {
         if !self.active.get() || self.at_instruction.get() {
-            return Some(self.count.get());
+            Some(self.count.get())
+        } else {
+            let a = self.accounting();
+            let tail = self.tail(self.scalar(arm::PC).ok()? as u64, !self.at_block.get());
+            let delta = self
+                .synced
+                .get()
+                .checked_sub(a.counters().0)?
+                .checked_sub(tail as i64)?;
+            self.count.get().checked_add(u64::try_from(delta).ok()?)
         }
-        let a = self.accounting();
-        let tail = self.tail(self.scalar(arm::PC).ok()? as u64, !self.at_block.get());
-        let delta = self
-            .synced
-            .get()
-            .checked_sub(a.counters().0)?
-            .checked_sub(tail as i64)?;
-        self.count.get().checked_add(u64::try_from(delta).ok()?)
     }
     pub(super) fn prepare_flush(&self) -> Result<(), String> {
         // The write already happened (for example DMA inside MMIO). Finish
@@ -451,8 +452,13 @@ impl Execution {
             self.reset_budget();
             return self.cpu.stop();
         }
+        let interactive_retry = restarted && self.policy.get() == ExecutionPolicy::Interactive;
         let mut room = self.cap.get().saturating_sub(self.count.get());
-        if restarted {
+        if interactive_retry {
+            // The isolated retry retires the instruction already admitted in
+            // the coarse block, even when that admission crossed the cap.
+            room = 1;
+        } else if restarted {
             room = room.min(1);
         }
         if room == 0 {
@@ -754,11 +760,10 @@ unsafe fn restart(data: *mut c_void, pc: u64) {
     e.guarded(|| {
         // The instruction has not completed; its isolated retry will publish.
         e.pending_stores.borrow_mut().clear();
-        let tail = if e.policy.get() == ExecutionPolicy::Interactive {
-            e.last_span.get().map_or(0, |span| span.tail(pc, false))
-        } else {
-            e.tail(pc, false)
-        };
+        // Interactive peers may already have synchronized against the full
+        // coarse block admission. Retaining its tail keeps that published
+        // progress monotonic while the pending store is retried in isolation.
+        let tail = e.tail(pc, false);
         e.settle(tail, true)?;
         e.reset_budget();
         e.restarted.set(Some(pc));

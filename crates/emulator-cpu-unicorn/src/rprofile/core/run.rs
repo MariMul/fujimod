@@ -55,11 +55,13 @@ impl Core {
             }
             let loop_resume = e.loops.resume.replace(false);
             let restarted = e.restarted.get();
+            let interactive_retry =
+                e.policy.get() == ExecutionPolicy::Interactive && restarted.is_some();
             if (remap.is_some() || flush || loop_resume || restarted.is_some())
                 && e.pause_requested.load(Ordering::Acquire) == 0
                 && !e.user_stop.get()
                 && e.hint.get().is_none()
-                && e.count.get() < e.cap.get()
+                && (e.count.get() < e.cap.get() || interactive_retry)
             {
                 begin = restarted.unwrap_or(u64::from(e.scalar(arm::PC)?))
                     | u64::from(e.scalar(arm::CPSR)? & 32 != 0);

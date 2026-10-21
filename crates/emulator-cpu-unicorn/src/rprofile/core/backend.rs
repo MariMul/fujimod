@@ -418,12 +418,14 @@ impl Cpu for Core {
         if !e.at_instruction.get() || e.user_stop.get() {
             return Err("instruction interception requires a live, unconsumed entry".into());
         }
-        e.count.set(
-            e.count
-                .get()
-                .checked_sub(1)
-                .ok_or("missing observed entry")?,
-        );
+        if e.thumb.get() || e.policy.get() == ExecutionPolicy::Exact {
+            e.count.set(
+                e.count
+                    .get()
+                    .checked_sub(1)
+                    .ok_or("missing observed entry")?,
+            );
+        }
         self.stop()
     }
     fn rprofile_identity(&self, value: Option<u32>) -> Result<u32, String> {

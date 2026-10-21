@@ -79,7 +79,10 @@ fn completed_store_observers_see_written_ram_before_the_next_instruction() {
         }
         .unwrap();
         resume(&cpu, 20).unwrap();
-        assert_eq!(cpu.instruction_progress(), Some(2));
+        match policy {
+            ExecutionPolicy::Exact => assert_eq!(cpu.instruction_progress(), Some(2)),
+            ExecutionPolicy::Interactive => assert!(cpu.instruction_progress().unwrap() >= 2),
+        }
         assert_eq!(get(&cpu, arm::PC), 0x1008);
         assert_eq!(get(&cpu, arm::CORE[0]), 42);
         cpu.remove_hook(id).unwrap();
@@ -114,6 +117,52 @@ fn sticky_pause_stops_instead_of_retrying_a_pending_restart() {
     // this marker, so the worker must not retry it while the pause is sticky.
     assert_eq!(execution.restarted.get(), Some(0x1000));
     assert!(!execution.active.get());
+}
+
+struct StopBeforeProgress {
+    cpu: *const Core,
+    before: Cell<Option<u64>>,
+    after: Cell<Option<u64>>,
+}
+unsafe fn stop_before_and_record_progress(_: u64, _: u32, data: *mut c_void) {
+    let p = unsafe { &*data.cast::<StopBeforeProgress>() };
+    let cpu = unsafe { &*p.cpu };
+    p.before.set(cpu.instruction_progress());
+    cpu.stop_before_instruction().unwrap();
+    p.after.set(cpu.instruction_progress());
+}
+#[test]
+fn interactive_arm_stop_before_preserves_coarse_progress() {
+    let cpu = processor(&Memory::default());
+    cpu.map_zeroed(0, 0x4000, 7).unwrap();
+    words(&cpu, 0x1000, &[0xe2800001]);
+    cpu.set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
+    set(&cpu, arm::CPSR, 0xd3);
+    set(&cpu, arm::PC, 0x1000);
+    let mut progress = StopBeforeProgress {
+        cpu: &cpu,
+        before: Cell::new(None),
+        after: Cell::new(None),
+    };
+    let hook = unsafe {
+        cpu.install_hook(Hook::Instruction {
+            callback: stop_before_and_record_progress,
+            data: (&mut progress as *mut StopBeforeProgress).cast(),
+            range: HookRange::Inclusive {
+                begin: 0x1000,
+                end: 0x1000,
+            },
+        })
+    }
+    .unwrap();
+
+    assert!(matches!(run(&cpu, 0x1000, 10).unwrap(), Exit::Stopped));
+    assert_eq!(progress.before.get(), Some(1));
+    assert_eq!(progress.after.get(), progress.before.get());
+    assert_eq!(cpu.instruction_progress(), progress.before.get());
+    assert_eq!(get(&cpu, arm::PC), 0x1000);
+    cpu.remove_hook(hook).unwrap();
 }
 
 fn processor(memory: &Memory) -> Core {
@@ -1001,6 +1050,62 @@ fn guest_code_store_through_an_alias_restarts_only_the_unentered_store() {
         ),
         (Some(3), 10, 0x1004)
     );
+}
+
+struct SynchronizationProgress {
+    cpu: *const Core,
+    observed: RefCell<Vec<u64>>,
+}
+unsafe fn observe_synchronization_progress(data: *mut c_void) {
+    let p = unsafe { &*data.cast::<SynchronizationProgress>() };
+    p.observed
+        .borrow_mut()
+        .push(unsafe { &*p.cpu }.instruction_progress().unwrap());
+}
+#[test]
+fn interactive_code_write_restart_does_not_retract_published_coarse_progress() {
+    let backing = Backing::aligned_zeros(0x3000, 4096).unwrap();
+    let cpu = processor(&Memory::default());
+    unsafe {
+        cpu.map_backing(0x1000, 0x3000, 7, NonNull::new(backing.as_ptr()).unwrap())
+            .unwrap();
+        cpu.map_backing(0x5000, 0x1000, 7, NonNull::new(backing.as_ptr()).unwrap())
+            .unwrap();
+    }
+    cpu.set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
+    words(&cpu, 0x1000, &[0xe2800001]);
+    run(&cpu, 0x1000, 1).unwrap();
+
+    let mut code = vec![0xe2844001; 8]; // eight independent ADD entries
+    code.extend([0xe5812000, 0xe12fff13]); // str r2,[r1]; bx r3
+    words(&cpu, 0x2000, &code);
+    set(&cpu, arm::CORE[1], 0x5000);
+    set(&cpu, arm::CORE[2], 0xe320f003); // replace the watched entry with WFI
+    set(&cpu, arm::CORE[3], 0x1000);
+    let mut progress = SynchronizationProgress {
+        cpu: &cpu,
+        observed: RefCell::new(Vec::new()),
+    };
+    let hook = unsafe {
+        cpu.install_hook(Hook::Synchronization {
+            callback: observe_synchronization_progress,
+            data: (&mut progress as *mut SynchronizationProgress).cast(),
+        })
+    }
+    .unwrap();
+
+    assert!(matches!(
+        run(&cpu, 0x2000, 100).unwrap(),
+        Exit::Hint(Hint::WaitForInterrupt)
+    ));
+    let observed = progress.observed.borrow();
+    assert_eq!(observed[0], 10);
+    assert!(observed.windows(2).all(|pair| pair[1] >= pair[0]));
+    assert!(cpu.instruction_progress().unwrap() >= *observed.last().unwrap());
+    assert_eq!(get(&cpu, arm::CORE[4]), 8);
+    assert_eq!(get(&cpu, arm::PC), 0x1004);
+    cpu.remove_hook(hook).unwrap();
 }
 
 #[test]

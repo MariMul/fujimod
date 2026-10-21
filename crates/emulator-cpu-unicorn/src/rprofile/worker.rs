@@ -1723,7 +1723,7 @@ mod tests {
         .unwrap();
         assert_eq!(read_u32(&cpu, arm::CORE[0]), 0x3333);
         assert_eq!(read_u32(&cpu, arm::PC), 0x1004);
-        assert_eq!(cpu.instruction_progress().unwrap(), 1);
+        assert!(cpu.instruction_progress().unwrap() >= 1);
         assert_eq!(count.0.get(), 0);
 
         cpu.set_execution_policy(ExecutionPolicy::Exact).unwrap();
