@@ -5,6 +5,7 @@ pub mod camera;
 pub mod configuration;
 pub mod emulator;
 pub mod facts;
+pub mod persistent_inputs;
 pub mod reference;
 pub mod schema;
 pub mod service;
