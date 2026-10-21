@@ -782,7 +782,7 @@ test('debug changes refresh only after close and latch service mode for the curr
     device.update({ present: false });
     await vi.waitFor(() => expect(f.model.cameras()[0].present).toBe(false));
     expect(f.model.cameras()[0].serviceMode).toBeUndefined();
-    expect(f.model.cameras()[0].debugMode).toBeUndefined();
+    expect(f.model.cameras()[0].debugMode).toBe('unknown');
     device.debugByte = 1;
     device.update({ present: true });
     await vi.waitFor(() => expect(f.model.cameras()[0].debugMode).toBe('on'));
@@ -917,6 +917,108 @@ test('a remote winning the follow-up acquisition race keeps the refresh pending 
     device.update({ sessionOwner: null });
     await vi.waitFor(() => expect(f.model.cameras()[0].debugMode).toBe('off'));
     expect(device.configurationReads).toHaveBeenCalledTimes(2);
+  } finally {
+    f.model.dispose();
+  }
+});
+
+// The owner reported an X100V stuck at Reading after an automatic identity attempt.
+// A failure before the session callback previously left the mode undefined forever.
+test.each(['interface selection', 'session acquisition'] as const)(
+  '%s failure completes identity initialization with unknown debug mode',
+  async (stage) => {
+    const device = new CameraDevice('one');
+    const failure = Error(`${stage} refused`);
+    if (stage === 'interface selection') vi.spyOn(device, 'interfaces').mockRejectedValue(failure);
+    else vi.spyOn(device, 'acquireSession').mockRejectedValue(failure);
+    const f = fixture([device]);
+    try {
+      await vi.waitFor(() => expect(f.model.cameras()[0]?.problem).toBe(failure.message));
+      await vi.waitFor(() => expect(f.model.cameras()[0].session).toBeUndefined());
+      expect(f.model.cameras()[0].debugMode).toBe('unknown');
+      expect(device.configurationReads).not.toHaveBeenCalled();
+      expect(device.releases).not.toHaveBeenCalled();
+    } finally {
+      f.model.dispose();
+    }
+  },
+);
+
+test.each(['held', 'uncertain'] as const)(
+  'a %s owner reports unknown while an identity read cannot start',
+  async (state) => {
+    const device = new CameraDevice('one');
+    device.update(
+      state === 'held'
+        ? { sessionOwner: { kind: 'remote', controller: 'peer' } }
+        : { fenced: true },
+    );
+    const f = fixture([device]);
+    try {
+      await vi.waitFor(() => expect(f.model.cameras()).toHaveLength(1));
+      expect(f.model.cameras()[0].debugMode).toBe('unknown');
+      expect(device.acquire).not.toHaveBeenCalled();
+      expect(device.configurationReads).not.toHaveBeenCalled();
+      if (state === 'held') {
+        device.update({ sessionOwner: null });
+        await idle(f.model);
+        expect(f.model.cameras()[0].debugMode).toBe('on');
+      }
+    } finally {
+      f.model.dispose();
+    }
+  },
+);
+
+test.each(['identity selector', 'session close'] as const)(
+  '%s errors still settle the debug-mode state',
+  async (stage) => {
+    const device = new CameraDevice('one');
+    if (stage === 'session close') device.failClose = true;
+    else {
+      const acquire = device.acquireSession.bind(device);
+      vi.spyOn(device, 'acquireSession').mockImplementation(async (...args) => {
+        const session = await acquire(...args);
+        return {
+          ...session,
+          deviceInfo: async () => {
+            throw Error('identity selector refused');
+          },
+        };
+      });
+      device.failDebugRead = true;
+    }
+    const f = fixture([device]);
+    try {
+      await vi.waitFor(() => expect(device.releases).toHaveBeenCalledOnce());
+      await vi.waitFor(() => expect(f.model.cameras()[0].session).toBeUndefined());
+      expect(device.configurationReads).toHaveBeenCalledExactlyOnceWith(
+        usb.ConfigurationView.Ram,
+        0,
+        247,
+        1,
+      );
+      expect(f.model.cameras()[0].debugMode).toBe(stage === 'session close' ? 'on' : 'unknown');
+    } finally {
+      f.model.dispose();
+    }
+  },
+);
+
+test('debug mode is unknown while the initial camera reply is still pending', async () => {
+  const device = new CameraDevice('one');
+  let finish!: (data: Uint8Array) => void;
+  device.debugReadOverride = () =>
+    new Promise((resolve) => {
+      finish = resolve;
+    });
+  const f = fixture([device]);
+  try {
+    await vi.waitFor(() => expect(device.configurationReads).toHaveBeenCalledOnce());
+    expect(f.model.cameras()[0].debugMode).toBe('unknown');
+    finish(Uint8Array.of(0));
+    await idle(f.model);
+    expect(f.model.cameras()[0]).toMatchObject({ debugMode: 'off', serviceMode: true });
   } finally {
     f.model.dispose();
   }

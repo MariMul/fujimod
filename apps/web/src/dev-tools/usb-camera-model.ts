@@ -413,6 +413,7 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
     if (entry.identifying || !entry.identityNeeded || entry.removed || disposed) return;
     refreshSession(entry);
     if (!entry.camera.present || entry.camera.uncertain || entry.camera.session) return;
+    const generation = entry.presenceGeneration;
     entry.identifying = true;
     entry.identityNeeded = false;
     entry.debugModeNeeded = false;
@@ -436,6 +437,16 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
       /* withSession records the connection error and Rust reports fencing. */
     } finally {
       entry.identifying = false;
+      // Selection/open failures never enter the session callback that reads 0xF7.
+      if (
+        !entry.removed &&
+        !disposed &&
+        generation === entry.presenceGeneration &&
+        entry.camera.debugMode === undefined
+      ) {
+        entry.camera.debugMode = 'unknown';
+        publish();
+      }
       if (entry.identityNeeded) void identity(entry);
       else void refreshDebugMode(entry);
     }
@@ -467,7 +478,7 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
             }
           } else {
             entry.camera.goneAt = services.now();
-            entry.camera.debugMode = undefined;
+            entry.camera.debugMode = 'unknown';
             entry.camera.serviceMode = undefined;
             entry.debugModeNeeded = false;
             entry.shareStatus = { ...entry.shareStatus, online: false, reason: 'unplugged' };
@@ -613,6 +624,7 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
         name: device.productName || (transport === 'usb' ? 'USB camera' : 'Shared camera'),
         present: state.present,
         uncertain: state.fenced,
+        debugMode: 'unknown',
         goneAt: state.present ? undefined : services.now(),
       },
       selection: Promise.resolve().then(async () => {

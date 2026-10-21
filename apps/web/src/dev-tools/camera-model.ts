@@ -40,7 +40,8 @@ export interface Camera {
   identity?: CameraIdentity;
   /**
    * The debug-mode flag (RAM configuration byte 0xF7), read with the identity
-   * and after each debug-mode change. Absent until read; 'unknown' if the read failed.
+   * and after each debug-mode change. 'unknown' until observed or if the read
+   * is unavailable or failed.
    */
   debugMode?: 'on' | 'off' | 'unknown';
   /**
