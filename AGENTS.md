@@ -19,6 +19,14 @@ worktrees, clones or branches; work left in them does not return to `main`, and
 each copy duplicates large build output. Other contributors' edits in the same
 checkout are not a reason to isolate: report tests they break instead.
 
+The owner may approve one specific worktree in the conversation. Only then
+create it with `FUJIMOD_WORKTREE_APPROVED="owner approved: purpose"` set for
+that `git worktree add`; without it the `post-checkout` hook removes the new
+worktree. An approval covers one worktree and does not carry over to other
+agents or conversations. Approved creations are logged in
+`.git/fujimod-worktrees.log`. The hooks are installed with
+`mise run hooks-install`.
+
 Commit with `mise run commit -- -m "Describe the change" path/one path/two`
 (`scripts/git/commit.py`). It commits only the named paths from a private index,
 fast-forwards to `origin/main` first, and pushes. For a file that also holds
