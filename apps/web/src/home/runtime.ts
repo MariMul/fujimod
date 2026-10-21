@@ -163,7 +163,7 @@ export function startHome(
         for (const asset of assets) {
           const index = s.loadingAssets.findIndex((entry) => entry.url === asset.url);
           if (index < 0) s.loadingAssets.push(asset);
-          else s.loadingAssets[index] = asset;
+          else reconcile(asset)(s.loadingAssets[index]);
         }
     });
   }

@@ -166,17 +166,16 @@ try {
   );
   assert.equal(await page.getByRole('group', { name: '3D renderer' }).count(), 0);
   const frames = Number(await page.locator('#viewer').getAttribute('data-frames'));
-  await page.waitForFunction(
-    (before) => Number(document.querySelector<HTMLElement>('#viewer')?.dataset.frames) > before + 1,
-    frames,
-  );
+  assert.ok(frames > 0, 'The checked boot must present a real LCD image.');
   const beforeMenu = await page
     .locator('#lcd-source')
     .evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
   await page.locator('#controls button[data-id="menu_ok_button"]').click();
   await page.waitForFunction(
-    (before) => document.querySelector<HTMLCanvasElement>('#lcd-source')!.toDataURL() !== before,
-    beforeMenu,
+    ({ frames, pixels }) =>
+      Number(document.querySelector<HTMLElement>('#viewer')?.dataset.frames) > frames &&
+      document.querySelector<HTMLCanvasElement>('#lcd-source')!.toDataURL() !== pixels,
+    { frames, pixels: beforeMenu },
   );
   await screenshot(page, 'shared-preview');
   assert.deepEqual(graphicsRequests, []);

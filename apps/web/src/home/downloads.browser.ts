@@ -16,6 +16,9 @@ try {
     await context.routeWebSocket('**/*', () => {});
     const page = await context.newPage();
     page.on('pageerror', (error) => errors.push(error.stack ?? error.message));
+    page.on('console', (message) => {
+      if (/\[[A-Z_]+\]/.test(message.text())) errors.push(message.text());
+    });
     await page.goto(url);
     await page.waitForFunction(
       () => performance.getEntriesByName('camera-catalog-ready').length > 0,
@@ -101,6 +104,9 @@ try {
   });
   const previewPage = await preview.newPage();
   previewPage.on('pageerror', (error) => errors.push(error.stack ?? error.message));
+  previewPage.on('console', (message) => {
+    if (/\[[A-Z_]+\]/.test(message.text())) errors.push(message.text());
+  });
   await previewPage.goto(previewUrl);
   await previewPage.waitForFunction(
     () =>

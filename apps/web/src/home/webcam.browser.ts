@@ -52,6 +52,9 @@ try {
   const page = await context.newPage();
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => {
+    if (/\[[A-Z_]+\]/.test(message.text())) errors.push(message.text());
+  });
   await page.goto(new URL('#workspace', url).href);
   await page.locator('#viewer-tools[data-ready="true"]').waitFor();
   console.log('Viewer ready; selecting firmware.');
