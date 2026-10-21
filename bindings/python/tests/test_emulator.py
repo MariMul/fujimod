@@ -5,8 +5,8 @@ import hashlib
 import importlib
 import os
 import struct
-from types import SimpleNamespace
 import weakref
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -20,8 +20,8 @@ from fujimod.emulator import (
     Image,
     make_board,
 )
-from fujimod.emulator.board import Session, _boot_report
 from fujimod.emulator import board as board_module
+from fujimod.emulator.board import Session, _boot_report
 
 NATIVE_EXPORTS = frozenset({
     "load_input_assets",
@@ -367,6 +367,13 @@ def test_session_facade_validates_inputs_and_returns_typed_observations() -> Non
         def screenshot(self) -> bytes:
             return b"png"
 
+        def physical_read_many(self, ranges: list[tuple[int, int]]) -> list[bytes]:
+            assert ranges == [(0x1000, 2), (0x2000, 1)]
+            return [b"ab", b"c"]
+
+        def image_rgb(self, name: str, width: int, height: int, rgb: bytes) -> None:
+            assert (name, width, height, rgb) == ("live_image", 1, 1, b"\x01\x02\x03")
+
         def close(self) -> None:
             pass
 
@@ -393,6 +400,13 @@ def test_session_facade_validates_inputs_and_returns_typed_observations() -> Non
     )
     assert frame.state == {"active": True}
     assert session.screenshot() == b"png"
+    assert board.read_physical_many([(0x1000, 2), (0x2000, 1)]) == (b"ab", b"c")
+    session.set_image_rgb("live_image", 1, 1, b"\x01\x02\x03")
+
+    with pytest.raises(ValueError, match=r"exactly width \* height \* 3"):
+        session.set_image_rgb("live_image", 1, 1, b"\x01")
+    with pytest.raises(ValueError, match="address must be"):
+        board.read_physical_many([(-1, 1)])
 
     with pytest.raises(ValueError, match="unsigned 16-bit"):
         session.set_adc_samples("adc0", [65536])

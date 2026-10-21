@@ -412,6 +412,28 @@ class Board:
         self._validate_range(address, size)
         return self._native.physical_read(address, size)
 
+    def read_physical_many(
+        self, ranges: Sequence[tuple[int, int]]
+    ) -> tuple[bytes, ...]:
+        """Read bounded physical memory spans at one stopped execution point."""
+        self._ensure_open()
+        if isinstance(ranges, (str, bytes, bytearray)) or not isinstance(
+            ranges, Sequence
+        ):
+            raise TypeError("ranges must be a sequence of (address, size) pairs")
+        if len(ranges) > 4096:
+            raise ValueError("at most 4096 physical memory ranges are supported")
+        checked: list[tuple[int, int]] = []
+        for row in ranges:
+            if not isinstance(row, Sequence) or isinstance(
+                row, (str, bytes, bytearray)
+            ) or len(row) != 2:
+                raise TypeError("each physical memory range must be an (address, size) pair")
+            address, size = row
+            self._validate_range(address, size)
+            checked.append((address, size))
+        return tuple(self._native.physical_read_many(checked))
+
     def write_physical(self, address: int, data: Buffer) -> None:
         """Write canonical physical memory."""
         self._ensure_open()
@@ -614,6 +636,19 @@ class Session:
     def screenshot(self) -> bytes:
         """Return a PNG screenshot for a catalog runtime after it has a frame."""
         return self._native_board().screenshot()
+
+    def set_image_rgb(
+        self, name: str, width: int, height: int, rgb: Buffer
+    ) -> None:
+        """Replace a named external RGB image without advancing guest time."""
+        if type(width) is not int or not 1 <= width <= sys.maxsize:
+            raise ValueError("width must be a positive host-sized integer")
+        if type(height) is not int or not 1 <= height <= sys.maxsize:
+            raise ValueError("height must be a positive host-sized integer")
+        payload = bytes(rgb)
+        if len(payload) != width * height * 3:
+            raise ValueError("RGB input must contain exactly width * height * 3 bytes")
+        self._native_board().image_rgb(self._node(name), width, height, payload)
 
     def frame_state(self, node: str) -> dict[str, object]:
         """Return the current state of a clocked frame source."""

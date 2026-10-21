@@ -59,6 +59,9 @@ inputs; use the corresponding state methods to inspect their modeled results.
 `session.scanout` returns a `ScanoutFrame` with raw bytes, optional RGB pixels,
 dimensions and state metadata without advancing guest time. `session.screenshot`
 returns a PNG for catalog runtimes after a display frame is configured.
+`session.set_image_rgb` supplies a caller-owned RGB image to a named scene input;
+`board.read_physical_many` observes several physical memory spans at the same
+stopped execution point.
 Graph-backed boards expose a typed `execution_policy` property and
 `set_execution_policy`, which accepts `"exact"` or `"interactive"`. `exact`
 preserves requested instruction boundaries; `interactive` allows
