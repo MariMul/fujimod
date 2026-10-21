@@ -1,4 +1,5 @@
-import { For, Show, onSettled } from 'solid-js';
+import { Show, onSettled } from 'solid-js';
+import { SegmentedControl } from '../ui/SegmentedControl';
 import { Icon } from '../ui/icons';
 import { SpeedGauge } from '../ui/speed';
 import type { EmulatorFeedbackActions } from './Feedback';
@@ -67,30 +68,20 @@ export function ViewportControls(props: {
             <Show when={props.active && props.modSupported}>
               <div class="viewport-setting">
                 <span class="viewport-setting-label">Firmware</span>
-                <div
+                <SegmentedControl
                   id="firmware-mode"
-                  class="viewport-setting-options"
-                  role="group"
-                  aria-label="Firmware mode"
-                >
-                  <For each={[true, false]}>
-                    {(enabled) => (
-                      <button
-                        type="button"
-                        class={{ selected: props.modEnabled === enabled }}
-                        data-mod-enabled={String(enabled)}
-                        aria-pressed={props.modEnabled === enabled ? 'true' : 'false'}
-                        disabled={props.modDisabled}
-                        onClick={() => {
-                          close();
-                          props.selectMod(enabled);
-                        }}
-                      >
-                        {enabled ? 'FujiMod' : 'Unmodded'}
-                      </button>
-                    )}
-                  </For>
-                </div>
+                  label="Firmware mode"
+                  options={[
+                    { value: true, label: 'FujiMod', data: { 'data-mod-enabled': 'true' } },
+                    { value: false, label: 'Unmodded', data: { 'data-mod-enabled': 'false' } },
+                  ]}
+                  value={props.modEnabled}
+                  disabled={props.modDisabled}
+                  onSelect={(enabled) => {
+                    close();
+                    props.selectMod(enabled);
+                  }}
+                />
               </div>
             </Show>
             <div class="viewport-menu-actions">

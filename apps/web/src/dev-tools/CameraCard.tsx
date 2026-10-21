@@ -1,5 +1,6 @@
 import { For, Show, createSignal } from 'solid-js';
 import type { Camera, CameraModel } from './camera-model';
+import { SegmentedControl } from '../ui/SegmentedControl';
 
 export enum Tone {
   Ready = 'ready',
@@ -82,16 +83,15 @@ export function CameraCard(props: { camera: Camera; model: CameraModel }) {
   const [sharingError, setSharingError] = createSignal('');
   const state = () => cameraState(props.camera);
   const identity = () => props.camera.identity;
-  const product = () =>
-    [identity()?.manufacturer ?? identity()?.vendor, identity()?.product].filter(Boolean).join(' ');
-  const version = () =>
-    [
-      identity()?.internalVersion && `Internal ${identity()!.internalVersion}`,
-      identity()?.framework && `Framework ${identity()!.framework}`,
-    ]
-      .filter(Boolean)
-      .join(' · ');
+  // "FUJIFILM X100V", without repeating a product that already names its maker.
+  const product = () => {
+    const maker = identity()?.manufacturer ?? identity()?.vendor;
+    const name = identity()?.product;
+    if (!name) return maker;
+    return maker && !name.toUpperCase().startsWith(maker.toUpperCase()) ? `${maker} ${name}` : name;
+  };
   async function setSharing(on: boolean) {
+    if (on === Boolean(props.camera.sharing)) return;
     setSharingBusy(true);
     setSharingError('');
     try {
@@ -111,27 +111,36 @@ export function CameraCard(props: { camera: Camera; model: CameraModel }) {
   }
   return (
     <section class="wb-card" aria-labelledby="wb-camera-name">
-      <h2 id="wb-camera-name">{props.camera.name}</h2>
+      <header class="wb-card-head">
+        <h2 id="wb-camera-name">{props.camera.name}</h2>
+        <span class={`wb-pill ${state().tone}`}>
+          <i class={`wb-dot ${state().tone}`} aria-hidden="true" />
+          <span class="wb-state">{state().label}</span>
+        </span>
+      </header>
       <Show when={identity()}>
         <dl class="wb-kv">
           <Show when={product()}>
             <dt>Product</dt>
             <dd>{product()}</dd>
           </Show>
-          <Show when={version()}>
-            <dt>Version</dt>
-            <dd>{version()}</dd>
+          <Show when={identity()?.internalVersion}>
+            <dt>Firmware</dt>
+            <dd>
+              {identity()!.internalVersion}
+              <Show when={identity()?.framework}>
+                <span class="wb-muted"> · framework {identity()!.framework}</span>
+              </Show>
+            </dd>
           </Show>
           <Show when={identity()?.serial}>
             <dt>Serial</dt>
-            <dd class="wb-serial">{identity()!.serial}</dd>
+            <dd class="wb-serial" title={identity()!.serial}>
+              {identity()!.serial}
+            </dd>
           </Show>
         </dl>
       </Show>
-      <div class={`wb-state ${state().tone}`}>
-        <i class={`wb-dot ${state().tone}`} aria-hidden="true" />
-        {state().label}
-      </div>
       <Show when={props.camera.remoteActivity?.progress}>
         {(progress) => (
           <div
@@ -161,32 +170,37 @@ export function CameraCard(props: { camera: Camera; model: CameraModel }) {
         )}
       </Show>
       <Show when={props.camera.transport === 'usb' && props.camera.present}>
-        <div class="wb-sharing">
-          <label class="wb-switch">
-            <input
-              type="checkbox"
-              role="switch"
-              checked={Boolean(props.camera.sharing)}
-              disabled={sharingBusy()}
-              onChange={(event) => void setSharing(event.currentTarget.checked)}
-            />
-            <span class="wb-toggle" aria-hidden="true" />
-            Sharing
-          </label>
-          <Show when={props.camera.sharing}>
-            {(sharing) => (
-              <>
-                <span class="wb-muted">
-                  · {sharing().peers.size}{' '}
-                  {sharing().peers.size === 1 ? 'controller' : 'controllers'}
-                </span>
-                <button class="wb-text wb-link" onClick={() => void copyLink()}>
-                  {copied() ? 'Copied' : 'Copy link'}
-                </button>
-              </>
-            )}
-          </Show>
+        <div class="wb-card-row">
+          <span class="wb-row-label">Sharing</span>
+          <SegmentedControl
+            label="Sharing"
+            options={[
+              { value: false, label: 'Off' },
+              { value: true, label: 'On' },
+            ]}
+            value={Boolean(props.camera.sharing)}
+            disabled={sharingBusy()}
+            onSelect={(on) => void setSharing(on)}
+          />
         </div>
+        <Show when={props.camera.sharing}>
+          {(sharing) => (
+            <div class="wb-share">
+              <span class="wb-share-link" title={sharing().link}>
+                {sharing().link}
+              </span>
+              <button class="wb-btn wb-copy" onClick={() => void copyLink()}>
+                {copied() ? 'Copied' : 'Copy link'}
+              </button>
+              <Show when={sharing().peers.size}>
+                <span class="wb-muted wb-share-peers">
+                  {sharing().peers.size} {sharing().peers.size === 1 ? 'controller' : 'controllers'}{' '}
+                  connected
+                </span>
+              </Show>
+            </div>
+          )}
+        </Show>
         <Show when={sharingError()}>
           <p class="wb-status" role="status">
             {sharingError()}

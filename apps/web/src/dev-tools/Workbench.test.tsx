@@ -98,13 +98,15 @@ test('a camera held by a remote shows who holds it and disables every tool', () 
     expect(button(host, name).disabled).toBe(true);
 });
 
-test('sharing is a switch on the camera card and never disables the tools', async () => {
+test('sharing is an Off/On control on the camera card and never disables the tools', async () => {
   const test = createTestCameraModel({});
   test.add(testCamera('X100V'));
   const host = mount(test.model);
   flush();
-  const toggle = host.querySelector<HTMLInputElement>('.wb-switch input')!;
-  toggle.click();
+  const on = [...host.querySelectorAll('[aria-label="Sharing"] button')].find(
+    (node) => node.textContent === 'On',
+  ) as HTMLButtonElement;
+  on.click();
   await vi.waitFor(() => {
     flush();
     expect(host.querySelector('.wb-tag')!.textContent).toBe('Shared · 0');

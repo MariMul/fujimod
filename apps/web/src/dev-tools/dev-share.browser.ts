@@ -130,8 +130,14 @@ try {
     .filter({ hasText: 'Development share registered' })
     .first()
     .waitFor();
-  const sharing = owner.locator('.wb-card .wb-switch input');
-  assert.equal(await sharing.isChecked(), true);
+  const sharing = owner
+    .locator('.wb-card')
+    .getByRole('group', { name: 'Sharing' })
+    .getByRole('button', { name: 'On', exact: true });
+  assert.equal(
+    await sharing.getAttribute('aria-pressed').then((pressed) => pressed === 'true'),
+    true,
+  );
   assert.equal(
     await owner.evaluate(
       () => window.devSharingFixture.log.filter((e) => e[0] === 'picker').length,
@@ -168,8 +174,15 @@ try {
     .locator('.wb-card .wb-state')
     .filter({ hasText: /^Idle$/ })
     .waitFor();
-  assert.equal(await sharing.isChecked(), true);
-  await owner.locator('.wb-card .wb-switch').click();
+  assert.equal(
+    await sharing.getAttribute('aria-pressed').then((pressed) => pressed === 'true'),
+    true,
+  );
+  await owner
+    .locator('.wb-card')
+    .getByRole('group', { name: 'Sharing' })
+    .getByRole('button', { name: 'Off', exact: true })
+    .click();
   await count(0);
   await owner.getByRole('button', { name: 'Copy link', exact: true }).waitFor({ state: 'hidden' });
   await owner
@@ -182,7 +195,11 @@ try {
     .waitFor();
   await setTimeout(300);
   await count(0);
-  assert.equal(await sharing.isChecked(), false, 'Stopping remains off while connected');
+  assert.equal(
+    await sharing.getAttribute('aria-pressed').then((pressed) => pressed === 'true'),
+    false,
+    'Stopping remains off while connected',
+  );
   // Reconnecting resets per-camera auto-sharing, creating a fresh ticket.
   await owner.evaluate(() => window.devSharingFixture.presence(false));
   await owner

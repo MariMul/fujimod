@@ -167,14 +167,90 @@
   border-radius: 6px;
   background: var(--wb-panel);
 }
+.wb-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 .wb-card h2 {
   margin: 0;
-  font: 600 14px var(--wb-mono);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 15px var(--wb-mono);
+}
+/* The camera's state, as a pill beside its name. */
+.wb-pill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  max-width: 60%;
+  padding: 2px 8px;
+  border: 1px solid var(--wb-line-2);
+  border-radius: 999px;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.wb-pill .wb-state {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wb-pill.ready {
+  color: var(--wb-accent);
+  border-color: rgba(var(--wb-accent-rgb), 0.35);
+}
+.wb-pill.busy {
+  color: var(--wb-amber);
+  border-color: rgba(232, 162, 60, 0.4);
+}
+.wb-pill.problem {
+  color: var(--wb-red);
+  border-color: rgba(255, 95, 87, 0.45);
+}
+.wb-pill.gone {
+  color: var(--wb-dim);
+}
+.wb-card-row {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--wb-line);
+}
+.wb-row-label {
+  font-size: 11.5px;
+  color: var(--wb-faint);
+}
+.wb-share {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 6px;
+  margin-left: 66px;
+}
+.wb-share-link {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 11px var(--wb-mono);
+  color: var(--wb-dim);
+}
+.wb-btn.wb-copy {
+  height: 24px;
+  font-size: 11px;
+}
+.wb-share-peers {
+  grid-column: 1 / -1;
+  font-size: 11px;
 }
 .wb-kv {
   display: grid;
-  grid-template-columns: 58px 1fr;
-  gap: 1px 8px;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 2px 8px;
   margin: 0;
   font: 11.5px var(--wb-mono);
 }
@@ -184,25 +260,13 @@
 }
 .wb-kv dd {
   margin: 0;
+  min-width: 0;
   overflow-wrap: anywhere;
 }
-.wb-state {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 12px;
-}
-.wb-state.ready {
-  color: var(--wb-accent);
-}
-.wb-state.busy {
-  color: var(--wb-amber);
-}
-.wb-state.problem {
-  color: var(--wb-red);
-}
-.wb-state.gone {
-  color: var(--wb-dim);
+.wb-kv dd.wb-serial {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .wb-progress {
   height: 3px;
@@ -225,52 +289,6 @@
   font-size: 12px;
   color: #ffd2cf;
 }
-.wb-sharing {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 12px;
-}
-.wb-switch {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  cursor: pointer;
-}
-.wb-switch input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-.wb-toggle {
-  position: relative;
-  width: 28px;
-  height: 16px;
-  border-radius: 8px;
-  background: var(--wb-line-2);
-  transition: background 120ms;
-}
-.wb-toggle::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #fff;
-  transition: transform 120ms;
-}
-.wb-switch input:checked + .wb-toggle {
-  background: rgba(var(--wb-accent-rgb), 0.85);
-}
-.wb-switch input:checked + .wb-toggle::after {
-  transform: translateX(12px);
-}
-.wb-switch input:focus-visible + .wb-toggle {
-  outline: 2px solid var(--wb-accent);
-  outline-offset: 2px;
-}
 .wb-muted {
   color: var(--wb-dim);
 }
@@ -285,9 +303,6 @@
 }
 .wb .wb-text:hover {
   color: var(--wb-text);
-}
-.wb-link {
-  margin-left: auto;
 }
 .wb-status {
   margin: 0;

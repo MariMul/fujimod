@@ -108,18 +108,6 @@
   color: #b5b6bc;
   font-size: 11px;
 }
-.viewport-setting-options {
-  display: flex;
-  gap: 2px;
-  border: 1px solid #3a3c42;
-  border-radius: 9px;
-  padding: 2px;
-  background: #101215;
-}
-.viewport-setting-options button {
-  min-height: 34px;
-  flex: 1;
-}
 .viewport-menu-actions {
   display: grid;
   gap: 4px;

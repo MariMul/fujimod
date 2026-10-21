@@ -116,17 +116,31 @@ try {
     window.releaseSharingDiscovery();
   });
   await ready(owner);
-  const sharing = owner.locator('.wb-card .wb-switch input');
   await owner.getByRole('button', { name: 'Copy link', exact: true }).waitFor();
-  await owner.locator('.wb-card .wb-switch').click();
+  await owner
+    .locator('.wb-card')
+    .getByRole('group', { name: 'Sharing' })
+    .getByRole('button', { name: 'Off', exact: true })
+    .click();
   await owner.getByRole('button', { name: 'Copy link', exact: true }).waitFor({ state: 'hidden' });
-  await owner.locator('.wb-card .wb-switch').click();
+  await owner
+    .locator('.wb-card')
+    .getByRole('group', { name: 'Sharing' })
+    .getByRole('button', { name: 'On', exact: true })
+    .click();
   await owner.getByRole('button', { name: 'Copy link', exact: true }).click();
   await owner.getByRole('button', { name: 'Copied', exact: true }).waitFor();
   const link = await owner.evaluate(() => navigator.clipboard.readText());
   assert.equal(new URL(link).origin, url.origin);
   assert.ok(new URL(link).hash.startsWith('#?remotecontrol='));
-  assert.equal(await sharing.isChecked(), true);
+  assert.equal(
+    await owner
+      .locator('.wb-card')
+      .getByRole('group', { name: 'Sharing' })
+      .getByRole('button', { name: 'On', exact: true })
+      .getAttribute('aria-pressed'),
+    'true',
+  );
   await read(owner);
   await owner.screenshot({
     path: new URL('shared-local-read.png', output).pathname,
@@ -154,7 +168,7 @@ try {
   await remote.goto(link);
   await ready(remote);
   assert.match(await remote.locator('.wb-cam.selected').innerText(), /Remote · Idle/);
-  assert.equal(await remote.locator('.wb-card .wb-switch').count(), 0);
+  assert.equal(await remote.locator('.wb-card').getByRole('group', { name: 'Sharing' }).count(), 0);
   assert.match(await remote.locator('.wb-card').innerText(), /Serial\s+SYNTHETIC/);
   await remote
     .getByRole('region', { name: 'Connection log' })
@@ -294,7 +308,11 @@ try {
     .filter({ hasText: 'Remote controller connected' })
     .first()
     .waitFor();
-  await owner.locator('.wb-card .wb-switch').click();
+  await owner
+    .locator('.wb-card')
+    .getByRole('group', { name: 'Sharing' })
+    .getByRole('button', { name: 'Off', exact: true })
+    .click();
   await owner.getByRole('button', { name: 'Copy link', exact: true }).waitFor({ state: 'hidden' });
   await read(owner);
   const usb = await owner.evaluate(() => ({
