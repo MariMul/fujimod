@@ -34,6 +34,7 @@ from fujimod.emulator import Board
 
 with Board.from_inputs(
     configuration_id="x70-110-rec",
+    overlays=("x70-110-rec-usb",),
     update=Path("/inputs/update.dat"),
     boot_rom=Path("/inputs/boot.rom"),
     unicorn=Path("/libraries/libunicorn.dylib"),
@@ -43,8 +44,10 @@ with Board.from_inputs(
     report = board.boot_to_rec()
 ```
 
-Omit `nand` or `settings` when those files are not supplied. The configuration
-selects its body and firmware by identity; input paths remain caller-selected.
+Omit `nand` or `settings` when those files are not supplied. The required
+configuration ID selects its body, firmware and execution policy; optional
+overlay IDs select declared changes in order. Input paths remain
+caller-selected.
 The board owns its native execution session. It exposes processor, memory,
 checkpoint and state operations, and supports `with` or an explicit `close()`.
 Closing is safe to repeat; methods that need an active session raise

@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     def emulator_inputs() -> None:
         board = Board.from_inputs(
             configuration_id="x70-110-rec",
+            overlays=("x70-110-rec-usb",),
             update=Path("update.dat"),
             boot_rom=Path("boot.rom"),
             unicorn=Path("libunicorn.dylib"),

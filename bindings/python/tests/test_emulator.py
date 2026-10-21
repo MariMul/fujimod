@@ -5,6 +5,7 @@ import hashlib
 import importlib
 import os
 import struct
+from types import SimpleNamespace
 import weakref
 from typing import cast
 
@@ -20,6 +21,7 @@ from fujimod.emulator import (
     make_board,
 )
 from fujimod.emulator.board import Session, _boot_report
+from fujimod.emulator import board as board_module
 
 NATIVE_EXPORTS = frozenset({
     "load_input_assets",
@@ -217,6 +219,56 @@ def test_board_from_inputs_validates_configuration_and_paths_first() -> None:
             configuration_id="x70-110-rec",
             update="update.bin",
             boot_rom=cast(str, object()),
+            unicorn="libunicorn.dylib",
+        )
+
+
+def test_board_from_inputs_forwards_ordered_overlay_ids(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    class NativeBoard:
+        instructions = [0]
+        boot_quantum = 1000
+
+        @classmethod
+        def from_inputs(cls, **options: object) -> NativeBoard:
+            calls.append(options)
+            return cls()
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        board_module, "_native", SimpleNamespace(Board=NativeBoard)
+    )
+    board = Board.from_inputs(
+        configuration_id="x70-110-rec",
+        overlays=("x70-110-rec-usb",),
+        update="update.dat",
+        boot_rom="boot.rom",
+        unicorn="libunicorn.dylib",
+    )
+    assert calls == [
+        {
+            "configuration_id": "x70-110-rec",
+            "overlays": ("x70-110-rec-usb",),
+            "update": "update.dat",
+            "boot_rom": "boot.rom",
+            "unicorn": "libunicorn.dylib",
+            "nand": None,
+            "settings": None,
+        }
+    ]
+    board.close()
+
+
+def test_board_from_inputs_rejects_duplicate_overlays_before_native() -> None:
+    with pytest.raises(ValueError, match="unique catalog identities"):
+        Board.from_inputs(
+            configuration_id="x70-110-rec",
+            overlays=("x70-110-rec-usb", "x70-110-rec-usb"),
+            update="update.dat",
+            boot_rom="boot.rom",
             unicorn="libunicorn.dylib",
         )
 

@@ -179,6 +179,7 @@ class Board:
         cls,
         *,
         configuration_id: str,
+        overlays: Sequence[str] = (),
         update: str | PathLike[str],
         boot_rom: str | PathLike[str],
         unicorn: str | PathLike[str],
@@ -191,11 +192,21 @@ class Board:
         and firmware references are resolved by the catalog, not supplied as
         separate caller identities.
 
+        ``overlays`` selects named catalog overlays in order. Each overlay
+        must apply to the selected run configuration.
+
         ``update`` and ``boot_rom`` are required files. ``nand`` and
         ``settings`` supply optional persistent storage inputs. No file path
         is inferred from the selected configuration.
         """
         configuration_id = cls._identifier(configuration_id, "configuration_id")
+        if isinstance(overlays, (str, bytes)) or not isinstance(overlays, Sequence):
+            raise TypeError("overlays must be a sequence of catalog overlay IDs")
+        selected_overlays = tuple(
+            cls._identifier(overlay, "overlay ID") for overlay in overlays
+        )
+        if len(selected_overlays) != len(set(selected_overlays)):
+            raise ValueError("overlays must contain unique catalog identities")
         update = cls._input_path(update, "update")
         boot_rom = cls._input_path(boot_rom, "boot_rom")
         unicorn = cls._input_path(unicorn, "unicorn")
@@ -203,6 +214,7 @@ class Board:
         settings = None if settings is None else cls._input_path(settings, "settings")
         native = _native.Board.from_inputs(
             configuration_id=configuration_id,
+            overlays=selected_overlays,
             update=update,
             boot_rom=boot_rom,
             unicorn=unicorn,

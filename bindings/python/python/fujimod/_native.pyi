@@ -1,4 +1,4 @@
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from os import PathLike
 from typing import Final, Self, SupportsFloat, SupportsIndex, final
 
@@ -35,6 +35,11 @@ class emulator:
     VERSION: Final[str]
     VIRTUAL_SCENE_PROFILE: Final[str]
 
+    @staticmethod
+    def prepare_configuration(
+        configuration_id: str, overlays: Sequence[str] = ...
+    ) -> str: ...
+
     @final
     class AnalogInputs:
         @property
@@ -48,6 +53,7 @@ class emulator:
         def from_inputs(
             *,
             configuration_id: str,
+            overlays: Sequence[str] = ...,
             update: str | PathLike[str],
             boot_rom: str | PathLike[str],
             unicorn: str | PathLike[str],
