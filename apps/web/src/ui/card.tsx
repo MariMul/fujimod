@@ -1,5 +1,6 @@
 import { For, Show, createSignal, createEffect, createMemo, untrack } from 'solid-js';
-import type { Engine, CardEntry, CardState } from '../engine/api';
+import type { Engine } from '../engine/api';
+import type { CardEntry, CardState } from 'fujimod/emulator';
 import { zipFiles } from '../archive';
 import { flags } from '../flags';
 import { Icon } from './icons';

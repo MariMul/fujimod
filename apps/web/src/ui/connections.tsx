@@ -1,5 +1,5 @@
 import { For } from 'solid-js';
-import type { Connection } from '../engine/api';
+import type { Connection } from 'fujimod/emulator';
 export function Connections(props: { rows: Connection[] }) {
   return (
     <section

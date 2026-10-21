@@ -3,7 +3,7 @@ import type { CameraRecord } from '../cameras/store';
 import { createStore } from 'solid-js';
 import { validateCatalog, type Catalog, type Firmware } from '../catalog';
 import { validateIndex } from '../patch/catalog';
-import type { Connection } from '../engine/api';
+import type { Connection } from 'fujimod/emulator';
 import type { EngineFault } from '../engine/fault';
 import type { FaultContext } from '../ui/fault';
 import type { CameraSupport } from '../ui/cameras';

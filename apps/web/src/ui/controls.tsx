@@ -1,5 +1,6 @@
 import { For, Show, Switch, Match, createSignal, createEffect, onSettled, untrack } from 'solid-js';
-import type { Engine, Input } from '../engine/api';
+import type { Engine } from '../engine/api';
+import type { Input } from 'fujimod/emulator';
 import type { LCDViewer } from '../viewer/lcd';
 import type { ControlNode, DevicePanel, PowerCombo } from './layout';
 import { Icon } from './icons';

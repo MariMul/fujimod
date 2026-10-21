@@ -1,21 +1,23 @@
 import type { LoadingProgress } from './download-progress';
-import { HostTimings } from 'fujimod/emulator';
+import {
+  HostTimings,
+  type BootInput,
+  type CardReadOptions,
+  type CardState,
+  type CardTree,
+  type Checkpoint,
+  type Connection,
+  type EngineFingerprint,
+  type Input,
+  type TouchPhase,
+} from 'fujimod/emulator';
 import type {
-  BootInput,
   BootMedia,
   CardFile,
-  CardReadOptions,
-  CardState,
-  CardTree,
-  Connection,
   Engine,
   EngineConfig,
-  Checkpoint,
-  TouchPhase,
   ReplayLog,
-  EngineFingerprint,
   Frame,
-  Input,
   ReplayStep,
   Scene,
 } from './api';

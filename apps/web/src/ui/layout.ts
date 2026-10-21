@@ -1,5 +1,5 @@
 import type { DetentSound } from '../feedback/detent-sound';
-import type { BootInput } from '../engine/api';
+import type { BootInput } from 'fujimod/emulator';
 export interface ControlNode {
   kind: 'control' | 'grid' | 'row' | 'column' | 'divider' | 'space' | 'command' | 'dpad';
   className?: string;

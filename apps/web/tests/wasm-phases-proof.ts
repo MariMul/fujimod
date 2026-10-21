@@ -1,5 +1,5 @@
 import { createEngine } from '../src/engine';
-import type { CardEntry } from '../src/engine/api';
+import type { CardEntry } from 'fujimod/emulator';
 import { LCDViewer } from '../src/viewer/lcd';
 
 const canvas = document.createElement('canvas'),

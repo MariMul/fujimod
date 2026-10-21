@@ -2,7 +2,8 @@ import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
 import { beforeAll, afterEach, expect, test, vi } from 'vite-plus/test';
 import { ControlSession, Controls } from './controls';
-import type { Engine, Input } from '../engine/api';
+import type { Engine } from '../engine/api';
+import type { Input } from 'fujimod/emulator';
 import type { DevicePanel } from './layout';
 let dispose: (() => void) | undefined;
 beforeAll(() => {

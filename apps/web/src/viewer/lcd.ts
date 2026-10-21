@@ -1,7 +1,8 @@
 import { createStore } from 'solid-js';
 import { touchPoint } from './touch';
 import { badgeStyle } from '../feedback/input';
-import type { Engine, Input, Frame, TouchPhase } from '../engine/api';
+import type { Engine, Frame } from '../engine/api';
+import type { Input, TouchPhase } from 'fujimod/emulator';
 
 /** Compose guest LCD frames and fault feedback on a 2D canvas. */
 export class LCDViewer {

@@ -1,5 +1,5 @@
 import { DownloadProgress, type LoadingProgress } from './download-progress';
-import type { CardFile, EngineConfig, ReplayStep, Scene, Checkpoint, BootInput } from './api';
+import type { CardFile, EngineConfig, ReplayStep, Scene } from './api';
 import { CameraStore } from '../cameras/store';
 import { digest } from './identity';
 import { diagnosticReport } from './diagnostics';
@@ -12,6 +12,8 @@ import {
   parseEmulatorManifest,
   type EmulatorManifest,
   type EmulatorModuleFactory,
+  type BootInput,
+  type Checkpoint,
   type SessionState,
 } from 'fujimod/emulator';
 import type { WasmRequest, WasmWorkerEvent, WasmWorkerRequest } from './wasm-worker-protocol';

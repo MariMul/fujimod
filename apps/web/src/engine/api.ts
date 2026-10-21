@@ -13,18 +13,6 @@ import type {
   Input,
   TouchPhase,
 } from 'fujimod/emulator';
-export type {
-  BootInput,
-  CardEntry,
-  CardReadOptions,
-  CardState,
-  CardTree,
-  Checkpoint,
-  Connection,
-  EngineFingerprint,
-  Input,
-  TouchPhase,
-} from 'fujimod/emulator';
 export type { EngineFault } from './fault';
 /** The only emulator contract used by the web app. All scheduling is engine-owned. */
 /** Frames are borrowed only during the synchronous listener call. */

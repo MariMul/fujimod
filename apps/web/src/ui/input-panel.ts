@@ -1,4 +1,4 @@
-import type { Input } from '../engine/api';
+import type { Input } from 'fujimod/emulator';
 import type { ControlNode, DevicePanel } from './layout';
 
 /** A catalog supplies capabilities even when the body has no custom presentation. */
