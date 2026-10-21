@@ -83,6 +83,7 @@ pub(super) struct Execution {
     next_observer: Cell<usize>,
     instruction_observers: Cell<usize>,
     block_observers: Cell<usize>,
+    store_dispatcher: Cell<Option<HookId>>,
     at_block: Cell<bool>,
     at_instruction: Cell<bool>,
 }
@@ -154,6 +155,7 @@ impl Core {
             next_observer: Cell::new(0),
             instruction_observers: Cell::new(0),
             block_observers: Cell::new(0),
+            store_dispatcher: Cell::new(None),
             at_block: Cell::new(false),
             at_instruction: Cell::new(false),
         });
@@ -197,6 +199,7 @@ impl Core {
                 range: HookRange::All,
             })?;
             e.cpu.hook_watched(stores, true)?;
+            e.store_dispatcher.set(Some(stores));
         }
         e.cpu.precise_store_pc(true)?;
         for bank in 0..2 {
@@ -333,6 +336,26 @@ impl Execution {
                 self.fail("R-profile callback panicked; execution stopped at the C boundary".into())
             }
         }
+    }
+    fn rearm_store_dispatcher(&self) -> Result<(), String> {
+        let finite = self.observers.borrow().values().any(|observer| {
+            observer.native.is_none()
+                && matches!(
+                    observer.hook,
+                    Hook::Memory {
+                        read: false,
+                        write: true,
+                        ..
+                    }
+                )
+        });
+        // A finite observer can tighten the run at this store. Its instruction
+        // must end the block before any following instruction executes.
+        let hook = self
+            .store_dispatcher
+            .get()
+            .ok_or("missing R-profile store dispatcher")?;
+        self.cpu.hook_watched(hook, !finite)
     }
     fn classify(&self, address: u64, word: u32) -> Result<Translation, String> {
         let watch = self.memory.note_code(self.id.get(), address, 4)?;

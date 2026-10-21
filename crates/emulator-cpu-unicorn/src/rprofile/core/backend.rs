@@ -492,6 +492,7 @@ impl Cpu for Core {
         e.observers
             .borrow_mut()
             .insert(key, Observer { hook, native });
+        e.rearm_store_dispatcher()?;
         e.next_observer.set(next);
         Ok(HookId {
             owner: self.identity(),
@@ -524,6 +525,7 @@ impl Cpu for Core {
         }
         drop(observers);
         e.observers.borrow_mut().remove(&hook.key);
+        e.rearm_store_dispatcher()?;
         Ok(())
     }
     unsafe fn translation_hooks(&self, _: Option<TranslationHooks>) -> Result<(), String> {
@@ -556,8 +558,8 @@ impl Cpu for Core {
         }
         match observer.native {
             Some(native) => self.execution.cpu.hook_watched(native, watched),
-            // Its entire finite range is already watched by the permanent
-            // store dispatcher, so either filtering mode observes that range.
+            // The shared dispatcher keeps finite observers at instruction
+            // boundaries regardless of caller filtering.
             None => Ok(()),
         }
     }

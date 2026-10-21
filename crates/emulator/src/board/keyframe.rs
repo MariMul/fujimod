@@ -109,6 +109,7 @@ impl State {
             active_slice: _,
             decoders: _,
             memory_access: _,
+            continuation: _,
         } = self;
         Saved {
             execution_policy: *execution_policy,
