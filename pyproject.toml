@@ -16,6 +16,7 @@ extend-exclude = [
   "dist-local-preview",
   "pkg",
   "mods/lib/settings/upstream",
+  "crates/emulator-cpu-unicorn/vendor",
 ]
 
 [tool.ruff.lint]
@@ -40,6 +41,7 @@ exclude = [
   "**/dist-local-preview",
   "bindings/javascript/pkg",
   "mods/lib/settings/upstream",
+  "crates/emulator-cpu-unicorn/vendor",
 ]
 
 [tool.ty.rules]
@@ -64,6 +66,7 @@ norecursedirs = [
   "dist-local-preview",
   "pkg",
   "upstream",
+  "crates/emulator-cpu-unicorn/vendor",
 ]
 addopts = "--strict-config --strict-markers --continue-on-collection-errors -ra"
 

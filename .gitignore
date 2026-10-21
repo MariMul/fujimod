@@ -1,5 +1,6 @@
 .DS_Store
 /target/
+/crates/*/target/
 /bindings/javascript/pkg/
 /bindings/javascript/dist/
 /bindings/javascript/node_modules/

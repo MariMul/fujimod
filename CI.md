@@ -67,6 +67,11 @@ mise run web-check
 mise run javascript-format-check
 ```
 
+Native test tasks build the pinned Unicorn source into ignored
+`target/unicorn-native` and set `CAMERA_UNICORN_LIBRARY` for test processes.
+The default Python emulator feature also needs libjpeg development headers.
+Run `mise run unicorn-native-build` to build the native library on its own.
+
 `mise run python-test` builds the native binding with its `testing` feature,
 then runs pytest discovery throughout the repository. This includes Python
 bindings, Wasm transport tests, simulation asset preparation and CI tooling.
