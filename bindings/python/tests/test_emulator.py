@@ -4,7 +4,6 @@ import gc
 import hashlib
 import importlib
 import os
-import platform
 import struct
 import weakref
 
@@ -87,11 +86,17 @@ def _execution_graph() -> dict[str, object]:
     return {
         "processors": [
             {
-                "model": "armv8a",
+                "model": "cortex-r5f",
                 "registers": [["Pc", 0x10000]],
                 "released": True,
                 "mprofile": None,
-                "rprofile": None,
+                "rprofile": {
+                    "cp14_identity": 21930,
+                    "tcm": {
+                        "btcm": {"bytes": 4096, "reset": 1879048193},
+                        "atcm": {"bytes": 8192, "reset": 4294934529},
+                    },
+                },
             }
         ],
         "ram": [{"base": 0x10000, "size": 0x4000}],
@@ -129,17 +134,11 @@ def _device_plan() -> dict[str, object]:
 
 
 def test_board_runs_authored_program_and_releases_native_state() -> None:
-    unicorn_library = os.environ.get("FUJIMOD_UNICORN_LIBRARY")
-    if unicorn_library:
-        engine = "unicorn"
-        library = unicorn_library
-    elif platform.system() == "Darwin" and platform.machine() in {"arm64", "aarch64"}:
-        engine = "hypervisor"
-        library = None
-    else:
-        pytest.skip("Set FUJIMOD_UNICORN_LIBRARY to select an execution library")
+    library = os.environ.get("CAMERA_UNICORN_LIBRARY")
+    if library is None:
+        pytest.fail("Set CAMERA_UNICORN_LIBRARY to select an execution library")
 
-    program = struct.pack("<II", 0xD2800540, 0x14000000)
+    program = struct.pack("<II", 0xE3A0002A, 0xEAFFFFFE)
     asset = Asset("program", len(program), hashlib.sha256(program).hexdigest())
     definition = Definition(
         execution=_execution_graph(),
@@ -147,7 +146,7 @@ def test_board_runs_authored_program_and_releases_native_state() -> None:
         assets=(asset,),
         images=(Image(asset.id, 0x10000),),
         library=library,
-        engine=engine,
+        engine="unicorn",
         quantum=1,
     )
     board = make_board(definition, {asset.id: program})
@@ -155,7 +154,7 @@ def test_board_runs_authored_program_and_releases_native_state() -> None:
     try:
         board.run(1)
         assert board.instructions == 1
-        assert board.cpus[0].reg_read({"X": 0}) == 42
+        assert board.cpus[0].reg_read({"Arm32": {"R": 0}}) == 42
     finally:
         board.close()
     with pytest.raises(RuntimeError, match="runtime is closed"):
