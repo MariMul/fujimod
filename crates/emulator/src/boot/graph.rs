@@ -13,6 +13,7 @@ use fujimod_catalog::{
     },
 };
 use fujimod_emulator_cpu::{Model, Register, arm};
+use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
 fn core_index(soc: &Soc) -> Result<BTreeMap<&str, usize>, String> {
@@ -174,7 +175,12 @@ pub(super) fn assemble(
             build_processor(
                 processor.model,
                 &registers,
-                processor.released,
+                processor.released.ok_or_else(|| {
+                    format!(
+                        "SoC {} does not declare the reset-release state for core {}",
+                        soc.id, processor.id
+                    )
+                })?,
                 processor.rprofile.as_ref(),
                 soc.architecture.clone(),
             )
@@ -311,6 +317,126 @@ pub(super) fn assemble(
     Ok(graph)
 }
 
+fn processor_model(model: Model) -> &'static str {
+    match model {
+        Model::CortexR5F => "cortex-r5f",
+        Model::CortexA7 => "cortex-a7",
+        Model::CortexM4 => "cortex-m4",
+        Model::ArmV8A => "armv8a",
+    }
+}
+
+fn processor_register(register: Register) -> Value {
+    match register {
+        Register::Diagnostic(value) => json!({"Diagnostic": format!("{value:?}")}),
+        Register::Arm32(value) => json!({"Arm32": format!("{value:?}")}),
+        Register::X(value) => json!({"X": value}),
+        Register::Pc => json!("Pc"),
+        Register::Sp => json!("Sp"),
+        Register::Pstate => json!("Pstate"),
+        Register::Fpcr => json!("Fpcr"),
+        Register::Fpsr => json!("Fpsr"),
+        Register::V(value) => json!({"V": value}),
+        Register::Arm64System(value) => json!({
+            "Arm64System": {
+                "op0": value.op0,
+                "op1": value.op1,
+                "crn": value.crn,
+                "crm": value.crm,
+                "op2": value.op2,
+            }
+        }),
+    }
+}
+
+fn memory_map(map: &factory::MemoryMap) -> Value {
+    json!({
+        "core": map.core,
+        "address": map.address,
+        "physical": map.physical,
+        "size": map.size,
+        "permissions": map.permissions,
+    })
+}
+
+fn dma_map(map: &BusMapping) -> Value {
+    json!({
+        "address": map.address,
+        "physical": map.physical,
+        "size": map.size,
+        "permissions": map.permissions,
+    })
+}
+
+/// Serialize the validated processor graph in the same closed shape accepted
+/// by `factory::Graph` deserialization for native callers.
+pub(super) fn value(
+    selection: &ResolvedSelection,
+    graph: &factory::Graph,
+    rate: RunInstructionRate,
+) -> Value {
+    let processors = graph
+        .processors
+        .iter()
+        .enumerate()
+        .map(|(index, processor)| {
+            let rprofile = selection.soc.processors[index].rprofile.map(|profile| {
+                json!({
+                    "cp14_identity": profile.cp14_identity,
+                    "tcm": {
+                        "btcm": {
+                            "bytes": profile.btcm.bytes,
+                            "reset": profile.btcm.reset_address,
+                        },
+                        "atcm": {
+                            "bytes": profile.atcm.bytes,
+                            "reset": profile.atcm.reset_address,
+                        },
+                    },
+                })
+            });
+            json!({
+                "model": processor_model(processor.model),
+                "released": processor.released,
+                "registers": processor.registers.iter().map(|(register, value)| {
+                    json!([processor_register(*register), value])
+                }).collect::<Vec<_>>(),
+                "mprofile": null,
+                "rprofile": rprofile,
+            })
+        })
+        .collect::<Vec<_>>();
+    let decoders = graph
+        .decoders
+        .iter()
+        .map(|decoder| {
+            json!({
+                "initial": decoder.initial,
+                "choices": decoder.choices.iter().map(|choice| {
+                    json!({
+                        "processors": choice.processors.iter().map(memory_map).collect::<Vec<_>>(),
+                        "dma": choice.dma.iter().map(dma_map).collect::<Vec<_>>(),
+                    })
+                }).collect::<Vec<_>>(),
+            })
+        })
+        .collect::<Vec<_>>();
+    json!({
+        "processors": processors,
+        "ram": graph.ram.iter().map(|ram| json!({"base":ram.base,"size":ram.size})).collect::<Vec<_>>(),
+        "dma_mappings": graph.dma_mappings.iter().map(dma_map).collect::<Vec<_>>(),
+        "decoders": decoders,
+        "mappings": graph.mappings.iter().map(memory_map).collect::<Vec<_>>(),
+        "peripherals": graph.peripherals.iter().map(|peripheral| json!({
+            "core": peripheral.core,
+            "address": peripheral.address,
+            "physical": peripheral.physical,
+            "size": peripheral.size,
+        })).collect::<Vec<_>>(),
+        "instructions_per_tick": [rate.numerator, rate.denominator],
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -323,7 +449,7 @@ mod tests {
         ProcessorCore {
             id: id.into(),
             model: ProcessorModel::CortexR5f,
-            released: true,
+            released: Some(true),
             registers: vec![],
             mprofile: None,
             rprofile: Some(RProfileState {
@@ -357,6 +483,7 @@ mod tests {
             blocks: vec![],
             interrupts: vec![],
             clocks: vec![],
+            hardware: None,
             mappings: vec![
                 AddressMapping {
                     id: "default-window".into(),
@@ -417,6 +544,8 @@ mod tests {
             id: "test-body".into(),
             soc_id: "test-soc".into(),
             dram_bytes: 0x2000,
+            hardware: None,
+            ram_regions: vec![],
             nand: None,
             sensor: None,
             lens: None,
