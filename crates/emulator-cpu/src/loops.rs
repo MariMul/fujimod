@@ -1,9 +1,9 @@
 //! Execution-owner permission for exact, instruction-proven loop acceleration.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum LoopMode {
-    #[default]
     Disabled,
     Measure,
+    #[default]
     Accelerate,
 }
 impl LoopMode {

@@ -225,3 +225,38 @@ fn an_interrupt_at_the_input_deadline_enters_before_the_next_loop_instruction() 
     }
     assert_eq!(on.read_register(0, arm::CORE[7]).unwrap(), 0x77);
 }
+
+#[test]
+fn store_continuations_allow_loops_and_stop_at_the_due_dma() {
+    let mut off = board(false, true, false, false, LoopMode::Disabled);
+    let mut on = board(false, true, false, false, LoopMode::Accelerate);
+    for board in [&mut off, &mut on] {
+        board
+            .continuation_begin(vec![(0x3000, 0x3004)], Default::default(), vec![])
+            .unwrap();
+        board.run_until(100, 1000).unwrap();
+        assert!(board.continuation_end().unwrap());
+        assert_eq!(board.now(), 53);
+    }
+    assert_eq!(on.fingerprint().unwrap(), off.fingerprint().unwrap());
+    assert!(
+        on.loop_statistics().unwrap()[0]["loop_accelerated_instructions"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+}
+
+#[test]
+fn device_continuations_keep_every_poll_observable() {
+    let mut board = board(true, true, false, false, LoopMode::Accelerate);
+    board
+        .continuation_begin(vec![], [0].into_iter().collect(), vec![])
+        .unwrap();
+    board.run_until(100, 1000).unwrap();
+    assert!(board.continuation_end().unwrap());
+    assert_eq!(
+        board.loop_statistics().unwrap()[0]["loop_accelerated_instructions"],
+        0
+    );
+}

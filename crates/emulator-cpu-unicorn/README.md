@@ -28,7 +28,9 @@ produced by CMake.
 
 ## Exact loop execution
 
-R-profile execution supports `LoopMode::Measure` and `LoopMode::Accelerate`.
+Exact board runs use `LoopMode::Accelerate` by default. Select
+`LoopMode::Measure` to count eligible instructions while executing them, or
+`LoopMode::Disabled` for the ordinary backend comparison.
 The board grants each exact run a stable window ending at its first device,
 DMA, interrupt or runnable-peer boundary. A standalone CPU owner must grant
 that window explicitly; it expires when the run returns. Measurement executes

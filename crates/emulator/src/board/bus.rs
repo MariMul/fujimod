@@ -457,7 +457,12 @@ impl Bus {
         self.windows.is_empty()
     }
     pub(super) fn loop_window(&self) -> bool {
-        self.mode == Mode::Strict && self.transactions.is_none() && self.continuation.is_none()
+        self.mode == Mode::Strict
+            && self.transactions.is_none()
+            && self
+                .continuation
+                .as_ref()
+                .is_none_or(|stops| stops.borrow().devices.is_empty())
     }
     /// Pure read snapshots that fall inside this CPU's physical MMIO mapping.
     /// Device declarations are relative to their registered windows; return
