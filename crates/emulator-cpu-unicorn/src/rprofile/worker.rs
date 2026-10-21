@@ -34,6 +34,9 @@ pub struct Config {
 pub struct CpuWorker {
     #[cfg(test)]
     rpc_calls: Cell<usize>,
+    // Host diagnostics stay outside the emulated CPU and its snapshots.
+    rpc_counts: [Cell<u64>; WorkerRpcCounter::COUNT],
+    callback_events: Cell<u64>,
     commands: Sender<Message>,
     events: RefCell<Receiver<Event>>,
     worker: RefCell<Option<JoinHandle<()>>>,
@@ -108,6 +111,8 @@ pub fn spawn(config: Config) -> Result<CpuWorker, String> {
             Ok(CpuWorker {
                 #[cfg(test)]
                 rpc_calls: Cell::new(0),
+                rpc_counts: std::array::from_fn(|_| Cell::new(0)),
+                callback_events: Cell::new(0),
                 commands,
                 events: RefCell::new(events),
                 worker: RefCell::new(Some(worker)),
@@ -255,6 +260,185 @@ enum Operation {
     #[cfg(test)]
     CallbackContexts,
 }
+
+#[derive(Clone, Copy)]
+#[repr(usize)]
+enum WorkerRpcCounter {
+    SetLoopMode,
+    SetLoopWindow,
+    SetExecutionPolicy,
+    CheckpointBackings,
+    Fingerprint,
+    SetGuestClock,
+    ReadRegister,
+    WriteRegister,
+    Coprocessor,
+    ReadMemory,
+    Translate,
+    ReadVirtual,
+    WriteMemory,
+    MemoryWritten,
+    BackingWritten,
+    MemoryRegions,
+    MapBacking,
+    MapPhysical,
+    ReplacePhysical,
+    MapZeroed,
+    MapMmio,
+    Unmap,
+    Protect,
+    InvalidateCode,
+    TightenInstructionLimit,
+    Progress,
+    Stop,
+    StopBeforeInstruction,
+    RprofileIdentity,
+    SetInterrupt,
+    Snapshot,
+    Restore,
+    InstallHooks,
+    RemoveHooks,
+    ObserveBackings,
+    WatchStores,
+    HookWatched,
+    PreciseStorePc,
+}
+
+impl WorkerRpcCounter {
+    const COUNT: usize = Self::PreciseStorePc as usize + 1;
+    const ALL: [Self; Self::COUNT] = [
+        Self::SetLoopMode,
+        Self::SetLoopWindow,
+        Self::SetExecutionPolicy,
+        Self::CheckpointBackings,
+        Self::Fingerprint,
+        Self::SetGuestClock,
+        Self::ReadRegister,
+        Self::WriteRegister,
+        Self::Coprocessor,
+        Self::ReadMemory,
+        Self::Translate,
+        Self::ReadVirtual,
+        Self::WriteMemory,
+        Self::MemoryWritten,
+        Self::BackingWritten,
+        Self::MemoryRegions,
+        Self::MapBacking,
+        Self::MapPhysical,
+        Self::ReplacePhysical,
+        Self::MapZeroed,
+        Self::MapMmio,
+        Self::Unmap,
+        Self::Protect,
+        Self::InvalidateCode,
+        Self::TightenInstructionLimit,
+        Self::Progress,
+        Self::Stop,
+        Self::StopBeforeInstruction,
+        Self::RprofileIdentity,
+        Self::SetInterrupt,
+        Self::Snapshot,
+        Self::Restore,
+        Self::InstallHooks,
+        Self::RemoveHooks,
+        Self::ObserveBackings,
+        Self::WatchStores,
+        Self::HookWatched,
+        Self::PreciseStorePc,
+    ];
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::SetLoopMode => "worker_rpc_set_loop_mode",
+            Self::SetLoopWindow => "worker_rpc_set_loop_window",
+            Self::SetExecutionPolicy => "worker_rpc_set_execution_policy",
+            Self::CheckpointBackings => "worker_rpc_checkpoint_backings",
+            Self::Fingerprint => "worker_rpc_fingerprint",
+            Self::SetGuestClock => "worker_rpc_set_guest_clock",
+            Self::ReadRegister => "worker_rpc_read_register",
+            Self::WriteRegister => "worker_rpc_write_register",
+            Self::Coprocessor => "worker_rpc_coprocessor",
+            Self::ReadMemory => "worker_rpc_read_memory",
+            Self::Translate => "worker_rpc_translate",
+            Self::ReadVirtual => "worker_rpc_read_virtual",
+            Self::WriteMemory => "worker_rpc_write_memory",
+            Self::MemoryWritten => "worker_rpc_memory_written",
+            Self::BackingWritten => "worker_rpc_backing_written",
+            Self::MemoryRegions => "worker_rpc_memory_regions",
+            Self::MapBacking => "worker_rpc_map_backing",
+            Self::MapPhysical => "worker_rpc_map_physical",
+            Self::ReplacePhysical => "worker_rpc_replace_physical",
+            Self::MapZeroed => "worker_rpc_map_zeroed",
+            Self::MapMmio => "worker_rpc_map_mmio",
+            Self::Unmap => "worker_rpc_unmap",
+            Self::Protect => "worker_rpc_protect",
+            Self::InvalidateCode => "worker_rpc_invalidate_code",
+            Self::TightenInstructionLimit => "worker_rpc_tighten_instruction_limit",
+            Self::Progress => "worker_rpc_progress",
+            Self::Stop => "worker_rpc_stop",
+            Self::StopBeforeInstruction => "worker_rpc_stop_before_instruction",
+            Self::RprofileIdentity => "worker_rpc_rprofile_identity",
+            Self::SetInterrupt => "worker_rpc_set_interrupt",
+            Self::Snapshot => "worker_rpc_snapshot",
+            Self::Restore => "worker_rpc_restore",
+            Self::InstallHooks => "worker_rpc_install_hooks",
+            Self::RemoveHooks => "worker_rpc_remove_hooks",
+            Self::ObserveBackings => "worker_rpc_observe_backings",
+            Self::WatchStores => "worker_rpc_watch_stores",
+            Self::HookWatched => "worker_rpc_hook_watched",
+            Self::PreciseStorePc => "worker_rpc_precise_store_pc",
+        }
+    }
+}
+
+impl Operation {
+    fn counter(&self) -> Option<WorkerRpcCounter> {
+        Some(match self {
+            Self::SetLoopMode(_) => WorkerRpcCounter::SetLoopMode,
+            Self::SetLoopWindow(_) => WorkerRpcCounter::SetLoopWindow,
+            Self::SetExecutionPolicy(_) => WorkerRpcCounter::SetExecutionPolicy,
+            Self::CheckpointBackings => WorkerRpcCounter::CheckpointBackings,
+            Self::Fingerprint => WorkerRpcCounter::Fingerprint,
+            Self::SetGuestClock(_) => WorkerRpcCounter::SetGuestClock,
+            Self::ReadRegister(_, _) => WorkerRpcCounter::ReadRegister,
+            Self::WriteRegister(_, _) => WorkerRpcCounter::WriteRegister,
+            Self::Coprocessor(_, _) => WorkerRpcCounter::Coprocessor,
+            Self::ReadMemory(_, _) => WorkerRpcCounter::ReadMemory,
+            Self::Translate(_, _) => WorkerRpcCounter::Translate,
+            Self::ReadVirtual(_, _, _) => WorkerRpcCounter::ReadVirtual,
+            Self::WriteMemory(_, _) => WorkerRpcCounter::WriteMemory,
+            Self::MemoryWritten(_, _) => WorkerRpcCounter::MemoryWritten,
+            Self::BackingWritten(_, _, _) => WorkerRpcCounter::BackingWritten,
+            Self::MemoryRegions => WorkerRpcCounter::MemoryRegions,
+            Self::MapBacking(_, _, _, _) => WorkerRpcCounter::MapBacking,
+            Self::MapPhysical(_, _, _, _, _) => WorkerRpcCounter::MapPhysical,
+            Self::ReplacePhysical(_, _, _, _, _) => WorkerRpcCounter::ReplacePhysical,
+            Self::MapZeroed(_, _, _) => WorkerRpcCounter::MapZeroed,
+            Self::MapMmio(_, _, _, _) => WorkerRpcCounter::MapMmio,
+            Self::Unmap(_, _) => WorkerRpcCounter::Unmap,
+            Self::Protect(_, _, _) => WorkerRpcCounter::Protect,
+            Self::InvalidateCode(_) => WorkerRpcCounter::InvalidateCode,
+            Self::TightenInstructionLimit(_) => WorkerRpcCounter::TightenInstructionLimit,
+            Self::Progress => WorkerRpcCounter::Progress,
+            Self::Stop => WorkerRpcCounter::Stop,
+            Self::StopBeforeInstruction => WorkerRpcCounter::StopBeforeInstruction,
+            Self::RprofileIdentity(_) => WorkerRpcCounter::RprofileIdentity,
+            Self::SetInterrupt(_, _) => WorkerRpcCounter::SetInterrupt,
+            Self::Snapshot(_) => WorkerRpcCounter::Snapshot,
+            Self::Restore(_) => WorkerRpcCounter::Restore,
+            Self::InstallHooks(_) => WorkerRpcCounter::InstallHooks,
+            Self::RemoveHooks(_) => WorkerRpcCounter::RemoveHooks,
+            Self::ObserveBackings(_) => WorkerRpcCounter::ObserveBackings,
+            Self::WatchStores(_, _) => WorkerRpcCounter::WatchStores,
+            Self::HookWatched(_, _) => WorkerRpcCounter::HookWatched,
+            Self::PreciseStorePc(_) => WorkerRpcCounter::PreciseStorePc,
+            Self::ExitCounters => return None,
+            #[cfg(test)]
+            Self::CallbackContexts => return None,
+        })
+    }
+}
+
 
 #[derive(Clone, Copy)]
 enum HookKind {
@@ -898,10 +1082,15 @@ impl CpuWorker {
     fn rpc(&self, operation: Operation) -> Result<Value, String> {
         #[cfg(test)]
         self.rpc_calls.set(self.rpc_calls.get() + 1);
+        let counter = operation.counter();
         let (reply, response) = mpsc::channel();
         self.commands
             .send(Message::Request { operation, reply })
             .map_err(|_| "R-profile CPU worker disconnected")?;
+        if let Some(counter) = counter {
+            let count = &self.rpc_counts[counter as usize];
+            count.set(count.get().saturating_add(1));
+        }
         response
             .recv()
             .map_err(|_| "R-profile CPU worker reply disconnected")?
@@ -1031,6 +1220,8 @@ impl CpuWorker {
                         "R-profile worker sent a second callback before the first was serviced".into(),
                     ));
                 }
+                self.callback_events
+                    .set(self.callback_events.get().saturating_add(1));
                 self.stopped_progress.set(progress);
                 self.stopped_pc.set(pc);
                 *self.pending_callback.borrow_mut() = Some((id, callback, call, progress, pc));
@@ -1640,7 +1831,14 @@ impl Cpu for CpuWorker {
     }
     fn exit_counters(&self) -> Result<BTreeMap<&'static str, u64>, String> {
         match self.rpc(Operation::ExitCounters)? {
-            Value::Counters(counters) => Ok(counters.into_iter().collect()),
+            Value::Counters(counters) => {
+                let mut counters = counters.into_iter().collect::<BTreeMap<_, _>>();
+                for counter in WorkerRpcCounter::ALL {
+                    counters.insert(counter.name(), self.rpc_counts[counter as usize].get());
+                }
+                counters.insert("worker_callback_events", self.callback_events.get());
+                Ok(counters)
+            }
             _ => Err("R-profile CPU worker returned unexpected exit counters".into()),
         }
     }
@@ -1709,6 +1907,55 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn worker_rpc_counters_are_observational_and_survive_restore() {
+        for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+            let cpu = worker(SharedMemory::default());
+            cpu.set_execution_policy(policy).unwrap();
+            let before = cpu.exit_counters().unwrap();
+
+            cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+            cpu.write_register(arm::CORE[0], &0x1122_3344u32.to_le_bytes())
+                .unwrap();
+            let snapshot = cpu.snapshot(None).unwrap();
+            cpu.write_register(arm::CORE[0], &0x5566_7788u32.to_le_bytes())
+                .unwrap();
+            cpu.restore(snapshot.as_ref()).unwrap();
+            assert_eq!(read_u32(&cpu, arm::CORE[0]), 0x1122_3344, "{policy:?}");
+
+            let after = cpu.exit_counters().unwrap();
+            assert_eq!(
+                after["worker_rpc_map_zeroed"] - before["worker_rpc_map_zeroed"],
+                1,
+                "{policy:?}"
+            );
+            assert_eq!(
+                after["worker_rpc_write_register"] - before["worker_rpc_write_register"],
+                2,
+                "{policy:?}"
+            );
+            assert_eq!(
+                after["worker_rpc_snapshot"] - before["worker_rpc_snapshot"],
+                1,
+                "{policy:?}"
+            );
+            assert_eq!(
+                after["worker_rpc_restore"] - before["worker_rpc_restore"],
+                1,
+                "{policy:?}"
+            );
+            assert_eq!(
+                after["worker_rpc_read_register"] - before["worker_rpc_read_register"],
+                1,
+                "{policy:?}"
+            );
+            assert_eq!(after["worker_callback_events"], 0, "{policy:?}");
+            assert!(!after.contains_key("worker_rpc_exit_counters"));
+            assert_eq!(after, cpu.exit_counters().unwrap(), "{policy:?}");
+        }
+    }
+
 
     #[test]
     fn observer_groups_use_one_rpc_and_retire_callback_contexts() {
@@ -1845,6 +2092,7 @@ mod tests {
         assert_eq!(probe.calls, 1);
         assert!(probe.progress.is_some());
         assert!(probe.pc.is_some());
+        assert_eq!(cpu.exit_counters().unwrap()["worker_callback_events"], 1);
     }
 
     #[test]
