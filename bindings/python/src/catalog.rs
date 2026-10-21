@@ -29,9 +29,11 @@ fn resolve_firmware(firmware_id: &str) -> PyResult<String> {
 
 /// Resolve and validate a named run configuration and all reference identities.
 #[pyfunction]
-fn resolve_configuration(configuration_id: &str) -> PyResult<String> {
-    let resolved = fujimod_catalog::ResolvedConfiguration::bundled(configuration_id)
-        .map_err(PyValueError::new_err)?;
+#[pyo3(signature = (configuration_id, overlays=Vec::new()))]
+fn resolve_configuration(configuration_id: &str, overlays: Vec<String>) -> PyResult<String> {
+    let resolved =
+        fujimod_catalog::ResolvedConfiguration::with_overlays(configuration_id, &overlays)
+            .map_err(PyValueError::new_err)?;
     serde_json::to_string(&resolved).map_err(|error| PyValueError::new_err(error.to_string()))
 }
 

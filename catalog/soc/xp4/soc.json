@@ -306,7 +306,7 @@
       "id": "serial-flash",
       "base": 4294803456,
       "size": 256,
-      "kind": "nand-controller",
+      "kind": "address-window",
       "clock_id": null
     },
     {
@@ -333,7 +333,7 @@
     {
       "id": "interval-timer",
       "base": 4294165248,
-      "size": 256,
+      "size": 80,
       "kind": "timer",
       "clock_id": null
     }

@@ -25,6 +25,14 @@ pub(crate) fn error(message: String) -> PyErr {
     NativeError::new_err(message)
 }
 
+/// Compile checked reference identities and starting inputs without constructing a CPU.
+#[pyfunction]
+#[pyo3(signature = (configuration_id, overlays=Vec::new()))]
+fn prepare_configuration(configuration_id: &str, overlays: Vec<String>) -> PyResult<String> {
+    let prepared = fujimod_emulator::boot::prepare(configuration_id, &overlays).map_err(error)?;
+    serde_json::to_string(&prepared.to_json()).map_err(|failure| error(failure.to_string()))
+}
+
 /// Load explicitly located, identity-checked inputs before constructing a board.
 #[pyfunction]
 fn load_input_assets<'py>(
@@ -133,7 +141,10 @@ fn sha256_many(values: Vec<Bound<'_, PyBytes>>) -> Vec<String> {
 )]
 mod binding {
     #[pymodule_export]
-    use super::{NativeError, Sha256, load_input_assets, sha256_many, verify_input_assets};
+    use super::{
+        NativeError, Sha256, load_input_assets, prepare_configuration, sha256_many,
+        verify_input_assets,
+    };
 
     #[cfg(not(target_os = "emscripten"))]
     #[pymodule_export]

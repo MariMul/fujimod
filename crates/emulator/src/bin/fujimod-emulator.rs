@@ -3,7 +3,7 @@ use fujimod_emulator::boot::{self, Options};
 use fujimod_emulator_cpu::ExecutionPolicy;
 use std::{collections::BTreeMap, ffi::OsString, path::PathBuf, process::ExitCode};
 
-const HELP: &str = "Usage: fujimod-emulator boot --configuration ID \\\n  --update UPDATE.DAT --boot-rom ROM.BIN --unicorn LIBRARY \\\n  [--nand IMAGE] [--settings MCU.BIN] [--screenshot LCD.PNG] \\\n  [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\n\
+const HELP: &str = "Usage: fujimod-emulator boot --configuration ID \\\n  --update UPDATE.DAT --boot-rom ROM.BIN --unicorn LIBRARY \\\n  [--overlay ID] [--nand IMAGE] [--settings MCU.BIN] [--screenshot LCD.PNG] \\\n  [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\n\
 Boot configuration: x70-110-rec. The ROM dump is required.\n\
 Without --nand or --settings, persistent settings start blank.\n\
 NAND accepts a committed image or 128 MiB main-area image without OOB/spare.\n\
@@ -25,10 +25,12 @@ fn parse(
         return Ok(None);
     }
     let mut values = BTreeMap::new();
+    let mut overlays = Vec::new();
     while let Some(key) = args.next() {
         let key = key.to_str().ok_or("option name is not UTF-8")?.to_owned();
         if ![
             "--configuration",
+            "--overlay",
             "--update",
             "--boot-rom",
             "--unicorn",
@@ -45,6 +47,16 @@ fn parse(
         let value = args
             .next()
             .ok_or_else(|| format!("missing value for {key}"))?;
+        if key == "--overlay" {
+            let id = value
+                .into_string()
+                .map_err(|_| "overlay ID must be UTF-8")?;
+            if overlays.contains(&id) {
+                return Err(format!("duplicate overlay: {id}"));
+            }
+            overlays.push(id);
+            continue;
+        }
         if values.insert(key.clone(), value).is_some() {
             return Err(format!("duplicate option: {key}"));
         }
@@ -58,6 +70,7 @@ fn parse(
         configuration_id: take("--configuration")?
             .into_string()
             .map_err(|_| "configuration ID must be UTF-8")?,
+        overlays,
         update: take("--update")?.into(),
         boot_rom: take("--boot-rom")?.into(),
         unicorn: take("--unicorn")?.into(),
@@ -176,6 +189,7 @@ mod tests {
         .unwrap()
         .unwrap();
         assert_eq!(options.configuration_id, "x70-110-rec");
+        assert!(options.overlays.is_empty());
         assert_eq!(options.boot_rom, PathBuf::from("rom.bin"));
         assert_eq!(limit, 2_000_000_000);
         assert_eq!(execution_policy, ExecutionPolicy::Interactive);
@@ -212,5 +226,26 @@ mod tests {
             parse(args(&input)).unwrap_err(),
             "unknown CPU execution policy: approximate"
         );
+    }
+
+    #[test]
+    fn overlay_ids_preserve_order_and_duplicates_refuse() {
+        let base = [
+            "boot",
+            "--configuration",
+            "x70-110-rec",
+            "--update",
+            "a.dat",
+            "--boot-rom",
+            "rom.bin",
+            "--unicorn",
+            "lib.so",
+        ];
+        let mut input = base.to_vec();
+        input.extend(["--overlay", "usb", "--overlay", "service"]);
+        let (options, _, _, _) = parse(args(&input)).unwrap().unwrap();
+        assert_eq!(options.overlays, ["usb", "service"]);
+        input.extend(["--overlay", "usb"]);
+        assert!(parse(args(&input)).is_err());
     }
 }

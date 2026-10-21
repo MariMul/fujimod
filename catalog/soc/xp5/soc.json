@@ -104,7 +104,7 @@
       "id": "flash",
       "base": 4287668224,
       "size": 4096,
-      "kind": "nand-controller",
+      "kind": "address-window",
       "clock_id": null
     },
     {

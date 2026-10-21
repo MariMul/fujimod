@@ -20,8 +20,9 @@ target/release/fujimod-emulator boot \
 
 The ID resolves a checked run configuration, which selects the body and
 firmware identities and supplies the execution policy and scene inputs. The
-selected pair must have a supported native runtime. This command currently
-accepts ROM-start configurations without overlays.
+selected pair must have a supported native runtime. Use `--overlay ID` to apply
+a named variant; repeated overlays are applied in command-line order. Unsupported
+start entries or physical inputs are refused during preparation.
 
 Use the shared library filename produced on your platform. Firmware and ROM
 size and SHA-256 must match the selected catalog entry. Supplying your own
@@ -54,7 +55,7 @@ PNG captures the currently composed LCD without advancing the guest. Input
 files are read only; firmware-written settings remain in the session's medium.
 
 Rust embedding uses `fujimod_emulator::boot::{Options, open, to_rec, screenshot}`;
-set `Options.configuration_id` to select the run configuration.
+set `Options.configuration_id` and `Options.overlays` to select the run.
 `open` returns an unexecuted `session::Session`; its `board` owns execution and
 its other methods supply external inputs and passive observations. `to_rec`
 returns a stopped report while retaining the session for inspection. No Python

@@ -34,17 +34,19 @@ impl<'a> Owner<'a> {
 #[pymethods]
 impl Board {
     #[staticmethod]
-    #[pyo3(signature=(*, configuration_id, update, boot_rom, unicorn, nand=None, settings=None))]
+    #[pyo3(signature=(*, configuration_id, update, boot_rom, unicorn, overlays=Vec::new(), nand=None, settings=None))]
     fn from_inputs(
         configuration_id: String,
         update: PathBuf,
         boot_rom: PathBuf,
         unicorn: PathBuf,
+        overlays: Vec<String>,
         nand: Option<PathBuf>,
         settings: Option<PathBuf>,
     ) -> PyResult<Self> {
         let session = boot::open(boot::Options {
             configuration_id,
+            overlays,
             update,
             boot_rom,
             unicorn,
