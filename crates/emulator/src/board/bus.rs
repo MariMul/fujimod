@@ -1,6 +1,6 @@
 //! Common device dispatch, discovery ledger and causal wakeups.
-use fujimod_emulator_devices::graph::{Mapping, validate_mappings};
 use fujimod_emulator_devices::bus::{FastReadValue, FastReadWord};
+use fujimod_emulator_devices::graph::{Mapping, validate_mappings};
 use fujimod_emulator_devices::{Cx, Device, Host};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -323,8 +323,11 @@ impl Bus {
         }
     }
     #[cfg(feature = "host-profile")]
-    pub fn start_host_profile(&mut self) -> Result<(), String> {
-        self.host_profile = Some(super::host_profile::Profile::new()?);
+    pub(super) fn start_host_profile(
+        &mut self,
+        baseline: Vec<super::host_profile::CpuCounters>,
+    ) -> Result<(), String> {
+        self.host_profile = Some(super::host_profile::Profile::new(baseline)?);
         Ok(())
     }
     #[cfg(feature = "host-profile")]
@@ -352,10 +355,13 @@ impl Bus {
         }
     }
     #[cfg(feature = "host-profile")]
-    pub fn host_profile(&self) -> Value {
+    pub(super) fn host_profile(
+        &self,
+        counters: impl FnOnce() -> Vec<Result<super::host_profile::CpuCounters, String>>,
+    ) -> Value {
         self.host_profile
             .as_ref()
-            .map(|p| p.report(|id| self.windows[id].device.name()))
+            .map(|p| p.report(|id| self.windows[id].device.name(), &counters()))
             .unwrap_or(Value::Null)
     }
     #[cfg(feature = "host-profile")]
@@ -467,11 +473,7 @@ impl Bus {
     /// Pure read snapshots that fall inside this CPU's physical MMIO mapping.
     /// Device declarations are relative to their registered windows; return
     /// offsets relative to the requested mapping for the CPU backend.
-    pub(super) fn fast_reads(
-        &self,
-        physical_base: u64,
-        bytes: usize,
-    ) -> Vec<(u64, FastReadValue)> {
+    pub(super) fn fast_reads(&self, physical_base: u64, bytes: usize) -> Vec<(u64, FastReadValue)> {
         let Some(physical_end) = physical_base.checked_add(bytes as u64) else {
             return Vec::new();
         };
@@ -620,11 +622,10 @@ impl Bus {
         if self.transactions.is_some() {
             return Err("Another bus transaction observer is active".into());
         }
-        if ranges.is_empty()
-            || limit == 0
-            || ranges.iter().any(|&(begin, end)| begin >= end)
-        {
-            return Err("Bus transaction watch requires bounded address windows and records".into());
+        if ranges.is_empty() || limit == 0 || ranges.iter().any(|&(begin, end)| begin >= end) {
+            return Err(
+                "Bus transaction watch requires bounded address windows and records".into(),
+            );
         }
         self.transactions = Some(Transactions {
             limit,
@@ -640,7 +641,11 @@ impl Bus {
     }
 
     pub fn transaction_watch_end(&mut self) -> Result<TransactionBatch, String> {
-        if !self.transactions.as_ref().is_some_and(|log| log.ranges.is_some()) {
+        if !self
+            .transactions
+            .as_ref()
+            .is_some_and(|log| log.ranges.is_some())
+        {
             return Err("No scoped bus transaction observer is active".into());
         }
         let log = self.transactions.take().unwrap();
@@ -1199,7 +1204,11 @@ mod tests {
         for bus in [&mut plain, &mut observed] {
             bus.register(0x1000, 4, Box::new(Register(5))).unwrap();
         }
-        observed.start_host_profile().unwrap();
+        assert_eq!(
+            observed.host_profile(|| panic!("inactive profiler queried CPU")),
+            Value::Null
+        );
+        observed.start_host_profile(Vec::new()).unwrap();
         for value in [None, Some(19), None] {
             assert_eq!(
                 plain.access(&mut Services, 0, 0, 0x1000, 4, value),
@@ -1208,7 +1217,7 @@ mod tests {
             assert_eq!(plain.state(), observed.state());
         }
         let before = observed.state();
-        let report = observed.host_profile();
+        let report = observed.host_profile(Vec::new);
         assert_eq!(report["devices"].as_array().unwrap().len(), 2);
         assert_eq!(
             report["devices"]

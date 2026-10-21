@@ -2,6 +2,8 @@
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, time::Duration};
 
+pub(super) type CpuCounters = BTreeMap<&'static str, u64>;
+
 fn now() -> Result<Duration, String> {
     #[cfg(unix)]
     {
@@ -38,6 +40,7 @@ struct Row {
 }
 #[derive(Default)]
 pub(super) struct Profile {
+    cpu_baseline: Vec<CpuCounters>,
     devices: BTreeMap<(usize, &'static str), Row>,
     engines: BTreeMap<usize, Row>,
     device_cpu: Duration,
@@ -46,9 +49,12 @@ pub(super) struct Profile {
     run_depth: usize,
 }
 impl Profile {
-    pub fn new() -> Result<Self, String> {
+    pub fn new(cpu_baseline: Vec<CpuCounters>) -> Result<Self, String> {
         now()?;
-        Ok(Self::default())
+        Ok(Self {
+            cpu_baseline,
+            ..Self::default()
+        })
     }
     pub fn start(&self) -> Stamp {
         self.start_at(now().expect("thread CPU clock failed after profiling started"))
@@ -116,7 +122,11 @@ impl Profile {
             .checked_sub(devices)
             .expect("MMIO device CPU exceeds engine CPU");
     }
-    pub fn report(&self, name: impl Fn(usize) -> &'static str) -> Value {
+    pub fn report(
+        &self,
+        name: impl Fn(usize) -> &'static str,
+        counters: &[Result<CpuCounters, String>],
+    ) -> Value {
         let engine: Duration = self.engines.values().map(|r| r.exclusive).sum();
         // Dispatch, callbacks outside device bodies, clock reads and profiler
         // bookkeeping remain visible rather than being assigned to a device.
@@ -128,6 +138,14 @@ impl Profile {
             "run_device_cpu_seconds":self.run_device_cpu.as_secs_f64(),
             "runtime_cpu_seconds":other.map(|v|v.as_secs_f64()),
             "engine_definition":"CPU backend and callbacks excluding measured device bodies",
+            "cpu_exit_counters":counters.iter().enumerate().map(|(core,current)|match current {
+                Ok(current)=>json!({"core":core,"delta":current.iter().map(|(&name,&value)| {
+                    let delta=self.cpu_baseline.get(core).and_then(|b|b.get(name))
+                        .and_then(|&before|value.checked_sub(before));
+                    (name,delta)
+                }).collect::<BTreeMap<_,_>>()}),
+                Err(error)=>json!({"core":core,"error":error}),
+            }).collect::<Vec<_>>(),
             "engines":self.engines.iter().map(|(&core,r)|json!({"core":core,"calls":r.calls,
                 "inclusive_cpu_seconds":r.inclusive.as_secs_f64(),"cpu_seconds":r.exclusive.as_secs_f64()})).collect::<Vec<_>>(),
             "devices":self.devices.iter().map(|(&(device,phase),r)|json!({"device":device,
@@ -154,7 +172,7 @@ mod tests {
         p.record_at(1, "write", parent, ms(25));
         p.record_engine_at(0, engine, ms(30));
         p.finish_run_at(run, ms(40));
-        let report = p.report(|_| "device");
+        let report = p.report(|_| "device", &[]);
         assert_eq!(report["engine_cpu_seconds"], 0.010);
         assert_eq!(report["run_device_cpu_seconds"], 0.010);
         assert_eq!(report["runtime_cpu_seconds"], 0.020);
@@ -169,7 +187,38 @@ mod tests {
         p.record_at(1, "read", stamp, ms(5));
         assert_eq!(p.device_cpu, ms(5));
         assert_eq!(p.run_device_cpu, Duration::ZERO);
-        assert_eq!(p.report(|_| "device")["runtime_cpu_seconds"], 0.0);
+        assert_eq!(p.report(|_| "device", &[])["runtime_cpu_seconds"], 0.0);
+    }
+    #[test]
+    fn cpu_counts_are_phase_deltas_and_reports_do_not_change_the_baseline() {
+        let p = Profile {
+            cpu_baseline: vec![BTreeMap::from([
+                ("worker_rpc_run", 40),
+                ("worker_callback_events", 9),
+                ("reset_counter", 5),
+            ])],
+            ..Profile::default()
+        };
+        let counters = [
+            Ok(BTreeMap::from([
+                ("worker_rpc_run", 47),
+                ("worker_callback_events", 11),
+                ("reset_counter", 1),
+            ])),
+            Err("CPU unavailable".into()),
+        ];
+        let report = p.report(|_| "device", &counters);
+        assert_eq!(report["cpu_exit_counters"][0]["delta"]["worker_rpc_run"], 7);
+        assert_eq!(
+            report["cpu_exit_counters"][0]["delta"]["worker_callback_events"],
+            2
+        );
+        assert_eq!(
+            report["cpu_exit_counters"][0]["delta"]["reset_counter"],
+            Value::Null
+        );
+        assert_eq!(report["cpu_exit_counters"][1]["error"], "CPU unavailable");
+        assert_eq!(report, p.report(|_| "device", &counters));
     }
     #[test]
     #[cfg(unix)]

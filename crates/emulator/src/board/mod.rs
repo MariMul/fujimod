@@ -387,12 +387,22 @@ impl Board {
         self.state.borrow().timeline.now()
     }
     #[cfg(feature = "host-profile")]
+    /// Begin host observations while all processors are stopped.
     pub fn start_host_profile(&self) -> Result<(), String> {
-        self.state.borrow_mut().bus.start_host_profile()
+        let baseline = self
+            .cpus
+            .iter()
+            .map(|cpu| cpu.exit_counters())
+            .collect::<Result<_, _>>()?;
+        self.state.borrow_mut().bus.start_host_profile(baseline)
     }
     #[cfg(feature = "host-profile")]
+    /// Observe phase costs while all processors are stopped after a board run.
     pub fn host_profile(&self) -> Value {
-        self.state.borrow().bus.host_profile()
+        self.state
+            .borrow()
+            .bus
+            .host_profile(|| self.cpus.iter().map(|cpu| cpu.exit_counters()).collect())
     }
     /// Observation only: every released processor is waiting for an input.
     /// Device deadlines may still wake a processor in a later run.
