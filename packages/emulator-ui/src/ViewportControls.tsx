@@ -1,7 +1,7 @@
 import { Show, onSettled } from 'solid-js';
-import { SegmentedControl } from '../ui/SegmentedControl';
-import { Icon } from '../ui/icons';
-import { SpeedGauge } from '../ui/speed';
+import { SegmentedControl } from './ui/SegmentedControl';
+import { Icon } from './ui/icons';
+import { SpeedGauge } from './ui/speed';
 import type { EmulatorFeedbackActions } from './Feedback';
 import './viewport-controls.css';
 

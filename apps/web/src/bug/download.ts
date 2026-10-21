@@ -1,4 +1,4 @@
-import { zipFiles } from '../archive';
+import { zipFiles } from '@fujimod/emulator-ui/archive';
 /** Preserve the camera TAR byte-for-byte inside a GitHub-compatible archive. */
 export async function prepareDownload(
   archive: Blob,

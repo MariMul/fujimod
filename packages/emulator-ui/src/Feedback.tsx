@@ -1,15 +1,15 @@
 import type { JSX } from '@solidjs/web';
 import { createEffect, createSignal, onSettled } from 'solid-js';
-import type { SessionController } from '../session/controller';
-import type { ReportSubmission } from '../engine/report';
-import { simulatorIssue } from '../ui/simulator-feedback';
+import type { SessionController } from './session/controller';
+import type { ReportSubmission } from './engine/report';
+import { simulatorIssue } from './ui/simulator-feedback';
 import {
   readPendingReport,
   storePendingReport,
   deliverReport,
   type PendingReport,
-} from '../ui/report-delivery';
-import { downloadBlob } from '../ui/download';
+} from './ui/report-delivery';
+import { downloadBlob } from './ui/download';
 
 export interface EmulatorFeedbackActions {
   readonly ready: boolean;

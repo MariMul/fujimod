@@ -1,4 +1,4 @@
-import type { WasmRequest } from './wasm-worker-protocol';
+import type { WasmRequest } from '@fujimod/emulator-ui/engine/wasm-worker-protocol';
 import type { UsbStatus } from 'fujimod/emulator';
 import { EmulatedUsbDevice, type UsbBus, type UsbSetup } from './webusb-device';
 

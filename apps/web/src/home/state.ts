@@ -1,4 +1,4 @@
-import { sessionState } from '../session/state';
+import { sessionState } from '@fujimod/emulator-ui/session/state';
 import type { CameraRecord } from '../cameras/store';
 import { createStore } from 'solid-js';
 import { validateCatalog, type Catalog, type Firmware } from '../catalog';

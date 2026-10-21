@@ -51,6 +51,7 @@ mise install
 uv sync --locked
 npm ci
 npm --prefix bindings/javascript ci
+npm --prefix packages/emulator-ui ci
 npm --prefix apps/web ci
 npm --prefix apps/usb-sharing ci
 rustup target add wasm32-unknown-unknown

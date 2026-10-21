@@ -1,4 +1,4 @@
-import type {} from '../src/engine/performance';
+import type {} from '@fujimod/emulator-ui/engine/performance';
 type BootMemory = { wasmMemoryBytes?: number; peakWasmMemoryBytes?: number; stage: string };
 declare global {
   interface WindowEventMap {

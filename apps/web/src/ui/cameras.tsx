@@ -1,6 +1,6 @@
 import { For } from 'solid-js';
 import type { Firmware } from '../catalog';
-import { Icon } from './icons';
+import { Icon } from '@fujimod/emulator-ui/ui/icons';
 export interface Generation {
   name: string;
   years: string;

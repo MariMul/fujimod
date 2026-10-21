@@ -1,6 +1,6 @@
 import { test } from 'vite-plus/test';
 import assert from 'node:assert/strict';
-import { deliverReport } from '../src/ui/report-delivery.ts';
+import { deliverReport } from '@fujimod/emulator-ui/ui/report-delivery';
 
 const report = {
   blob: new Blob(['ZIP']),

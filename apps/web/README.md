@@ -12,7 +12,9 @@ on review branches; the Pages workflow deploys approved main builds only.
 `@solidjs/vite-plugin` runs in native start mode with `ssr: true`. The plugin
 owns client/server entries and hydration; `src/App.tsx` selects the three pages
 and `src/Document.tsx` owns their HTML document and metadata. Browser-only emulator, USB and LCD work starts after hydration. Engine/input protocols
-remain separate from the Solid components that display their state.
+remain separate from the Solid components that display their state. The
+[emulator UI package](../../packages/emulator-ui/README.md) owns the reusable
+session and workspace; `src/home/controller.ts` owns homepage policy.
 
 `npm run build` renders `/`, `/dev-tools/` and `/bug/` through start mode's
 production request handler. Deploy **`dist/client/`**, which contains the full
@@ -114,16 +116,16 @@ stays in IndexedDB. The C ABI supports live execution, same-owner Undo and porta
 saves. Each reopen cold boots committed storage and persistent physical controls. Save failures
 are shown in the library and preserve any previous successful transaction.
 
-`src/engine/api.ts` is the web app's emulator boundary. The standalone Rust Wasm
+`@fujimod/emulator-ui/engine/api` is the web app's emulator boundary. The standalone Rust Wasm
 worker owns execution, pacing, request ordering and native history. Rendering
 and panel code contain no register addresses or firmware bindings. Inputs,
 labels, support and positions come from native `state.inputs`. Layout, printed
 faces and gestures belong to `devices/x70/panel.json`; icons and badge styling
-belong to `src/feedback/presentation.json`. The X70 panel uses semantic body
+belong to `packages/emulator-ui/src/feedback/presentation.json`. The X70 panel uses semantic body
 control IDs throughout. A firmware catalog supplies the checked Wasm artifact
 bundle; there is one engine implementation.
 
-`src/viewer/lcd.ts` composes actual guest LCD frames and fault feedback. Native
+`@fujimod/emulator-ui/viewer/lcd` composes actual guest LCD frames and fault feedback. Native
 card state and FAT files supply the SD browser. Unsupported lifecycle operations
 return their native error. With no selected scene, the app supplies the bundled
 1536×1024 dunes PNG through the ordinary RGB scene interface. It was generated
@@ -150,6 +152,8 @@ Use the Node version in the repository's `mise.toml` (`mise install`),
 
 ```sh
 rustup target add wasm32-unknown-unknown
+npm --prefix ../.. ci
+npm --prefix ../../packages/emulator-ui ci
 npm --prefix ../../bindings/javascript ci
 npm --prefix ../../bindings/javascript run setup:tooling
 npm ci

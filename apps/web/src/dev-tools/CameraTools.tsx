@@ -1,7 +1,7 @@
 import { Show, createSignal } from 'solid-js';
 import type { Camera, CameraModel, ToolSession } from './camera-model';
 import { memoryRange } from './inspection';
-import { zipFiles } from '../archive';
+import { zipFiles } from '@fujimod/emulator-ui/archive';
 
 /** Readings collected on one camera, for the diagnostic bundle. */
 export interface Readings {

@@ -6,7 +6,8 @@ and a small standalone frontend served by a native emulator process.
 
 ## Boundaries
 
-- The UI drives an emulator only through `Engine` (`src/engine/api.ts`).
+- The UI drives an emulator only through `Engine`
+  (`packages/emulator-ui/src/engine/api.ts`).
 - `WasmEngine` runs the emulator in a browser worker. `RemoteEngine` reaches a
   native emulator process. Both send the same messages: the worker protocol
   becomes the wire protocol, defined once and used by the worker, the remote
@@ -35,8 +36,12 @@ it as JSON. User layouts are stored with the saved camera.
 
 ## Order
 
-1. Split `src/home/runtime.ts` into the session controller and homepage code.
-2. Move the UI into its package; the homepage uses it.
+1. Complete: split `src/home/runtime.ts` into the Engine-only session controller
+   (`packages/emulator-ui/src/session/controller.ts`) and homepage code
+   (`src/home/controller.ts`). The old runtime module is deleted.
+2. Complete: move the UI into [`@fujimod/emulator-ui`](../../packages/emulator-ui/README.md).
+   The homepage imports its workspace, session, viewer, controls, status,
+   faults and reports. The Wasm engine implementation stays in the web app.
 3. Layout schema version, import/export, binding checks, then the editor.
 4. `RemoteEngine` over WebRTC, and the native process serving the UI.
 

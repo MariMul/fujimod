@@ -1,5 +1,5 @@
 /** Exercise the settled app route through its actual generated control panel. */
-import type { WasmRequest } from '../src/engine/wasm-worker-protocol';
+import type { WasmRequest } from '@fujimod/emulator-ui/engine/wasm-worker-protocol';
 import { chromium, webkit } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';

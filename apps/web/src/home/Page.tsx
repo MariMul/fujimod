@@ -1,28 +1,22 @@
-import { LoadingAssets } from './LoadingAssets';
+import { EmulatorWorkspace } from '@fujimod/emulator-ui/EmulatorWorkspace';
 import { CameraLibrary } from '../cameras/Library';
 import { Show, createSignal, onSettled } from 'solid-js';
 import { createHomeState } from './state';
 import { startHome, type HomeController } from './controller';
-import { Controls } from '../ui/controls';
-import { CardBrowser } from '../ui/card';
-import { Connections } from '../ui/connections';
-import { FaultPanel } from '../ui/fault';
+import { FaultPanel } from '@fujimod/emulator-ui/ui/fault';
 import { CameraTable } from '../ui/cameras';
 import { PersonalNote } from '../ui/personal-note';
 import { FeatureCatalog } from './Features';
 import { FirmwareChoice, createFirmwareChoice } from '../ui/firmware-actions';
-import { EmulatorFeedback } from './Feedback';
-import { ViewportControls } from './ViewportControls';
+import { EmulatorFeedback } from '@fujimod/emulator-ui/Feedback';
+import { ViewportControls } from '@fujimod/emulator-ui/ViewportControls';
 import generations from '../../devices/generations.json';
-import { ViewerOverlays } from '../viewer/Overlays';
-import '../style.css';
+import '../home/site.css';
 import '../navigation.css';
-import './loading.css';
 
 export default function Home() {
   const [state, setState] = createHomeState();
   const [runtime, setRuntime] = createSignal<HomeController>();
-  const [dragging, setDragging] = createSignal(false);
   const [feedback, setFeedback] = createSignal<{ event: 'feedback' | 'crash' }>();
   const choice = createFirmwareChoice();
   let viewer!: HTMLDivElement,
@@ -88,39 +82,22 @@ export default function Home() {
             }}
             upload={() => file.click()}
           />
-          <section
-            ref={workspace}
-            class={['stage', { idle: state.idle }]}
-            id="workspace"
-            aria-labelledby="emulator-heading"
-          >
-            <div
-              ref={viewer}
-              class={['viewer lcd-mode', { dragging: dragging() }]}
-              id="viewer"
-              aria-label="Camera viewer"
-              style={{ '--body-preview': state.bodyPreview }}
-              onDragOver={(event) => {
-                event.preventDefault();
-                setDragging(true);
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(event) => {
-                event.preventDefault();
-                setDragging(false);
-                runtime()?.selectFile(event.dataTransfer?.files[0]);
-              }}
-            >
-              <canvas
-                ref={lcd}
-                id="lcd-source"
-                class="flat"
-                aria-label="Camera LCD"
-                width="720"
-                height="480"
-              />
-              <ViewerOverlays viewer={runtime()?.viewer} />
-              <div class="ghost" aria-hidden="true" />
+          <EmulatorWorkspace
+            state={state}
+            runtime={runtime()}
+            bodyPreview={state.bodyPreview}
+            labelledBy="emulator-heading"
+            workspace={(element) => {
+              workspace = element;
+            }}
+            viewer={(element) => {
+              viewer = element;
+            }}
+            lcd={(element) => {
+              lcd = element;
+            }}
+            selectFile={(selected) => runtime()?.selectFile(selected)}
+            toolbar={
               <EmulatorFeedback runtime={runtime()} request={feedback()}>
                 {(actions) => (
                   <ViewportControls
@@ -143,71 +120,30 @@ export default function Home() {
                   />
                 )}
               </EmulatorFeedback>
-              <label
-                class="dropbox"
-                id="firmware-prompt"
-                for="firmware-file"
-                hidden={!state.promptVisible}
-              >
-                <strong>drop FPUPDATE.DAT firmware file</strong>
-                <span>you can download it from Fujifilm</span>
-              </label>
-              <input
-                ref={file}
-                class="visually-hidden"
-                id="firmware-file"
-                type="file"
-                accept=".dat,.DAT"
-                aria-label="Choose FPUPDATE.DAT"
-                onChange={(event) => {
-                  runtime()?.selectFile(event.currentTarget.files?.[0]);
-                  event.currentTarget.value = '';
-                }}
-              />
-              <div id="camera-loading" class="camera-loading" hidden={!state.loading}>
-                <Show
-                  when={
-                    !state.loadingAssets.some(
-                      (asset) => asset.status === 'loading' || asset.status === 'waiting',
-                    )
-                  }
-                >
-                  <p>{state.message}</p>
-                </Show>
-                <LoadingAssets assets={state.loadingAssets} />
-                <progress
-                  id="boot-progress"
-                  hidden={state.loadingAssets.some(
-                    (asset) => asset.status === 'loading' || asset.status === 'waiting',
-                  )}
-                  max="100"
-                  value={state.progress}
-                  aria-label={state.message || 'Loading camera'}
-                />
-              </div>
-              <span id="status" class={{ error: state.error }} role="status" aria-live="polite">
-                {state.message}
-              </span>
-              <span id="live-label">{state.live}</span>
-            </div>
-            <aside
-              class="panel"
-              id="panel"
-              aria-label="Camera controls"
-              hidden={!state.panelVisible}
+            }
+          >
+            <label
+              class="dropbox"
+              id="firmware-prompt"
+              for="firmware-file"
+              hidden={!state.promptVisible}
             >
-              <div id="controls">
-                <Controls session={runtime()?.panel} />
-              </div>
-              <hr />
-              <CardBrowser
-                engine={runtime()?.cardEngine()}
-                present={(value) => runtime()?.insertCard(value) ?? Promise.resolve()}
-                format={() => runtime()?.formatCard() ?? Promise.resolve()}
-              />
-              <Connections rows={state.connections} />
-            </aside>
-          </section>
+              <strong>drop FPUPDATE.DAT firmware file</strong>
+              <span>you can download it from Fujifilm</span>
+            </label>
+            <input
+              ref={file}
+              class="visually-hidden"
+              id="firmware-file"
+              type="file"
+              accept=".dat,.DAT"
+              aria-label="Choose FPUPDATE.DAT"
+              onChange={(event) => {
+                runtime()?.selectFile(event.currentTarget.files?.[0]);
+                event.currentTarget.value = '';
+              }}
+            />
+          </EmulatorWorkspace>
           <CameraTable
             columns={generations}
             cameras={state.cameras}

@@ -1,4 +1,4 @@
-import { crc32 } from '../archive';
+import { crc32 } from '@fujimod/emulator-ui/archive';
 export const MAX_REPORT_BYTES = 64 * 1024 * 1024;
 export interface ReportLink {
   v: 1;

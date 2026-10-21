@@ -1,7 +1,7 @@
 import { test } from 'vite-plus/test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { simulatorIssue } from '../src/ui/simulator-feedback.ts';
+import { simulatorIssue } from '@fujimod/emulator-ui/ui/simulator-feedback';
 
 const template = (event: string) =>
   readFileSync(

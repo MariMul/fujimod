@@ -1,4 +1,4 @@
-/** Lucide icon paths, ISC licensed. See third_party/lucide-LICENSE. */
+/** Lucide icon paths, ISC licensed. See apps/web/third_party/lucide-LICENSE. */
 const paths: Record<string, string> = {
   monitor: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
   camera:

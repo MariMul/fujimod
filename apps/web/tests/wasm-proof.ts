@@ -1,7 +1,7 @@
 import { createEngine } from '../src/engine';
-import type { EngineConfig } from '../src/engine/api';
-import type { EngineFault } from '../src/engine/fault';
-import { LCDViewer } from '../src/viewer/lcd';
+import type { EngineConfig } from '@fujimod/emulator-ui/engine/api';
+import type { EngineFault } from '@fujimod/emulator-ui/engine/fault';
+import { LCDViewer } from '@fujimod/emulator-ui/viewer/lcd';
 import { proveSession } from './wasm-session-proof';
 
 const host = document.createElement('main');

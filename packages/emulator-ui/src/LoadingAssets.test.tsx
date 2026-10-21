@@ -2,7 +2,7 @@ import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';
 import { expect, test } from 'vite-plus/test';
 import { LoadingAssets } from './LoadingAssets';
-import type { AssetProgress } from '../engine/download-progress';
+import type { AssetProgress } from './engine/download-progress';
 test('each asset has its own progress and completed files remain visible through setup', () => {
   const host = document.createElement('div');
   document.body.append(host);

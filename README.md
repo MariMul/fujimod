@@ -2,11 +2,14 @@
 
 Camera tools, emulation and firmware mods. The browser application lives in
 [apps/web](apps/web/README.md), including its body definitions, patch
-interpreter, runtime adapter and browser checks.
+interpreter, runtime adapter and browser checks. The shared
+[emulator UI](packages/emulator-ui/README.md) lives in `packages/emulator-ui/`.
 
 Use `mise install`, then work in `apps/web`:
 
 ```sh
+npm ci
+npm --prefix packages/emulator-ui ci
 cd apps/web
 npm ci
 npm test

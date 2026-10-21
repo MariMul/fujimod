@@ -5,7 +5,7 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { zipFiles } from '../src/archive';
+import { zipFiles } from '@fujimod/emulator-ui/archive';
 import { localReports, simulatorReports } from '../scripts/local-reports.ts';
 
 test('local report writes metadata first and streams ZIP to its own directory', async () => {

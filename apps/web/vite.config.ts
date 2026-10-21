@@ -1,3 +1,4 @@
+import { uiLint } from '../../packages/emulator-ui/lint';
 import { runtimeHeaders } from './src/security';
 import { defineConfig } from 'vite-plus';
 import { loadEnv, normalizePath, type Plugin, type Connect } from 'vite';
@@ -23,8 +24,12 @@ function isolationHeaders(): Plugin {
   };
   return {
     name: 'runtime-isolation-headers',
-    configureServer: (server) => { configure(server.middlewares); },
-    configurePreviewServer: (server) => { configure(server.middlewares); },
+    configureServer: (server) => {
+      configure(server.middlewares);
+    },
+    configurePreviewServer: (server) => {
+      configure(server.middlewares);
+    },
   };
 }
 
@@ -189,6 +194,7 @@ function simulatedUsbAvailable(env: Record<string, string>): boolean {
 }
 export default defineConfig(({ mode, command }) => ({
   base: '/',
+  resolve: { dedupe: ['solid-js', '@solidjs/web', '@solidjs/signals'] },
   // Solid's server build consumes the manifest produced by its client build.
   builder: { sharedPlugins: true },
   define: {
@@ -241,34 +247,7 @@ export default defineConfig(({ mode, command }) => ({
       },
     },
   ],
-  lint: {
-    jsPlugins: ['eslint-plugin-solid'],
-    settings: { solid: { version: 2 } },
-    overrides: [
-      {
-        files: ['**/*.{jsx,tsx}'],
-        rules: {
-          'solid/reactivity': 'error',
-          'solid/no-destructure': 'error',
-          'solid/components-return-once': 'error',
-          'solid/no-react-deps': 'error',
-          'solid/removed-api': 'error',
-          'solid/no-single-arg-create-effect': 'error',
-          'solid/no-accessor-as-prop': 'error',
-          'solid/no-store-mutation-outside-setter': 'error',
-          'solid/no-write-in-pure-computation': 'error',
-        },
-      },
-    ],
-    options: { typeAware: true, typeCheck: true },
-    ignorePatterns: [
-      'build/**',
-      'dist/**',
-      'dist-local-preview/**',
-      'public/runtime/**',
-      'public/artifacts/**',
-    ],
-  },
+  lint: uiLint,
   fmt: {
     singleQuote: true,
     ignorePatterns: [
@@ -287,7 +266,11 @@ export default defineConfig(({ mode, command }) => ({
         test: {
           name: 'unit',
           environment: 'node',
-          include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
+          include: [
+            'src/**/*.test.ts',
+            'tests/**/*.test.ts',
+            '../../packages/emulator-ui/src/**/*.test.ts',
+          ],
         },
       },
       {
@@ -295,7 +278,7 @@ export default defineConfig(({ mode, command }) => ({
         test: {
           name: 'components',
           environment: 'jsdom',
-          include: ['src/**/*.test.tsx'],
+          include: ['src/**/*.test.tsx', '../../packages/emulator-ui/src/**/*.test.tsx'],
         },
       },
     ],

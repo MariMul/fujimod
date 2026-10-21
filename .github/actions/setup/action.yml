@@ -21,6 +21,7 @@ runs:
       run: |
         rustup target add wasm32-unknown-unknown
         npm --prefix bindings/javascript ci
+        npm --prefix packages/emulator-ui ci
         npm --prefix apps/web ci
         npm --prefix apps/usb-sharing ci
         npm --prefix crates/simulation/tools ci

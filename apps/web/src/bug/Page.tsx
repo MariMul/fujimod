@@ -1,7 +1,7 @@
 import { Show, For, createSignal, onSettled, untrack } from 'solid-js';
 import DevTools from '../dev-tools/Page';
 import type { CameraModel } from '../dev-tools/camera-model';
-import { downloadBlob } from '../ui/download';
+import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
 import { uploadReport, type UploadReport, type UploadReceipt } from './upload';
 import { reportPlatform, type ReportPlatform } from './file-guide';
 import {
@@ -15,7 +15,7 @@ import {
 } from './report-link';
 import { prepareDownload } from './download';
 import { ReportUsb, type CameraChoice, type ReportConnection } from './usb';
-import '../style.css';
+import '../home/site.css';
 import './style.css';
 export default function BugReport(props: {
   connection?: ReportConnection;

@@ -1,6 +1,6 @@
 import { createEngine } from '../src/engine';
-import type { EngineConfig } from '../src/engine/api';
-import { LCDViewer } from '../src/viewer/lcd';
+import type { EngineConfig } from '@fujimod/emulator-ui/engine/api';
+import { LCDViewer } from '@fujimod/emulator-ui/viewer/lcd';
 const output = document.createElement('pre');
 const host = document.createElement('main');
 const canvas = document.createElement('canvas');

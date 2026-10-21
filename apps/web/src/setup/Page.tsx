@@ -3,7 +3,7 @@ import type { Timeline } from 'animejs';
 import { cameras, type Camera } from './cameras';
 import { buildScene, initialRig, type Rig } from './scene';
 import { beatAt, stepTimeline, steps } from './steps';
-import '../style.css';
+import '../home/site.css';
 import './setup.css';
 
 type Link =

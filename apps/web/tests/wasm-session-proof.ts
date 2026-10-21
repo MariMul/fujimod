@@ -1,5 +1,5 @@
 import { createEngine } from '../src/engine';
-import type { Engine, EngineConfig } from '../src/engine/api';
+import type { Engine, EngineConfig } from '@fujimod/emulator-ui/engine/api';
 import type { CardState } from 'fujimod/emulator';
 import { CameraStore } from '../src/cameras/store';
 import { engineReport } from './wasm-report';

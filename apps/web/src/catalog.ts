@@ -1,5 +1,5 @@
-import type { EngineConfig } from './engine/api';
-import type { DevicePanel } from './ui/layout';
+import type { EngineConfig } from '@fujimod/emulator-ui/engine/api';
+import type { DevicePanel } from '@fujimod/emulator-ui/ui/layout';
 export interface Firmware {
   id: string;
   body?: string;

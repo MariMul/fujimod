@@ -1,9 +1,12 @@
-import { DownloadProgress, type LoadingProgress } from './download-progress';
-import type { CardFile, EngineConfig, ReplayStep, Scene } from './api';
+import {
+  DownloadProgress,
+  type LoadingProgress,
+} from '@fujimod/emulator-ui/engine/download-progress';
+import type { CardFile, EngineConfig, ReplayStep, Scene } from '@fujimod/emulator-ui/engine/api';
 import { CameraStore } from '../cameras/store';
 import { digest } from './identity';
 import { diagnosticReport } from './diagnostics';
-import { faultFrom } from './fault';
+import { faultFrom } from '@fujimod/emulator-ui/engine/fault';
 import {
   EmulatorSession,
   GuestExecutionError,
@@ -16,7 +19,11 @@ import {
   type Checkpoint,
   type SessionState,
 } from 'fujimod/emulator';
-import type { WasmRequest, WasmWorkerEvent, WasmWorkerRequest } from './wasm-worker-protocol';
+import type {
+  WasmRequest,
+  WasmWorkerEvent,
+  WasmWorkerRequest,
+} from '@fujimod/emulator-ui/engine/wasm-worker-protocol';
 
 type Send = (event: WasmWorkerEvent, transfer?: Transferable[]) => void;
 interface Loaded {

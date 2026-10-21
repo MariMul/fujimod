@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { EmulatorSession, type EmulatorManifest } from 'fujimod/emulator';
 import { WasmWorkerRuntime } from './wasm-worker-runtime';
 import { testCameraModule } from './wasm-test-module';
-import type { WasmRequest, WasmWorkerEvent } from './wasm-worker-protocol';
+import type {
+  WasmRequest,
+  WasmWorkerEvent,
+} from '@fujimod/emulator-ui/engine/wasm-worker-protocol';
 import { testConfig } from './test-fixtures';
 import type { CameraRecord, CameraSave } from '../cameras/store';
 

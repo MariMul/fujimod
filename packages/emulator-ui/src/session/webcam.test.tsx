@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vite-plus/test';
-import { WebcamInput } from '../session/webcam';
+import { WebcamInput } from './webcam';
 import type { Scene } from '../engine/api';
 
 afterEach(() => {

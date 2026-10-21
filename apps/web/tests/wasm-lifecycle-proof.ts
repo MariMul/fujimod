@@ -1,8 +1,8 @@
 import { createEngine } from '../src/engine';
-import type { Engine, EngineConfig } from '../src/engine/api';
+import type { Engine, EngineConfig } from '@fujimod/emulator-ui/engine/api';
 import type { CardEntry } from 'fujimod/emulator';
 import { CameraStore } from '../src/cameras/store';
-import { LCDViewer } from '../src/viewer/lcd';
+import { LCDViewer } from '@fujimod/emulator-ui/viewer/lcd';
 import { engineReport } from './wasm-report';
 import { pixelQuality } from './pixel-quality';
 const host = document.createElement('main'),

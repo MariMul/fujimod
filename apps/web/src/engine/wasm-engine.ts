@@ -1,4 +1,4 @@
-import type { LoadingProgress } from './download-progress';
+import type { LoadingProgress } from '@fujimod/emulator-ui/engine/download-progress';
 import {
   HostTimings,
   type BootInput,
@@ -20,13 +20,17 @@ import type {
   Frame,
   ReplayStep,
   Scene,
-} from './api';
+} from '@fujimod/emulator-ui/engine/api';
 import { loadImageScene } from './image-scene';
-import { EngineError, faultFrom, type EngineFault } from './fault';
-import type { CameraPerformance } from './performance';
-import type { ReportSubmission } from './report';
-import { zipFiles } from '../archive';
-import type { WasmRequest, WasmWorkerEvent, WasmWorkerRequest } from './wasm-worker-protocol';
+import { EngineError, faultFrom, type EngineFault } from '@fujimod/emulator-ui/engine/fault';
+import type { CameraPerformance } from '@fujimod/emulator-ui/engine/performance';
+import type { ReportSubmission } from '@fujimod/emulator-ui/engine/report';
+import { zipFiles } from '@fujimod/emulator-ui/archive';
+import type {
+  WasmRequest,
+  WasmWorkerEvent,
+  WasmWorkerRequest,
+} from '@fujimod/emulator-ui/engine/wasm-worker-protocol';
 
 type SaveEvent = { savedAt?: number; revision?: number; error?: string };
 class Listeners<T> {

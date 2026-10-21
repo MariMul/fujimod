@@ -1,4 +1,4 @@
-import type { Scene } from './api';
+import type { Scene } from '@fujimod/emulator-ui/engine/api';
 
 /** Decode a browser image for the ordinary RGB input path. */
 export async function loadImageScene(url: URL): Promise<Scene> {

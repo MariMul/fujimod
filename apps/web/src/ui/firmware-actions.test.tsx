@@ -1,7 +1,7 @@
 import { test, expect, beforeAll, afterEach } from 'vite-plus/test';
 import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
-import { flags } from '../flags';
+import { flags } from '@fujimod/emulator-ui/flags';
 import { firmwareActions, createFirmwareChoice, FirmwareChoice } from './firmware-actions';
 let dispose: (() => void) | undefined;
 beforeAll(() => {

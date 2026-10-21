@@ -1,5 +1,5 @@
-import type { DetentSound } from '../feedback/detent-sound';
-import type { Engine } from '../engine/api';
+import type { DetentSound } from '@fujimod/emulator-ui/feedback/detent-sound';
+import type { Engine } from '@fujimod/emulator-ui/engine/api';
 declare global {
   interface Window {
     requests: { id: string; value: string | number }[];
@@ -11,7 +11,7 @@ declare global {
     fixtureReady: boolean;
   }
 }
-import { ControlSession, Controls } from './controls';
+import { ControlSession, Controls } from '@fujimod/emulator-ui/ui/controls';
 import { render, createComponent } from '@solidjs/web';
 import { flush } from 'solid-js';
 import panelData from '../../devices/x70/panel.json';

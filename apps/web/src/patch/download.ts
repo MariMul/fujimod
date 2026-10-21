@@ -1,5 +1,5 @@
 import type { PatchFiles } from './patcher.ts';
-import { zipFiles } from '../archive.ts';
+import { zipFiles } from '@fujimod/emulator-ui/archive';
 
 export function cardZip({ ffboot, ffsys }: PatchFiles): Blob {
   return zipFiles([

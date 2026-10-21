@@ -1,7 +1,7 @@
 import { createEngine } from '../src/engine';
-import { EngineError } from '../src/engine/fault';
+import { EngineError } from '@fujimod/emulator-ui/engine/fault';
 import type { CardEntry } from 'fujimod/emulator';
-import { LCDViewer } from '../src/viewer/lcd';
+import { LCDViewer } from '@fujimod/emulator-ui/viewer/lcd';
 import { pixelQuality } from './pixel-quality';
 
 const canvas = document.createElement('canvas'),

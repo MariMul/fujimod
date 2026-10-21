@@ -3,7 +3,7 @@ import { chromium, webkit } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import type { Input } from 'fujimod/emulator';
-import type { WasmRequest } from '../src/engine/wasm-worker-protocol';
+import type { WasmRequest } from '@fujimod/emulator-ui/engine/wasm-worker-protocol';
 declare global {
   interface Window {
     retainedInputs: Input[];

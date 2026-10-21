@@ -1,7 +1,7 @@
 import { Show, createSignal } from 'solid-js';
 import type { Camera, CameraModel } from './camera-model';
 import { cameraState } from './CameraStrip';
-import { SegmentedControl } from '../ui/SegmentedControl';
+import { SegmentedControl } from '@fujimod/emulator-ui/ui/SegmentedControl';
 
 export function CameraDetails(props: { camera: Camera; model: CameraModel }) {
   const [copied, setCopied] = createSignal(false);

@@ -35,4 +35,5 @@ run(['scripts/build.ts'], bindings);
 run([compiler], bindings);
 check('bindings/javascript/tsconfig.types.json');
 check('bindings/javascript/tsconfig.scripts.json');
+check('packages/emulator-ui/tsconfig.json');
 check('apps/web/tsconfig.json');

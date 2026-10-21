@@ -16,7 +16,7 @@ declare global {
   }
 }
 const fixture =
-  '<!doctype html><link rel="stylesheet" href="/src/style.css"><div id="controls" style="width:240px;padding:20px"></div><script type="module" src="/src/ui/dial.fixture.tsx"></script>';
+  '<!doctype html><link rel="stylesheet" href="/src/home/site.css"><div id="controls" style="width:240px;padding:20px"></div><script type="module" src="/src/ui/dial.fixture.tsx"></script>';
 async function paint(page: Page) {
   await page.evaluate(
     () =>

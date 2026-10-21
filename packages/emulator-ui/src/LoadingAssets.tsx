@@ -1,5 +1,5 @@
 import { For, Show } from 'solid-js';
-import type { AssetProgress } from '../engine/download-progress';
+import type { AssetProgress } from './engine/download-progress';
 const mib = (bytes: number) => (bytes / 1048576).toFixed(1);
 const size = (bytes: number) =>
   bytes < 1048576 ? `${Math.ceil(bytes / 1024)} KiB` : `${mib(bytes)} MiB`;

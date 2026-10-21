@@ -1,4 +1,4 @@
-import type { ReplayStep } from './engine/api';
+import type { ReplayStep } from '@fujimod/emulator-ui/engine/api';
 
 export interface ReplayScenario {
   firmwareId: string;

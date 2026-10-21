@@ -1,14 +1,14 @@
 import { getRequestEvent } from '@solidjs/web';
 import { createSignal, onSettled, untrack } from 'solid-js';
-import type { ReportSubmission } from '../engine/report';
-import { errorReportZip } from '../engine/report';
-import { LocalReports } from '../ui/local-reports';
+import type { ReportSubmission } from '@fujimod/emulator-ui/engine/report';
+import { errorReportZip } from '@fujimod/emulator-ui/engine/report';
+import { LocalReports } from '@fujimod/emulator-ui/ui/local-reports';
 import type { CameraModel } from './camera-model';
 import { Wizard } from './CameraTools';
 import { remoteControlUrl } from './sharing';
 import { pageCameraModel } from './usb-camera-model';
 import { Workbench } from './Workbench';
-import '../style.css';
+import '../home/site.css';
 import './style.css';
 
 declare const __FUJIMOD_SIMULATOR_BUILD__: string;
