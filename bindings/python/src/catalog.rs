@@ -27,6 +27,14 @@ fn resolve_firmware(firmware_id: &str) -> PyResult<String> {
     serde_json::to_string(&selection).map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
+/// Resolve and validate a named run configuration and all reference identities.
+#[pyfunction]
+fn resolve_configuration(configuration_id: &str) -> PyResult<String> {
+    let resolved = fujimod_catalog::ResolvedConfiguration::bundled(configuration_id)
+        .map_err(PyValueError::new_err)?;
+    serde_json::to_string(&resolved).map_err(|error| PyValueError::new_err(error.to_string()))
+}
+
 #[pyclass(frozen, from_py_object, module = "fujimod.catalog")]
 #[derive(Clone)]
 enum DefinitionFailure {
@@ -259,6 +267,7 @@ pub(crate) fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult
     let catalog = PyModule::new(py, "fujimod.catalog")?;
     catalog.add_function(wrap_pyfunction!(resolve_reference, &catalog)?)?;
     catalog.add_function(wrap_pyfunction!(resolve_firmware, &catalog)?)?;
+    catalog.add_function(wrap_pyfunction!(resolve_configuration, &catalog)?)?;
     catalog.add("__path__", PyList::empty(py))?;
     catalog.add_class::<FirmwareIdentity>()?;
     catalog.add("DefinitionError", py.get_type::<DefinitionError>())?;
