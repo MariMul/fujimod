@@ -418,6 +418,113 @@ fn session_keyframe_and_input_replay_preserve_card_adc_and_fractional_cpu_bounda
 }
 
 #[test]
+fn history_replay_instruction_boundaries_follow_execution_policy() {
+    use super::history::{Boundary, Entry, History, Input};
+    use fujimod_emulator_cpu::ExecutionPolicy;
+
+    for mismatch_before in [true, false] {
+        for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+            let mut session = card_session();
+            session.board.set_execution_policy(policy).unwrap();
+            let boundary = Boundary::capture(&session);
+            let mut before = boundary.clone();
+            let mut after = boundary;
+            if mismatch_before {
+                before.instructions[0] += 1;
+            } else {
+                after.instructions[0] += 1;
+            }
+            let entry = Entry {
+                before,
+                input: Input::Adc {
+                    node: "adc".into(),
+                    samples: vec![837; 12],
+                },
+                after,
+                failure: None,
+            };
+
+            let result = History::replay(&mut session, &[entry]);
+            assert_eq!(
+                result.is_ok(),
+                policy == ExecutionPolicy::Interactive,
+                "policy={policy:?}, mismatch_before={mismatch_before}"
+            );
+        }
+    }
+
+    let mut session = card_session();
+    session
+        .board
+        .set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
+    let boundary = Boundary::capture(&session);
+    let refusal = Entry {
+        before: boundary.clone(),
+        input: Input::Adc {
+            node: "absent".into(),
+            samples: vec![837; 12],
+        },
+        after: boundary,
+        failure: None,
+    };
+    assert!(History::replay(&mut session, &[refusal]).is_err());
+}
+
+#[test]
+fn history_rollback_bounds_interactive_run_and_keeps_exact_keyframe_restore() {
+    use super::history::{Boundary, History, Input};
+    use fujimod_emulator_cpu::{ExecutionPolicy, Register};
+
+    for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+        let mut session = card_session();
+        session.board.set_execution_policy(policy).unwrap();
+        session
+            .board
+            .write_register(0, Register::Pstate, 0xd3)
+            .unwrap();
+        session.board.write_register(0, Register::Pc, 0).unwrap();
+        session
+            .board
+            .write_physical(0, &[0xfe, 0xff, 0xff, 0xea])
+            .unwrap();
+
+        let initial = session.fingerprint().unwrap();
+        let initial_boundary = Boundary::capture(&session);
+        let mut history = History::new(2, usize::MAX).unwrap();
+        history.mark(&session).unwrap();
+        history
+            .apply(
+                &mut session,
+                Input::Run {
+                    instructions: 240,
+                    quantum: 17,
+                    pause_after: None,
+                    until: None,
+                },
+            )
+            .unwrap();
+        assert!(session.board.now() > 3);
+
+        let reached = history.rollback(&mut session, 3).unwrap();
+        if policy == ExecutionPolicy::Exact {
+            assert_eq!(reached.tick, 3);
+        } else {
+            assert!(reached.tick <= 3);
+        }
+        assert_eq!(history.entries().len(), 1);
+        let replayed = &history.entries()[0];
+        assert_eq!(replayed.before, initial_boundary);
+        assert_eq!(replayed.after, reached);
+        assert!(matches!(&replayed.input, Input::Run { until: Some(3), .. }));
+
+        history.undo(&mut session).unwrap();
+        assert_eq!(session.fingerprint().unwrap(), initial);
+        assert_eq!(Boundary::capture(&session), initial_boundary);
+    }
+}
+
+#[test]
 fn rust_card_insertion_drives_the_declared_native_gpio_contacts() {
     let mut session = card_session();
     let pins = session.resources.card_pins.get("sd").unwrap();

@@ -1,6 +1,7 @@
 //! Ordered external inputs and bounded Undo on shared machine keyframes.
 //! Instruction counts disambiguate inputs within one guest tick at high ratios.
-use super::{Session, checkpoint::Snapshot};
+use super::{checkpoint::Snapshot, Session};
+use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_devices::scene::StatisticsCadence;
 use std::{collections::VecDeque, sync::Arc};
 
@@ -292,49 +293,60 @@ impl History {
         let saved = mark.saved.clone();
         let replay = self.log[cursor..].to_vec();
         session.restore(&saved)?;
+        let exact = session.board.execution_policy() == ExecutionPolicy::Exact;
         let mut continuation = Vec::new();
         for entry in replay {
             if entry.before.tick > tick {
                 break;
             }
-            if Boundary::capture(session) != entry.before {
+            if exact && Boundary::capture(session) != entry.before {
                 return Err("input replay boundary differs".into());
             }
-            if entry.after.tick > tick {
-                if let Input::Run {
+            let partial = entry.after.tick > tick;
+            let input = match entry.input {
+                Input::Run {
                     instructions,
                     quantum,
                     pause_after,
                     until,
-                } = entry.input
-                {
-                    let input = Input::Run {
-                        instructions,
-                        quantum,
-                        pause_after,
-                        until: Some(until.map_or(tick, |until| until.min(tick))),
-                    };
-                    let before = Boundary::capture(session);
-                    input.apply(session)?;
-                    continuation.push(Entry {
-                        before,
-                        input,
-                        after: Boundary::capture(session),
-                        failure: None,
-                    });
-                } else {
-                    return Err("external input advanced guest time".into());
-                }
+                } if partial || !exact => Input::Run {
+                    instructions,
+                    quantum,
+                    pause_after,
+                    until: Some(until.map_or(tick, |until| until.min(tick))),
+                },
+                _ if partial => return Err("external input advanced guest time".into()),
+                input => input,
+            };
+            let before = Boundary::capture(session);
+            let result = input.apply(session);
+            let failure = result.clone().err();
+            if partial {
+                result?;
+                continuation.push(Entry {
+                    before,
+                    input,
+                    after: Boundary::capture(session),
+                    failure: None,
+                });
                 break;
             }
-            let failure = entry.input.apply(session).err();
-            if failure != entry.failure || Boundary::capture(session) != entry.after {
+            let after = Boundary::capture(session);
+            if failure != entry.failure || exact && after != entry.after {
                 return Err("input replay result differs".into());
             }
-            continuation.push(entry);
+            continuation.push(Entry {
+                before,
+                input,
+                after,
+                failure,
+            });
         }
-        if session.board.now() != tick {
+        if exact && session.board.now() != tick {
             return Err("input log does not reach rollback target".into());
+        }
+        if session.board.now() > tick {
+            return Err("input replay exceeded rollback target".into());
         }
         self.marks.truncate(index + 1);
         self.log.truncate(cursor);
@@ -342,12 +354,13 @@ impl History {
         Ok(Boundary::capture(session))
     }
     pub fn replay(session: &mut Session, entries: &[Entry]) -> Result<(), String> {
+        let exact = session.board.execution_policy() == ExecutionPolicy::Exact;
         for entry in entries {
-            if Boundary::capture(session) != entry.before {
+            if exact && Boundary::capture(session) != entry.before {
                 return Err("input replay boundary differs".into());
             }
             let failure = entry.input.apply(session).err();
-            if failure != entry.failure || Boundary::capture(session) != entry.after {
+            if failure != entry.failure || exact && Boundary::capture(session) != entry.after {
                 return Err("input replay result differs".into());
             }
         }
