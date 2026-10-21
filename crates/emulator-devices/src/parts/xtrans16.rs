@@ -104,15 +104,19 @@ impl Sensor {
             .iter()
             .find(|r| s.registers[0] & 0xfc == r.mode && s.horizontal == r.horizontal)
             .map_or(s.vertical, |r| r.lines);
-        let rows = u64::from(reference) * (u64::from(word(2)) + 1);
+        let extension = u64::from(word(2)) + 1;
+        let exposure_rows = u64::from(reference) * extension;
         if let Some((output, tick_hz)) = &self.frame_clock {
-            let clocks = u128::from(rows) * u128::from(s.horizontal) * u128::from(*tick_hz);
+            // Reset references bound integration, not the scan's blanking
+            // interval. Frame edges follow the complete programmed raster.
+            let frame_rows = u64::from(s.vertical) * extension;
+            let clocks = u128::from(frame_rows) * u128::from(s.horizontal) * u128::from(*tick_hz);
             let period = (clocks + u128::from(self.options.pixel_clock_hz) / 2)
                 / u128::from(self.options.pixel_clock_hz);
             *output.lock().map_err(|_| "sensor frame clock poisoned")? =
                 u64::try_from(period).map_err(|_| "sensor frame clock exceeds guest timebase")?;
         }
-        let integration = rows.saturating_sub(u64::from(word(5))).max(1);
+        let integration = exposure_rows.saturating_sub(u64::from(word(5))).max(1);
         *self
             .exposure
             .lock()
@@ -229,8 +233,9 @@ impl Controls for Sensor {
 mod tests {
     use super::*;
     #[test]
-    fn physical_scan_clock_uses_raster_extension_and_declared_reset_reference() {
+    fn physical_scan_clock_preserves_vertical_blanking_and_raster_extension() {
         let period: crate::imaging::timing::FramePeriod = Default::default();
+        let exposure: ExposureHandle = Default::default();
         let mut s = Sensor::new(
             Options {
                 pixel_clock_hz: 33_000_000,
@@ -241,7 +246,7 @@ mod tests {
                     lines: 856,
                 }],
             },
-            Default::default(),
+            exposure.clone(),
             std::sync::Arc::new(std::sync::Mutex::new(8.)),
         )
         .unwrap();
@@ -261,8 +266,20 @@ mod tests {
         *period.lock().unwrap() = saved_period;
         assert_eq!(*period.lock().unwrap(), 120109);
         s.timing(706, 9348, None).unwrap();
+        let scan_period = *period.lock().unwrap();
         s.command(&[0x81, 0, 0xec, 0, 0, 0, 0, 0]).unwrap();
-        assert_eq!(*period.lock().unwrap(), 219759);
+        assert_eq!(*period.lock().unwrap(), 2_399_887);
+        assert_eq!(*period.lock().unwrap(), scan_period);
+        assert!((exposure.lock().unwrap().seconds - 856. * 706. / 33_000_000.).abs() < 1e-12);
+        // More blanking changes cadence without changing the reset reference
+        // or integration. A mode change can change integration independently.
+        let seconds = exposure.lock().unwrap().seconds;
+        s.timing(706, 12000, None).unwrap();
+        assert_eq!(*period.lock().unwrap(), 3_080_727);
+        assert_eq!(exposure.lock().unwrap().seconds, seconds);
+        s.command(&[0x81, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+        assert_eq!(*period.lock().unwrap(), 3_080_727);
+        assert!(exposure.lock().unwrap().seconds > seconds);
     }
     #[test]
     fn register_shutter_gain_and_restore_change_physical_exposure() {
