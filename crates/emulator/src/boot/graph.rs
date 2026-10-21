@@ -1,0 +1,469 @@
+//! CPU graph assembly from resolved SoC and body facts.
+//!
+//! This module contains no camera firmware execution policy. Address maps,
+//! processor reset state, decoder selections, peripherals, and RAM capacity
+//! are read from the selected catalog identities.
+
+use crate::board::{factory, memory::BusMapping};
+use fujimod_catalog::{
+    configuration::RunInstructionRate,
+    reference::{
+        AddressMapping, DecoderSelection, MemoryRegion, ProcessorArchitecture, ProcessorModel,
+        ProcessorRegister, RegionSize, ResolvedSelection, Soc,
+    },
+};
+use fujimod_emulator_cpu::{Model, Register, arm};
+use std::collections::{BTreeMap, BTreeSet};
+
+fn core_index(soc: &Soc) -> Result<BTreeMap<&str, usize>, String> {
+    let mut indexes = BTreeMap::new();
+    for (index, processor) in soc.processors.iter().enumerate() {
+        if indexes.insert(processor.id.as_str(), index).is_some() {
+            return Err(format!("SoC {} repeats processor {}", soc.id, processor.id));
+        }
+    }
+    Ok(indexes)
+}
+
+fn extent(size: RegionSize, dram_bytes: u64, label: &str) -> Result<usize, String> {
+    let bytes = match size {
+        RegionSize::Bytes { bytes } => bytes,
+        RegionSize::BodyDram => dram_bytes,
+    };
+    usize::try_from(bytes).map_err(|_| format!("{label} extent exceeds host address space"))
+}
+
+fn register(register: ProcessorRegister) -> Register {
+    match register {
+        ProcessorRegister::Pc => Register::Pc,
+        ProcessorRegister::Sp => Register::Sp,
+        ProcessorRegister::Pstate => Register::Pstate,
+        ProcessorRegister::Cpsr => Register::Arm32(arm::Register::Cpsr),
+    }
+}
+
+fn build_processor(
+    model: ProcessorModel,
+    registers: &[(ProcessorRegister, u64)],
+    released: bool,
+    rprofile: Option<&fujimod_catalog::reference::RProfileState>,
+    architecture: ProcessorArchitecture,
+) -> Result<factory::Processor, String> {
+    let model = match (architecture, model) {
+        (ProcessorArchitecture::Arm32, ProcessorModel::CortexR5f) => Model::CortexR5F,
+        (ProcessorArchitecture::Arm32, ProcessorModel::CortexA7) => Model::CortexA7,
+        (ProcessorArchitecture::Aarch64, ProcessorModel::CortexA53) => Model::ArmV8A,
+        _ => return Err("processor model does not match its SoC architecture".into()),
+    };
+    let rprofile = rprofile
+        .map(|state| {
+            use fujimod_emulator_cpu_unicorn::rprofile::{
+                core::Options,
+                tcm::{BankOptions, Options as TcmOptions},
+            };
+            let bank = |state: fujimod_catalog::reference::TcmState| {
+                Ok::<_, String>(BankOptions {
+                    bytes: usize::try_from(state.bytes)
+                        .map_err(|_| "TCM extent exceeds host address space")?,
+                    reset: u32::try_from(state.reset_address)
+                        .map_err(|_| "TCM reset address exceeds the R-profile register width")?,
+                })
+            };
+            Ok::<_, String>(Options {
+                cp14_identity: state.cp14_identity,
+                tcm: TcmOptions {
+                    btcm: bank(state.btcm)?,
+                    atcm: bank(state.atcm)?,
+                },
+            })
+        })
+        .transpose()?;
+    Ok(factory::Processor {
+        model,
+        registers: registers
+            .iter()
+            .map(|(identifier, value)| (register(*identifier), *value))
+            .collect(),
+        released,
+        mprofile: None,
+        rprofile,
+    })
+}
+
+fn memory_region(region: &MemoryRegion, dram_bytes: u64) -> Result<factory::Ram, String> {
+    Ok(factory::Ram {
+        base: region.base,
+        size: extent(
+            region.size,
+            dram_bytes,
+            &format!("memory region {}", region.id),
+        )?,
+    })
+}
+
+fn address_mapping(
+    mapping: &AddressMapping,
+    cores: &BTreeMap<&str, usize>,
+    dram_bytes: u64,
+) -> Result<factory::MemoryMap, String> {
+    Ok(factory::MemoryMap {
+        core: *cores.get(mapping.core.as_str()).ok_or_else(|| {
+            format!(
+                "address mapping {} names absent core {}",
+                mapping.id, mapping.core
+            )
+        })?,
+        address: mapping.address,
+        physical: mapping.physical,
+        size: extent(
+            mapping.size,
+            dram_bytes,
+            &format!("address mapping {}", mapping.id),
+        )?,
+        permissions: u32::from(mapping.permissions),
+    })
+}
+
+fn decoder_selection(
+    selection: &DecoderSelection,
+    mappings: &BTreeMap<&str, factory::MemoryMap>,
+    dma: &BTreeMap<&str, BusMapping>,
+    decoder_id: &str,
+) -> Result<crate::board::decoder::Choice, String> {
+    let processors = selection
+        .processors
+        .iter()
+        .map(|id| {
+            mappings.get(id.as_str()).cloned().ok_or_else(|| {
+                format!("decoder {decoder_id} refers to absent address mapping {id}")
+            })
+        })
+        .collect::<Result<_, _>>()?;
+    let dma = selection
+        .dma_mappings
+        .iter()
+        .map(|id| {
+            dma.get(id.as_str())
+                .copied()
+                .ok_or_else(|| format!("decoder {decoder_id} refers to absent DMA mapping {id}"))
+        })
+        .collect::<Result<_, _>>()?;
+    Ok(crate::board::decoder::Choice { processors, dma })
+}
+
+/// Construct and validate the processor/address graph for one resolved body.
+pub(super) fn assemble(
+    selection: &ResolvedSelection,
+    rate: RunInstructionRate,
+) -> Result<factory::Graph, String> {
+    let soc = &selection.soc;
+    let body = &selection.body;
+    if body.soc_id != soc.id {
+        return Err("resolved body and SoC identities differ".into());
+    }
+    let cores = core_index(soc)?;
+    let processors = soc
+        .processors
+        .iter()
+        .map(|processor| {
+            let registers = processor
+                .registers
+                .iter()
+                .map(|item| (item.register, item.value))
+                .collect::<Vec<_>>();
+            build_processor(
+                processor.model,
+                &registers,
+                processor.released,
+                processor.rprofile.as_ref(),
+                soc.architecture.clone(),
+            )
+        })
+        .collect::<Result<_, _>>()?;
+    let ram = soc
+        .memory_regions
+        .iter()
+        .map(|region| memory_region(region, body.dram_bytes))
+        .collect::<Result<_, _>>()?;
+    let mapping_by_id = soc
+        .mappings
+        .iter()
+        .map(|mapping| {
+            Ok::<_, String>((
+                mapping.id.as_str(),
+                address_mapping(mapping, &cores, body.dram_bytes)?,
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+    let mut decoder_mappings = BTreeSet::new();
+    let mut initial_mappings = BTreeSet::new();
+    let mut decoder_dma = BTreeSet::new();
+    let mut initial_dma = BTreeSet::new();
+    for decoder in &soc.decoders {
+        initial_mappings.extend(decoder.initial.processors.iter().map(String::as_str));
+        decoder_mappings.extend(decoder.initial.processors.iter().map(String::as_str));
+        initial_dma.extend(decoder.initial.dma_mappings.iter().map(String::as_str));
+        decoder_dma.extend(decoder.initial.dma_mappings.iter().map(String::as_str));
+        for choice in &decoder.choices {
+            decoder_mappings.extend(choice.selection.processors.iter().map(String::as_str));
+            decoder_dma.extend(choice.selection.dma_mappings.iter().map(String::as_str));
+        }
+    }
+    let mappings = mapping_by_id
+        .iter()
+        .filter_map(|(id, mapping)| {
+            (!decoder_mappings.contains(id) || initial_mappings.contains(id))
+                .then_some(mapping.clone())
+        })
+        .collect();
+    let dma_by_id = soc
+        .dma_mappings
+        .iter()
+        .map(|mapping| {
+            Ok::<_, String>((
+                mapping.id.as_str(),
+                BusMapping {
+                    address: mapping.address,
+                    physical: mapping.physical,
+                    size: extent(
+                        mapping.size,
+                        body.dram_bytes,
+                        &format!("DMA mapping {}", mapping.id),
+                    )?,
+                    permissions: u32::from(mapping.permissions),
+                },
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+    let dma_mappings = dma_by_id
+        .iter()
+        .filter_map(|(id, mapping)| {
+            (!decoder_dma.contains(id) || initial_dma.contains(id)).then_some(*mapping)
+        })
+        .collect();
+    let decoders = soc
+        .decoders
+        .iter()
+        .map(|decoder| {
+            let initial =
+                decoder_selection(&decoder.initial, &mapping_by_id, &dma_by_id, &decoder.id)?;
+            let choices = decoder
+                .choices
+                .iter()
+                .map(|choice| {
+                    decoder_selection(&choice.selection, &mapping_by_id, &dma_by_id, &decoder.id)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut selections = Vec::with_capacity(choices.len() + 1);
+            selections.push(initial);
+            selections.extend(choices);
+            Ok::<_, String>(crate::board::decoder::Decoder {
+                initial: 0,
+                choices: selections,
+            })
+        })
+        .collect::<Result<_, _>>()?;
+    let peripherals = soc
+        .peripherals
+        .iter()
+        .map(|mapping| {
+            let core = *cores
+                .get(mapping.core.as_str())
+                .ok_or_else(|| format!("peripheral mapping names absent core {}", mapping.core))?;
+            let block = soc
+                .blocks
+                .iter()
+                .find(|block| block.id == mapping.block_id)
+                .ok_or_else(|| {
+                    format!("peripheral mapping names absent block {}", mapping.block_id)
+                })?;
+            let offset = mapping.offset.unwrap_or(0);
+            if offset >= block.size {
+                return Err(format!(
+                    "peripheral mapping offset exceeds block {}",
+                    block.id
+                ));
+            }
+            Ok(factory::Peripheral {
+                core,
+                address: mapping.address,
+                physical: block
+                    .base
+                    .checked_add(offset)
+                    .ok_or("peripheral physical address overflows")?,
+                size: usize::try_from(block.size - offset).map_err(|_| {
+                    format!("peripheral block {} exceeds host address space", block.id)
+                })?,
+            })
+        })
+        .collect::<Result<_, String>>()?;
+    let (numerator, denominator) = (rate.numerator, rate.denominator);
+    let graph = factory::Graph {
+        processors,
+        ram,
+        dma_mappings,
+        decoders,
+        mappings,
+        peripherals,
+        instructions_per_tick: fujimod_emulator_cpu::timeline::Ratio::new(numerator, denominator)?,
+    };
+    graph.validate()?;
+    Ok(graph)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fujimod_catalog::reference::{
+        AddressDecoder, Body, DecoderChoice, Firmware, MemoryKind, ProcessorCore, RProfileState,
+        SocReset, TcmState,
+    };
+
+    fn r5(id: &str) -> ProcessorCore {
+        ProcessorCore {
+            id: id.into(),
+            model: ProcessorModel::CortexR5f,
+            released: true,
+            registers: vec![],
+            mprofile: None,
+            rprofile: Some(RProfileState {
+                cp14_identity: 0,
+                atcm: TcmState {
+                    bytes: 0,
+                    reset_address: 0,
+                },
+                btcm: TcmState {
+                    bytes: 0,
+                    reset_address: 0,
+                },
+            }),
+        }
+    }
+
+    #[test]
+    fn decoder_selectors_resolve_address_mapping_ids_not_core_ids() {
+        let soc = Soc {
+            schema_uri: fujimod_catalog::reference::SOC_SCHEMA_URI.into(),
+            schema: 1,
+            id: "test-soc".into(),
+            architecture: ProcessorArchitecture::Arm32,
+            processors: vec![r5("core0")],
+            memory_regions: vec![MemoryRegion {
+                id: "ram".into(),
+                base: 0x2000_0000,
+                size: RegionSize::Bytes { bytes: 0x2000 },
+                kind: MemoryKind::Dram,
+            }],
+            blocks: vec![],
+            interrupts: vec![],
+            clocks: vec![],
+            mappings: vec![
+                AddressMapping {
+                    id: "default-window".into(),
+                    core: "core0".into(),
+                    address: 0,
+                    physical: 0x2000_0000,
+                    size: RegionSize::Bytes { bytes: 0x1000 },
+                    permissions: 7,
+                },
+                AddressMapping {
+                    id: "alternate-window".into(),
+                    core: "core0".into(),
+                    address: 0,
+                    physical: 0x2000_1000,
+                    size: RegionSize::Bytes { bytes: 0x1000 },
+                    permissions: 7,
+                },
+            ],
+            dma_mappings: vec![
+                fujimod_catalog::reference::DmaMapping {
+                    id: "default-dma".into(),
+                    address: 0,
+                    physical: 0x2000_0000,
+                    size: RegionSize::Bytes { bytes: 0x1000 },
+                    permissions: 3,
+                },
+                fujimod_catalog::reference::DmaMapping {
+                    id: "alternate-dma".into(),
+                    address: 0,
+                    physical: 0x2000_1000,
+                    size: RegionSize::Bytes { bytes: 0x1000 },
+                    permissions: 3,
+                },
+            ],
+            decoders: vec![AddressDecoder {
+                id: "boot-window".into(),
+                initial: DecoderSelection {
+                    processors: vec!["default-window".into()],
+                    dma_mappings: vec!["default-dma".into()],
+                },
+                choices: vec![DecoderChoice {
+                    id: "alternate".into(),
+                    selection: DecoderSelection {
+                        processors: vec!["alternate-window".into()],
+                        dma_mappings: vec!["alternate-dma".into()],
+                    },
+                }],
+            }],
+            peripherals: vec![],
+            reset: SocReset {
+                release: None,
+                coprocessor_writes: vec![],
+            },
+        };
+        let body = Body {
+            schema_uri: fujimod_catalog::reference::BODY_SCHEMA_URI.into(),
+            schema: 1,
+            id: "test-body".into(),
+            soc_id: "test-soc".into(),
+            dram_bytes: 0x2000,
+            nand: None,
+            sensor: None,
+            lens: None,
+            display: None,
+            controls: None,
+            microcontroller: None,
+            power_control: None,
+            card_slot: None,
+            control_bus_chips: vec![],
+            connections: vec![],
+            parts: vec![],
+            wiring: vec![],
+        };
+        let selection = ResolvedSelection {
+            soc,
+            body,
+            firmware: Firmware {
+                schema_uri: fujimod_catalog::reference::FIRMWARE_SCHEMA_URI.into(),
+                schema: 1,
+                id: "test-firmware".into(),
+                body_id: "test-body".into(),
+                version: "test".into(),
+                update: None,
+                boot_rom: None,
+                installation: None,
+                generated_facts: None,
+            },
+            parts: vec![],
+        };
+        let graph = assemble(
+            &selection,
+            RunInstructionRate {
+                numerator: 24,
+                denominator: 1,
+            },
+        )
+        .unwrap();
+        assert_eq!(graph.mappings.len(), 1);
+        assert_eq!(graph.mappings[0].physical, 0x2000_0000);
+        assert_eq!(graph.dma_mappings.len(), 1);
+        assert_eq!(graph.decoders.len(), 1);
+        assert_eq!(graph.decoders[0].initial, 0);
+        assert_eq!(graph.decoders[0].choices.len(), 2);
+        assert_eq!(
+            graph.decoders[0].choices[1].processors[0].physical,
+            0x2000_1000
+        );
+        assert_eq!(graph.decoders[0].choices[1].dma[0].physical, 0x2000_1000);
+    }
+}

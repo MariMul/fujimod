@@ -2,6 +2,8 @@
 //!
 //! Preparation runs before execution. Host readiness checks only observe RAM;
 //! first-start acceptance drives the ordinary ADC input on the guest timeline.
+mod graph;
+
 use crate::{
     board::{
         bus::{Bus, Mode},
@@ -31,7 +33,7 @@ pub struct Options {
     pub update: PathBuf,
     pub boot_rom: PathBuf,
     pub unicorn: PathBuf,
-    /// Committed NAND image exported by the emulator, or a complete raw medium.
+    /// Committed NAND image, or a complete main-area image without OOB/spare.
     pub nand: Option<PathBuf>,
     /// Sixteen-byte checksum-protected MCU persistent settings packet.
     pub settings: Option<PathBuf>,
@@ -273,7 +275,9 @@ pub fn open(options: Options) -> Result<Session, String> {
                 .ok_or("NAND geometry is absent")?
         {
             if !bytes.starts_with(&assets["nand_base"]) {
-                return Err("raw NAND firmware prefix differs from the selected update".into());
+                return Err(
+                    "NAND main-area firmware prefix differs from the selected update".into(),
+                );
             }
             nand["overlays"] = json!([[0, "nand_image"]]);
         } else {
@@ -417,12 +421,18 @@ fn advance(
     if now >= end {
         return Err("instruction limit reached during first-start input".into());
     }
+    let tick = session.board.now();
     session.board.run_with_limits(
         end - now,
         spec.quantum,
         Some(now.saturating_add(1_000_000).min(end)),
         until,
-    )
+    )?;
+    if session.board.now() == tick && session.board.instruction_counts().iter().sum::<u64>() == now
+    {
+        return Err("board is quiescent without an input or device deadline".into());
+    }
+    Ok(())
 }
 fn advance_ticks(
     session: &mut Session,
