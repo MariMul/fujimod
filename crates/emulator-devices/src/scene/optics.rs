@@ -44,21 +44,21 @@ mod tests {
         .unwrap();
         let mut frame = frames.0.lock().unwrap();
         optics.render(&mut frame, true).unwrap();
-        let retained_sharp = frame.pixels.render(l).unwrap();
-        let sharp = energies(&frame.pixels.render(l).unwrap(), l, [0, 0, 32, 4])
+        let retained_sharp = frame.pixels.render(l, 0).unwrap();
+        let sharp = energies(&frame.pixels.render(l, 0).unwrap(), l, [0, 0, 32, 4])
             .unwrap()
             .1;
         position.publish(64);
         optics.render(&mut frame, false).unwrap();
-        let blurred = energies(&frame.pixels.render(l).unwrap(), l, [0, 0, 32, 4])
+        let blurred = energies(&frame.pixels.render(l, 0).unwrap(), l, [0, 0, 32, 4])
             .unwrap()
             .1;
         assert!(blurred < sharp);
         assert_eq!(retained_sharp.as_ref(), bytes.as_slice());
         let saved = optics.fingerprint();
-        let pixels = frame.pixels.render(l).unwrap();
+        let pixels = frame.pixels.render(l, 0).unwrap();
         optics.render(&mut frame, false).unwrap();
-        assert_eq!(pixels, frame.pixels.render(l).unwrap());
+        assert_eq!(pixels, frame.pixels.render(l, 0).unwrap());
         assert_eq!(saved, optics.fingerprint());
         let checkpoint = optics.checkpoint().unwrap();
         let corrupt = checkpoint.clone().with_blobs(vec![Arc::from([0u8; 4])]);
@@ -78,9 +78,12 @@ mod tests {
         assert_eq!(optics.fingerprint(), saved);
         position.publish(0);
         optics.render(&mut frame, false).unwrap();
-        assert_eq!(frame.pixels.render(l).unwrap().as_ref(), bytes.as_slice());
         assert_eq!(
-            energies(&frame.pixels.render(l).unwrap(), l, [0, 0, 32, 4])
+            frame.pixels.render(l, 0).unwrap().as_ref(),
+            bytes.as_slice()
+        );
+        assert_eq!(
+            energies(&frame.pixels.render(l, 0).unwrap(), l, [0, 0, 32, 4])
                 .unwrap()
                 .1,
             sharp
@@ -154,7 +157,7 @@ impl Optics {
     ) -> Result<(), String> {
         let position = self.position.value();
         if changed || self.source.is_empty() {
-            self.source = image.pixels.render(image.layout)?;
+            self.source = image.pixels.render(image.layout, 0)?;
             self.last = None;
         }
         if self.last == Some(position) {
@@ -168,7 +171,7 @@ impl Optics {
             image.pixels = super::frames::Pixels::Packed(self.source.clone());
             return Ok(());
         }
-        let pixels = Arc::make_mut(image.pixels.packed_mut(image.layout)?);
+        let pixels = Arc::make_mut(image.pixels.packed_mut(image.layout, 0)?);
         pixels.copy_from_slice(&self.source);
         let l = image.layout;
         let mut sums = vec![0u32; l.width + 1];

@@ -213,7 +213,7 @@ impl Block18000 {
         let r = &self.registers;
         r[1] == 0x33173317 && r[2] & 1 != 0 && r[0x984 / 4] == 1 && r[0x9f8 / 4] == 0x10000000
     }
-    fn latch(&mut self, now: u64) -> Result<(), String> {
+    fn latch(&mut self, now: u64, workers: usize) -> Result<(), String> {
         let frame = self.wiring.frames.0.lock().unwrap();
         let Some(edge) = frame.edge else {
             return Ok(());
@@ -391,7 +391,7 @@ impl Block18000 {
             let image = self.wiring.images.0.lock().unwrap();
             let (grid, bands) = super::contrast::banks(
                 self.registers.as_slice(),
-                &image.pixels.render(image.layout)?,
+                &image.pixels.render(image.layout, workers)?,
                 image.layout,
                 self.options.contrast.as_ref().unwrap(),
             )?;
@@ -402,7 +402,7 @@ impl Block18000 {
             let image = self.wiring.images.0.lock().unwrap();
             let bytes = super::metering::banks(
                 self.registers.as_slice(),
-                &image.pixels.render(image.layout)?,
+                &image.pixels.render(image.layout, workers)?,
                 image.layout,
             )?;
             self.spans[base.len() + usize::from(contrast) * 2]
@@ -517,7 +517,7 @@ impl Block18000 {
                 p.route.raise(cx)?;
             }
         }
-        self.latch(cx.now())
+        self.latch(cx.now(), cx.compute_workers())
     }
     fn ack_read(&mut self, o: usize) -> Result<(), String> {
         let Some(ch) = self.ack_channel else {

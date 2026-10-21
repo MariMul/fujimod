@@ -13,15 +13,19 @@ pub(crate) enum Pixels {
     Sensor(Arc<crate::imaging::radiometric::Image>),
 }
 impl Pixels {
-    pub fn render(&self, layout: ImageLayout) -> Result<Arc<[u8]>, String> {
+    pub fn render(&self, layout: ImageLayout, workers: usize) -> Result<Arc<[u8]>, String> {
         match self {
             Self::Packed(p) => Ok(p.clone()),
-            Self::Sensor(image) => image.render(layout),
+            Self::Sensor(image) => image.render(layout, workers),
         }
     }
-    pub fn packed_mut(&mut self, layout: ImageLayout) -> Result<&mut Arc<[u8]>, String> {
+    pub fn packed_mut(
+        &mut self,
+        layout: ImageLayout,
+        workers: usize,
+    ) -> Result<&mut Arc<[u8]>, String> {
         if matches!(self, Self::Sensor(_)) {
-            *self = Self::Packed(self.render(layout)?);
+            *self = Self::Packed(self.render(layout, workers)?);
         }
         match self {
             Self::Packed(p) => Ok(p),
@@ -363,7 +367,7 @@ mod checkpoint_tests {
         let initial = image.checkpoint().unwrap();
         assert!(Arc::ptr_eq(
             &initial.children()[0].blobs()[0],
-            &image.0.lock().unwrap().pixels.render(layout).unwrap()
+            &image.0.lock().unwrap().pixels.render(layout, 0).unwrap()
         ));
         image.prepare_rgb(2, 1, &[255, 0, 0, 0, 255, 0]).unwrap();
         let before = image.fingerprint();
@@ -379,14 +383,14 @@ mod checkpoint_tests {
         assert_eq!(&*initial.children()[0].blobs()[0], &[1, 2, 128, 128]);
         assert!(!Arc::ptr_eq(
             &initial.children()[0].blobs()[0],
-            &image.0.lock().unwrap().pixels.render(layout).unwrap()
+            &image.0.lock().unwrap().pixels.render(layout, 0).unwrap()
         ));
         image.use_analytic();
         image.restore_checkpoint(&pending).unwrap();
         assert_eq!(image.fingerprint(), before);
         assert!(Arc::ptr_eq(
             &pending.children()[0].blobs()[0],
-            &image.0.lock().unwrap().pixels.render(layout).unwrap()
+            &image.0.lock().unwrap().pixels.render(layout, 0).unwrap()
         ));
         let invalid = crate::checkpoint::Checkpoint::encode(
             "image-frame",

@@ -292,7 +292,7 @@ impl OutputChannel {
         }
         Ok(true)
     }
-    fn latch(&mut self, now: u64) -> Result<(), String> {
+    fn latch(&mut self, now: u64, workers: usize) -> Result<(), String> {
         let frames = self.wiring.frames.0.lock().unwrap();
         let Some(edge) = frames.edge else {
             return Ok(());
@@ -348,7 +348,7 @@ impl OutputChannel {
         )?;
         let result = match &frames.pixels {
             crate::scene::frames::Pixels::Sensor(image) => image
-                .render(layout)
+                .render(layout, workers)
                 .map(|pixels| transfer.pixels.copy_from_slice(&pixels)),
             crate::scene::frames::Pixels::Packed(pixels) => {
                 nearest_pairs(pixels, frames.layout, &mut transfer.pixels, layout)
@@ -415,7 +415,7 @@ impl OutputChannel {
                 }
             }
         }
-        self.latch(cx.now())
+        self.latch(cx.now(), cx.compute_workers())
     }
 }
 impl Device for OutputChannel {

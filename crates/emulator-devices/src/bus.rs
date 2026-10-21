@@ -38,6 +38,11 @@ pub trait Host {
     /// Guest virtual time in the board's unit (X70: virtual timer ticks, so the
     /// exact runtime and the HVF port agree).
     fn now(&self) -> u64;
+    /// Worker count for pure host computation. Zero selects the exact serial
+    /// path; workers never receive guest state or publish device effects.
+    fn compute_workers(&self) -> usize {
+        0
+    }
     /// Call `device.event(cx, token)` at board time `at`.
     fn schedule(&mut self, device: usize, at: u64, token: u64);
     /// Assert or release a level interrupt line (GIC-style boards).
@@ -104,6 +109,11 @@ impl<'a> Cx<'a> {
     }
     pub fn now(&self) -> u64 {
         self.tick_override.unwrap_or_else(|| self.host.now())
+    }
+    /// Bounded strategy for pure, deterministic raster work. The owner still
+    /// applies every resulting device effect on this context's thread.
+    pub fn compute_workers(&self) -> usize {
+        self.host.compute_workers()
     }
     /// Service a composite device's already-due effect at its declared tick.
     /// This changes only the child clock view; it never advances the runtime.

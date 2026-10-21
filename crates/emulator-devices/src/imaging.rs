@@ -14,6 +14,7 @@ pub mod film;
 pub mod frame;
 pub mod jpeg;
 pub mod packed_color;
+mod parallel;
 pub mod raw;
 pub mod resample;
 pub mod separable;

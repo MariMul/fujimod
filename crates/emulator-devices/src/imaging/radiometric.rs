@@ -246,7 +246,7 @@ impl Image {
             ((u64::from(raw[c]) * u64::from(self.gain[c])) >> 8).min(16383) as u16
         })
     }
-    pub(crate) fn render(&self, layout: ImageLayout) -> Result<Arc<[u8]>, String> {
+    pub(crate) fn render(&self, layout: ImageLayout, workers: usize) -> Result<Arc<[u8]>, String> {
         layout.bytes()?;
         let mut cache = self
             .outputs
@@ -257,29 +257,88 @@ impl Image {
         }
         let frame = self.measurement([layout.width, layout.height])?;
         let [width, height] = frame.sample_dimensions();
-        let mut memo = FilmPixels::new(&self.film);
-        let mut colors = Vec::with_capacity(width * height);
-        if let Some(readout) = frame.sample_offsets([width, height], [0, 0, width, height], 1) {
-            for &row in &readout.rows {
-                for &column in &readout.columns {
-                    colors.push(self.color(readout.sample(row, column), &mut memo));
-                }
+        let mut out = vec![0; layout.bytes()?];
+        if [width, height] == [layout.width, layout.height] {
+            if let Some(readout) = frame.sample_offsets([width, height], [0, 0, width, height], 1) {
+                super::parallel::rows(
+                    &mut out,
+                    layout.stride,
+                    layout.height,
+                    workers,
+                    |range, rows| {
+                        let mut memo = FilmPixels::new(&self.film);
+                        for (local_y, row) in rows.chunks_exact_mut(layout.stride).enumerate() {
+                            let source_row = readout.rows[range.start + local_y];
+                            for (x, pair) in row[..layout.width * 2].chunks_exact_mut(4).enumerate()
+                            {
+                                let left = self.color(
+                                    readout.sample(source_row, readout.columns[x * 2]),
+                                    &mut memo,
+                                );
+                                let right = self.color(
+                                    readout.sample(source_row, readout.columns[x * 2 + 1]),
+                                    &mut memo,
+                                );
+                                pair.copy_from_slice(&Film::pack(left, right));
+                            }
+                        }
+                    },
+                )?;
+            } else {
+                super::parallel::rows(
+                    &mut out,
+                    layout.stride,
+                    layout.height,
+                    workers,
+                    |range, rows| {
+                        let mut memo = FilmPixels::new(&self.film);
+                        for (local_y, row) in rows.chunks_exact_mut(layout.stride).enumerate() {
+                            let y = range.start + local_y;
+                            for (x, pair) in row[..layout.width * 2].chunks_exact_mut(4).enumerate()
+                            {
+                                let left =
+                                    self.color(frame.sample(x * 2, y, [width, height]), &mut memo);
+                                let right = self
+                                    .color(frame.sample(x * 2 + 1, y, [width, height]), &mut memo);
+                                pair.copy_from_slice(&Film::pack(left, right));
+                            }
+                        }
+                    },
+                )?;
             }
         } else {
-            for y in 0..height {
-                for x in 0..width {
-                    colors.push(self.color(frame.sample(x, y, [width, height]), &mut memo));
-                }
+            let mut colors = vec![[0; 3]; width * height];
+            if let Some(readout) = frame.sample_offsets([width, height], [0, 0, width, height], 1) {
+                super::parallel::rows(&mut colors, width, height, workers, |range, rows| {
+                    let mut memo = FilmPixels::new(&self.film);
+                    for (local_y, row) in rows.chunks_exact_mut(width).enumerate() {
+                        let source_row = readout.rows[range.start + local_y];
+                        for (x, color) in row.iter_mut().enumerate() {
+                            *color = self
+                                .color(readout.sample(source_row, readout.columns[x]), &mut memo);
+                        }
+                    }
+                })?;
+            } else {
+                super::parallel::rows(&mut colors, width, height, workers, |range, rows| {
+                    let mut memo = FilmPixels::new(&self.film);
+                    for (local_y, row) in rows.chunks_exact_mut(width).enumerate() {
+                        let y = range.start + local_y;
+                        for (x, color) in row.iter_mut().enumerate() {
+                            *color = self.color(frame.sample(x, y, [width, height]), &mut memo);
+                        }
+                    }
+                })?;
             }
-        }
-        let mut out = vec![0; layout.bytes()?];
-        for (y, row) in out.chunks_exact_mut(layout.stride).enumerate() {
-            let sy = ((2 * y + 1) * height / (2 * layout.height)).min(height - 1);
-            for (x, pair) in row[..layout.width * 2].chunks_exact_mut(4).enumerate() {
-                let sample = |x: usize| {
-                    colors[sy * width + ((2 * x + 1) * width / (2 * layout.width)).min(width - 1)]
-                };
-                pair.copy_from_slice(&Film::pack(sample(x * 2), sample(x * 2 + 1)));
+            for (y, row) in out.chunks_exact_mut(layout.stride).enumerate() {
+                let sy = ((2 * y + 1) * height / (2 * layout.height)).min(height - 1);
+                for (x, pair) in row[..layout.width * 2].chunks_exact_mut(4).enumerate() {
+                    let sample = |x: usize| {
+                        colors
+                            [sy * width + ((2 * x + 1) * width / (2 * layout.width)).min(width - 1)]
+                    };
+                    pair.copy_from_slice(&Film::pack(sample(x * 2), sample(x * 2 + 1)));
+                }
             }
         }
         let out: Arc<[u8]> = out.into();
@@ -400,6 +459,37 @@ mod tests {
         .unwrap();
         (r, parameters, exposure)
     }
+    fn scalar_render(image: &Image, layout: ImageLayout) -> Vec<u8> {
+        let frame = image.measurement([layout.width, layout.height]).unwrap();
+        let [width, height] = frame.sample_dimensions();
+        let mut pixels = FilmPixels::new(&image.film);
+        let mut colors = Vec::with_capacity(width * height);
+        if let Some(readout) = frame.sample_offsets([width, height], [0, 0, width, height], 1) {
+            for &row in &readout.rows {
+                for &column in &readout.columns {
+                    colors.push(image.color(readout.sample(row, column), &mut pixels));
+                }
+            }
+        } else {
+            for y in 0..height {
+                for x in 0..width {
+                    colors.push(image.color(frame.sample(x, y, [width, height]), &mut pixels));
+                }
+            }
+        }
+        let mut output = vec![0; layout.bytes().unwrap()];
+        for (y, row) in output.chunks_exact_mut(layout.stride).enumerate() {
+            let source_y = ((2 * y + 1) * height / (2 * layout.height)).min(height - 1);
+            for (x, pair) in row[..layout.width * 2].chunks_exact_mut(4).enumerate() {
+                let sample = |x: usize| {
+                    colors[source_y * width
+                        + ((2 * x + 1) * width / (2 * layout.width)).min(width - 1)]
+                };
+                pair.copy_from_slice(&Film::pack(sample(x * 2), sample(x * 2 + 1)));
+            }
+        }
+        output
+    }
     #[test]
     fn exposure_publication_is_lazy_and_reuses_only_consumed_parameters() {
         let (mut renderer, parameters, exposure) = renderer();
@@ -411,7 +501,7 @@ mod tests {
             height: 12,
             stride: 36,
         };
-        let pixels = first.render(layout).unwrap();
+        let pixels = first.render(layout, 0).unwrap();
         assert_eq!(first.measurements.lock().unwrap()[0].0, [16, 12]);
         assert_eq!(pixels.len(), 432);
         assert!(
@@ -422,12 +512,12 @@ mod tests {
         parameters.lock().unwrap().words[0] = 1;
         let unchanged = renderer.capture().unwrap().unwrap();
         assert!(Arc::ptr_eq(&first, &unchanged));
-        assert!(Arc::ptr_eq(&pixels, &unchanged.render(layout).unwrap()));
+        assert!(Arc::ptr_eq(&pixels, &unchanged.render(layout, 0).unwrap()));
         exposure.lock().unwrap().seconds *= 2.;
         let changed = renderer.capture().unwrap().unwrap();
         assert!(!Arc::ptr_eq(&first, &changed));
         assert!(changed.outputs.lock().unwrap().is_empty());
-        assert_eq!(first.render(layout).unwrap(), pixels);
+        assert_eq!(first.render(layout, 0).unwrap(), pixels);
     }
     #[test]
     fn binned_readout_integrates_light_before_film_and_roundtrips_without_rendering() {
@@ -443,8 +533,8 @@ mod tests {
             height: 12,
             stride: 32,
         };
-        let output = frame.render(layout).unwrap();
-        assert_eq!(output, restored.render(layout).unwrap());
+        let output = frame.render(layout, 0).unwrap();
+        assert_eq!(output, restored.render(layout, 0).unwrap());
         // The two-pixel black/white pattern averages in linear irradiance;
         // point sampling before film would select alternating endpoints.
         assert!(output.chunks_exact(4).all(|p| p[0] == p[1]));
@@ -460,6 +550,22 @@ mod tests {
             .sum();
         assert_eq!(total, 64 * 48 / 2);
         assert_eq!(frame.histograms.lock().unwrap().len(), 1);
+    }
+    #[test]
+    fn exact_and_upscaled_outputs_match_the_scalar_renderer() {
+        let (mut renderer, _, _) = renderer();
+        let image = renderer.capture().unwrap().unwrap();
+        for (width, height) in [(16, 12), (64, 48), (128, 96)] {
+            let layout = ImageLayout {
+                width,
+                height,
+                stride: width * 2 + 8,
+            };
+            let expected = scalar_render(&image, layout);
+            assert_eq!(image.render(layout, 2).unwrap().as_ref(), expected);
+            image.outputs.lock().unwrap().clear();
+            assert_eq!(image.render(layout, 0).unwrap().as_ref(), expected);
+        }
     }
     #[test]
     fn readouts_match_scalar_film_across_binning_projection_padding_and_restore() {
@@ -559,9 +665,9 @@ mod tests {
                     .unwrap();
                     let image = renderer.capture().unwrap().unwrap();
                     let saved = image.checkpoint().unwrap();
-                    let actual = image.render(layout).unwrap();
+                    let actual = image.render(layout, 0).unwrap();
                     let restored = Image::from_checkpoint(&saved).unwrap();
-                    assert_eq!(actual, restored.render(layout).unwrap());
+                    assert_eq!(actual, restored.render(layout, 0).unwrap());
                     assert_eq!(
                         actual.as_ref(),
                         expected,

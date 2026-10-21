@@ -432,7 +432,7 @@ impl Device for ClockedFrames {
         } else if matches!(image.source, super::frames::ImageSource::Analytic) {
             image.radiance = None;
             let layout = image.layout;
-            let bytes = match image.pixels.packed_mut(layout) {
+            let bytes = match image.pixels.packed_mut(layout, cx.compute_workers()) {
                 Ok(pixels) => std::sync::Arc::make_mut(pixels),
                 Err(e) => {
                     cx.fail(e);

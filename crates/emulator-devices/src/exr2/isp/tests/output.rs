@@ -476,14 +476,14 @@ fn external_frames_latch_host_pixels_only_at_due_edges_and_animate_in_guest_time
     super::liveview_support::advance(&mut source, &mut memory, 10);
     let red = {
         let image = images.0.lock().unwrap();
-        image.pixels.render(image.layout).unwrap()
+        image.pixels.render(image.layout, 0).unwrap()
     };
     assert_eq!(&red[..4], &[77, 77, 85, 255]);
     images.prepare_rgb(1, 1, &[0, 0, 255]).unwrap();
     assert_eq!(
         {
             let image = images.0.lock().unwrap();
-            image.pixels.render(image.layout).unwrap()
+            image.pixels.render(image.layout, 0).unwrap()
         },
         red
     );
@@ -493,7 +493,7 @@ fn external_frames_latch_host_pixels_only_at_due_edges_and_animate_in_guest_time
     assert_ne!(
         {
             let image = images.0.lock().unwrap();
-            image.pixels.render(image.layout).unwrap()
+            image.pixels.render(image.layout, 0).unwrap()
         },
         red
     );
@@ -505,13 +505,13 @@ fn external_frames_latch_host_pixels_only_at_due_edges_and_animate_in_guest_time
     super::liveview_support::advance(&mut source, &mut memory, 30);
     let a = {
         let image = images.0.lock().unwrap();
-        image.pixels.render(image.layout).unwrap()
+        image.pixels.render(image.layout, 0).unwrap()
     };
     super::liveview_support::advance(&mut source, &mut memory, 39);
     assert_eq!(
         {
             let image = images.0.lock().unwrap();
-            image.pixels.render(image.layout).unwrap()
+            image.pixels.render(image.layout, 0).unwrap()
         },
         a
     );
@@ -519,7 +519,7 @@ fn external_frames_latch_host_pixels_only_at_due_edges_and_animate_in_guest_time
     assert_ne!(
         {
             let image = images.0.lock().unwrap();
-            image.pixels.render(image.layout).unwrap()
+            image.pixels.render(image.layout, 0).unwrap()
         },
         a
     );
@@ -571,7 +571,7 @@ fn wired_frame_clock_publishes_pixels_and_statistics_on_the_same_physical_edge()
     assert_eq!(
         &{
             let image = images.0.lock().unwrap();
-            image.pixels.render(image.layout).unwrap()
+            image.pixels.render(image.layout, 0).unwrap()
         }[..4],
         &[77, 77, 85, 255]
     );
@@ -686,7 +686,7 @@ fn wired_exposures_latch_physical_focus_until_the_next_input_edge() {
     super::liveview_support::advance(&mut source, &mut memory, 10);
     let sharp = {
         let image = images.0.lock().unwrap();
-        image.pixels.render(image.layout).unwrap()
+        image.pixels.render(image.layout, 0).unwrap()
     };
     position.publish(64);
     let saved = source.save();
@@ -696,7 +696,7 @@ fn wired_exposures_latch_physical_focus_until_the_next_input_edge() {
     assert_eq!(
         {
             let image = images.0.lock().unwrap();
-            image.pixels.render(image.layout).unwrap()
+            image.pixels.render(image.layout, 0).unwrap()
         },
         sharp
     );
@@ -706,7 +706,7 @@ fn wired_exposures_latch_physical_focus_until_the_next_input_edge() {
     assert_ne!(
         {
             let image = images.0.lock().unwrap();
-            image.pixels.render(image.layout).unwrap()
+            image.pixels.render(image.layout, 0).unwrap()
         },
         sharp
     );
@@ -725,7 +725,7 @@ fn wired_exposures_latch_physical_focus_until_the_next_input_edge() {
     assert_eq!(
         {
             let image = images.0.lock().unwrap();
-            image.pixels.render(image.layout).unwrap()
+            image.pixels.render(image.layout, 0).unwrap()
         },
         sharp
     );
@@ -1005,7 +1005,7 @@ fn switching_frame_sources_waits_for_a_new_edge_and_keeps_external_clock_phase()
     assert_eq!(
         &{
             let image = images.0.lock().unwrap();
-            image.pixels.render(image.layout).unwrap()
+            image.pixels.render(image.layout, 0).unwrap()
         }[..4],
         &[77, 77, 85, 255]
     );
