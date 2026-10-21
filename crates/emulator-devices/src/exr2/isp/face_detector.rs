@@ -31,11 +31,7 @@ pub enum Mode {
     RetainedWords,
 }
 
-const FIXED_WORDS: &[(u16, u32)] = &[
-    (0x08, 0x01000000),
-    (0x564, 0xffff),
-    (0x57c, 0),
-];
+const FIXED_WORDS: &[(u16, u32)] = &[(0x08, 0x01000000), (0x564, 0xffff), (0x57c, 0)];
 
 // Address registers retain bus addresses directly. No table is read and no
 // detection is synthesized here.
@@ -95,6 +91,7 @@ struct DmaAccess {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 struct DmaChannel {
     phase: DmaPhase,
+    initial_registers: BTreeMap<u8, u32>,
     registers: BTreeMap<u8, u32>,
     accepted_registers: BTreeMap<u8, u32>,
     accesses: Vec<DmaAccess>,
@@ -209,14 +206,12 @@ impl FaceDetector {
                 DmaPhase::ClearCommand
             }
             (DmaPhase::ClearCommand, DmaOperation::Write, 0) if value == 0 => DmaPhase::ConfigRead,
-            (DmaPhase::ConfigRead, DmaOperation::Read, 0x20) if value == 0 && stored == 0 => {
+            (DmaPhase::ConfigRead, DmaOperation::Read, 0x20)
+                if value == stored && (stored == 0 || Self::valid_dma_config(stored)) =>
+            {
                 DmaPhase::ConfigWrite
             }
-            (DmaPhase::ConfigWrite, DmaOperation::Write, 0x20)
-                if value & !0x00703000 == 0
-                    && value & 0x000fffff == 0x3000
-                    && (value >> 20) & 7 <= 4 =>
-            {
+            (DmaPhase::ConfigWrite, DmaOperation::Write, 0x20) if Self::valid_dma_config(value) => {
                 DmaPhase::ConfigControl
             }
             (DmaPhase::ConfigControl, DmaOperation::Write, 4) if value == 0 => {
@@ -243,8 +238,31 @@ impl FaceDetector {
         true
     }
 
+    fn valid_dma_config(value: u32) -> bool {
+        value & !0x00703000 == 0 && value & 0x000fffff == 0x3000 && (value >> 20) & 7 <= 4
+    }
+
+    fn valid_idle_dma_registers(registers: &BTreeMap<u8, u32>) -> bool {
+        registers.iter().all(|(&offset, &value)| match offset {
+            0 | 4 | 0x10 => value == 0,
+            0x0c => value == 1,
+            0x20 => Self::valid_dma_config(value),
+            0x28 => value == 0x100,
+            0x44 => matches!(value, 0 | 2),
+            _ => false,
+        })
+    }
+
     fn valid_dma_channel(state: &DmaChannel) -> bool {
-        let mut replay = DmaChannel::default();
+        if !Self::valid_idle_dma_registers(&state.initial_registers) {
+            return false;
+        }
+        let mut replay = DmaChannel {
+            initial_registers: state.initial_registers.clone(),
+            registers: state.initial_registers.clone(),
+            accepted_registers: state.initial_registers.clone(),
+            ..DmaChannel::default()
+        };
         for access in &state.accesses {
             if !Self::apply_dma_access(&mut replay, access.operation, access.offset, access.value) {
                 return false;
@@ -645,7 +663,44 @@ impl FaceDetector {
                     }
                 }
             }
-            RequestPhase::Closed => return false,
+            RequestPhase::Closed => {
+                if request.step == 0 {
+                    if operation != DmaOperation::Write
+                        || offset != 0x10
+                        || !Self::valid_config(offset, value)
+                        || dma
+                            .iter()
+                            .any(|channel| !Self::valid_idle_dma_registers(&channel.registers))
+                    {
+                        return false;
+                    }
+                    // A new configuration retires the closed transaction.
+                    // Keep the real idle register values, including DMA setup;
+                    // only the bounded transaction observers begin again.
+                    for channel in dma.iter_mut() {
+                        let registers = channel.registers.clone();
+                        *channel = DmaChannel {
+                            initial_registers: registers.clone(),
+                            accepted_registers: registers.clone(),
+                            registers,
+                            ..DmaChannel::default()
+                        };
+                    }
+                    request.step = 1;
+                    registers.insert(offset, value);
+                } else if let Some((channel, local)) = Self::dma_location(offset) {
+                    if !Self::apply_dma_access(&mut dma[channel], operation, local, value) {
+                        return false;
+                    }
+                } else if operation == DmaOperation::Write
+                    && Self::is_config_offset(offset)
+                    && Self::valid_config(offset, value)
+                {
+                    registers.insert(offset, value);
+                } else {
+                    return false;
+                }
+            }
         }
         request.accesses.push(RequestAccess {
             operation,
@@ -663,7 +718,18 @@ impl FaceDetector {
         if !Self::configured_for_request(&request.initial_registers, &request.initial_dma)
             || request.initial_registers.iter().any(|(offset, value)| {
                 !((*offset == 0 && *value <= 1)
-                    || Self::is_config_offset(*offset) && Self::valid_config(*offset, *value))
+                    || Self::is_config_offset(*offset) && Self::valid_config(*offset, *value)
+                    || Self::is_request_offset(*offset)
+                        && request
+                            .initial_dma
+                            .iter()
+                            .all(|channel| !channel.initial_registers.is_empty())
+                        && match *offset {
+                            0x04 => *value == 1,
+                            0x14 => *value < 0x1000,
+                            0x8f8 => *value == 0x10000000,
+                            _ => true,
+                        })
             })
             || request.initial_dma.iter().any(|channel| {
                 !Self::valid_dma_channel(channel) || channel.registers != channel.accepted_registers
@@ -873,7 +939,12 @@ impl Device for FaceDetector {
                 cx.fail("face detector request must fit its 12-bit input");
                 return;
             }
-            if self.state.request.is_some() {
+            if self
+                .state
+                .request
+                .as_ref()
+                .is_some_and(|request| request.phase != RequestPhase::Closed || request.step != 1)
+            {
                 cx.fail("face detector request is already retained without a modeled result");
                 return;
             }
@@ -1231,6 +1302,78 @@ mod tests {
             .unwrap()
             .remove(submission.len());
         assert!(FaceDetector::default().restore(&corrupt).is_err());
+    }
+
+    #[test]
+    fn closed_requests_reconfigure_with_retained_idle_dma_and_bounded_history() {
+        let mut model = armed();
+        let submission = model.state.request.as_ref().unwrap().accesses.clone();
+        for _ in 0..3 {
+            for close in [false, true] {
+                for (operation, offset, value) in stop_accesses(close) {
+                    if operation == DmaOperation::Write {
+                        assert_eq!(write(&mut model, offset, value), None);
+                    } else {
+                        assert_eq!(read(&mut model, offset), None);
+                    }
+                }
+                if !close {
+                    let stopped = model.save();
+                    assert!(write(&mut model, 0x10, 0).is_some());
+                    assert_eq!(model.save(), stopped);
+                }
+            }
+            let closed = model.save();
+            assert!(write(&mut model, 0x10, 0x80000000).is_some());
+            assert_eq!(model.save(), closed);
+            let retained = model.state.dma.clone();
+            assert_eq!(write(&mut model, 0x10, 0), None);
+            for (channel, previous) in model.state.dma.iter().zip(&retained) {
+                assert_eq!(channel.registers, previous.registers);
+                assert_eq!(channel.initial_registers, previous.registers);
+                assert!(channel.accesses.is_empty());
+                assert_eq!(channel.registers[&4], 0);
+                assert_eq!(channel.registers[&0x44], 2);
+            }
+            let reopening = model.save();
+            FaceDetector::default().restore(&reopening).unwrap();
+            initialize(&mut model);
+            for access in &submission {
+                if access.operation == DmaOperation::Write {
+                    assert_eq!(
+                        write(&mut model, access.offset.into(), access.value.into()),
+                        None
+                    );
+                } else {
+                    assert_eq!(read(&mut model, access.offset.into()), None);
+                }
+            }
+            assert_eq!(
+                model.state.request.as_ref().unwrap().phase,
+                RequestPhase::AwaitingResult
+            );
+            assert_eq!(
+                model.state.request.as_ref().unwrap().accesses.len(),
+                submission.len()
+            );
+            assert!(
+                model
+                    .state
+                    .dma
+                    .iter()
+                    .all(|channel| channel.accesses.len() == 10)
+            );
+            assert_eq!(model.next_deadline(0), None);
+            assert!(read(&mut model, 0x600).is_some());
+            let saved = model.save();
+            let mut restored = FaceDetector::default();
+            restored.restore(&saved).unwrap();
+            assert_eq!(restored.save(), saved);
+            let mut false_idle = saved.clone();
+            false_idle["request"]["initial_dma"][0]["initial_registers"]["16"] = Value::from(1);
+            assert!(restored.restore(&false_idle).is_err());
+            assert_eq!(restored.save(), saved);
+        }
     }
 
     #[test]
