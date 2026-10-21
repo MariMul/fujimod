@@ -1,17 +1,34 @@
 // Generated from the Rust catalog schemas.
 
+export type AdditionalUiModes = {
+  readonly "play": number;
+  readonly "setup_play": number;
+};
+
 export type AddressDecoder = {
   readonly "choices": readonly DecoderChoice[];
   readonly "id": string;
   readonly "initial": DecoderSelection;
 };
 
+export type AddressIdentity = {
+  readonly "address": number;
+  readonly "sha256": string;
+  readonly "size": number;
+};
+
 export type AddressMapping = {
   readonly "address": number;
   readonly "core": string;
+  readonly "id": string;
   readonly "permissions": number;
   readonly "physical": number;
   readonly "size": RegionSize;
+};
+
+export type AperturePosition = {
+  readonly "f_number": number;
+  readonly "position": number;
 };
 
 export type BlockSignal = "detect" | "write_protect" | "data_ready" | "clock";
@@ -21,6 +38,7 @@ export type Body = {
   readonly "card_slot"?: CardSlotAssembly | null;
   readonly "connections": readonly BodyConnection[];
   readonly "control_bus_chips": readonly ControlBusChip[];
+  readonly "controls"?: BodyControls | null;
   readonly "display"?: DisplayAssembly | null;
   readonly "dram_bytes": number;
   readonly "id": string;
@@ -41,6 +59,24 @@ export type BodyConnection = {
   readonly "signals": readonly ConnectionSignal[];
 };
 
+export type BodyControl = {
+  readonly "assignable": boolean;
+  readonly "connection_ids": readonly string[];
+  readonly "default_function"?: string | null;
+  readonly "kind": ControlKind;
+  readonly "location": ControlLocation;
+  readonly "manual_page"?: number | null;
+  readonly "name": string;
+  readonly "positions": readonly ControlPosition[];
+  readonly "pushable": boolean;
+};
+
+export type BodyControls = {
+  readonly "analog_levels": number;
+  readonly "controls": Record<string, BodyControl>;
+  readonly "manual": ManualReference;
+};
+
 export type BodyWiring = {
   readonly "signal": WireSignal;
   readonly "source_id": string;
@@ -52,8 +88,14 @@ export type BootRomIdentity = {
   readonly "content": ContentIdentity;
 };
 
+export type CalibrationInterval = {
+  readonly "lower": number;
+  readonly "upper": number;
+};
+
 export type CardSlotAssembly = {
   readonly "connection_id": string;
+  readonly "controller_id"?: string | null;
   readonly "detect_connection_id": string;
   readonly "part_id": string;
   readonly "write_protect_connection_id": string;
@@ -65,7 +107,19 @@ export type ClockDomain = {
   readonly "parent_id"?: string | null;
 };
 
-export type ConnectionKind = "control" | "usb" | "hdmi" | "sd-card" | "remote" | "hot-shoe" | "external-power" | "battery-door" | "sensor" | "lens" | "display" | "microcontroller";
+export type ConfigurationLocation = ConfigurationLocationVariant0 | ConfigurationLocationVariant1;
+
+export type ConfigurationLocationVariant0 = {
+  readonly "address": number;
+  readonly "kind": "pointer";
+};
+
+export type ConfigurationLocationVariant1 = {
+  readonly "address": number;
+  readonly "kind": "direct";
+};
+
+export type ConnectionKind = "control" | "usb" | "hdmi" | "sd-card" | "remote" | "hot-shoe" | "external-power" | "battery-door" | "sensor" | "lens" | "display" | "microcontroller" | "power-control";
 
 export type ConnectionSignal = ConnectionSignalVariant0 | ConnectionSignalVariant1 | ConnectionSignalVariant2 | ConnectionSignalVariant3;
 
@@ -79,7 +133,7 @@ export type ConnectionSignalVariant0 = {
 export type ConnectionSignalVariant1 = {
   readonly "channel": number;
   readonly "kind": "adc";
-  readonly "threshold": number;
+  readonly "threshold"?: number | null;
 };
 
 export type ConnectionSignalVariant2 = {
@@ -105,10 +159,91 @@ export type ContentIdentity = {
   readonly "size": number;
 };
 
+export type ControlAction = {
+  readonly "keys": readonly string[];
+};
+
 export type ControlBusChip = {
   readonly "address": number;
   readonly "channel": number;
+  readonly "controller_id": string;
   readonly "polarity_selector": number;
+};
+
+export type ControlInput = ControlInputVariant0 | ControlInputVariant1 | ControlInputVariant2;
+
+export type ControlInputVariant0 = {
+  readonly "callback"?: number | null;
+  readonly "connection_id": string;
+  readonly "event": number;
+  readonly "expected_result"?: number | null;
+  readonly "intervals": readonly CalibrationInterval[];
+  readonly "kind": "adc";
+  readonly "scanner_index": number;
+};
+
+export type ControlInputVariant1 = {
+  readonly "connection_id": string;
+  readonly "event": number;
+  readonly "expected_level": boolean;
+  readonly "kind": "gpio";
+  readonly "scanner": GpioScanner;
+  readonly "scanner_index": number;
+};
+
+export type ControlInputVariant2 = {
+  readonly "connection_id": string;
+  readonly "event": number;
+  readonly "guard": number;
+  readonly "kind": "gpio_quadrature";
+  readonly "phase_map": readonly number[];
+  readonly "reset": readonly number[];
+  readonly "threshold": number;
+  readonly "transitions": readonly number[];
+};
+
+export type ControlInterface = ControlInterfaceVariant0 | ControlInterfaceVariant1;
+
+export type ControlInterfaceVariant0 = {
+  readonly "connection_id": string;
+  readonly "endpoint": number;
+  readonly "kind": "power_switch";
+  readonly "mask": number;
+  readonly "off_value": number;
+  readonly "on_value": number;
+  readonly "register": number;
+  readonly "saved_inputs": number;
+};
+
+export type ControlInterfaceVariant1 = {
+  readonly "connection_id": string;
+  readonly "contacts": number;
+  readonly "coordinate_bits": number;
+  readonly "height": number;
+  readonly "irq": number;
+  readonly "irq_mode": number;
+  readonly "kind": "prefixed_touch";
+  readonly "mode": number;
+  readonly "offset_tags": readonly number[];
+  readonly "priority": number;
+  readonly "register": number;
+  readonly "report_bytes": number;
+  readonly "width": number;
+};
+
+export type ControlKind = "dial" | "button" | "lever" | "switch" | "ring" | "shutter" | "wheel" | "joystick" | "touchscreen";
+
+export type ControlLocation = "top" | "front" | "rear" | "lens" | "bottom";
+
+export type ControlPosition = {
+  readonly "description"?: string | null;
+  readonly "id": string;
+  readonly "label"?: string | null;
+};
+
+export type ControlReaders = {
+  readonly "calibration": number;
+  readonly "scanner": ScannerReader;
 };
 
 export type CoprocessorWrite = {
@@ -150,6 +285,7 @@ export type DisplayOrientation = "landscape" | "portrait" | "tilting";
 
 export type DmaMapping = {
   readonly "address": number;
+  readonly "id": string;
   readonly "permissions": number;
   readonly "physical": number;
   readonly "size": RegionSize;
@@ -167,14 +303,58 @@ export type Firmware = {
   readonly "version": string;
 };
 
+export type FirmwareControl = {
+  readonly "actions": Record<string, ControlAction>;
+  readonly "input"?: Record<string, readonly ControlInput[]> | null;
+  readonly "interface"?: ControlInterface | null;
+  readonly "keys": readonly string[];
+  readonly "positions": readonly FirmwareControlPosition[];
+  readonly "unavailable_reason"?: string | null;
+};
+
+export type FirmwareControlPosition = {
+  readonly "active"?: boolean | null;
+  readonly "keys": readonly string[];
+  readonly "position": string;
+};
+
+export type FirmwareControls = {
+  readonly "controls": Record<string, FirmwareControl>;
+  readonly "debug_keys_available": boolean;
+  readonly "input_readers": ControlReaders;
+  readonly "native_key_names": NativeKeyNames;
+  readonly "scanner": ScannerTable;
+};
+
 export type FirmwareGeneratedFacts = {
-  readonly "first_start"?: FirstStart | null;
+  readonly "additional_ui_modes"?: AdditionalUiModes | null;
+  readonly "cfgdata_location"?: ConfigurationLocation | null;
+  readonly "controls"?: FirmwareControls | null;
+  readonly "identity_checks": readonly AddressIdentity[];
+  readonly "menu_cursor"?: number | null;
+  readonly "menu_keys"?: MenuKeys | null;
   readonly "observation"?: FirmwareObservation | null;
+  readonly "uncached_alias"?: number | null;
+};
+
+export type FirmwareImageSection = {
+  readonly "address": number;
+  readonly "name": string;
+  readonly "native_flash_offset"?: number | null;
+  readonly "sha256": string;
+  readonly "size": number;
 };
 
 export type FirmwareInstallation = {
+  readonly "entry_labels": Record<string, string>;
   readonly "flash_offset": number;
-  readonly "loader_entry"?: number | null;
+  readonly "image_sections": readonly FirmwareImageSection[];
+  readonly "loader_validation"?: FirmwareLoaderValidation | null;
+};
+
+export type FirmwareLoaderValidation = {
+  readonly "entry": number;
+  readonly "sections": readonly string[];
 };
 
 export type FirmwareObservation = {
@@ -188,15 +368,10 @@ export type FirmwareObservation = {
   readonly "ui_mode": number;
 };
 
-export type FirstStart = {
-  readonly "adc_block_id": string;
-  readonly "calibration_pointer": number;
-  readonly "channel": number;
-  readonly "hold_ticks": number;
-  readonly "lower_offset": number;
-  readonly "max_presses": number;
-  readonly "settle_ticks": number;
-  readonly "upper_offset": number;
+export type FocusAxis = {
+  readonly "infinity_position": number;
+  readonly "output": OpticalQuantity;
+  readonly "steps_per_mm": number;
 };
 
 export type GeneratedSceneAsset = {
@@ -205,9 +380,20 @@ export type GeneratedSceneAsset = {
   readonly "size": number;
 };
 
+export type GpioScanner = GpioScannerVariant0 | GpioScannerVariant1;
+
+export type GpioScannerVariant0 = {
+  readonly "kind": "direct";
+};
+
+export type GpioScannerVariant1 = {
+  readonly "kind": "combined";
+  readonly "lower": number;
+  readonly "source": number;
+  readonly "upper": number;
+};
+
 export type HomeSwitch = {
-  readonly "active_high": boolean;
-  readonly "pin": Pin;
   readonly "threshold": number;
 };
 
@@ -217,10 +403,26 @@ export type InterruptRoute = {
   readonly "source_block": string;
 };
 
+export type IrisOptics = {
+  readonly "output": OpticalQuantity;
+  readonly "positions": readonly AperturePosition[];
+  readonly "travel_limits": readonly number[];
+};
+
 export type LensAssembly = {
   readonly "connection_id": string;
+  readonly "encoder_connection_id"?: string | null;
+  readonly "focus"?: FocusAxis | null;
+  readonly "home_connections": readonly LensHomeConnection[];
+  readonly "iris"?: IrisOptics | null;
   readonly "part_id": string;
   readonly "pulse": PulseInterface;
+  readonly "route": SerialRoute;
+};
+
+export type LensHomeConnection = {
+  readonly "connection_id": string;
+  readonly "motor": number;
 };
 
 export type LensMotor = {
@@ -238,6 +440,12 @@ export type MProfileState = {
   readonly "vector_base": number;
 };
 
+export type ManualReference = {
+  readonly "pages": readonly number[];
+  readonly "title": string;
+  readonly "url": string;
+};
+
 export type MemoryKind = "dram" | "rom" | "sram" | "tcm";
 
 export type MemoryRegion = {
@@ -245,6 +453,13 @@ export type MemoryRegion = {
   readonly "id": string;
   readonly "kind": MemoryKind;
   readonly "size": RegionSize;
+};
+
+export type MenuKeys = {
+  readonly "back": string;
+  readonly "down": string;
+  readonly "menu": string;
+  readonly "up": string;
 };
 
 export type MicrocontrollerAssembly = {
@@ -262,6 +477,21 @@ export type NandGeometry = {
   readonly "spare_bytes": number;
 };
 
+export type NativeKeyName = {
+  readonly "event": number;
+  readonly "name": string;
+  readonly "string_address": number;
+};
+
+export type NativeKeyNames = {
+  readonly "reader": number;
+  readonly "rows": readonly NativeKeyName[];
+  readonly "sha256": string;
+  readonly "size": number;
+};
+
+export type OpticalQuantity = "lens_focus" | "lens_aperture";
+
 export type Part = {
   readonly "$schema": "https://fujimod.com/schemas/part.schema.json";
   readonly "id": string;
@@ -271,7 +501,6 @@ export type Part = {
 
 export type PartEncoder = {
   readonly "phase_ticks": number;
-  readonly "pins": readonly Pin[];
   readonly "rest_phase": number;
 };
 
@@ -286,8 +515,6 @@ export type PartModelVariant0 = {
 };
 
 export type PartModelVariant1 = {
-  readonly "contact_pins": readonly Pin[];
-  readonly "drive_pins": readonly Pin[];
   readonly "kind": "contact-actuator";
   readonly "positions": readonly ContactPosition[];
   readonly "settle_ticks": number;
@@ -299,8 +526,12 @@ export type PartModelVariant2 = {
 };
 
 export type PartModelVariant3 = {
+  readonly "clock_registers": RegisterRange;
+  readonly "initial_registers": readonly number[];
   readonly "kind": "microcontroller";
+  readonly "packet_registers": RegisterRange;
   readonly "registers": RegisterRange;
+  readonly "status_register"?: number | null;
 };
 
 export type PartModelVariant4 = {
@@ -323,33 +554,27 @@ export type PartModelVariant6 = {
 };
 
 export type PartModelVariant7 = {
-  readonly "height": number;
+  readonly "height"?: number | null;
   readonly "kind": "display-panel";
-  readonly "orientation": DisplayOrientation;
+  readonly "orientation"?: DisplayOrientation | null;
   readonly "serial": SerialOutputKind;
   readonly "used_mask": number;
-  readonly "width": number;
+  readonly "width"?: number | null;
 };
 
 export type PeripheralMapping = {
   readonly "address": number;
   readonly "block_id": string;
   readonly "core": string;
-  readonly "physical": number;
-  readonly "size": number;
-};
-
-export type Pin = {
-  readonly "pin": number;
-  readonly "port": number;
+  readonly "offset"?: number | null;
 };
 
 export type PowerControlAssembly = {
-  readonly "adc_block_id": string;
-  readonly "adc_channel": number;
+  readonly "channel": number;
   readonly "connection_id": string;
   readonly "controller_id": string;
   readonly "part_id": string;
+  readonly "select_connection_id": string;
 };
 
 export type ProcessorArchitecture = "arm32" | "aarch64";
@@ -411,8 +636,12 @@ export type RegisterValue = {
   readonly "value": number;
 };
 
+export type ResolvedConfiguration = {
+  readonly "configuration": RunConfiguration;
+  readonly "reference": ResolvedSelection;
+};
+
 export type ResolvedSelection = {
-  readonly "$schema"?: "https://fujimod.com/schemas/resolved-selection.schema.json";
   readonly "body": Body;
   readonly "firmware": Firmware;
   readonly "parts": readonly Part[];
@@ -425,7 +654,7 @@ export type RunAdcInputs = {
 };
 
 export type RunCardInput = {
-  readonly "part_id": string;
+  readonly "connection_id": string;
   readonly "present": boolean;
   readonly "write_protected": boolean;
 };
@@ -459,6 +688,13 @@ export type RunExecution = {
 
 export type RunExecutionMode = "strict";
 
+export type RunFirstStart = {
+  readonly "hold_ticks": number;
+  readonly "key_id": string;
+  readonly "max_presses": number;
+  readonly "settle_ticks": number;
+};
+
 export type RunGpioInputs = {
   readonly "block_id": string;
   readonly "connections": readonly RunConnectionState[];
@@ -479,6 +715,7 @@ export type RunImages = {
 export type RunInputs = {
   readonly "adc": RunAdcInputs;
   readonly "card": RunCardInput;
+  readonly "first_start"?: RunFirstStart | null;
   readonly "gpio": RunGpioInputs;
   readonly "mcu": RunMcuInput;
   readonly "power": RunPowerInput;
@@ -578,16 +815,25 @@ export type RunUsbInput = {
   readonly "connection_id": string;
 };
 
+export type ScannerReader = {
+  readonly "routine": AddressIdentity;
+  readonly "stable_offset": number;
+};
+
+export type ScannerTable = {
+  readonly "base": number;
+  readonly "count": number;
+  readonly "lookup": number;
+  readonly "sha256": string;
+  readonly "stride": number;
+};
+
 export type SensorAssembly = {
-  readonly "channel": number;
   readonly "connection_id": string;
-  readonly "control": SensorControlInterface;
-  readonly "controller_id": string;
   readonly "part_id": string;
 };
 
 export type SensorControlInterface = {
-  readonly "address": number;
   readonly "data_bits": number;
   readonly "register_address_bits": number;
 };
@@ -606,8 +852,7 @@ export type SerialRoute = {
   readonly "clock_hz"?: number | null;
   readonly "controller_id": string;
   readonly "endpoint_id": string;
-  readonly "select_active_high": boolean;
-  readonly "select_pin": Pin;
+  readonly "select_connection_id": string;
   readonly "word_bits": number;
 };
 
@@ -632,12 +877,11 @@ export type SocBlock = {
   readonly "base": number;
   readonly "clock_id"?: string | null;
   readonly "id": string;
-  readonly "interrupt_lines": readonly number[];
   readonly "kind": SocBlockKind;
   readonly "size": number;
 };
 
-export type SocBlockKind = "gpio" | "adc" | "interrupt-controller" | "timer" | "dma" | "control-bus" | "serial-controller" | "nand-controller" | "usb-controller" | "display-controller" | "imaging-controller" | "reset-controller" | "clock-controller";
+export type SocBlockKind = "gpio" | "adc" | "interrupt-controller" | "timer" | "dma" | "control-bus" | "serial-controller" | "nand-controller" | "sd-card-controller" | "usb-controller" | "display-controller" | "imaging-controller" | "reset-controller" | "clock-controller" | "address-window";
 
 export type SocReset = {
   readonly "coprocessor_writes": readonly CoprocessorWrite[];

@@ -1,1033 +1,1037 @@
 # Generated from the Rust catalog schemas.
-from typing import Literal, Never, NotRequired, Required, TypedDict, TypeAlias, Union
+from __future__ import annotations
 
-AddressDecoder = TypedDict(
-    "AddressDecoder",
-    {
-        "choices": Required[list["DecoderChoice"]],
-        "id": Required[str],
-        "initial": Required["DecoderSelection"],
-    },
-    total=False,
-)
+from typing import Literal, NotRequired, Required, TypedDict
 
-AddressMapping = TypedDict(
-    "AddressMapping",
-    {
-        "address": Required[int],
-        "core": Required[str],
-        "permissions": Required[int],
-        "physical": Required[int],
-        "size": Required["RegionSize"],
-    },
-    total=False,
-)
 
-BlockSignal: TypeAlias = Union[Literal["detect"], Literal["write_protect"], Literal["data_ready"], Literal["clock"]]
+class AdditionalUiModes(TypedDict, total=False):
+    play: Required[int]
+    setup_play: Required[int]
+
+
+class AddressDecoder(TypedDict, total=False):
+    choices: Required[list[DecoderChoice]]
+    id: Required[str]
+    initial: Required[DecoderSelection]
+
+
+class AddressIdentity(TypedDict, total=False):
+    address: Required[int]
+    sha256: Required[str]
+    size: Required[int]
+
+
+class AddressMapping(TypedDict, total=False):
+    address: Required[int]
+    core: Required[str]
+    id: Required[str]
+    permissions: Required[int]
+    physical: Required[int]
+    size: Required[RegionSize]
+
+
+class AperturePosition(TypedDict, total=False):
+    f_number: Required[int]
+    position: Required[int]
+
+
+type BlockSignal = Literal["detect", "write_protect", "data_ready", "clock"]
+
 
 Body = TypedDict(
     "Body",
     {
-        "$schema": Required[Literal["https://fujimod.com/schemas/body.schema.json"]],
-        "card_slot": NotRequired[Union["CardSlotAssembly", None]],
-        "connections": Required[list["BodyConnection"]],
-        "control_bus_chips": Required[list["ControlBusChip"]],
-        "display": NotRequired[Union["DisplayAssembly", None]],
-        "dram_bytes": Required[int],
-        "id": Required[str],
-        "lens": NotRequired[Union["LensAssembly", None]],
-        "microcontroller": NotRequired[Union["MicrocontrollerAssembly", None]],
-        "nand": NotRequired[Union["NandGeometry", None]],
-        "parts": Required[list[str]],
-        "power_control": NotRequired[Union["PowerControlAssembly", None]],
-        "schema": Required[int],
-        "sensor": NotRequired[Union["SensorAssembly", None]],
-        "soc_id": Required[str],
-        "wiring": Required[list["BodyWiring"]],
+        "$schema": Required['Literal["https://fujimod.com/schemas/body.schema.json"]'],
+        "card_slot": NotRequired["CardSlotAssembly | None"],
+        "connections": Required["list[BodyConnection]"],
+        "control_bus_chips": Required["list[ControlBusChip]"],
+        "controls": NotRequired["BodyControls | None"],
+        "display": NotRequired["DisplayAssembly | None"],
+        "dram_bytes": Required["int"],
+        "id": Required["str"],
+        "lens": NotRequired["LensAssembly | None"],
+        "microcontroller": NotRequired["MicrocontrollerAssembly | None"],
+        "nand": NotRequired["NandGeometry | None"],
+        "parts": Required["list[str]"],
+        "power_control": NotRequired["PowerControlAssembly | None"],
+        "schema": Required["int"],
+        "sensor": NotRequired["SensorAssembly | None"],
+        "soc_id": Required["str"],
+        "wiring": Required["list[BodyWiring]"],
     },
     total=False,
 )
 
-BodyConnection = TypedDict(
-    "BodyConnection",
-    {
-        "id": Required[str],
-        "kind": Required["ConnectionKind"],
-        "signals": Required[list["ConnectionSignal"]],
-    },
-    total=False,
+
+class BodyConnection(TypedDict, total=False):
+    id: Required[str]
+    kind: Required[ConnectionKind]
+    signals: Required[list[ConnectionSignal]]
+
+
+class BodyControl(TypedDict, total=False):
+    assignable: Required[bool]
+    connection_ids: Required[list[str]]
+    default_function: NotRequired[str | None]
+    kind: Required[ControlKind]
+    location: Required[ControlLocation]
+    manual_page: NotRequired[int | None]
+    name: Required[str]
+    positions: Required[list[ControlPosition]]
+    pushable: Required[bool]
+
+
+class BodyControls(TypedDict, total=False):
+    analog_levels: Required[int]
+    controls: Required[dict[str, BodyControl]]
+    manual: Required[ManualReference]
+
+
+class BodyWiring(TypedDict, total=False):
+    signal: Required[WireSignal]
+    source_id: Required[str]
+    target_id: Required[str]
+
+
+class BootRomIdentity(TypedDict, total=False):
+    address: Required[int]
+    content: Required[ContentIdentity]
+
+
+class CalibrationInterval(TypedDict, total=False):
+    lower: Required[int]
+    upper: Required[int]
+
+
+class CardSlotAssembly(TypedDict, total=False):
+    connection_id: Required[str]
+    controller_id: NotRequired[str | None]
+    detect_connection_id: Required[str]
+    part_id: Required[str]
+    write_protect_connection_id: Required[str]
+
+
+class ClockDomain(TypedDict, total=False):
+    frequency_hz: NotRequired[int | None]
+    id: Required[str]
+    parent_id: NotRequired[str | None]
+
+
+type ConfigurationLocation = (
+    ConfigurationLocationVariant0 | ConfigurationLocationVariant1
 )
 
-BodyWiring = TypedDict(
-    "BodyWiring",
-    {
-        "signal": Required["WireSignal"],
-        "source_id": Required[str],
-        "target_id": Required[str],
-    },
-    total=False,
+
+class ConfigurationLocationVariant0(TypedDict, total=False):
+    address: Required[int]
+    kind: Required[Literal["pointer"]]
+
+
+class ConfigurationLocationVariant1(TypedDict, total=False):
+    address: Required[int]
+    kind: Required[Literal["direct"]]
+
+
+type ConnectionKind = Literal[
+    "control",
+    "usb",
+    "hdmi",
+    "sd-card",
+    "remote",
+    "hot-shoe",
+    "external-power",
+    "battery-door",
+    "sensor",
+    "lens",
+    "display",
+    "microcontroller",
+    "power-control",
+]
+
+
+type ConnectionSignal = (
+    ConnectionSignalVariant0
+    | ConnectionSignalVariant1
+    | ConnectionSignalVariant2
+    | ConnectionSignalVariant3
 )
 
-BootRomIdentity = TypedDict(
-    "BootRomIdentity",
-    {
-        "address": Required[int],
-        "content": Required["ContentIdentity"],
-    },
-    total=False,
-)
 
-CardSlotAssembly = TypedDict(
-    "CardSlotAssembly",
-    {
-        "connection_id": Required[str],
-        "detect_connection_id": Required[str],
-        "part_id": Required[str],
-        "write_protect_connection_id": Required[str],
-    },
-    total=False,
-)
+class ConnectionSignalVariant0(TypedDict, total=False):
+    active_level: Required[bool]
+    kind: Required[Literal["gpio"]]
+    pin: Required[int]
+    port: Required[int]
 
-ClockDomain = TypedDict(
-    "ClockDomain",
-    {
-        "frequency_hz": NotRequired[Union[int, None]],
-        "id": Required[str],
-        "parent_id": NotRequired[Union[str, None]],
-    },
-    total=False,
-)
 
-ConnectionKind: TypeAlias = Union[Literal["control"], Literal["usb"], Literal["hdmi"], Literal["sd-card"], Literal["remote"], Literal["hot-shoe"], Literal["external-power"], Literal["battery-door"], Literal["sensor"], Literal["lens"], Literal["display"], Literal["microcontroller"]]
+class ConnectionSignalVariant1(TypedDict, total=False):
+    channel: Required[int]
+    kind: Required[Literal["adc"]]
+    threshold: NotRequired[int | None]
 
-ConnectionSignal: TypeAlias = Union["ConnectionSignalVariant0", "ConnectionSignalVariant1", "ConnectionSignalVariant2", "ConnectionSignalVariant3"]
 
-ConnectionSignalVariant0 = TypedDict(
-    "ConnectionSignalVariant0",
-    {
-        "active_level": Required[bool],
-        "kind": Required[Literal["gpio"]],
-        "pin": Required[int],
-        "port": Required[int],
-    },
-    total=False,
-)
+class ConnectionSignalVariant2(TypedDict, total=False):
+    block_id: Required[str]
+    kind: Required[Literal["block"]]
+    signal: Required[BlockSignal]
 
-ConnectionSignalVariant1 = TypedDict(
-    "ConnectionSignalVariant1",
-    {
-        "channel": Required[int],
-        "kind": Required[Literal["adc"]],
-        "threshold": Required[int],
-    },
-    total=False,
-)
 
-ConnectionSignalVariant2 = TypedDict(
-    "ConnectionSignalVariant2",
-    {
-        "block_id": Required[str],
-        "kind": Required[Literal["block"]],
-        "signal": Required["BlockSignal"],
-    },
-    total=False,
-)
+class ConnectionSignalVariant3(TypedDict, total=False):
+    address: Required[int]
+    block_id: Required[str]
+    channel: Required[int]
+    kind: Required[Literal["serial"]]
 
-ConnectionSignalVariant3 = TypedDict(
-    "ConnectionSignalVariant3",
-    {
-        "address": Required[int],
-        "block_id": Required[str],
-        "channel": Required[int],
-        "kind": Required[Literal["serial"]],
-    },
-    total=False,
-)
 
-ContactPosition = TypedDict(
-    "ContactPosition",
-    {
-        "contacts": Required[list[bool]],
-        "drive": Required[int],
-    },
-    total=False,
-)
+class ContactPosition(TypedDict, total=False):
+    contacts: Required[list[bool]]
+    drive: Required[int]
 
-ContentIdentity = TypedDict(
-    "ContentIdentity",
-    {
-        "sha256": Required[str],
-        "size": Required[int],
-    },
-    total=False,
-)
 
-ControlBusChip = TypedDict(
-    "ControlBusChip",
-    {
-        "address": Required[int],
-        "channel": Required[int],
-        "polarity_selector": Required[int],
-    },
-    total=False,
-)
+class ContentIdentity(TypedDict, total=False):
+    sha256: Required[str]
+    size: Required[int]
 
-CoprocessorWrite = TypedDict(
-    "CoprocessorWrite",
-    {
-        "core": Required[str],
-        "cp": Required[int],
-        "crm": Required[int],
-        "crn": Required[int],
-        "opc1": Required[int],
-        "opc2": Required[int],
-        "secure": Required[int],
-        "set_bits": Required[int],
-        "wide": Required[bool],
-    },
-    total=False,
-)
 
-CoreRelease = TypedDict(
-    "CoreRelease",
-    {
-        "mask": Required[int],
-        "register": Required[int],
-        "source": Required[int],
-        "target": Required[int],
-    },
-    total=False,
-)
+class ControlAction(TypedDict, total=False):
+    keys: Required[list[str]]
 
-DecoderChoice = TypedDict(
-    "DecoderChoice",
-    {
-        "id": Required[str],
-        "selection": Required["DecoderSelection"],
-    },
-    total=False,
-)
 
-DecoderSelection = TypedDict(
-    "DecoderSelection",
-    {
-        "dma_mappings": Required[list[str]],
-        "processors": Required[list[str]],
-    },
-    total=False,
-)
+class ControlBusChip(TypedDict, total=False):
+    address: Required[int]
+    channel: Required[int]
+    controller_id: Required[str]
+    polarity_selector: Required[int]
 
-DisplayAssembly = TypedDict(
-    "DisplayAssembly",
-    {
-        "connection_id": Required[str],
-        "part_id": Required[str],
-        "route": NotRequired[Union["SerialRoute", None]],
-    },
-    total=False,
-)
 
-DisplayOrientation: TypeAlias = Union[Literal["landscape"], Literal["portrait"], Literal["tilting"]]
+type ControlInput = ControlInputVariant0 | ControlInputVariant1 | ControlInputVariant2
 
-DmaMapping = TypedDict(
-    "DmaMapping",
-    {
-        "address": Required[int],
-        "permissions": Required[int],
-        "physical": Required[int],
-        "size": Required["RegionSize"],
-    },
-    total=False,
-)
+
+class ControlInputVariant0(TypedDict, total=False):
+    callback: NotRequired[int | None]
+    connection_id: Required[str]
+    event: Required[int]
+    expected_result: NotRequired[int | None]
+    intervals: Required[list[CalibrationInterval]]
+    kind: Required[Literal["adc"]]
+    scanner_index: Required[int]
+
+
+class ControlInputVariant1(TypedDict, total=False):
+    connection_id: Required[str]
+    event: Required[int]
+    expected_level: Required[bool]
+    kind: Required[Literal["gpio"]]
+    scanner: Required[GpioScanner]
+    scanner_index: Required[int]
+
+
+class ControlInputVariant2(TypedDict, total=False):
+    connection_id: Required[str]
+    event: Required[int]
+    guard: Required[int]
+    kind: Required[Literal["gpio_quadrature"]]
+    phase_map: Required[list[int]]
+    reset: Required[list[int]]
+    threshold: Required[int]
+    transitions: Required[list[int]]
+
+
+type ControlInterface = ControlInterfaceVariant0 | ControlInterfaceVariant1
+
+
+class ControlInterfaceVariant0(TypedDict, total=False):
+    connection_id: Required[str]
+    endpoint: Required[int]
+    kind: Required[Literal["power_switch"]]
+    mask: Required[int]
+    off_value: Required[int]
+    on_value: Required[int]
+    register: Required[int]
+    saved_inputs: Required[int]
+
+
+class ControlInterfaceVariant1(TypedDict, total=False):
+    connection_id: Required[str]
+    contacts: Required[int]
+    coordinate_bits: Required[int]
+    height: Required[int]
+    irq: Required[int]
+    irq_mode: Required[int]
+    kind: Required[Literal["prefixed_touch"]]
+    mode: Required[int]
+    offset_tags: Required[list[int]]
+    priority: Required[int]
+    register: Required[int]
+    report_bytes: Required[int]
+    width: Required[int]
+
+
+type ControlKind = Literal[
+    "dial",
+    "button",
+    "lever",
+    "switch",
+    "ring",
+    "shutter",
+    "wheel",
+    "joystick",
+    "touchscreen",
+]
+
+
+type ControlLocation = Literal["top", "front", "rear", "lens", "bottom"]
+
+
+class ControlPosition(TypedDict, total=False):
+    description: NotRequired[str | None]
+    id: Required[str]
+    label: NotRequired[str | None]
+
+
+class ControlReaders(TypedDict, total=False):
+    calibration: Required[int]
+    scanner: Required[ScannerReader]
+
+
+class CoprocessorWrite(TypedDict, total=False):
+    core: Required[str]
+    cp: Required[int]
+    crm: Required[int]
+    crn: Required[int]
+    opc1: Required[int]
+    opc2: Required[int]
+    secure: Required[int]
+    set_bits: Required[int]
+    wide: Required[bool]
+
+
+class CoreRelease(TypedDict, total=False):
+    mask: Required[int]
+    register: Required[int]
+    source: Required[int]
+    target: Required[int]
+
+
+class DecoderChoice(TypedDict, total=False):
+    id: Required[str]
+    selection: Required[DecoderSelection]
+
+
+class DecoderSelection(TypedDict, total=False):
+    dma_mappings: Required[list[str]]
+    processors: Required[list[str]]
+
+
+class DisplayAssembly(TypedDict, total=False):
+    connection_id: Required[str]
+    part_id: Required[str]
+    route: NotRequired[SerialRoute | None]
+
+
+type DisplayOrientation = Literal["landscape", "portrait", "tilting"]
+
+
+class DmaMapping(TypedDict, total=False):
+    address: Required[int]
+    id: Required[str]
+    permissions: Required[int]
+    physical: Required[int]
+    size: Required[RegionSize]
+
 
 Firmware = TypedDict(
     "Firmware",
     {
-        "$schema": Required[Literal["https://fujimod.com/schemas/firmware.schema.json"]],
-        "body_id": Required[str],
-        "boot_rom": NotRequired[Union["BootRomIdentity", None]],
-        "generated_facts": NotRequired[Union["FirmwareGeneratedFacts", None]],
-        "id": Required[str],
-        "installation": NotRequired[Union["FirmwareInstallation", None]],
-        "schema": Required[int],
-        "update": NotRequired[Union["ContentIdentity", None]],
-        "version": Required[str],
+        "$schema": Required[
+            'Literal["https://fujimod.com/schemas/firmware.schema.json"]'
+        ],
+        "body_id": Required["str"],
+        "boot_rom": NotRequired["BootRomIdentity | None"],
+        "generated_facts": NotRequired["FirmwareGeneratedFacts | None"],
+        "id": Required["str"],
+        "installation": NotRequired["FirmwareInstallation | None"],
+        "schema": Required["int"],
+        "update": NotRequired["ContentIdentity | None"],
+        "version": Required["str"],
     },
     total=False,
 )
 
-FirmwareGeneratedFacts = TypedDict(
-    "FirmwareGeneratedFacts",
-    {
-        "first_start": NotRequired[Union["FirstStart", None]],
-        "observation": NotRequired[Union["FirmwareObservation", None]],
-    },
-    total=False,
-)
 
-FirmwareInstallation = TypedDict(
-    "FirmwareInstallation",
-    {
-        "flash_offset": Required[int],
-        "loader_entry": NotRequired[Union[int, None]],
-    },
-    total=False,
-)
+class FirmwareControl(TypedDict, total=False):
+    actions: Required[dict[str, ControlAction]]
+    input: NotRequired[dict[str, list[ControlInput]] | None]
+    interface: NotRequired[ControlInterface | None]
+    keys: Required[list[str]]
+    positions: Required[list[FirmwareControlPosition]]
+    unavailable_reason: NotRequired[str | None]
 
-FirmwareObservation = TypedDict(
-    "FirmwareObservation",
-    {
-        "menu_active": Required[int],
-        "menu_node": Required[int],
-        "pending_mode": Required[int],
-        "readiness": Required["ReadinessAddresses"],
-        "rec_mode": Required[int],
-        "setup_mode": Required[int],
-        "system_mode": Required[int],
-        "ui_mode": Required[int],
-    },
-    total=False,
-)
 
-FirstStart = TypedDict(
-    "FirstStart",
-    {
-        "adc_block_id": Required[str],
-        "calibration_pointer": Required[int],
-        "channel": Required[int],
-        "hold_ticks": Required[int],
-        "lower_offset": Required[int],
-        "max_presses": Required[int],
-        "settle_ticks": Required[int],
-        "upper_offset": Required[int],
-    },
-    total=False,
-)
+class FirmwareControlPosition(TypedDict, total=False):
+    active: NotRequired[bool | None]
+    keys: Required[list[str]]
+    position: Required[str]
 
-GeneratedSceneAsset = TypedDict(
-    "GeneratedSceneAsset",
-    {
-        "id": Required[str],
-        "pattern": Required[list[int]],
-        "size": Required[int],
-    },
-    total=False,
-)
 
-HomeSwitch = TypedDict(
-    "HomeSwitch",
-    {
-        "active_high": Required[bool],
-        "pin": Required["Pin"],
-        "threshold": Required[int],
-    },
-    total=False,
-)
+class FirmwareControls(TypedDict, total=False):
+    controls: Required[dict[str, FirmwareControl]]
+    debug_keys_available: Required[bool]
+    input_readers: Required[ControlReaders]
+    native_key_names: Required[NativeKeyNames]
+    scanner: Required[ScannerTable]
 
-InterruptRoute = TypedDict(
-    "InterruptRoute",
-    {
-        "core": Required[str],
-        "line": Required[int],
-        "source_block": Required[str],
-    },
-    total=False,
-)
 
-LensAssembly = TypedDict(
-    "LensAssembly",
-    {
-        "connection_id": Required[str],
-        "part_id": Required[str],
-        "pulse": Required["PulseInterface"],
-    },
-    total=False,
-)
+class FirmwareGeneratedFacts(TypedDict, total=False):
+    additional_ui_modes: NotRequired[AdditionalUiModes | None]
+    cfgdata_location: NotRequired[ConfigurationLocation | None]
+    controls: NotRequired[FirmwareControls | None]
+    identity_checks: Required[list[AddressIdentity]]
+    menu_cursor: NotRequired[int | None]
+    menu_keys: NotRequired[MenuKeys | None]
+    observation: NotRequired[FirmwareObservation | None]
+    uncached_alias: NotRequired[int | None]
 
-LensMotor = TypedDict(
-    "LensMotor",
-    {
-        "home": NotRequired[Union["HomeSwitch", None]],
-        "initial_position": Required[int],
-        "settle_ticks": Required[int],
-        "ticks_per_step": Required[int],
-        "travel_limits": Required[list[int]],
-    },
-    total=False,
-)
 
-LensProtocol: TypeAlias = Union[Literal["banked"], Literal["three-byte"], Literal["mixed-width"], Literal["dc-zoom"]]
+class FirmwareImageSection(TypedDict, total=False):
+    address: Required[int]
+    name: Required[str]
+    native_flash_offset: NotRequired[int | None]
+    sha256: Required[str]
+    size: Required[int]
 
-MProfileState = TypedDict(
-    "MProfileState",
-    {
-        "cpuid": Required[int],
-        "vector_base": Required[int],
-    },
-    total=False,
-)
 
-MemoryKind: TypeAlias = Union[Literal["dram"], Literal["rom"], Literal["sram"], Literal["tcm"]]
+class FirmwareInstallation(TypedDict, total=False):
+    entry_labels: Required[dict[str, str]]
+    flash_offset: Required[int]
+    image_sections: Required[list[FirmwareImageSection]]
+    loader_validation: NotRequired[FirmwareLoaderValidation | None]
 
-MemoryRegion = TypedDict(
-    "MemoryRegion",
-    {
-        "base": Required[int],
-        "id": Required[str],
-        "kind": Required["MemoryKind"],
-        "size": Required["RegionSize"],
-    },
-    total=False,
-)
 
-MicrocontrollerAssembly = TypedDict(
-    "MicrocontrollerAssembly",
-    {
-        "channel": Required[int],
-        "connection_id": Required[str],
-        "controller_id": Required[str],
-        "part_id": Required[str],
-        "select_connection_id": Required[str],
-    },
-    total=False,
-)
+class FirmwareLoaderValidation(TypedDict, total=False):
+    entry: Required[int]
+    sections: Required[list[str]]
 
-NandGeometry = TypedDict(
-    "NandGeometry",
-    {
-        "bytes": Required[int],
-        "page_bytes": Required[int],
-        "pages_per_block": Required[int],
-        "spare_bytes": Required[int],
-    },
-    total=False,
-)
+
+class FirmwareObservation(TypedDict, total=False):
+    menu_active: Required[int]
+    menu_node: Required[int]
+    pending_mode: Required[int]
+    readiness: Required[ReadinessAddresses]
+    rec_mode: Required[int]
+    setup_mode: Required[int]
+    system_mode: Required[int]
+    ui_mode: Required[int]
+
+
+class FocusAxis(TypedDict, total=False):
+    infinity_position: Required[int]
+    output: Required[OpticalQuantity]
+    steps_per_mm: Required[int]
+
+
+class GeneratedSceneAsset(TypedDict, total=False):
+    id: Required[str]
+    pattern: Required[list[int]]
+    size: Required[int]
+
+
+type GpioScanner = GpioScannerVariant0 | GpioScannerVariant1
+
+
+class GpioScannerVariant0(TypedDict, total=False):
+    kind: Required[Literal["direct"]]
+
+
+class GpioScannerVariant1(TypedDict, total=False):
+    kind: Required[Literal["combined"]]
+    lower: Required[int]
+    source: Required[int]
+    upper: Required[int]
+
+
+class HomeSwitch(TypedDict, total=False):
+    threshold: Required[int]
+
+
+class InterruptRoute(TypedDict, total=False):
+    core: Required[str]
+    line: Required[int]
+    source_block: Required[str]
+
+
+class IrisOptics(TypedDict, total=False):
+    output: Required[OpticalQuantity]
+    positions: Required[list[AperturePosition]]
+    travel_limits: Required[list[int]]
+
+
+class LensAssembly(TypedDict, total=False):
+    connection_id: Required[str]
+    encoder_connection_id: NotRequired[str | None]
+    focus: NotRequired[FocusAxis | None]
+    home_connections: Required[list[LensHomeConnection]]
+    iris: NotRequired[IrisOptics | None]
+    part_id: Required[str]
+    pulse: Required[PulseInterface]
+    route: Required[SerialRoute]
+
+
+class LensHomeConnection(TypedDict, total=False):
+    connection_id: Required[str]
+    motor: Required[int]
+
+
+class LensMotor(TypedDict, total=False):
+    home: NotRequired[HomeSwitch | None]
+    initial_position: Required[int]
+    settle_ticks: Required[int]
+    ticks_per_step: Required[int]
+    travel_limits: Required[list[int]]
+
+
+type LensProtocol = Literal["banked", "three-byte", "mixed-width", "dc-zoom"]
+
+
+class MProfileState(TypedDict, total=False):
+    cpuid: Required[int]
+    vector_base: Required[int]
+
+
+class ManualReference(TypedDict, total=False):
+    pages: Required[list[int]]
+    title: Required[str]
+    url: Required[str]
+
+
+type MemoryKind = Literal["dram", "rom", "sram", "tcm"]
+
+
+class MemoryRegion(TypedDict, total=False):
+    base: Required[int]
+    id: Required[str]
+    kind: Required[MemoryKind]
+    size: Required[RegionSize]
+
+
+class MenuKeys(TypedDict, total=False):
+    back: Required[str]
+    down: Required[str]
+    menu: Required[str]
+    up: Required[str]
+
+
+class MicrocontrollerAssembly(TypedDict, total=False):
+    channel: Required[int]
+    connection_id: Required[str]
+    controller_id: Required[str]
+    part_id: Required[str]
+    select_connection_id: Required[str]
+
+
+class NandGeometry(TypedDict, total=False):
+    bytes: Required[int]
+    page_bytes: Required[int]
+    pages_per_block: Required[int]
+    spare_bytes: Required[int]
+
+
+class NativeKeyName(TypedDict, total=False):
+    event: Required[int]
+    name: Required[str]
+    string_address: Required[int]
+
+
+class NativeKeyNames(TypedDict, total=False):
+    reader: Required[int]
+    rows: Required[list[NativeKeyName]]
+    sha256: Required[str]
+    size: Required[int]
+
+
+type OpticalQuantity = Literal["lens_focus", "lens_aperture"]
+
 
 Part = TypedDict(
     "Part",
     {
-        "$schema": Required[Literal["https://fujimod.com/schemas/part.schema.json"]],
-        "id": Required[str],
+        "$schema": Required['Literal["https://fujimod.com/schemas/part.schema.json"]'],
+        "id": Required["str"],
         "model": Required["PartModel"],
-        "schema": Required[int],
+        "schema": Required["int"],
     },
     total=False,
 )
 
-PartEncoder = TypedDict(
-    "PartEncoder",
-    {
-        "phase_ticks": Required[int],
-        "pins": Required[list["Pin"]],
-        "rest_phase": Required[int],
-    },
-    total=False,
+
+class PartEncoder(TypedDict, total=False):
+    phase_ticks: Required[int]
+    rest_phase: Required[int]
+
+
+type PartModel = (
+    PartModelVariant0
+    | PartModelVariant1
+    | PartModelVariant2
+    | PartModelVariant3
+    | PartModelVariant4
+    | PartModelVariant5
+    | PartModelVariant6
+    | PartModelVariant7
 )
 
-PartModel: TypeAlias = Union["PartModelVariant0", "PartModelVariant1", "PartModelVariant2", "PartModelVariant3", "PartModelVariant4", "PartModelVariant5", "PartModelVariant6", "PartModelVariant7"]
 
-PartModelVariant0 = TypedDict(
-    "PartModelVariant0",
-    {
-        "encoder": NotRequired[Union["PartEncoder", None]],
-        "kind": Required[Literal["lens-mechanism"]],
-        "motors": Required[list["LensMotor"]],
-        "protocol": Required["LensProtocol"],
-        "zoom": NotRequired[Union["ZoomMechanism", None]],
-    },
-    total=False,
-)
+class PartModelVariant0(TypedDict, total=False):
+    encoder: NotRequired[PartEncoder | None]
+    kind: Required[Literal["lens-mechanism"]]
+    motors: Required[list[LensMotor]]
+    protocol: Required[LensProtocol]
+    zoom: NotRequired[ZoomMechanism | None]
 
-PartModelVariant1 = TypedDict(
-    "PartModelVariant1",
-    {
-        "contact_pins": Required[list["Pin"]],
-        "drive_pins": Required[list["Pin"]],
-        "kind": Required[Literal["contact-actuator"]],
-        "positions": Required[list["ContactPosition"]],
-        "settle_ticks": Required[int],
-    },
-    total=False,
-)
 
-PartModelVariant2 = TypedDict(
-    "PartModelVariant2",
-    {
-        "endpoint": Required["SerialOutputKind"],
-        "kind": Required[Literal["serial-output"]],
-    },
-    total=False,
-)
+class PartModelVariant1(TypedDict, total=False):
+    kind: Required[Literal["contact-actuator"]]
+    positions: Required[list[ContactPosition]]
+    settle_ticks: Required[int]
 
-PartModelVariant3 = TypedDict(
-    "PartModelVariant3",
-    {
-        "kind": Required[Literal["microcontroller"]],
-        "registers": Required["RegisterRange"],
-    },
-    total=False,
-)
 
-PartModelVariant4 = TypedDict(
-    "PartModelVariant4",
-    {
-        "kind": Required[Literal["power-control"]],
-        "status_registers": Required[list["StatusRegister"]],
-    },
-    total=False,
-)
+class PartModelVariant2(TypedDict, total=False):
+    endpoint: Required[SerialOutputKind]
+    kind: Required[Literal["serial-output"]]
 
-PartModelVariant5 = TypedDict(
-    "PartModelVariant5",
-    {
-        "kind": Required[Literal["sd-card-slot"]],
-    },
-    total=False,
-)
 
-PartModelVariant6 = TypedDict(
-    "PartModelVariant6",
-    {
-        "black_level": Required[int],
-        "color_filter": Required[list[int]],
-        "control": Required["SensorControlInterface"],
-        "full_scale": Required[int],
-        "kind": Required[Literal["image-sensor"]],
-        "raster": Required["SensorRaster"],
-        "reference_white": Required[list[int]],
-    },
-    total=False,
-)
+class PartModelVariant3(TypedDict, total=False):
+    clock_registers: Required[RegisterRange]
+    initial_registers: Required[list[int]]
+    kind: Required[Literal["microcontroller"]]
+    packet_registers: Required[RegisterRange]
+    registers: Required[RegisterRange]
+    status_register: NotRequired[int | None]
 
-PartModelVariant7 = TypedDict(
-    "PartModelVariant7",
-    {
-        "height": Required[int],
-        "kind": Required[Literal["display-panel"]],
-        "orientation": Required["DisplayOrientation"],
-        "serial": Required["SerialOutputKind"],
-        "used_mask": Required[int],
-        "width": Required[int],
-    },
-    total=False,
-)
 
-PeripheralMapping = TypedDict(
-    "PeripheralMapping",
-    {
-        "address": Required[int],
-        "block_id": Required[str],
-        "core": Required[str],
-        "physical": Required[int],
-        "size": Required[int],
-    },
-    total=False,
-)
+class PartModelVariant4(TypedDict, total=False):
+    kind: Required[Literal["power-control"]]
+    status_registers: Required[list[StatusRegister]]
 
-Pin = TypedDict(
-    "Pin",
-    {
-        "pin": Required[int],
-        "port": Required[int],
-    },
-    total=False,
-)
 
-PowerControlAssembly = TypedDict(
-    "PowerControlAssembly",
-    {
-        "adc_block_id": Required[str],
-        "adc_channel": Required[int],
-        "connection_id": Required[str],
-        "controller_id": Required[str],
-        "part_id": Required[str],
-    },
-    total=False,
-)
+class PartModelVariant5(TypedDict, total=False):
+    kind: Required[Literal["sd-card-slot"]]
 
-ProcessorArchitecture: TypeAlias = Union[Literal["arm32"], Literal["aarch64"]]
 
-ProcessorCore = TypedDict(
-    "ProcessorCore",
-    {
-        "id": Required[str],
-        "model": Required["ProcessorModel"],
-        "mprofile": NotRequired[Union["MProfileState", None]],
-        "registers": Required[list["RegisterValue"]],
-        "released": Required[bool],
-        "rprofile": NotRequired[Union["RProfileState", None]],
-    },
-    total=False,
-)
+class PartModelVariant6(TypedDict, total=False):
+    black_level: Required[int]
+    color_filter: Required[list[int]]
+    control: Required[SensorControlInterface]
+    full_scale: Required[int]
+    kind: Required[Literal["image-sensor"]]
+    raster: Required[SensorRaster]
+    reference_white: Required[list[int]]
 
-ProcessorModel: TypeAlias = Union[Literal["cortex-r5f"], Literal["cortex-a7"], Literal["cortex-a53"]]
 
-ProcessorRegister: TypeAlias = Union[Literal["pc"], Literal["sp"], Literal["pstate"], Literal["cpsr"]]
+class PartModelVariant7(TypedDict, total=False):
+    height: NotRequired[int | None]
+    kind: Required[Literal["display-panel"]]
+    orientation: NotRequired[DisplayOrientation | None]
+    serial: Required[SerialOutputKind]
+    used_mask: Required[int]
+    width: NotRequired[int | None]
 
-PulseInterface = TypedDict(
-    "PulseInterface",
-    {
-        "counter_channels": Required[list[int]],
-        "initial_phase": Required[int],
-        "quadrature": Required[bool],
-        "timer_channels": Required[list[int]],
-    },
-    total=False,
-)
 
-RProfileState = TypedDict(
-    "RProfileState",
-    {
-        "atcm": Required["TcmState"],
-        "btcm": Required["TcmState"],
-        "cp14_identity": Required[int],
-    },
-    total=False,
-)
+class PeripheralMapping(TypedDict, total=False):
+    address: Required[int]
+    block_id: Required[str]
+    core: Required[str]
+    offset: NotRequired[int | None]
 
-ReadinessAddresses = TypedDict(
-    "ReadinessAddresses",
-    {
-        "category_one": Required[int],
-        "category_two": Required[int],
-        "excluded_mask": Required[int],
-        "input_pending": Required[int],
-        "operation_alert_timer": Required[int],
-        "override_address": Required[int],
-    },
-    total=False,
-)
 
-RegionSize: TypeAlias = Union["RegionSizeVariant0", "RegionSizeVariant1"]
+class PowerControlAssembly(TypedDict, total=False):
+    channel: Required[int]
+    connection_id: Required[str]
+    controller_id: Required[str]
+    part_id: Required[str]
+    select_connection_id: Required[str]
 
-RegionSizeVariant0 = TypedDict(
-    "RegionSizeVariant0",
-    {
-        "bytes": Required[int],
-        "kind": Required[Literal["bytes"]],
-    },
-    total=False,
-)
 
-RegionSizeVariant1 = TypedDict(
-    "RegionSizeVariant1",
-    {
-        "kind": Required[Literal["body_dram"]],
-    },
-    total=False,
-)
+type ProcessorArchitecture = Literal["arm32", "aarch64"]
 
-RegisterRange = TypedDict(
-    "RegisterRange",
-    {
-        "count": Required[int],
-        "first": Required[int],
-        "width_bytes": Required[int],
-    },
-    total=False,
-)
 
-RegisterValue = TypedDict(
-    "RegisterValue",
-    {
-        "register": Required["ProcessorRegister"],
-        "value": Required[int],
-    },
-    total=False,
-)
+class ProcessorCore(TypedDict, total=False):
+    id: Required[str]
+    model: Required[ProcessorModel]
+    mprofile: NotRequired[MProfileState | None]
+    registers: Required[list[RegisterValue]]
+    released: Required[bool]
+    rprofile: NotRequired[RProfileState | None]
 
-ResolvedSelection = TypedDict(
-    "ResolvedSelection",
-    {
-        "$schema": NotRequired[Literal["https://fujimod.com/schemas/resolved-selection.schema.json"]],
-        "body": Required["Body"],
-        "firmware": Required["Firmware"],
-        "parts": Required[list["Part"]],
-        "soc": Required["Soc"],
-    },
-    total=False,
-)
 
-RunAdcInputs = TypedDict(
-    "RunAdcInputs",
-    {
-        "block_id": Required[str],
-        "samples": Required[list[int]],
-    },
-    total=False,
-)
+type ProcessorModel = Literal["cortex-r5f", "cortex-a7", "cortex-a53"]
 
-RunCardInput = TypedDict(
-    "RunCardInput",
-    {
-        "part_id": Required[str],
-        "present": Required[bool],
-        "write_protected": Required[bool],
-    },
-    total=False,
-)
+
+type ProcessorRegister = Literal["pc", "sp", "pstate", "cpsr"]
+
+
+class PulseInterface(TypedDict, total=False):
+    counter_channels: Required[list[int]]
+    initial_phase: Required[int]
+    quadrature: Required[bool]
+    timer_channels: Required[list[int]]
+
+
+class RProfileState(TypedDict, total=False):
+    atcm: Required[TcmState]
+    btcm: Required[TcmState]
+    cp14_identity: Required[int]
+
+
+class ReadinessAddresses(TypedDict, total=False):
+    category_one: Required[int]
+    category_two: Required[int]
+    excluded_mask: Required[int]
+    input_pending: Required[int]
+    operation_alert_timer: Required[int]
+    override_address: Required[int]
+
+
+type RegionSize = RegionSizeVariant0 | RegionSizeVariant1
+
+
+class RegionSizeVariant0(TypedDict, total=False):
+    bytes: Required[int]
+    kind: Required[Literal["bytes"]]
+
+
+class RegionSizeVariant1(TypedDict, total=False):
+    kind: Required[Literal["body_dram"]]
+
+
+class RegisterRange(TypedDict, total=False):
+    count: Required[int]
+    first: Required[int]
+    width_bytes: Required[int]
+
+
+class RegisterValue(TypedDict, total=False):
+    register: Required[ProcessorRegister]
+    value: Required[int]
+
+
+class ResolvedConfiguration(TypedDict, total=False):
+    configuration: Required[RunConfiguration]
+    reference: Required[ResolvedSelection]
+
+
+class ResolvedSelection(TypedDict, total=False):
+    body: Required[Body]
+    firmware: Required[Firmware]
+    parts: Required[list[Part]]
+    soc: Required[Soc]
+
+
+class RunAdcInputs(TypedDict, total=False):
+    block_id: Required[str]
+    samples: Required[list[int]]
+
+
+class RunCardInput(TypedDict, total=False):
+    connection_id: Required[str]
+    present: Required[bool]
+    write_protected: Required[bool]
+
 
 RunConfiguration = TypedDict(
     "RunConfiguration",
     {
-        "$schema": Required[Literal["https://fujimod.com/schemas/emulator-run-configuration.schema.json"]],
-        "body_id": Required[str],
+        "$schema": Required[
+            'Literal["https://fujimod.com/schemas/emulator-run-configuration.schema.json"]'
+        ],
+        "body_id": Required["str"],
         "execution": Required["RunExecution"],
-        "firmware_id": Required[str],
-        "id": Required[str],
+        "firmware_id": Required["str"],
+        "id": Required["str"],
         "inputs": Required["RunInputs"],
-        "overlays": Required[list[str]],
+        "overlays": Required["list[str]"],
         "scene": Required["RunScene"],
-        "schema": Required[int],
+        "schema": Required["int"],
         "start": Required["RunStart"],
     },
     total=False,
 )
 
-RunConnectionState = TypedDict(
-    "RunConnectionState",
-    {
-        "connected": Required[bool],
-        "connection_id": Required[str],
-    },
-    total=False,
-)
 
-RunEngine: TypeAlias = Literal["unicorn"]
+class RunConnectionState(TypedDict, total=False):
+    connected: Required[bool]
+    connection_id: Required[str]
 
-RunExecution = TypedDict(
-    "RunExecution",
-    {
-        "engine": Required["RunEngine"],
-        "instructions_per_tick": Required["RunInstructionRate"],
-        "mode": Required["RunExecutionMode"],
-        "quantum": Required[int],
-    },
-    total=False,
-)
 
-RunExecutionMode: TypeAlias = Literal["strict"]
+type RunEngine = Literal["unicorn"]
 
-RunGpioInputs = TypedDict(
-    "RunGpioInputs",
-    {
-        "block_id": Required[str],
-        "connections": Required[list["RunConnectionState"]],
-        "keys": Required[list["RunKeyState"]],
-    },
-    total=False,
-)
 
-RunImage = TypedDict(
-    "RunImage",
-    {
-        "asset": Required[str],
-        "height": Required[int],
-        "stride": Required[int],
-        "width": Required[int],
-    },
-    total=False,
-)
+class RunExecution(TypedDict, total=False):
+    engine: Required[RunEngine]
+    instructions_per_tick: Required[RunInstructionRate]
+    mode: Required[RunExecutionMode]
+    quantum: Required[int]
 
-RunImages = TypedDict(
-    "RunImages",
-    {
-        "live_image": Required["RunImage"],
-    },
-    total=False,
-)
 
-RunInputs = TypedDict(
-    "RunInputs",
-    {
-        "adc": Required["RunAdcInputs"],
-        "card": Required["RunCardInput"],
-        "gpio": Required["RunGpioInputs"],
-        "mcu": Required["RunMcuInput"],
-        "power": Required["RunPowerInput"],
-        "serial_registers": Required[list["RunSerialRegisters"]],
-        "usb": Required["RunUsbInput"],
-    },
-    total=False,
-)
+type RunExecutionMode = Literal["strict"]
 
-RunInstructionRate = TypedDict(
-    "RunInstructionRate",
-    {
-        "denominator": Required[int],
-        "numerator": Required[int],
-    },
-    total=False,
-)
 
-RunKeyState = TypedDict(
-    "RunKeyState",
-    {
-        "connection_id": Required[str],
-        "pressed": Required[bool],
-    },
-    total=False,
-)
+class RunFirstStart(TypedDict, total=False):
+    hold_ticks: Required[int]
+    key_id: Required[str]
+    max_presses: Required[int]
+    settle_ticks: Required[int]
 
-RunMcuInput = TypedDict(
-    "RunMcuInput",
-    {
-        "packet": Required[list[int]],
-        "part_id": Required[str],
-        "rtc": Required["RunRtcInput"],
-    },
-    total=False,
-)
+
+class RunGpioInputs(TypedDict, total=False):
+    block_id: Required[str]
+    connections: Required[list[RunConnectionState]]
+    keys: Required[list[RunKeyState]]
+
+
+class RunImage(TypedDict, total=False):
+    asset: Required[str]
+    height: Required[int]
+    stride: Required[int]
+    width: Required[int]
+
+
+class RunImages(TypedDict, total=False):
+    live_image: Required[RunImage]
+
+
+class RunInputs(TypedDict, total=False):
+    adc: Required[RunAdcInputs]
+    card: Required[RunCardInput]
+    first_start: NotRequired[RunFirstStart | None]
+    gpio: Required[RunGpioInputs]
+    mcu: Required[RunMcuInput]
+    power: Required[RunPowerInput]
+    serial_registers: Required[list[RunSerialRegisters]]
+    usb: Required[RunUsbInput]
+
+
+class RunInstructionRate(TypedDict, total=False):
+    denominator: Required[int]
+    numerator: Required[int]
+
+
+class RunKeyState(TypedDict, total=False):
+    connection_id: Required[str]
+    pressed: Required[bool]
+
+
+class RunMcuInput(TypedDict, total=False):
+    packet: Required[list[int]]
+    part_id: Required[str]
+    rtc: Required[RunRtcInput]
+
 
 RunOverlay = TypedDict(
     "RunOverlay",
     {
-        "$schema": Required[Literal["https://fujimod.com/schemas/emulator-run-overlay.schema.json"]],
+        "$schema": Required[
+            'Literal["https://fujimod.com/schemas/emulator-run-overlay.schema.json"]'
+        ],
         "change": Required["RunOverlayChange"],
-        "configuration_id": Required[str],
-        "id": Required[str],
-        "schema": Required[int],
+        "configuration_id": Required["str"],
+        "id": Required["str"],
+        "schema": Required["int"],
     },
     total=False,
 )
 
-RunOverlayChange: TypeAlias = Union["RunOverlayChangeVariant0", "RunOverlayChangeVariant1"]
 
-RunOverlayChangeVariant0 = TypedDict(
-    "RunOverlayChangeVariant0",
-    {
-        "connected": Required[bool],
-        "kind": Required[Literal["usb_connection"]],
-    },
-    total=False,
-)
+type RunOverlayChange = RunOverlayChangeVariant0 | RunOverlayChangeVariant1
 
-RunOverlayChangeVariant1 = TypedDict(
-    "RunOverlayChangeVariant1",
-    {
-        "kind": Required[Literal["start"]],
-        "start": Required["RunStart"],
-    },
-    total=False,
-)
 
-RunPowerInput = TypedDict(
-    "RunPowerInput",
-    {
-        "boot_reply": Required[int],
-        "part_id": Required[str],
-        "powered_on": Required[bool],
-        "spi_status": Required[list["RunRegisterValue"]],
-    },
-    total=False,
-)
+class RunOverlayChangeVariant0(TypedDict, total=False):
+    connected: Required[bool]
+    kind: Required[Literal["usb_connection"]]
 
-RunRegisterValue = TypedDict(
-    "RunRegisterValue",
-    {
-        "register": Required[int],
-        "value": Required[int],
-    },
-    total=False,
-)
 
-RunRtcInput = TypedDict(
-    "RunRtcInput",
-    {
-        "initial_seconds": Required[int],
-        "maximum_seconds": Required[int],
-        "started": Required[int],
-        "ticks_per_second": Required[int],
-    },
-    total=False,
-)
+class RunOverlayChangeVariant1(TypedDict, total=False):
+    kind: Required[Literal["start"]]
+    start: Required[RunStart]
 
-RunScene = TypedDict(
-    "RunScene",
-    {
-        "frame_period_ticks": Required[int],
-        "generated_assets": Required[list["GeneratedSceneAsset"]],
-        "images": Required["RunImages"],
-        "statistics": Required["RunStatistics"],
-    },
-    total=False,
-)
 
-RunSerialRegisters = TypedDict(
-    "RunSerialRegisters",
-    {
-        "part_id": Required[str],
-        "values": Required[list["RunRegisterValue"]],
-    },
-    total=False,
-)
+class RunPowerInput(TypedDict, total=False):
+    boot_reply: Required[int]
+    part_id: Required[str]
+    powered_on: Required[bool]
+    spi_status: Required[list[RunRegisterValue]]
 
-RunStart: TypeAlias = Union["RunStartVariant0", "RunStartVariant1"]
 
-RunStartVariant0 = TypedDict(
-    "RunStartVariant0",
-    {
-        "kind": Required[Literal["rom"]],
-    },
-    total=False,
-)
+class RunRegisterValue(TypedDict, total=False):
+    register: Required[int]
+    value: Required[int]
 
-RunStartVariant1 = TypedDict(
-    "RunStartVariant1",
-    {
-        "kind": Required[Literal["loader"]],
-    },
-    total=False,
-)
 
-RunStatistics = TypedDict(
-    "RunStatistics",
-    {
-        "live_statistics": Required[list["RunStatisticsSpan"]],
-    },
-    total=False,
-)
+class RunRtcInput(TypedDict, total=False):
+    initial_seconds: Required[int]
+    maximum_seconds: Required[int]
+    started: Required[int]
+    ticks_per_second: Required[int]
 
-RunStatisticsSpan = TypedDict(
-    "RunStatisticsSpan",
-    {
-        "asset": Required[str],
-        "destination": Required[int],
-        "offset": Required[int],
-    },
-    total=False,
-)
 
-RunUsbInput = TypedDict(
-    "RunUsbInput",
-    {
-        "connected": Required[bool],
-        "connection_id": Required[str],
-    },
-    total=False,
-)
+class RunScene(TypedDict, total=False):
+    frame_period_ticks: Required[int]
+    generated_assets: Required[list[GeneratedSceneAsset]]
+    images: Required[RunImages]
+    statistics: Required[RunStatistics]
 
-SensorAssembly = TypedDict(
-    "SensorAssembly",
-    {
-        "channel": Required[int],
-        "connection_id": Required[str],
-        "control": Required["SensorControlInterface"],
-        "controller_id": Required[str],
-        "part_id": Required[str],
-    },
-    total=False,
-)
 
-SensorControlInterface = TypedDict(
-    "SensorControlInterface",
-    {
-        "address": Required[int],
-        "data_bits": Required[int],
-        "register_address_bits": Required[int],
-    },
-    total=False,
-)
+class RunSerialRegisters(TypedDict, total=False):
+    part_id: Required[str]
+    values: Required[list[RunRegisterValue]]
 
-SensorRaster = TypedDict(
-    "SensorRaster",
-    {
-        "height": Required[int],
-        "image_area": Required[list[int]],
-        "pixel_clock_hz": NotRequired[Union[int, None]],
-        "width": Required[int],
-    },
-    total=False,
-)
 
-SerialOutputKind: TypeAlias = Union[Literal["panel"], Literal["registers"], Literal["command_data"], Literal["fixed"]]
+type RunStart = RunStartVariant0 | RunStartVariant1
 
-SerialRoute = TypedDict(
-    "SerialRoute",
-    {
-        "channel": Required[int],
-        "clock_hz": NotRequired[Union[int, None]],
-        "controller_id": Required[str],
-        "endpoint_id": Required[str],
-        "select_active_high": Required[bool],
-        "select_pin": Required["Pin"],
-        "word_bits": Required[int],
-    },
-    total=False,
-)
+
+class RunStartVariant0(TypedDict, total=False):
+    kind: Required[Literal["rom"]]
+
+
+class RunStartVariant1(TypedDict, total=False):
+    kind: Required[Literal["loader"]]
+
+
+class RunStatistics(TypedDict, total=False):
+    live_statistics: Required[list[RunStatisticsSpan]]
+
+
+class RunStatisticsSpan(TypedDict, total=False):
+    asset: Required[str]
+    destination: Required[int]
+    offset: Required[int]
+
+
+class RunUsbInput(TypedDict, total=False):
+    connected: Required[bool]
+    connection_id: Required[str]
+
+
+class ScannerReader(TypedDict, total=False):
+    routine: Required[AddressIdentity]
+    stable_offset: Required[int]
+
+
+class ScannerTable(TypedDict, total=False):
+    base: Required[int]
+    count: Required[int]
+    lookup: Required[int]
+    sha256: Required[str]
+    stride: Required[int]
+
+
+class SensorAssembly(TypedDict, total=False):
+    connection_id: Required[str]
+    part_id: Required[str]
+
+
+class SensorControlInterface(TypedDict, total=False):
+    data_bits: Required[int]
+    register_address_bits: Required[int]
+
+
+class SensorRaster(TypedDict, total=False):
+    height: Required[int]
+    image_area: Required[list[int]]
+    pixel_clock_hz: NotRequired[int | None]
+    width: Required[int]
+
+
+type SerialOutputKind = Literal["panel", "registers", "command_data", "fixed"]
+
+
+class SerialRoute(TypedDict, total=False):
+    channel: Required[int]
+    clock_hz: NotRequired[int | None]
+    controller_id: Required[str]
+    endpoint_id: Required[str]
+    select_connection_id: Required[str]
+    word_bits: Required[int]
+
 
 Soc = TypedDict(
     "Soc",
     {
-        "$schema": Required[Literal["https://fujimod.com/schemas/soc.schema.json"]],
+        "$schema": Required['Literal["https://fujimod.com/schemas/soc.schema.json"]'],
         "architecture": Required["ProcessorArchitecture"],
-        "blocks": Required[list["SocBlock"]],
-        "clocks": Required[list["ClockDomain"]],
-        "decoders": Required[list["AddressDecoder"]],
-        "dma_mappings": Required[list["DmaMapping"]],
-        "id": Required[str],
-        "interrupts": Required[list["InterruptRoute"]],
-        "mappings": Required[list["AddressMapping"]],
-        "memory_regions": Required[list["MemoryRegion"]],
-        "peripherals": Required[list["PeripheralMapping"]],
-        "processors": Required[list["ProcessorCore"]],
+        "blocks": Required["list[SocBlock]"],
+        "clocks": Required["list[ClockDomain]"],
+        "decoders": Required["list[AddressDecoder]"],
+        "dma_mappings": Required["list[DmaMapping]"],
+        "id": Required["str"],
+        "interrupts": Required["list[InterruptRoute]"],
+        "mappings": Required["list[AddressMapping]"],
+        "memory_regions": Required["list[MemoryRegion]"],
+        "peripherals": Required["list[PeripheralMapping]"],
+        "processors": Required["list[ProcessorCore]"],
         "reset": Required["SocReset"],
-        "schema": Required[int],
+        "schema": Required["int"],
     },
     total=False,
 )
 
-SocBlock = TypedDict(
-    "SocBlock",
-    {
-        "base": Required[int],
-        "clock_id": NotRequired[Union[str, None]],
-        "id": Required[str],
-        "interrupt_lines": Required[list[int]],
-        "kind": Required["SocBlockKind"],
-        "size": Required[int],
-    },
-    total=False,
-)
 
-SocBlockKind: TypeAlias = Union[Literal["gpio"], Literal["adc"], Literal["interrupt-controller"], Literal["timer"], Literal["dma"], Literal["control-bus"], Literal["serial-controller"], Literal["nand-controller"], Literal["usb-controller"], Literal["display-controller"], Literal["imaging-controller"], Literal["reset-controller"], Literal["clock-controller"]]
+class SocBlock(TypedDict, total=False):
+    base: Required[int]
+    clock_id: NotRequired[str | None]
+    id: Required[str]
+    kind: Required[SocBlockKind]
+    size: Required[int]
 
-SocReset = TypedDict(
-    "SocReset",
-    {
-        "coprocessor_writes": Required[list["CoprocessorWrite"]],
-        "release": NotRequired[Union["CoreRelease", None]],
-    },
-    total=False,
-)
 
-StatusRegister = TypedDict(
-    "StatusRegister",
-    {
-        "address": Required[int],
-        "value": Required[int],
-    },
-    total=False,
-)
+type SocBlockKind = Literal[
+    "gpio",
+    "adc",
+    "interrupt-controller",
+    "timer",
+    "dma",
+    "control-bus",
+    "serial-controller",
+    "nand-controller",
+    "sd-card-controller",
+    "usb-controller",
+    "display-controller",
+    "imaging-controller",
+    "reset-controller",
+    "clock-controller",
+    "address-window",
+]
 
-TcmState = TypedDict(
-    "TcmState",
-    {
-        "bytes": Required[int],
-        "reset_address": Required[int],
-    },
-    total=False,
-)
 
-WireSignal: TypeAlias = Union[Literal["gpio"], Literal["adc"], Literal["serial_data"], Literal["serial_clock"], Literal["image_data"], Literal["display_data"], Literal["microcontroller"], Literal["storage"], Literal["power"]]
+class SocReset(TypedDict, total=False):
+    coprocessor_writes: Required[list[CoprocessorWrite]]
+    release: NotRequired[CoreRelease | None]
 
-ZoomMechanism = TypedDict(
-    "ZoomMechanism",
-    {
-        "maximum_position": Required[int],
-        "minimum_position": Required[int],
-        "pulse_ticks": Required[int],
-    },
-    total=False,
-)
 
+class StatusRegister(TypedDict, total=False):
+    address: Required[int]
+    value: Required[int]
+
+
+class TcmState(TypedDict, total=False):
+    bytes: Required[int]
+    reset_address: Required[int]
+
+
+type WireSignal = Literal[
+    "gpio",
+    "adc",
+    "serial_data",
+    "serial_clock",
+    "image_data",
+    "display_data",
+    "microcontroller",
+    "storage",
+    "power",
+]
+
+
+class ZoomMechanism(TypedDict, total=False):
+    maximum_position: Required[int]
+    minimum_position: Required[int]
+    pulse_ticks: Required[int]

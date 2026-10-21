@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import json
-from typing import TypeGuard, cast
+from typing import Protocol, TypeGuard, cast
 
-from fujimod._native import catalog as _native_catalog
+from fujimod._native import catalog as _native_catalog_module
 
 from ._catalog_types import (
     Body,
     Firmware,
     Part,
+    ResolvedConfiguration,
     ResolvedSelection,
     RunConfiguration,
     RunOverlay,
@@ -18,17 +19,34 @@ from ._catalog_types import (
 )
 
 
+class _NativeCatalogResolver(Protocol):
+    def resolve_reference(self, body_id: str, firmware_id: str) -> str: ...
+
+    def resolve_firmware(self, firmware_id: str) -> str: ...
+
+    def resolve_configuration(self, configuration_id: str) -> str: ...
+
+
+_native_catalog: _NativeCatalogResolver = cast(
+    _NativeCatalogResolver, _native_catalog_module
+)
+
+
 def _string_keyed_object(value: object) -> TypeGuard[dict[str, object]]:
     return isinstance(value, dict) and all(isinstance(key, str) for key in value)
 
 
-def _selection(result: object) -> ResolvedSelection:
+def _document(result: object) -> dict[str, object]:
     if type(result) is not str:
         raise RuntimeError("Native catalog resolution must return JSON text")
     value = json.loads(result)
     if not _string_keyed_object(value):
         raise RuntimeError("Native catalog resolution must return a JSON object")
-    return cast(ResolvedSelection, value)
+    return value
+
+
+def _selection(result: object) -> ResolvedSelection:
+    return cast(ResolvedSelection, _document(result))
 
 
 def resolve_reference(body_id: str, firmware_id: str) -> ResolvedSelection:
@@ -45,14 +63,24 @@ def resolve_firmware(firmware_id: str) -> ResolvedSelection:
     return _selection(_native_catalog.resolve_firmware(firmware_id))
 
 
+def resolve_configuration(configuration_id: str) -> ResolvedConfiguration:
+    """Resolve a run configuration and its checked body, SoC and firmware."""
+    if type(configuration_id) is not str:
+        raise TypeError("configuration_id must be a string")
+    value = _native_catalog.resolve_configuration(configuration_id)
+    return cast(ResolvedConfiguration, _document(value))
+
+
 __all__ = [
     "Body",
     "Firmware",
     "Part",
+    "ResolvedConfiguration",
     "ResolvedSelection",
     "RunConfiguration",
     "RunOverlay",
     "Soc",
     "resolve_firmware",
+    "resolve_configuration",
     "resolve_reference",
 ]

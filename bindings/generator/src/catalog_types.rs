@@ -10,6 +10,10 @@ const RUST_SCHEMA_FILES: &[(&str, &str)] = &[
     ("body.schema.json", "Body"),
     ("firmware.schema.json", "Firmware"),
     ("resolved-selection.schema.json", "ResolvedSelection"),
+    (
+        "resolved-configuration.schema.json",
+        "ResolvedConfiguration",
+    ),
     ("emulator-run-configuration.schema.json", "RunConfiguration"),
     ("emulator-run-overlay.schema.json", "RunOverlay"),
 ];
@@ -228,14 +232,153 @@ fn python_union(types: impl IntoIterator<Item = Result<String, String>>) -> Resu
     match rendered.len() {
         0 => Ok("never".into()),
         1 => Ok(rendered.remove(0)),
-        _ => Ok(format!("Union[{}]", rendered.join(", "))),
+        _ => Ok(rendered.join(" | ")),
     }
 }
 
-fn property_type(schema: &Value, is_python: bool) -> Result<String, String> {
+fn python_enum(values: &[Value]) -> Result<String, String> {
+    let rendered = values
+        .iter()
+        .map(|value| match value {
+            Value::String(text) => serde_json::to_string(text).map_err(|error| error.to_string()),
+            Value::Number(number) => Ok(number.to_string()),
+            Value::Bool(value) => Ok(if *value { "True" } else { "False" }.into()),
+            Value::Null => Ok("None".into()),
+            _ => Err("catalog schema enum values must be scalar".into()),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(format!("Literal[{}]", rendered.join(", ")))
+}
+
+fn python_string_literal(value: &str) -> String {
+    let single_quotes = value.chars().filter(|character| *character == '\'').count();
+    let double_quotes = value.chars().filter(|character| *character == '"').count();
+    let quote = if double_quotes > single_quotes {
+        '\''
+    } else {
+        '"'
+    };
+    let mut rendered = String::with_capacity(value.len() + 2);
+    rendered.push(quote);
+    for character in value.chars() {
+        match character {
+            '\\' => rendered.push_str("\\\\"),
+            '\n' => rendered.push_str("\\n"),
+            '\r' => rendered.push_str("\\r"),
+            '\t' => rendered.push_str("\\t"),
+            character if character == quote => {
+                rendered.push('\\');
+                rendered.push(character);
+            }
+            character => rendered.push(character),
+        }
+    }
+    rendered.push(quote);
+    rendered
+}
+
+fn python_union_branches(value: &str) -> Vec<String> {
+    let characters: Vec<_> = value.chars().collect();
+    let mut branches = Vec::new();
+    let mut start = 0;
+    let mut quote = None;
+    let mut escaped = false;
+    let mut square_depth = 0;
+    let mut index = 0;
+    while index < characters.len() {
+        let character = characters[index];
+        if let Some(active_quote) = quote {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == active_quote {
+                quote = None;
+            }
+            index += 1;
+            continue;
+        }
+        match character {
+            '\'' | '"' => quote = Some(character),
+            '[' => square_depth += 1,
+            ']' => square_depth -= 1,
+            '|' if square_depth == 0
+                && index > 0
+                && index + 1 < characters.len()
+                && characters[index - 1] == ' '
+                && characters[index + 1] == ' ' =>
+            {
+                branches.push(characters[start..index - 1].iter().collect());
+                start = index + 2;
+                index += 2;
+                continue;
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+    branches.push(characters[start..].iter().collect());
+    branches
+}
+
+fn python_alias(name: &str, value: &str) -> String {
+    let declaration = format!("type {name} = {value}");
+    if declaration.len() <= 88 {
+        return format!("{declaration}\n\n\n");
+    }
+    if value.starts_with("Literal[") && value.ends_with(']') {
+        let values = &value[8..value.len() - 1];
+        let mut entries = Vec::new();
+        let mut start = 0;
+        let mut quote = None;
+        let mut escaped = false;
+        for (index, character) in values.char_indices() {
+            if let Some(active_quote) = quote {
+                if escaped {
+                    escaped = false;
+                } else if character == '\\' {
+                    escaped = true;
+                } else if character == active_quote {
+                    quote = None;
+                }
+            } else if character == '\'' || character == '"' {
+                quote = Some(character);
+            } else if character == ',' {
+                entries.push(values[start..index].trim());
+                start = index + character.len_utf8();
+            }
+        }
+        entries.push(values[start..].trim());
+        let mut rendered = format!("type {name} = Literal[\n");
+        for entry in entries {
+            rendered.push_str(&format!("    {entry},\n"));
+        }
+        rendered.push_str("]\n\n\n");
+        return rendered;
+    }
+    let branches = python_union_branches(value);
+    if branches.len() > 1 {
+        if branches.join(" | ").len() + 4 <= 88 {
+            return format!("type {name} = (\n    {}\n)\n\n\n", branches.join(" | "));
+        }
+        let mut rendered = format!("type {name} = (\n    {}\n", branches[0]);
+        for branch in &branches[1..] {
+            rendered.push_str(&format!("    | {branch}\n"));
+        }
+        rendered.push_str(")\n\n\n");
+        return rendered;
+    }
+    format!("{declaration}\n\n\n")
+}
+
+fn property_type(
+    schema: &Value,
+    is_python: bool,
+    python_string_refs: bool,
+) -> Result<String, String> {
     if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
         let name = ref_name(reference)?;
-        return Ok(if is_python {
+        return Ok(if is_python && python_string_refs {
             format!("\"{name}\"")
         } else {
             name
@@ -246,17 +389,28 @@ fn property_type(schema: &Value, is_python: bool) -> Result<String, String> {
     }
     if let Some(values) = schema.get("enum").and_then(Value::as_array) {
         if is_python {
-            return python_union(values.iter().map(|value| literal(value, true)));
+            return python_enum(values);
         }
         return join_union(values.iter().map(|value| literal(value, false)), " | ");
     }
     for key in ["oneOf", "anyOf"] {
         if let Some(values) = schema.get(key).and_then(Value::as_array) {
             if is_python {
-                return python_union(values.iter().map(|value| property_type(value, true)));
+                if values.iter().all(|value| value.get("const").is_some()) {
+                    let literals: Vec<_> =
+                        values.iter().map(|value| value["const"].clone()).collect();
+                    return python_enum(&literals);
+                }
+                return python_union(
+                    values
+                        .iter()
+                        .map(|value| property_type(value, true, python_string_refs)),
+                );
             }
             return join_union(
-                values.iter().map(|value| property_type(value, is_python)),
+                values
+                    .iter()
+                    .map(|value| property_type(value, is_python, python_string_refs)),
                 " | ",
             );
         }
@@ -266,10 +420,16 @@ fn property_type(schema: &Value, is_python: bool) -> Result<String, String> {
             return Err("Python catalog types cannot express multi-branch allOf schemas".into());
         }
         if is_python {
-            return python_union(values.iter().map(|value| property_type(value, true)));
+            return python_union(
+                values
+                    .iter()
+                    .map(|value| property_type(value, true, python_string_refs)),
+            );
         }
         return join_union(
-            values.iter().map(|value| property_type(value, is_python)),
+            values
+                .iter()
+                .map(|value| property_type(value, is_python, python_string_refs)),
             " & ",
         );
     }
@@ -278,22 +438,20 @@ fn property_type(schema: &Value, is_python: bool) -> Result<String, String> {
             return Err("catalog schema type arrays must contain string names".into());
         }
         if is_python {
-            return python_union(
-                types
-                    .iter()
-                    .map(|value| primitive(value.as_str().unwrap(), schema, true)),
-            );
+            return python_union(types.iter().map(|value| {
+                primitive(value.as_str().unwrap(), schema, true, python_string_refs)
+            }));
         }
         return join_union(
             types
                 .iter()
                 .filter_map(Value::as_str)
-                .map(|name| primitive(name, schema, is_python)),
+                .map(|name| primitive(name, schema, is_python, python_string_refs)),
             " | ",
         );
     }
     if let Some(name) = schema.get("type").and_then(Value::as_str) {
-        return primitive(name, schema, is_python);
+        return primitive(name, schema, is_python, python_string_refs);
     }
     if schema.get("properties").is_some() || schema.get("additionalProperties").is_some() {
         return Err("nested object catalog schemas must have a named Rust type".into());
@@ -326,7 +484,12 @@ fn literal(value: &Value, is_python: bool) -> Result<String, String> {
     }
 }
 
-fn primitive(name: &str, schema: &Value, is_python: bool) -> Result<String, String> {
+fn primitive(
+    name: &str,
+    schema: &Value,
+    is_python: bool,
+    python_string_refs: bool,
+) -> Result<String, String> {
     match name {
         "object" => {
             if let Some(properties) = schema.get("properties").and_then(Value::as_object) {
@@ -349,7 +512,7 @@ fn primitive(name: &str, schema: &Value, is_python: bool) -> Result<String, Stri
                         "Record<string, never>".into()
                     });
                 }
-                let item = property_type(additional, is_python)?;
+                let item = property_type(additional, is_python, python_string_refs)?;
                 return Ok(if is_python {
                     format!("dict[str, {item}]")
                 } else {
@@ -361,7 +524,7 @@ fn primitive(name: &str, schema: &Value, is_python: bool) -> Result<String, Stri
         "array" => {
             let item = schema
                 .get("items")
-                .map(|value| property_type(value, is_python))
+                .map(|value| property_type(value, is_python, python_string_refs))
                 .unwrap_or_else(|| Err("catalog array schema has no item type".into()))?;
             Ok(if is_python {
                 format!("list[{item}]")
@@ -398,50 +561,132 @@ fn typescript(definitions: &Definitions) -> Result<String, String> {
             output.push_str("{\n");
             for (field, property) in properties {
                 let optional = if required.contains(field) { "" } else { "?" };
-                let ty = property_type(property, false)?;
+                let ty = property_type(property, false, false)?;
                 let field = serde_json::to_string(field).map_err(|error| error.to_string())?;
                 output.push_str(&format!("  readonly {field}{optional}: {ty};\n"));
             }
             if schema.get("additionalProperties") != Some(&Value::Bool(false))
                 && schema.get("additionalProperties").is_some()
             {
-                let ty = property_type(&schema["additionalProperties"], false)?;
+                let ty = property_type(&schema["additionalProperties"], false, false)?;
                 output.push_str(&format!("  readonly [key: string]: {ty};\n"));
             }
             output.push_str("};\n\n");
         } else {
-            output.push_str(&property_type(schema, false)?);
+            output.push_str(&property_type(schema, false, false)?);
             output.push_str(";\n\n");
         }
     }
     Ok(output)
 }
 
+fn python_identifier(name: &str) -> bool {
+    let mut characters = name.chars();
+    let Some(first) = characters.next() else {
+        return false;
+    };
+    let starts_valid = first == '_' || first.is_ascii_alphabetic();
+    let rest_valid =
+        characters.all(|character| character == '_' || character.is_ascii_alphanumeric());
+    starts_valid
+        && rest_valid
+        && !matches!(
+            name,
+            "False"
+                | "None"
+                | "True"
+                | "and"
+                | "as"
+                | "assert"
+                | "async"
+                | "await"
+                | "break"
+                | "class"
+                | "continue"
+                | "def"
+                | "del"
+                | "elif"
+                | "else"
+                | "except"
+                | "finally"
+                | "for"
+                | "from"
+                | "global"
+                | "if"
+                | "import"
+                | "in"
+                | "is"
+                | "lambda"
+                | "nonlocal"
+                | "not"
+                | "or"
+                | "pass"
+                | "raise"
+                | "return"
+                | "try"
+                | "while"
+                | "with"
+                | "yield"
+        )
+}
+
 fn python(definitions: &Definitions) -> Result<String, String> {
-    let mut output = String::from(
-        "# Generated from the Rust catalog schemas.\nfrom typing import Literal, Never, NotRequired, Required, TypedDict, TypeAlias, Union\n\n",
-    );
+    let mut output = String::new();
     for (name, schema) in definitions {
         if let Some((properties, required)) = object_members(schema) {
-            output.push_str(&format!("{name} = TypedDict(\n    {name:?},\n    {{\n"));
-            for (field, property) in properties {
-                let ty = property_type(property, true)?;
-                let marker = if required.contains(field) {
-                    "Required"
-                } else {
-                    "NotRequired"
-                };
-                output.push_str(&format!("        {field:?}: {marker}[{ty}],\n"));
+            if properties.keys().all(|field| python_identifier(field)) {
+                output.push_str(&format!("class {name}(TypedDict, total=False):\n"));
+                for (field, property) in properties {
+                    let ty = property_type(property, true, false)?;
+                    let marker = if required.contains(field) {
+                        "Required"
+                    } else {
+                        "NotRequired"
+                    };
+                    output.push_str(&format!("    {field}: {marker}[{ty}]\n"));
+                }
+            } else {
+                output.push_str(&format!("{name} = TypedDict(\n    {name:?},\n    {{\n"));
+                for (field, property) in properties {
+                    // Functional TypedDict evaluates its annotations immediately. Keep the
+                    // complete annotation as a forward-reference string so refs inside
+                    // unions, optionals, lists, and maps do not depend on declaration order.
+                    let ty = property_type(property, true, false)?;
+                    let ty = python_string_literal(&ty);
+                    let marker = if required.contains(field) {
+                        "Required"
+                    } else {
+                        "NotRequired"
+                    };
+                    let annotation = format!("{marker}[{ty}]");
+                    if format!("        {field:?}: {annotation},").len() > 88 {
+                        output.push_str(&format!(
+                            "        {field:?}: {marker}[\n            {ty}\n        ],\n"
+                        ));
+                    } else {
+                        output.push_str(&format!("        {field:?}: {annotation},\n"));
+                    }
+                }
+                output.push_str("    },\n    total=False,\n)");
             }
-            output.push_str("    },\n    total=False,\n)\n\n");
+            if properties.keys().all(|field| python_identifier(field)) {
+                output.push_str("\n\n");
+            } else {
+                output.push_str("\n\n\n");
+            }
         } else {
-            output.push_str(&format!(
-                "{name}: TypeAlias = {}\n\n",
-                property_type(schema, true)?
-            ));
+            output.push_str(&python_alias(name, &property_type(schema, true, false)?));
         }
     }
-    Ok(output)
+    let never_import = if output.contains("dict[str, Never]") {
+        "Never, "
+    } else {
+        ""
+    };
+    Ok(format!(
+        "# Generated from the Rust catalog schemas.\nfrom __future__ import annotations\n\nfrom typing import Literal, {never_import}NotRequired, Required, TypedDict\n\n\n{}\n",
+        output.trim_end()
+    ))
 }
 
 /// Generate Python and TypeScript catalog types from Rust-derived JSON Schema.
@@ -528,6 +773,10 @@ mod tests {
             ("body.schema.json", "Body"),
             ("firmware.schema.json", "Firmware"),
             ("resolved-selection.schema.json", "ResolvedSelection"),
+            (
+                "resolved-configuration.schema.json",
+                "ResolvedConfiguration",
+            ),
         ] {
             fs::write(
                 directory.join(filename),
@@ -544,9 +793,9 @@ mod tests {
         let schemas = schemas(&directory).unwrap();
         let python = python(&schemas).unwrap();
         let typescript = typescript(&schemas).unwrap();
-        assert!(python.contains("\"$schema\": Required[str]"));
-        assert!(python.contains("NotRequired[\"Identity\"]"));
-        assert!(python.contains("Union[\"RunOverlayVariant0\", \"RunOverlayVariant1\"]"));
+        assert!(python.contains("\"$schema\": Required[\"str\"]"));
+        assert!(python.contains("\"firmware_id\": NotRequired[\"Identity\"]"));
+        assert!(python.contains("type RunOverlay = RunOverlayVariant0 | RunOverlayVariant1"));
         assert!(typescript.contains("readonly \"$schema\": string"));
         assert!(typescript.contains("readonly \"body_id\": Identity"));
         assert!(typescript.contains("\"display\""));
@@ -561,14 +810,15 @@ mod tests {
             serde_json::json!({ "type": "object", "additionalProperties": true }),
             serde_json::json!({ "type": "array" }),
         ] {
-            assert!(property_type(&schema, true).is_err());
-            assert!(property_type(&schema, false).is_err());
+            assert!(property_type(&schema, true, false).is_err());
+            assert!(property_type(&schema, false, false).is_err());
         }
         assert_eq!(
             primitive(
                 "object",
                 &serde_json::json!({ "type": "object", "additionalProperties": false }),
-                true
+                true,
+                false,
             )
             .unwrap(),
             "dict[str, Never]"
@@ -576,7 +826,7 @@ mod tests {
     }
 
     #[test]
-    fn references_are_local_named_types_and_python_unions_keep_forward_references() {
+    fn references_are_local_named_types_and_python_unions_use_bare_names() {
         assert_eq!(ref_name("#/$defs/RunStart").unwrap(), "RunStart");
         assert!(ref_name("https://example.com/schema.json#/$defs/RunStart").is_err());
         assert!(ref_name("#/$defs/RunStart/properties/kind").is_err());
@@ -591,8 +841,8 @@ mod tests {
         )]);
         assert!(validate_references(&definitions).is_err());
         assert_eq!(
-            property_type(&definitions["Example"], true).unwrap(),
-            "Union[Literal[\"rom\"], \"RunStart\"]"
+            property_type(&definitions["Example"], true, false).unwrap(),
+            "Literal[\"rom\"] | RunStart"
         );
     }
 }
