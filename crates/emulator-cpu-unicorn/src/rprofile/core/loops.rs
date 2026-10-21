@@ -321,7 +321,9 @@ impl Proof {
 
 impl Execution {
     pub(super) fn loop_candidate(&self, address: u64, word: u32) -> bool {
-        self.loops.mode.get() != LoopMode::Disabled && self.loop_proof(address, word).is_some()
+        self.policy.get() == ExecutionPolicy::Exact
+            && self.loops.mode.get() != LoopMode::Disabled
+            && self.loop_proof(address, word).is_some()
     }
     fn loop_proof(&self, address: u64, word: u32) -> Option<Proof> {
         let start = target(address, word)?;

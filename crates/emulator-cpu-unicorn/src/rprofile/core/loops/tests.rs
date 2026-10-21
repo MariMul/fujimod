@@ -265,3 +265,54 @@ fn counted_loops_preserve_guest_pmu_time_and_complete_cpu_fingerprints() {
         }
     }
 }
+
+#[test]
+fn policy_switches_and_restores_reclassify_cached_loop_branches() {
+    let cpu = processor_with_options(&Memory::default(), Options::default());
+    cpu.map_zeroed(0, 0x4000, 7).unwrap();
+    words(&cpu, 0x1000, &[0xe2500001, 0x1afffffd, 0xe320f003]);
+    cpu.set_loop_mode(LoopMode::Accelerate).unwrap();
+    let exercise = |policy| {
+        assert_eq!(cpu.execution.policy.get(), policy);
+        // Interactive must translate this ordinary branch without a loop
+        // observer. Exact must regain its proof even after a cached fast run.
+        let observed = matches!(
+            cpu.execution
+                .classify(0x1004, 0x1afffffd)
+                .unwrap()
+                .instruction,
+            InstructionDisposition::ObserveAndEndBlock
+        );
+        assert_eq!(observed, policy == ExecutionPolicy::Exact);
+        set(&cpu, arm::CPSR, 0xd3);
+        set(&cpu, arm::CORE[0], 1000);
+        cpu.set_loop_window(true).unwrap();
+        let before = cpu.exit_counters().unwrap()["loop_accelerated_instructions"];
+        super::super::tests::run(&cpu, 0x1000, 1000).unwrap();
+        assert_eq!(
+            (
+                get(&cpu, arm::PC),
+                get(&cpu, arm::CORE[0]),
+                get(&cpu, arm::CPSR)
+            ),
+            (0x1000, 500, 0x200000d3)
+        );
+        assert_eq!(cpu.instruction_progress(), Some(1000));
+        assert_eq!(
+            cpu.exit_counters().unwrap()["loop_accelerated_instructions"] > before,
+            policy == ExecutionPolicy::Exact
+        );
+    };
+    for (policy, other) in [
+        (ExecutionPolicy::Interactive, ExecutionPolicy::Exact),
+        (ExecutionPolicy::Exact, ExecutionPolicy::Interactive),
+    ] {
+        cpu.set_execution_policy(policy).unwrap();
+        exercise(policy);
+        let snapshot = cpu.snapshot(None).unwrap();
+        cpu.set_execution_policy(other).unwrap();
+        exercise(other);
+        cpu.restore(snapshot.as_ref()).unwrap();
+        exercise(policy);
+    }
+}
