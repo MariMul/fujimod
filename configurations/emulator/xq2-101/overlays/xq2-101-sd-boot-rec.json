@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xq2-101-sd-boot-rec",
+  "configuration_id": "xq2-101",
+  "change": {
+    "kind": "start",
+    "start": {
+      "kind": "sd_card"
+    }
+  }
+}

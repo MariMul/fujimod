@@ -17,6 +17,7 @@
     }
   },
   "inputs": {
+    "kind": "exr2",
     "gpio": {
       "block_id": "gpio",
       "unassigned_input_level": false,
@@ -110,7 +111,20 @@
     ],
     "adc": {
       "block_id": "adc",
-      "samples": [0, 0, 1023, 63, 534, 640, 0, 825, 1023, 60, 0, 0]
+      "samples": [
+        0,
+        0,
+        1023,
+        63,
+        534,
+        640,
+        0,
+        825,
+        1023,
+        60,
+        0,
+        0
+      ]
     },
     "power": {
       "part_id": "power-control",
@@ -120,7 +134,24 @@
     },
     "mcu": {
       "part_id": "mcu-interface",
-      "packet": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 170, 86],
+      "packet": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        170,
+        86
+      ],
       "rtc": {
         "initial_seconds": 0,
         "ticks_per_second": 12000000,
@@ -132,17 +163,50 @@
       {
         "part_id": "mcu-interface",
         "values": [
-          {"register": 69, "value": 0},
-          {"register": 70, "value": 0},
-          {"register": 73, "value": 0},
-          {"register": 74, "value": 0},
-          {"register": 75, "value": 0},
-          {"register": 76, "value": 0},
-          {"register": 78, "value": 0},
-          {"register": 96, "value": 0},
-          {"register": 104, "value": 0},
-          {"register": 105, "value": 0},
-          {"register": 106, "value": 0}
+          {
+            "register": 69,
+            "value": 0
+          },
+          {
+            "register": 70,
+            "value": 0
+          },
+          {
+            "register": 73,
+            "value": 0
+          },
+          {
+            "register": 74,
+            "value": 0
+          },
+          {
+            "register": 75,
+            "value": 0
+          },
+          {
+            "register": 76,
+            "value": 0
+          },
+          {
+            "register": 78,
+            "value": 0
+          },
+          {
+            "register": 96,
+            "value": 0
+          },
+          {
+            "register": 104,
+            "value": 0
+          },
+          {
+            "register": 105,
+            "value": 0
+          },
+          {
+            "register": 106,
+            "value": 0
+          }
         ]
       }
     ],
@@ -163,6 +227,7 @@
     }
   },
   "scene": {
+    "kind": "exr2",
     "frame_period_ticks": 400000,
     "generated_assets": [
       {
@@ -201,5 +266,6 @@
       ]
     }
   },
-  "overlays": []
+  "overlays": [],
+  "purpose": "rom_boot"
 }

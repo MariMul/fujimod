@@ -1,5 +1,552 @@
 {
   "$defs": {
+    "ApplicationBlockInput": {
+      "description": "External values supplied to one application-profile SoC block.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Explicit analog sample values in channel order.",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "adc",
+              "type": "string"
+            },
+            "samples": {
+              "items": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "samples"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Explicit GPIO input words and known output latches.",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "gpio",
+              "type": "string"
+            },
+            "levels": {
+              "items": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "outputs": {
+              "items": {
+                "$ref": "#/$defs/GpioOutputWord"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "levels",
+            "outputs"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Ambient temperature presented to a temperature-monitor block.",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "temperature",
+              "type": "string"
+            },
+            "millicelsius": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "millicelsius"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Idle serial input level on a named controller.",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "idle_high": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "serial_line",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "idle_high"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Backing contents supplied to a nonvolatile-memory aperture.",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "erased_tail": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "flash",
+              "type": "string"
+            },
+            "part_id": {
+              "type": "string"
+            },
+            "seeds": {
+              "items": {
+                "$ref": "#/$defs/FlashSeed"
+              },
+              "type": "array"
+            },
+            "source": {
+              "$ref": "#/$defs/ApplicationFlashSource"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "part_id",
+            "source",
+            "seeds"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ApplicationCommandImageInput": {
+      "additionalProperties": false,
+      "description": "Uniform image data supplied to command-driven imaging work.",
+      "properties": {
+        "block_ids": {
+          "description": "Blocks consuming this command-driven image input.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "luma": {
+          "description": "Uniform source luma sample.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block_ids",
+        "luma"
+      ],
+      "type": "object"
+    },
+    "ApplicationFlashSource": {
+      "description": "Source of the nonvolatile backing supplied by a run.",
+      "oneOf": [
+        {
+          "const": "firmware_update",
+          "description": "The explicitly supplied, identity-checked selected firmware update.",
+          "type": "string"
+        }
+      ]
+    },
+    "ApplicationFrameInput": {
+      "additionalProperties": false,
+      "description": "A periodic external frame source for one or more declared blocks.",
+      "properties": {
+        "active_ticks": {
+          "description": "Active duration within the frame period, when supplied.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "block_ids": {
+          "description": "Blocks consuming this external frame source.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "luma": {
+          "description": "Uniform source luma sample, when supplied.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "period_ticks": {
+          "description": "Period between frames in the run's virtual ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block_ids",
+        "period_ticks"
+      ],
+      "type": "object"
+    },
+    "ApplicationPartInput": {
+      "description": "Initial values supplied to one installed serial endpoint.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Initial word registers and optional RTC timebase.",
+          "properties": {
+            "kind": {
+              "const": "register_words",
+              "type": "string"
+            },
+            "part_id": {
+              "type": "string"
+            },
+            "registers": {
+              "items": {
+                "$ref": "#/$defs/RegisterWord"
+              },
+              "type": "array"
+            },
+            "rtc_ticks_per_second": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "part_id",
+            "registers"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Initial clock state for a power-controller endpoint.",
+          "properties": {
+            "kind": {
+              "const": "clock",
+              "type": "string"
+            },
+            "part_id": {
+              "type": "string"
+            },
+            "seconds": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "valid": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "part_id",
+            "seconds",
+            "valid"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Idle input level for a serial endpoint.",
+          "properties": {
+            "high": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "idle_level",
+              "type": "string"
+            },
+            "part_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "part_id",
+            "high"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Explicit BIS revision-register and idle-line inputs.",
+          "properties": {
+            "idle_high": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "bis_revision",
+              "type": "string"
+            },
+            "part_id": {
+              "type": "string"
+            },
+            "revision": {
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "part_id",
+            "revision",
+            "idle_high"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ApplicationStatisticsInput": {
+      "additionalProperties": false,
+      "description": "A uniform statistics scene supplied to one imaging block.",
+      "properties": {
+        "black_level": {
+          "description": "Black-level subtraction value.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "block_id": {
+          "description": "Imaging block consuming the statistics scene.",
+          "type": "string"
+        },
+        "luma": {
+          "description": "Uniform input luma value.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "samples_per_cell": {
+          "description": "Number of samples accumulated in one cell.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "signal_shift": {
+          "description": "Right shift applied to the input signal.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block_id",
+        "luma",
+        "samples_per_cell",
+        "black_level",
+        "signal_shift"
+      ],
+      "type": "object"
+    },
+    "ApplicationTiming": {
+      "description": "Explicit functional timing supplied to named blocks or parts.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "The same delay policy applied to a set of named SoC blocks.",
+          "properties": {
+            "block_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "delay",
+              "type": "string"
+            },
+            "operation": {
+              "$ref": "#/$defs/TimingOperation"
+            },
+            "ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "block_ids",
+            "operation",
+            "ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Transfer setup cost and byte throughput for a named SoC block.",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "bytes_per_tick": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "throughput",
+              "type": "string"
+            },
+            "setup_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "setup_ticks",
+            "bytes_per_tick"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Ratio between a serial input clock and its parent virtual clock.",
+          "properties": {
+            "block_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "parent_clock",
+              "type": "string"
+            },
+            "ticks_per_parent": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "block_ids",
+            "ticks_per_parent"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Programming delay for an installed storage part.",
+          "properties": {
+            "erase_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "storage_programming",
+              "type": "string"
+            },
+            "page_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "part_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "part_id",
+            "erase_ticks",
+            "page_ticks"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "FlashSeed": {
+      "additionalProperties": false,
+      "description": "An explicit byte overlay on the run's supplied flash backing.",
+      "properties": {
+        "offset": {
+          "description": "Offset from the start of flash backing.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Byte supplied at that offset; this is an intervention, not stock firmware.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "value"
+      ],
+      "type": "object"
+    },
     "GeneratedSceneAsset": {
       "additionalProperties": false,
       "description": "A generated run-scene input asset.",
@@ -29,6 +576,56 @@
         "id",
         "pattern",
         "size"
+      ],
+      "type": "object"
+    },
+    "GpioOutputWord": {
+      "additionalProperties": false,
+      "description": "One explicitly initialized GPIO output word.",
+      "properties": {
+        "levels": {
+          "description": "Supplied output-latch bits for this port.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "description": "GPIO port number.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "levels"
+      ],
+      "type": "object"
+    },
+    "RegisterWord": {
+      "additionalProperties": false,
+      "description": "One initial word-sized endpoint register.",
+      "properties": {
+        "register": {
+          "description": "Endpoint register number.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Supplied register value.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "register",
+        "value"
       ],
       "type": "object"
     },
@@ -329,70 +926,170 @@
       "type": "object"
     },
     "RunInputs": {
-      "additionalProperties": false,
-      "description": "Synthetic starting input values applied to resolved blocks and parts.",
-      "properties": {
-        "adc": {
-          "$ref": "#/$defs/RunAdcInputs",
-          "description": "ADC reset samples."
-        },
-        "card": {
-          "$ref": "#/$defs/RunCardInput",
-          "description": "Initial SD card insertion and protection state."
-        },
-        "encoders": {
-          "description": "Initial phases for physical quadrature encoders.",
-          "items": {
-            "$ref": "#/$defs/RunEncoderInput"
-          },
-          "type": "array"
-        },
-        "first_start": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RunFirstStart"
+      "description": "Model-specific synthetic startup inputs applied to resolved hardware.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Reset inputs for an EXR2-based body.",
+          "properties": {
+            "adc": {
+              "$ref": "#/$defs/RunAdcInputs",
+              "description": "ADC reset samples."
             },
-            {
-              "type": "null"
+            "card": {
+              "$ref": "#/$defs/RunCardInput",
+              "description": "Initial SD card insertion and protection state."
+            },
+            "encoders": {
+              "description": "Initial phases for physical quadrature encoders.",
+              "items": {
+                "$ref": "#/$defs/RunEncoderInput"
+              },
+              "type": "array"
+            },
+            "first_start": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RunFirstStart"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Policy for accepting a firmware first-start prompt, when needed."
+            },
+            "gpio": {
+              "$ref": "#/$defs/RunGpioInputs",
+              "description": "GPIO reset state and explicitly released controls."
+            },
+            "kind": {
+              "const": "exr2",
+              "type": "string"
+            },
+            "mcu": {
+              "$ref": "#/$defs/RunMcuInput",
+              "description": "MCU persistent input and RTC start state."
+            },
+            "power": {
+              "$ref": "#/$defs/RunPowerInput",
+              "description": "Power-controller reset input."
+            },
+            "serial_registers": {
+              "description": "Other declared reset values for serial-backed parts.",
+              "items": {
+                "$ref": "#/$defs/RunSerialRegisters"
+              },
+              "type": "array"
+            },
+            "usb": {
+              "$ref": "#/$defs/RunUsbInput",
+              "description": "Initial USB cable state."
             }
-          ],
-          "description": "Policy for accepting a firmware first-start prompt, when needed."
-        },
-        "gpio": {
-          "$ref": "#/$defs/RunGpioInputs",
-          "description": "GPIO reset state and explicitly released controls."
-        },
-        "mcu": {
-          "$ref": "#/$defs/RunMcuInput",
-          "description": "MCU persistent input and RTC start state."
-        },
-        "power": {
-          "$ref": "#/$defs/RunPowerInput",
-          "description": "Power-controller reset input."
-        },
-        "serial_registers": {
-          "description": "Other declared reset values for serial-backed parts.",
-          "items": {
-            "$ref": "#/$defs/RunSerialRegisters"
           },
-          "type": "array"
+          "required": [
+            "kind",
+            "gpio",
+            "encoders",
+            "adc",
+            "power",
+            "mcu",
+            "serial_registers",
+            "usb",
+            "card"
+          ],
+          "type": "object"
         },
-        "usb": {
-          "$ref": "#/$defs/RunUsbInput",
-          "description": "Initial USB cable state."
+        {
+          "additionalProperties": false,
+          "description": "Reset inputs for an XP4-based body.",
+          "properties": {
+            "blocks": {
+              "description": "Initial external values supplied to named SoC blocks.",
+              "items": {
+                "$ref": "#/$defs/ApplicationBlockInput"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "xp4",
+              "type": "string"
+            },
+            "parts": {
+              "description": "Initial external values supplied to installed parts.",
+              "items": {
+                "$ref": "#/$defs/ApplicationPartInput"
+              },
+              "type": "array"
+            },
+            "ticks_per_second": {
+              "description": "Virtual clock ticks per second used by the supplied timing policies.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "timings": {
+              "description": "Functional device timing policy for this run, not measured silicon timing.",
+              "items": {
+                "$ref": "#/$defs/ApplicationTiming"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "ticks_per_second",
+            "blocks",
+            "parts",
+            "timings"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Reset inputs for an XP5-based body.",
+          "properties": {
+            "blocks": {
+              "description": "Initial external values supplied to named SoC blocks.",
+              "items": {
+                "$ref": "#/$defs/ApplicationBlockInput"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "xp5",
+              "type": "string"
+            },
+            "parts": {
+              "description": "Initial external values supplied to installed parts.",
+              "items": {
+                "$ref": "#/$defs/ApplicationPartInput"
+              },
+              "type": "array"
+            },
+            "ticks_per_second": {
+              "description": "Virtual clock ticks per second used by the supplied timing policies.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "timings": {
+              "description": "Functional device timing policy for this run, not measured silicon timing.",
+              "items": {
+                "$ref": "#/$defs/ApplicationTiming"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "ticks_per_second",
+            "blocks",
+            "parts",
+            "timings"
+          ],
+          "type": "object"
         }
-      },
-      "required": [
-        "gpio",
-        "encoders",
-        "adc",
-        "power",
-        "mcu",
-        "serial_registers",
-        "usb",
-        "card"
-      ],
-      "type": "object"
+      ]
     },
     "RunInstructionRate": {
       "additionalProperties": false,
@@ -503,6 +1200,36 @@
       ],
       "type": "object"
     },
+    "RunPurpose": {
+      "description": "Intended operation selected by a run configuration.",
+      "oneOf": [
+        {
+          "const": "rom_boot",
+          "description": "Start the selected firmware for normal operation.",
+          "type": "string"
+        },
+        {
+          "const": "service_session",
+          "description": "Prepare a service-session run.",
+          "type": "string"
+        },
+        {
+          "const": "rehearsal",
+          "description": "Prepare a rehearsal of a declared service operation.",
+          "type": "string"
+        },
+        {
+          "const": "boot_access",
+          "description": "Prepare a boot-access probe.",
+          "type": "string"
+        },
+        {
+          "const": "shutdown",
+          "description": "Prepare a controlled shutdown run.",
+          "type": "string"
+        }
+      ]
+    },
     "RunRegisterValue": {
       "additionalProperties": false,
       "description": "One synthetic external serial register value.",
@@ -566,38 +1293,124 @@
       "type": "object"
     },
     "RunScene": {
-      "additionalProperties": false,
-      "description": "Generated scene assets and the devices that consume them.",
-      "properties": {
-        "frame_period_ticks": {
-          "description": "Initial frame clock period in virtual ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "generated_assets": {
-          "description": "Deterministic external byte assets generated from fixed patterns.",
-          "items": {
-            "$ref": "#/$defs/GeneratedSceneAsset"
+      "description": "Model-specific scene inputs and the devices that consume them.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Generated scene assets for an EXR2-based body.",
+          "properties": {
+            "frame_period_ticks": {
+              "description": "Initial frame clock period in virtual ticks.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "generated_assets": {
+              "description": "Deterministic external byte assets generated from fixed patterns.",
+              "items": {
+                "$ref": "#/$defs/GeneratedSceneAsset"
+              },
+              "type": "array"
+            },
+            "images": {
+              "$ref": "#/$defs/RunImages",
+              "description": "Image input presented to live-view hardware."
+            },
+            "kind": {
+              "const": "exr2",
+              "type": "string"
+            },
+            "statistics": {
+              "$ref": "#/$defs/RunStatistics",
+              "description": "Statistics input presented to live-view hardware."
+            }
           },
-          "type": "array"
+          "required": [
+            "kind",
+            "generated_assets",
+            "images",
+            "statistics",
+            "frame_period_ticks"
+          ],
+          "type": "object"
         },
-        "images": {
-          "$ref": "#/$defs/RunImages",
-          "description": "Image input presented to live-view hardware."
+        {
+          "additionalProperties": false,
+          "description": "External scene inputs for an XP4-based body.",
+          "properties": {
+            "command_images": {
+              "description": "Image values supplied when a declared block requests command-driven work.",
+              "items": {
+                "$ref": "#/$defs/ApplicationCommandImageInput"
+              },
+              "type": "array"
+            },
+            "frames": {
+              "description": "Periodic frame sources bound to named SoC blocks.",
+              "items": {
+                "$ref": "#/$defs/ApplicationFrameInput"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "xp4",
+              "type": "string"
+            },
+            "statistics": {
+              "description": "Uniform statistics scenes bound to named SoC blocks.",
+              "items": {
+                "$ref": "#/$defs/ApplicationStatisticsInput"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "frames",
+            "statistics",
+            "command_images"
+          ],
+          "type": "object"
         },
-        "statistics": {
-          "$ref": "#/$defs/RunStatistics",
-          "description": "Statistics input presented to live-view hardware."
+        {
+          "additionalProperties": false,
+          "description": "External scene inputs for an XP5-based body.",
+          "properties": {
+            "command_images": {
+              "description": "Image values supplied when a declared block requests command-driven work.",
+              "items": {
+                "$ref": "#/$defs/ApplicationCommandImageInput"
+              },
+              "type": "array"
+            },
+            "frames": {
+              "description": "Periodic frame sources bound to named SoC blocks.",
+              "items": {
+                "$ref": "#/$defs/ApplicationFrameInput"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "xp5",
+              "type": "string"
+            },
+            "statistics": {
+              "description": "Uniform statistics scenes bound to named SoC blocks.",
+              "items": {
+                "$ref": "#/$defs/ApplicationStatisticsInput"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "frames",
+            "statistics",
+            "command_images"
+          ],
+          "type": "object"
         }
-      },
-      "required": [
-        "generated_assets",
-        "images",
-        "statistics",
-        "frame_period_ticks"
-      ],
-      "type": "object"
+      ]
     },
     "RunSerialRegisters": {
       "additionalProperties": false,
@@ -644,6 +1457,20 @@
           "properties": {
             "kind": {
               "const": "loader",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Enter through a removable-card boot entry.",
+          "properties": {
+            "kind": {
+              "const": "sd_card",
               "type": "string"
             }
           },
@@ -717,6 +1544,46 @@
         "connected"
       ],
       "type": "object"
+    },
+    "TimingOperation": {
+      "description": "Device operation to which a run's functional delay applies.",
+      "oneOf": [
+        {
+          "const": "settle",
+          "description": "Clock or signal settling.",
+          "type": "string"
+        },
+        {
+          "const": "sample",
+          "description": "Analog or temperature sampling.",
+          "type": "string"
+        },
+        {
+          "const": "command",
+          "description": "Command acceptance or completion.",
+          "type": "string"
+        },
+        {
+          "const": "reset",
+          "description": "Device reset completion.",
+          "type": "string"
+        },
+        {
+          "const": "pixel",
+          "description": "Display pixel clock.",
+          "type": "string"
+        },
+        {
+          "const": "acknowledge",
+          "description": "Control-request acknowledgment.",
+          "type": "string"
+        },
+        {
+          "const": "complete",
+          "description": "General processing completion.",
+          "type": "string"
+        }
+      ]
     }
   },
   "$id": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
@@ -734,7 +1601,14 @@
       "type": "string"
     },
     "execution": {
-      "$ref": "#/$defs/RunExecution",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunExecution"
+        },
+        {
+          "type": "null"
+        }
+      ],
       "description": "Execution policy for this run."
     },
     "firmware_id": {
@@ -746,8 +1620,15 @@
       "type": "string"
     },
     "inputs": {
-      "$ref": "#/$defs/RunInputs",
-      "description": "Declared synthetic reset inputs, addressed by catalog identity."
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunInputs"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Declared model-specific reset inputs, addressed by catalog identity."
     },
     "overlays": {
       "description": "Named overlays to apply in declaration order.",
@@ -756,8 +1637,19 @@
       },
       "type": "array"
     },
+    "purpose": {
+      "$ref": "#/$defs/RunPurpose",
+      "description": "Intended operation selected by this run configuration."
+    },
     "scene": {
-      "$ref": "#/$defs/RunScene",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunScene"
+        },
+        {
+          "type": "null"
+        }
+      ],
       "description": "External scene inputs generated for this run."
     },
     "schema": {
@@ -775,12 +1667,10 @@
     "$schema",
     "schema",
     "id",
+    "purpose",
     "body_id",
     "firmware_id",
     "start",
-    "execution",
-    "inputs",
-    "scene",
     "overlays"
   ],
   "title": "RunConfiguration",

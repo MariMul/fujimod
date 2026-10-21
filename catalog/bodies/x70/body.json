@@ -717,6 +717,7 @@
     "connection_id": "mcu-bus",
     "controller_id": "serial-spi1",
     "channel": 1,
+    "word_bits": 16,
     "select_connection_id": "mcu-select"
   },
   "power_control": {
@@ -738,49 +739,57 @@
       "controller_id": "control-bus1",
       "channel": 1,
       "address": 48,
-      "polarity_selector": 0
+      "polarity_selector": 0,
+      "id": "secondary-pwic"
     },
     {
       "controller_id": "control-bus0",
       "channel": 0,
       "address": 24,
-      "polarity_selector": 1
+      "polarity_selector": 1,
+      "id": "primary-device-0"
     },
     {
       "controller_id": "control-bus0",
       "channel": 0,
       "address": 68,
-      "polarity_selector": 0
+      "polarity_selector": 0,
+      "id": "primary-device-1"
     },
     {
       "controller_id": "control-bus0",
       "channel": 0,
       "address": 57,
-      "polarity_selector": 1
+      "polarity_selector": 1,
+      "id": "primary-device-2"
     },
     {
       "controller_id": "control-bus1",
       "channel": 1,
       "address": 114,
-      "polarity_selector": 0
+      "polarity_selector": 0,
+      "id": "secondary-sink"
     },
     {
       "controller_id": "control-bus0",
       "channel": 0,
       "address": 25,
-      "polarity_selector": 1
+      "polarity_selector": 1,
+      "id": "primary-device-3"
     },
     {
       "controller_id": "control-bus0",
       "channel": 0,
       "address": 12,
-      "polarity_selector": 1
+      "polarity_selector": 1,
+      "id": "primary-device-4"
     },
     {
       "controller_id": "control-bus1",
       "channel": 1,
       "address": 10,
-      "polarity_selector": 1
+      "polarity_selector": 1,
+      "id": "secondary-register-endpoint"
     }
   ],
   "connections": [

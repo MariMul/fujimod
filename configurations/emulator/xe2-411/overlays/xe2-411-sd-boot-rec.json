@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xe2-411-sd-boot-rec",
+  "configuration_id": "xe2-411",
+  "change": {
+    "kind": "start",
+    "start": {
+      "kind": "sd_card"
+    }
+  }
+}

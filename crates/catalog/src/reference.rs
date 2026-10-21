@@ -683,6 +683,20 @@ impl Body {
             self.connections.iter().map(|item| item.id.as_str()),
             "body connection",
         )?;
+        unique_ids(
+            self.control_bus_chips.iter().map(|item| item.id.as_str()),
+            "control-bus endpoint",
+        )?;
+        for chip in &self.control_bus_chips {
+            validate_id(&chip.id)?;
+            validate_id(&chip.controller_id)?;
+            if chip.address > 0x7f || chip.polarity_selector > 1 {
+                return Err(format!(
+                    "body {} has an invalid control-bus endpoint {}",
+                    self.id, chip.id
+                ));
+            }
+        }
         if let Some(controls) = &self.controls {
             let connections: BTreeSet<_> = self
                 .connections
@@ -949,6 +963,8 @@ pub struct MicrocontrollerAssembly {
     pub controller_id: String,
     /// Channel selected on the controller.
     pub channel: u8,
+    /// Transfer word width used by this attachment.
+    pub word_bits: u8,
     /// Body connection identity controlling chip select.
     pub select_connection_id: String,
 }
@@ -1131,6 +1147,8 @@ pub enum WireSignal {
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
 pub struct ControlBusChip {
+    /// Stable endpoint identity within this body.
+    pub id: String,
     /// SoC control-bus block identity carrying this device.
     pub controller_id: String,
     /// Control-bus channel index.
@@ -2117,6 +2135,12 @@ impl ReferenceCatalog {
                     SocBlockKind::SerialController,
                     "microcontroller",
                 )?;
+                if !matches!(mcu.word_bits, 8 | 16 | 32) {
+                    return Err(format!(
+                        "body {} microcontroller route has an unsupported word width",
+                        body.id
+                    ));
+                }
                 if !body.connections.iter().any(|connection| {
                     connection.id == mcu.select_connection_id
                         && connection

@@ -28,6 +28,8 @@ pub struct RunConfiguration {
     pub schema: u32,
     /// Stable run-configuration identity.
     pub id: String,
+    /// Intended operation selected by this run configuration.
+    pub purpose: RunPurpose,
     /// Selected body identity.
     pub body_id: String,
     /// Selected firmware identity.
@@ -35,11 +37,11 @@ pub struct RunConfiguration {
     /// Firmware entry mode selected for this run.
     pub start: RunStart,
     /// Execution policy for this run.
-    pub execution: RunExecution,
-    /// Declared synthetic reset inputs, addressed by catalog identity.
-    pub inputs: RunInputs,
+    pub execution: Option<RunExecution>,
+    /// Declared model-specific reset inputs, addressed by catalog identity.
+    pub inputs: Option<RunInputs>,
     /// External scene inputs generated for this run.
-    pub scene: RunScene,
+    pub scene: Option<RunScene>,
     /// Named overlays to apply in declaration order.
     pub overlays: Vec<String>,
 }
@@ -76,12 +78,19 @@ impl RunConfiguration {
                 return Err("run configuration repeats an overlay identity".into());
             }
         }
-        if self.execution.quantum == 0 {
-            return Err("run execution quantum must be positive".into());
+        if let Some(execution) = &self.execution {
+            if execution.quantum == 0 {
+                return Err("run execution quantum must be positive".into());
+            }
+            execution.instructions_per_tick.validate()?;
         }
-        self.execution.instructions_per_tick.validate()?;
-        self.inputs.validate()?;
-        self.scene.validate()
+        if let Some(inputs) = &self.inputs {
+            inputs.validate()?;
+        }
+        if let Some(scene) = &self.scene {
+            scene.validate()?;
+        }
+        Ok(())
     }
 
     /// Check that every run-input identity exists in the selected hardware.
@@ -97,6 +106,32 @@ impl RunConfiguration {
             return Err("run configuration identities differ from resolved hardware".into());
         }
 
+        let input_model_matches = match &self.inputs {
+            None => true,
+            Some(RunInputs::Exr2(_)) => selection.soc.id == "exr2",
+            Some(RunInputs::Xp4(_)) => selection.soc.id == "xp4",
+            Some(RunInputs::Xp5(_)) => selection.soc.id == "xp5",
+        };
+        let scene_model_matches = match &self.scene {
+            None => true,
+            Some(RunScene::Exr2(_)) => selection.soc.id == "exr2",
+            Some(RunScene::Xp4(_)) => selection.soc.id == "xp4",
+            Some(RunScene::Xp5(_)) => selection.soc.id == "xp5",
+        };
+        if !input_model_matches || !scene_model_matches {
+            return Err("run inputs or scene do not match the selected SoC model".into());
+        }
+        if let Some(scene) = &self.scene {
+            scene.validate_selection(selection)?;
+        }
+
+        let inputs = match &self.inputs {
+            None => return Ok(()),
+            Some(RunInputs::Exr2(inputs)) => inputs,
+            Some(RunInputs::Xp4(inputs)) => return inputs.validate_selection(selection),
+            Some(RunInputs::Xp5(inputs)) => return inputs.validate_selection(selection),
+        };
+
         let body = &selection.body;
         let soc = &selection.soc;
         let block = |id: &str, kind| {
@@ -104,27 +139,21 @@ impl RunConfiguration {
                 .iter()
                 .any(|candidate| candidate.id == id && candidate.kind == kind)
         };
-        if !block(
-            &self.inputs.gpio.block_id,
-            crate::reference::SocBlockKind::Gpio,
-        ) {
+        if !block(&inputs.gpio.block_id, crate::reference::SocBlockKind::Gpio) {
             return Err(format!(
                 "run GPIO input refers to an absent or non-GPIO SoC block {}",
-                self.inputs.gpio.block_id
+                inputs.gpio.block_id
             ));
         }
-        if !block(
-            &self.inputs.adc.block_id,
-            crate::reference::SocBlockKind::Adc,
-        ) {
+        if !block(&inputs.adc.block_id, crate::reference::SocBlockKind::Adc) {
             return Err(format!(
                 "run ADC input refers to an absent or non-ADC SoC block {}",
-                self.inputs.adc.block_id
+                inputs.adc.block_id
             ));
         }
 
         let connection = |id: &str| body.connections.iter().find(|item| item.id == id);
-        for key in &self.inputs.gpio.keys {
+        for key in &inputs.gpio.keys {
             if !connection(&key.connection_id)
                 .is_some_and(|item| item.kind == crate::reference::ConnectionKind::Control)
             {
@@ -134,7 +163,7 @@ impl RunConfiguration {
                 ));
             }
         }
-        for encoder in &self.inputs.encoders {
+        for encoder in &inputs.encoders {
             let input = connection(&encoder.connection_id)
                 .filter(|item| item.kind == crate::reference::ConnectionKind::Control)
                 .ok_or_else(|| {
@@ -155,7 +184,7 @@ impl RunConfiguration {
                 ));
             }
         }
-        for output in &self.inputs.gpio.outputs {
+        for output in &inputs.gpio.outputs {
             let target = connection(&output.connection_id).ok_or_else(|| {
                 format!(
                     "run GPIO output refers to an absent body connection {}",
@@ -172,7 +201,7 @@ impl RunConfiguration {
                 ));
             }
         }
-        for state in &self.inputs.gpio.connections {
+        for state in &inputs.gpio.connections {
             if connection(&state.connection_id).is_none() {
                 return Err(format!(
                     "run connection input refers to an absent body connection {}",
@@ -180,12 +209,12 @@ impl RunConfiguration {
                 ));
             }
         }
-        if !connection(&self.inputs.usb.connection_id)
+        if !connection(&inputs.usb.connection_id)
             .is_some_and(|item| item.kind == crate::reference::ConnectionKind::Usb)
         {
             return Err(format!(
                 "run USB input refers to an absent or non-USB body connection {}",
-                self.inputs.usb.connection_id
+                inputs.usb.connection_id
             ));
         }
 
@@ -193,23 +222,23 @@ impl RunConfiguration {
         let mcu = body
             .microcontroller
             .as_ref()
-            .filter(|item| item.part_id == self.inputs.mcu.part_id)
+            .filter(|item| item.part_id == inputs.mcu.part_id)
             .ok_or("run MCU input does not target the installed body MCU")?;
         let power = body
             .power_control
             .as_ref()
-            .filter(|item| item.part_id == self.inputs.power.part_id)
+            .filter(|item| item.part_id == inputs.power.part_id)
             .ok_or("run power input does not target the installed body power controller")?;
         let card = body
             .card_slot
             .as_ref()
-            .filter(|item| item.connection_id == self.inputs.card.connection_id)
+            .filter(|item| item.connection_id == inputs.card.connection_id)
             .ok_or("run card input does not target the body's card connection")?;
-        if self.inputs.card.present && card.controller_id.is_none() {
+        if inputs.card.present && card.controller_id.is_none() {
             return Err("selected body has no supported removable-card controller".into());
         }
-        if self.inputs.gpio.connections.iter().any(|state| {
-            state.connection_id == self.inputs.usb.connection_id
+        if inputs.gpio.connections.iter().any(|state| {
+            state.connection_id == inputs.usb.connection_id
                 || state.connection_id == card.detect_connection_id
                 || state.connection_id == card.write_protect_connection_id
         }) {
@@ -262,7 +291,7 @@ impl RunConfiguration {
             let end = first + u64::from(range.count);
             u64::from(register) >= first && u64::from(register) < end
         };
-        for input in &self.inputs.power.spi_status {
+        for input in &inputs.power.spi_status {
             if !power_registers
                 .iter()
                 .any(|register| register.address == input.register)
@@ -273,7 +302,7 @@ impl RunConfiguration {
                 ));
             }
         }
-        for serial_input in &self.inputs.serial_registers {
+        for serial_input in &inputs.serial_registers {
             let target = part(&serial_input.part_id).ok_or_else(|| {
                 format!(
                     "run input refers to an absent body part {}",
@@ -388,13 +417,26 @@ impl ResolvedConfiguration {
                     if !changed.insert("usb") {
                         return Err("run overlays change USB connection more than once".into());
                     }
-                    configuration.inputs.usb.connected = connected;
+                    let Some(RunInputs::Exr2(inputs)) = &mut configuration.inputs else {
+                        return Err(format!(
+                            "run overlay {overlay_id} requires declared EXR2 USB input state"
+                        ));
+                    };
+                    inputs.usb.connected = connected;
                 }
                 RunOverlayChange::Start { start } => {
                     if !changed.insert("start") {
                         return Err("run overlays change the start entry more than once".into());
                     }
                     configuration.start = start;
+                }
+                RunOverlayChange::Purpose { purpose } => {
+                    if !changed.insert("purpose") {
+                        return Err(
+                            "run overlays change the operation purpose more than once".into()
+                        );
+                    }
+                    configuration.purpose = purpose;
                 }
             }
             configuration.overlays.push(overlay.id);
@@ -416,6 +458,24 @@ pub enum RunStart {
     Rom,
     /// Enter through the selected firmware's loader entry.
     Loader,
+    /// Enter through a removable-card boot entry.
+    SdCard,
+}
+
+/// Intended operation selected by a run configuration.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RunPurpose {
+    /// Start the selected firmware for normal operation.
+    RomBoot,
+    /// Prepare a service-session run.
+    ServiceSession,
+    /// Prepare a rehearsal of a declared service operation.
+    Rehearsal,
+    /// Prepare a boot-access probe.
+    BootAccess,
+    /// Prepare a controlled shutdown run.
+    Shutdown,
 }
 
 /// Closed instruction-derived timebase ratio for a run.
@@ -442,11 +502,34 @@ impl RunInstructionRate {
     }
 }
 
-/// Synthetic starting input values applied to resolved blocks and parts.
+/// Model-specific synthetic startup inputs applied to resolved hardware.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub enum RunInputs {
+    /// Reset inputs for an EXR2-based body.
+    Exr2(Exr2RunInputs),
+    /// Reset inputs for an XP4-based body.
+    Xp4(crate::application_inputs::ApplicationRunInputs),
+    /// Reset inputs for an XP5-based body.
+    Xp5(crate::application_inputs::ApplicationRunInputs),
+}
+
+impl RunInputs {
+    fn validate(&self) -> Result<(), String> {
+        match self {
+            Self::Exr2(inputs) => inputs.validate(),
+            Self::Xp4(inputs) => inputs.validate(),
+            Self::Xp5(inputs) => inputs.validate(),
+        }
+    }
+}
+
+/// Synthetic EXR2 startup inputs applied to resolved blocks and parts.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
-pub struct RunInputs {
+pub struct Exr2RunInputs {
     /// GPIO reset state and explicitly released controls.
     pub gpio: RunGpioInputs,
     /// Initial phases for physical quadrature encoders.
@@ -467,7 +550,7 @@ pub struct RunInputs {
     pub first_start: Option<RunFirstStart>,
 }
 
-impl RunInputs {
+impl Exr2RunInputs {
     fn validate(&self) -> Result<(), String> {
         crate::emulator::validate_id(&self.gpio.block_id)?;
         if self.gpio.keys.len() > 64
@@ -814,6 +897,8 @@ pub enum RunOverlayChange {
     UsbConnection { connected: bool },
     /// Select another named firmware entry.
     Start { start: RunStart },
+    /// Select one named run operation.
+    Purpose { purpose: RunPurpose },
 }
 
 /// Execution policy selected by the run configuration.
@@ -847,11 +932,45 @@ pub enum RunEngine {
     Unicorn,
 }
 
-/// Generated scene assets and the devices that consume them.
+/// Model-specific scene inputs and the devices that consume them.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub enum RunScene {
+    /// Generated scene assets for an EXR2-based body.
+    Exr2(Exr2RunScene),
+    /// External scene inputs for an XP4-based body.
+    Xp4(crate::application_inputs::ApplicationRunScene),
+    /// External scene inputs for an XP5-based body.
+    Xp5(crate::application_inputs::ApplicationRunScene),
+}
+
+impl RunScene {
+    fn validate(&self) -> Result<(), String> {
+        match self {
+            Self::Exr2(scene) => scene.validate(),
+            Self::Xp4(scene) => scene.validate(),
+            Self::Xp5(scene) => scene.validate(),
+        }
+    }
+
+    fn validate_selection(
+        &self,
+        selection: &crate::reference::ResolvedSelection,
+    ) -> Result<(), String> {
+        match self {
+            Self::Exr2(scene) => scene.validate_selection(selection),
+            Self::Xp4(scene) => scene.validate_selection(selection),
+            Self::Xp5(scene) => scene.validate_selection(selection),
+        }
+    }
+}
+
+/// Generated scene assets and the devices that consume them on EXR2 bodies.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
-pub struct RunScene {
+pub struct Exr2RunScene {
     /// Deterministic external byte assets generated from fixed patterns.
     pub generated_assets: Vec<GeneratedSceneAsset>,
     /// Image input presented to live-view hardware.
@@ -862,7 +981,7 @@ pub struct RunScene {
     pub frame_period_ticks: u64,
 }
 
-impl RunScene {
+impl Exr2RunScene {
     fn validate(&self) -> Result<(), String> {
         if self.generated_assets.is_empty() || self.generated_assets.len() > 256 {
             return Err("run scene generated-asset count is outside its bound".into());
@@ -902,6 +1021,13 @@ impl RunScene {
             }
         }
         Ok(())
+    }
+
+    fn validate_selection(
+        &self,
+        _selection: &crate::reference::ResolvedSelection,
+    ) -> Result<(), String> {
+        self.validate()
     }
 }
 
@@ -985,30 +1111,35 @@ mod tests {
     #[test]
     fn bundled_configuration_is_identity_checked_and_has_explicit_reset_inputs() {
         let config = RunConfiguration::bundled("x70-110-rec").unwrap();
+        let Some(RunInputs::Exr2(inputs)) = config.inputs.as_ref() else {
+            panic!("X70 run inputs must be EXR2 inputs");
+        };
+        let Some(RunScene::Exr2(scene)) = config.scene.as_ref() else {
+            panic!("X70 run scene must be EXR2 scene inputs");
+        };
         assert_eq!(config.id, "x70-110-rec");
         assert_eq!(config.body_id, "x70");
         assert_eq!(config.firmware_id, "x70-110");
+        assert_eq!(config.purpose, RunPurpose::RomBoot);
         assert_eq!(config.start, RunStart::Rom);
-        assert_eq!(config.execution.mode, RunExecutionMode::Strict);
+        let execution = config.execution.as_ref().unwrap();
+        assert_eq!(execution.mode, RunExecutionMode::Strict);
         assert_eq!(
-            config.execution.instructions_per_tick,
+            execution.instructions_per_tick,
             RunInstructionRate {
                 numerator: 24,
                 denominator: 1
             }
         );
-        assert_eq!(config.scene.frame_period_ticks, 400000);
-        assert!(!config.inputs.gpio.unassigned_input_level);
-        assert!(config.inputs.gpio.keys.iter().all(|key| !key.pressed));
-        assert_eq!(config.inputs.gpio.outputs.len(), 3);
-        assert!(config.inputs.gpio.outputs.iter().all(|output| output.high));
-        assert_eq!(config.inputs.encoders.len(), 1);
-        assert_eq!(
-            config.inputs.encoders[0].connection_id,
-            "controls-encoder-3-6-3-7"
-        );
-        assert_eq!(config.inputs.encoders[0].phase, 0);
-        assert_eq!(config.inputs.adc.block_id, "adc");
+        assert_eq!(scene.frame_period_ticks, 400000);
+        assert!(!inputs.gpio.unassigned_input_level);
+        assert!(inputs.gpio.keys.iter().all(|key| !key.pressed));
+        assert_eq!(inputs.gpio.outputs.len(), 3);
+        assert!(inputs.gpio.outputs.iter().all(|output| output.high));
+        assert_eq!(inputs.encoders.len(), 1);
+        assert_eq!(inputs.encoders[0].connection_id, "controls-encoder-3-6-3-7");
+        assert_eq!(inputs.encoders[0].phase, 0);
+        assert_eq!(inputs.adc.block_id, "adc");
         assert!(config.overlays.is_empty());
         assert!(RunConfiguration::bundled("unknown").is_err());
     }
@@ -1016,10 +1147,16 @@ mod tests {
     #[test]
     fn scene_asset_references_are_closed_and_bounded() {
         let mut config = RunConfiguration::bundled("x70-110-rec").unwrap();
-        config.scene.images.live_image.asset = "missing".into();
+        let Some(RunScene::Exr2(scene)) = config.scene.as_mut() else {
+            panic!("X70 run scene must be EXR2 scene inputs");
+        };
+        scene.images.live_image.asset = "missing".into();
         assert!(config.validate("x70-110-rec").is_err());
         config = RunConfiguration::bundled("x70-110-rec").unwrap();
-        config.scene.generated_assets[0].pattern.clear();
+        let Some(RunScene::Exr2(scene)) = config.scene.as_mut() else {
+            panic!("X70 run scene must be EXR2 scene inputs");
+        };
+        scene.generated_assets[0].pattern.clear();
         assert!(config.validate("x70-110-rec").is_err());
         assert!(config.validate("different").is_err());
     }
@@ -1032,23 +1169,38 @@ mod tests {
         assert!(config.validate_selection(&selection).is_ok());
 
         let mut invalid = config.clone();
-        invalid.inputs.adc.block_id = invalid.inputs.gpio.block_id.clone();
+        let Some(RunInputs::Exr2(inputs)) = invalid.inputs.as_mut() else {
+            panic!("X70 run inputs must be EXR2 inputs");
+        };
+        inputs.adc.block_id = inputs.gpio.block_id.clone();
         assert!(invalid.validate_selection(&selection).is_err());
 
         let mut invalid = config.clone();
-        invalid.inputs.usb.connection_id = "hdmi".into();
+        let Some(RunInputs::Exr2(inputs)) = invalid.inputs.as_mut() else {
+            panic!("X70 run inputs must be EXR2 inputs");
+        };
+        inputs.usb.connection_id = "hdmi".into();
         assert!(invalid.validate_selection(&selection).is_err());
 
         let mut invalid = config.clone();
-        invalid.inputs.encoders[0].connection_id = "s1".into();
+        let Some(RunInputs::Exr2(inputs)) = invalid.inputs.as_mut() else {
+            panic!("X70 run inputs must be EXR2 inputs");
+        };
+        inputs.encoders[0].connection_id = "s1".into();
         assert!(invalid.validate_selection(&selection).is_err());
 
         let mut invalid = config.clone();
-        invalid.inputs.gpio.outputs[0].signal_index = 2;
+        let Some(RunInputs::Exr2(inputs)) = invalid.inputs.as_mut() else {
+            panic!("X70 run inputs must be EXR2 inputs");
+        };
+        inputs.gpio.outputs[0].signal_index = 2;
         assert!(invalid.validate_selection(&selection).is_err());
 
         let mut invalid = config;
-        invalid.inputs.mcu.part_id = invalid.inputs.power.part_id.clone();
+        let Some(RunInputs::Exr2(inputs)) = invalid.inputs.as_mut() else {
+            panic!("X70 run inputs must be EXR2 inputs");
+        };
+        inputs.mcu.part_id = inputs.power.part_id.clone();
         assert!(invalid.validate_selection(&selection).is_err());
     }
 
@@ -1074,14 +1226,39 @@ mod tests {
         let resolved =
             ResolvedConfiguration::with_overlays("x70-110-rec", &["x70-110-rec-usb".into()])
                 .unwrap();
-        assert!(resolved.configuration.inputs.usb.connected);
+        let Some(RunInputs::Exr2(inputs)) = resolved.configuration.inputs.as_ref() else {
+            panic!("X70 run inputs must be EXR2 inputs");
+        };
+        assert!(inputs.usb.connected);
         assert_eq!(resolved.configuration.overlays, ["x70-110-rec-usb"]);
+    }
+
+    #[test]
+    fn every_bundled_run_identity_and_overlay_resolves_without_path_aliases() {
+        for (id, _) in BUNDLED_RUN_CONFIGURATIONS {
+            let resolved = ResolvedConfiguration::bundled(id)
+                .unwrap_or_else(|error| panic!("run configuration {id}: {error}"));
+            assert_eq!(resolved.configuration.id, *id);
+        }
+        for (id, _) in BUNDLED_RUN_OVERLAYS {
+            let overlay =
+                RunOverlay::bundled(id).unwrap_or_else(|error| panic!("run overlay {id}: {error}"));
+            let resolved = ResolvedConfiguration::with_overlays(
+                &overlay.configuration_id,
+                &[(*id).to_owned()],
+            )
+            .unwrap_or_else(|error| panic!("run overlay {id}: {error}"));
+            assert_eq!(resolved.configuration.overlays, [*id]);
+        }
     }
 
     #[test]
     fn statistics_offsets_are_destination_offsets() {
         let mut config = RunConfiguration::bundled("x70-110-rec").unwrap();
-        config.scene.statistics.live_statistics[0].offset = u32::MAX;
+        let Some(RunScene::Exr2(scene)) = config.scene.as_mut() else {
+            panic!("X70 run scene must be EXR2 scene inputs");
+        };
+        scene.statistics.live_statistics[0].offset = u32::MAX;
         assert!(config.validate("x70-110-rec").is_ok());
     }
 }

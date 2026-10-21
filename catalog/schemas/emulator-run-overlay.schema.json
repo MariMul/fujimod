@@ -38,6 +38,54 @@
             "start"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Select one named run operation.",
+          "properties": {
+            "kind": {
+              "const": "purpose",
+              "type": "string"
+            },
+            "purpose": {
+              "$ref": "#/$defs/RunPurpose"
+            }
+          },
+          "required": [
+            "kind",
+            "purpose"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "RunPurpose": {
+      "description": "Intended operation selected by a run configuration.",
+      "oneOf": [
+        {
+          "const": "rom_boot",
+          "description": "Start the selected firmware for normal operation.",
+          "type": "string"
+        },
+        {
+          "const": "service_session",
+          "description": "Prepare a service-session run.",
+          "type": "string"
+        },
+        {
+          "const": "rehearsal",
+          "description": "Prepare a rehearsal of a declared service operation.",
+          "type": "string"
+        },
+        {
+          "const": "boot_access",
+          "description": "Prepare a boot-access probe.",
+          "type": "string"
+        },
+        {
+          "const": "shutdown",
+          "description": "Prepare a controlled shutdown run.",
+          "type": "string"
         }
       ]
     },
@@ -64,6 +112,20 @@
           "properties": {
             "kind": {
               "const": "loader",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Enter through a removable-card boot entry.",
+          "properties": {
+            "kind": {
+              "const": "sd_card",
               "type": "string"
             }
           },

@@ -96,6 +96,13 @@ pub enum PeripheralPart {
     AudioSerialOutput,
     /// Imaging serial output endpoint.
     ImagingSerialOutput,
+    /// Image sensor whose serial register selects the readout gate.
+    ImagingSensor {
+        /// Sensor register controlling readout.
+        read_gate_register: u16,
+        /// Bits enabling the readout gate.
+        read_gate_mask: u8,
+    },
     /// Power-controller register protocol.
     PowerController,
     /// Serial calibration-register protocol.

@@ -1413,6 +1413,10 @@
           "description": "SoC control-bus block identity carrying this device.",
           "type": "string"
         },
+        "id": {
+          "description": "Stable endpoint identity within this body.",
+          "type": "string"
+        },
         "polarity_selector": {
           "description": "Polarity selector for this device.",
           "format": "uint8",
@@ -1422,6 +1426,7 @@
         }
       },
       "required": [
+        "id",
         "controller_id",
         "channel",
         "address",
@@ -3237,6 +3242,13 @@
         "select_connection_id": {
           "description": "Body connection identity controlling chip select.",
           "type": "string"
+        },
+        "word_bits": {
+          "description": "Transfer word width used by this attachment.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
@@ -3244,6 +3256,7 @@
         "connection_id",
         "controller_id",
         "channel",
+        "word_bits",
         "select_connection_id"
       ],
       "type": "object"
@@ -3829,6 +3842,36 @@
           },
           "required": [
             "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Image sensor whose serial register selects the readout gate.",
+          "properties": {
+            "kind": {
+              "const": "imaging-sensor",
+              "type": "string"
+            },
+            "read_gate_mask": {
+              "description": "Bits enabling the readout gate.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "read_gate_register": {
+              "description": "Sensor register controlling readout.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "read_gate_register",
+            "read_gate_mask"
           ],
           "type": "object"
         },
