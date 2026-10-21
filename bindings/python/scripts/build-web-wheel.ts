@@ -60,7 +60,12 @@ export function build(output: string): string {
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const { values } = parseArgs({
-    options: { out: { type: 'string', default: resolve(root, '../../target/web-wheels') } },
+    options: {
+      out: { type: 'string', default: resolve(root, '../../target/web-wheels') },
+      help: { type: 'boolean', short: 'h' },
+    },
   });
-  console.log(build(resolve(values.out)));
+  if (values.help)
+    console.log('Usage: node bindings/python/scripts/build-web-wheel.ts [--out DIR]');
+  else console.log(build(resolve(values.out)));
 }
