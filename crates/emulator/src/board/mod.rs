@@ -178,7 +178,9 @@ impl Board {
         }
         let mut runtime = self.state();
         runtime["bus"] = state.bus.fingerprint()?;
-        runtime["scheduler"] = json!({"accounted":state.accounted,"deadlines":state.deadlines,"generations":state.generations,
+        // accounted is progress relative to the last backend host call. Every
+        // new processor run resets it; it is not future-affecting guest state.
+        runtime["scheduler"] = json!({"deadlines":state.deadlines,"generations":state.generations,
             "processor_deadlines":state.processor_deadlines,"processor_generations":state.processor_generations,
             "interrupt_delivery":state.interrupt_delivery,"irq_observations":state.irq_observations,
             "isolated_core":self.isolated_core.get(),"host_pause":self.host_pause.get()});
