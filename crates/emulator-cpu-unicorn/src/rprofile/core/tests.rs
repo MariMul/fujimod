@@ -86,6 +86,36 @@ fn completed_store_observers_see_written_ram_before_the_next_instruction() {
     }
 }
 
+#[test]
+fn sticky_pause_stops_instead_of_retrying_a_pending_restart() {
+    let cpu = processor(&Memory::default());
+    cpu.map_zeroed(0, 0x4000, 7).unwrap();
+    words(&cpu, 0x1000, &[0xeaff_fffe]); // b .
+
+    let execution = &cpu.execution;
+    execution.cap.set(10);
+    execution.restarted.set(Some(0x1000));
+    execution.pause_requested.store(1, Ordering::Release);
+
+    let exit = cpu
+        .execute(
+            Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(10),
+            },
+            0x1000,
+        )
+        .unwrap();
+
+    assert!(matches!(exit, Exit::Stopped));
+    // The C block-entry pause returns before the Rust block callback can clear
+    // this marker, so the worker must not retry it while the pause is sticky.
+    assert_eq!(execution.restarted.get(), Some(0x1000));
+    assert!(!execution.active.get());
+}
+
 fn processor(memory: &Memory) -> Core {
     processor_with_options(
         memory,
