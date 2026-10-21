@@ -5,8 +5,11 @@
 //! policy; physical addresses, links, and starting inputs are resolved below.
 
 use fujimod_catalog::{
-    configuration::{RunConfiguration, RunInputs},
-    reference::{ConnectionSignal, PartModel, ResolvedSelection, SocBlock, SocBlockKind},
+    configuration::{Exr2RunInputs, Exr2RunScene, RunConfiguration, RunPurpose, RunStart},
+    reference::{
+        ConnectionSignal, ControlBusChip, LensProtocol, Part, PartModel, ResolvedSelection,
+        SocBlock, SocBlockKind,
+    },
 };
 use fujimod_emulator_devices::{
     exr2::board::{BootEntry, Model, Node, Plan, WireKind},
@@ -421,10 +424,10 @@ fn apply_interrupts(
 ) -> Result<(), String> {
     match name {
         "irq0" => {
-            recipe["core"] = json!(core(selection, "core0")?);
+            recipe["core"] = json!(interrupt_controller_core(selection, "interrupt-core0")?);
         }
         "irq1" => {
-            recipe["core"] = json!(core(selection, "core1")?);
+            recipe["core"] = json!(interrupt_controller_core(selection, "interrupt-core1")?);
             let release = selection
                 .soc
                 .reset
@@ -475,13 +478,17 @@ fn apply_interrupts(
             ]);
         }
         "release" => {
+            let route = irq(selection, "interrupt-core1", "software-release")?;
+            let core_index = route["Core"]["core"]
+                .as_u64()
+                .and_then(|value| usize::try_from(value).ok())
+                .ok_or("secondary-core release route has no processor core")?;
             let processor = selection
                 .soc
                 .processors
-                .iter()
-                .find(|processor| processor.id == "core1")
-                .ok_or("SoC has no secondary processor core")?;
-            recipe["core"] = json!(core(selection, "core1")?);
+                .get(core_index)
+                .ok_or("secondary-core release route targets an absent processor")?;
+            recipe["core"] = json!(core_index);
             recipe["options"]["released"] = json!(
                 processor
                     .released
@@ -552,6 +559,18 @@ fn core(selection: &ResolvedSelection, id: &str) -> Result<usize, String> {
         .ok_or_else(|| format!("SoC {} has no processor core {id}", selection.soc.id))
 }
 
+fn interrupt_controller_core(selection: &ResolvedSelection, id: &str) -> Result<usize, String> {
+    let controller = block(selection, id)?;
+    if controller.kind != SocBlockKind::InterruptController {
+        return Err(format!("SoC block {id} is not an interrupt controller"));
+    }
+    let processor_id = controller
+        .processor_core_id
+        .as_deref()
+        .ok_or_else(|| format!("SoC interrupt controller {id} has no processor-core binding"))?;
+    core(selection, processor_id)
+}
+
 fn connection_interrupt(
     selection: &ResolvedSelection,
     connection_id: &str,
@@ -600,6 +619,606 @@ fn connection<'a>(
         .iter()
         .find(|item| item.id == id)
         .ok_or_else(|| format!("body {} has no connection {id}", selection.body.id))
+}
+
+fn part<'a>(selection: &'a ResolvedSelection, id: &str) -> Result<&'a Part, String> {
+    selection
+        .parts
+        .iter()
+        .find(|item| item.id == id)
+        .ok_or_else(|| format!("body {} has no resolved part {id}", selection.body.id))
+}
+
+fn control_bus_chip<'a>(
+    selection: &'a ResolvedSelection,
+    id: &str,
+) -> Result<&'a ControlBusChip, String> {
+    selection
+        .body
+        .control_bus_chips
+        .iter()
+        .find(|chip| chip.id == id)
+        .ok_or_else(|| format!("X70 body has no control-bus endpoint {id}"))
+}
+
+fn register_range(first: u32, count: u32, label: &str) -> Result<Vec<u8>, String> {
+    first
+        .checked_add(count)
+        .ok_or_else(|| format!("{label} register range overflows"))?;
+    (0..count)
+        .map(|offset| {
+            first
+                .checked_add(offset)
+                .and_then(|address| u8::try_from(address).ok())
+                .ok_or_else(|| format!("{label} register address exceeds one byte"))
+        })
+        .collect()
+}
+
+fn serial_endpoint(
+    selection: &ResolvedSelection,
+    connection_id: &str,
+) -> Result<(String, u8, u8), String> {
+    let mut serial = connection(selection, connection_id)?
+        .signals
+        .iter()
+        .filter_map(|signal| match signal {
+            ConnectionSignal::Serial {
+                block_id,
+                channel,
+                address,
+            } => Some((block_id.clone(), *channel, *address)),
+            _ => None,
+        });
+    let endpoint = serial
+        .next()
+        .ok_or_else(|| format!("body connection {connection_id} has no serial endpoint"))?;
+    if serial.next().is_some() {
+        return Err(format!(
+            "body connection {connection_id} has multiple serial endpoints"
+        ));
+    }
+    Ok(endpoint)
+}
+
+fn gpio_selection(
+    selection: &ResolvedSelection,
+    connection_id: &str,
+) -> Result<Vec<Value>, String> {
+    gpio_signals(selection, connection_id).map(|signals| {
+        signals
+            .into_iter()
+            .map(|(pin, active_level)| {
+                json!({
+                    "pin":{"port":pin.port,"pin":pin.pin},
+                    "high":active_level,
+                })
+            })
+            .collect()
+    })
+}
+
+fn set_spi_route(
+    recipe: &mut Value,
+    selection: &ResolvedSelection,
+    controller_id: &str,
+    channel: u8,
+    endpoint_id: &str,
+    select_connection_id: &str,
+    word_bits: Option<u8>,
+    clock_hz: Option<u64>,
+) -> Result<(), String> {
+    if clock_hz.is_some() {
+        return Err(format!(
+            "X70 SPI controller {controller_id} has no configured clock-rate model"
+        ));
+    }
+    if block(selection, controller_id)?.kind != SocBlockKind::SerialController {
+        return Err(format!(
+            "SoC block {controller_id} is not a serial controller"
+        ));
+    }
+    let routes = recipe["routes"]
+        .as_array_mut()
+        .ok_or("X70 SPI implementation has no routes")?;
+    let route = routes
+        .get_mut(usize::from(channel))
+        .ok_or_else(|| format!("X70 SPI implementation has no channel {channel}"))?;
+    if route["endpoint"]["kind"] == "lens-unit" {
+        if endpoint_id
+            != selection
+                .body
+                .lens
+                .as_ref()
+                .map_or("", |lens| lens.part_id.as_str())
+        {
+            return Err("X70 lens SPI endpoint identity differs from its body attachment".into());
+        }
+    }
+    route["options"]["selection"] = json!(gpio_selection(selection, select_connection_id)?);
+    if let Some(bits) = word_bits {
+        if bits == 0 {
+            return Err(format!(
+                "X70 SPI endpoint {endpoint_id} has zero word width"
+            ));
+        }
+        let transports = route["options"]["transports"]
+            .as_array_mut()
+            .ok_or("X70 SPI route has no transport formats")?;
+        for transport in transports {
+            transport["bits"] = json!(bits);
+        }
+    }
+    Ok(())
+}
+
+fn control_bus_topology(
+    selection: &ResolvedSelection,
+    controller_id: &str,
+    channel: u8,
+) -> Result<Vec<u8>, String> {
+    let mut addresses = BTreeSet::new();
+    for chip in &selection.body.control_bus_chips {
+        if chip.controller_id == controller_id && chip.channel == channel {
+            addresses.insert(chip.address);
+        }
+    }
+    for connection in &selection.body.connections {
+        for signal in &connection.signals {
+            if let ConnectionSignal::Serial {
+                block_id,
+                channel: signal_channel,
+                address,
+            } = signal
+                && block_id == controller_id
+                && *signal_channel == channel
+            {
+                addresses.insert(*address);
+            }
+        }
+    }
+    if addresses.is_empty() {
+        return Err(format!(
+            "X70 control bus {controller_id} channel {channel} has no declared endpoints"
+        ));
+    }
+    Ok(addresses.into_iter().collect())
+}
+
+fn apply_body_facts(
+    recipe: &mut Value,
+    name: &str,
+    selection: &ResolvedSelection,
+) -> Result<(), String> {
+    if recipe["options"].get("ram_bytes").is_some() {
+        recipe["options"]["ram_bytes"] = json!(selection.body.dram_bytes);
+    }
+    match name {
+        "serial_spi1" => {
+            let mcu = selection
+                .body
+                .microcontroller
+                .as_ref()
+                .ok_or("X70 body has no MCU attachment")?;
+            if mcu.controller_id != "serial-spi1" {
+                return Err("X70 MCU is not attached to serial-spi1".into());
+            }
+            set_spi_route(
+                recipe,
+                selection,
+                &mcu.controller_id,
+                mcu.channel,
+                &mcu.part_id,
+                &mcu.select_connection_id,
+                Some(mcu.word_bits),
+                None,
+            )?;
+
+            let PartModel::Microcontroller {
+                registers,
+                packet_registers,
+                clock_registers,
+                status_register,
+                initial_registers,
+            } = &part(selection, &mcu.part_id)?.model
+            else {
+                return Err("X70 MCU attachment is not a microcontroller part".into());
+            };
+            if registers.width_bytes != 1
+                || packet_registers.width_bytes != 1
+                || clock_registers.width_bytes != 1
+            {
+                return Err("X70 MCU register model requires byte-wide registers".into());
+            }
+            let mut addresses = BTreeSet::new();
+            addresses.extend(register_range(
+                packet_registers.first,
+                packet_registers.count,
+                "X70 MCU packet",
+            )?);
+            let clock_addresses = register_range(
+                clock_registers.first,
+                clock_registers.count,
+                "X70 MCU clock",
+            )?;
+            addresses.extend(clock_addresses.iter().copied());
+            let status_addresses = status_register
+                .map(|address| {
+                    u8::try_from(address)
+                        .map_err(|_| "X70 MCU status register exceeds one byte".to_owned())
+                })
+                .transpose()?;
+            addresses.extend(status_addresses);
+            for address in initial_registers {
+                addresses.insert(
+                    u8::try_from(*address)
+                        .map_err(|_| "X70 MCU initial register exceeds one byte".to_owned())?,
+                );
+            }
+            if addresses.iter().any(|address| {
+                u32::from(*address) < registers.first
+                    || u32::from(*address) >= registers.first.saturating_add(registers.count)
+            }) {
+                return Err("X70 MCU initialized register lies outside its declared extent".into());
+            }
+            let mcu_options =
+                &mut recipe["routes"][usize::from(mcu.channel)]["endpoint"]["options"];
+            mcu_options["registers"] = Value::Array(
+                addresses
+                    .into_iter()
+                    .map(|address| json!([address, 0]))
+                    .collect(),
+            );
+            mcu_options["status_registers"] =
+                json!(status_addresses.into_iter().collect::<Vec<_>>());
+            mcu_options["clock"]["registers"] = json!(clock_addresses);
+
+            let display = selection
+                .body
+                .display
+                .as_ref()
+                .ok_or("X70 body has no display attachment")?;
+            let route = display
+                .route
+                .as_ref()
+                .ok_or("X70 display has no serial route")?;
+            if route.endpoint_id != display.part_id {
+                return Err("X70 display route endpoint differs from installed part".into());
+            }
+            set_spi_route(
+                recipe,
+                selection,
+                &route.controller_id,
+                route.channel,
+                &route.endpoint_id,
+                &route.select_connection_id,
+                Some(route.word_bits),
+                route.clock_hz,
+            )?;
+            let display_part = part(selection, &display.part_id)?;
+            let PartModel::DisplayPanel { used_mask, .. } = &display_part.model else {
+                return Err("X70 display attachment is not a panel part".into());
+            };
+            recipe["routes"][usize::from(route.channel)]["endpoint"]["options"]["used_mask"] =
+                json!(used_mask);
+        }
+        "lens_serial" => {
+            let lens = selection
+                .body
+                .lens
+                .as_ref()
+                .ok_or("X70 body has no lens attachment")?;
+            if lens.route.endpoint_id != lens.part_id {
+                return Err("X70 lens route endpoint differs from installed part".into());
+            }
+            set_spi_route(
+                recipe,
+                selection,
+                &lens.route.controller_id,
+                lens.route.channel,
+                &lens.route.endpoint_id,
+                &lens.route.select_connection_id,
+                Some(lens.route.word_bits),
+                lens.route.clock_hz,
+            )?;
+            let PartModel::LensMechanism {
+                protocol,
+                motors,
+                encoder,
+                zoom,
+            } = &part(selection, &lens.part_id)?.model
+            else {
+                return Err("X70 lens attachment is not a lens mechanism part".into());
+            };
+            if *protocol != LensProtocol::Banked {
+                return Err(format!(
+                    "X70 lens assembler does not support the {protocol:?} protocol"
+                ));
+            }
+            if encoder.is_some() != lens.encoder_connection_id.is_some() {
+                return Err("X70 lens encoder part and body connection do not agree".into());
+            }
+            if encoder.is_some() {
+                return Err(
+                    "X70 native lens implementation does not support an encoder part".into(),
+                );
+            }
+            if zoom.is_some() {
+                return Err(
+                    "X70 native lens implementation does not support a zoom mechanism".into(),
+                );
+            }
+            if motors.len() != 2 {
+                return Err("X70 banked lens implementation requires two motor records".into());
+            }
+            let options =
+                &mut recipe["routes"][usize::from(lens.route.channel)]["endpoint"]["options"];
+            options["protocol"]["kind"] = json!("banked");
+            let motor_values = motors
+                .iter()
+                .enumerate()
+                .map(|(index, motor)| {
+                    // The banked implementation routes the body's counter
+                    // channels through motor zero. Dividers are constructor
+                    // policy; channel identities come from the selected body.
+                    let counters = if index == 0 {
+                        lens.pulse
+                            .counter_channels
+                            .iter()
+                            .map(|channel| {
+                                let divider = match channel {
+                                    0 => 4,
+                                    4 => 1,
+                                    _ => {
+                                        return Err(format!(
+                                            "X70 banked lens has no native divider policy for pulse channel {channel}"
+                                        ));
+                                    }
+                                };
+                                Ok(json!({"channel":channel,"divider":divider}))
+                            })
+                            .collect::<Result<Vec<_>, String>>()?
+                    } else {
+                        Vec::new()
+                    };
+                    let home = lens
+                        .home_connections
+                        .iter()
+                        .find(|connection| usize::from(connection.motor) == index);
+                    let home_value = match (&motor.home, home) {
+                        (None, None) => Value::Null,
+                        (Some(switch), Some(connection)) => {
+                            let pins = gpio_signals(selection, &connection.connection_id)?;
+                            if pins.len() != 1 {
+                                return Err(format!(
+                                    "lens home connection {} must resolve to one GPIO pin",
+                                    connection.connection_id
+                                ));
+                            }
+                            json!({
+                                "pin":{"port":pins[0].0.port,"pin":pins[0].0.pin},
+                                "threshold":switch.threshold,
+                                "side":"above",
+                            })
+                        }
+                        (Some(_), None) => {
+                            return Err(format!("lens motor {index} has no home connection"));
+                        }
+                        (None, Some(_)) => {
+                            return Err(format!(
+                                "lens motor {index} has an undeclared home switch"
+                            ));
+                        }
+                    };
+                    Ok(json!({
+                        "initial_position":motor.initial_position,
+                        "travel_limits":motor.travel_limits,
+                        "ticks_per_step":motor.ticks_per_step,
+                        "settle_ticks":motor.settle_ticks,
+                        "home":home_value,
+                        "counters":counters,
+                    }))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            options["motors"] = Value::Array(motor_values);
+            options["encoder"] = Value::Null;
+            options["zoom"] = Value::Null;
+            if let Some(iris) = &lens.iris {
+                if iris.positions.is_empty()
+                    || iris.positions.iter().any(|position| {
+                        !(iris.travel_limits[0]..=iris.travel_limits[1])
+                            .contains(&position.position)
+                    })
+                {
+                    return Err("X70 lens iris positions exceed declared travel limits".into());
+                }
+                let observed_limits = [
+                    iris.positions
+                        .iter()
+                        .map(|position| position.position)
+                        .min()
+                        .ok_or("X70 lens iris has no positions")?,
+                    iris.positions
+                        .iter()
+                        .map(|position| position.position)
+                        .max()
+                        .ok_or("X70 lens iris has no positions")?,
+                ];
+                if observed_limits != iris.travel_limits {
+                    return Err("X70 lens iris travel limits differ from its position table".into());
+                }
+            }
+            let optics = lens
+                .iris
+                .as_ref()
+                .map(|iris| {
+                    json!({
+                        "output":iris.output,
+                        "positions":iris.positions.iter().map(|position| {
+                            json!([position.position,position.f_number])
+                        }).collect::<Vec<_>>(),
+                    })
+                })
+                .unwrap_or(Value::Null);
+            recipe["routes"][usize::from(lens.route.channel)]["endpoint"]["optics"] = optics;
+            recipe["routes"][usize::from(lens.route.channel)]["endpoint"]["focus"] =
+                serde_json::to_value(&lens.focus).map_err(|error| error.to_string())?;
+        }
+        "power_peripherals" => {
+            let power = selection
+                .body
+                .power_control
+                .as_ref()
+                .ok_or("X70 body has no power-control attachment")?;
+            if power.controller_id != "power-peripherals" || power.channel != 0 {
+                return Err("X70 power controller has no supported power-peripherals route".into());
+            }
+            let pins = gpio_selection(selection, &power.select_connection_id)?;
+            if pins.len() != 1 {
+                return Err("X70 power-controller select must resolve to one GPIO signal".into());
+            }
+            recipe["options"]["spi0"]["selection"] = pins[0].clone();
+            recipe["options"]["spi0"]["presence"] = pins[0].clone();
+        }
+        "pulse" => {
+            let lens = selection
+                .body
+                .lens
+                .as_ref()
+                .ok_or("X70 body has no lens attachment")?;
+            recipe["options"]["counter_channels"] = json!(lens.pulse.counter_channels);
+            recipe["options"]["timer_channels"] = json!(lens.pulse.timer_channels);
+            recipe["options"]["quadrature"] = json!(lens.pulse.quadrature);
+            recipe["options"]["initial_phase"] = json!(lens.pulse.initial_phase);
+        }
+        "control_bus0" | "control_bus1" => {
+            let controller_id = if name == "control_bus0" {
+                "control-bus0"
+            } else {
+                "control-bus1"
+            };
+            let mut channels = selection
+                .body
+                .control_bus_chips
+                .iter()
+                .filter(|chip| chip.controller_id == controller_id)
+                .map(|chip| chip.channel)
+                .collect::<BTreeSet<_>>();
+            for connection in &selection.body.connections {
+                for signal in &connection.signals {
+                    if let ConnectionSignal::Serial {
+                        block_id, channel, ..
+                    } = signal
+                        && block_id == controller_id
+                    {
+                        channels.insert(*channel);
+                    }
+                }
+            }
+            if channels.len() != 1 {
+                return Err(format!(
+                    "X70 control bus {controller_id} must resolve to one documented channel"
+                ));
+            }
+            let channel = *channels.first().ok_or("control bus channel is absent")?;
+            recipe["options"]["parts"]["topology"] =
+                json!(control_bus_topology(selection, controller_id, channel)?);
+            if name == "control_bus0" {
+                let sensor = selection
+                    .body
+                    .sensor
+                    .as_ref()
+                    .ok_or("X70 body has no sensor attachment")?;
+                let sensor_bus = sensor
+                    .control_bus
+                    .as_ref()
+                    .ok_or("X70 sensor has no control-bus route")?;
+                let (sensor_controller, sensor_channel, sensor_address) =
+                    serial_endpoint(selection, &sensor.connection_id)?;
+                if sensor_controller != sensor_bus.controller_id
+                    || sensor_channel != sensor_bus.channel
+                    || sensor_address != sensor_bus.address
+                {
+                    return Err(
+                        "X70 sensor control-bus attachment differs from its connection".into(),
+                    );
+                }
+                recipe["options"]["parts"]["sensor_address"] = json!(sensor_address);
+                let (touch_controller, touch_channel, touch_address) =
+                    serial_endpoint(selection, "touch-bus")?;
+                if touch_controller != controller_id || touch_channel != channel {
+                    return Err("X70 touch endpoint is not attached to control-bus0".into());
+                }
+                recipe["options"]["parts"]["prefix_address"] = json!(touch_address);
+            } else {
+                let register = control_bus_chip(selection, "secondary-register-endpoint")?;
+                let pwic = control_bus_chip(selection, "secondary-pwic")?;
+                let sink = control_bus_chip(selection, "secondary-sink")?;
+                for chip in [register, pwic, sink] {
+                    if chip.controller_id != controller_id || chip.channel != channel {
+                        return Err(format!(
+                            "X70 named control-bus endpoint {} uses a different controller or channel",
+                            chip.id
+                        ));
+                    }
+                }
+                recipe["options"]["parts"]["register_address"] = json!(register.address);
+                recipe["options"]["parts"]["pwic_address"] = json!(pwic.address);
+                if !recipe["options"]["parts"]["topology"]
+                    .as_array()
+                    .is_some_and(|addresses| addresses.contains(&json!(sink.address)))
+                {
+                    return Err(
+                        "X70 secondary bus sink is absent from the endpoint topology".into(),
+                    );
+                }
+            }
+        }
+        "image_input" => {
+            let sensor = selection
+                .body
+                .sensor
+                .as_ref()
+                .ok_or("X70 body has no sensor attachment")?;
+            let PartModel::ImageSensor {
+                raster,
+                color_filter,
+                ..
+            } = &part(selection, &sensor.part_id)?.model
+            else {
+                return Err("X70 sensor attachment is not an image-sensor part".into());
+            };
+            let mut side = 1usize;
+            while side
+                .checked_mul(side)
+                .is_some_and(|area| area < color_filter.len())
+            {
+                side = side
+                    .checked_add(1)
+                    .ok_or("X70 sensor CFA dimensions overflow")?;
+            }
+            if side.checked_mul(side) != Some(color_filter.len()) {
+                return Err("X70 sensor CFA is not a square pattern".into());
+            }
+            let origin_x = usize::try_from(raster.image_area[0] % side as u32)
+                .map_err(|_| "X70 sensor CFA x origin is invalid")?;
+            let origin_y = usize::try_from(raster.image_area[1] % side as u32)
+                .map_err(|_| "X70 sensor CFA y origin is invalid")?;
+            // The image-input CFA is the sensor pattern viewed at the active
+            // crop origin; this derives the processing phase without storing
+            // a second copy of the sensor's color-filter array.
+            let processing_cfa = (0..side)
+                .flat_map(|y| {
+                    (0..side).map(move |x| {
+                        color_filter[((y + origin_y) % side) * side + (x + origin_x) % side]
+                    })
+                })
+                .collect::<Vec<_>>();
+            recipe["options"]["cfa"] = json!(processing_cfa);
+        }
+        _ => (),
+    }
+    Ok(())
 }
 
 fn gpio_signals(
@@ -661,7 +1280,7 @@ fn input_level(
 
 fn gpio_levels(
     selection: &ResolvedSelection,
-    inputs: &RunInputs,
+    inputs: &Exr2RunInputs,
 ) -> Result<([u32; 16], Vec<Value>), String> {
     let unassigned = inputs.gpio.unassigned_input_level;
     let mut levels = [if unassigned { u32::MAX } else { 0 }; 16];
@@ -826,9 +1445,9 @@ fn apply_run_inputs(
     recipe: &mut Value,
     name: &str,
     selection: &ResolvedSelection,
-    configuration: &RunConfiguration,
+    inputs: &Exr2RunInputs,
+    scene: &Exr2RunScene,
 ) -> Result<(), String> {
-    let inputs = &configuration.inputs;
     match name {
         "serial_gpio" => {
             let (levels, outputs) = gpio_levels(selection, inputs)?;
@@ -910,7 +1529,7 @@ fn apply_run_inputs(
         _ => (),
     }
 
-    let frame_period = configuration.scene.frame_period_ticks;
+    let frame_period = scene.frame_period_ticks;
     match name {
         "statistics" | "image_output_0" | "image_output_1" => {
             recipe["options"]["clock"]["ticks"] = json!(frame_period);
@@ -1027,11 +1646,10 @@ fn apply_run_inputs(
     Ok(())
 }
 
-fn scene(selection: &ResolvedSelection, configuration: &RunConfiguration) -> Result<Value, String> {
+fn scene(selection: &ResolvedSelection, scene: &Exr2RunScene) -> Result<Value, String> {
     let nand = selection.body.nand.ok_or("X70 body has no NAND geometry")?;
-    let image = &configuration.scene.images.live_image;
-    let statistics = configuration
-        .scene
+    let image = &scene.images.live_image;
+    let statistics = scene
         .statistics
         .live_statistics
         .iter()
@@ -1064,12 +1682,15 @@ fn scene(selection: &ResolvedSelection, configuration: &RunConfiguration) -> Res
 pub(super) fn assemble(
     selection: &ResolvedSelection,
     configuration: &RunConfiguration,
+    inputs: &Exr2RunInputs,
+    scene_input: &Exr2RunScene,
 ) -> Result<(Plan, Value, Value), String> {
     if selection.soc.id != "exr2"
         || selection.body.id != "x70"
         || selection.firmware.id != "x70-110"
         || configuration.id != "x70-110-rec"
-        || configuration.start != fujimod_catalog::configuration::RunStart::Rom
+        || configuration.purpose != RunPurpose::RomBoot
+        || configuration.start != RunStart::Rom
     {
         return Err(
             "X70 native boot implementation does not support this selected identity".into(),
@@ -1080,8 +1701,9 @@ pub(super) fn assemble(
     for rule in NODE_RULES {
         let mut recipe = model_recipe(rule.name)?;
         apply_soc_blocks(&mut recipe, rule, selection)?;
+        apply_body_facts(&mut recipe, rule.name, selection)?;
         apply_interrupts(&mut recipe, rule.name, selection)?;
-        apply_run_inputs(&mut recipe, rule.name, selection, configuration)?;
+        apply_run_inputs(&mut recipe, rule.name, selection, inputs, scene_input)?;
         let model: Model = serde_json::from_value(recipe.clone())
             .map_err(|error| format!("X70 node {}: {error}", rule.name))?;
         let windows = rule
@@ -1120,7 +1742,7 @@ pub(super) fn assemble(
     let mut wires = implementation_wires();
     wires.insert(
         "usb_cable".into(),
-        WireKind::LogicLevel(configuration.inputs.usb.connected),
+        WireKind::LogicLevel(inputs.usb.connected),
     );
     let plan = Plan {
         schema: 1,
@@ -1136,7 +1758,7 @@ pub(super) fn assemble(
             "release":"software-pulse",
             "lens_aperture":"aperture",
             "lens_focus":"focus",
-            "usb_cable":{"logic-level":configuration.inputs.usb.connected},
+            "usb_cable":{"logic-level":inputs.usb.connected},
             "imaging_routes":"irq-routes",
             "image_outputs":"output-channels",
             "memory_outputs":"memory-outputs",
@@ -1145,6 +1767,6 @@ pub(super) fn assemble(
         },
         "nodes":serialized_nodes,
     });
-    let scene = scene(selection, configuration)?;
-    Ok((plan, plan_value, scene))
+    let scene_value = scene(selection, scene_input)?;
+    Ok((plan, plan_value, scene_value))
 }

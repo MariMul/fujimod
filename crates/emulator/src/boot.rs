@@ -13,7 +13,10 @@ use crate::{
     session::{Session, preparation},
 };
 use fujimod_catalog::{
-    configuration::{ResolvedConfiguration, RunEngine, RunExecutionMode, RunStart},
+    configuration::{
+        Exr2RunInputs, Exr2RunScene, ResolvedConfiguration, RunEngine, RunExecution,
+        RunExecutionMode, RunInputs, RunPurpose, RunScene, RunStart,
+    },
     emulator::Content,
     facts::{CalibrationInterval, ConfigurationLocation, ControlInput},
     reference::PartModel,
@@ -109,6 +112,7 @@ pub struct Prepared {
     plan: Plan,
     devices_value: Value,
     scene: Value,
+    execution_policy: RunExecution,
     quantum: usize,
     update: Content,
     flash_offset: usize,
@@ -127,9 +131,11 @@ fn content(size: u64, sha256: &str) -> Content {
     }
 }
 
-fn first_start(resolved: &ResolvedConfiguration) -> Result<Option<FirstStart>, String> {
-    let configuration = &resolved.configuration;
-    let Some(policy) = &configuration.inputs.first_start else {
+fn first_start(
+    resolved: &ResolvedConfiguration,
+    inputs: &Exr2RunInputs,
+) -> Result<Option<FirstStart>, String> {
+    let Some(policy) = &inputs.first_start else {
         return Ok(None);
     };
     let facts = resolved
@@ -161,7 +167,7 @@ fn first_start(resolved: &ResolvedConfiguration) -> Result<Option<FirstStart>, S
             policy.key_id
         ));
     }
-    let mut inputs = predicates.iter().filter_map(|predicate| match predicate {
+    let mut adc_inputs = predicates.iter().filter_map(|predicate| match predicate {
         ControlInput::Adc {
             connection_id,
             intervals,
@@ -169,10 +175,10 @@ fn first_start(resolved: &ResolvedConfiguration) -> Result<Option<FirstStart>, S
         } => Some((connection_id, intervals.as_slice())),
         _ => None,
     });
-    let (connection_id, intervals) = inputs
+    let (connection_id, intervals) = adc_inputs
         .next()
         .ok_or_else(|| format!("firmware key {} has no ADC predicate", policy.key_id))?;
-    if inputs.next().is_some() || intervals.len() != 1 {
+    if adc_inputs.next().is_some() || intervals.len() != 1 {
         return Err(format!(
             "firmware key {} has unsupported multiple ADC calibration intervals",
             policy.key_id
@@ -195,7 +201,7 @@ fn first_start(resolved: &ResolvedConfiguration) -> Result<Option<FirstStart>, S
             _ => None,
         })
         .collect::<Vec<_>>();
-    if channel.len() != 1 || configuration.inputs.adc.block_id != "adc" {
+    if channel.len() != 1 || inputs.adc.block_id != "adc" {
         return Err("first-start ADC target is ambiguous or unsupported".into());
     }
     let cfgdata = facts
@@ -208,7 +214,7 @@ fn first_start(resolved: &ResolvedConfiguration) -> Result<Option<FirstStart>, S
     let CalibrationInterval { lower, upper } = intervals[0];
     Ok(Some(FirstStart {
         key_id: policy.key_id.clone(),
-        adc: configuration.inputs.adc.block_id.clone(),
+        adc: inputs.adc.block_id.clone(),
         channel: channel[0],
         calibration_pointer,
         calibration_is_pointer,
@@ -224,9 +230,53 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
     let configuration = &resolved.configuration;
     configuration.validate(&configuration.id)?;
     configuration.validate_selection(&resolved.reference)?;
-    if configuration.start != RunStart::Rom {
-        return Err("native boot only supports ROM-start configurations".into());
+    match configuration.purpose {
+        RunPurpose::RomBoot => (),
+        RunPurpose::ServiceSession => {
+            return Err("native X70 boot does not support service-session runs".into());
+        }
+        RunPurpose::Rehearsal => {
+            return Err("native X70 boot does not support rehearsal runs".into());
+        }
+        RunPurpose::BootAccess => {
+            return Err("native X70 boot does not support boot-access runs".into());
+        }
+        RunPurpose::Shutdown => {
+            return Err("native X70 boot does not support shutdown runs".into());
+        }
     }
+    match configuration.start {
+        RunStart::Rom => (),
+        RunStart::Loader => {
+            return Err("native X70 boot does not support loader-start configurations".into());
+        }
+        RunStart::SdCard => {
+            return Err("native X70 boot does not support SD-card-start configurations".into());
+        }
+    }
+    let inputs = match configuration.inputs.as_ref() {
+        Some(RunInputs::Exr2(inputs)) => inputs,
+        Some(RunInputs::Xp4(_)) => {
+            return Err("native X70 boot does not support XP4 startup inputs".into());
+        }
+        Some(RunInputs::Xp5(_)) => {
+            return Err("native X70 boot does not support XP5 startup inputs".into());
+        }
+        None => return Err("native X70 boot requires declared startup inputs".into()),
+    };
+    let scene_input = match configuration.scene.as_ref() {
+        Some(RunScene::Exr2(scene)) => scene,
+        Some(RunScene::Xp4(_)) => {
+            return Err("native X70 boot does not support XP4 scene inputs".into());
+        }
+        Some(RunScene::Xp5(_)) => {
+            return Err("native X70 boot does not support XP5 scene inputs".into());
+        }
+        None => return Err("native X70 boot requires a declared generated scene".into()),
+    };
+    let execution_policy = configuration
+        .execution
+        .ok_or("native X70 boot requires a declared execution policy")?;
     let firmware = &resolved.reference.firmware;
     let update_identity = firmware
         .update
@@ -245,17 +295,15 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
         .as_ref()
         .and_then(|facts| facts.observation.as_ref())
         .ok_or("selected firmware has no observation facts")?;
-    let quantum = configuration.execution.quantum;
-    let execution = graph::assemble(
-        &resolved.reference,
-        configuration.execution.instructions_per_tick,
-    )?;
+    let quantum = execution_policy.quantum;
+    let execution = graph::assemble(&resolved.reference, execution_policy.instructions_per_tick)?;
     let execution_value = graph::value(
         &resolved.reference,
         &execution,
-        configuration.execution.instructions_per_tick,
+        execution_policy.instructions_per_tick,
     );
-    let (plan, devices_value, scene) = x70::assemble(&resolved.reference, configuration)?;
+    let (plan, devices_value, scene) =
+        x70::assemble(&resolved.reference, configuration, inputs, scene_input)?;
     plan.validate_reset_outputs(
         &execution
             .processors
@@ -273,8 +321,7 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
             })
             .collect::<Vec<_>>(),
     )?;
-    let generated_assets = configuration
-        .scene
+    let generated_assets = scene_input
         .generated_assets
         .iter()
         .map(|asset| {
@@ -359,7 +406,7 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
             operation_alert_timer: Some(readiness.operation_alert_timer),
         },
     };
-    let first_start = first_start(&resolved)?;
+    let first_start = first_start(&resolved, inputs)?;
     let flash_offset = usize::try_from(installation.flash_offset)
         .map_err(|_| "firmware flash offset exceeds host address space")?;
     let update = content(update_identity.size, &update_identity.sha256);
@@ -374,6 +421,7 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
         plan,
         devices_value,
         scene,
+        execution_policy,
         quantum,
         update,
         flash_offset,
@@ -604,10 +652,10 @@ pub fn open(options: Options) -> Result<Session, String> {
         .map_err(|e| e.to_string())?
         .build(&assets)?;
     let assembly = plan.build(resources, 0, &mut RefuseAdapters)?;
-    let bus_mode = match prepared.resolved.configuration.execution.mode {
+    let bus_mode = match prepared.execution_policy.mode {
         RunExecutionMode::Strict => Mode::Strict,
     };
-    let engine = match prepared.resolved.configuration.execution.engine {
+    let engine = match prepared.execution_policy.engine {
         RunEngine::Unicorn => factory::Engine::Unicorn,
     };
     let bus = Bus::from_graph(bus_mode, assembly.graph)?;

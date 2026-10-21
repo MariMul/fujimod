@@ -1,5 +1,19 @@
 use super::*;
 
+fn exr2_inputs(resolved: &mut ResolvedConfiguration) -> &mut Exr2RunInputs {
+    match resolved.configuration.inputs.as_mut().unwrap() {
+        RunInputs::Exr2(inputs) => inputs,
+        RunInputs::Xp4(_) | RunInputs::Xp5(_) => panic!("unexpected input model"),
+    }
+}
+
+fn run_scene(resolved: &mut ResolvedConfiguration) -> &mut Exr2RunScene {
+    match resolved.configuration.scene.as_mut().unwrap() {
+        RunScene::Exr2(scene) => scene,
+        RunScene::Xp4(_) | RunScene::Xp5(_) => panic!("unexpected scene model"),
+    }
+}
+
 fn model<'a>(prepared: &'a Prepared, name: &str) -> &'a serde_json::Value {
     prepared.devices_value["nodes"]
         .as_array()
@@ -62,25 +76,27 @@ fn checked_run_configuration_selects_runtime_and_supplies_scene_and_quantum() {
         spec.resolved.reference.firmware.id,
         configuration.firmware_id
     );
-    assert_eq!(spec.quantum, configuration.execution.quantum);
+    let execution = configuration.execution.unwrap();
+    let scene = match configuration.scene.as_ref().unwrap() {
+        RunScene::Exr2(scene) => scene,
+        RunScene::Xp4(_) | RunScene::Xp5(_) => panic!("unexpected scene model"),
+    };
+    assert_eq!(spec.quantum, execution.quantum);
     assert_eq!(
         spec.execution_value["instructions_per_tick"],
         serde_json::json!([
-            configuration.execution.instructions_per_tick.numerator,
-            configuration.execution.instructions_per_tick.denominator
+            execution.instructions_per_tick.numerator,
+            execution.instructions_per_tick.denominator
         ])
     );
-    assert_eq!(
-        spec.generated_assets.len(),
-        configuration.scene.generated_assets.len()
-    );
+    assert_eq!(spec.generated_assets.len(), scene.generated_assets.len());
     assert_eq!(
         spec.scene["images"]["live_image"]["asset"],
-        configuration.scene.images.live_image.asset
+        scene.images.live_image.asset
     );
     assert_eq!(
         spec.scene["statistics"]["live_statistics"][0]["asset"],
-        configuration.scene.statistics.live_statistics[0].asset
+        scene.statistics.live_statistics[0].asset
     );
     let live_frames = spec.devices_value["nodes"]
         .as_array()
@@ -90,7 +106,7 @@ fn checked_run_configuration_selects_runtime_and_supplies_scene_and_quantum() {
         .unwrap();
     assert_eq!(
         live_frames["model"]["options"]["period_ticks"],
-        configuration.scene.frame_period_ticks
+        scene.frame_period_ticks
     );
     let json = spec.to_json();
     assert_eq!(json["configuration_id"], "x70-110-rec");
@@ -106,7 +122,49 @@ fn checked_run_configuration_selects_runtime_and_supplies_scene_and_quantum() {
 fn unsupported_run_configuration_start_is_refused_and_usb_overlay_is_applied() {
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
     resolved.configuration.start = RunStart::Loader;
-    assert!(prepared(resolved).is_err());
+    assert!(prepared(resolved).err().unwrap().contains("loader-start"));
+
+    let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
+    resolved.configuration.start = RunStart::SdCard;
+    assert!(prepared(resolved).err().unwrap().contains("SD-card-start"));
+
+    for (purpose, expected) in [
+        (RunPurpose::ServiceSession, "service-session"),
+        (RunPurpose::Rehearsal, "rehearsal"),
+        (RunPurpose::BootAccess, "boot-access"),
+        (RunPurpose::Shutdown, "shutdown"),
+    ] {
+        let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
+        resolved.configuration.purpose = purpose;
+        assert!(prepared(resolved).err().unwrap().contains(expected));
+    }
+
+    let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
+    resolved.configuration.inputs = None;
+    assert!(
+        prepared(resolved)
+            .err()
+            .unwrap()
+            .contains("requires declared startup inputs")
+    );
+
+    let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
+    resolved.configuration.scene = None;
+    assert!(
+        prepared(resolved)
+            .err()
+            .unwrap()
+            .contains("requires a declared generated scene")
+    );
+
+    let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
+    resolved.configuration.execution = None;
+    assert!(
+        prepared(resolved)
+            .err()
+            .unwrap()
+            .contains("requires a declared execution policy")
+    );
 
     let spec = prepare("x70-110-rec", &["x70-110-rec-usb".into()]).unwrap();
     assert_eq!(spec.resolved.configuration.overlays, ["x70-110-rec-usb"]);
@@ -116,7 +174,7 @@ fn unsupported_run_configuration_start_is_refused_and_usb_overlay_is_applied() {
     );
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    resolved.configuration.execution.quantum = 0;
+    resolved.configuration.execution.as_mut().unwrap().quantum = 0;
     assert!(prepared(resolved).is_err());
 }
 
@@ -154,14 +212,17 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
     let base = prepare("x70-110-rec", &[]).unwrap();
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    resolved.configuration.inputs.adc.samples[0] = 1;
+    exr2_inputs(&mut resolved).adc.samples[0] = 1;
     let adc = prepared(resolved).unwrap();
     assert_eq!(model(&adc, "adc")["options"]["samples"][0], 1);
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    resolved.configuration.inputs.mcu.packet[0] = 1;
-    resolved.configuration.inputs.mcu.packet[15] =
-        resolved.configuration.inputs.mcu.packet[15].wrapping_sub(1);
+    exr2_inputs(&mut resolved).mcu.packet[0] = 1;
+    {
+        let inputs = exr2_inputs(&mut resolved);
+        let last = inputs.mcu.packet.len() - 1;
+        inputs.mcu.packet[last] = inputs.mcu.packet[last].wrapping_sub(1);
+    }
     let packet = prepared(resolved).unwrap();
     let packet_value = model(&packet, "serial_spi1")["routes"][packet.mcu.route]["endpoint"]
         ["options"]["registers"]
@@ -175,10 +236,10 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
     assert_eq!(packet_value, 1);
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    resolved.configuration.inputs.mcu.rtc.initial_seconds = 7;
-    resolved.configuration.inputs.mcu.rtc.ticks_per_second = 24_000_000;
-    resolved.configuration.inputs.mcu.rtc.maximum_seconds = 9_999;
-    resolved.configuration.inputs.mcu.rtc.started = 17;
+    exr2_inputs(&mut resolved).mcu.rtc.initial_seconds = 7;
+    exr2_inputs(&mut resolved).mcu.rtc.ticks_per_second = 24_000_000;
+    exr2_inputs(&mut resolved).mcu.rtc.maximum_seconds = 9_999;
+    exr2_inputs(&mut resolved).mcu.rtc.started = 17;
     let rtc = prepared(resolved).unwrap();
     let rtc_route = usize::from(
         rtc.resolved
@@ -196,9 +257,7 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
     assert_eq!(clock["started"], 17);
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    resolved
-        .configuration
-        .inputs
+    exr2_inputs(&mut resolved)
         .gpio
         .keys
         .iter_mut()
@@ -236,7 +295,7 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
     );
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    resolved.configuration.inputs.gpio.outputs[0].high = false;
+    exr2_inputs(&mut resolved).gpio.outputs[0].high = false;
     let output = prepared(resolved).unwrap();
     assert_ne!(
         model(&base, "serial_gpio")["options"]["output_levels"],
@@ -247,7 +306,7 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
     assert_eq!(usb.devices_value["wires"]["usb_cable"]["logic-level"], true);
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    resolved.configuration.inputs.encoders[0].phase = 3;
+    exr2_inputs(&mut resolved).encoders[0].phase = 3;
     let encoder = prepared(resolved).unwrap();
     assert_eq!(
         model(&encoder, "encoder_control_ring")["options"]["rest_phase"],
@@ -255,7 +314,7 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
     );
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    resolved.configuration.scene.frame_period_ticks = 432_100;
+    run_scene(&mut resolved).frame_period_ticks = 432_100;
     let scene = prepared(resolved).unwrap();
     assert_eq!(
         model(&scene, "live_frames")["options"]["period_ticks"],
@@ -263,9 +322,7 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
     );
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    resolved
-        .configuration
-        .inputs
+    exr2_inputs(&mut resolved)
         .gpio
         .connections
         .iter_mut()
@@ -279,7 +336,7 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
     );
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    resolved.configuration.inputs.power.powered_on = false;
+    exr2_inputs(&mut resolved).power.powered_on = false;
     assert!(
         prepared(resolved)
             .err()
@@ -291,11 +348,15 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
     resolved
         .configuration
         .execution
+        .as_mut()
+        .unwrap()
         .instructions_per_tick
         .numerator = 11;
     resolved
         .configuration
         .execution
+        .as_mut()
+        .unwrap()
         .instructions_per_tick
         .denominator = 3;
     let rate = prepared(resolved).unwrap();
@@ -305,7 +366,7 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
     );
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    resolved.configuration.inputs.power.boot_reply = 1;
+    exr2_inputs(&mut resolved).power.boot_reply = 1;
     assert!(
         prepared(resolved)
             .err()
@@ -314,7 +375,7 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
     );
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    resolved.configuration.inputs.power.spi_status.push(
+    exr2_inputs(&mut resolved).power.spi_status.push(
         fujimod_catalog::configuration::RunRegisterValue {
             register: 9,
             value: 1,
@@ -328,6 +389,6 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
     );
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    resolved.configuration.inputs.card.present = true;
+    exr2_inputs(&mut resolved).card.present = true;
     assert!(prepared(resolved).is_err());
 }
