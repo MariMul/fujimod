@@ -77,9 +77,10 @@ The checked identity catalog is available through
 `fujimod.emulator.catalog`. `resolve_reference(body_id, firmware_id)` returns a
 `ResolvedSelection` containing the resolved `Soc`, `Body`, `Firmware` and
 `Part` records; `resolve_firmware(firmware_id)` derives the referenced body
-and SoC. The generated `TypedDict` models mirror the Rust catalog schemas and
-provide field-level editor and type-checker support. They describe identity
-records, not local file locations.
+and SoC. `resolve_configuration(configuration_id)` returns the validated run
+configuration with its resolved hardware reference. The generated `TypedDict`
+models mirror the Rust catalog schemas and provide field-level editor and
+type-checker support. They describe identity records, not local file locations.
 
 The update and ROM files are checked against the selected runtime's recorded
 size and SHA-256. A settings file is a 16-byte persistent packet with its
