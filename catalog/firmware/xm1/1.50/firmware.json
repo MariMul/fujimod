@@ -1,0 +1,87 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xm1-150",
+  "body_id": "xm1",
+  "version": "1.50",
+  "update": {
+    "size": 38405148,
+    "sha256": "43d67afa1a2bc9ae8481bc0acf02cb085ed0f515122dcbd26addcae102cd1490"
+  },
+  "boot_rom": {
+    "content": {
+      "size": 16384,
+      "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be"
+    },
+    "address": 2147483648
+  },
+  "installation": {
+    "flash_offset": 604,
+    "entry_labels": {
+      "0x69cdf8": "application entry",
+      "0x1800": "primary loader",
+      "0x11800": "secondary loader",
+      "0x40020": "primary kernel",
+      "0xd0020": "secondary kernel"
+    },
+    "loader_validation": {
+      "entry": 6934008,
+      "sections": [
+        "stream-0016025c",
+        "stream-002c025c"
+      ]
+    },
+    "image_sections": [
+      {
+        "name": "kernel0",
+        "address": 262144,
+        "size": 56032,
+        "sha256": "21366ffff7cebc6176b8a8125bf3a9974835a51070a58ea325f7eed8aabd8882",
+        "native_flash_offset": 524288
+      },
+      {
+        "name": "kernel1",
+        "address": 851968,
+        "size": 55968,
+        "sha256": "8fb0c322a22443a3783cdab9071db17212a5629f6375646218ac1e043dc672ec",
+        "native_flash_offset": 655360
+      },
+      {
+        "name": "stream-0016025c",
+        "address": 6407168,
+        "size": 2631720,
+        "sha256": "f2e2acab892dafeed85171f6870a411f0a2d5eae10921b86a24630d401dcff16",
+        "native_flash_offset": 1441792
+      },
+      {
+        "name": "stream-002c025c",
+        "address": 12524032,
+        "size": 5185120,
+        "sha256": "3cd501c07533938ae4d9347616986fd1649005a588c36b5abf05e36ef4fd892a",
+        "native_flash_offset": 2883584
+      },
+      {
+        "name": "overlay44",
+        "address": 17825792,
+        "size": 705952,
+        "sha256": "2dfaa5d4bd025d68e991a329cc1377d5da16de656148dc4027d9a6bc0c349f5c",
+        "native_flash_offset": 5898240
+      },
+      {
+        "name": "overlay46",
+        "address": 18612224,
+        "size": 117920,
+        "sha256": "a9dee59faaec1765d9f3a2dd7f75fd7d423a8b8061599b5d7f6752b6bdd4cf84",
+        "native_flash_offset": 6684672
+      },
+      {
+        "name": "overlay47",
+        "address": 18743296,
+        "size": 2532832,
+        "sha256": "0cf67b7221c3b0755092da0ae4c6d6fb817f2b32771ee53dff691fc59b28770c",
+        "native_flash_offset": 6815744
+      }
+    ]
+  },
+  "generated_facts": null
+}

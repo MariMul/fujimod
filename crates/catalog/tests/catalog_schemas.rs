@@ -125,3 +125,25 @@ fn reference_and_run_configuration_documents_validate_generated_schemas() {
         );
     }
 }
+
+#[test]
+fn bundled_reference_records_resolve_by_identity() {
+    let catalog = fujimod_catalog::ReferenceCatalog::bundled().expect("bundled references");
+    for (body, firmware) in [
+        ("x100s", "x100s-121"),
+        ("x100t", "x100t-111"),
+        ("x20", "x20-103"),
+        ("x30", "x30-103"),
+        ("xe2", "xe2-411"),
+        ("xe2s", "xe2s-111"),
+        ("xm1", "xm1-150"),
+        ("xq", "xq1-121"),
+        ("xq", "xq2-101"),
+        ("xt1", "xt1-552"),
+        ("xt10", "xt10-131"),
+    ] {
+        catalog
+            .resolve(body, firmware)
+            .unwrap_or_else(|error| panic!("{body} / {firmware}: {error}"));
+    }
+}

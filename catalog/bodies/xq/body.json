@@ -1,0 +1,114 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "xq",
+  "soc_id": "exr2",
+  "dram_bytes": 536870912,
+  "hardware": null,
+  "ram_regions": [],
+  "nand": null,
+  "sensor": null,
+  "lens": null,
+  "display": null,
+  "controls": null,
+  "microcontroller": null,
+  "power_control": null,
+  "card_slot": {
+    "part_id": "sd-card",
+    "connection_id": "sd-card-slot",
+    "detect_connection_id": "sd-card-detect",
+    "write_protect_connection_id": "sd-card-write-protect",
+    "controller_id": null
+  },
+  "control_bus_chips": [
+    {
+      "controller_id": "control-bus1",
+      "channel": 1,
+      "address": 48,
+      "polarity_selector": 0
+    },
+    {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 24,
+      "polarity_selector": 1
+    },
+    {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 68,
+      "polarity_selector": 0
+    },
+    {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 57,
+      "polarity_selector": 1
+    },
+    {
+      "controller_id": "control-bus1",
+      "channel": 1,
+      "address": 114,
+      "polarity_selector": 0
+    },
+    {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 25,
+      "polarity_selector": 1
+    },
+    {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 12,
+      "polarity_selector": 1
+    },
+    {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 28,
+      "polarity_selector": 1
+    },
+    {
+      "controller_id": "control-bus1",
+      "channel": 1,
+      "address": 10,
+      "polarity_selector": 1
+    }
+  ],
+  "connections": [
+    {
+      "id": "sd-card-slot",
+      "kind": "sd-card",
+      "signals": []
+    },
+    {
+      "id": "sd-card-detect",
+      "kind": "sd-card",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 7,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "sd-card-write-protect",
+      "kind": "sd-card",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 6,
+          "active_level": true
+        }
+      ]
+    }
+  ],
+  "parts": [
+    "sd-card"
+  ],
+  "wiring": []
+}

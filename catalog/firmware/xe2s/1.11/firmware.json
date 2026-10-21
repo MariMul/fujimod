@@ -1,0 +1,88 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xe2s-111",
+  "body_id": "xe2s",
+  "version": "1.11",
+  "update": {
+    "size": 53085184,
+    "sha256": "a34859b8e7ad2b915bcb77b337ddca4799cc29141a57de88909ee5746c62d424"
+  },
+  "boot_rom": {
+    "content": {
+      "size": 16384,
+      "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be"
+    },
+    "address": 2147483648
+  },
+  "installation": {
+    "flash_offset": 604,
+    "entry_labels": {
+      "0x93dca4": "application entry",
+      "0x1800": "primary loader",
+      "0x11800": "secondary loader",
+      "0x40020": "primary kernel",
+      "0xd0020": "secondary kernel",
+      "0x93e1f0": "application INIT"
+    },
+    "loader_validation": {
+      "entry": 9690276,
+      "sections": [
+        "stream-0016025c",
+        "stream-0032025c"
+      ]
+    },
+    "image_sections": [
+      {
+        "name": "kernel0",
+        "address": 262144,
+        "size": 56224,
+        "sha256": "399c48c26c1b09e8dafcf666fe0efa62619f9cdcaa27166fb8f6d864a3d8d6f0",
+        "native_flash_offset": 524288
+      },
+      {
+        "name": "kernel1",
+        "address": 851968,
+        "size": 56192,
+        "sha256": "6db7ca9ec6d87124d830acbbf452c9f2d57fb26089766c2a88e0c5503d7de128",
+        "native_flash_offset": 655360
+      },
+      {
+        "name": "stream-0016025c",
+        "address": 9044992,
+        "size": 3523912,
+        "sha256": "2499a88196c5de7b9481b62c1619e593d78c7d99c09c005673aab8b101ba51b0",
+        "native_flash_offset": 1441792
+      },
+      {
+        "name": "stream-0032025c",
+        "address": 16225824,
+        "size": 6072736,
+        "sha256": "3185544ec5c9211877f48c2a7d2089dc9b85ad2fb0bd6a6abd680189961e18f4",
+        "native_flash_offset": 3276800
+      },
+      {
+        "name": "overlay48",
+        "address": 27000832,
+        "size": 3156320,
+        "sha256": "76e5f83894b21a3baa2ae9c0fa60c75e1df9aead58191e00d345dc255badfc06",
+        "native_flash_offset": 6815744
+      },
+      {
+        "name": "overlay4a",
+        "address": 30277632,
+        "size": 119584,
+        "sha256": "58f5592f4c6129dbf8ed5b84542ba43e93e71e565e2cd0be23a7f83a83b6db34",
+        "native_flash_offset": 10092544
+      },
+      {
+        "name": "overlay4b",
+        "address": 30408704,
+        "size": 2465536,
+        "sha256": "35e19d715f7bebb6178f9c786aed094e52fa7b8f59c49af1ab2dfb4e02919a67",
+        "native_flash_offset": 10223616
+      }
+    ]
+  },
+  "generated_facts": null
+}
