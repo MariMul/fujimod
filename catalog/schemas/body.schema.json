@@ -1,5 +1,26 @@
 {
   "$defs": {
+    "AperturePosition": {
+      "additionalProperties": false,
+      "description": "An aperture mechanism position and f-number.",
+      "properties": {
+        "f_number": {
+          "description": "Optical f-number at this position.",
+          "format": "double",
+          "type": "number"
+        },
+        "position": {
+          "description": "Mechanical position value.",
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "position",
+        "f_number"
+      ],
+      "type": "object"
+    },
     "BlockSignal": {
       "description": "Named control signals carried by SoC blocks.",
       "oneOf": [
@@ -52,6 +73,102 @@
       ],
       "type": "object"
     },
+    "BodyControl": {
+      "additionalProperties": false,
+      "description": "A physical control's identity, positions, and body connections.",
+      "properties": {
+        "assignable": {
+          "description": "Whether firmware allows its function to be assigned.",
+          "type": "boolean"
+        },
+        "connection_ids": {
+          "description": "Physical body connections used by this control.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "default_function": {
+          "description": "Documented default function when available.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/ControlKind",
+          "description": "Mechanical control category."
+        },
+        "location": {
+          "$ref": "#/$defs/ControlLocation",
+          "description": "Physical position on the camera body."
+        },
+        "manual_page": {
+          "description": "Relevant manual page when available.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Printed or documented control name.",
+          "type": "string"
+        },
+        "positions": {
+          "description": "Documented mechanical positions.",
+          "items": {
+            "$ref": "#/$defs/ControlPosition"
+          },
+          "type": "array"
+        },
+        "pushable": {
+          "description": "Whether the control can be pressed.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "location",
+        "positions",
+        "pushable",
+        "assignable",
+        "connection_ids"
+      ],
+      "type": "object"
+    },
+    "BodyControls": {
+      "additionalProperties": false,
+      "description": "Physical controls documented for a body.",
+      "properties": {
+        "analog_levels": {
+          "description": "Number of analog sample levels exposed by the controls.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "controls": {
+          "additionalProperties": {
+            "$ref": "#/$defs/BodyControl"
+          },
+          "description": "Physical controls keyed by stable control identity.",
+          "type": "object"
+        },
+        "manual": {
+          "$ref": "#/$defs/ManualReference",
+          "description": "Published manual identifying the physical controls."
+        }
+      },
+      "required": [
+        "manual",
+        "analog_levels",
+        "controls"
+      ],
+      "type": "object"
+    },
     "BodyWiring": {
       "additionalProperties": false,
       "description": "A physical wire between a body connection, part, or SoC block.",
@@ -83,6 +200,13 @@
         "connection_id": {
           "description": "Body connection identity for the card data interface.",
           "type": "string"
+        },
+        "controller_id": {
+          "description": "SoC removable-card controller block, when implemented.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "detect_connection_id": {
           "description": "Body connection identity carrying card-detect state.",
@@ -167,6 +291,11 @@
           "const": "microcontroller",
           "description": "Microcontroller connection.",
           "type": "string"
+        },
+        {
+          "const": "power-control",
+          "description": "Serial power-control endpoint.",
+          "type": "string"
         }
       ]
     },
@@ -223,13 +352,15 @@
               "format": "uint16",
               "maximum": 65535,
               "minimum": 0,
-              "type": "integer"
+              "type": [
+                "integer",
+                "null"
+              ]
             }
           },
           "required": [
             "kind",
-            "channel",
-            "threshold"
+            "channel"
           ],
           "type": "object"
         },
@@ -307,6 +438,10 @@
           "minimum": 0,
           "type": "integer"
         },
+        "controller_id": {
+          "description": "SoC control-bus block identity carrying this device.",
+          "type": "string"
+        },
         "polarity_selector": {
           "description": "Polarity selector for this device.",
           "format": "uint8",
@@ -316,9 +451,118 @@
         }
       },
       "required": [
+        "controller_id",
         "channel",
         "address",
         "polarity_selector"
+      ],
+      "type": "object"
+    },
+    "ControlKind": {
+      "description": "Physical control categories.",
+      "oneOf": [
+        {
+          "const": "dial",
+          "description": "Rotary dial with named positions.",
+          "type": "string"
+        },
+        {
+          "const": "button",
+          "description": "Momentary button.",
+          "type": "string"
+        },
+        {
+          "const": "lever",
+          "description": "Mechanical lever.",
+          "type": "string"
+        },
+        {
+          "const": "switch",
+          "description": "Selector switch.",
+          "type": "string"
+        },
+        {
+          "const": "ring",
+          "description": "Lens or body ring.",
+          "type": "string"
+        },
+        {
+          "const": "shutter",
+          "description": "Two-stage shutter release.",
+          "type": "string"
+        },
+        {
+          "const": "wheel",
+          "description": "Relative command wheel.",
+          "type": "string"
+        },
+        {
+          "const": "joystick",
+          "description": "Directional selector.",
+          "type": "string"
+        },
+        {
+          "const": "touchscreen",
+          "description": "Touch-sensitive display.",
+          "type": "string"
+        }
+      ]
+    },
+    "ControlLocation": {
+      "description": "Locations used to identify physical controls.",
+      "oneOf": [
+        {
+          "const": "top",
+          "description": "Top surface.",
+          "type": "string"
+        },
+        {
+          "const": "front",
+          "description": "Front surface.",
+          "type": "string"
+        },
+        {
+          "const": "rear",
+          "description": "Rear surface.",
+          "type": "string"
+        },
+        {
+          "const": "lens",
+          "description": "Lens assembly.",
+          "type": "string"
+        },
+        {
+          "const": "bottom",
+          "description": "Bottom surface.",
+          "type": "string"
+        }
+      ]
+    },
+    "ControlPosition": {
+      "additionalProperties": false,
+      "description": "A named mechanical position of a physical control.",
+      "properties": {
+        "description": {
+          "description": "Meaning of an icon or otherwise unlabeled position.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Stable position identity or printed value.",
+          "type": "string"
+        },
+        "label": {
+          "description": "Printed label when available.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
       ],
       "type": "object"
     },
@@ -352,6 +596,65 @@
       ],
       "type": "object"
     },
+    "FocusAxis": {
+      "additionalProperties": false,
+      "description": "A focus-axis model.",
+      "properties": {
+        "infinity_position": {
+          "description": "Focus position representing infinity.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "output": {
+          "$ref": "#/$defs/OpticalQuantity",
+          "description": "Named optical quantity produced by focus motion."
+        },
+        "steps_per_mm": {
+          "description": "Focus steps per millimeter.",
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "output",
+        "infinity_position",
+        "steps_per_mm"
+      ],
+      "type": "object"
+    },
+    "IrisOptics": {
+      "additionalProperties": false,
+      "description": "Aperture positions and their optical output.",
+      "properties": {
+        "output": {
+          "$ref": "#/$defs/OpticalQuantity",
+          "description": "Named optical quantity produced by the aperture."
+        },
+        "positions": {
+          "description": "Aperture positions and their f-number values.",
+          "items": {
+            "$ref": "#/$defs/AperturePosition"
+          },
+          "type": "array"
+        },
+        "travel_limits": {
+          "description": "Minimum and maximum mechanical positions.",
+          "items": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "output",
+        "positions",
+        "travel_limits"
+      ],
+      "type": "object"
+    },
     "LensAssembly": {
       "additionalProperties": false,
       "description": "A body lens assembly.",
@@ -360,6 +663,42 @@
           "description": "Body connection identity carrying lens control signals.",
           "type": "string"
         },
+        "encoder_connection_id": {
+          "description": "Body connection wired to the optional rotary encoder.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "focus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FocusAxis"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Documented focus-axis response."
+        },
+        "home_connections": {
+          "description": "Body connections wired to motor home switches.",
+          "items": {
+            "$ref": "#/$defs/LensHomeConnection"
+          },
+          "type": "array"
+        },
+        "iris": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IrisOptics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Documented aperture positions and their optical output."
+        },
         "part_id": {
           "description": "Reusable lens part identity.",
           "type": "string"
@@ -367,12 +706,69 @@
         "pulse": {
           "$ref": "#/$defs/PulseInterface",
           "description": "Body-specific pulse-controller wiring for this lens."
+        },
+        "route": {
+          "$ref": "#/$defs/SerialRoute",
+          "description": "Body-specific serial route to the lens controller."
         }
       },
       "required": [
         "part_id",
         "connection_id",
-        "pulse"
+        "route",
+        "pulse",
+        "home_connections"
+      ],
+      "type": "object"
+    },
+    "LensHomeConnection": {
+      "additionalProperties": false,
+      "description": "A body connection attached to one lens motor's home-switch input.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection carrying the home-switch signal.",
+          "type": "string"
+        },
+        "motor": {
+          "description": "Motor index within the installed lens part.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "motor",
+        "connection_id"
+      ],
+      "type": "object"
+    },
+    "ManualReference": {
+      "additionalProperties": false,
+      "description": "A published manual and the pages used to identify controls.",
+      "properties": {
+        "pages": {
+          "description": "Referenced page numbers.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "title": {
+          "description": "Manual title.",
+          "type": "string"
+        },
+        "url": {
+          "description": "Public manual URL.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "title",
+        "pages"
       ],
       "type": "object"
     },
@@ -450,41 +846,27 @@
       ],
       "type": "object"
     },
-    "Pin": {
-      "additionalProperties": false,
-      "description": "A two-dimensional GPIO pin identity.",
-      "properties": {
-        "pin": {
-          "description": "Pin number within the GPIO port.",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
-          "type": "integer"
+    "OpticalQuantity": {
+      "description": "Named optical quantities exposed by a lens assembly.",
+      "oneOf": [
+        {
+          "const": "lens_focus",
+          "description": "Lens focus position.",
+          "type": "string"
         },
-        "port": {
-          "description": "GPIO port number.",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
-          "type": "integer"
+        {
+          "const": "lens_aperture",
+          "description": "Lens aperture value.",
+          "type": "string"
         }
-      },
-      "required": [
-        "port",
-        "pin"
-      ],
-      "type": "object"
+      ]
     },
     "PowerControlAssembly": {
       "additionalProperties": false,
       "description": "A body-specific attachment for a power-control part.",
       "properties": {
-        "adc_block_id": {
-          "description": "SoC ADC block identity wired to the controller.",
-          "type": "string"
-        },
-        "adc_channel": {
-          "description": "ADC channel wired to the controller.",
+        "channel": {
+          "description": "Channel selected on the controller.",
           "format": "uint8",
           "maximum": 255,
           "minimum": 0,
@@ -501,14 +883,18 @@
         "part_id": {
           "description": "Reusable power-control part identity.",
           "type": "string"
+        },
+        "select_connection_id": {
+          "description": "Body connection controlling chip select.",
+          "type": "string"
         }
       },
       "required": [
         "part_id",
         "connection_id",
         "controller_id",
-        "adc_block_id",
-        "adc_channel"
+        "channel",
+        "select_connection_id"
       ],
       "type": "object"
     },
@@ -559,23 +945,8 @@
       "additionalProperties": false,
       "description": "A camera sensor assembly.",
       "properties": {
-        "channel": {
-          "description": "Control-bus channel connected to the sensor.",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
-          "type": "integer"
-        },
         "connection_id": {
           "description": "Body connection identity carrying sensor control and data signals.",
-          "type": "string"
-        },
-        "control": {
-          "$ref": "#/$defs/SensorControlInterface",
-          "description": "Sensor's device-specific control protocol."
-        },
-        "controller_id": {
-          "description": "SoC control-bus block identity wired to the sensor.",
           "type": "string"
         },
         "part_id": {
@@ -585,43 +956,7 @@
       },
       "required": [
         "part_id",
-        "connection_id",
-        "controller_id",
-        "channel",
-        "control"
-      ],
-      "type": "object"
-    },
-    "SensorControlInterface": {
-      "additionalProperties": false,
-      "description": "A sensor's physical control-bus connection.",
-      "properties": {
-        "address": {
-          "description": "Seven-bit control-bus address.",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "data_bits": {
-          "description": "Data width in bits.",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "register_address_bits": {
-          "description": "Register-address width in bits.",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "address",
-        "register_address_bits",
-        "data_bits"
+        "connection_id"
       ],
       "type": "object"
     },
@@ -653,13 +988,9 @@
           "description": "Endpoint identity on the serial bus.",
           "type": "string"
         },
-        "select_active_high": {
-          "description": "Active logic level for chip select.",
-          "type": "boolean"
-        },
-        "select_pin": {
-          "$ref": "#/$defs/Pin",
-          "description": "Chip-select GPIO pin."
+        "select_connection_id": {
+          "description": "Body connection driving chip select.",
+          "type": "string"
         },
         "word_bits": {
           "description": "Word width in bits.",
@@ -673,8 +1004,7 @@
         "controller_id",
         "channel",
         "endpoint_id",
-        "select_pin",
-        "select_active_high",
+        "select_connection_id",
         "word_bits"
       ],
       "type": "object"
@@ -764,6 +1094,17 @@
         "$ref": "#/$defs/ControlBusChip"
       },
       "type": "array"
+    },
+    "controls": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BodyControls"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Documented physical controls and their body connections."
     },
     "display": {
       "anyOf": [

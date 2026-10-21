@@ -1,0 +1,35 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "banked-programmed-lens",
+  "model": {
+    "kind": "lens-mechanism",
+    "protocol": "banked",
+    "motors": [
+      {
+        "initial_position": 0,
+        "travel_limits": [
+          -32767,
+          32767
+        ],
+        "ticks_per_step": 1000,
+        "settle_ticks": 4000,
+        "home": {
+          "threshold": 8
+        }
+      },
+      {
+        "initial_position": 0,
+        "travel_limits": [
+          -32767,
+          32767
+        ],
+        "ticks_per_step": 1000,
+        "settle_ticks": 4000,
+        "home": null
+      }
+    ],
+    "encoder": null,
+    "zoom": null
+  }
+}

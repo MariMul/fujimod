@@ -10,7 +10,10 @@ fn json_files(root: &Path, files: &mut Vec<PathBuf>) {
         let path = entry.path();
         if path.is_dir() {
             json_files(&path, files);
-        } else if path.extension().is_some_and(|extension| extension == "json") {
+        } else if path
+            .extension()
+            .is_some_and(|extension| extension == "json")
+        {
             files.push(path);
         }
     }
@@ -33,19 +36,22 @@ fn main() {
         json_files(&path, &mut files);
     }
     files.sort();
-    let mut source = String::from(
-        "const BUNDLED_CATALOG: &[(ReferenceKind, &str, &str)] = &[\n",
-    );
+    let mut source = String::from("const BUNDLED_CATALOG: &[(ReferenceKind, &str, &str)] = &[\n");
     for path in files {
         let Some(layer) = path.strip_prefix(&catalog).ok().and_then(|relative| {
-            relative.components().next().and_then(|component| component.as_os_str().to_str())
+            relative
+                .components()
+                .next()
+                .and_then(|component| component.as_os_str().to_str())
         }) else {
             continue;
         };
         let Some((_, kind)) = layers.iter().find(|(directory, _)| *directory == layer) else {
             continue;
         };
-        let relative = path.strip_prefix(&root).expect("catalog file is under root");
+        let relative = path
+            .strip_prefix(&root)
+            .expect("catalog file is under root");
         let include = relative.to_string_lossy().replace('\\', "/");
         let label = relative.to_string_lossy();
         source.push_str(&format!(
@@ -54,7 +60,7 @@ fn main() {
         println!("cargo:rerun-if-changed={}", path.display());
     }
     source.push_str("];\n");
-    let output = PathBuf::from(env::var_os("OUT_DIR").expect("output directory"))
-        .join("bundled_catalog.rs");
+    let output =
+        PathBuf::from(env::var_os("OUT_DIR").expect("output directory")).join("bundled_catalog.rs");
     fs::write(output, source).expect("write embedded catalog index");
 }

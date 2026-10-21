@@ -61,8 +61,8 @@
       "additionalProperties": false,
       "description": "Initial removable-card state.",
       "properties": {
-        "part_id": {
-          "description": "Body card part identity.",
+        "connection_id": {
+          "description": "Body connection identity for the removable-card slot.",
           "type": "string"
         },
         "present": {
@@ -75,7 +75,7 @@
         }
       },
       "required": [
-        "part_id",
+        "connection_id",
         "present",
         "write_protected"
       ],
@@ -150,6 +150,42 @@
           "type": "string"
         }
       ]
+    },
+    "RunFirstStart": {
+      "additionalProperties": false,
+      "description": "Run policy for one logical key used to accept the first-start prompt.",
+      "properties": {
+        "hold_ticks": {
+          "description": "Virtual ticks to hold the input active.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "key_id": {
+          "description": "Firmware logical key identity, such as `EXE_M`.",
+          "type": "string"
+        },
+        "max_presses": {
+          "description": "Maximum input presses accepted for this startup policy.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "settle_ticks": {
+          "description": "Virtual ticks to wait after releasing the input.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key_id",
+        "hold_ticks",
+        "settle_ticks",
+        "max_presses"
+      ],
+      "type": "object"
     },
     "RunGpioInputs": {
       "additionalProperties": false,
@@ -241,6 +277,17 @@
         "card": {
           "$ref": "#/$defs/RunCardInput",
           "description": "Initial SD card insertion and protection state."
+        },
+        "first_start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunFirstStart"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Policy for accepting a firmware first-start prompt, when needed."
         },
         "gpio": {
           "$ref": "#/$defs/RunGpioInputs",

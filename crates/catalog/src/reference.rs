@@ -81,12 +81,87 @@ impl Soc {
                 return Err(format!("SoC {} repeats block {}", self.id, block.id));
             }
         }
-        for mapping in &self.peripherals {
-            if !blocks.contains(mapping.block_id.as_str()) {
+        let mut mapping_ids = BTreeSet::new();
+        for mapping in &self.mappings {
+            validate_id(&mapping.id)?;
+            if !mapping_ids.insert(mapping.id.as_str()) {
                 return Err(format!(
-                    "SoC {} refers to missing block {}",
-                    self.id, mapping.block_id
+                    "SoC {} repeats address mapping {}",
+                    self.id, mapping.id
                 ));
+            }
+        }
+        let cores: BTreeSet<_> = processors.iter().copied().collect();
+        let mut dma_ids = BTreeSet::new();
+        for mapping in &self.dma_mappings {
+            validate_id(&mapping.id)?;
+            if !dma_ids.insert(mapping.id.as_str()) {
+                return Err(format!(
+                    "SoC {} repeats DMA mapping {}",
+                    self.id, mapping.id
+                ));
+            }
+        }
+        let mut routes = BTreeSet::new();
+        for route in &self.interrupts {
+            if !cores.contains(route.core.as_str()) || !blocks.contains(route.source_block.as_str())
+            {
+                return Err(format!(
+                    "SoC {} interrupt route has an unresolved core or block",
+                    self.id
+                ));
+            }
+            if !routes.insert((route.core.as_str(), route.line)) {
+                return Err(format!(
+                    "SoC {} repeats interrupt line {} for core {}",
+                    self.id, route.line, route.core
+                ));
+            }
+        }
+        let mut peripheral_addresses = BTreeSet::new();
+        for mapping in &self.peripherals {
+            if !cores.contains(mapping.core.as_str()) || !blocks.contains(mapping.block_id.as_str())
+            {
+                return Err(format!(
+                    "SoC {} peripheral mapping has an unresolved core or block",
+                    self.id
+                ));
+            }
+            if !peripheral_addresses.insert((mapping.core.as_str(), mapping.address)) {
+                return Err(format!("SoC {} repeats a peripheral address", self.id));
+            }
+        }
+        for decoder in &self.decoders {
+            validate_id(&decoder.id)?;
+            let mut choice_ids = BTreeSet::new();
+            for choice in &decoder.choices {
+                validate_id(&choice.id)?;
+                if !choice_ids.insert(choice.id.as_str()) {
+                    return Err(format!(
+                        "SoC {} decoder {} repeats choice {}",
+                        self.id, decoder.id, choice.id
+                    ));
+                }
+            }
+            for selection in std::iter::once(&decoder.initial)
+                .chain(decoder.choices.iter().map(|choice| &choice.selection))
+            {
+                for mapping in &selection.processors {
+                    if !mapping_ids.contains(mapping.as_str()) {
+                        return Err(format!(
+                            "SoC {} decoder {} refers to missing address mapping {mapping}",
+                            self.id, decoder.id,
+                        ));
+                    }
+                }
+                for mapping in &selection.dma_mappings {
+                    if !dma_ids.contains(mapping.as_str()) {
+                        return Err(format!(
+                            "SoC {} decoder {} refers to missing DMA mapping {mapping}",
+                            self.id, decoder.id
+                        ));
+                    }
+                }
             }
         }
         for clock in &self.clocks {
@@ -95,6 +170,32 @@ impl Soc {
                 && !self.clocks.iter().any(|candidate| candidate.id == *parent)
             {
                 return Err(format!("SoC {} refers to missing clock {parent}", self.id));
+            }
+        }
+        for block in &self.blocks {
+            if let Some(clock_id) = &block.clock_id
+                && !self.clocks.iter().any(|clock| clock.id == *clock_id)
+            {
+                return Err(format!(
+                    "SoC {} block {} refers to missing clock {clock_id}",
+                    self.id, block.id
+                ));
+            }
+        }
+        for mapping in &self.mappings {
+            if !cores.contains(mapping.core.as_str()) {
+                return Err(format!(
+                    "SoC {} address mapping refers to missing core {}",
+                    self.id, mapping.core
+                ));
+            }
+        }
+        for write in &self.reset.coprocessor_writes {
+            if !cores.contains(write.core.as_str()) {
+                return Err(format!(
+                    "SoC {} reset refers to missing core {}",
+                    self.id, write.core
+                ));
             }
         }
         Ok(())
@@ -247,8 +348,6 @@ pub struct SocBlock {
     pub kind: SocBlockKind,
     /// Clock domain supplying this block, when specified.
     pub clock_id: Option<String>,
-    /// Interrupt lines emitted by this block.
-    pub interrupt_lines: Vec<u32>,
 }
 
 /// Hardware block categories represented in the catalog.
@@ -271,6 +370,8 @@ pub enum SocBlockKind {
     SerialController,
     /// Nonvolatile memory controller.
     NandController,
+    /// Removable-card controller.
+    SdCardController,
     /// USB controller.
     UsbController,
     /// Display controller.
@@ -281,6 +382,8 @@ pub enum SocBlockKind {
     ResetController,
     /// Clock controller.
     ClockController,
+    /// Addressable register window with no assigned functional category.
+    AddressWindow,
 }
 
 /// A routed interrupt line.
@@ -314,6 +417,8 @@ pub struct ClockDomain {
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
 pub struct AddressMapping {
+    /// Stable identity used by decoder selections.
+    pub id: String,
     /// Processor core using this mapping.
     pub core: String,
     /// Address visible to the processor.
@@ -331,6 +436,8 @@ pub struct AddressMapping {
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
 pub struct DmaMapping {
+    /// Stable identity used by decoder selections.
+    pub id: String,
     /// DMA-visible address.
     pub address: u64,
     /// Physical target address.
@@ -359,7 +466,7 @@ pub struct AddressDecoder {
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
 pub struct DecoderSelection {
-    /// Processor cores selected by this state.
+    /// Processor address mappings selected by this state.
     pub processors: Vec<String>,
     /// DMA mapping identities selected by this state.
     pub dma_mappings: Vec<String>,
@@ -387,10 +494,9 @@ pub struct PeripheralMapping {
     pub block_id: String,
     /// Processor-visible address.
     pub address: u64,
-    /// Physical target address.
-    pub physical: u64,
-    /// Window size in bytes.
-    pub size: u64,
+    /// Offset in the selected block for a subwindow, when nonzero.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub offset: Option<u64>,
 }
 
 /// Hardware state applied when a SoC leaves reset.
@@ -468,6 +574,8 @@ pub struct Body {
     pub lens: Option<LensAssembly>,
     /// Optional display assembly and its physical characteristics.
     pub display: Option<DisplayAssembly>,
+    /// Documented physical controls and their body connections.
+    pub controls: Option<crate::facts::BodyControls>,
     /// Optional MCU endpoint and its body-specific serial wiring.
     pub microcontroller: Option<MicrocontrollerAssembly>,
     /// Optional power-controller endpoint and its body-specific wiring.
@@ -500,6 +608,14 @@ impl Body {
             self.connections.iter().map(|item| item.id.as_str()),
             "body connection",
         )?;
+        if let Some(controls) = &self.controls {
+            let connections: BTreeSet<_> = self
+                .connections
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect();
+            controls.validate(&connections)?;
+        }
         for connection_id in [
             self.sensor.as_ref().map(|item| item.connection_id.as_str()),
             self.lens.as_ref().map(|item| item.connection_id.as_str()),
@@ -522,6 +638,41 @@ impl Body {
             if !self.connections.iter().any(|item| item.id == connection_id) {
                 return Err(format!(
                     "body {} component refers to missing connection {connection_id}",
+                    self.id
+                ));
+            }
+        }
+        for connection_id in self
+            .lens
+            .as_ref()
+            .into_iter()
+            .flat_map(|lens| {
+                lens.home_connections
+                    .iter()
+                    .map(|home| home.connection_id.as_str())
+                    .chain(lens.encoder_connection_id.iter().map(String::as_str))
+                    .chain(std::iter::once(lens.route.select_connection_id.as_str()))
+            })
+            .chain(
+                self.display
+                    .as_ref()
+                    .and_then(|display| display.route.as_ref())
+                    .map(|route| route.select_connection_id.as_str()),
+            )
+            .chain(
+                self.microcontroller
+                    .as_ref()
+                    .map(|mcu| mcu.select_connection_id.as_str()),
+            )
+            .chain(
+                self.power_control
+                    .as_ref()
+                    .map(|power| power.select_connection_id.as_str()),
+            )
+        {
+            if !self.connections.iter().any(|item| item.id == connection_id) {
+                return Err(format!(
+                    "body {} wiring refers to missing connection {connection_id}",
                     self.id
                 ));
             }
@@ -558,12 +709,6 @@ pub struct SensorAssembly {
     pub part_id: String,
     /// Body connection identity carrying sensor control and data signals.
     pub connection_id: String,
-    /// SoC control-bus block identity wired to the sensor.
-    pub controller_id: String,
-    /// Control-bus channel connected to the sensor.
-    pub channel: u8,
-    /// Sensor's device-specific control protocol.
-    pub control: SensorControlInterface,
 }
 
 /// Sensor image and timing geometry.
@@ -586,8 +731,6 @@ pub struct SensorRaster {
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
 pub struct SensorControlInterface {
-    /// Seven-bit control-bus address.
-    pub address: u8,
     /// Register-address width in bits.
     pub register_address_bits: u8,
     /// Data width in bits.
@@ -603,8 +746,29 @@ pub struct LensAssembly {
     pub part_id: String,
     /// Body connection identity carrying lens control signals.
     pub connection_id: String,
+    /// Body-specific serial route to the lens controller.
+    pub route: SerialRoute,
     /// Body-specific pulse-controller wiring for this lens.
     pub pulse: PulseInterface,
+    /// Documented aperture positions and their optical output.
+    pub iris: Option<IrisOptics>,
+    /// Documented focus-axis response.
+    pub focus: Option<FocusAxis>,
+    /// Body connections wired to motor home switches.
+    pub home_connections: Vec<LensHomeConnection>,
+    /// Body connection wired to the optional rotary encoder.
+    pub encoder_connection_id: Option<String>,
+}
+
+/// A body connection attached to one lens motor's home-switch input.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub struct LensHomeConnection {
+    /// Motor index within the installed lens part.
+    pub motor: u8,
+    /// Body connection carrying the home-switch signal.
+    pub connection_id: String,
 }
 
 /// Aperture positions and their optical output.
@@ -695,10 +859,10 @@ pub struct PowerControlAssembly {
     pub connection_id: String,
     /// SoC serial controller block identity.
     pub controller_id: String,
-    /// SoC ADC block identity wired to the controller.
-    pub adc_block_id: String,
-    /// ADC channel wired to the controller.
-    pub adc_channel: u8,
+    /// Channel selected on the controller.
+    pub channel: u8,
+    /// Body connection controlling chip select.
+    pub select_connection_id: String,
 }
 
 /// A body-specific attachment for a removable-card slot part.
@@ -714,6 +878,9 @@ pub struct CardSlotAssembly {
     pub detect_connection_id: String,
     /// Body connection identity carrying write-protect state.
     pub write_protect_connection_id: String,
+    /// SoC removable-card controller block, when implemented.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub controller_id: Option<String>,
 }
 
 /// Display orientation relative to the camera body.
@@ -769,6 +936,8 @@ pub enum ConnectionKind {
     Display,
     /// Microcontroller connection.
     Microcontroller,
+    /// Serial power-control endpoint.
+    PowerControl,
 }
 
 /// One electrical signal exposed by a body connection.
@@ -783,7 +952,7 @@ pub enum ConnectionSignal {
         active_level: bool,
     },
     /// An ADC channel and threshold.
-    Adc { channel: u8, threshold: u16 },
+    Adc { channel: u8, threshold: Option<u16> },
     /// A named SoC block signal.
     Block {
         block_id: String,
@@ -849,10 +1018,12 @@ pub enum WireSignal {
 }
 
 /// A physical control-bus device installed in a camera body.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
 pub struct ControlBusChip {
+    /// SoC control-bus block identity carrying this device.
+    pub controller_id: String,
     /// Control-bus channel index.
     pub channel: u8,
     /// Seven-bit device address.
@@ -883,7 +1054,74 @@ impl Part {
         if self.schema != 1 || self.schema_uri != PART_SCHEMA_URI || self.id != selected_id {
             return Err("part schema or identity differs".into());
         }
-        validate_id(&self.id)
+        validate_id(&self.id)?;
+        if let PartModel::Microcontroller {
+            registers,
+            packet_registers,
+            clock_registers,
+            status_register,
+            initial_registers,
+        } = &self.model
+        {
+            if registers.count == 0
+                || registers.width_bytes != 1
+                || packet_registers.count != 16
+                || packet_registers.width_bytes != 1
+                || clock_registers.count != 4
+                || clock_registers.width_bytes != 1
+            {
+                return Err(format!(
+                    "MCU part {} has an invalid register layout",
+                    self.id
+                ));
+            }
+            let in_range = |range: &RegisterRange, address: u32| {
+                address >= range.first && address < range.first.saturating_add(range.count)
+            };
+            let window_in_range = |window: &RegisterRange| {
+                window.first >= registers.first
+                    && window.first.saturating_add(window.count)
+                        <= registers.first.saturating_add(registers.count)
+            };
+            let intersects = |left: &RegisterRange, right: &RegisterRange| {
+                left.first < right.first.saturating_add(right.count)
+                    && right.first < left.first.saturating_add(left.count)
+            };
+            if !window_in_range(packet_registers)
+                || !window_in_range(clock_registers)
+                || intersects(packet_registers, clock_registers)
+            {
+                return Err(format!(
+                    "MCU part {} has overlapping register windows",
+                    self.id
+                ));
+            }
+            let mut initial = BTreeSet::new();
+            for address in initial_registers {
+                if !in_range(registers, *address)
+                    || in_range(packet_registers, *address)
+                    || in_range(clock_registers, *address)
+                    || *status_register == Some(*address)
+                    || !initial.insert(address)
+                {
+                    return Err(format!(
+                        "MCU part {} has an invalid auxiliary register address",
+                        self.id
+                    ));
+                }
+            }
+            if status_register.is_some_and(|address| {
+                !in_range(registers, address)
+                    || in_range(packet_registers, address)
+                    || in_range(clock_registers, address)
+            }) {
+                return Err(format!(
+                    "MCU part {} has an invalid status register address",
+                    self.id
+                ));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -905,10 +1143,6 @@ pub enum PartModel {
     },
     /// A multi-pin contact actuator.
     ContactActuator {
-        /// GPIO pins that drive the actuator.
-        drive_pins: Vec<Pin>,
-        /// GPIO pins sensed as contacts.
-        contact_pins: Vec<Pin>,
         /// Supported drive values and resulting contact state.
         positions: Vec<ContactPosition>,
         /// Time required for a contact transition to settle.
@@ -923,6 +1157,14 @@ pub enum PartModel {
     Microcontroller {
         /// Register address range used by the endpoint.
         registers: RegisterRange,
+        /// Register window populated by the firmware command packet.
+        packet_registers: RegisterRange,
+        /// Register window containing the clock counter.
+        clock_registers: RegisterRange,
+        /// Status register exposed by the endpoint, when present.
+        status_register: Option<u32>,
+        /// Other explicitly initialized register addresses accepted by a run.
+        initial_registers: Vec<u32>,
     },
     /// A power-control endpoint with named startup inputs.
     PowerControl {
@@ -949,11 +1191,11 @@ pub enum PartModel {
     /// A display panel endpoint.
     DisplayPanel {
         /// Display raster width in pixels.
-        width: u32,
+        width: Option<u32>,
         /// Display raster height in pixels.
-        height: u32,
+        height: Option<u32>,
         /// Display orientation relative to the body.
-        orientation: DisplayOrientation,
+        orientation: Option<DisplayOrientation>,
         /// Display endpoint serial protocol.
         serial: SerialOutputKind,
         /// Number of panel register bits used by the endpoint.
@@ -1012,23 +1254,8 @@ pub struct LensMotor {
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
 pub struct HomeSwitch {
-    /// GPIO pin used by the home switch.
-    pub pin: Pin,
     /// Position threshold used to detect home.
     pub threshold: i32,
-    /// GPIO level indicating the home position.
-    pub active_high: bool,
-}
-
-/// A two-dimensional GPIO pin identity.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
-pub struct Pin {
-    /// GPIO port number.
-    pub port: u8,
-    /// Pin number within the GPIO port.
-    pub pin: u8,
 }
 
 /// An optional encoder attached to a physical part.
@@ -1036,8 +1263,6 @@ pub struct Pin {
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
 pub struct PartEncoder {
-    /// Encoder GPIO input pins.
-    pub pins: Vec<Pin>,
     /// Guest ticks per encoder phase transition.
     pub phase_ticks: u64,
     /// Initial encoder phase.
@@ -1079,10 +1304,8 @@ pub struct SerialRoute {
     pub channel: u8,
     /// Endpoint identity on the serial bus.
     pub endpoint_id: String,
-    /// Chip-select GPIO pin.
-    pub select_pin: Pin,
-    /// Active logic level for chip select.
-    pub select_active_high: bool,
+    /// Body connection driving chip select.
+    pub select_connection_id: String,
     /// Serial clock frequency in hertz, when known.
     pub clock_hz: Option<u64>,
     /// Word width in bits.
@@ -1141,17 +1364,22 @@ pub struct ContentIdentity {
 impl ContentIdentity {
     /// Validate content size and lowercase SHA-256 syntax.
     pub fn validate(&self) -> Result<(), String> {
-        if self.size == 0
-            || self.sha256.len() != 64
-            || !self
-                .sha256
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        {
+        if self.size == 0 || validate_sha256(&self.sha256).is_err() {
             return Err("content identity requires a positive size and lowercase SHA-256".into());
         }
         Ok(())
     }
+}
+
+fn validate_sha256(digest: &str) -> Result<(), String> {
+    if digest.len() != 64
+        || !digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err("identity requires a lowercase SHA-256 digest".into());
+    }
+    Ok(())
 }
 
 /// A named firmware version and the content identities needed to run it.
@@ -1194,6 +1422,50 @@ impl Firmware {
         if let Some(boot_rom) = &self.boot_rom {
             boot_rom.content.validate()?;
         }
+        if let Some(installation) = &self.installation {
+            let mut section_names = BTreeSet::new();
+            for section in &installation.image_sections {
+                validate_id(&section.name)?;
+                if section.size == 0
+                    || section.address.checked_add(section.size).is_none()
+                    || validate_sha256(&section.sha256).is_err()
+                    || !section_names.insert(section.name.as_str())
+                {
+                    return Err(format!(
+                        "firmware {} has an invalid or repeated mapped section",
+                        self.id
+                    ));
+                }
+            }
+            if let Some(loader) = &installation.loader_validation {
+                if loader.sections.is_empty()
+                    || loader
+                        .sections
+                        .iter()
+                        .any(|name| !section_names.contains(name.as_str()))
+                {
+                    return Err(format!(
+                        "firmware {} loader validation refers to missing sections",
+                        self.id
+                    ));
+                }
+            }
+            for (address, label) in &installation.entry_labels {
+                let address = u64::from_str_radix(address.trim_start_matches("0x"), 16)
+                    .map_err(|_| format!("firmware {} has an invalid entry address", self.id))?;
+                if address == 0 || label.trim().is_empty() {
+                    return Err(format!(
+                        "firmware {} has an empty entry label or address",
+                        self.id
+                    ));
+                }
+            }
+        }
+        if let Some(facts) = &self.generated_facts {
+            for identity in &facts.identity_checks {
+                identity.validate()?;
+            }
+        }
         Ok(())
     }
 }
@@ -1210,14 +1482,46 @@ pub struct BootRomIdentity {
 }
 
 /// The flash layout used to install a firmware update.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
 pub struct FirmwareInstallation {
     /// Offset from the update input to the flash image.
     pub flash_offset: u64,
-    /// Address used to validate the first firmware image.
-    pub loader_entry: Option<u64>,
+    /// Named executable entry addresses consumed by firmware tooling.
+    pub entry_labels: BTreeMap<String, String>,
+    /// Loader validation entry and the mapped sections required by the loader.
+    pub loader_validation: Option<FirmwareLoaderValidation>,
+    /// Named sections in the installed firmware image.
+    pub image_sections: Vec<FirmwareImageSection>,
+}
+
+/// A firmware loader entry and the named sections it validates.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub struct FirmwareLoaderValidation {
+    /// Firmware entry address validated by the loader.
+    pub entry: u64,
+    /// Mapped section names required by the validation.
+    pub sections: Vec<String>,
+}
+
+/// A mapped firmware image section identified by address and content digest.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub struct FirmwareImageSection {
+    /// Stable section name.
+    pub name: String,
+    /// Address where the section is mapped.
+    pub address: u64,
+    /// Mapped section size in bytes.
+    pub size: u64,
+    /// SHA-256 of the mapped section.
+    pub sha256: String,
+    /// Native flash offset, when identified.
+    pub native_flash_offset: Option<u64>,
 }
 
 /// Generated firmware facts that inform state observation and initial setup.
@@ -1225,10 +1529,22 @@ pub struct FirmwareInstallation {
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
 pub struct FirmwareGeneratedFacts {
+    /// Firmware control-event tables and electrical input predicates.
+    pub controls: Option<crate::facts::FirmwareControls>,
+    /// Firmware configuration-block location.
+    pub cfgdata_location: Option<crate::facts::ConfigurationLocation>,
+    /// Additional playback UI mode values.
+    pub additional_ui_modes: Option<crate::facts::AdditionalUiModes>,
+    /// Firmware menu-cursor structure base address.
+    pub menu_cursor: Option<u64>,
+    /// Logical keys used by menu controls.
+    pub menu_keys: Option<crate::facts::MenuKeys>,
+    /// Uncached alias used to access RAM addresses.
+    pub uncached_alias: Option<u64>,
+    /// Hash-identified firmware address ranges used for identity checks.
+    pub identity_checks: Vec<crate::facts::AddressIdentity>,
     /// Addresses and values used to observe firmware readiness.
     pub observation: Option<FirmwareObservation>,
-    /// Calibration and input requirements for the first start sequence.
-    pub first_start: Option<FirstStart>,
 }
 
 /// Firmware addresses used by a supported run observer.
@@ -1271,29 +1587,6 @@ pub struct ReadinessAddresses {
     pub operation_alert_timer: u64,
     /// Firmware address used to override readiness.
     pub override_address: u64,
-}
-
-/// First-start ADC calibration and press limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
-pub struct FirstStart {
-    /// SoC ADC block identity.
-    pub adc_block_id: String,
-    /// ADC channel used by the first-start input.
-    pub channel: u8,
-    /// Firmware address of the calibration table pointer.
-    pub calibration_pointer: u64,
-    /// Lower calibration-table byte offset.
-    pub lower_offset: u16,
-    /// Upper calibration-table byte offset.
-    pub upper_offset: u16,
-    /// Press-and-hold time in guest ticks.
-    pub hold_ticks: u64,
-    /// Input settle time in guest ticks.
-    pub settle_ticks: u64,
-    /// Maximum first-start input presses.
-    pub max_presses: u8,
 }
 
 /// All resolved reference records for one body and firmware selection.
@@ -1625,8 +1918,31 @@ impl ReferenceCatalog {
                 }
                 Ok(())
             };
-            if let Some(sensor) = &body.sensor {
-                block_kind(&sensor.controller_id, SocBlockKind::ControlBus, "sensor")?;
+            for chip in &body.control_bus_chips {
+                block_kind(
+                    &chip.controller_id,
+                    SocBlockKind::ControlBus,
+                    "control-bus device",
+                )?;
+            }
+            if let Some(lens) = &body.lens {
+                block_kind(
+                    &lens.route.controller_id,
+                    SocBlockKind::SerialController,
+                    "lens",
+                )?;
+                if !body.connections.iter().any(|connection| {
+                    connection.id == lens.route.select_connection_id
+                        && connection
+                            .signals
+                            .iter()
+                            .any(|signal| matches!(signal, ConnectionSignal::Gpio { .. }))
+                }) {
+                    return Err(format!(
+                        "body {} lens route has no GPIO chip-select connection",
+                        body.id
+                    ));
+                }
             }
             if let Some(display) = &body.display {
                 if let Some(route) = &display.route {
@@ -1635,6 +1951,18 @@ impl ReferenceCatalog {
                         SocBlockKind::SerialController,
                         "display",
                     )?;
+                    if !body.connections.iter().any(|connection| {
+                        connection.id == route.select_connection_id
+                            && connection
+                                .signals
+                                .iter()
+                                .any(|signal| matches!(signal, ConnectionSignal::Gpio { .. }))
+                    }) {
+                        return Err(format!(
+                            "body {} display route has no GPIO chip-select connection",
+                            body.id
+                        ));
+                    }
                 }
             }
             if let Some(mcu) = &body.microcontroller {
@@ -1643,13 +1971,15 @@ impl ReferenceCatalog {
                     SocBlockKind::SerialController,
                     "microcontroller",
                 )?;
-                if !body
-                    .connections
-                    .iter()
-                    .any(|item| item.id == mcu.select_connection_id)
-                {
+                if !body.connections.iter().any(|connection| {
+                    connection.id == mcu.select_connection_id
+                        && connection
+                            .signals
+                            .iter()
+                            .any(|signal| matches!(signal, ConnectionSignal::Gpio { .. }))
+                }) {
                     return Err(format!(
-                        "body {} microcontroller refers to missing chip-select connection {}",
+                        "body {} microcontroller refers to a missing GPIO chip-select connection {}",
                         body.id, mcu.select_connection_id
                     ));
                 }
@@ -1660,9 +1990,50 @@ impl ReferenceCatalog {
                     SocBlockKind::SerialController,
                     "power controller",
                 )?;
-                block_kind(&power.adc_block_id, SocBlockKind::Adc, "power controller")?;
+                if !body.connections.iter().any(|connection| {
+                    connection.id == power.select_connection_id
+                        && connection
+                            .signals
+                            .iter()
+                            .any(|signal| matches!(signal, ConnectionSignal::Gpio { .. }))
+                }) {
+                    return Err(format!(
+                        "body {} power controller has no GPIO chip-select connection",
+                        body.id
+                    ));
+                }
+            }
+            for connection in &body.connections {
+                for signal in &connection.signals {
+                    let (block_id, kind) = match signal {
+                        ConnectionSignal::Block { block_id, .. } => (block_id, None),
+                        ConnectionSignal::Serial { block_id, .. } => {
+                            (block_id, Some(SocBlockKind::ControlBus))
+                        }
+                        ConnectionSignal::Gpio { .. } | ConnectionSignal::Adc { .. } => continue,
+                    };
+                    let block = soc
+                        .blocks
+                        .iter()
+                        .find(|candidate| candidate.id == *block_id);
+                    let Some(block) = block else {
+                        return Err(format!(
+                            "body {} connection {} refers to missing SoC block {block_id}",
+                            body.id, connection.id
+                        ));
+                    };
+                    if kind.is_some_and(|expected| block.kind != expected) {
+                        return Err(format!(
+                            "body {} connection {} uses a SoC block with the wrong kind",
+                            body.id, connection.id
+                        ));
+                    }
+                }
             }
             if let Some(card) = &body.card_slot {
+                if let Some(controller_id) = &card.controller_id {
+                    block_kind(controller_id, SocBlockKind::SdCardController, "card slot")?;
+                }
                 for connection_id in [
                     &card.detect_connection_id,
                     &card.write_protect_connection_id,
@@ -1681,11 +2052,16 @@ impl ReferenceCatalog {
             }
         }
         for firmware in self.firmwares.values() {
-            if !self.bodies.contains_key(&firmware.body_id) {
-                return Err(format!(
+            let body = self.bodies.get(&firmware.body_id).ok_or_else(|| {
+                format!(
                     "firmware {} refers to missing body {}",
                     firmware.id, firmware.body_id
-                ));
+                )
+            })?;
+            if let Some(facts) = &firmware.generated_facts {
+                if let Some(controls) = &facts.controls {
+                    controls.validate(body)?;
+                }
             }
         }
         Ok(())

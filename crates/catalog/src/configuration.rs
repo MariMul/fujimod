@@ -163,8 +163,11 @@ impl RunConfiguration {
         let card = body
             .card_slot
             .as_ref()
-            .filter(|item| item.part_id == self.inputs.card.part_id)
-            .ok_or("run card input does not target the installed body card slot")?;
+            .filter(|item| item.connection_id == self.inputs.card.connection_id)
+            .ok_or("run card input does not target the body's card connection")?;
+        if self.inputs.card.present && card.controller_id.is_none() {
+            return Err("selected body has no supported removable-card controller".into());
+        }
         if self.inputs.gpio.connections.iter().any(|state| {
             state.connection_id == self.inputs.usb.connection_id
                 || state.connection_id == card.detect_connection_id
@@ -174,25 +177,46 @@ impl RunConfiguration {
         }
 
         let mcu_part = part(&mcu.part_id).ok_or("body MCU part is unresolved")?;
-        let mcu_registers = match &mcu_part.model {
-            crate::reference::PartModel::Microcontroller { registers } => registers,
+        let (mcu_registers, packet_registers, clock_registers) = match &mcu_part.model {
+            crate::reference::PartModel::Microcontroller {
+                registers,
+                packet_registers,
+                clock_registers,
+                ..
+            } => (registers, packet_registers, clock_registers),
             _ => return Err("body MCU attachment refers to a non-MCU part".into()),
         };
-        if mcu_registers.width_bytes != 1 || mcu_registers.count < 16 {
-            return Err(
-                "body MCU part does not expose a sixteen-byte packet register range".into(),
-            );
+        if mcu_registers.width_bytes != 1
+            || mcu_registers.count == 0
+            || packet_registers.width_bytes != 1
+            || packet_registers.count != 16
+            || clock_registers.width_bytes != 1
+            || clock_registers.count != 4
+        {
+            return Err("body MCU part has an unsupported packet or clock register layout".into());
+        }
+        let in_range = |range: &crate::reference::RegisterRange, register: u32| {
+            register >= range.first && register < range.first.saturating_add(range.count)
+        };
+        let packet_overlaps_clock = (0..packet_registers.count)
+            .map(|offset| packet_registers.first.saturating_add(offset))
+            .any(|register| in_range(clock_registers, register));
+        let packet_overlaps_extent = packet_registers.first < mcu_registers.first
+            || packet_registers
+                .first
+                .saturating_add(packet_registers.count)
+                > mcu_registers.first.saturating_add(mcu_registers.count);
+        let clock_overlaps_extent = clock_registers.first < mcu_registers.first
+            || clock_registers.first.saturating_add(clock_registers.count)
+                > mcu_registers.first.saturating_add(mcu_registers.count);
+        if packet_overlaps_clock || packet_overlaps_extent || clock_overlaps_extent {
+            return Err("body MCU sub-register layout overlaps or exceeds its extent".into());
         }
         let power_part = part(&power.part_id).ok_or("body power-controller part is unresolved")?;
         let power_registers = match &power_part.model {
             crate::reference::PartModel::PowerControl { status_registers } => status_registers,
             _ => return Err("body power attachment refers to a non-power part".into()),
         };
-        let card_part = part(&card.part_id).ok_or("body card-slot part is unresolved")?;
-        if !matches!(&card_part.model, crate::reference::PartModel::SdCardSlot) {
-            return Err("body card-slot attachment refers to a non-card part".into());
-        }
-
         let register_in_range = |register: u8, range: &crate::reference::RegisterRange| {
             let first = u64::from(range.first);
             let end = first + u64::from(range.count);
@@ -209,47 +233,93 @@ impl RunConfiguration {
                 ));
             }
         }
-        for registers in &self.inputs.serial_registers {
-            let target = part(&registers.part_id).ok_or_else(|| {
+        for serial_input in &self.inputs.serial_registers {
+            let target = part(&serial_input.part_id).ok_or_else(|| {
                 format!(
                     "run input refers to an absent body part {}",
-                    registers.part_id
+                    serial_input.part_id
                 )
             })?;
             if !body
                 .parts
                 .iter()
-                .any(|part_id| part_id == &registers.part_id)
+                .any(|part_id| part_id == &serial_input.part_id)
             {
                 return Err(format!(
                     "run input refers to an uninstalled body part {}",
-                    registers.part_id
+                    serial_input.part_id
                 ));
             }
             let range = match &target.model {
-                crate::reference::PartModel::Microcontroller { registers } => Some(registers),
+                crate::reference::PartModel::Microcontroller {
+                    registers: register_range,
+                    packet_registers,
+                    clock_registers,
+                    status_register,
+                    initial_registers,
+                } => {
+                    for value in &serial_input.values {
+                        let address = u32::from(value.register);
+                        if in_range(packet_registers, address)
+                            || in_range(clock_registers, address)
+                            || (*status_register != Some(address)
+                                && !initial_registers.contains(&address))
+                        {
+                            return Err(format!(
+                                "run serial input register {} has no declared initialization role",
+                                value.register
+                            ));
+                        }
+                    }
+                    Some(register_range)
+                }
                 crate::reference::PartModel::SerialOutput {
                     endpoint: crate::reference::SerialOutputKind::Registers,
                 } => None,
                 _ => {
                     return Err(format!(
                         "run serial-register input targets a non-register part {}",
-                        registers.part_id
+                        serial_input.part_id
                     ));
                 }
             };
             if let Some(range) = range {
-                for value in &registers.values {
+                for value in &serial_input.values {
                     if !register_in_range(value.register, range) {
                         return Err(format!(
                             "run serial input register {} is outside part {}'s register range",
-                            value.register, registers.part_id
+                            value.register, serial_input.part_id
                         ));
                     }
                 }
             }
         }
         Ok(())
+    }
+}
+
+/// A run configuration and the hardware and firmware identities it resolves.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub struct ResolvedConfiguration {
+    /// Validated run configuration selected by identity.
+    pub configuration: RunConfiguration,
+    /// Resolved SoC, body, firmware and installed parts.
+    pub reference: crate::reference::ResolvedSelection,
+}
+
+impl ResolvedConfiguration {
+    /// Load a bundled run configuration and resolve all selected catalog IDs.
+    pub fn bundled(id: &str) -> Result<Self, String> {
+        let configuration = RunConfiguration::bundled(id)?;
+        let catalog = crate::reference::ReferenceCatalog::bundled()?;
+        let reference = catalog.resolve(&configuration.body_id, &configuration.firmware_id)?;
+        configuration.validate_selection(&reference)?;
+        Ok(Self {
+            configuration,
+            reference,
+        })
     }
 }
 
@@ -307,6 +377,8 @@ pub struct RunInputs {
     pub usb: RunUsbInput,
     /// Initial SD card insertion and protection state.
     pub card: RunCardInput,
+    /// Policy for accepting a firmware first-start prompt, when needed.
+    pub first_start: Option<RunFirstStart>,
 }
 
 impl RunInputs {
@@ -362,9 +434,37 @@ impl RunInputs {
             validate_register_values(&registers.values)?;
         }
         crate::emulator::validate_id(&self.usb.connection_id)?;
-        crate::emulator::validate_id(&self.card.part_id)?;
+        crate::emulator::validate_id(&self.card.connection_id)?;
         if !self.card.present && self.card.write_protected {
             return Err("an absent run card cannot be write protected".into());
+        }
+        if let Some(first_start) = &self.first_start {
+            first_start.validate()?;
+        }
+        Ok(())
+    }
+}
+
+/// Run policy for one logical key used to accept the first-start prompt.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub struct RunFirstStart {
+    /// Firmware logical key identity, such as `EXE_M`.
+    pub key_id: String,
+    /// Virtual ticks to hold the input active.
+    pub hold_ticks: u64,
+    /// Virtual ticks to wait after releasing the input.
+    pub settle_ticks: u64,
+    /// Maximum input presses accepted for this startup policy.
+    pub max_presses: u8,
+}
+
+impl RunFirstStart {
+    fn validate(&self) -> Result<(), String> {
+        crate::emulator::validate_id(&self.key_id)?;
+        if self.hold_ticks == 0 || self.settle_ticks == 0 || self.max_presses == 0 {
+            return Err("run first-start timing and press limit must be positive".into());
         }
         Ok(())
     }
@@ -516,8 +616,8 @@ pub struct RunUsbInput {
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
 pub struct RunCardInput {
-    /// Body card part identity.
-    pub part_id: String,
+    /// Body connection identity for the removable-card slot.
+    pub connection_id: String,
     /// Whether a card is inserted.
     pub present: bool,
     /// Whether an inserted card is write protected.

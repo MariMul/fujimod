@@ -1,0 +1,68 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "x70-image-sensor",
+  "model": {
+    "kind": "image-sensor",
+    "raster": {
+      "width": 4992,
+      "height": 3362,
+      "image_area": [
+        0,
+        62,
+        4992,
+        3300
+      ],
+      "pixel_clock_hz": 33000000
+    },
+    "control": {
+      "register_address_bits": 8,
+      "data_bits": 8
+    },
+    "color_filter": [
+      1,
+      1,
+      2,
+      1,
+      1,
+      0,
+      1,
+      1,
+      0,
+      1,
+      1,
+      2,
+      0,
+      2,
+      1,
+      2,
+      0,
+      1,
+      1,
+      1,
+      0,
+      1,
+      1,
+      2,
+      1,
+      1,
+      2,
+      1,
+      1,
+      0,
+      2,
+      0,
+      1,
+      0,
+      2,
+      1
+    ],
+    "black_level": 0,
+    "full_scale": 16380,
+    "reference_white": [
+      606,
+      302,
+      421
+    ]
+  }
+}

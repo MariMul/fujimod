@@ -41,6 +41,10 @@
           "description": "Processor core using this mapping.",
           "type": "string"
         },
+        "id": {
+          "description": "Stable identity used by decoder selections.",
+          "type": "string"
+        },
         "permissions": {
           "description": "Read, write and execute permission bits.",
           "format": "uint8",
@@ -60,6 +64,7 @@
         }
       },
       "required": [
+        "id",
         "core",
         "address",
         "physical",
@@ -240,7 +245,7 @@
           "type": "array"
         },
         "processors": {
-          "description": "Processor cores selected by this state.",
+          "description": "Processor address mappings selected by this state.",
           "items": {
             "type": "string"
           },
@@ -263,6 +268,10 @@
           "minimum": 0,
           "type": "integer"
         },
+        "id": {
+          "description": "Stable identity used by decoder selections.",
+          "type": "string"
+        },
         "permissions": {
           "description": "Read, write and execute permission bits.",
           "format": "uint8",
@@ -282,6 +291,7 @@
         }
       },
       "required": [
+        "id",
         "address",
         "physical",
         "size",
@@ -412,25 +422,20 @@
           "description": "Processor core using this peripheral window.",
           "type": "string"
         },
-        "physical": {
-          "description": "Physical target address.",
+        "offset": {
+          "description": "Offset in the selected block for a subwindow, when nonzero.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
-        },
-        "size": {
-          "description": "Window size in bytes.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         }
       },
       "required": [
         "core",
         "block_id",
-        "address",
-        "physical",
-        "size"
+        "address"
       ],
       "type": "object"
     },
@@ -655,15 +660,6 @@
           "description": "Block identity used by bodies and run inputs.",
           "type": "string"
         },
-        "interrupt_lines": {
-          "description": "Interrupt lines emitted by this block.",
-          "items": {
-            "format": "uint32",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        },
         "kind": {
           "$ref": "#/$defs/SocBlockKind",
           "description": "Block's modeled hardware category."
@@ -679,8 +675,7 @@
         "id",
         "base",
         "size",
-        "kind",
-        "interrupt_lines"
+        "kind"
       ],
       "type": "object"
     },
@@ -728,6 +723,11 @@
           "type": "string"
         },
         {
+          "const": "sd-card-controller",
+          "description": "Removable-card controller.",
+          "type": "string"
+        },
+        {
           "const": "usb-controller",
           "description": "USB controller.",
           "type": "string"
@@ -750,6 +750,11 @@
         {
           "const": "clock-controller",
           "description": "Clock controller.",
+          "type": "string"
+        },
+        {
+          "const": "address-window",
+          "description": "Addressable register window with no assigned functional category.",
           "type": "string"
         }
       ]

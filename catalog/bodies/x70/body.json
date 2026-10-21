@@ -1,0 +1,1240 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "x70",
+  "soc_id": "exr2",
+  "dram_bytes": 536870912,
+  "nand": {
+    "bytes": 134217728,
+    "page_bytes": 2048,
+    "pages_per_block": 64,
+    "spare_bytes": 512
+  },
+  "sensor": {
+    "part_id": "x70-image-sensor",
+    "connection_id": "sensor-bus"
+  },
+  "lens": {
+    "part_id": "banked-programmed-lens",
+    "connection_id": "lens-bus",
+    "route": {
+      "controller_id": "serial-spi2",
+      "channel": 0,
+      "endpoint_id": "banked-programmed-lens",
+      "select_connection_id": "lens-select",
+      "clock_hz": null,
+      "word_bits": 16
+    },
+    "pulse": {
+      "counter_channels": [
+        0,
+        4
+      ],
+      "timer_channels": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        9,
+        10,
+        11
+      ],
+      "quadrature": false,
+      "initial_phase": 0
+    },
+    "iris": {
+      "output": "lens_aperture",
+      "positions": [
+        {
+          "position": 6,
+          "f_number": 16.000000000000004
+        },
+        {
+          "position": 10,
+          "f_number": 14.25437949024543
+        },
+        {
+          "position": 14,
+          "f_number": 12.699208415745595
+        },
+        {
+          "position": 18,
+          "f_number": 11.313708498984761
+        },
+        {
+          "position": 22,
+          "f_number": 10.079368399158986
+        },
+        {
+          "position": 26,
+          "f_number": 8.979696386474986
+        },
+        {
+          "position": 30,
+          "f_number": 8.000000000000002
+        },
+        {
+          "position": 34,
+          "f_number": 7.127189745122715
+        },
+        {
+          "position": 38,
+          "f_number": 6.349604207872798
+        },
+        {
+          "position": 42,
+          "f_number": 5.656854249492381
+        },
+        {
+          "position": 46,
+          "f_number": 5.039684199579493
+        },
+        {
+          "position": 50,
+          "f_number": 4.489848193237492
+        },
+        {
+          "position": 54,
+          "f_number": 4.000000000000001
+        },
+        {
+          "position": 58,
+          "f_number": 3.5635948725613575
+        },
+        {
+          "position": 62,
+          "f_number": 3.174802103936399
+        },
+        {
+          "position": 78,
+          "f_number": 2.8284271247461903
+        }
+      ],
+      "travel_limits": [
+        6,
+        78
+      ]
+    },
+    "focus": {
+      "output": "lens_focus",
+      "infinity_position": -111,
+      "steps_per_mm": 267.0
+    },
+    "home_connections": [],
+    "encoder_connection_id": null
+  },
+  "display": {
+    "part_id": "x70-display-panel",
+    "connection_id": "display-bus",
+    "route": {
+      "controller_id": "serial-spi1",
+      "channel": 2,
+      "endpoint_id": "x70-display-panel",
+      "select_connection_id": "display-select",
+      "clock_hz": null,
+      "word_bits": 16
+    }
+  },
+  "controls": {
+    "manual": {
+      "url": "https://fujifilm-dsc.com/en/manual/x70/X70_OMW_EN_S_F_02.pdf",
+      "title": "FUJIFILM X70 Owner's Manual",
+      "pages": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        14,
+        21,
+        24,
+        25,
+        29,
+        30,
+        35,
+        36,
+        39,
+        42,
+        43,
+        48,
+        49,
+        51,
+        52,
+        53,
+        54,
+        62,
+        65,
+        74,
+        81,
+        85,
+        96,
+        107,
+        111,
+        128
+      ]
+    },
+    "analog_levels": 1024,
+    "controls": {
+      "exposure_compensation_dial": {
+        "name": "Exposure compensation dial",
+        "kind": "dial",
+        "location": "top",
+        "pushable": false,
+        "assignable": false,
+        "positions": [
+          {
+            "id": "+3",
+            "label": "+3",
+            "description": null
+          },
+          {
+            "id": "+2",
+            "label": "+2",
+            "description": null
+          },
+          {
+            "id": "+1",
+            "label": "+1",
+            "description": null
+          },
+          {
+            "id": "0",
+            "label": "0",
+            "description": null
+          },
+          {
+            "id": "−1",
+            "label": "−1",
+            "description": null
+          },
+          {
+            "id": "−2",
+            "label": "−2",
+            "description": null
+          },
+          {
+            "id": "−3",
+            "label": "−3",
+            "description": null
+          }
+        ],
+        "default_function": "Adjusts exposure compensation; positive values increase exposure and negative values reduce it.",
+        "manual_page": 62,
+        "connection_ids": [
+          "controls-adc-4"
+        ]
+      },
+      "drive_button": {
+        "name": "DRIVE button",
+        "kind": "button",
+        "location": "top",
+        "pushable": true,
+        "assignable": false,
+        "positions": [],
+        "default_function": "Displays drive options for still image, continuous, bracketing, motion panorama, multiple exposure, and advanced filter modes.",
+        "manual_page": 65,
+        "connection_ids": [
+          "controls-gpio-2-12"
+        ]
+      },
+      "auto_mode_selector_lever": {
+        "name": "Auto mode selector lever",
+        "kind": "lever",
+        "location": "top",
+        "pushable": false,
+        "assignable": false,
+        "positions": [
+          {
+            "id": "manual",
+            "label": "icon",
+            "description": "Select from P (program AE), S (shutter-priority AE), A (aperture-priority AE), and M (manual) modes."
+          },
+          {
+            "id": "AUTO",
+            "label": "AUTO",
+            "description": null
+          }
+        ],
+        "default_function": "Selects manual exposure modes P, S, A, and M, or auto mode.",
+        "manual_page": 5,
+        "connection_ids": [
+          "controls-gpio-2-11"
+        ]
+      },
+      "shutter_speed_dial": {
+        "name": "Shutter speed dial",
+        "kind": "dial",
+        "location": "top",
+        "pushable": false,
+        "assignable": false,
+        "positions": [
+          {
+            "id": "A",
+            "label": "A",
+            "description": null
+          },
+          {
+            "id": "4000",
+            "label": "4000",
+            "description": null
+          },
+          {
+            "id": "2000",
+            "label": "2000",
+            "description": null
+          },
+          {
+            "id": "1000",
+            "label": "1000",
+            "description": null
+          },
+          {
+            "id": "500",
+            "label": "500",
+            "description": null
+          },
+          {
+            "id": "250",
+            "label": "250",
+            "description": null
+          },
+          {
+            "id": "125",
+            "label": "125",
+            "description": null
+          },
+          {
+            "id": "60",
+            "label": "60",
+            "description": null
+          },
+          {
+            "id": "30",
+            "label": "30",
+            "description": null
+          },
+          {
+            "id": "15",
+            "label": "15",
+            "description": null
+          },
+          {
+            "id": "8",
+            "label": "8",
+            "description": null
+          },
+          {
+            "id": "4",
+            "label": "4",
+            "description": null
+          },
+          {
+            "id": "2",
+            "label": "2",
+            "description": null
+          },
+          {
+            "id": "1",
+            "label": "1",
+            "description": null
+          },
+          {
+            "id": "T",
+            "label": "T",
+            "description": null
+          },
+          {
+            "id": "B",
+            "label": "B",
+            "description": null
+          }
+        ],
+        "default_function": "Selects shutter speed; A selects automatic shutter speed, T selects a timed exposure, and B holds the shutter open while the shutter button is pressed.",
+        "manual_page": 51,
+        "connection_ids": [
+          "controls-adc-3"
+        ]
+      },
+      "control_ring_options_button": {
+        "name": "Control ring options button / Function button (Fn7)",
+        "kind": "button",
+        "location": "front",
+        "pushable": true,
+        "assignable": true,
+        "positions": [],
+        "default_function": "Displays control ring options; Fn7 is assigned to control ring options by default and its function-button role is assignable.",
+        "manual_page": 49,
+        "connection_ids": [
+          "controls-adc-7"
+        ]
+      },
+      "focus_mode_selector": {
+        "name": "Focus mode selector",
+        "kind": "switch",
+        "location": "front",
+        "pushable": false,
+        "assignable": false,
+        "positions": [
+          {
+            "id": "S",
+            "label": "S",
+            "description": null
+          },
+          {
+            "id": "C",
+            "label": "C",
+            "description": null
+          },
+          {
+            "id": "M",
+            "label": "M",
+            "description": null
+          }
+        ],
+        "default_function": "Selects single AF, continuous AF, or manual focus.",
+        "manual_page": 74,
+        "connection_ids": [
+          "controls-adc-7"
+        ]
+      },
+      "aperture_ring": {
+        "name": "Aperture ring",
+        "kind": "ring",
+        "location": "lens",
+        "pushable": false,
+        "assignable": false,
+        "positions": [
+          {
+            "id": "A",
+            "label": "A",
+            "description": null
+          },
+          {
+            "id": "2.8",
+            "label": "2.8",
+            "description": null
+          },
+          {
+            "id": "4",
+            "label": "4",
+            "description": null
+          },
+          {
+            "id": "5.6",
+            "label": "5.6",
+            "description": null
+          },
+          {
+            "id": "8",
+            "label": "8",
+            "description": null
+          },
+          {
+            "id": "11",
+            "label": "11",
+            "description": null
+          },
+          {
+            "id": "16",
+            "label": "16",
+            "description": null
+          }
+        ],
+        "default_function": "Sets aperture; A lets the camera select aperture.",
+        "manual_page": 51,
+        "connection_ids": [
+          "controls-adc-9"
+        ]
+      },
+      "control_ring": {
+        "name": "Control ring",
+        "kind": "ring",
+        "location": "lens",
+        "pushable": false,
+        "assignable": true,
+        "positions": [],
+        "default_function": "Provides the selected control-ring function; DEFAULT varies by shooting mode. In manual focus mode, it adjusts focus distance.",
+        "manual_page": 49,
+        "connection_ids": [
+          "controls-encoder-3-6-3-7"
+        ]
+      },
+      "front_ring": {
+        "name": "Front ring",
+        "kind": "ring",
+        "location": "lens",
+        "pushable": false,
+        "assignable": false,
+        "positions": [],
+        "default_function": "Remove to attach the optional wide conversion lens.",
+        "manual_page": 128,
+        "connection_ids": []
+      },
+      "power_switch": {
+        "name": "ON/OFF switch",
+        "kind": "switch",
+        "location": "top",
+        "pushable": false,
+        "assignable": false,
+        "positions": [
+          {
+            "id": "ON",
+            "label": "ON",
+            "description": null
+          },
+          {
+            "id": "OFF",
+            "label": "OFF",
+            "description": null
+          }
+        ],
+        "default_function": "Turns the camera on or off.",
+        "manual_page": 21,
+        "connection_ids": [
+          "power"
+        ]
+      },
+      "shutter_button": {
+        "name": "Shutter button",
+        "kind": "shutter",
+        "location": "top",
+        "pushable": true,
+        "assignable": false,
+        "positions": [],
+        "default_function": "Half-presses to focus and lock focus and exposure; press fully to take a picture.",
+        "manual_page": 29,
+        "connection_ids": [
+          "s1",
+          "s2"
+        ]
+      },
+      "movie_record_button": {
+        "name": "Movie-record button / Function button (Fn1)",
+        "kind": "button",
+        "location": "top",
+        "pushable": true,
+        "assignable": true,
+        "positions": [],
+        "default_function": "Starts and stops movie recording by default; its function-button role is assignable and the assigned role is accessed by pressing and holding.",
+        "manual_page": 36,
+        "connection_ids": [
+          "controls-gpio-0-11"
+        ]
+      },
+      "delete_button": {
+        "name": "b (delete) button / Function button (Fn8)",
+        "kind": "button",
+        "location": "rear",
+        "pushable": true,
+        "assignable": true,
+        "positions": [],
+        "default_function": "Deletes pictures in playback; Fn8 has no function assigned by default and can be assigned.",
+        "manual_page": 35,
+        "connection_ids": [
+          "controls-gpio-3-3"
+        ]
+      },
+      "playback_button": {
+        "name": "a (playback) button",
+        "kind": "button",
+        "location": "rear",
+        "pushable": true,
+        "assignable": false,
+        "positions": [],
+        "default_function": "Starts playback.",
+        "manual_page": 30,
+        "connection_ids": [
+          "controls-gpio-2-9"
+        ]
+      },
+      "command_control": {
+        "name": "Command control",
+        "kind": "wheel",
+        "location": "rear",
+        "pushable": true,
+        "assignable": false,
+        "positions": [],
+        "default_function": "Press left or right to choose shutter speed and aperture combinations or fine-tune shutter speed, and to zoom during playback; press the center to zoom in on the selected focus area. Press and hold the center during manual focus to choose a focus-assist display.",
+        "manual_page": 6,
+        "connection_ids": [
+          "controls-gpio-0-10",
+          "controls-gpio-3-8",
+          "controls-gpio-3-9"
+        ]
+      },
+      "quick_menu_button": {
+        "name": "Q (quick menu) button",
+        "kind": "button",
+        "location": "rear",
+        "pushable": true,
+        "assignable": false,
+        "positions": [],
+        "default_function": "Displays the quick menu; press and hold to display quick-menu edit options.",
+        "manual_page": 39,
+        "connection_ids": [
+          "controls-adc-8"
+        ]
+      },
+      "selector_function_buttons": {
+        "name": "Selector/function buttons",
+        "kind": "joystick",
+        "location": "rear",
+        "pushable": true,
+        "assignable": true,
+        "positions": [],
+        "default_function": "Highlights items; up selects AF mode, left selects self-timer, right selects flash mode, and down selects the focus area by default. These directions are assignable as function buttons Fn2–Fn5.",
+        "manual_page": 4,
+        "connection_ids": [
+          "controls-adc-8"
+        ]
+      },
+      "menu_ok_button": {
+        "name": "MENU/OK button / X (control lock) button",
+        "kind": "button",
+        "location": "rear",
+        "pushable": true,
+        "assignable": false,
+        "positions": [],
+        "default_function": "Opens menus and selects items; press and hold to lock or unlock the selector, Q, Fn6, and AF-L/AE-L buttons during shooting.",
+        "manual_page": 3,
+        "connection_ids": [
+          "controls-adc-8"
+        ]
+      },
+      "wifi_button": {
+        "name": "Wi-Fi button / Function button (Fn6)",
+        "kind": "button",
+        "location": "rear",
+        "pushable": true,
+        "assignable": true,
+        "positions": [],
+        "default_function": "Wireless options are assigned to Fn6 by default; its function-button role is assignable.",
+        "manual_page": 48,
+        "connection_ids": [
+          "controls-adc-8"
+        ]
+      },
+      "disp_back_button": {
+        "name": "DISP (display)/BACK button",
+        "kind": "button",
+        "location": "rear",
+        "pushable": true,
+        "assignable": false,
+        "positions": [],
+        "default_function": "Cycles display modes and serves as BACK in menus; press and hold to display function-button role settings.",
+        "manual_page": 25,
+        "connection_ids": [
+          "controls-adc-8"
+        ]
+      },
+      "af_ae_lock_button": {
+        "name": "AF-L/AE-L (autofocus/autoexposure lock) button",
+        "kind": "button",
+        "location": "rear",
+        "pushable": true,
+        "assignable": false,
+        "positions": [],
+        "default_function": "AE lock only by default; lock behavior can be set to remain active while pressed or until the button is pressed again.",
+        "manual_page": 85,
+        "connection_ids": [
+          "controls-adc-8"
+        ]
+      },
+      "lcd_tilt_switch": {
+        "name": "LCD tilt switch",
+        "kind": "switch",
+        "location": "rear",
+        "pushable": false,
+        "assignable": false,
+        "positions": [
+          {
+            "id": "normal",
+            "label": "normal",
+            "description": null
+          },
+          {
+            "id": "selfie",
+            "label": "selfie",
+            "description": null
+          }
+        ],
+        "default_function": null,
+        "manual_page": null,
+        "connection_ids": [
+          "controls-gpio-1-1"
+        ]
+      },
+      "touchscreen": {
+        "name": "LCD monitor (touchscreen)",
+        "kind": "touchscreen",
+        "location": "rear",
+        "pushable": false,
+        "assignable": false,
+        "positions": [],
+        "default_function": "Touch controls are off by default; touch mode can be set to touch shooting or focus-area selection.",
+        "manual_page": 24,
+        "connection_ids": [
+          "controls-touch"
+        ]
+      },
+      "battery_chamber_cover_latch": {
+        "name": "Battery-chamber cover latch",
+        "kind": "lever",
+        "location": "bottom",
+        "pushable": false,
+        "assignable": false,
+        "positions": [],
+        "default_function": "Slide the battery-chamber latch as shown and open the battery-chamber cover.",
+        "manual_page": 14,
+        "connection_ids": []
+      },
+      "battery_latch": {
+        "name": "Battery latch",
+        "kind": "lever",
+        "location": "bottom",
+        "pushable": true,
+        "assignable": false,
+        "positions": [],
+        "default_function": "To remove the battery, press the battery latch to the side, and slide the battery out of the camera as shown.",
+        "manual_page": 14,
+        "connection_ids": []
+      }
+    }
+  },
+  "microcontroller": {
+    "part_id": "mcu-interface",
+    "connection_id": "mcu-bus",
+    "controller_id": "serial-spi1",
+    "channel": 1,
+    "select_connection_id": "mcu-select"
+  },
+  "power_control": {
+    "part_id": "power-control",
+    "connection_id": "power-bus",
+    "controller_id": "power-peripherals",
+    "channel": 0,
+    "select_connection_id": "power-controller-select"
+  },
+  "card_slot": {
+    "part_id": "sd-card",
+    "connection_id": "sd-card",
+    "detect_connection_id": "sd-card-detect",
+    "write_protect_connection_id": "sd-card-write-protect",
+    "controller_id": null
+  },
+  "control_bus_chips": [
+    {
+      "controller_id": "control-bus1",
+      "channel": 1,
+      "address": 48,
+      "polarity_selector": 0
+    },
+    {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 24,
+      "polarity_selector": 1
+    },
+    {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 68,
+      "polarity_selector": 0
+    },
+    {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 57,
+      "polarity_selector": 1
+    },
+    {
+      "controller_id": "control-bus1",
+      "channel": 1,
+      "address": 114,
+      "polarity_selector": 0
+    },
+    {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 25,
+      "polarity_selector": 1
+    },
+    {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 12,
+      "polarity_selector": 1
+    },
+    {
+      "controller_id": "control-bus1",
+      "channel": 1,
+      "address": 10,
+      "polarity_selector": 1
+    }
+  ],
+  "connections": [
+    {
+      "id": "controls-adc-4",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 4,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-2-12",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 2,
+          "pin": 12,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-2-11",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 2,
+          "pin": 11,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-3",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 3,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-7",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 7,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-9",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 9,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-encoder-3-6-3-7",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 6,
+          "active_level": true
+        },
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 7,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "s1",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 2,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 3,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-0-11",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 11,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-3-3",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 3,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-2-9",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 2,
+          "pin": 9,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-3-8",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 8,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-3-9",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 9,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-0-10",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 10,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-8",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 8,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-1-1",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 1,
+          "pin": 1,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "power",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 5,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "controls-touch",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "serial",
+          "block_id": "control-bus0",
+          "channel": 0,
+          "address": 85
+        }
+      ]
+    },
+    {
+      "id": "remote",
+      "kind": "remote",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 0,
+          "active_level": false
+        },
+        {
+          "kind": "adc",
+          "channel": 2,
+          "threshold": 465
+        },
+        {
+          "kind": "adc",
+          "channel": 2,
+          "threshold": 41
+        },
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 4,
+          "active_level": true
+        },
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 5,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "hdmi",
+      "kind": "hdmi",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 1,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "hot-shoe",
+      "kind": "hot-shoe",
+      "signals": []
+    },
+    {
+      "id": "usb",
+      "kind": "usb",
+      "signals": []
+    },
+    {
+      "id": "sd-card",
+      "kind": "sd-card",
+      "signals": []
+    },
+    {
+      "id": "sd-card-detect",
+      "kind": "sd-card",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 7,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "sd-card-write-protect",
+      "kind": "sd-card",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 6,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "external-power",
+      "kind": "external-power",
+      "signals": []
+    },
+    {
+      "id": "battery-door",
+      "kind": "battery-door",
+      "signals": []
+    },
+    {
+      "id": "sensor-bus",
+      "kind": "sensor",
+      "signals": [
+        {
+          "kind": "serial",
+          "block_id": "control-bus0",
+          "channel": 0,
+          "address": 28
+        }
+      ]
+    },
+    {
+      "id": "touch-bus",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "serial",
+          "block_id": "control-bus0",
+          "channel": 0,
+          "address": 85
+        }
+      ]
+    },
+    {
+      "id": "lens-bus",
+      "kind": "lens",
+      "signals": []
+    },
+    {
+      "id": "lens-select",
+      "kind": "lens",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 13,
+          "pin": 9,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "display-bus",
+      "kind": "display",
+      "signals": []
+    },
+    {
+      "id": "display-select",
+      "kind": "display",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 11,
+          "pin": 3,
+          "active_level": false
+        },
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 3,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "mcu-bus",
+      "kind": "microcontroller",
+      "signals": []
+    },
+    {
+      "id": "mcu-select",
+      "kind": "microcontroller",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 3,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "power-bus",
+      "kind": "power-control",
+      "signals": []
+    },
+    {
+      "id": "power-controller-select",
+      "kind": "power-control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 11,
+          "pin": 2,
+          "active_level": false
+        }
+      ]
+    }
+  ],
+  "parts": [
+    "banked-programmed-lens",
+    "x70-image-sensor",
+    "x70-display-panel",
+    "mcu-interface",
+    "power-control",
+    "sd-card"
+  ],
+  "wiring": [
+    {
+      "source_id": "sensor-bus",
+      "target_id": "x70-image-sensor",
+      "signal": "serial_data"
+    },
+    {
+      "source_id": "lens-bus",
+      "target_id": "banked-programmed-lens",
+      "signal": "serial_data"
+    },
+    {
+      "source_id": "display-bus",
+      "target_id": "x70-display-panel",
+      "signal": "display_data"
+    },
+    {
+      "source_id": "mcu-bus",
+      "target_id": "mcu-interface",
+      "signal": "microcontroller"
+    },
+    {
+      "source_id": "power-bus",
+      "target_id": "power-control",
+      "signal": "power"
+    },
+    {
+      "source_id": "sd-card",
+      "target_id": "sd-card",
+      "signal": "storage"
+    }
+  ]
+}

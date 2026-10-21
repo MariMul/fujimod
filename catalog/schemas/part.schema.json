@@ -48,14 +48,6 @@
       "additionalProperties": false,
       "description": "A lens home-switch input.",
       "properties": {
-        "active_high": {
-          "description": "GPIO level indicating the home position.",
-          "type": "boolean"
-        },
-        "pin": {
-          "$ref": "#/$defs/Pin",
-          "description": "GPIO pin used by the home switch."
-        },
         "threshold": {
           "description": "Position threshold used to detect home.",
           "format": "int32",
@@ -63,9 +55,7 @@
         }
       },
       "required": [
-        "pin",
-        "threshold",
-        "active_high"
+        "threshold"
       ],
       "type": "object"
     },
@@ -155,13 +145,6 @@
           "minimum": 0,
           "type": "integer"
         },
-        "pins": {
-          "description": "Encoder GPIO input pins.",
-          "items": {
-            "$ref": "#/$defs/Pin"
-          },
-          "type": "array"
-        },
         "rest_phase": {
           "description": "Initial encoder phase.",
           "format": "uint8",
@@ -171,7 +154,6 @@
         }
       },
       "required": [
-        "pins",
         "phase_ticks",
         "rest_phase"
       ],
@@ -233,20 +215,6 @@
           "additionalProperties": false,
           "description": "A multi-pin contact actuator.",
           "properties": {
-            "contact_pins": {
-              "description": "GPIO pins sensed as contacts.",
-              "items": {
-                "$ref": "#/$defs/Pin"
-              },
-              "type": "array"
-            },
-            "drive_pins": {
-              "description": "GPIO pins that drive the actuator.",
-              "items": {
-                "$ref": "#/$defs/Pin"
-              },
-              "type": "array"
-            },
             "kind": {
               "const": "contact-actuator",
               "type": "string"
@@ -267,8 +235,6 @@
           },
           "required": [
             "kind",
-            "drive_pins",
-            "contact_pins",
             "positions",
             "settle_ticks"
           ],
@@ -297,18 +263,47 @@
           "additionalProperties": false,
           "description": "A microcontroller packet endpoint.",
           "properties": {
+            "clock_registers": {
+              "$ref": "#/$defs/RegisterRange",
+              "description": "Register window containing the clock counter."
+            },
+            "initial_registers": {
+              "description": "Other explicitly initialized register addresses accepted by a run.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
             "kind": {
               "const": "microcontroller",
               "type": "string"
             },
+            "packet_registers": {
+              "$ref": "#/$defs/RegisterRange",
+              "description": "Register window populated by the firmware command packet."
+            },
             "registers": {
               "$ref": "#/$defs/RegisterRange",
               "description": "Register address range used by the endpoint."
+            },
+            "status_register": {
+              "description": "Status register exposed by the endpoint, when present.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
             }
           },
           "required": [
             "kind",
-            "registers"
+            "registers",
+            "packet_registers",
+            "clock_registers",
+            "initial_registers"
           ],
           "type": "object"
         },
@@ -415,14 +410,24 @@
               "description": "Display raster height in pixels.",
               "format": "uint32",
               "minimum": 0,
-              "type": "integer"
+              "type": [
+                "integer",
+                "null"
+              ]
             },
             "kind": {
               "const": "display-panel",
               "type": "string"
             },
             "orientation": {
-              "$ref": "#/$defs/DisplayOrientation",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DisplayOrientation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "description": "Display orientation relative to the body."
             },
             "serial": {
@@ -439,45 +444,20 @@
               "description": "Display raster width in pixels.",
               "format": "uint32",
               "minimum": 0,
-              "type": "integer"
+              "type": [
+                "integer",
+                "null"
+              ]
             }
           },
           "required": [
             "kind",
-            "width",
-            "height",
-            "orientation",
             "serial",
             "used_mask"
           ],
           "type": "object"
         }
       ]
-    },
-    "Pin": {
-      "additionalProperties": false,
-      "description": "A two-dimensional GPIO pin identity.",
-      "properties": {
-        "pin": {
-          "description": "Pin number within the GPIO port.",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "port": {
-          "description": "GPIO port number.",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "port",
-        "pin"
-      ],
-      "type": "object"
     },
     "RegisterRange": {
       "additionalProperties": false,
@@ -514,13 +494,6 @@
       "additionalProperties": false,
       "description": "A sensor's physical control-bus connection.",
       "properties": {
-        "address": {
-          "description": "Seven-bit control-bus address.",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
-          "type": "integer"
-        },
         "data_bits": {
           "description": "Data width in bits.",
           "format": "uint8",
@@ -537,7 +510,6 @@
         }
       },
       "required": [
-        "address",
         "register_address_bits",
         "data_bits"
       ],

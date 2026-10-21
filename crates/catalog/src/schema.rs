@@ -39,6 +39,12 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
             "https://fujimod.com/schemas/resolved-selection.schema.json",
         ),
     );
+    documents.insert(
+        "resolved-configuration.schema.json",
+        schema::<crate::configuration::ResolvedConfiguration>(
+            "https://fujimod.com/schemas/resolved-configuration.schema.json",
+        ),
+    );
     documents
 }
 
