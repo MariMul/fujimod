@@ -344,7 +344,7 @@ impl OutputChannel {
             height: layout.height,
             pitch: layout.stride,
         };
-        transfer.prepare(
+        transfer.prepare_deferred(
             edge.tick,
             self.options.clock.delay(layout.bytes()?)?,
             raster,
@@ -354,6 +354,7 @@ impl OutputChannel {
             crate::scene::frames::Pixels::Sensor(image) => (|| {
                 let frozen = image.freeze(layout)?;
                 transfer.pixels.defer_fallible(move |mut staging| {
+                    staging.resize(layout.stride * layout.height, 0);
                     let result = frozen
                         .render(0)
                         .map(|pixels| staging.copy_from_slice(&pixels));
@@ -366,9 +367,22 @@ impl OutputChannel {
                 }
                 Ok(())
             })(),
-            crate::scene::frames::Pixels::Packed(pixels) => {
-                nearest_pairs(pixels, frames.layout, &mut transfer.pixels, layout)
-            }
+            crate::scene::frames::Pixels::Packed(pixels) => (|| {
+                let input = frames.layout;
+                if pixels.len() != input.bytes()? {
+                    return Err("packed image extent differs from its raster".into());
+                }
+                let pixels = pixels.clone();
+                transfer.pixels.defer_fallible(move |mut staging| {
+                    staging.resize(layout.stride * layout.height, 0);
+                    let result = nearest_pairs(&pixels, input, &mut staging, layout);
+                    (staging, result)
+                });
+                if crate::work::worker_count() == 0 {
+                    transfer.check_result()?;
+                }
+                Ok(())
+            })(),
         };
         if let Err(e) = result {
             transfer.cancel();

@@ -188,12 +188,35 @@ impl Transfer {
         raster: Raster,
         row_bytes: usize,
     ) -> Result<(), String> {
+        self.reserve(now, delay, raster, row_bytes)?;
+        self.pixels.resize(row_bytes * raster.height, 0);
+        Ok(())
+    }
+    /// Fix the guest destination/deadline while leaving staging allocation and
+    /// initialization to the pure owned computation.
+    pub fn prepare_deferred(
+        &mut self,
+        now: u64,
+        delay: u64,
+        raster: Raster,
+        row_bytes: usize,
+    ) -> Result<(), String> {
+        self.reserve(now, delay, raster, row_bytes)?;
+        self.pixels.clear();
+        Ok(())
+    }
+    fn reserve(
+        &mut self,
+        now: u64,
+        delay: u64,
+        raster: Raster,
+        row_bytes: usize,
+    ) -> Result<(), String> {
         if self.deadline.is_some() {
             return Err("image DMA is already pending".into());
         }
         raster.validate(row_bytes)?;
         let deadline = due(now, delay)?;
-        self.pixels.resize(row_bytes * raster.height, 0);
         self.raster = Some(raster);
         self.row_bytes = row_bytes;
         self.deadline = Some(deadline);
@@ -209,21 +232,14 @@ impl Transfer {
         address: u64,
         capacity: usize,
     ) -> Result<(), String> {
-        if self.deadline.is_some() {
-            return Err("image DMA is already pending".into());
-        }
         let raster = Raster {
             address,
             width: 1,
             height: 1,
             pitch: capacity,
         };
-        raster.validate(capacity)?;
-        let deadline = due(now, delay)?;
+        self.reserve(now, delay, raster, capacity)?;
         self.pixels.clear();
-        self.raster = Some(raster);
-        self.row_bytes = capacity;
-        self.deadline = Some(deadline);
         self.variable = true;
         Ok(())
     }

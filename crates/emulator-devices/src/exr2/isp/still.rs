@@ -146,14 +146,11 @@ impl StillProcessor {
         };
         self.source = vec![0; src.pitch * src.height].into();
         cx.ram_read(src.address, Arc::get_mut(&mut self.source).unwrap())?;
-        self.dma.prepare(cx.now(), self.delay, dst, dst.width * 2)?;
+        self.dma
+            .prepare_deferred(cx.now(), self.delay, dst, dst.width * 2)?;
         if let Some(raster) = raw_output {
             self.raw_dma
-                .prepare(cx.now(), self.delay, raster, raster.width * 2)?;
-            for y in 0..raster.height {
-                self.raw_dma.pixels[y * raster.width * 2..(y + 1) * raster.width * 2]
-                    .copy_from_slice(&self.source[y * src.pitch..y * src.pitch + raster.width * 2]);
-            }
+                .prepare_deferred(cx.now(), self.delay, raster, raster.width * 2)?;
         }
         let raw = RawView {
             bytes: &self.source,
@@ -174,6 +171,17 @@ impl StillProcessor {
             self.dma.cancel();
             self.raw_dma.cancel();
             return Err(error);
+        }
+        if let Some(raster) = raw_output {
+            let source = self.source.clone();
+            self.raw_dma.pixels.defer(move |mut out| {
+                out.resize(raster.width * raster.height * 2, 0);
+                for y in 0..raster.height {
+                    out[y * raster.width * 2..(y + 1) * raster.width * 2]
+                        .copy_from_slice(&source[y * src.pitch..y * src.pitch + raster.width * 2]);
+                }
+                out
+            });
         }
         let source = self.source.clone();
         let cfa = self.cfa.clone();

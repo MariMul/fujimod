@@ -181,6 +181,12 @@ impl Buffer {
         self.job = None;
         self.failure = None;
         let bytes = std::mem::take(&mut self.bytes);
+        if worker_count() == 0 {
+            let (bytes, result) = compute(bytes);
+            self.bytes = bytes;
+            self.failure = result.err();
+            return;
+        }
         self.job = Some(Arc::new(Job::submit(move || {
             let (bytes, result) = compute(bytes);
             BufferResult {

@@ -95,7 +95,6 @@ impl Warp {
         let source = self.source.clone();
         if r[1] == 0x40 {
             let mut stream = self.stream.lock().unwrap();
-            stream.pixels.resize(w * h * 2, 0);
             let plan = crate::imaging::resample::Endpoint::new(
                 self.source.len(),
                 src.width,
@@ -124,7 +123,7 @@ impl Warp {
                 return Err("warp source and output overlap".into());
             }
             self.dma
-                .prepare(cx.now(), self.options.completion_ticks, active, w * 2)?;
+                .prepare_deferred(cx.now(), self.options.completion_ticks, active, w * 2)?;
             let plan = match crate::imaging::resample::Endpoint::new(
                 self.source.len(),
                 src.width,

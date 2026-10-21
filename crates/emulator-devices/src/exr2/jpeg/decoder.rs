@@ -136,7 +136,7 @@ impl Decoder {
         let size = decoder
             .output_buffer_size()
             .ok_or("JPEG output size unknown")?;
-        self.dma.prepare(
+        self.dma.prepare_deferred(
             cx.now(),
             self.options.completion_ticks,
             Raster {
@@ -149,6 +149,7 @@ impl Decoder {
         )?;
         let source = self.source.clone();
         self.dma.pixels.defer_fallible(move |mut pixels| {
+            pixels.resize(pitch * rows * 2, 0);
             let result = (|| {
                 let options = DecoderOptions::new_safe()
                     .set_use_unsafe(false)
