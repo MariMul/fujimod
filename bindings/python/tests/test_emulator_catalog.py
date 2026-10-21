@@ -71,18 +71,20 @@ def test_configuration_resolution_returns_its_validated_reference(
     }
     calls = []
 
-    def resolve(configuration_id: str) -> str:
-        calls.append(configuration_id)
+    def resolve(configuration_id: str, overlays: list[str]) -> str:
+        calls.append((configuration_id, overlays))
         return json.dumps(expected)
 
     monkeypatch.setattr(
         catalog._native_catalog, "resolve_configuration", resolve, raising=False
     )
 
-    result: catalog.ResolvedConfiguration = catalog.resolve_configuration("x70-110-rec")
+    result: catalog.ResolvedConfiguration = catalog.resolve_configuration(
+        "x70-110-rec", overlays=("x70-110-rec-usb",)
+    )
 
     assert result == expected
-    assert calls == ["x70-110-rec"]
+    assert calls == [("x70-110-rec", ["x70-110-rec-usb"])]
 
 
 def test_selection_requires_native_json_object(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -115,7 +117,7 @@ def test_configuration_requires_native_json_object(
     monkeypatch.setattr(
         catalog._native_catalog,
         "resolve_configuration",
-        lambda configuration_id: "[]",
+        lambda configuration_id, overlays: "[]",
         raising=False,
     )
 
@@ -137,6 +139,15 @@ def test_reference_resolution_rejects_non_string_ids(
 def test_configuration_resolution_rejects_non_string_id() -> None:
     with pytest.raises(TypeError, match="configuration_id must be a string"):
         catalog.resolve_configuration(cast(str, 3))
+
+
+@pytest.mark.parametrize(
+    "overlays",
+    ["x70-110-rec-usb", ["UPPER"], ["x70-110-rec-usb", "x70-110-rec-usb"]],
+)
+def test_configuration_resolution_rejects_invalid_overlays(overlays: object) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        catalog.resolve_configuration("x70-110-rec", overlays=cast(list[str], overlays))
 
 
 def test_generated_typed_dicts_import_and_resolve_forward_references() -> None:

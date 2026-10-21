@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import re
+from collections.abc import Sequence
 from typing import Protocol, TypeGuard, cast
 
 from fujimod._native import catalog as _native_catalog_module
@@ -24,7 +26,9 @@ class _NativeCatalogResolver(Protocol):
 
     def resolve_firmware(self, firmware_id: str) -> str: ...
 
-    def resolve_configuration(self, configuration_id: str) -> str: ...
+    def resolve_configuration(
+        self, configuration_id: str, overlays: list[str]
+    ) -> str: ...
 
 
 _native_catalog: _NativeCatalogResolver = cast(
@@ -63,11 +67,24 @@ def resolve_firmware(firmware_id: str) -> ResolvedSelection:
     return _selection(_native_catalog.resolve_firmware(firmware_id))
 
 
-def resolve_configuration(configuration_id: str) -> ResolvedConfiguration:
-    """Resolve a run configuration and its checked body, SoC and firmware."""
+def resolve_configuration(
+    configuration_id: str, *, overlays: Sequence[str] = ()
+) -> ResolvedConfiguration:
+    """Resolve a run configuration, selected overlays and checked references."""
     if type(configuration_id) is not str:
         raise TypeError("configuration_id must be a string")
-    value = _native_catalog.resolve_configuration(configuration_id)
+    if isinstance(overlays, (str, bytes)) or not isinstance(overlays, Sequence):
+        raise TypeError("overlays must be a sequence of catalog overlay IDs")
+    selected_overlays = list(overlays)
+    if any(
+        type(overlay) is not str
+        or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", overlay)
+        for overlay in selected_overlays
+    ):
+        raise ValueError("overlays must contain stable lowercase catalog IDs")
+    if len(selected_overlays) != len(set(selected_overlays)):
+        raise ValueError("overlays must contain unique catalog identities")
+    value = _native_catalog.resolve_configuration(configuration_id, selected_overlays)
     return cast(ResolvedConfiguration, _document(value))
 
 
