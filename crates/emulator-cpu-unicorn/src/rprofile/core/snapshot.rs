@@ -9,6 +9,8 @@ use std::any::Any;
 struct Saved {
     context: Box<dyn Snapshot>,
     clock: Option<Clock>,
+    clock_overshoot: u64,
+    policy: ExecutionPolicy,
     pmu: pmu::Counter,
     tcm: [(u32, Image); 2],
     maps: Vec<Mapping>,
@@ -125,6 +127,7 @@ impl Execution {
         Ok(
             serde_json::json!({"architecture":self.cpu.architecture_state()?, "pmu":self.pmu.get().fingerprint(),
             "clock":self.clock.get().map(|c|serde_json::json!({"now":c.now,"phase":c.phase,"ratio":c.ratio.parts()})),
+            "execution_policy":self.policy.get().name(),
             "tcm":memory,"irq":self.irq.get(),"reservation":reservation.map(|r|(r.address,r.size)),
             "mappings":maps.iter().map(|m|(m.address,m.physical,m.bytes,m.permissions)).collect::<Vec<_>>() }),
         )
@@ -203,6 +206,8 @@ impl Core {
         Ok(Box::new(Saved {
             context,
             clock: e.clock.get(),
+            clock_overshoot: e.clock_overshoot.get(),
+            policy: e.policy.get(),
             pmu: e.pmu.get(),
             tcm,
             maps: e.checkpoint_maps(),
@@ -283,11 +288,14 @@ impl Core {
             }
         }
         e.clock.set(saved.clock);
+        e.clock_overshoot.set(saved.clock_overshoot);
+        e.set_policy(saved.policy);
         e.pmu.set(saved.pmu);
         unsafe {
             **e.ring.get() = saved.ring;
             (*e.record.as_ptr()).budget = saved.budget;
             (*e.record.as_ptr()).head = saved.head;
+            (*e.record.as_ptr()).enabled = e.accounting_mode();
         }
         e.count.set(saved.count);
         e.cap.set(saved.cap);

@@ -127,14 +127,16 @@ impl Drop for InspectionGuard<'_> {
         self.0.depth.set(self.0.depth.get() - 1);
     }
 }
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct MmioMapping {
     end: u64,
     callbacks: Mmio,
+    fast_reads: Vec<FastMmioRead>,
     offset: u64,
 }
 struct MmioData {
     callbacks: Mmio,
+    fast_reads: Vec<FastMmioRead>,
     inspection: Rc<Inspection>,
     offset: u64,
 }
@@ -151,7 +153,14 @@ unsafe extern "C" fn mmio_read(_: ffi::Engine, offset: u64, size: u32, data: *mu
         context.inspection.blocked.set(true);
         return 0;
     }
-    unsafe { (context.callbacks.read)(context.offset + offset, size, context.callbacks.data) }
+    let offset = context.offset + offset;
+    context
+        .fast_reads
+        .iter()
+        .find_map(|read| read.read(offset, size))
+        .unwrap_or_else(|| unsafe {
+            (context.callbacks.read)(offset, size, context.callbacks.data)
+        })
 }
 unsafe extern "C" fn mmio_write(
     _: ffi::Engine,
@@ -275,6 +284,7 @@ impl Core {
         address: u64,
         bytes: usize,
         callbacks: Mmio,
+        fast_reads: Vec<FastMmioRead>,
         offset: u64,
     ) -> Result<(), String> {
         let end = address
@@ -282,6 +292,7 @@ impl Core {
             .ok_or("MMIO address overflow")?;
         let mut context = Box::new(MmioData {
             callbacks,
+            fast_reads: fast_reads.clone(),
             inspection: self.inspection.clone(),
             offset,
         });
@@ -303,6 +314,7 @@ impl Core {
             MmioMapping {
                 end,
                 callbacks,
+                fast_reads,
                 offset,
             },
         );
@@ -316,7 +328,9 @@ impl Core {
             .mmio
             .borrow()
             .range(..end)
-            .filter_map(|(&base, &mapping)| (address < mapping.end).then_some((base, mapping)))
+            .filter_map(|(&base, mapping)| {
+                (address < mapping.end).then_some((base, mapping.clone()))
+            })
             .collect())
     }
     fn normalize_mmio(&self, affected: Vec<(u64, MmioMapping)>) -> Result<(), String> {
@@ -350,6 +364,7 @@ impl Core {
                         fragment.begin,
                         bytes as usize,
                         mapping.callbacks,
+                        mapping.fast_reads.clone(),
                         mapping.offset + fragment.begin - base,
                     )?;
                 }
@@ -538,7 +553,16 @@ impl Cpu for Core {
         self.check(unsafe { (self.api.uc_mem_map)(self.raw, address, bytes as u64, permissions) })
     }
     unsafe fn map_mmio(&self, address: u64, bytes: usize, callbacks: Mmio) -> Result<(), String> {
-        unsafe { self.map_io(address, bytes, callbacks, 0) }
+        unsafe { self.map_io(address, bytes, callbacks, Vec::new(), 0) }
+    }
+    unsafe fn map_mmio_fast(
+        &self,
+        address: u64,
+        bytes: usize,
+        callbacks: Mmio,
+        fast_reads: Vec<FastMmioRead>,
+    ) -> Result<(), String> {
+        unsafe { self.map_io(address, bytes, callbacks, fast_reads, 0) }
     }
     fn unmap(&self, address: u64, bytes: usize) -> Result<(), String> {
         let affected = self.affected_mmio(address, bytes)?;

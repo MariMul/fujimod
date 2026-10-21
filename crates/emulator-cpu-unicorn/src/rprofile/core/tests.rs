@@ -585,6 +585,102 @@ fn exact_block_budgets_ring_wrap_pause_and_thumb_resume() {
     );
 }
 
+#[test]
+fn interactive_policy_runs_full_blocks_and_rebases_clock_after_bounded_overshoot() {
+    let setup = |memory: &Memory| {
+        let cpu = processor(memory);
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        words(
+            &cpu,
+            0x1000,
+            &[0xe3a00001, 0xe2811001, 0xe2822001, 0xe320f003],
+        );
+        cpu
+    };
+
+    let exact = setup(&Memory::default());
+    run(&exact, 0x1000, 1).unwrap();
+    assert_eq!(
+        (
+            exact.instruction_progress(),
+            get(&exact, arm::PC),
+            get(&exact, arm::CORE[0]),
+        ),
+        (Some(1), 0x1004, 1)
+    );
+    assert!(exact.execution.accounting().counters().1 > 0);
+
+    let interactive = setup(&Memory::default());
+    interactive
+        .set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
+    let before_snapshot = interactive.fingerprint().unwrap();
+    let snapshot = interactive.snapshot(None).unwrap();
+    interactive
+        .set_execution_policy(ExecutionPolicy::Exact)
+        .unwrap();
+    interactive.restore(snapshot.as_ref()).unwrap();
+    assert_eq!(interactive.fingerprint().unwrap(), before_snapshot);
+    assert_eq!(
+        interactive.execution.policy.get(),
+        ExecutionPolicy::Interactive
+    );
+    interactive
+        .set_guest_clock(Clock {
+            now: 20,
+            phase: 0,
+            ratio: fujimod_emulator_cpu::timeline::Ratio::new(1, 1).unwrap(),
+        })
+        .unwrap();
+
+    run(&interactive, 0x1000, 1).unwrap();
+    let progress = interactive.instruction_progress().unwrap();
+    assert!((3..=4).contains(&progress));
+    assert_eq!(get(&interactive, arm::PC), 0x1000 + 4 * progress as u32);
+    assert_eq!(
+        (
+            get(&interactive, arm::CORE[0]),
+            get(&interactive, arm::CORE[1]),
+            get(&interactive, arm::CORE[2]),
+        ),
+        (1, 1, 1)
+    );
+    assert_eq!(interactive.execution.accounting().counters().1, 0);
+
+    // The board may clamp time to its deadline while the CPU has advanced by
+    // the final block. That bounded block-time discrepancy is rebased once.
+    interactive
+        .set_guest_clock(Clock {
+            now: 21,
+            phase: 0,
+            ratio: fujimod_emulator_cpu::timeline::Ratio::new(1, 1).unwrap(),
+        })
+        .unwrap();
+    assert!(
+        interactive
+            .set_guest_clock(Clock {
+                now: 20,
+                phase: 0,
+                ratio: fujimod_emulator_cpu::timeline::Ratio::new(1, 1).unwrap(),
+            })
+            .is_err()
+    );
+
+    let hint = processor(&Memory::default());
+    hint.map_zeroed(0x1000, 0x1000, 7).unwrap();
+    words(&hint, 0x1000, &[0xe320f003]);
+    hint.set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
+    assert!(matches!(
+        run(&hint, 0x1000, 1).unwrap(),
+        Exit::Hint(Hint::WaitForInterrupt)
+    ));
+    assert_eq!(
+        (hint.instruction_progress(), get(&hint, arm::PC)),
+        (Some(1), 0x1004)
+    );
+}
+
 struct DeviceAccess {
     cpu: *const Core,
     reads: Cell<u32>,
@@ -835,6 +931,44 @@ fn code_ranges_can_cross_adjacent_mappings_with_distinct_backing() {
         (cpu.instruction_progress(), get(&cpu, arm::PC)),
         (Some(1), 0x2002)
     );
+}
+
+#[test]
+fn code_watch_marks_exact_bytes_across_words_pages_and_aliases() {
+    let backing = Backing::aligned_zeros(0x2000, 4096).unwrap();
+    let memory = Memory::default();
+    let cpu = processor(&memory);
+    unsafe {
+        cpu.map_backing(0x1000, 0x2000, 7, NonNull::new(backing.as_ptr()).unwrap())
+            .unwrap();
+        cpu.map_backing(0x9000, 0x2000, 7, NonNull::new(backing.as_ptr()).unwrap())
+            .unwrap();
+    }
+    let core = cpu.execution.id.get();
+
+    // The first range crosses bitmap words; the second crosses backing pages.
+    assert!(memory.note_code(core, 0x103f, 2).unwrap());
+    assert!(memory.note_code(core, 0x1fff, 2).unwrap());
+    memory.apply_watches().unwrap();
+
+    // Reclassification preserves the recorded bytes without re-adding hooks.
+    assert!(!memory.note_code(core, 0x103f, 2).unwrap());
+    assert!(!memory.written(core, 0x103e, 1).unwrap());
+    assert!(memory.written(core, 0x103f, 1).unwrap());
+    memory.flush().unwrap();
+
+    // The other byte in the cross-word range is still watched after translation.
+    assert!(!memory.note_code(core, 0x103f, 2).unwrap());
+    assert!(memory.written(core, 0x1040, 1).unwrap());
+    memory.flush().unwrap();
+
+    // Both sides of the cross-page range remain watched through the alias.
+    assert!(!memory.note_code(core, 0x1fff, 2).unwrap());
+    assert!(memory.written(core, 0x9fff, 1).unwrap());
+    memory.flush().unwrap();
+    assert!(!memory.note_code(core, 0x1fff, 2).unwrap());
+    assert!(memory.written(core, 0xa000, 1).unwrap());
+    memory.flush().unwrap();
 }
 
 #[test]

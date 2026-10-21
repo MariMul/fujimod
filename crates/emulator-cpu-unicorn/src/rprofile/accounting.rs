@@ -93,9 +93,27 @@ impl Accounting {
     /// instruction. Returns the baseline for the next settlement.
     #[inline]
     pub fn admit(&mut self, span: Span, room: u64) -> Result<i64, String> {
+        self.admit_inner(span, room, false, true)
+    }
+
+    /// Admit a whole block even when it crosses `room`, without recording a
+    /// span in the exact-accounting ring. The next block boundary observes the
+    /// negative remaining budget and stops the run.
+    #[inline]
+    pub fn admit_coarse(&mut self, span: Span, room: u64) -> Result<i64, String> {
+        self.admit_inner(span, room, true, false)
+    }
+
+    fn admit_inner(
+        &mut self,
+        span: Span,
+        room: u64,
+        allow_overshoot: bool,
+        record: bool,
+    ) -> Result<i64, String> {
         if span.instructions == 0
             || span.instructions > u32::MAX.into()
-            || span.instructions > room
+            || !allow_overshoot && span.instructions > room
             || !span.address.is_multiple_of(4)
             || span
                 .address
@@ -106,14 +124,16 @@ impl Accounting {
         }
         let room = room.min(i64::MAX as u64 / 2) as i64;
         let r = unsafe { self.record.as_mut() };
-        let head = r
-            .head
-            .checked_add(1)
-            .ok_or("block accounting ring head exhausted")?;
-        unsafe {
-            *r.ring.add((r.head & r.mask) as usize) = span.address << 32 | span.instructions;
+        if record {
+            let head = r
+                .head
+                .checked_add(1)
+                .ok_or("block accounting ring head exhausted")?;
+            unsafe {
+                *r.ring.add((r.head & r.mask) as usize) = span.address << 32 | span.instructions;
+            }
+            r.head = head;
         }
-        r.head = head;
         r.budget = room - span.instructions as i64;
         Ok(room)
     }
@@ -164,6 +184,22 @@ mod tests {
             )
             .unwrap();
         assert_eq!(a.settle(synced, 0, true).unwrap().instructions, 1);
+    }
+    #[test]
+    fn coarse_admission_keeps_the_full_block_without_a_ring_entry() {
+        let mut ring = [0; 4];
+        let mut r = record(&mut ring);
+        let mut a = unsafe { Accounting::from_raw(NonNull::from(&mut r)) };
+        let span = Span {
+            address: 0x1000,
+            instructions: 10,
+        };
+        let synced = a.admit_coarse(span, 1).unwrap();
+        assert_eq!(synced, 1);
+        assert_eq!(a.counters(), (-9, 0));
+        assert_eq!(a.settle(synced, 0, true).unwrap().instructions, 10);
+        assert_eq!(a.counters(), (-9, 0));
+        assert_eq!(ring, [0; 4]);
     }
     #[test]
     fn an_observed_last_instruction_keeps_its_debit_and_ring_wrap_keeps_the_newest_span() {

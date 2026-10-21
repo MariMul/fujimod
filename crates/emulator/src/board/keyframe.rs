@@ -5,6 +5,7 @@ use fujimod_emulator_cpu::{Snapshot as CpuSnapshot, exclusive::Monitors};
 use std::collections::BTreeMap;
 
 struct Saved {
+    execution_policy: ExecutionPolicy,
     timeline: Timeline,
     interrupt_changed: Vec<bool>,
     released: Vec<bool>,
@@ -72,6 +73,8 @@ impl State {
         // Exhaustive matching makes a new runtime field an explicit checkpoint
         // decision. Wiring/allocations are retained by this exact Board owner.
         let Self {
+            execution_policy,
+            clock_limit: _,
             memory: _,
             bus: _,
             timeline,
@@ -108,6 +111,7 @@ impl State {
             memory_access: _,
         } = self;
         Saved {
+            execution_policy: *execution_policy,
             timeline: timeline.clone(),
             interrupt_changed: interrupt_changed.clone(),
             released: released.clone(),
@@ -140,6 +144,8 @@ impl State {
         }
     }
     fn restore_state(&mut self, saved: &Saved) {
+        self.execution_policy = saved.execution_policy;
+        self.clock_limit = None;
         self.timeline.clone_from(&saved.timeline);
         self.interrupt_changed.clone_from(&saved.interrupt_changed);
         self.released.clone_from(&saved.released);

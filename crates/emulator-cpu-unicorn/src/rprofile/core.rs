@@ -16,6 +16,7 @@ use std::{ffi::c_void, ptr::NonNull};
 
 mod backend;
 mod exclusive;
+mod loops;
 mod mapping;
 mod pmu;
 mod run;
@@ -50,6 +51,8 @@ pub(super) struct Execution {
     monitor: fujimod_emulator_cpu::exclusive::Owner,
     identity_input: Cell<u32>,
     clock: Cell<Option<Clock>>,
+    clock_overshoot: Cell<u64>,
+    policy: Cell<ExecutionPolicy>,
     pmu: Cell<pmu::Counter>,
     tcm: [super::tcm::Bank; 2],
     tcm_pending: Cell<Option<(usize, u32)>>,
@@ -60,6 +63,9 @@ pub(super) struct Execution {
     ring: UnsafeCell<Box<[u64; 64]>>,
     owned: RefCell<Vec<Backing>>,
     mmio_hooks: RefCell<BTreeMap<u64, (usize, HookId)>>,
+    fast_reads: RefCell<Vec<FastMmioRead>>,
+    loop_reads: RefCell<Vec<(u64, FastMmioRead)>>,
+    loops: loops::Loops,
     count: Cell<u64>,
     cap: Cell<u64>,
     synced: Cell<i64>,
@@ -115,6 +121,8 @@ impl Core {
             monitor,
             identity_input: Cell::new(options.cp14_identity),
             clock: Cell::new(None),
+            clock_overshoot: Cell::new(0),
+            policy: Cell::new(ExecutionPolicy::Exact),
             pmu: Cell::new(pmu::Counter::default()),
             tcm,
             tcm_pending: Cell::new(None),
@@ -125,6 +133,9 @@ impl Core {
             ring: UnsafeCell::new(Box::new([0; 64])),
             owned: RefCell::new(Vec::new()),
             mmio_hooks: RefCell::new(BTreeMap::new()),
+            fast_reads: RefCell::new(Vec::new()),
+            loop_reads: RefCell::new(Vec::new()),
+            loops: loops::Loops::default(),
             count: Cell::new(0),
             cap: Cell::new(0),
             synced: Cell::new(0),
@@ -194,6 +205,23 @@ impl Core {
     }
 }
 impl Execution {
+    pub(super) fn set_policy(&self, policy: ExecutionPolicy) {
+        self.policy.set(policy);
+        let enabled = policy == ExecutionPolicy::Interactive;
+        for read in self.fast_reads.borrow().iter() {
+            read.set_enabled(enabled);
+        }
+    }
+    pub(super) fn accounting_mode(&self) -> u64 {
+        if self.thumb.get() {
+            0
+        } else {
+            match self.policy.get() {
+                ExecutionPolicy::Exact => 1,
+                ExecutionPolicy::Interactive => 2,
+            }
+        }
+    }
     fn accounting(&self) -> Accounting {
         unsafe { Accounting::from_raw(self.record) }
     }
@@ -208,6 +236,9 @@ impl Execution {
         self.cpu.write_register(register, &value.to_le_bytes())
     }
     fn tail(&self, pc: u64, entered: bool) -> u64 {
+        if self.policy.get() == ExecutionPolicy::Interactive {
+            return 0;
+        }
         self.accounting()
             .newest_since(self.settled_head.get())
             .map_or(0, |span| span.tail(pc, entered))
@@ -308,7 +339,7 @@ impl Execution {
                 && self.observers.borrow().values().any(|observer| {
                     matches!(observer.hook, Hook::Instruction { range, .. } if includes(range, address))
                 })
-                || special(word)
+                || special(word) || self.loop_candidate(address, word)
             {
                 InstructionDisposition::ObserveAndEndBlock
             } else {
@@ -329,9 +360,7 @@ impl Execution {
             .thumb
             .ok_or("R-profile block has no instruction-set metadata")?;
         self.thumb.set(thumb);
-        unsafe {
-            (*self.record.as_ptr()).enabled = u64::from(!thumb);
-        }
+        unsafe { (*self.record.as_ptr()).enabled = self.accounting_mode() };
         let restarted = self.restarted.get() == Some(block.address);
         for observer in self.observers.borrow().values() {
             if let Hook::Block {
@@ -369,17 +398,18 @@ impl Execution {
                 return Err("invalid R-profile ARM block size".into());
             }
             let n = u64::from(block.bytes / 4);
-            if n > room {
+            if n > room && self.policy.get() == ExecutionPolicy::Exact {
                 self.reset_budget();
                 return self.cpu.retry_block(room as u32);
             }
-            self.synced.set(self.accounting().admit(
-                Span {
-                    address: block.address,
-                    instructions: n,
-                },
-                room,
-            )?);
+            let span = Span {
+                address: block.address,
+                instructions: n,
+            };
+            self.synced.set(match self.policy.get() {
+                ExecutionPolicy::Exact => self.accounting().admit(span, room)?,
+                ExecutionPolicy::Interactive => self.accounting().admit_coarse(span, room)?,
+            });
         }
         if restarted {
             self.restarted.set(None);
@@ -391,16 +421,19 @@ impl Execution {
         if !self.thumb.get() {
             self.settle(self.tail(address, false), false)?;
         }
-        if self.count.get() >= self.cap.get() {
-            self.reset_budget();
-            return self.cpu.stop();
+        let coarse_arm = !self.thumb.get() && self.policy.get() == ExecutionPolicy::Interactive;
+        if !coarse_arm {
+            if self.count.get() >= self.cap.get() {
+                self.reset_budget();
+                return self.cpu.stop();
+            }
+            self.count.set(
+                self.count
+                    .get()
+                    .checked_add(1)
+                    .ok_or("R-profile instruction count overflow")?,
+            );
         }
-        self.count.set(
-            self.count
-                .get()
-                .checked_add(1)
-                .ok_or("R-profile instruction count overflow")?,
-        );
         self.at_instruction.set(true);
         let result = self.execute_observed(address, size);
         self.at_instruction.set(false);
@@ -431,6 +464,7 @@ impl Execution {
         let word = u32::from_le_bytes(bytes);
         let cpsr = self.scalar(arm::CPSR)?;
         let thumb = self.thumb.get();
+        if !thumb && self.execute_loop(address, word)? { return Ok(()); }
         let condition = if thumb {
             let it = ((cpsr >> 25) & 3) | ((cpsr >> 8) & 0xfc);
             if it == 0 { 14 } else { it >> 4 }

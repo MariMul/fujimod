@@ -1,8 +1,32 @@
 use super::*;
 
 impl Cpu for Core {
+    fn set_loop_mode(&self, mode: fujimod_emulator_cpu::loops::LoopMode) -> Result<(), String> {
+        let e = &self.execution;
+        e.memory.require_stopped()?;
+        e.cpu.invalidate_code(None)?;
+        e.loops.mode.set(mode);
+        e.loops.bypass.set(None);
+        Ok(())
+    }
+    fn set_loop_window(&self, stable: bool) -> Result<(), String> {
+        self.execution.memory.require_stopped()?;
+        self.execution.loops.window.set(stable);
+        Ok(())
+    }
     fn identity(&self) -> Identity {
         self.execution.cpu.identity()
+    }
+    fn set_execution_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
+        let e = &self.execution;
+        e.memory.require_stopped()?;
+        if e.active.get() {
+            return Err("execution policy requires a stopped processor".into());
+        }
+        e.set_policy(policy);
+        e.clock_overshoot.set(0);
+        unsafe { (*e.record.as_ptr()).enabled = e.accounting_mode() };
+        Ok(())
     }
     fn checkpoint_backings(&self) -> Result<Vec<(NonNull<u8>, usize)>, String> {
         Ok(self
@@ -84,12 +108,27 @@ impl Cpu for Core {
             return Err("cannot replace an active R-profile guest clock".into());
         }
         clock.after(0)?;
-        if e.clock.get().is_some_and(|old| {
-            clock.now < old.now
-                || clock.now == old.now && clock.ratio == old.ratio && clock.phase < old.phase
-        }) {
-            return Err("R-profile guest clock may not move backward".into());
+        if let Some(old) = e.clock.get() {
+            if old.ratio != clock.ratio {
+                if clock.now < old.now {
+                    return Err("R-profile guest clock may not move backward".into());
+                }
+            } else {
+                let (numerator, denominator) = clock.ratio.parts();
+                let old_position =
+                    u128::from(old.now) * u128::from(numerator) + u128::from(old.phase);
+                let new_position =
+                    u128::from(clock.now) * u128::from(numerator) + u128::from(clock.phase);
+                let backstep = old_position.saturating_sub(new_position);
+                if backstep != 0
+                    && (e.policy.get() != ExecutionPolicy::Interactive
+                        || backstep > u128::from(e.clock_overshoot.get()) * u128::from(denominator))
+                {
+                    return Err("R-profile guest clock may not move backward".into());
+                }
+            }
         }
+        e.clock_overshoot.set(0);
         e.clock.set(Some(clock));
         Ok(())
     }
@@ -210,6 +249,32 @@ impl Cpu for Core {
         }
         Ok(())
     }
+    unsafe fn map_mmio_fast(
+        &self,
+        address: u64,
+        bytes: usize,
+        callbacks: Mmio,
+        fast_reads: Vec<FastMmioRead>,
+    ) -> Result<(), String> {
+        let e = &self.execution;
+        if e.overlaps_tcm(address, bytes) {
+            return Err("MMIO overlaps processor-private TCM".into());
+        }
+        for read in &fast_reads {
+            read.set_enabled(e.policy.get() == ExecutionPolicy::Interactive);
+        }
+        unsafe {
+            e.cpu
+                .map_mmio_fast(address, bytes, callbacks, fast_reads.clone())?;
+        }
+        if let Err(error) = e.device_hook(address, bytes) {
+            e.cpu.unmap(address, bytes)?;
+            return Err(error);
+        }
+        e.loop_reads.borrow_mut().extend(fast_reads.iter().cloned().map(|read| (address, read)));
+        e.fast_reads.borrow_mut().extend(fast_reads);
+        Ok(())
+    }
     fn unmap(&self, address: u64, bytes: usize) -> Result<(), String> {
         let e = &self.execution;
         if e.overlaps_tcm(address, bytes) {
@@ -219,6 +284,10 @@ impl Cpu for Core {
         e.memory.unmap(e.id.get(), address, bytes);
         e.remove_external(address, bytes);
         let end = address + bytes as u64;
+        e.loop_reads.borrow_mut().retain(|(base, read)| {
+            let p = base + read.register_offset;
+            p + 4 <= address || p >= end
+        });
         let affected: Vec<_> = e
             .mmio_hooks
             .borrow()
@@ -272,6 +341,7 @@ impl Cpu for Core {
         if e.active.get() {
             return Err("nested R-profile execution is refused".into());
         }
+        e.clock_overshoot.set(0);
         e.count.set(0);
         if request.instructions == Some(0) {
             return Ok(Exit::Stopped);
@@ -308,6 +378,13 @@ impl Cpu for Core {
             }
         }
         let result = self.execute(request, begin);
+        e.loops.window.set(false);
+        e.clock_overshoot
+            .set(if e.policy.get() == ExecutionPolicy::Interactive {
+                e.count.get().saturating_sub(e.cap.get())
+            } else {
+                0
+            });
         if let Some(clock) = e.clock.get() {
             e.clock.set(Some(clock.after(e.count.get())?));
         }
@@ -461,6 +538,11 @@ impl Cpu for Core {
         Ok(())
     }
     fn exit_counters(&self) -> Result<BTreeMap<&'static str, u64>, String> {
-        self.execution.cpu.exit_counters()
+        let mut counters = self.execution.cpu.exit_counters()?;
+        let l = &self.execution.loops;
+        counters.insert("loop_poll_instructions", l.poll_instructions.get());
+        counters.insert("loop_counted_instructions", l.counted_instructions.get());
+        counters.insert("loop_accelerated_instructions", l.accelerated_instructions.get());
+        Ok(counters)
     }
 }

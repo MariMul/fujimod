@@ -2,9 +2,9 @@
 pub mod aprofile;
 pub mod bus;
 pub mod decoder;
-pub mod discovery;
 #[cfg(test)]
 mod decoder_tests;
+pub mod discovery;
 pub mod factory;
 pub mod harness;
 mod host;
@@ -16,7 +16,6 @@ pub mod memory;
 mod memory_tests;
 pub mod mprofile;
 pub mod observation;
-pub mod xp4;
 mod observe;
 mod schedule;
 #[cfg(test)]
@@ -25,11 +24,14 @@ mod schedule_tests;
 pub(crate) mod test_support;
 #[cfg(test)]
 mod tests;
+pub mod xp4;
 use bus::Bus;
+use fujimod_emulator_cpu::timeline::{Ratio, Target, Timeline};
+use fujimod_emulator_cpu::{
+    Cpu, ExecutionPolicy, Exit, Hook, HookId, HookRange, Interrupt, Mmio, Register, Run,
+};
 use fujimod_emulator_devices::ip::arm::gicv3::Gic;
 use fujimod_emulator_devices::{Host, Record};
-use fujimod_emulator_cpu::timeline::{Ratio, Target, Timeline};
-use fujimod_emulator_cpu::{Cpu, Exit, Hook, HookId, HookRange, Interrupt, Mmio, Register, Run};
 use serde_json::{Value, json};
 use std::cell::{Cell, RefCell};
 use std::ffi::c_void;
@@ -46,7 +48,23 @@ struct CoreInterruptMap {
     device: usize,
     inputs: Box<dyn fujimod_emulator_devices::bus::CoreInterrupts>,
 }
+fn device_workers(policy: ExecutionPolicy) -> usize {
+    match policy {
+        ExecutionPolicy::Exact => 0,
+        ExecutionPolicy::Interactive => 2,
+    }
+}
+fn prepare_device_workers(policy: ExecutionPolicy) -> Result<(), String> {
+    let count = device_workers(policy);
+    if fujimod_emulator_devices::work::worker_count() != count {
+        fujimod_emulator_devices::work::configure(count)?;
+    }
+    Ok(())
+}
 struct State {
+    execution_policy: ExecutionPolicy,
+    // Host run boundary, not a device deadline or persistent modeled state.
+    clock_limit: Option<u64>,
     memory: Rc<memory::Memory>,
     bus: Bus,
     timeline: Timeline,
@@ -110,6 +128,41 @@ pub struct Board {
     entries: Rc<RefCell<observe::Entries>>,
 }
 impl Board {
+    pub fn execution_policy(&self) -> ExecutionPolicy {
+        self.state.borrow().execution_policy
+    }
+    /// Change policy only at a whole-board pause. CPU snapshots retain their
+    /// own policy; the board keyframe retains this scheduler selection too.
+    pub fn set_execution_policy(&mut self, policy: ExecutionPolicy) -> Result<(), String> {
+        let mut state = self
+            .state
+            .try_borrow_mut()
+            .map_err(|_| "policy requires a stopped board")?;
+        if state.active_slice.is_some() || state.memory_access {
+            return Err("policy requires a stopped board".into());
+        }
+        let previous = state.execution_policy;
+        if previous == policy {
+            return prepare_device_workers(policy);
+        }
+        for (index, cpu) in self.cpus.iter().enumerate() {
+            if let Err(error) = cpu.set_execution_policy(policy) {
+                for cpu in &self.cpus[..index] {
+                    cpu.set_execution_policy(previous)?;
+                }
+                return Err(error);
+            }
+        }
+        if let Err(error) = prepare_device_workers(policy) {
+            for cpu in self.cpus.iter() {
+                cpu.set_execution_policy(previous)?;
+            }
+            return Err(error);
+        }
+        state.execution_policy = policy;
+        self.slice_left.set(0);
+        Ok(())
+    }
     pub fn fingerprint(&self) -> Result<Value, String> {
         let state = self
             .state
@@ -195,6 +248,8 @@ impl Board {
         let count = bus.len();
         let memory = Rc::new(memory);
         let state = Rc::new(RefCell::new(State {
+            execution_policy: ExecutionPolicy::Exact,
+            clock_limit: None,
             memory: memory.clone(),
             bus,
             timeline: Timeline::new(ratio)?,
@@ -463,6 +518,7 @@ impl Board {
     /// limits belong to the caller; they never supply guest elapsed time.
     pub fn run_until(&mut self, until: u64, quantum: usize) -> Result<(), String> {
         let result = self.run_inner(Some(until), None, None, quantum);
+        self.state.borrow_mut().clock_limit = None;
         if let Err(error) = &result {
             self.state.borrow_mut().fail(error.clone());
         }
@@ -509,15 +565,16 @@ impl Board {
         until: Option<u64>,
     ) -> Result<(), String> {
         let start = self.state.borrow().total_instructions()?;
-        if end < start {
+        if end < start && self.execution_policy() == ExecutionPolicy::Exact {
             return Err("board instruction window moved backward".into());
         }
-        if end == start {
+        if end <= start {
             return Ok(());
         }
         #[cfg(feature = "host-profile")]
         let profile_run = self.state.borrow_mut().bus.profile_begin_run();
         let result = self.run_inner(until, Some(end), pause_after, quantum);
+        self.state.borrow_mut().clock_limit = None;
         #[cfg(feature = "host-profile")]
         self.state.borrow_mut().bus.profile_finish_run(profile_run);
         if let Err(error) = &result {
@@ -532,6 +589,7 @@ impl Board {
         pause_after: Option<u64>,
         quantum: usize,
     ) -> Result<(), String> {
+        prepare_device_workers(self.execution_policy())?;
         if quantum == 0 {
             return Err("zero processor quantum".into());
         }
@@ -541,6 +599,7 @@ impl Board {
         self.quantum.set(Some(quantum));
         self.host_pause.set(false);
         self.state.borrow_mut().code_run = None;
+        self.state.borrow_mut().clock_limit = until;
         let mut completed_slice = None;
         loop {
             let mut s = self.state.borrow_mut();
@@ -567,9 +626,13 @@ impl Board {
             let remaining = instruction_limit
                 .map(|limit| {
                     s.total_instructions().and_then(|n| {
-                        limit
-                            .checked_sub(n)
-                            .ok_or("board instruction limit exceeded".into())
+                        if s.execution_policy == ExecutionPolicy::Interactive {
+                            Ok(limit.saturating_sub(n))
+                        } else {
+                            limit
+                                .checked_sub(n)
+                                .ok_or("board instruction limit exceeded".into())
+                        }
                     })
                 })
                 .transpose()?
@@ -579,8 +642,9 @@ impl Board {
             }
             let n = self.cpus.len();
             if pause_after.is_some_and(|pause| s.total_instructions().is_ok_and(|n| n >= pause))
-                && completed_slice
-                    .is_some_and(|core| (core + 1..n).all(|c| !s.released[c] || s.waiting[c]))
+                && (s.execution_policy == ExecutionPolicy::Interactive
+                    || completed_slice
+                        .is_some_and(|core| (core + 1..n).all(|c| !s.released[c] || s.waiting[c])))
             {
                 return Ok(());
             }
@@ -606,7 +670,7 @@ impl Board {
                 s.timeline.phase(),
                 until.unwrap_or(u64::MAX),
             )?;
-            let peer = s.runnable_peer(core);
+            let peer = s.execution_policy == ExecutionPolicy::Exact && s.runnable_peer(core);
             let solo_pause = if peer {
                 u64::MAX
             } else if let Some(pause) = pause_after {
@@ -715,13 +779,17 @@ impl Board {
             let entered = s.instructions[core]
                 .checked_sub(entered)
                 .ok_or("processor entry count moved backward")?;
-            if entered > budget as u64 {
+            if entered > budget as u64 && s.execution_policy == ExecutionPolicy::Exact {
                 return Err("CPU exceeded its requested instruction budget".into());
             }
             self.slice_left
                 .set(slice.room(s.instructions[core]) as usize);
             completed_slice = None;
-            if self.slice_left.get() == 0 || s.waiting[core] || !s.released[core] {
+            if s.execution_policy == ExecutionPolicy::Interactive
+                || self.slice_left.get() == 0
+                || s.waiting[core]
+                || !s.released[core]
+            {
                 completed_slice = Some(core);
                 self.next_core.set((core + 1) % n);
                 self.slice_left.set(0);
@@ -730,7 +798,7 @@ impl Board {
     }
     pub fn state(&self) -> Value {
         let s = self.state.borrow();
-        json!({"execution_mode":s.bus.mode().name(),"counts_as_boot":s.bus.mode()==bus::Mode::Strict,
+        json!({"execution_mode":s.bus.mode().name(),"execution_policy":s.execution_policy.name(),"counts_as_boot":s.bus.mode()==bus::Mode::Strict,
             "timeline":s.timeline.save(),"instructions":s.instructions,"released":s.released,"waiting":s.waiting,"waiting_event":s.waiting_event,"events":s.events,"next_core":self.next_core.get(),"slice_left":self.slice_left.get(),"quantum":self.quantum.get(),"failure":s.error,
             "memory_decoders":s.decoders.state(),"dma_mappings":s.memory.state(),"bus":s.bus.state(),"gic":s.interrupts.as_ref().map(|g|g.gic.save()),"core_interrupt_devices":s.core_interrupts.iter().map(|c|c.as_ref().map(|c|c.device)).collect::<Vec<_>>(),"outputs":s.outputs,"implementation_cluster":s.implementation_cluster,"unmodeled_system":s.unmodeled_system.iter().map(|(&(core,register,pc),&(reads,writes))|json!({"core":core,"register":register,"pc":pc,"reads":reads,"writes":writes})).collect::<Vec<_>>(),"aprofile":s.aprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()).unwrap_or_else(|e|json!({"error":e})))).collect::<Vec<_>>(),"mprofile":s.mprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()))).collect::<Vec<_>>()})
     }
@@ -793,6 +861,9 @@ impl State {
             .any(|(c, &released)| c != core && released && !self.waiting[c])
     }
     fn scheduler_room(&self, core: usize) -> u64 {
+        if self.execution_policy == ExecutionPolicy::Interactive {
+            return u64::MAX;
+        }
         if !self.runnable_peer(core) {
             return u64::MAX;
         }
@@ -844,7 +915,17 @@ impl State {
             let delta = progress
                 .checked_sub(self.accounted[core])
                 .ok_or("processor entry count moved backward")?;
-            self.timeline.advance_instructions(delta)?;
+            let elapsed = if self.execution_policy == ExecutionPolicy::Interactive {
+                let boundary = self.timeline.ratio().budget(
+                    self.timeline.now(),
+                    self.timeline.phase(),
+                    self.clock_limit.unwrap_or(u64::MAX),
+                )?;
+                self.timeline.budget(delta.min(boundary))?
+            } else {
+                delta
+            };
+            self.timeline.advance_instructions(elapsed)?;
             self.instructions[core] = self.instructions[core]
                 .checked_add(delta)
                 .ok_or("instruction counter overflow")?;
@@ -954,6 +1035,7 @@ impl State {
         f: impl FnOnce(&mut Bus, &mut Services<'_>) -> Result<T, String>,
     ) -> Result<T, String> {
         let Self {
+            execution_policy,
             bus,
             memory,
             timeline,
@@ -977,6 +1059,7 @@ impl State {
             ..
         } = self;
         let mut host = Services {
+            execution_policy: *execution_policy,
             memory,
             timeline,
             interrupts,
@@ -1204,6 +1287,7 @@ impl State {
     }
 }
 struct Services<'a> {
+    execution_policy: ExecutionPolicy,
     memory: &'a memory::Memory,
     timeline: &'a mut Timeline,
     interrupts: &'a mut Option<InterruptMap>,
@@ -1215,7 +1299,10 @@ struct Services<'a> {
     records: &'a mut Vec<Record>,
     irq_observations: &'a mut Option<(usize, Vec<Value>)>,
     console: &'a mut Vec<String>,
-    frames: &'a mut std::collections::BTreeMap<usize, fujimod_emulator_devices::graphics::scanout::Frame>,
+    frames: &'a mut std::collections::BTreeMap<
+        usize,
+        fujimod_emulator_devices::graphics::scanout::Frame,
+    >,
     outputs: &'a mut std::collections::BTreeMap<usize, Value>,
     mprofile: &'a mut [Option<mprofile::Profile>],
     cpus: &'a [Rc<dyn Cpu>],
@@ -1235,6 +1322,9 @@ impl Services<'_> {
     }
 }
 impl Host for Services<'_> {
+    fn compute_workers(&self) -> usize {
+        device_workers(self.execution_policy)
+    }
     fn select_memory(&mut self, decoder: usize, choice: usize) -> Result<(), String> {
         self.decoders.select(
             decoder,
@@ -1345,7 +1435,10 @@ impl Host for Services<'_> {
         self.memory
             .write_dma(self.cpus, self.exclusive, address, bytes)
     }
-    fn scanout(&mut self, frame: fujimod_emulator_devices::graphics::scanout::Frame) -> Result<(), String> {
+    fn scanout(
+        &mut self,
+        frame: fujimod_emulator_devices::graphics::scanout::Frame,
+    ) -> Result<(), String> {
         self.frames.insert(frame.output, frame);
         Ok(())
     }

@@ -148,6 +148,21 @@ impl Drop for Board {
 }
 #[pymethods]
 impl Board {
+    fn set_execution_policy(&mut self, policy: &str) -> PyResult<()> {
+        let policy = fujimod_emulator_cpu::ExecutionPolicy::parse(policy).map_err(error)?;
+        if self.driver.is_some() && policy != fujimod_emulator_cpu::ExecutionPolicy::Exact {
+            return Err(PyValueError::new_err(
+                "Isolated routines require exact execution",
+            ));
+        }
+        self.board_mut()?
+            .set_execution_policy(policy)
+            .map_err(error)
+    }
+
+    fn execution_policy(&self) -> PyResult<&'static str> {
+        Ok(self.board()?.execution_policy().name())
+    }
     #[staticmethod]
     #[pyo3(signature=(library, definition, storage_image=None))]
     fn from_xp4(library: &str, definition: &str, storage_image: Option<Vec<u8>>) -> PyResult<Self> {

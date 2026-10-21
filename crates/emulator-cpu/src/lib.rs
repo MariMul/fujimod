@@ -6,11 +6,13 @@
 use std::any::Any;
 use std::ffi::c_void;
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::Arc;
 
 pub mod arm;
 pub mod arm64;
 pub mod exclusive;
+pub mod loops;
 pub mod memory;
 pub mod timeline;
 #[cfg(target_os = "emscripten")]
@@ -90,6 +92,30 @@ pub struct Run {
     /// performs no execution and leaves the processor's PC unchanged.
     pub instructions: Option<usize>,
 }
+/// Instruction accounting behavior selected by the execution owner.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ExecutionPolicy {
+    /// Stop at the requested instruction boundary and preserve exact progress.
+    #[default]
+    Exact,
+    /// Permit backend-defined block-boundary overshoot for interactive runs.
+    Interactive,
+}
+impl ExecutionPolicy {
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Exact => "exact",
+            Self::Interactive => "interactive",
+        }
+    }
+    pub fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "exact" => Ok(Self::Exact),
+            "interactive" => Ok(Self::Interactive),
+            _ => Err(format!("unknown CPU execution policy: {value}")),
+        }
+    }
+}
 /// Guest-clock anchor for architectural registers implemented by a backend.
 /// Its phase and ratio are supplied by the execution owner, never host time.
 #[derive(Clone, Copy, Debug)]
@@ -126,6 +152,35 @@ pub struct Mmio {
     pub read: unsafe fn(u64, u32, *mut c_void) -> u64,
     pub write: unsafe fn(u64, u32, u64, *mut c_void),
     pub data: *mut c_void,
+}
+/// A device-published read-only register snapshot that can be read directly
+/// by an execution backend. The device remains responsible for publishing
+/// only values valid at the current guest-time boundary.
+#[derive(Clone)]
+pub struct FastMmioRead {
+    pub register_offset: u64,
+    pub value: Arc<AtomicU32>,
+    enabled: Arc<AtomicBool>,
+}
+impl FastMmioRead {
+    pub fn atomic_u32(register_offset: u64, value: Arc<AtomicU32>) -> Self {
+        Self {
+            register_offset,
+            value,
+            enabled: Arc::new(AtomicBool::new(false)),
+        }
+    }
+    pub fn set_enabled(&self, enabled: bool) {
+        self.enabled.store(enabled, Ordering::Release);
+    }
+    /// Return a snapshot only for the exact declared 32-bit register access.
+    pub fn read(&self, offset: u64, size: u32) -> Option<u64> {
+        if self.enabled.load(Ordering::Acquire) && offset == self.register_offset && size == 4 {
+            Some(u64::from(self.value.load(Ordering::Acquire)))
+        } else {
+            None
+        }
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Fault {
@@ -281,6 +336,8 @@ pub struct TranslationHooks {
 /// Optional ARM32 block-budget accelerator. The instruction-span ring and its
 /// lifetime belong to the runtime. Fields match the published accelerator ABI;
 /// the runtime accesses this record only while execution is stopped/in a hook.
+/// `enabled` selects exact ring accounting (1), coarse interactive accounting
+/// without ring writes (2), or disabled accounting (0).
 #[repr(C)]
 pub struct BlockAccounting {
     pub budget: i64,
@@ -308,6 +365,24 @@ pub struct BackingObserver {
 
 pub trait Cpu {
     fn identity(&self) -> Identity;
+    /// Configure instruction-proven loops; statistics remain observational.
+    fn set_loop_mode(&self, mode: loops::LoopMode) -> Result<(), String> {
+        if mode == loops::LoopMode::Disabled { Ok(()) } else { Err("backend has no exact loop acceleration".into()) }
+    }
+    /// The execution owner guarantees no RAM/input changes before this run's
+    /// instruction cap: stop at device, DMA, interrupt and runnable-peer events.
+    /// The permission expires when the bounded run returns.
+    fn set_loop_window(&self, _stable: bool) -> Result<(), String> { Ok(()) }
+    /// Select how a bounded run handles its instruction target. Backends that
+    /// do not support coarse interactive execution keep exact behavior only.
+    fn set_execution_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
+        match policy {
+            ExecutionPolicy::Exact => Ok(()),
+            ExecutionPolicy::Interactive => {
+                Err("processor backend does not support interactive execution policy".into())
+            }
+        }
+    }
     /// External mutable backing covered by a whole-board keyframe. Private
     /// memory retained by the processor snapshot is excluded. Unknown owners
     /// refuse, so a board cannot silently omit independently mapped RAM.
@@ -415,6 +490,21 @@ pub trait Cpu {
     /// the CPU is destroyed. Callbacks must not unwind and must obey the
     /// owner's bounded reentrancy rules. Partial unmaps retain this lifetime.
     unsafe fn map_mmio(&self, address: u64, bytes: usize, callbacks: Mmio) -> Result<(), String>;
+    /// Map MMIO with one pure read-only register snapshot. All other reads
+    /// and every write continue through `callbacks`.
+    /// # Safety
+    /// The callback requirements of `map_mmio` apply. The snapshot must remain
+    /// valid and be published at every guest-time boundary where its value
+    /// changes.
+    unsafe fn map_mmio_fast(
+        &self,
+        address: u64,
+        bytes: usize,
+        callbacks: Mmio,
+        _fast_reads: Vec<FastMmioRead>,
+    ) -> Result<(), String> {
+        unsafe { self.map_mmio(address, bytes, callbacks) }
+    }
     fn unmap(&self, address: u64, bytes: usize) -> Result<(), String>;
     fn protect(&self, address: u64, bytes: usize, permissions: u32) -> Result<(), String>;
     fn invalidate_code(&self, range: Option<(u64, u64)>) -> Result<(), String>;

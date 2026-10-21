@@ -101,6 +101,8 @@ impl Extensions {
     }
 }
 /// Unicorn's embedder budgeted block accounting record (uc_priv.h embedder_acct).
+/// `enabled` selects exact ring accounting (1), coarse interactive accounting
+/// without ring writes (2), or disabled accounting (0).
 #[repr(C)]
 pub struct Accounting {
     pub budget: i64,

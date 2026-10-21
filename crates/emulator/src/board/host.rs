@@ -12,7 +12,8 @@ impl Board {
     pub fn observation(&self) -> Result<serde_json::Value, String> {
         let s = self.state.try_borrow().map_err(|_| "board is executing")?;
         Ok(serde_json::json!({
-            "execution_mode":s.bus.mode().name(), "counts_as_boot":s.bus.mode()==super::bus::Mode::Strict,
+            "execution_mode":s.bus.mode().name(), "execution_policy":s.execution_policy.name(),
+            "counts_as_boot":s.bus.mode()==super::bus::Mode::Strict,
             "timeline":s.timeline.save(), "instructions":s.instructions,
             "released":s.released, "waiting":s.waiting, "waiting_event":s.waiting_event,
             "events":s.events, "next_core":self.next_core.get(), "slice_left":self.slice_left.get(),

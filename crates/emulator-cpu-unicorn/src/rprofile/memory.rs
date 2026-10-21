@@ -7,6 +7,7 @@ use fujimod_emulator_cpu::exclusive;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
+use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Copy)]
 struct View {
@@ -79,44 +80,107 @@ struct Page {
     bits: Box<[u64; 64]>,
     invalid: bool,
 }
+#[derive(Clone, Copy)]
+struct Invalidation {
+    core: usize,
+    address: u64,
+    backing: usize,
+}
 #[derive(Default)]
 struct State {
-    cores: Vec<Weak<Execution>>,
+    cores: Vec<bool>,
     views: Vec<View>,
     bindings: Vec<View>,
     pages: HashMap<usize, Page>,
     watches: Vec<(usize, u64)>,
-    invalidations: Vec<(usize, u64)>,
+    invalidations: Vec<Invalidation>,
     dirty_pages: Vec<usize>,
+    active: Option<usize>,
 }
-#[derive(Clone, Default)]
+/// Thread-safe ownership for memory identities and cross-processor code
+/// coherence. It contains no CPU handles; each processor creates its own
+/// thread-affine [`Memory`] view inside its owner thread.
+#[derive(Clone)]
+pub struct SharedMemory {
+    state: Arc<Mutex<State>>,
+    monitors: exclusive::Shared,
+}
+impl Default for SharedMemory {
+    fn default() -> Self {
+        Self {
+            state: Arc::new(Mutex::new(State::default())),
+            monitors: Arc::new(Mutex::new(exclusive::Monitors::default())),
+        }
+    }
+}
+impl SharedMemory {
+    /// Create the thread-affine view used by one processor owner thread.
+    pub fn processor(&self) -> Memory {
+        Memory {
+            shared: self.clone(),
+            local: Rc::new(Local::default()),
+            monitors: self.monitors.clone(),
+        }
+    }
+    pub fn exclusive_domain(&self) -> exclusive::Shared {
+        self.monitors.clone()
+    }
+}
+#[derive(Default)]
+struct Local {
+    cores: RefCell<HashMap<usize, Weak<Execution>>>,
+    active: Cell<Option<usize>>,
+}
+#[derive(Clone)]
 pub struct Memory {
-    state: Rc<RefCell<State>>,
-    active: Rc<Cell<Option<usize>>>,
+    shared: SharedMemory,
+    local: Rc<Local>,
     pub(super) monitors: exclusive::Shared,
 }
+impl Default for Memory {
+    fn default() -> Self {
+        SharedMemory::default().processor()
+    }
+}
 impl Memory {
+    /// Return the send-safe cross-thread coordinator for this memory space.
+    pub fn shared(&self) -> SharedMemory {
+        self.shared.clone()
+    }
+    fn state(&self) -> std::sync::MutexGuard<'_, State> {
+        self.shared
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
     pub(super) fn require_stopped(&self) -> Result<(), String> {
-        if self.active.get().is_some() {
+        if self.state().active.is_some() {
             return Err("R-profile memory mapping requires all processors to be stopped".into());
         }
         Ok(())
     }
     pub(super) fn register(&self, core: Weak<Execution>) -> usize {
-        let mut s = self.state.borrow_mut();
+        let mut s = self.state();
         let id = s.cores.len();
-        s.cores.push(core);
+        s.cores.push(true);
+        self.local.cores.borrow_mut().insert(id, core);
         id
     }
     pub(super) fn start(&self, core: usize) -> Result<(), String> {
-        if self.active.get().is_some() {
+        let mut state = self.state();
+        if state.active.is_some() {
             return Err("nested R-profile execution is refused".into());
         }
-        self.active.set(Some(core));
+        state.active = Some(core);
+        self.local.active.set(Some(core));
         Ok(())
     }
     pub(super) fn end(&self) {
-        self.active.set(None);
+        let active = self.local.active.replace(None);
+        let mut state = self.state();
+        if state.active == active {
+            state.active = None;
+        }
     }
     pub(super) fn validate_mapping(
         &self,
@@ -127,7 +191,7 @@ impl Memory {
         let Some(physical) = physical else {
             return Ok(());
         };
-        for v in &self.state.borrow().bindings {
+        for v in &self.state().bindings {
             let Some(other) = v.physical else {
                 continue;
             };
@@ -156,7 +220,7 @@ impl Memory {
         bytes: usize,
         physical: Option<u64>,
     ) {
-        let mut s = self.state.borrow_mut();
+        let mut s = self.state();
         s.bindings.push(View {
             core,
             address,
@@ -169,13 +233,38 @@ impl Memory {
         s.views.reserve(capacity.saturating_sub(len));
     }
     pub(super) fn undeclare(&self, core: usize, address: u64, bytes: usize) {
-        Self::remove_range(&mut self.state.borrow_mut().bindings, core, address, bytes);
+        Self::remove_range(&mut self.state().bindings, core, address, bytes);
     }
     pub(super) fn forget(&self, core: usize) {
-        let mut s = self.state.borrow_mut();
+        let mut s = self.state();
         s.views.retain(|v| v.core != core);
         s.bindings.retain(|v| v.core != core);
-        s.cores[core] = Weak::new();
+        s.watches.retain(|(id, _)| *id != core);
+        let mut dirty = Vec::new();
+        s.invalidations.retain(|invalidation| {
+            if invalidation.core == core {
+                dirty.push(invalidation.backing);
+                false
+            } else {
+                true
+            }
+        });
+        s.cores[core] = false;
+        self.local.cores.borrow_mut().remove(&core);
+        dirty.sort_unstable();
+        dirty.dedup();
+        for backing in dirty {
+            if !s
+                .invalidations
+                .iter()
+                .any(|invalidation| invalidation.backing == backing)
+            {
+                if let Some(page) = s.pages.get_mut(&backing) {
+                    page.invalid = false;
+                }
+                s.dirty_pages.retain(|page| *page != backing);
+            }
+        }
     }
     pub(super) fn map(
         &self,
@@ -185,7 +274,7 @@ impl Memory {
         bytes: usize,
         physical: Option<u64>,
     ) {
-        let mut s = self.state.borrow_mut();
+        let mut s = self.state();
         let view = View {
             core,
             address,
@@ -212,7 +301,7 @@ impl Memory {
         s.watches.reserve(capacity.saturating_sub(len));
     }
     pub(super) fn unmap(&self, core: usize, address: u64, bytes: usize) {
-        Self::remove_range(&mut self.state.borrow_mut().views, core, address, bytes);
+        Self::remove_range(&mut self.state().views, core, address, bytes);
     }
     fn remove_range(views: &mut Vec<View>, core: usize, address: u64, bytes: usize) {
         let end = address + bytes as u64;
@@ -261,6 +350,24 @@ impl Memory {
             }
         }
     }
+    fn invalidation_aliases(views: &[View], backing: usize, out: &mut Vec<Invalidation>) {
+        for v in views {
+            let begin = backing.max(v.pointer);
+            let end = (backing + 4096).min(v.pointer + v.bytes);
+            if begin >= end {
+                continue;
+            }
+            let first = (v.address + (begin - v.pointer) as u64) >> 12;
+            let last = (v.address + (end - v.pointer - 1) as u64) >> 12;
+            for page in first..=last {
+                out.push(Invalidation {
+                    core: v.core,
+                    address: page << 12,
+                    backing,
+                });
+            }
+        }
+    }
     fn canonical_pointer(views: &[View], pointer: usize, bytes: usize) -> Option<u64> {
         views.iter().find_map(|v| {
             if pointer >= v.pointer && pointer.checked_add(bytes)? <= v.pointer + v.bytes {
@@ -271,7 +378,7 @@ impl Memory {
         })
     }
     pub(super) fn canonical(&self, core: usize, address: u64, bytes: usize) -> Result<u64, String> {
-        let s = self.state.borrow();
+        let s = self.state();
         let (pointer, _) = Chunks::new(&s.views, core, address, bytes, true)?
             .next()
             .ok_or("empty R-profile exclusive range")??;
@@ -285,7 +392,7 @@ impl Memory {
         bytes: usize,
     ) -> Result<(), String> {
         {
-            let mut s = self.state.borrow_mut();
+            let mut s = self.state();
             let (pointer, _) = Chunks::new(&s.views, core, address, bytes, true)?
                 .next()
                 .ok_or("empty R-profile exclusive range")??;
@@ -302,7 +409,7 @@ impl Memory {
         address: u64,
         bytes: usize,
     ) -> Result<bool, String> {
-        let mut s = self.state.borrow_mut();
+        let mut s = self.state();
         let State {
             views,
             pages,
@@ -314,32 +421,73 @@ impl Memory {
         let old = watches.len();
         for chunk in Chunks::new(views, core, address, bytes, true)? {
             let (pointer, bytes) = chunk?;
-            for byte in pointer..pointer + bytes {
-                let base = byte & !4095;
-                if let std::collections::hash_map::Entry::Vacant(entry) = pages.entry(base) {
-                    entry.insert(Page {
-                        bits: Box::new([0; 64]),
-                        invalid: false,
-                    });
+            let mut cursor = pointer;
+            let end = pointer
+                .checked_add(bytes)
+                .ok_or("CPU memory range overflow")?;
+            while cursor < end {
+                let base = cursor & !4095;
+                let page_end = end.min(base + 4096);
+                let begin_offset = cursor - base;
+                let end_offset = page_end - base;
+                let inserted = match pages.entry(base) {
+                    std::collections::hash_map::Entry::Occupied(mut entry) => {
+                        Self::mark_code_range(
+                            entry.get_mut().bits.as_mut(),
+                            begin_offset,
+                            end_offset,
+                        );
+                        false
+                    }
+                    std::collections::hash_map::Entry::Vacant(entry) => {
+                        let mut page = Page {
+                            bits: Box::new([0; 64]),
+                            invalid: false,
+                        };
+                        Self::mark_code_range(page.bits.as_mut(), begin_offset, end_offset);
+                        entry.insert(page);
+                        true
+                    }
+                };
+                if inserted {
                     Self::aliases(views, base, watches);
                     let capacity = pages.len() * views.len() * 2;
                     invalidations.reserve(capacity.saturating_sub(invalidations.len()));
                     dirty_pages.reserve(pages.len().saturating_sub(dirty_pages.len()));
                 }
-                let bits = &mut pages.get_mut(&base).unwrap().bits;
-                let offset = byte & 4095;
-                bits[offset / 64] |= 1 << (offset % 64);
+                cursor = page_end;
             }
         }
         Ok(watches.len() != old)
     }
+    fn mark_code_range(bits: &mut [u64; 64], begin: usize, end: usize) {
+        let mut offset = begin;
+        while offset < end {
+            let word = offset / 64;
+            let bit = offset % 64;
+            let count = (end - offset).min(64 - bit);
+            let mask = if count == 64 {
+                u64::MAX
+            } else {
+                ((1u64 << count) - 1) << bit
+            };
+            bits[word] |= mask;
+            offset += count;
+        }
+    }
     pub(super) fn apply_watches(&self) -> Result<(), String> {
         loop {
             let next = {
-                let mut s = self.state.borrow_mut();
-                s.watches
-                    .pop()
-                    .map(|(id, page)| (s.cores[id].upgrade(), page))
+                let local = self.local.cores.borrow();
+                let mut s = self.state();
+                let position = s
+                    .watches
+                    .iter()
+                    .rposition(|(id, _)| local.contains_key(id));
+                position.map(|position| {
+                    let (id, page) = s.watches.swap_remove(position);
+                    (local.get(&id).and_then(Weak::upgrade), page)
+                })
             };
             let Some((core, page)) = next else {
                 return Ok(());
@@ -373,7 +521,7 @@ impl Memory {
         if bytes == 0 {
             return Ok(false);
         }
-        let mut s = self.state.borrow_mut();
+        let mut s = self.state();
         let State {
             views,
             bindings,
@@ -386,7 +534,8 @@ impl Memory {
         for chunk in Chunks::new(views, core, address, bytes, require_backing)? {
             let (pointer, count) = chunk?;
             if let Some(physical) = Self::canonical_pointer(bindings, pointer, count) {
-                self.monitors
+                self.shared
+                    .monitors
                     .lock()
                     .map_err(|_| "exclusive monitors poisoned")?
                     .written(Some((physical, count)))?;
@@ -406,11 +555,12 @@ impl Memory {
             return Ok(false);
         }
         self.validate_mapping(pointer, bytes, Some(physical))?;
-        self.monitors
+        self.shared
+            .monitors
             .lock()
             .map_err(|_| "exclusive monitors poisoned")?
             .written(Some((physical, bytes)))?;
-        let mut s = self.state.borrow_mut();
+        let mut s = self.state();
         let State {
             views,
             pages,
@@ -430,7 +580,7 @@ impl Memory {
     fn record_backing(
         views: &[View],
         pages: &mut HashMap<usize, Page>,
-        invalidations: &mut Vec<(usize, u64)>,
+        invalidations: &mut Vec<Invalidation>,
         dirty_pages: &mut Vec<usize>,
         pointer: usize,
         bytes: usize,
@@ -454,46 +604,66 @@ impl Memory {
             page.bits.fill(0);
             changed = true;
             dirty_pages.push(base);
-            Self::aliases(views, base, invalidations);
+            Self::invalidation_aliases(views, base, invalidations);
         }
         changed
     }
     pub(super) fn flush_pending(&self) -> bool {
-        !self.state.borrow().invalidations.is_empty()
+        let local = self.local.cores.borrow();
+        self.state()
+            .invalidations
+            .iter()
+            .any(|invalidation| local.contains_key(&invalidation.core))
     }
     pub(super) fn prepare_external_write(&self) -> Result<(), String> {
-        let core = self
-            .active
-            .get()
-            .and_then(|id| self.state.borrow().cores[id].upgrade());
+        let active = self.state().active;
+        let core = active.and_then(|id| self.local.cores.borrow().get(&id).and_then(Weak::upgrade));
         if let Some(core) = core {
             core.prepare_flush()?;
+        } else if active.is_some() {
+            return Err("code write cannot interrupt a processor owned by another worker".into());
         } else {
             self.flush()?;
         }
         Ok(())
     }
     pub(super) fn flush(&self) -> Result<(), String> {
-        if self.active.get().is_some() {
+        if self.state().active.is_some() {
             return Err("code invalidation requires stopped processors".into());
         }
+        let local = self.local.cores.borrow();
         loop {
             let next = {
-                let mut s = self.state.borrow_mut();
-                s.invalidations
-                    .pop()
-                    .map(|(id, page)| (s.cores[id].upgrade(), page))
+                let mut s = self.state();
+                let position = s
+                    .invalidations
+                    .iter()
+                    .rposition(|invalidation| local.contains_key(&invalidation.core));
+                position.map(|position| {
+                    let invalidation = s.invalidations.swap_remove(position);
+                    (invalidation, local.get(&invalidation.core).and_then(Weak::upgrade))
+                })
             };
-            let Some((core, page)) = next else {
+            let Some((invalidation, core)) = next else {
                 break;
             };
             if let Some(core) = core {
-                core.cpu.invalidate_code(Some((page, page + 4096)))?;
+                core.cpu.invalidate_code(Some((
+                    invalidation.address,
+                    invalidation.address + 4096,
+                )))?;
             }
-        }
-        let mut s = self.state.borrow_mut();
-        while let Some(page) = s.dirty_pages.pop() {
-            s.pages.get_mut(&page).unwrap().invalid = false;
+            let mut s = self.state();
+            if !s
+                .invalidations
+                .iter()
+                .any(|queued| queued.backing == invalidation.backing)
+            {
+                if let Some(page) = s.pages.get_mut(&invalidation.backing) {
+                    page.invalid = false;
+                }
+                s.dirty_pages.retain(|page| *page != invalidation.backing);
+            }
         }
         Ok(())
     }

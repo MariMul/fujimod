@@ -1,7 +1,7 @@
 use super::*;
 use crate::board::{factory::*, memory::BusMapping};
-use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint};
 use fujimod_emulator_cpu::{Model, arm};
+use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint};
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Serialize, Deserialize)]
@@ -186,6 +186,32 @@ fn board() -> Board {
     board.watch_pcs(&[0x1008, 0x1100]).unwrap();
     board
 }
+#[test]
+fn both_execution_policies_restore_the_whole_board_and_pending_events() {
+    for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+        let mut board = board();
+        board.set_execution_policy(policy).unwrap();
+        board.run_until(13, 17).unwrap();
+        let before = board.fingerprint().unwrap();
+        let saved = board.checkpoint(None).unwrap();
+        assert_eq!(before, board.fingerprint().unwrap());
+        board.run_until(120, 17).unwrap();
+        board.set_execution_policy(ExecutionPolicy::Exact).unwrap();
+        board.write_physical(0x3000, &99u32.to_le_bytes()).unwrap();
+        board.restore_keyframe(&saved).unwrap();
+        assert_eq!(board.execution_policy(), policy);
+        assert_eq!(before, board.fingerprint().unwrap());
+        board.run_until(120, 17).unwrap();
+        assert!(
+            board
+                .inspect_device::<PendingDma, _>(0, |d| Ok(
+                    d.due.is_none() && d.completions.len() == 2
+                ))
+                .unwrap()
+        );
+    }
+}
+
 #[test]
 fn replay_restores_pending_dma_deadlines_aliases_private_ram_and_partial_scheduler_slices() {
     let mut board = board();
