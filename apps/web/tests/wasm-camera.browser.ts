@@ -1,5 +1,6 @@
 import { chromium, webkit } from 'playwright';
 import assert from 'node:assert/strict';
+import type { EngineFingerprint } from 'fujimod/emulator';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 const base = process.env.FUJIMOD_WEB_URL;
 const receipt = process.env.FUJIMOD_WASM_EXPECT_EXECUTION;
@@ -12,6 +13,7 @@ const expected = JSON.parse(await readFile(receipt, 'utf8')) as {
   error: string | null;
   status: { ticks: string; cores: string[]; failed: boolean };
   frame: { width: number; height: number; sha256: string };
+  fingerprint: EngineFingerprint;
 };
 assert(expected.created && !expected.error && !expected.status.failed && expected.frame);
 const url = new URL('/__wasm-camera', base).href;
@@ -48,6 +50,7 @@ for (const type of [chromium, webkit]) {
     assert.equal(String(result.execution.profile.ticks), expected.status.ticks);
     assert.deepEqual(result.execution.profile.instructions.map(String), expected.status.cores);
     assert.equal(result.execution.profile.failed, false);
+    assert.deepEqual(result.execution.fingerprint, expected.fingerprint);
     assert.deepEqual(result.execution.frame, {
       width: expected.frame.width,
       height: expected.frame.height,

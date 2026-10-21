@@ -60,6 +60,7 @@ try {
   result.rec = await pixels();
   result.execution = {
     profile: await engine.profile(0),
+    fingerprint: await engine.fingerprint(),
     frame: { width: canvas.width, height: canvas.height, sha256: result.rec },
   };
   check(
