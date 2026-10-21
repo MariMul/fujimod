@@ -91,7 +91,7 @@ production build, prerender checks, developer-tools browser checks and Worker
 build validation. Pyodide also needs its pure Python wheel:
 
 ```sh
-uv run --locked python bindings/python/scripts/build_web_wheel.py --out target/web-wheels
+node bindings/python/scripts/build-web-wheel.ts --out target/web-wheels
 npm --prefix apps/web exec -- playwright install --with-deps chromium webkit
 mise run javascript-browser-test
 npm --prefix bindings/javascript run test:pyodide:browser

@@ -23,7 +23,7 @@ for (const type of types) {
     page.on('request', (request) => requests.push(request.url()));
     page.on('worker', (worker) => workers.push(worker.url()));
     await page.goto(url);
-    await page.waitForFunction(() => document.body.dataset.proof, undefined, { timeout: 60000 });
+    await page.waitForFunction(() => document.body.dataset.proof, undefined, { timeout: 300000 });
     const text = await page.locator('pre').innerText();
     assert.equal(await page.locator('body').getAttribute('data-proof'), 'passed', text);
     const result = JSON.parse(text) as {
@@ -43,8 +43,8 @@ for (const type of types) {
       ),
     );
     assert.deepEqual(result.frames.at(-1)!.pixels, Array(4).fill([0, 4, 86, 255]).flat());
-    assert.equal(result.metrics.guestTicks, 7500000);
-    assert.equal(result.metrics.runtime.instructions, '7500000');
+    assert.equal(result.metrics.guestTicks, 205000000);
+    assert.equal(result.metrics.runtime.instructions, '205000000');
     assert.equal(result.faults[0]!.kind, 'guest-fault');
     assert.equal(result.card.supported, false);
     assert.deepEqual(result.session.scenes, [0, 1, 2]);

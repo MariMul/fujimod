@@ -9,6 +9,11 @@
     "types": ["node", "emscripten"],
     "declaration": false
   },
-  "include": ["scripts/**/*.ts", "tests/**/*.ts", "../python/tests/**/*.ts"],
+  "include": [
+    "scripts/**/*.ts",
+    "tests/**/*.ts",
+    "../python/tests/**/*.ts",
+    "../python/scripts/**/*.ts"
+  ],
   "exclude": ["tests/types.ts", "tests/usb.test.ts"]
 }

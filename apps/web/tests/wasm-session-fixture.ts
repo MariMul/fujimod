@@ -68,7 +68,7 @@ export async function wasmSessionFixture() {
           node(
             'irq',
             {
-              kind: 'interrupt-controller',
+              kind: 'exr2-interrupt-controller',
               options: { arbitration: 'unique' },
               core: 0,
               base: 0xfffb3000,
