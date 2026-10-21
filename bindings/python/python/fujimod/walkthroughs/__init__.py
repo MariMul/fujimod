@@ -17,6 +17,8 @@ from pathlib import Path
 from string.templatelib import Template
 from typing import NotRequired, Protocol, Self, TypedDict, cast
 
+from ..recording import Frame
+
 from .text import (
     MenuEntry,
     MenuReference,
@@ -32,7 +34,7 @@ from .text import (
 
 
 class RecordingCamera(Protocol):
-    def capture(self) -> bytes: ...
+    def capture(self) -> Frame: ...
     def start_recording(self, guide: Guide[Self]) -> None: ...
     def stop_recording(self) -> None: ...
     def begin_segment(self) -> None: ...
@@ -122,6 +124,8 @@ class Report(TypedDict):
     identity: dict[str, object]
     title: str
     passed: bool
+    media: str
+    recording_metrics: NotRequired[dict[str, object]]
     role: str | None
     feature: str | None
     video_clean: NotRequired[str]
@@ -347,7 +351,7 @@ def _digest(path: Path) -> str:
 class Guide[C: RecordingCamera]:
     """One run. Adapter callbacks record frames, input edges and interactions.
 
-    capture() must return settled, clean PNG bytes. start_recording(guide)
+    capture() must return a settled, clean native Frame. start_recording(guide)
     observes all adapter input paths; it must not infer coverage from prose.
     The factory is called once per run and must provide a fresh camera.
     """
@@ -363,17 +367,18 @@ class Guide[C: RecordingCamera]:
         feature: str | None = None,
         hero: Sequence[MenuReference | OptionReference] = (),
         fps: int = 15,
+        video: bool = False,
         navigation_hold: float = 0.12,
         action_hold: float = 0.45,
     ) -> None:
         if not __debug__:
             raise RuntimeError("Walkthroughs require Python assertions")
-        from .media import Video, seconds_value
+        from ..recording import Recorder, seconds_value
 
         self.navigation_hold = seconds_value(navigation_hold)
         self.action_hold = seconds_value(action_hold)
         self.camera, self.output = camera, Path(output)
-        self.video = Video(self.output, fps=fps)
+        self.recording = Recorder(self.output, fps=fps, video=video)
         self.output.mkdir(parents=True, exist_ok=False)
         self.report: Report = dict(
             schema=SCHEMA,
@@ -382,6 +387,7 @@ class Guide[C: RecordingCamera]:
             role=role,
             feature=feature,
             passed=False,
+            media="video" if video else "screenshots",
             steps=[],
             inputs=[],
             interactions=[],
@@ -400,23 +406,22 @@ class Guide[C: RecordingCamera]:
         temporary.write_text(json.dumps(self.report, indent=2) + "\n")
         os.replace(temporary, self.output / "guide.json")
 
-    def frame(self, png: bytes, seconds: float) -> None:
+    def frame(self, frame: Frame, seconds: float) -> None:
         if self._preparing:
             return
-        if png and "poster" not in self.report:
-            (self.output / "poster.png").write_bytes(png)
+        self.recording.frame(frame, seconds)
+        if self.recording.has_poster:
             self.report["poster"] = "poster.png"
-        self.video.frame(png, seconds)
 
     def input(self, name: str, pressed: bool, seconds: float) -> int | None:
         if self._preparing:
             return None
-        self.video.input(name, pressed, seconds)
+        self.recording.input(name, pressed, seconds)
         event: Input = dict(
             name=name,
             pressed=pressed,
             seconds=seconds,
-            video_seconds=self.video.seconds,
+            video_seconds=self.recording.seconds,
             fixture=not self._recording,
         )
         self.report["inputs"].append(event)
@@ -489,31 +494,29 @@ class Guide[C: RecordingCamera]:
         ):
             raise ValueError("hold must be a finite nonnegative number of seconds")
         self._inside_step = True
-        start = self.video.seconds
+        start = self.recording.seconds
         print(
             f"Guide step {len(self.report['steps']) + 1}: {plain(title_tokens)}",
             flush=True,
         )
         try:
             yield
-            png = self.camera.capture()
+            frame = self.camera.capture()
             if self._preparing:
                 return
             number = len(self.report["steps"]) + 1
             name = f"screenshots/{number:03d}.png"
-            path = self.output / name
-            path.parent.mkdir(exist_ok=True)
-            path.write_bytes(png)
-            self.video.still(png, hold)
+            digest = self.recording.screenshot(frame, name)
+            self.recording.still(frame, hold)
             self.report["steps"].append(
                 dict(
                     number=number,
                     title=title_tokens,
                     text=text_tokens,
                     screenshot=name,
-                    screenshot_sha256=hashlib.sha256(png).hexdigest(),
+                    screenshot_sha256=digest,
                     video_start=start,
-                    video_end=self.video.seconds,
+                    video_end=self.recording.seconds,
                     hold=hold,
                 )
             )
@@ -531,12 +534,12 @@ class Guide[C: RecordingCamera]:
 
     def pause(self, seconds: float = 0.35) -> None:
         """Show a settled action result without adding an illustrated step."""
-        from .media import seconds_value
+        from ..recording import seconds_value
 
         seconds_value(seconds)
-        png = self.camera.capture()
+        frame = self.camera.capture()
         if not self._preparing:
-            self.video.still(png, seconds)
+            self.recording.still(frame, seconds)
 
     @contextmanager
     def action(self, *, navigation: bool = False) -> Generator[None]:
@@ -548,7 +551,7 @@ class Guide[C: RecordingCamera]:
         """
         yield
         if not self._preparing:
-            self.video.still(
+            self.recording.still(
                 self.camera.capture(),
                 self.navigation_hold if navigation else self.action_hold,
             )
@@ -617,21 +620,25 @@ class Guide[C: RecordingCamera]:
                     error = caught
                     self.report["error"] = f"{type(caught).__name__}: {caught}"
             try:
-                self.video.finish()
-                self.report["video"] = "video.mp4"
-                self.report["video_clean"] = "video-clean.mp4"  # no helper overlays
+                self.recording.finish()
+                if self.recording.video:
+                    self.report["video"] = "video.mp4"
+                    self.report["video_clean"] = "video-clean.mp4"
             except BaseException as caught:
                 if error is None:
                     error = caught
                     self.report["error"] = f"{type(caught).__name__}: {caught}"
+            if self.recording.has_poster:
+                self.report["poster"] = "poster.png"
+            self.report["recording_metrics"] = json.loads(self.recording.metrics())
             self.report["passed"] = error is None
             self.report["presentation"] = dict(
-                fps=self.video.fps,
-                idle_limit=self.video.idle_limit,
-                skipped_guest_seconds=self.video.skipped_seconds,
+                fps=self.recording.fps,
+                idle_limit=self.recording.idle_limit,
+                skipped_guest_seconds=self.recording.skipped_seconds,
                 navigation_hold=self.navigation_hold,
                 action_hold=self.action_hold,
-                duration_seconds=self.video.seconds,
+                duration_seconds=self.recording.seconds,
             )
             artifacts = {
                 str(p.relative_to(self.output)): _digest(p)

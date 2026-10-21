@@ -21,6 +21,7 @@ host-profile = ["dep:libc"]
 default = []
 
 [dependencies]
+fujimod-recording = { path = "../recording" }
 serde = { version = "1", features = ["derive"] }
 fujimod-emulator-devices = { path = "../emulator-devices" }
 fujimod-emulator-cpu = { path = "../emulator-cpu" }

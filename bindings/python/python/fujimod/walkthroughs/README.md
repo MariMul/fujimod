@@ -1,7 +1,9 @@
 # Python walkthrough recording
 
 Walkthrough authoring requires Python 3.14. Install FujiMod with its
-`walkthroughs` extra and put `ffmpeg` on PATH. Other FujiMod APIs retain their
+`walkthroughs` extra. Screenshot acceptance does not require ffmpeg. Pass
+`video=True` to `Guide` when recording docs media; that mode requires ffmpeg on
+PATH. Other FujiMod APIs retain their
 existing Python requirement.
 The library has no camera, firmware or repository dependency.
 
@@ -54,10 +56,10 @@ A camera adapter implements:
 
 - `start_recording(guide)`: attach observation to existing execution/input paths.
 - `begin_segment()`: reset the local guest clock and supply the first frame after replay.
-- `capture()`: settle and return clean PNG bytes for the current screen.
+- `capture()`: settle and return a clean `fujimod.recording.Frame`.
 - `stop_recording()`: remove recording hooks, including on failure.
 
-It calls `guide.frame(png, seconds)` at monotonically increasing guest times,
+It calls `guide.frame(frame, seconds)` at monotonically increasing guest times,
 `guide.input(name, pressed, seconds)` for real input edges (returns an index),
 and `guide.interaction(surface, item, input_index=..., **evidence)` for observed
 interactions. Frame sampling never drives device state. Only non-fixture press
@@ -107,8 +109,12 @@ screenshot may still show a highlighted destination before activation.
 `presentation.duration_seconds` includes the complete video, including those
 trailing inputs, and can extend beyond the last step's `video_end`.
 The host records `start_from` as the parent identity so consumers can link guides.
-Failed runs retain diagnostics and never qualify coverage. Video is sampled at
-15 fps; websites consume these artifacts without executing walkthrough source.
+Failed runs retain diagnostics and never qualify coverage. The Rust recorder
+owns screenshot encoding, frame reuse, badges and optional 15 fps video.
+`media` identifies `screenshots` or `video`; only video reports contain
+`video.mp4` and `video-clean.mp4`. Websites request video recordings explicitly.
+Image assertions can call `camera.capture().png()`; video sampling and holds
+pass native frames directly without PNG encoding or decoding.
 
 Step titles and descriptions accept ordinary strings or standard Python
 template strings (`t"Choose {item}"`). Templates retain the interpolated menu

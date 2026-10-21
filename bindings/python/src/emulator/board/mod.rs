@@ -8,14 +8,14 @@ mod device;
 use fujimod_emulator::session::preparation;
 mod run;
 mod storage;
-use fujimod_emulator_devices::exr2::board::{Plan, Resources};
+use device::{Adapters, Failures, Object};
 use fujimod_emulator::board::{
     Board as ExecutionBoard,
     bus::{Bus, Mode},
     factory,
 };
-use device::{Adapters, Failures, Object};
 use fujimod_emulator_cpu::{Register, arm};
+use fujimod_emulator_devices::exr2::board::{Plan, Resources};
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
@@ -485,6 +485,7 @@ impl Board {
                 contact_driver: None,
                 nodes: assembly.node_ids,
                 contacts: assembly.contacts,
+                recording_frames: Default::default(),
                 resources: assembly.resources,
             })),
             objects: adapters.objects,
@@ -676,7 +677,9 @@ impl Board {
         self.session_mut()?
             .touch(
                 node,
-                &json::<Vec<fujimod_emulator_devices::parts::touch_controller::ContactInput>>(script)?,
+                &json::<Vec<fujimod_emulator_devices::parts::touch_controller::ContactInput>>(
+                    script,
+                )?,
             )
             .map_err(error)
     }
@@ -722,6 +725,32 @@ impl Board {
                     serde_json::to_string(&f.state.json()).map_err(|e| error(e.to_string()))?,
                     f.width,
                     f.height,
+                ))
+            })
+            .transpose()
+    }
+    fn recording_frame<'py>(
+        &self,
+        py: Python<'py>,
+        node: &str,
+        instance: usize,
+        diagnostic_hashes: bool,
+    ) -> PyResult<Option<(Bound<'py, pyo3::types::PyBytes>, String, usize, usize)>> {
+        self.session()?
+            .recording_frame(node, instance, diagnostic_hashes)
+            .map_err(error)?
+            .map(|frame| {
+                Ok((
+                    pyo3::types::PyBytes::new(
+                        py,
+                        frame
+                            .rgb
+                            .as_deref()
+                            .ok_or_else(|| error("Capture omitted RGB".into()))?,
+                    ),
+                    serde_json::to_string(&frame.state.json()).map_err(|e| error(e.to_string()))?,
+                    frame.width,
+                    frame.height,
                 ))
             })
             .transpose()
@@ -933,6 +962,25 @@ impl Board {
             self.board()?.read_physical(address, out).map_err(error)
         })
     }
+    /// Batch passive physical reads at one stopped execution boundary.
+    fn physical_read_many<'py>(
+        &self,
+        py: Python<'py>,
+        ranges: Vec<(u64, usize)>,
+    ) -> PyResult<Vec<Bound<'py, PyBytes>>> {
+        if ranges.len() > 4096 {
+            return Err(PyValueError::new_err("Too many memory observation ranges"));
+        }
+        let total = ranges
+            .iter()
+            .try_fold(0usize, |sum, (_, size)| sum.checked_add(*size))
+            .ok_or_else(|| PyValueError::new_err("Memory observation extent overflow"))?;
+        self.check_read(total)?;
+        ranges
+            .into_iter()
+            .map(|(address, size)| self.physical_read(py, address, size))
+            .collect()
+    }
     fn physical_write(&self, address: u64, bytes: &[u8]) -> PyResult<()> {
         if let Some(Backend::Xp4(session)) = &self.backend {
             let address = usize::try_from(address)
@@ -953,6 +1001,13 @@ impl Board {
         self.session_mut()?
             .hdmi_connection(sink, transmitter, connected)
             .map_err(error)
+    }
+    fn gpio_input_levels(&self, name: &str) -> PyResult<Vec<u32>> {
+        Ok(self
+            .session()?
+            .gpio_input_levels(name)
+            .map_err(error)?
+            .to_vec())
     }
     fn gpio_level(&self, name: &str, port: u8, pin: u8) -> PyResult<bool> {
         self.session()?.gpio_level(name, port, pin).map_err(error)

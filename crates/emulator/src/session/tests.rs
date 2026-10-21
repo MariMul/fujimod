@@ -92,6 +92,7 @@ fn card_session() -> Session {
         resources,
         nodes: BTreeMap::from([("sd".into(), id), ("adc".into(), adc)]),
         contacts: BTreeMap::from([("sd".into(), contacts)]),
+        recording_frames: Default::default(),
     }
 }
 fn format() -> fat::Options {
@@ -209,8 +210,11 @@ fn scene_rgb_prepares_only_the_next_sensor_exposure() {
         )
         .unwrap();
     let straight = session.fingerprint().unwrap();
-    let log = fujimod_emulator_devices::checkpoint::Checkpoint::encode("scene-input-log", &history.entries())
-        .unwrap();
+    let log = fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+        "scene-input-log",
+        &history.entries(),
+    )
+    .unwrap();
     let replay: Vec<super::history::Entry> = log.decode("scene-input-log").unwrap();
     session.restore(&saved).unwrap();
     super::history::History::replay(&mut session, &replay).unwrap();
@@ -368,9 +372,11 @@ fn session_keyframe_and_input_replay_preserve_card_adc_and_fractional_cpu_bounda
         )
         .unwrap();
     let straight = session.fingerprint().unwrap();
-    let encoded =
-        fujimod_emulator_devices::checkpoint::Checkpoint::encode("input-log", &&history.entries()[cursor..])
-            .unwrap();
+    let encoded = fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+        "input-log",
+        &&history.entries()[cursor..],
+    )
+    .unwrap();
     let replay: Vec<super::history::Entry> = encoded.decode("input-log").unwrap();
     session.restore(&before).unwrap();
     assert_eq!(session.board.instruction_counts(), [13]);

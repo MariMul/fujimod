@@ -11,7 +11,7 @@ from unittest import TestCase
 from unittest.mock import Mock
 
 from fujimod.walkthroughs import Guide, MenuCamera, MenuGuide, open_menu
-from fujimod.walkthroughs.media import Video
+from fujimod.recording import Frame, Recorder
 from fujimod.walkthroughs.text import MenuEntry, encode, plain
 
 
@@ -20,15 +20,17 @@ class ManeuverPacingTests(TestCase):
         with TemporaryDirectory() as directory:
             guide = Guide.__new__(Guide)
             guide.output = Path(directory)
-            guide.camera = SimpleNamespace(capture=Mock(return_value=b"settled image"))
-            video = Mock(spec=Video)
+            image = Frame.rgb(2, 2, bytes(12))
+            guide.camera = SimpleNamespace(capture=Mock(return_value=image))
+            video = Mock(spec=Recorder)
             video.seconds = 0
-            guide.video = video
+            guide.recording = video
             guide.report = dict(
                 schema=3,
                 identity={},
                 title="Test",
                 passed=False,
+                media="screenshots",
                 steps=[],
                 inputs=[],
                 interactions=[],
@@ -40,7 +42,7 @@ class ManeuverPacingTests(TestCase):
             guide.save = Mock()
             with guide.step("Choose the tile"):
                 pass
-            video.still.assert_called_once_with(b"settled image", 1.5)
+            video.still.assert_called_once_with(image, 1.5)
             self.assertEqual(guide.report["steps"][0]["hold"], 1.5)
 
     def test_menu_starter_pauses_after_activation_before_following_navigation(

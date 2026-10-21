@@ -27,6 +27,15 @@ pub struct Session {
     pub resources: Resources,
     pub nodes: BTreeMap<String, usize>,
     pub contacts: BTreeMap<String, Contacts>,
+    /// Host rendering memo; excluded from checkpoints, fingerprints and modeled state.
+    pub recording_frames: std::cell::RefCell<
+        BTreeMap<
+            (String, usize, bool),
+            fujimod_recording::cache::CaptureCache<
+                Option<std::sync::Arc<fujimod_emulator_devices::exr2::display::scanout::Frame>>,
+            >,
+        >,
+    >,
 }
 impl Session {
     pub fn fingerprint(&self) -> Result<serde_json::Value, String> {
@@ -57,10 +66,13 @@ impl Session {
         let sink_id = self.node(sink)?;
         let transmitter_id = self.node(transmitter)?;
         self.board
-            .device_input::<fujimod_emulator_devices::parts::hdmi_sink::Input, _>(sink_id, |input, _| {
-                input.set_connected(connected);
-                Ok(())
-            })?;
+            .device_input::<fujimod_emulator_devices::parts::hdmi_sink::Input, _>(
+                sink_id,
+                |input, _| {
+                    input.set_connected(connected);
+                    Ok(())
+                },
+            )?;
         self.board
             .device_input::<fujimod_emulator_devices::exr2::hdmi::Transmitter, _>(
                 transmitter_id,
@@ -119,10 +131,14 @@ impl Session {
             .ok_or_else(|| format!("no such session node {name}"))
     }
     pub fn gpio(&mut self, name: &str, port: u8, pin: u8, high: bool) -> Result<(), String> {
-        self.resources
-            .pads(name)?
-            .request(fujimod_emulator_devices::parts::pins::Pin { port, pin }, high)?;
+        self.resources.pads(name)?.request(
+            fujimod_emulator_devices::parts::pins::Pin { port, pin },
+            high,
+        )?;
         self.board.inputs_changed(self.node(name)?)
+    }
+    pub fn gpio_input_levels(&self, name: &str) -> Result<[u32; 16], String> {
+        Ok(self.resources.pads(name)?.input_levels())
     }
     pub fn gpio_level(&self, name: &str, port: u8, pin: u8) -> Result<bool, String> {
         self.resources

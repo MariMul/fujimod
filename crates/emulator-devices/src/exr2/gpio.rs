@@ -121,6 +121,11 @@ impl Pads {
         }
         Ok(())
     }
+    /// Observe all input-status words, including declared high strap bits.
+    pub fn input_levels(&self) -> [u32; 16] {
+        let state = self.state.lock().unwrap();
+        std::array::from_fn(|port| state.registers[port][5])
+    }
     pub fn input_level(&self, pin: Pin) -> Result<bool, String> {
         Self::input_pin(pin)?;
         Ok(self.state.lock().unwrap().registers[pin.port as usize][5] & (1 << pin.pin) != 0)

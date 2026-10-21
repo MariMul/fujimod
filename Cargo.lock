@@ -3198,6 +3198,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "font8x8"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "875488b8711a968268c7cf5d139578713097ca4635a76044e8fe8eedf831d07e"
+
+[[package]]
 name = "fontique"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3324,6 +3330,7 @@ dependencies = [
  "fujimod-emulator-cpu-hvf",
  "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
+ "fujimod-recording",
  "libc",
  "serde",
  "serde_json",
@@ -3416,6 +3423,7 @@ dependencies = [
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
  "fujimod-firmware",
+ "fujimod-recording",
  "fujimod-usb",
  "fujimod-workflows",
  "futures-channel",
@@ -3423,6 +3431,17 @@ dependencies = [
  "nusb",
  "pkg-config",
  "pyo3",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "fujimod-recording"
+version = "0.1.0"
+dependencies = [
+ "font8x8",
+ "png",
  "serde",
  "serde_json",
  "sha2",

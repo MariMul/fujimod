@@ -2,6 +2,43 @@
 use super::Session;
 use fujimod_emulator_devices::exr2::display::{Scanout, device::Observation, scanout::Frame};
 impl Session {
+    /// Reuse a presentation only after rechecking registers and every source byte.
+    /// No event, guest instruction or architectural state participates in this memo.
+    pub fn recording_frame(
+        &self,
+        name: &str,
+        instance: usize,
+        diagnostics: bool,
+    ) -> Result<Option<std::sync::Arc<Frame>>, String> {
+        self.board
+            .inspect_device::<Scanout, _>(self.node(name)?, |scanout| {
+                let key = serde_json::to_vec(&scanout.metadata()).map_err(|e| e.to_string())?;
+                let mut caches = self.recording_frames.borrow_mut();
+                let cache = caches
+                    .entry((name.to_owned(), instance, diagnostics))
+                    .or_default();
+                cache.capture(
+                    key,
+                    |address, count| {
+                        let mut bytes = vec![0; count];
+                        self.board.read_physical(address, &mut bytes)?;
+                        Ok(bytes)
+                    },
+                    |read| {
+                        scanout
+                            .frame(
+                                instance,
+                                true,
+                                &mut Observation {
+                                    read,
+                                    diagnostic_hashes: diagnostics,
+                                },
+                            )
+                            .map(|frame| frame.map(std::sync::Arc::new))
+                    },
+                )
+            })
+    }
     pub fn scanout_state(&self, name: &str) -> Result<serde_json::Value, String> {
         self.board
             .inspect_device::<Scanout, _>(self.node(name)?, |scanout| Ok(scanout.metadata()))

@@ -8,10 +8,9 @@ import unittest
 from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
-from unittest.mock import patch
 
+from fujimod.recording import Frame
 from fujimod.walkthroughs import Guide, discover
-from fujimod.walkthroughs.media import Video
 from fujimod.walkthroughs.text import MenuEntry, MenuReference, plain
 
 
@@ -31,24 +30,24 @@ class Camera:
     open_menu_item: Callable[[MenuReference], None]
 
     def __init__(self) -> None:
-        self.png = png()
+        self.frame = Frame.from_png(png())
 
     def start_recording(self, guide: Guide[Camera]) -> None:
         self.guide = guide
-        guide.frame(self.png, 0)
+        guide.frame(self.frame, 0)
 
     def stop_recording(self) -> None:
         pass
 
     def begin_segment(self) -> None:
-        self.guide.frame(self.png, 0)
+        self.guide.frame(self.frame, 0)
 
-    def capture(self) -> bytes:
-        return self.png
+    def capture(self) -> Frame:
+        return self.frame
 
     def press(self) -> None:
         index = self.guide.input("right", True, 0)
-        self.guide.frame(self.png, 0.2)
+        self.guide.frame(self.frame, 0.2)
         self.guide.interaction("menu", "mod/item", input_index=index)
         self.guide.input("right", False, 0.2)
 
@@ -59,10 +58,10 @@ class WalkthroughTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
 
-    def guide(self) -> tuple[Camera, Guide[Camera]]:
+    def guide(self, *, video: bool = False) -> tuple[Camera, Guide[Camera]]:
         camera = Camera()
         return camera, Guide(
-            camera, self.root / "run", identity={"build": "test"}, title="Test"
+            camera, self.root / "run", identity={"build": "test"}, title="Test", video=video
         )
 
     def test_multiple_functions_and_filename_identity(self) -> None:
@@ -79,7 +78,7 @@ class WalkthroughTests(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg required")
     def test_clean_screenshot_and_video_overlay(self) -> None:
-        camera, guide = self.guide()
+        camera, guide = self.guide(video=True)
 
         def run(camera: Camera, guide: Guide[Camera]) -> None:
             with guide.step("Example", "Description", hold=0.2):
@@ -88,7 +87,7 @@ class WalkthroughTests(unittest.TestCase):
         report = guide.run(run)
         self.assertTrue(report["passed"])
         self.assertEqual(
-            (guide.output / "screenshots/001.png").read_bytes(), camera.png
+            (guide.output / "screenshots/001.png").read_bytes(), camera.frame.png()
         )
         self.assertEqual(len(report["interactions"]), 1)
         frame = subprocess.check_output([
@@ -124,17 +123,17 @@ class WalkthroughTests(unittest.TestCase):
     def test_output_switch_keeps_native_screenshot_and_fixed_video_canvas(self) -> None:
         from PIL import Image
 
-        camera, guide = self.guide()
+        camera, guide = self.guide(video=True)
 
         def run(camera: Camera, guide: Guide[Camera]) -> None:
             with guide.step("First output", hold=0.2):
                 pass
             with guide.step("Second output", hold=0.2):
-                camera.png = png("red", (640, 360))
+                camera.frame = Frame.from_png(png("red", (640, 360)))
 
         report = guide.run(run)
         screenshot = (guide.output / "screenshots/002.png").read_bytes()
-        self.assertEqual(screenshot, camera.png)
+        self.assertEqual(screenshot, camera.frame.png())
         with Image.open(BytesIO(screenshot)) as image:
             self.assertEqual(image.size, (640, 360))
         for name in ("video.mp4", "video-clean.mp4"):
@@ -186,12 +185,7 @@ class WalkthroughTests(unittest.TestCase):
             with guide.step("Example", hold=0):
                 pass
 
-        with (
-            patch.object(Video, "finish"),
-            patch.object(Video, "still"),
-            patch.object(Video, "_write"),
-        ):
-            report = guide.run(run)
+        report = guide.run(run)
         self.assertEqual(report["interactions"], [])
         self.assertTrue(report["fixtures"][0]["passed"])
 
@@ -203,7 +197,7 @@ class WalkthroughTests(unittest.TestCase):
             guide.step("Inner"),
         ):
             pass
-        guide.video.finish()
+        guide.recording.finish()
 
     def test_invalid_hold(self) -> None:
         camera, guide = self.guide()
@@ -213,17 +207,16 @@ class WalkthroughTests(unittest.TestCase):
 
     def test_timestamp_cadence_preserves_short_samples(self) -> None:
         camera, guide = self.guide()
-        with patch.object(Video, "_write") as write:
-            guide.input("right", True, 0)
-            for n in range(101):
-                guide.frame(camera.png, n / 100)
-            self.assertEqual(write.call_count, 15)
+        guide.input("right", True, 0)
+        for n in range(101):
+            guide.frame(camera.frame, n / 100)
+        self.assertEqual(guide.recording.frames, 15)
 
     def test_nonmonotonic_video_time_refused(self) -> None:
         camera, guide = self.guide()
-        guide.frame(camera.png, 1)
+        guide.frame(camera.frame, 1)
         with self.assertRaises(ValueError):
-            guide.frame(camera.png, 0.5)
+            guide.frame(camera.frame, 0.5)
 
     def test_relative_helpers_and_duplicate_function_alias(self) -> None:
         (self.root / "helpers.py").write_text('TITLE="Helper title"\n')
@@ -250,28 +243,11 @@ class WalkthroughTests(unittest.TestCase):
         os.utime(source, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
         self.assertEqual(discover(source)[0].title, "Two")
 
-    def test_input_edges_do_not_retroactively_overlay_prior_frames(self) -> None:
-        camera, guide = self.guide()
-        video = guide.video
-        observed = []
-
-        def write(raw: bytes) -> None:
-            observed.append({b["name"] for b in video.badges if b["released"] is None})
-            video.frames += 1
-
-        with patch.object(video, "_write", side_effect=write):
-            guide.frame(camera.png, 0)
-            guide.input("right", True, 0.5)
-            guide.frame(camera.png, 1)
-        self.assertEqual(len(observed), 13)
-        self.assertTrue(all(not labels for labels in observed[:6]))
-        self.assertTrue(all(labels == {"right"} for labels in observed[6:]))
 
     def test_zero_hold_adds_no_frame(self) -> None:
         camera, guide = self.guide()
-        with patch.object(guide.video, "_write") as write:
-            guide.video.still(camera.png, 0)
-            write.assert_not_called()
+        guide.recording.still(camera.frame, 0)
+        self.assertEqual(guide.recording.frames, 0)
 
     def test_input_release_and_fixture_input_cannot_earn_coverage(self) -> None:
         camera, guide = self.guide()
@@ -302,30 +278,6 @@ class WalkthroughTests(unittest.TestCase):
             json.loads((guide.output / "guide.json").read_text())["passed"]
         )
 
-    def test_final_observation_is_encoded_and_finish_is_idempotent(self) -> None:
-        from unittest.mock import Mock
-
-        camera, guide = self.guide()
-        video = guide.video
-        observed = []
-
-        def write(raw: bytes) -> None:
-            observed.append(raw)
-            video.frames += 1
-            video.process = Mock()
-            video.process.wait.return_value = 0
-            video.clean = Mock()
-            video.clean.wait.return_value = 0
-            video.log = Mock()
-
-        with patch.object(video, "_write", side_effect=write):
-            video.frame(camera.png, 0)
-            video.frame(b"last observation", 1)
-            video.finish()
-            count = len(observed)
-            video.finish()
-        self.assertEqual(observed[-1], b"last observation")
-        self.assertEqual(len(observed), count)
 
     def test_helper_rewrite_with_unchanged_timestamp_is_not_cached(self) -> None:
         import os
@@ -375,13 +327,13 @@ class WalkthroughTests(unittest.TestCase):
             camera.menu_reference = lambda item: MenuEntry(
                 "item", "ITEM", ancestors=(MenuEntry("root", "MENU"),)
             )
-            camera.select_menu_item = lambda item: setattr(camera, "png", png("blue"))
+            camera.select_menu_item = lambda item: setattr(camera, "frame", Frame.from_png(png("blue")))
 
             def activate(item: MenuReference) -> None:
-                self.assertEqual(camera.png, png("blue"))
+                self.assertEqual(camera.frame.png(), png("blue"))
                 camera.press()
-                camera.png = png("red")
-                camera.guide.frame(camera.png, 0.2)
+                camera.frame = Frame.from_png(png("red"))
+                camera.guide.frame(camera.frame, 0.2)
 
             camera.open_menu_item = activate
             return camera
@@ -394,7 +346,7 @@ class WalkthroughTests(unittest.TestCase):
         self.assertEqual(
             (parent.output / report["steps"][0]["screenshot"]).read_bytes(), png("blue")
         )
-        self.assertEqual(parent.video.last_png, png("red"))
+        self.assertEqual(parent.camera.frame.png(), png("red"))
         self.assertGreater(
             report["presentation"]["duration_seconds"], report["steps"][0]["video_end"]
         )
@@ -402,7 +354,7 @@ class WalkthroughTests(unittest.TestCase):
 
         def continuation(camera: Camera, guide: Guide[Camera]) -> None:
             with guide.step("Item settings"):
-                self.assertEqual(camera.png, png("red"))
+                self.assertEqual(camera.frame.png(), png("red"))
 
         child.run(continuation, prerequisites=[("mod/navigation/page", visit)])
         self.assertEqual((child.output / "poster.png").read_bytes(), png("red"))
@@ -418,14 +370,14 @@ class WalkthroughTests(unittest.TestCase):
                 with g.step("Parent"):
                     c.press()
                     c.value = 1
-                    c.png = png("blue")
+                    c.frame = Frame.from_png(png("blue"))
 
             def child(c: Camera, g: Guide[Camera]) -> None:
                 self.assertEqual(c.value, 1)
                 with g.step("Child", hold=0):
                     c.press()
                     c.value = 2
-                    c.png = png("red")
+                    c.frame = Frame.from_png(png("red"))
 
             report = guide.run(child, prerequisites=[("mod/file/parent", parent)])
             self.assertEqual([plain(s["title"]) for s in report["steps"]], ["Child"])
@@ -458,83 +410,36 @@ class WalkthroughTests(unittest.TestCase):
         self,
     ) -> None:
         camera, guide = self.guide()
-        video = guide.video
-        seen = []
-
-        def write(raw: bytes) -> None:
-            seen.append(raw)
-            video.frames += 1
-
-        with patch.object(video, "_write", side_effect=write):
-            video.frame(camera.png, 0)
-            video.frame(camera.png, 3)
-            video.frame(png("blue"), 3.1)
-            video.frame(png("blue"), 4.1)
-        self.assertAlmostEqual(video.skipped_seconds, 3.3)
-        self.assertEqual(video.last_time, 4.1)
-        self.assertIn(png("blue"), seen)
-        self.assertEqual(len(seen), 12)
+        recording = guide.recording
+        for image, time in [(camera.frame.png(), 0), (camera.frame.png(), 3), (png("blue"), 3.1), (png("blue"), 4.1)]:
+            recording.frame(Frame.from_png(image), time)
+        self.assertAlmostEqual(recording.skipped_seconds, 3.3)
+        self.assertEqual(recording.frames, 12)
+        self.assertEqual(json.loads(recording.metrics())["changed_frames"], 2)
 
     def test_explicit_holds_are_not_compressed(self) -> None:
         camera, guide = self.guide()
-        video = guide.video
-
-        def write(raw: bytes) -> None:
-            video.frames += 1
-
-        with patch.object(video, "_write", side_effect=write):
-            video.still(camera.png, 2)
-        self.assertEqual(video.frames, 30)
+        guide.recording.still(camera.frame, 2)
+        self.assertEqual(guide.recording.frames, 30)
 
     def test_action_holds_only_present_the_result_and_replay_has_no_hold(self) -> None:
-        camera, guide = self.guide()
         from unittest.mock import Mock
-
-        camera.capture = Mock(return_value=camera.png)
-        with patch.object(guide.video, "still") as still:
-            with guide.action(navigation=True):
-                pass
-            self.assertEqual(still.call_args.args, (camera.png, 0.12))
-            with guide.action():
-                pass
-            self.assertEqual(still.call_args.args, (camera.png, 0.45))
-            guide._preparing = True
-            with guide.action():
-                pass
-            self.assertEqual(still.call_count, 2)
-            self.assertEqual(camera.capture.call_count, 2)
-        self.assertIsNone(guide.video.last_time)
+        camera, guide = self.guide()
+        camera.capture = Mock(return_value=camera.frame)
+        with guide.action(navigation=True):
+            pass
+        self.assertEqual(guide.recording.frames, 1)
+        with guide.action():
+            pass
+        self.assertEqual(guide.recording.frames, 8)
+        guide._preparing = True
+        with guide.action():
+            pass
+        self.assertEqual(guide.recording.frames, 8)
+        self.assertEqual(camera.capture.call_count, 2)
 
     def test_failed_action_never_adds_a_presentation_hold(self) -> None:
         camera, guide = self.guide()
-        with patch.object(guide.video, "still") as still:
-            with self.assertRaises(AssertionError), guide.action():
-                raise AssertionError("input failed")
-            still.assert_not_called()
-
-    def test_repeated_presses_stay_visible_for_five_seconds_after_release(self) -> None:
-        camera, guide = self.guide()
-        video = guide.video
-        video.input("down", True, 0)
-        video.input("down", False, 0)
-        video.frames = 2
-        video.input("down", True, 0)
-        self.assertEqual(video._labels(), [("down", 255), ("down", 255)])
-        video.input("down", False, 0)
-        video.frames = 4 * video.fps
-        self.assertEqual(video._labels(), [("down", 255), ("down", 255)])
-        video.frames = 71
-        self.assertEqual(video._labels(), [("down", 170), ("down", 255)])
-        video.frames = 5 * video.fps
-        self.assertEqual(video._labels(), [("down", 85)])
-        video.frames = 5 * video.fps + 2
-        self.assertEqual(video._labels(), [])
-
-    def test_stack_retains_five_most_recent_presses_in_order(self) -> None:
-        camera, guide = self.guide()
-        video = guide.video
-        names = ["up", "down", "left", "right", "q", "menu_ok"]
-        for name in names:
-            video.input(name, True, 0)
-            video.input(name, False, 0)
-        self.assertEqual([name for name, alpha in video._labels()], names[-5:])
+        with self.assertRaises(AssertionError), guide.action():
+            raise AssertionError("input failed")
+        self.assertEqual(guide.recording.frames, 0)
