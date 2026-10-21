@@ -84,7 +84,7 @@ try {
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(base, { waitUntil: 'domcontentloaded' });
   await page.locator('#viewer-tools[data-ready="true"]').waitFor();
-  assert.equal(await page.getByRole('button', { name: 'New camera', exact: true }).count(), 0);
+  assert.equal(await page.locator('#camera-exit').count(), 0);
   await page.locator('#viewer-settings-toggle').click();
   await page.locator('#feedback-open').click();
   assert.equal(

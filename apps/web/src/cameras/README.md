@@ -1,9 +1,12 @@
 # Browser camera library
 
 Each supported firmware upload creates a separate virtual camera record.
-The homepage lists those records without importing the emulator or loading its
-runtime. Selecting a record reads its DAT from IndexedDB and verifies it through
-the ordinary catalog path.
+The idle emulator shows `Launcher.tsx` without importing the emulator or loading
+its runtime: first use explains where firmware comes from and links each
+emulated body's Fujifilm download; later visits offer Resume for each record
+(most recently used first) and New for each stored firmware. Either reads the
+DAT from IndexedDB and verifies it through the ordinary catalog path. Save &
+Exit in the running viewer saves the camera and returns to the launcher.
 
 `store.ts` owns the versioned `fujimod-cameras` database. Metadata, firmware and
 save descriptors use separate stores. Durable bytes use immutable OPFS files,

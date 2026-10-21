@@ -49,8 +49,8 @@ for (const type of [chromium, webkit].filter(
       await page.waitForFunction(() =>
         document.querySelector<HTMLElement>('#viewer')?.style.getPropertyValue('--body-preview'),
       );
-      assert.equal(await page.locator('.saved-camera').count(), expected.length);
-      assert.equal(await page.locator('.active-camera').count(), 0);
+      assert.equal(await page.locator('.resume-camera').count(), expected.length);
+      assert.equal(await page.locator('#camera-exit').count(), 0);
       assert.equal(await page.locator('#live-label').innerText(), '');
       assert.deepEqual(await records(), expected);
       assert.deepEqual(automaticFirmware, [], 'Loading the homepage must not select a DAT');

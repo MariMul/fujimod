@@ -1,5 +1,5 @@
 import { EmulatorWorkspace } from '@fujimod/emulator-ui/EmulatorWorkspace';
-import { CameraLibrary } from '../cameras/Library';
+import { CameraLauncher } from '../cameras/Launcher';
 import { Show, createSignal, onSettled } from 'solid-js';
 import { createHomeState } from './state';
 import { startHome, type HomeController } from './controller';
@@ -10,6 +10,7 @@ import { FeatureCatalog } from './Features';
 import { FirmwareChoice, createFirmwareChoice } from '../ui/firmware-actions';
 import { EmulatorFeedback } from '@fujimod/emulator-ui/Feedback';
 import { ViewportControls } from '@fujimod/emulator-ui/ViewportControls';
+import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import generations from '../../devices/generations.json';
 import '../home/site.css';
 import '../navigation.css';
@@ -17,7 +18,9 @@ import '../navigation.css';
 export default function Home() {
   const [state, setState] = createHomeState();
   const [runtime, setRuntime] = createSignal<HomeController>();
-  const [feedback, setFeedback] = createSignal<{ event: 'feedback' | 'crash' }>();
+  const [feedback, setFeedback] = createSignal<{
+    event: 'feedback' | 'crash';
+  }>();
   const choice = createFirmwareChoice();
   let viewer!: HTMLDivElement,
     workspace!: HTMLElement,
@@ -68,20 +71,6 @@ export default function Home() {
           <h2 class="section-heading" id="emulator-heading">
             Emulator
           </h2>
-          <CameraLibrary
-            cameras={state.savedCameras}
-            active={state.activeCamera}
-            busy={state.cameraBusy}
-            message={state.storageMessage}
-            error={state.storageError}
-            open={(camera) => {
-              void runtime()?.openCamera(camera);
-            }}
-            close={() => {
-              void runtime()?.closeCamera();
-            }}
-            upload={() => file.click()}
-          />
           <EmulatorWorkspace
             state={state}
             runtime={runtime()}
@@ -100,37 +89,64 @@ export default function Home() {
             toolbar={
               <EmulatorFeedback runtime={runtime()} request={feedback()}>
                 {(actions) => (
-                  <ViewportControls
-                    active={state.toolbarVisible}
-                    title={
-                      state.firmware ? `${state.firmware.model} · ${state.firmware.version}` : ''
-                    }
-                    speed={state.speed}
-                    webcamSupported={!!state.firmware?.emulate?.sceneInput}
-                    webcamActive={state.webcamActive}
-                    webcamBusy={state.webcamBusy}
-                    webcamDisabled={state.loading || !!state.fault}
-                    webcamError={state.webcamError}
-                    toggleWebcam={() => runtime()?.toggleWebcam()}
-                    modSupported={state.modSupported}
-                    modEnabled={state.modEnabled}
-                    modDisabled={state.modDisabled}
-                    feedback={actions}
-                    selectMod={(enabled) => void runtime()?.selectMod(enabled)}
-                  />
+                  <>
+                    <Show when={state.activeCamera}>
+                      <div class="viewport-exit">
+                        <span
+                          class={{
+                            'camera-storage-status': true,
+                            error: state.storageError,
+                          }}
+                          role="status"
+                          aria-live="polite"
+                        >
+                          {state.storageMessage}
+                        </span>
+                        <button
+                          type="button"
+                          id="camera-exit"
+                          disabled={state.cameraBusy}
+                          onClick={() => void runtime()?.closeCamera()}
+                        >
+                          <Icon name="power" size={14} />
+                          Save & Exit
+                        </button>
+                      </div>
+                    </Show>
+                    <ViewportControls
+                      active={state.toolbarVisible}
+                      title={
+                        state.firmware ? `${state.firmware.model} · ${state.firmware.version}` : ''
+                      }
+                      speed={state.speed}
+                      webcamSupported={!!state.firmware?.emulate?.sceneInput}
+                      webcamActive={state.webcamActive}
+                      webcamBusy={state.webcamBusy}
+                      webcamDisabled={state.loading || !!state.fault}
+                      webcamError={state.webcamError}
+                      toggleWebcam={() => runtime()?.toggleWebcam()}
+                      modSupported={state.modSupported}
+                      modEnabled={state.modEnabled}
+                      modDisabled={state.modDisabled}
+                      feedback={actions}
+                      selectMod={(enabled) => void runtime()?.selectMod(enabled)}
+                    />
+                  </>
                 )}
               </EmulatorFeedback>
             }
           >
-            <label
-              class="dropbox"
-              id="firmware-prompt"
-              for="firmware-file"
-              hidden={!state.promptVisible}
-            >
-              <strong>drop FPUPDATE.DAT firmware file</strong>
-              <span>you can download it from Fujifilm</span>
-            </label>
+            <Show when={state.promptVisible}>
+              <CameraLauncher
+                cameras={state.savedCameras}
+                supported={state.cameras}
+                busy={state.cameraBusy}
+                message={state.storageMessage}
+                error={state.storageError}
+                resume={(camera) => void runtime()?.openCamera(camera)}
+                create={(camera) => void runtime()?.newCamera(camera)}
+              />
+            </Show>
             <input
               ref={file}
               class="visually-hidden"

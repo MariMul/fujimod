@@ -59,7 +59,7 @@ try {
   });
   await page.goto(base, { waitUntil: 'domcontentloaded' });
   await page.locator('#viewer-tools[data-ready="true"]').waitFor();
-  assert.equal(await page.getByRole('button', { name: 'New camera', exact: true }).count(), 0);
+  assert.equal(await page.locator('#camera-exit').count(), 0);
   assert.equal(await page.locator('#idle-cameras').count(), 0);
   await page.locator('#workspace').scrollIntoViewIfNeeded();
   await screenshot(page, 'first-use');
@@ -76,10 +76,7 @@ try {
   await (await chooser).setFiles(dat);
   await ready(page);
   console.log('Created first camera from native file chooser and booted firmware');
-  assert.equal(
-    await page.getByRole('button', { name: 'New camera', exact: true }).isVisible(),
-    true,
-  );
+  assert.equal(await page.locator('#camera-exit').isVisible(), true);
   assert.equal(
     await page.locator('#lcd-source').evaluate((canvas: HTMLCanvasElement) =>
       canvas
@@ -210,7 +207,7 @@ try {
   const page = await safari.newPage({ viewport: { width: 390, height: 844 } });
   await page.goto(base, { waitUntil: 'domcontentloaded' });
   await page.locator('#viewer-tools[data-ready="true"]').waitFor();
-  assert.equal(await page.getByRole('button', { name: 'New camera', exact: true }).count(), 0);
+  assert.equal(await page.locator('#camera-exit').count(), 0);
   await menu(page);
   await page.locator('#feedback-open').click();
   assert.equal(

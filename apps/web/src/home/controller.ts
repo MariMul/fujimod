@@ -447,6 +447,24 @@ export function startHome(
       });
     }
   }
+  /** Starts another camera from firmware this browser already stores. */
+  async function newCamera(source: CameraRecord) {
+    manualSelection = true;
+    if (state.cameraBusy) return;
+    setState((s) => {
+      s.cameraBusy = true;
+    });
+    try {
+      const read = async () => new File([await cameras.firmware(source.id)], source.fileName);
+      await processFile(await read(), false, undefined, read);
+    } catch (error) {
+      storageStatus(String(error), true);
+    } finally {
+      setState((s) => {
+        s.cameraBusy = false;
+      });
+    }
+  }
   async function closeCamera() {
     if (state.cameraBusy) return;
     setState((s) => {
@@ -462,6 +480,7 @@ export function startHome(
       setState((s) => {
         s.activeCamera = undefined;
       });
+      storageStatus('');
       await refreshCameras();
     } catch (error) {
       storageStatus(String(error), true);
@@ -560,6 +579,7 @@ export function startHome(
     ...session,
     selectMod,
     openCamera,
+    newCamera,
     closeCamera,
     selectFirmware: (firmware: Firmware) => {
       void tryFirmware(firmware).catch((error) => showFault(faultFrom(error)));

@@ -45,7 +45,8 @@ for (const type of [chromium, webkit]) {
     assert.equal(await page.locator('#lcd-source').isVisible(), false);
     await page.locator('#workspace').scrollIntoViewIfNeeded();
     const bounds = await page.locator('#viewer').boundingBox();
-    assert.ok(bounds && bounds.height <= 260 && bounds.height >= 180);
+    const launcher = await page.locator('.launcher').boundingBox();
+    assert.ok(bounds && launcher && bounds.height <= launcher.height + 80);
     assert.equal(
       await page.locator('#workspace').evaluate((el) => getComputedStyle(el).borderTopWidth),
       '1px',
@@ -58,7 +59,7 @@ for (const type of [chromium, webkit]) {
     if (type === chromium) {
       const session = await context.newCDPSession(page);
       const x = bounds.x + bounds.width / 2;
-      const y = bounds.y + bounds.height - 24;
+      const y = Math.min(bounds.y + bounds.height, page.viewportSize()!.height) - 24;
       await session.send('Input.dispatchTouchEvent', {
         type: 'touchStart',
         touchPoints: [{ x, y }],
@@ -119,8 +120,8 @@ for (const type of [chromium, webkit]) {
     await page.locator('.camera-storage-status.error').waitFor();
     assert.equal(await page.locator('html').getAttribute('data-camera-reads'), '2');
     await page.goto(base);
-    await page.locator('.saved-camera').waitFor();
-    assert.equal(await page.locator('.saved-camera').count(), 1);
+    await page.locator('.resume-camera').waitFor();
+    assert.equal(await page.locator('.resume-camera').count(), 1);
     assert.equal(await page.locator('.camera-storage-status.error').count(), 0);
     assert.deepEqual(errors, []);
 
@@ -128,9 +129,10 @@ for (const type of [chromium, webkit]) {
     await page.locator('#workspace').scrollIntoViewIfNeeded();
     assert.equal(await page.locator('#lcd-source').isVisible(), false);
     const desktop = await page.locator('#viewer').boundingBox();
-    assert.ok(desktop && desktop.height <= 260);
+    const desktopLauncher = await page.locator('.launcher').boundingBox();
+    assert.ok(desktop && desktopLauncher && desktop.height <= desktopLauncher.height + 80);
     console.log(
-      `${type.name()}: transient read recovered; persistent error shown; write atomic and unrepeated; compact idle viewer scrolls and opens chooser`,
+      `${type.name()}: transient read recovered; persistent error shown; write atomic and unrepeated; idle viewer fits the launcher, scrolls and opens chooser`,
     );
     await context.close();
   } finally {
