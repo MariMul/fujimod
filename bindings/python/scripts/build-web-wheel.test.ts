@@ -7,7 +7,7 @@ import test from 'node:test';
 import { unzipSync } from 'fflate';
 import { build } from './build-web-wheel.ts';
 
-test('wheel records authenticate every Python source and metadata entry', () => {
+test('wheel records authenticate every included Python source and metadata entry', () => {
   const output = mkdtempSync(join(tmpdir(), 'fujimod-wheel-'));
   try {
     const path = build(output),
@@ -15,6 +15,8 @@ test('wheel records authenticate every Python source and metadata entry', () => 
       files = unzipSync(first);
     assert.deepEqual(readFileSync(build(output)), first, 'Repeated builds are deterministic');
     assert(Object.keys(files).some((name) => name === 'fujimod/__init__.py'));
+    assert(Object.keys(files).some((name) => name === 'fujimod/usb/__init__.py'));
+    assert(!Object.keys(files).some((name) => name.startsWith('fujimod/emulator/')));
     assert(
       Object.keys(files).every((name) => name.endsWith('.py') || name.includes('.dist-info/')),
     );

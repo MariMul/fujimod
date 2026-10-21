@@ -23,8 +23,12 @@ export function build(output: string): string {
   const dist = `fujimod-${version}.dist-info`,
     source = join(root, 'python');
   const files = new Map<string, Uint8Array>();
-  for (const name of globSync('fujimod/**/*.py', { cwd: source }).sort())
-    files.set(name.replaceAll('\\', '/'), readFileSync(join(source, name)));
+  for (const name of globSync('fujimod/**/*.py', { cwd: source }).sort()) {
+    const relative = name.replaceAll('\\', '/');
+    // The emulator namespace requires native support and is not part of Pyodide.
+    if (relative.startsWith('fujimod/emulator/')) continue;
+    files.set(relative, readFileSync(join(source, name)));
+  }
   files.set(
     `${dist}/METADATA`,
     Buffer.from(
