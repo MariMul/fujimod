@@ -1,9 +1,9 @@
 import { test } from 'vite-plus/test';
 import assert from 'node:assert/strict';
-import { WasmSession, type WasmManifest } from './wasm-abi';
+import { EmulatorSession, type EmulatorManifest } from 'fujimod/emulator';
 import { WasmWorkerRuntime } from './wasm-worker-runtime';
 import { testCameraModule } from './wasm-test-module';
-import type { WasmRequest, WasmWorkerEvent } from './wasm-protocol';
+import type { WasmRequest, WasmWorkerEvent } from './wasm-worker-protocol';
 import { testConfig } from './test-fixtures';
 import type { CameraRecord, CameraSave } from '../cameras/store';
 
@@ -19,7 +19,7 @@ function setup(
   const fake = testCameraModule(options.shared),
     events: WasmWorkerEvent[] = [],
     saves: CameraSave[] = [];
-  const manifest: WasmManifest = {
+  const manifest: EmulatorManifest = {
     schema: 1,
     abi: 1,
     module: '',
@@ -39,7 +39,7 @@ function setup(
         pending.delete(event.serial!);
       }
     },
-    async () => ({ session: new WasmSession(fake.module), manifest, identity: 'test' }),
+    async () => ({ session: new EmulatorSession(fake.module), manifest, identity: 'test' }),
     {
       async saved() {
         return options.saved;

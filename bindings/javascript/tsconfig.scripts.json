@@ -12,6 +12,7 @@
   "include": [
     "scripts/**/*.ts",
     "tests/**/*.ts",
+    "tests/**/*.mts",
     "../python/tests/**/*.ts",
     "../python/scripts/**/*.ts"
   ],

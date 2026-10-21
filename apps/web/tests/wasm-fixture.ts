@@ -1,4 +1,4 @@
-import type { WasmManifest } from '../src/engine/wasm-abi';
+import type { EmulatorManifest } from 'fujimod/emulator';
 
 /** Generated ARM instructions program LCDC, poll an ADC ladder and store pixels. */
 export async function wasmFixture(fault = false) {
@@ -36,7 +36,7 @@ export async function wasmFixture(fault = false) {
   const sha256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', dat))]
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
-  const manifest: WasmManifest = {
+  const manifest: EmulatorManifest = {
     schema: 1,
     abi: 1,
     module: 'camera.mjs',

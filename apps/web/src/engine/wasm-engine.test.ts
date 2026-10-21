@@ -1,7 +1,7 @@
 import { test } from 'vite-plus/test';
 import assert from 'node:assert/strict';
 import { WasmEngine } from './wasm-engine';
-import type { WasmWorkerEvent, WasmWorkerRequest } from './wasm-protocol';
+import type { WasmWorkerEvent, WasmWorkerRequest } from './wasm-worker-protocol';
 import { testConfig } from './test-fixtures';
 
 function setup() {

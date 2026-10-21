@@ -2,7 +2,13 @@
 node = "26.12.0"
 python = "3.14.8"
 uv = "0.13.1"
-rust = { version = "1.99.1", profile = "minimal", components = ["rustfmt", "clippy"] }
+rust = [
+  { version = "1.99.1", profile = "minimal", components = ["rustfmt", "clippy"] },
+  { version = "nightly-2026-10-10", profile = "minimal", components = ["rust-src"] },
+]
+emsdk = "5.0.3"
+cmake = "4.4.4"
+ninja = "1.13.2"
 
 [tasks.web-build]
 dir = "{{config_root}}/apps/web"
@@ -50,6 +56,10 @@ run = 'PATH="$PWD/target/tooling/bin:$PATH" cargo test -p fujimod-usb --target w
 [tasks.javascript-build]
 dir = "{{config_root}}/bindings/javascript"
 run = "npm run build"
+
+[tasks.javascript-emulator-build]
+dir = "{{config_root}}/bindings/javascript"
+run = "npm run stage:emulator"
 
 [tasks.javascript-test]
 dir = "{{config_root}}/bindings/javascript"

@@ -4,7 +4,7 @@ import { validateCatalog, type Catalog } from '../catalog';
 import { digest } from '../engine/identity';
 import { WasmEngine } from '../engine/wasm-engine';
 import { Exr2UsbBus } from '../engine/exr2-usb-bus';
-import type { WasmManifest } from '../engine/wasm-abi';
+import type { EmulatorManifest } from 'fujimod/emulator';
 import type { SimulatedCamera } from './usb-camera-model';
 
 declare const __FUJIMOD_CATALOG__: string;
@@ -23,7 +23,7 @@ export async function startSimulatedCamera(id: string): Promise<SimulatedCamera>
   const bundle = new URL(firmware.emulate.usb.bundle, document.baseURI).href;
   const manifestResponse = await fetch(new URL('wasm.json', bundle));
   if (!manifestResponse.ok) throw Error('USB simulation manifest is unavailable.');
-  const manifest = (await manifestResponse.json()) as WasmManifest;
+  const manifest = (await manifestResponse.json()) as EmulatorManifest;
   if (manifest.construction !== 'session' || manifest.usb?.kind !== 'exr2' || !manifest.usb.node)
     throw Error('This runtime has no USB endpoint.');
   const dat = await (await store.firmware(id)).arrayBuffer();

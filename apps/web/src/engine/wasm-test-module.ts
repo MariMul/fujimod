@@ -1,4 +1,4 @@
-import type { CameraModule, SessionState } from './wasm-abi';
+import type { EmulatorModule, SessionState } from 'fujimod/emulator';
 
 /** C ABI double for transport/lifetime tests. Never loaded by an engine worker. */
 export function testCameraModule(shared = false) {
@@ -26,9 +26,12 @@ export function testCameraModule(shared = false) {
   let createError = '',
     commandError = '',
     frameEnabled = false;
-  const module: CameraModule = {
+  const module: EmulatorModule = {
     get HEAPU8() {
       return new Uint8Array(memory.buffer);
+    },
+    tcgJitStats() {
+      return { enabled: false };
     },
     _camera_alloc(n) {
       const p = cursor;
@@ -158,10 +161,17 @@ export function testCameraModule(shared = false) {
           ticks = 10n;
           break;
         case 'profile':
-          result = { measured: true };
+          result = {
+            ticks: Number(ticks),
+            instructions: [Number(ticks * 2n)],
+            pcEntries: [],
+            failed,
+          };
           break;
         case 'save':
           result = {
+            format: 'camera-media-cbor',
+            schema: 1,
             durable: { offset: 0, length: 2 },
             positions: state.positions,
             poweredOn: true,

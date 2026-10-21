@@ -1,11 +1,11 @@
 import { test } from 'vite-plus/test';
 import assert from 'node:assert/strict';
-import { WasmSession } from './wasm-abi';
+import { EmulatorSession } from 'fujimod/emulator';
 import { testCameraModule } from './wasm-test-module';
 
 test('Wasm descriptors reacquire grown memory; frames borrow the heap without a pixel copy', () => {
   const fake = testCameraModule(),
-    session = new WasmSession(fake.module);
+    session = new EmulatorSession(fake.module);
   session.create({ schema: 1 }, new Uint8Array([1, 2]), 'resolved');
   assert.equal(fake.allocations.size, 1, 'only the persistent scratch allocation survives create');
   assert.equal(session.frame(0), undefined);
@@ -25,7 +25,7 @@ test('Wasm descriptors reacquire grown memory; frames borrow the heap without a 
 });
 test('uploads are freed on creation and command errors; missing extensions refuse', () => {
   const fake = testCameraModule(),
-    session = new WasmSession(fake.module);
+    session = new EmulatorSession(fake.module);
   fake.createError('SHA-256 mismatch');
   assert.throws(() => session.create({}, new Uint8Array([1]), 'resolved'), /SHA-256/);
   assert.equal(fake.allocations.size, 1);
@@ -45,7 +45,7 @@ test('uploads are freed on creation and command errors; missing extensions refus
 });
 test('scene RGB writes directly into the reserved Wasm buffer and command bytes escape borrowed lifetimes', () => {
   const fake = testCameraModule(),
-    session = new WasmSession(fake.module);
+    session = new EmulatorSession(fake.module);
   session.create({}, new Uint8Array(), 'session');
   session.scene({ width: 1, height: 1, rgb: new Uint8Array([1, 2, 3]) });
   assert.deepEqual(fake.calls.at(-1)!.bytes, [1, 2, 3]);

@@ -21,18 +21,36 @@
     "./simulation/webgpu": {
       "types": "./pkg/simulation/webgpu/fujimod_simulation.d.ts",
       "import": "./pkg/simulation/webgpu/fujimod_simulation.js"
+    },
+    "./emulator": {
+      "types": "./dist/emulator/index.d.ts",
+      "import": "./dist/emulator/index.js"
+    },
+    "./emulator/buffers": {
+      "types": "./dist/emulator/buffers.d.ts",
+      "import": "./dist/emulator/buffers.js"
+    },
+    "./emulator/node": {
+      "types": "./dist/emulator/node.d.mts",
+      "import": "./dist/emulator/node.mjs"
     }
   },
   "scripts": {
-    "build": "node scripts/build.ts && tsc",
-    "test": "node scripts/build.ts --testing && tsc && tsc -p tsconfig.types.json && tsc -p tsconfig.testing.json && tsc -p tsconfig.scripts.json && node --test tests/usb.test.ts && node scripts/build.ts && tsc && tsc -p tsconfig.types.json && tsc -p tsconfig.scripts.json && node --test tests/production.ts tests/ownership.test.ts",
-    "check": "tsc --noEmit && tsc -p tsconfig.types.json && tsc -p tsconfig.scripts.json",
+    "build": "node scripts/build.ts && tsc && tsc -p tsconfig.emulator.json",
+    "build:emulator": "node emulator/build.mts",
+    "stage:emulator": "node emulator/build.mts --stage-package",
+    "test:jit": "node jit/test_host.mts",
+    "test:emulator:guest": "node tests/emulator/test_guest.mts",
+    "test:emulator:devices": "node tests/emulator/test_loader.mts",
+    "test": "node scripts/build.ts --testing && tsc && tsc -p tsconfig.emulator.json && tsc -p tsconfig.types.json && tsc -p tsconfig.testing.json && tsc -p tsconfig.scripts.json && node --test tests/usb.test.ts tests/emulator/*.test.ts && node jit/test_host.mts && node scripts/build.ts && tsc && tsc -p tsconfig.emulator.json && tsc -p tsconfig.types.json && tsc -p tsconfig.scripts.json && node --test tests/production.ts tests/ownership.test.ts",
+    "check": "tsc --noEmit && tsc -p tsconfig.emulator.json --noEmit && tsc -p tsconfig.types.json && tsc -p tsconfig.scripts.json && tsc -p jit/tsconfig.json",
     "test:browser": "npm run build && node tests/browser.ts",
     "test:pyodide": "node ../python/tests/pyodide.ts",
     "test:pyodide:browser": "node ../python/tests/pyodide.ts && node ../python/tests/pyodide-browser.ts",
     "setup:tooling": "node scripts/install-tooling.ts"
   },
   "devDependencies": {
+    "@types/node": "^26.6.5",
     "playwright": "^1.64.1",
     "pyodide": "^314.0.7",
     "typescript": "^7.0.2"

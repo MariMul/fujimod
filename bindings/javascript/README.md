@@ -45,6 +45,31 @@ npm run test:browser
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` can select an explicitly installed Chromium
 binary. Permission UI and physical camera integration remain unvalidated.
 
+## Emulator runtime
+
+The `fujimod/emulator` entry publishes the browser-safe Wasm ABI, session types,
+buffer helpers and generic contracts. A staged package contains the generated
+`camera.mjs` and `camera.wasm` beside that entry, so a browser can load them with
+`loadBundledEmulatorModule()`. The Node-only `fujimod/emulator/node` entry loads
+an explicit module path and its adjacent Wasm file with `loadNodeModule()` or
+opens a serialized session with `openCamera()`. Node filesystem APIs are kept out
+of the browser entry.
+
+Build and stage the runtime with the pinned Mise toolchain:
+
+```sh
+mise install
+mise run javascript-emulator-build
+```
+
+The builder defaults to ignored `target/emulator/` output and stages runtime
+assets under `bindings/javascript/dist/emulator/`. Use
+`npm run build:emulator -- --out DIR` to choose another output directory. The
+generated `build.json` records the toolchain and artifact hashes. Runtime input
+manifests remain the caller's responsibility. Guest conformance scripts can run against a built module with
+`npm run test:emulator:guest` and `npm run test:emulator:devices`; each accepts
+an optional path to `camera.mjs`.
+
 The [mod installation helpers](../../crates/mod-install/README.md) expose
 `usb.InstallQueries` for guarded borrowed callback batches,
 `usb.CommandSequence.verifiedWrites` for packet-sized write/readback batches,

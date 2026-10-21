@@ -3,7 +3,7 @@ import { chromium, webkit } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import type { Input } from '../src/engine/api';
-import type { WasmRequest } from '../src/engine/wasm-protocol';
+import type { WasmRequest } from '../src/engine/wasm-worker-protocol';
 declare global {
   interface Window {
     retainedInputs: Input[];

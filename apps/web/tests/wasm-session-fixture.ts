@@ -1,4 +1,4 @@
-import type { WasmManifest } from '../src/engine/wasm-abi';
+import type { EmulatorManifest } from 'fujimod/emulator';
 
 /** A generated ARM loop, real SD host/FAT media and a clocked scene source. */
 export async function wasmSessionFixture() {
@@ -19,7 +19,7 @@ export async function wasmSessionFixture() {
     windows: { base: number; size: number }[] = [],
   ) => ({ name, boot_entries: ['loader'], windows, dependencies: [], model });
   const mapping = { address: 0x10000, physical: 0x10000, size: 0x4000, permissions: 7 };
-  const manifest: WasmManifest = {
+  const manifest: EmulatorManifest = {
     schema: 1,
     abi: 1,
     module: '../wasm-proof/camera.mjs',

@@ -10,7 +10,7 @@ import type {
 import type { AssetProgress } from './download-progress';
 import type { EngineFault } from './fault';
 import type { CameraPerformance } from './performance';
-import type { SessionState } from './wasm-abi';
+import type { SessionState } from 'fujimod/emulator';
 
 export type WasmRequest =
   | { action: 'prepare'; bundle: string }

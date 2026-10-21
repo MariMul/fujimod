@@ -1,23 +1,25 @@
 import { DownloadProgress, type LoadingProgress } from './download-progress';
-import { HostTimings } from './host-timings';
 import type { CardFile, EngineConfig, ReplayStep, Scene, Checkpoint, BootInput } from './api';
 import { CameraStore } from '../cameras/store';
 import { digest } from './identity';
 import { diagnosticReport } from './diagnostics';
 import { faultFrom } from './fault';
 import {
+  EmulatorSession,
   GuestExecutionError,
-  WasmSession,
-  type CameraModule,
+  HostTimings,
+  instantiateEmulatorModule,
+  parseEmulatorManifest,
+  type EmulatorManifest,
+  type EmulatorModuleFactory,
   type SessionState,
-  type WasmManifest,
-} from './wasm-abi';
-import type { WasmRequest, WasmWorkerEvent, WasmWorkerRequest } from './wasm-protocol';
+} from 'fujimod/emulator';
+import type { WasmRequest, WasmWorkerEvent, WasmWorkerRequest } from './wasm-worker-protocol';
 
 type Send = (event: WasmWorkerEvent, transfer?: Transferable[]) => void;
 interface Loaded {
-  session: WasmSession;
-  manifest: WasmManifest;
+  session: EmulatorSession;
+  manifest: EmulatorManifest;
   identity: string;
   loadTimings?: ReturnType<HostTimings['snapshot']>;
 }
@@ -31,62 +33,44 @@ export async function loadWasm(
     downloads.fetch(new URL('wasm.json', bundle).href, () => fetch(new URL('wasm.json', bundle))),
   );
   if (!response.ok) throw Error('Wasm runtime manifest is unavailable.');
-  const manifest: WasmManifest = await timing.measureAsync('manifestParse', () => response.json());
-  if (
-    manifest.schema !== 1 ||
-    manifest.abi !== 1 ||
-    !['resolved', 'session'].includes(manifest.construction) ||
-    !Number.isSafeInteger(manifest.ticksPerSecond) ||
-    manifest.ticksPerSecond <= 0 ||
-    !Number.isSafeInteger(manifest.bootTicks) ||
-    manifest.bootTicks < 0 ||
-    !Number.isSafeInteger(manifest.output) ||
-    manifest.output < 0 ||
-    manifest.output > 0xffffffff
-  )
-    throw Error('Unsupported Wasm manifest.');
-  if (
-    manifest.observations &&
-    (manifest.observations.length > 64 ||
-      manifest.observations.some(
-        (o) =>
-          !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(o.name) ||
-          !/^[0-9]+$/.test(o.address) ||
-          !Number.isSafeInteger(o.size) ||
-          o.size < 1 ||
-          o.size > 4096,
-      ))
-  )
-    throw Error('Invalid observation declaration.');
+  const manifest = await timing.measureAsync('manifestParse', async () => {
+    const raw: unknown = await response.json();
+    return parseEmulatorManifest(raw);
+  });
   // Load the independent module text and binary concurrently.
-  const [wasmBinary, { default: create }] = await Promise.all([
+  const [wasmBinary, create] = await Promise.all([
     timing.measureAsync('binaryFetch', async () => {
-      const url = new URL(manifest.wasm, bundle).href;
+      const url = new URL(manifest.wasm, new URL('wasm.json', bundle)).href;
       const response = await downloads.fetch(url, () => fetch(url));
       if (!response.ok) throw Error('Wasm binary is unavailable.');
       return response.arrayBuffer();
     }),
-    timing.measureAsync('moduleImport', async () =>
-      downloads.module(
-        new URL(manifest.module, bundle).href,
-        async () =>
-          (await import(/* @vite-ignore */ new URL(manifest.module, bundle).href)) as {
-            default: (options: {
-              wasmBinary: ArrayBuffer;
-              locateFile: (path: string) => string;
-            }) => Promise<CameraModule>;
-          },
-      ),
-    ),
+    timing.measureAsync('moduleImport', async () => {
+      const url = new URL(manifest.module, new URL('wasm.json', bundle));
+      return downloads.module(url.href, async () => {
+        const imported: unknown = await import(/* @vite-ignore */ url.href);
+        if (imported === null || typeof imported !== 'object' || !('default' in imported))
+          throw Error('Generated module has no factory.');
+        const factory = imported.default;
+        if (typeof factory !== 'function') throw Error('Generated module has no factory.');
+        return factory as EmulatorModuleFactory;
+      });
+    }),
   ]);
   const module = await timing.measureAsync('instantiate', () =>
-    create({
+    instantiateEmulatorModule(
+      create,
       wasmBinary,
-      locateFile: (path) => new URL(path, bundle).href,
-    }),
+      (path) => new URL(path, new URL(manifest.wasm, new URL('wasm.json', bundle))).href,
+    ),
   );
   const identity = await timing.measureAsync('binaryDigest', () => digest(wasmBinary));
-  return { session: new WasmSession(module), manifest, identity, loadTimings: timing.snapshot() };
+  return {
+    session: new EmulatorSession(module),
+    manifest,
+    identity,
+    loadTimings: timing.snapshot(),
+  };
 }
 function packFiles(files: CardFile[]) {
   let offset = 0;
@@ -117,8 +101,8 @@ export class WasmWorkerRuntime {
   private loadTimings?: Loaded['loadTimings'];
   private loaded?: Promise<Loaded>;
   private bundle?: string;
-  private session?: WasmSession;
-  private manifest?: WasmManifest;
+  private session?: EmulatorSession;
+  private manifest?: EmulatorManifest;
   private config?: EngineConfig;
   private state?: SessionState;
   private scene?: Scene;

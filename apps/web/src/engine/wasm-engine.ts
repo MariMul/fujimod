@@ -1,5 +1,5 @@
 import type { LoadingProgress } from './download-progress';
-import { HostTimings } from './host-timings';
+import { HostTimings } from 'fujimod/emulator';
 import type {
   BootInput,
   BootMedia,
@@ -24,7 +24,7 @@ import { EngineError, faultFrom, type EngineFault } from './fault';
 import type { CameraPerformance } from './performance';
 import type { ReportSubmission } from './report';
 import { zipFiles } from '../archive';
-import type { WasmRequest, WasmWorkerEvent, WasmWorkerRequest } from './wasm-protocol';
+import type { WasmRequest, WasmWorkerEvent, WasmWorkerRequest } from './wasm-worker-protocol';
 
 type SaveEvent = { savedAt?: number; revision?: number; error?: string };
 class Listeners<T> {
