@@ -17,7 +17,7 @@ import type {
   SessionHolder,
   ToolSession,
 } from './camera-model';
-import { Direction, Layer, Level } from './log';
+import { Direction, Layer, Level, hex as dumpBytes } from './log';
 import { ShareHost, newTicket, shareUrl, signalUrl } from './sharing';
 
 export interface ModelStream<T> {
@@ -107,13 +107,13 @@ const defaults: UsbCameraServices = {
   pause: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
 };
 const selectors = [
-  ['Vendor', 'vendor'],
-  ['Manufacturer', 'manufacturer'],
-  ['Product', 'product'],
-  ['InternalVersion', 'internalVersion'],
-  ['DeviceType', 'deviceType'],
-  ['Serial', 'serial'],
-  ['Framework', 'framework'],
+  ['Vendor', 'vendor', 0x01],
+  ['Manufacturer', 'manufacturer', 0x02],
+  ['Product', 'product', 0x04],
+  ['InternalVersion', 'internalVersion', 0x08],
+  ['DeviceType', 'deviceType', 0x10],
+  ['Serial', 'serial', 0x20],
+  ['Framework', 'framework', 0x40],
 ] as const;
 interface Entry {
   device: ModelDevice;
@@ -140,6 +140,27 @@ interface Entry {
 }
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const hex = (value: number) => `0x${value.toString(16)}`;
+/** Format only complete, successful identity replies; execution validates them in Rust. */
+function identityText(data: Uint8Array | undefined): string | undefined {
+  if (!data || data.length < 16) return;
+  const header = new DataView(data.buffer, data.byteOffset, data.length);
+  if (
+    header.getUint32(0, true) !== 0x150000 ||
+    [4, 8, 12].some((offset) => header.getUint32(offset, true) !== 0)
+  )
+    return;
+  for (let end = 16; end + 1 < data.length; end += 2) {
+    if (data[end] !== 0 || data[end + 1] !== 0) continue;
+    try {
+      return new TextDecoder('utf-16le', { fatal: true, ignoreBOM: true }).decode(
+        data.subarray(16, end),
+      );
+    } catch {
+      return;
+    }
+  }
+}
+
 function toolSession(session: ModelSession, pause: UsbCameraServices['pause']): ToolSession {
   return {
     async deviceInfo(selector) {
@@ -408,45 +429,92 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
     }
   }
   async function watchLog(entry: Entry) {
+    let command: Exchange | undefined;
+    const exchange = (request: Exchange, reply?: Exchange, missingReply?: string) => {
+      const input = ![0xd0, 0xe0].includes(request.kind);
+      const error = [request.error, reply?.error, missingReply].filter(Boolean).join('; ');
+      const selectorName =
+        request.command === 0x150000
+          ? selectors.find(([, , wire]) => wire === request.selector)?.[0]
+          : undefined;
+      const value =
+        selectorName && !error
+          ? identityText(reply?.data ?? (input ? request.data : undefined))
+          : undefined;
+      const description = [
+        request.operation,
+        request.address === null ? '' : hex(request.address),
+        selectorName
+          ? `${selectorName}${value === undefined ? '' : ` → ${value}`}`
+          : request.selector === null
+            ? ''
+            : `selector ${hex(request.selector)}`,
+        request.length === null ? '' : `${request.length} B`,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      const detail = [
+        `Request envelope: ${dumpBytes(request.envelope)}`,
+        !input && `Request payload: ${dumpBytes(request.data)}`,
+        reply && `Reply envelope: ${dumpBytes(reply.envelope)}`,
+        error,
+        request.truncated && `Request capture: ${request.data.length} of ${request.transferred} B`,
+        reply?.truncated && `Reply capture: ${reply.data.length} of ${reply.transferred} B`,
+        !reply &&
+          input &&
+          request.truncated &&
+          `Reply capture: ${request.data.length} of ${request.transferred} B`,
+      ]
+        .filter(Boolean)
+        .join('\n');
+      append(entry, {
+        layer: Layer.Ff80,
+        level: error ? Level.Error : Level.Debug,
+        direction: reply ? Direction.In : input ? Direction.In : Direction.Out,
+        time: request.timestampMs,
+        holder: sessionHolder(entry, request.holder),
+        message: description,
+        sizes: {
+          sent:
+            request.envelope.length +
+            (input ? 0 : request.transferred) +
+            (reply?.envelope.length ?? 0),
+          received: (input ? request.transferred : 0) + (reply?.transferred ?? 0),
+        },
+        data: (reply?.data ?? (input ? request.data : new Uint8Array())).slice(),
+        detail,
+      });
+    };
+    const flush = (reason: string) => {
+      if (command) exchange(command, undefined, reason);
+      command = undefined;
+    };
     try {
       for (;;) {
         const event = await entry.logs.next();
-        if (!event || entry.removed || disposed) return;
-        const input = ![0xd0, 0xe0].includes(event.kind);
-        const data = new Uint8Array(event.envelope.length + event.data.length);
-        data.set(event.envelope);
-        data.set(event.data, event.envelope.length);
-        const description = [
-          event.operation,
-          event.address === null ? '' : hex(event.address),
-          event.selector === null ? '' : `selector ${hex(event.selector)}`,
-          event.length === null ? '' : `${event.length} B`,
-        ]
-          .filter(Boolean)
-          .join(' · ');
-        append(entry, {
-          layer: Layer.Ff80,
-          level: event.error ? Level.Error : Level.Debug,
-          direction: input ? Direction.In : Direction.Out,
-          time: event.timestampMs,
-          holder: sessionHolder(entry, event.holder),
-          message: description,
-          sizes: {
-            sent: event.envelope.length + (input ? 0 : event.transferred),
-            received: input ? event.transferred : 0,
-          },
-          data,
-          detail:
-            event.error ??
-            (event.truncated
-              ? `Captured ${event.data.length} of ${event.transferred} payload bytes`
-              : undefined),
-        });
+        if (entry.removed || disposed) return;
+        if (!event) {
+          flush('Command reply was not observed');
+          return;
+        }
+        const matches =
+          command &&
+          event.kind === 0xd1 &&
+          command.session === event.session &&
+          JSON.stringify(command.holder) === JSON.stringify(event.holder);
+        if (matches) {
+          exchange(command!, event);
+          command = undefined;
+        } else {
+          flush('Command reply was not observed');
+          if (event.kind === 0xd0 && !event.error) command = event;
+          else exchange(event);
+        }
         if (event.consoleData?.length)
           append(entry, {
             layer: Layer.Console,
             level: Level.Info,
-            direction: input ? Direction.In : Direction.Out,
+            direction: event.kind === 0xd0 ? Direction.Out : Direction.In,
             time: event.timestampMs,
             holder: sessionHolder(entry, event.holder),
             message: new TextDecoder().decode(event.consoleData),
@@ -454,6 +522,7 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
           });
       }
     } catch (error) {
+      flush(errorText(error));
       if (!entry.removed && !disposed) problem(entry, errorText(error), 'session');
     }
   }

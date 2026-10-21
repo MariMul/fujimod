@@ -10,7 +10,7 @@ import {
   type ModelStream,
   type UsbCameraServices,
 } from './usb-camera-model';
-import { Layer } from './log';
+import { Layer, Level } from './log';
 beforeAll(async () => {
   await initialize({
     module_or_path: await readFile(
@@ -89,7 +89,7 @@ class CameraDevice implements ModelDevice {
   watchLog() {
     return this.logs;
   }
-  emit(kind = 0xd0, consoleData: Uint8Array | null = null) {
+  emit(kind = 0xd0, consoleData: Uint8Array | null = null, overrides: Partial<Exchange> = {}) {
     this.logs.push({
       deviceId: this.id,
       holder: this.status.sessionOwner ?? { kind: 'remote', controller: 'peer' },
@@ -111,6 +111,7 @@ class CameraDevice implements ModelDevice {
       error: null,
       truncated: false,
       consoleData,
+      ...overrides,
     });
   }
   share(): UsbExporter {
@@ -153,11 +154,13 @@ class CameraDevice implements ModelDevice {
       readMemory: async () => {
         if (this.failRead) throw Error('read failed');
         this.emit();
+        this.emit(0xd1);
         return Uint8Array.of(1, 2, 3, 4);
       },
       readConfiguration: async () => Uint8Array.of(5),
       submitConsole: async (data) => {
         this.emit(0xd0, data);
+        this.emit(0xd1);
         return new Uint8Array();
       },
       pollConsole: async () => ({
@@ -479,7 +482,7 @@ test('production WebUSB owner keeps one open/claim through sharing and reads', a
     await model.setSharing(id, false);
     await model.withSession(id, 'memory', (s) => s.readMemory(0x1000, 4));
     await vi.waitFor(() =>
-      expect(model.log().filter((row) => row.layer === Layer.Ff80)).toHaveLength(8),
+      expect(model.log().filter((row) => row.layer === Layer.Ff80)).toHaveLength(6),
     );
     expect(wire.log.filter(([kind]) => kind === 'open')).toHaveLength(1);
     expect(wire.log.filter(([kind]) => kind === 'claim')).toHaveLength(1);
@@ -533,6 +536,157 @@ test('stopping a pending share and then restarting creates only the current atta
     expect(stopped).toHaveBeenCalledOnce();
     expect(f.model.cameras()[0].sharing).toBeDefined();
     expect(f.model.cameras()[0].present).toBe(true);
+  } finally {
+    f.model.dispose();
+  }
+});
+
+test('one command row merges request/reply totals and payloads, with errors on either phase', async () => {
+  const f = fixture();
+  try {
+    await idle(f.model);
+    f.model.clearLog();
+    const d = f.devices[0];
+    d.update({ sessionOwner: { kind: 'local', tool: 'configuration' } });
+    const request = {
+      operation: 'Read configuration',
+      address: 0x300,
+      length: 256,
+      data: Uint8Array.of(1, 2, 3),
+      transferred: 3,
+      envelope: new Uint8Array(12).fill(0xd0),
+    };
+    d.emit(0xd0, null, request);
+    await Promise.resolve();
+    expect(f.model.log().filter((row) => row.layer === Layer.Ff80)).toHaveLength(0);
+    d.emit(0xd1, null, {
+      operation: 'Reply header',
+      address: 0,
+      length: 2,
+      data: Uint8Array.of(4, 5),
+      transferred: 2,
+    });
+    await vi.waitFor(() =>
+      expect(f.model.log().filter((row) => row.layer === Layer.Ff80)).toHaveLength(1),
+    );
+    const row = f.model.log().find((row) => row.layer === Layer.Ff80)!;
+    expect(row.message).toBe('Read configuration · 0x300 · 256 B');
+    expect(row.sizes).toEqual({ sent: 27, received: 2 });
+    expect(row.data).toEqual(Uint8Array.of(4, 5));
+    expect(row.detail).toContain('Request payload: 01 02 03');
+    expect(row.holder).toEqual({ kind: 'local', tool: 'configuration' });
+    expect(row.level).toBe(Level.Debug);
+    d.emit(0xd0, null, { ...request, error: 'request stall' });
+    d.emit(0xd0, null, request);
+    d.emit(0xd1, null, { data: Uint8Array.of(9), transferred: 1, error: 'reply disconnected' });
+    d.emit(0xc0, null, {
+      operation: 'Open session',
+      address: null,
+      length: null,
+      data: new Uint8Array(8),
+      transferred: 8,
+    });
+    d.emit(0xc4, null, {
+      operation: 'Close session',
+      address: null,
+      length: null,
+      data: new Uint8Array(2),
+      transferred: 2,
+    });
+    await vi.waitFor(() =>
+      expect(f.model.log().filter((row) => row.layer === Layer.Ff80)).toHaveLength(5),
+    );
+    const rows = f.model.log().filter((row) => row.layer === Layer.Ff80);
+    expect(rows[1].level).toBe(Level.Error);
+    expect(rows[1].detail).toContain('request stall');
+    expect(rows[1].data).toEqual(new Uint8Array());
+    expect(rows[2].level).toBe(Level.Error);
+    expect(rows[2].detail).toContain('reply disconnected');
+    expect(rows[2].sizes).toEqual({ sent: 27, received: 1 });
+    expect(rows[2].data).toEqual(Uint8Array.of(9));
+    expect(rows.slice(3).map((row) => row.message)).toEqual(['Open session', 'Close session']);
+    expect(rows.slice(3).map((row) => row.sizes)).toEqual([
+      { sent: 12, received: 8 },
+      { sent: 12, received: 2 },
+    ]);
+  } finally {
+    f.model.dispose();
+  }
+});
+
+test('identity log rows name all seven wire selectors and decode their returned values', async () => {
+  const f = fixture();
+  try {
+    await idle(f.model);
+    f.model.clearLog();
+    const d = f.devices[0];
+    const identities = [
+      'Vendor',
+      'Manufacturer',
+      'Product',
+      'InternalVersion',
+      'DeviceType',
+      'Serial',
+      'Framework',
+    ];
+    const response = (text: string) => {
+      const data = new Uint8Array(16 + (text.length + 1) * 2),
+        view = new DataView(data.buffer);
+      view.setUint32(0, 0x150000, true);
+      for (let i = 0; i < text.length; i++) view.setUint16(16 + i * 2, text.charCodeAt(i), true);
+      return data;
+    };
+    for (const [index, name] of identities.entries()) {
+      const data = response(name === 'Product' ? 'X100V' : `Value ${name}`);
+      d.emit(0xd0, null, {
+        command: 0x150000,
+        operation: 'Device info',
+        selector: 1 << index,
+        address: null,
+        length: null,
+      });
+      d.emit(0xd1, null, { command: 0x150000, selector: null, data, transferred: data.length });
+    }
+    await vi.waitFor(() =>
+      expect(f.model.log().filter((row) => row.layer === Layer.Ff80)).toHaveLength(7),
+    );
+    expect(
+      f.model
+        .log()
+        .filter((row) => row.layer === Layer.Ff80)
+        .map((row) => row.message),
+    ).toEqual(
+      identities.map(
+        (name) => `Device info · ${name} → ${name === 'Product' ? 'X100V' : `Value ${name}`}`,
+      ),
+    );
+    const invalid = [
+      response('X').slice(0, -2),
+      response('\ud800'),
+      new Uint8Array(8),
+      response('Failed'),
+    ];
+    new DataView(invalid[3].buffer).setUint32(4, 1, true);
+    for (const data of invalid) {
+      d.emit(0xd0, null, {
+        command: 0x150000,
+        operation: 'Device info',
+        selector: 4,
+        address: null,
+        length: null,
+      });
+      d.emit(0xd1, null, { data, transferred: data.length });
+    }
+    await vi.waitFor(() =>
+      expect(f.model.log().filter((row) => row.layer === Layer.Ff80)).toHaveLength(11),
+    );
+    expect(
+      f.model
+        .log()
+        .filter((row) => row.layer === Layer.Ff80)
+        .slice(7)
+        .map((row) => row.message),
+    ).toEqual(Array(4).fill('Device info · Product'));
   } finally {
     f.model.dispose();
   }
