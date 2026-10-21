@@ -1,4 +1,5 @@
 import subprocess
+import threading
 from pathlib import Path
 
 import pytest
@@ -88,3 +89,14 @@ def test_detached_head_is_refused(repos: tuple[Path, Path]) -> None:
     (checkout / "a.txt").write_text("detached\n")
     with pytest.raises(Failure, match="detached"):
         Repository(checkout).commit(["a.txt"], None, "Detached\n")
+
+
+def test_commit_waits_for_a_busy_index(repos: tuple[Path, Path]) -> None:
+    remote, checkout = repos
+    lock = checkout / ".git" / "index.lock"
+    lock.write_text("")
+    threading.Timer(1.0, lock.unlink).start()
+    (checkout / "a.txt").write_text("waited\n")
+    result, _ = Repository(checkout).commit(["a.txt"], None, "Wait\n")
+    assert run("git", "rev-parse", "main", cwd=remote).strip() == result
+    assert run("git", "status", "--porcelain", cwd=checkout) == ""

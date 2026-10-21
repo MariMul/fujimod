@@ -21,9 +21,11 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 ATTEMPTS = 5
+LOCK_WAIT_SECONDS = 120
 
 
 class Failure(Exception):
@@ -48,15 +50,23 @@ class Repository:
         input: str | None = None,
         check: bool = True,
     ) -> subprocess.CompletedProcess[str]:
-        result = subprocess.run(
-            ["git", *arguments],
-            cwd=self.root,
-            env=env,
-            input=input,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        deadline = time.monotonic() + LOCK_WAIT_SECONDS
+        while True:
+            result = subprocess.run(
+                ["git", *arguments],
+                cwd=self.root,
+                env=env,
+                input=input,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            # Another Git process in the shared checkout holds the index briefly.
+            if "index.lock': File exists" not in result.stderr:
+                break
+            if time.monotonic() > deadline:
+                break
+            time.sleep(0.5)
         if check and result.returncode:
             command = " ".join(arguments)
             raise Failure(f"git {command} failed:\n{result.stderr.strip()}")
@@ -150,7 +160,16 @@ class Repository:
                 continue
             pushed = self.git("push", "-q", "origin", f"{result}:{ref}", check=False)
             if pushed.returncode == 0:
-                return result, self.reconcile_index(parent, result)
+                try:
+                    return result, self.reconcile_index(parent, result)
+                except Failure as error:
+                    # The commit is pushed; only the shared index is stale for its paths.
+                    print(
+                        f"commit: pushed {result[:10]}, but updating the shared index "
+                        f"failed; run `git reset -q HEAD -- PATHS` for its paths:\n{error}",
+                        file=sys.stderr,
+                    )
+                    return result, []
             # Origin moved: step the branch back unless something else moved it, then rebuild.
             if self.git("update-ref", ref, parent, result, check=False).returncode:
                 raise Failure(
