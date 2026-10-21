@@ -1,0 +1,435 @@
+//! Conservative A32 loop proofs. No firmware identities or software structures.
+//! A proof is rebuilt from permission-checked instruction bytes at each entry.
+//! The execution owner bounds the stable window at every event/peer boundary.
+use super::*;
+use fujimod_emulator_cpu::loops::LoopMode;
+
+#[derive(Default)]
+pub(super) struct Loops {
+    pub mode: Cell<LoopMode>,
+    pub window: Cell<bool>,
+    pub resume: Cell<bool>,
+    pub bypass: Cell<Option<u64>>,
+    pub poll_instructions: Cell<u64>,
+    pub counted_instructions: Cell<u64>,
+    pub accelerated_instructions: Cell<u64>,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum Operand {
+    Immediate(u32, Option<bool>),
+    Register(usize, u32, u32),
+}
+#[derive(Clone, Copy, Debug)]
+enum Op {
+    Data {
+        opcode: u32,
+        flags: bool,
+        dst: usize,
+        lhs: usize,
+        rhs: Operand,
+    },
+    Load {
+        dst: usize,
+        base: usize,
+        offset: u32,
+        width: usize,
+    },
+}
+#[derive(Clone, Debug)]
+struct Proof {
+    branch: u64,
+    condition: u32,
+    body: Vec<Op>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct State {
+    registers: [u32; 15],
+    cpsr: u32,
+}
+
+/// Only a direct, backward A32 B (never BL, BLX or the unconditional space).
+fn target(address: u64, word: u32) -> Option<u64> {
+    if word >> 28 == 15 || word & 0x0f00_0000 != 0x0a00_0000 {
+        return None;
+    }
+    let displacement = ((word << 8) as i32 >> 6) as i64;
+    let start = address.checked_add(8)?.checked_add_signed(displacement)?;
+    (start <= address && address - start <= 60).then_some(start)
+}
+fn decode(word: u32) -> Option<Op> {
+    // Conditional bodies, PC, writeback, register-offset loads, atomics,
+    // coprocessors, stores, barriers and hints are deliberately unsupported.
+    if word >> 28 != 14 {
+        return None;
+    }
+    let dst = ((word >> 12) & 15) as usize;
+    let lhs = ((word >> 16) & 15) as usize;
+    if dst == 15 || lhs == 15 {
+        return None;
+    }
+    if word & 0x0f30_0000 == 0x0510_0000 {
+        let offset = word & 0xfff;
+        return Some(Op::Load {
+            dst,
+            base: lhs,
+            offset: if word & (1 << 23) == 0 {
+                0u32.wrapping_sub(offset)
+            } else {
+                offset
+            },
+            width: if word & (1 << 22) == 0 { 4 } else { 1 },
+        });
+    }
+    if word & 0x0c00_0000 != 0 {
+        return None;
+    }
+    let opcode = (word >> 21) & 15;
+    if !matches!(opcode, 0 | 1 | 2 | 4 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15) {
+        return None;
+    }
+    let flags = word & (1 << 20) != 0;
+    if (8..=11).contains(&opcode) && (!flags || dst != 0) {
+        return None;
+    }
+    let rhs = if word & (1 << 25) != 0 {
+        let rotate = ((word >> 8) & 15) * 2;
+        let value = (word & 255).rotate_right(rotate);
+        Operand::Immediate(value, (rotate != 0).then_some(value >> 31 != 0))
+    } else {
+        if word & 16 != 0 || word & 15 == 15 {
+            return None;
+        }
+        Operand::Register((word & 15) as usize, (word >> 5) & 3, (word >> 7) & 31)
+    };
+    Some(Op::Data {
+        opcode,
+        flags,
+        dst,
+        lhs,
+        rhs,
+    })
+}
+impl Operand {
+    fn value(self, state: State) -> (u32, bool) {
+        let carry = state.cpsr & (1 << 29) != 0;
+        match self {
+            Self::Immediate(value, out) => (value, out.unwrap_or(carry)),
+            Self::Register(r, kind, shift) => {
+                let value = state.registers[r];
+                match (kind, shift) {
+                    (0, 0) => (value, carry),
+                    (0, n) => (value << n, value & (1 << (32 - n)) != 0),
+                    (1, 0) => (0, value >> 31 != 0),
+                    (1, n) => (value >> n, value & (1 << (n - 1)) != 0),
+                    (2, 0) => (((value as i32) >> 31) as u32, value >> 31 != 0),
+                    (2, n) => (((value as i32) >> n) as u32, value & (1 << (n - 1)) != 0),
+                    (3, 0) => ((u32::from(carry) << 31) | (value >> 1), value & 1 != 0),
+                    (3, n) => (value.rotate_right(n), value & (1 << (n - 1)) != 0),
+                    _ => unreachable!(),
+                }
+            }
+        }
+    }
+}
+impl Proof {
+    fn decode(start: u64, branch: u64, words: &[u32]) -> Option<Self> {
+        let (&word, body) = words.split_last()?;
+        if target(branch, word)? != start {
+            return None;
+        }
+        Some(Self {
+            branch,
+            condition: word >> 28,
+            body: body
+                .iter()
+                .map(|&word| decode(word))
+                .collect::<Option<_>>()?,
+        })
+    }
+    fn apply(
+        &self,
+        mut state: State,
+        mut read: impl FnMut(u32, usize) -> Option<u32>,
+    ) -> Option<State> {
+        for op in &self.body {
+            match *op {
+                Op::Load {
+                    dst,
+                    base,
+                    offset,
+                    width,
+                } => {
+                    state.registers[dst] = read(state.registers[base].wrapping_add(offset), width)?;
+                }
+                Op::Data {
+                    opcode,
+                    flags,
+                    dst,
+                    lhs,
+                    rhs,
+                } => {
+                    let a = state.registers[lhs];
+                    let (b, shifted_carry) = rhs.value(state);
+                    let (result, carry, overflow) = match opcode {
+                        2 | 10 => {
+                            let result = a.wrapping_sub(b);
+                            (result, a >= b, ((a ^ b) & (a ^ result)) >> 31 != 0)
+                        }
+                        4 | 11 => {
+                            let (result, carry) = a.overflowing_add(b);
+                            (result, carry, (!(a ^ b) & (a ^ result)) >> 31 != 0)
+                        }
+                        _ => (
+                            match opcode {
+                                0 | 8 => a & b,
+                                1 | 9 => a ^ b,
+                                12 => a | b,
+                                13 => b,
+                                14 => a & !b,
+                                15 => !b,
+                                _ => unreachable!(),
+                            },
+                            shifted_carry,
+                            state.cpsr & (1 << 28) != 0,
+                        ),
+                    };
+                    if !(8..=11).contains(&opcode) {
+                        state.registers[dst] = result;
+                    }
+                    if flags {
+                        state.cpsr = (state.cpsr & 0x0fff_ffff)
+                            | (result & 0x8000_0000)
+                            | (u32::from(result == 0) << 30)
+                            | (u32::from(carry) << 29)
+                            | (u32::from(overflow) << 28);
+                    }
+                }
+            }
+        }
+        Some(state)
+    }
+    fn taken(&self, state: State) -> bool {
+        arm::condition_passes(self.condition, state.cpsr)
+    }
+    fn length(&self) -> u64 {
+        self.body.len() as u64 + 1
+    }
+    /// A single unit-step counter, followed only by a fixed comparison.
+    /// Restricting the algebra keeps its first-exit proof small and auditable.
+    fn counter(&self) -> Option<(usize, i64, u32)> {
+        let (&first, rest) = self.body.split_first()?;
+        let Op::Data {
+            opcode,
+            flags,
+            dst,
+            lhs,
+            rhs: Operand::Immediate(1, _),
+        } = first
+        else {
+            return None;
+        };
+        if dst != lhs || !matches!(opcode, 2 | 4) {
+            return None;
+        }
+        let compare = match rest {
+            [] if flags => 0,
+            [
+                Op::Data {
+                    opcode: 10,
+                    lhs,
+                    rhs: Operand::Immediate(value, _),
+                    ..
+                },
+            ] if *lhs == dst => *value,
+            _ => return None,
+        };
+        matches!(self.condition, 1 | 2 | 3 | 8 | 9).then_some((
+            dst,
+            if opcode == 2 { -1 } else { 1 },
+            compare,
+        ))
+    }
+    fn advance(
+        &self,
+        state: State,
+        cycles: u64,
+        mut read: impl FnMut(u32, usize) -> Option<u32>,
+    ) -> Option<(State, u64, bool)> {
+        if cycles == 0 || !self.taken(state) {
+            return None;
+        }
+        let next = self.apply(state, &mut read)?;
+        // Fixed point of the complete architectural state. The read callback
+        // proves that every addressed byte is stable for this entire window.
+        if next == state {
+            return Some((state, cycles, false));
+        }
+        let (counter, step, compare) = self.counter()?;
+        let value = state.registers[counter];
+        let distance = if step < 0 {
+            u64::from(value)
+        } else {
+            u64::from(u32::MAX - value)
+        };
+        let mut limit = cycles.min(distance);
+        // NE can become false at equality and true again afterwards.
+        if self.condition == 1 {
+            let equal = if step < 0 {
+                value.checked_sub(compare)
+            } else {
+                compare.checked_sub(value)
+            };
+            if let Some(equal) = equal.filter(|&n| n != 0) {
+                limit = limit.min(u64::from(equal));
+            }
+        }
+        if limit == 0 {
+            return None;
+        }
+        let at = |n: u64| {
+            let mut before = state;
+            before.registers[counter] = (i64::from(value) + step * (n as i64 - 1)) as u32;
+            self.apply(before, |_, _| None).unwrap()
+        };
+        // Unsigned comparisons are monotonic between the no-wrap boundaries.
+        if !self.taken(at(limit)) {
+            let (mut low, mut high) = (1, limit);
+            while low < high {
+                let mid = low + (high - low) / 2;
+                if self.taken(at(mid)) {
+                    low = mid + 1;
+                } else {
+                    high = mid;
+                }
+            }
+            limit = low;
+        }
+        Some((at(limit), limit, true))
+    }
+}
+
+impl Execution {
+    pub(super) fn loop_candidate(&self, address: u64, word: u32) -> bool {
+        self.loops.mode.get() != LoopMode::Disabled && self.loop_proof(address, word).is_some()
+    }
+    fn loop_proof(&self, address: u64, word: u32) -> Option<Proof> {
+        let start = target(address, word)?;
+        let mut bytes = [0; 64];
+        let bytes = &mut bytes[..(address - start + 4) as usize];
+        self.cpu.read_virtual(start, Access::Fetch, bytes).ok()?;
+        let words: Vec<_> = bytes
+            .chunks_exact(4)
+            .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+            .collect();
+        Proof::decode(start, address, &words)
+    }
+    fn loop_read(&self, address: u32, width: usize) -> Option<u32> {
+        if !(address as usize).is_multiple_of(width) {
+            return None;
+        }
+        let mut bytes = [0; 4];
+        // Permission-checked and observational. Device reads are refused here.
+        if self
+            .cpu
+            .read_virtual(u64::from(address), Access::Read, &mut bytes[..width])
+            .is_ok()
+        {
+            return Some(u32::from_le_bytes(bytes));
+        }
+        if width == 4 {
+            let physical = self.cpu.translate(u64::from(address), Access::Read).ok()?;
+            return self.loop_reads.borrow().iter().find_map(|(base, read)| {
+                (physical == base + read.register_offset)
+                    .then(|| read.value.load(std::sync::atomic::Ordering::Acquire))
+            });
+        }
+        None
+    }
+    pub(super) fn execute_loop(&self, address: u64, word: u32) -> Result<bool, String> {
+        if self.loops.mode.get() == LoopMode::Disabled
+            || target(address, word).is_none()
+            || self.thumb.get()
+            || self.policy.get() != ExecutionPolicy::Exact
+            || !self.loops.window.get()
+            || self.memory.flush_pending()
+        {
+            return Ok(false);
+        }
+        if self.loops.bypass.take() == Some(address) {
+            return Ok(false);
+        }
+        let start = target(address, word).unwrap();
+        if self
+            .observers
+            .borrow()
+            .values()
+            .any(|observer| match observer.hook {
+                Hook::Instruction { range, .. } | Hook::Block { range, .. } => match range {
+                    HookRange::All => true,
+                    HookRange::Inclusive { begin, end } => begin <= address && end >= start,
+                },
+                Hook::Memory { read: true, .. } => true,
+                _ => false,
+            })
+        {
+            return Ok(false);
+        }
+        let Some(proof) = self.loop_proof(address, word) else {
+            return Ok(false);
+        };
+        let mut state = State {
+            registers: [0; 15],
+            cpsr: self.scalar(arm::CPSR)?,
+        };
+        if state.cpsr & ((1 << 9) | (1 << 24)) != 0 {
+            return Ok(false);
+        }
+        for (r, value) in state.registers.iter_mut().enumerate() {
+            *value = self.scalar(arm::CORE[r])?;
+        }
+        let room = self.cap.get().saturating_sub(self.count.get() - 1);
+        let Some((after, cycles, counted)) =
+            proof.advance(state, (room / proof.length()).max(1), |p, n| {
+                self.loop_read(p, n)
+            })
+        else {
+            return Ok(false);
+        };
+        let counter = if counted {
+            &self.loops.counted_instructions
+        } else {
+            &self.loops.poll_instructions
+        };
+        counter.set(counter.get().saturating_add(proof.length()));
+        if self.loops.mode.get() != LoopMode::Accelerate || cycles * proof.length() > room {
+            return Ok(false);
+        }
+        let skipped = cycles * proof.length();
+        for (r, value) in after.registers.iter().enumerate() {
+            if *value != state.registers[r] {
+                self.set(arm::CORE[r], *value)?;
+            }
+        }
+        if after.cpsr != state.cpsr {
+            self.set(arm::CPSR, after.cpsr)?;
+        }
+        self.count.set(self.count.get() - 1 + skipped);
+        counter.set(counter.get().saturating_add(skipped - proof.length()));
+        self.loops.accelerated_instructions.set(
+            self.loops
+                .accelerated_instructions
+                .get()
+                .saturating_add(skipped),
+        );
+        self.reset_budget();
+        self.loops.resume.set(true);
+        self.loops.bypass.set(Some(proof.branch));
+        self.set(arm::PC, proof.branch as u32)?;
+        self.cpu.stop()?;
+        Ok(true)
+    }
+}
+
+#[cfg(test)]
+mod tests;

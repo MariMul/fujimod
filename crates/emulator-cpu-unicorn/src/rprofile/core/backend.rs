@@ -1,6 +1,19 @@
 use super::*;
 
 impl Cpu for Core {
+    fn set_loop_mode(&self, mode: fujimod_emulator_cpu::loops::LoopMode) -> Result<(), String> {
+        let e = &self.execution;
+        e.memory.require_stopped()?;
+        e.cpu.invalidate_code(None)?;
+        e.loops.mode.set(mode);
+        e.loops.bypass.set(None);
+        Ok(())
+    }
+    fn set_loop_window(&self, stable: bool) -> Result<(), String> {
+        self.execution.memory.require_stopped()?;
+        self.execution.loops.window.set(stable);
+        Ok(())
+    }
     fn identity(&self) -> Identity {
         self.execution.cpu.identity()
     }
@@ -258,6 +271,9 @@ impl Cpu for Core {
             e.cpu.unmap(address, bytes)?;
             return Err(error);
         }
+        e.loop_reads
+            .borrow_mut()
+            .extend(fast_reads.iter().cloned().map(|read| (address, read)));
         e.fast_reads.borrow_mut().extend(fast_reads);
         Ok(())
     }
@@ -270,6 +286,10 @@ impl Cpu for Core {
         e.memory.unmap(e.id.get(), address, bytes);
         e.remove_external(address, bytes);
         let end = address + bytes as u64;
+        e.loop_reads.borrow_mut().retain(|(base, read)| {
+            let p = base + read.register_offset;
+            p + 4 <= address || p >= end
+        });
         let affected: Vec<_> = e
             .mmio_hooks
             .borrow()
@@ -325,6 +345,9 @@ impl Cpu for Core {
         }
         e.clock_overshoot.set(0);
         e.count.set(0);
+        if request.until.is_some() {
+            e.loops.window.set(false);
+        }
         if request.instructions == Some(0) {
             return Ok(Exit::Stopped);
         }
@@ -360,6 +383,7 @@ impl Cpu for Core {
             }
         }
         let result = self.execute(request, begin);
+        e.loops.window.set(false);
         e.clock_overshoot
             .set(if e.policy.get() == ExecutionPolicy::Interactive {
                 e.count.get().saturating_sub(e.cap.get())
@@ -519,6 +543,14 @@ impl Cpu for Core {
         Ok(())
     }
     fn exit_counters(&self) -> Result<BTreeMap<&'static str, u64>, String> {
-        self.execution.cpu.exit_counters()
+        let mut counters = self.execution.cpu.exit_counters()?;
+        let l = &self.execution.loops;
+        counters.insert("loop_poll_instructions", l.poll_instructions.get());
+        counters.insert("loop_counted_instructions", l.counted_instructions.get());
+        counters.insert(
+            "loop_accelerated_instructions",
+            l.accelerated_instructions.get(),
+        );
+        Ok(counters)
     }
 }

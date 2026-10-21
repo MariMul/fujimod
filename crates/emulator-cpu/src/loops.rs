@@ -1,0 +1,18 @@
+//! Execution-owner permission for exact, instruction-proven loop acceleration.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LoopMode {
+    #[default]
+    Disabled,
+    Measure,
+    Accelerate,
+}
+impl LoopMode {
+    pub fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "disabled" => Ok(Self::Disabled),
+            "measure" => Ok(Self::Measure),
+            "accelerate" => Ok(Self::Accelerate),
+            _ => Err(format!("unknown loop execution mode: {value}")),
+        }
+    }
+}

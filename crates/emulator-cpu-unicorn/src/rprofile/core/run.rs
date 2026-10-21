@@ -47,7 +47,8 @@ impl Core {
             if flush {
                 e.memory.flush()?;
             }
-            if (remap.is_some() || flush)
+            let loop_resume = e.loops.resume.replace(false);
+            if (remap.is_some() || flush || loop_resume)
                 && !e.user_stop.get()
                 && e.hint.get().is_none()
                 && e.count.get() < e.cap.get()

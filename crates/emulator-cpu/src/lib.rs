@@ -6,12 +6,13 @@
 use std::any::Any;
 use std::ffi::c_void;
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 pub mod arm;
 pub mod arm64;
 pub mod exclusive;
+pub mod loops;
 pub mod memory;
 pub mod timeline;
 #[cfg(target_os = "emscripten")]
@@ -364,6 +365,20 @@ pub struct BackingObserver {
 
 pub trait Cpu {
     fn identity(&self) -> Identity;
+    /// Configure instruction-proven loops; statistics remain observational.
+    fn set_loop_mode(&self, mode: loops::LoopMode) -> Result<(), String> {
+        if mode == loops::LoopMode::Disabled {
+            Ok(())
+        } else {
+            Err("backend has no exact loop acceleration".into())
+        }
+    }
+    /// The execution owner guarantees no RAM/input changes before this run's
+    /// instruction cap: stop at device, DMA, interrupt and runnable-peer events.
+    /// The permission expires when the bounded run returns.
+    fn set_loop_window(&self, _stable: bool) -> Result<(), String> {
+        Ok(())
+    }
     /// Select how a bounded run handles its instruction target. Backends that
     /// do not support coarse interactive execution keep exact behavior only.
     fn set_execution_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
