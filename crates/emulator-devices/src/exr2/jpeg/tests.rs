@@ -288,3 +288,74 @@ fn worker_codec_retains_exact_stream_bytes_error_state_and_completion() {
     implicit_and_explicit_packed_input_modes_encode_the_same_addressed_pixels();
     crate::work::configure(0).unwrap();
 }
+
+#[test]
+fn stream_encode_start_retains_pending_warp_without_joining_or_publishing() {
+    use std::sync::mpsc;
+    crate::work::configure(2).unwrap();
+    let (release, held) = mpsc::channel();
+    let (started, running) = mpsc::channel();
+    let stream: StreamHandle = Default::default();
+    {
+        let mut s = stream.lock().unwrap();
+        s.state = State::Ready;
+        s.width = 16;
+        s.height = 8;
+        s.pixels.defer(move |_| {
+            started.send(()).unwrap();
+            held.recv().unwrap();
+            vec![128; 256]
+        });
+    }
+    running.recv().unwrap();
+    let mut h = TestHost::new();
+    h.ram[0x9000..0xa000].fill(0xa5);
+    let mut e = encoder(stream.clone());
+    configure(&mut e, &mut h, true);
+    write(&mut e, &mut h, 0xfff62000, 5);
+    assert_eq!(stream.lock().unwrap().state, State::Claimed);
+    assert!(h.effects.is_empty());
+    assert!(h.ram[0x9000..0xa000].iter().all(|&v| v == 0xa5));
+    release.send(()).unwrap();
+    advance_from_checkpoint(&mut e, &mut h, 9);
+    assert!(h.effects.is_empty());
+    advance(&mut e, &mut h, 10);
+    assert_eq!(h.effects, ["dma", "irq"]);
+    assert_eq!(stream.lock().unwrap().state, State::Finished);
+    assert_eq!(&h.ram[0x9000..0x9004], &[0xa5, 0xa5, 255, 0xc4]);
+    crate::work::configure(0).unwrap();
+}
+
+#[test]
+fn deferred_entropy_failure_survives_checkpoint_without_dma_or_irq() {
+    crate::work::configure(2).unwrap();
+    let stream: StreamHandle = Default::default();
+    {
+        let mut s = stream.lock().unwrap();
+        s.state = State::Ready;
+        s.width = 16;
+        s.height = 8;
+        s.pixels = (0..256)
+            .map(|i| ((i * 73 + i / 7) % 256) as u8)
+            .collect::<Vec<_>>()
+            .into();
+    }
+    let mut h = TestHost::new();
+    h.ram[0x9000..0xa000].fill(0xa5);
+    let mut e = encoder(stream.clone());
+    configure(&mut e, &mut h, true);
+    write(&mut e, &mut h, 0xfff62110, 640);
+    write(&mut e, &mut h, 0xfff62000, 5);
+    let saved = e.checkpoint().unwrap();
+    e.restore_checkpoint(&saved).unwrap();
+    assert!(h.effects.is_empty());
+    h.now = 10;
+    let mut cx = h.cx();
+    e.advance(&mut cx);
+    assert_eq!(cx.refusal(), Some("JPEG output exceeds capacity"));
+    assert_eq!(stream.lock().unwrap().state, State::Ready);
+    assert!(h.effects.is_empty());
+    assert!(h.ram[0x9000..0xa000].iter().all(|&v| v == 0xa5));
+    assert_eq!(e.next_deadline(10), None);
+    crate::work::configure(0).unwrap();
+}

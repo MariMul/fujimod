@@ -28,7 +28,6 @@ pub struct Decoder {
     options: Options,
     irq: Irq,
     source: Arc<[u8]>,
-    rgb: Arc<[u8]>,
     dma: Transfer,
     pending: Option<Pending>,
 }
@@ -72,7 +71,6 @@ impl Decoder {
             options,
             irq,
             source: Arc::from([]),
-            rgb: Arc::from([]),
             dma: Transfer::default(),
             pending: None,
         })
@@ -138,25 +136,6 @@ impl Decoder {
         let size = decoder
             .output_buffer_size()
             .ok_or("JPEG output size unknown")?;
-        let source = self.source.clone();
-        let (rgb, decoded) = crate::work::Job::submit(move || {
-            let options = DecoderOptions::new_safe()
-                .set_use_unsafe(false)
-                .set_strict_mode(true)
-                .set_max_width(8192)
-                .set_max_height(8192)
-                .jpeg_set_out_colorspace(ColorSpace::RGB);
-            let mut decoder =
-                zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(source.as_ref()), options);
-            let mut rgb = vec![0; size];
-            let decoded = decoder
-                .decode_into(&mut rgb)
-                .map_err(|e| format!("invalid JPEG image: {e:?}"));
-            (rgb, decoded)
-        })
-        .into_value();
-        self.rgb = rgb.into();
-        decoded?;
         self.dma.prepare(
             cx.now(),
             self.options.completion_ticks,
@@ -168,19 +147,32 @@ impl Decoder {
             },
             pitch * 2,
         )?;
-        let rgb = self.rgb.clone();
-        self.dma
-            .pixels
-            .defer_rows(pitch * 2, rows, move |output_rows, pixels| {
+        let source = self.source.clone();
+        self.dma.pixels.defer_fallible(move |mut pixels| {
+            let result = (|| {
+                let options = DecoderOptions::new_safe()
+                    .set_use_unsafe(false)
+                    .set_strict_mode(true)
+                    .set_max_width(8192)
+                    .set_max_height(8192)
+                    .jpeg_set_out_colorspace(ColorSpace::RGB);
+                let mut decoder = zune_jpeg::JpegDecoder::new_with_options(
+                    ZCursor::new(source.as_ref()),
+                    options,
+                );
+                let mut rgb = vec![0; size];
+                decoder
+                    .decode_into(&mut rgb)
+                    .map_err(|e| format!("invalid JPEG image: {e:?}"))?;
                 let factor = 1usize << shift;
-                for (local_y, y) in output_rows.enumerate() {
+                for y in 0..rows {
                     if y >= h {
                         continue;
                     }
                     for x in (0..w).step_by(2) {
                         let a = rgb_to_ycc(rgb_pixel(&rgb, sw, factor, x, y));
                         let b = rgb_to_ycc(rgb_pixel(&rgb, sw, factor, x + 1, y));
-                        let at = (local_y * pitch + x) * 2;
+                        let at = (y * pitch + x) * 2;
                         pixels[at..at + 4].copy_from_slice(&[
                             a[0],
                             b[0],
@@ -189,7 +181,16 @@ impl Decoder {
                         ]);
                     }
                 }
-            });
+                Ok(())
+            })();
+            (pixels, result)
+        });
+        if crate::work::worker_count() == 0
+            && let Err(error) = self.dma.check_result()
+        {
+            self.dma.cancel();
+            return Err(error);
+        }
         self.pending = Some(Pending::Decode(count as u32));
         Ok(())
     }
@@ -221,7 +222,7 @@ impl Device for Decoder {
         r: Vec<u32>,
         dma: Transfer,
         pending: Option<Pending>,
-        ; blobs: [source, rgb]
+        ; blobs: [source]
     );
     fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
         Ok(self.save())
@@ -373,19 +374,35 @@ mod checkpoint_tests {
         )
         .unwrap();
         device.source = vec![0xf9; 4096].into();
-        device.rgb = (0..16384).map(|i| i as u8).collect::<Vec<_>>().into();
+        device
+            .dma
+            .prepare(
+                0,
+                5,
+                Raster {
+                    address: 0x4000,
+                    width: 8,
+                    height: 8,
+                    pitch: 16,
+                },
+                16,
+            )
+            .unwrap();
+        for (i, byte) in device.dma.pixels.iter_mut().enumerate() {
+            *byte = i as u8;
+        }
         device.pending = Some(Pending::Decode(41));
         let identity = device.fingerprint().unwrap();
         let saved = device.checkpoint().unwrap();
-        assert!(saved.bytes() < device.source.len() + device.rgb.len() + 1024);
+        assert!(saved.bytes() < device.source.len() + device.dma.pixels.len() + 1024);
         Arc::make_mut(&mut device.source).fill(0);
-        Arc::make_mut(&mut device.rgb).fill(0);
+        device.dma.pixels.fill(0);
         device.pending = None;
         device.restore_checkpoint(&saved).unwrap();
         assert_eq!(&*device.source, &vec![0xf9; 4096]);
         assert_eq!(
-            &*device.rgb,
-            &(0..16384).map(|i| i as u8).collect::<Vec<_>>()
+            &**device.dma.pixels,
+            &(0..128).map(|i| i as u8).collect::<Vec<_>>()
         );
         assert!(matches!(device.pending, Some(Pending::Decode(41))));
         assert_eq!(device.fingerprint().unwrap(), identity);

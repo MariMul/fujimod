@@ -4,7 +4,7 @@
 //! DMA bytes/count/status precede IRQ77.
 use crate::exr2::isp::{
     Irq,
-    dma::{Raster, Transfer, physical},
+    dma::{Transfer, physical},
     due,
     stream::{State, StreamHandle},
     word,
@@ -23,7 +23,7 @@ pub struct Options {
 enum Pending {
     Idle(u64),
     Reset(u64),
-    Encode { stream: bool, produced: u32 },
+    Encode { stream: bool },
 }
 pub struct Encoder {
     r: Vec<u32>,
@@ -122,20 +122,12 @@ impl Encoder {
             return Err("JPEG output requires aligned bounded allocation".into());
         }
         let streaming = r[0x120 / 4] == 2;
-        if streaming {
+        let restart = r[0x80 / 4] as u16;
+        self.codec
+            .validate(w * h * 2, w, h, restart, capacity - 2)?;
+        let input = if streaming {
             let mut s = self.stream.lock().unwrap();
-            let input = s.claim(w, h)?;
-            if let Err(e) = self.codec.encode(
-                input,
-                w,
-                h,
-                r[0x80 / 4] as u16,
-                &mut self.dma.pixels,
-                capacity - 2,
-            ) {
-                s.state = State::Ready;
-                return Err(e);
-            }
+            Some(s.claim(w, h)?)
         } else {
             let src = r[0x100 / 4] as u64;
             let count = w * h * 2;
@@ -145,36 +137,41 @@ impl Encoder {
             }
             self.source = vec![0; count].into();
             cx.ram_read(src, Arc::get_mut(&mut self.source).unwrap())?;
-            self.codec.encode(
-                &self.source,
-                w,
-                h,
-                r[0x80 / 4] as u16,
-                &mut self.dma.pixels,
-                capacity - 2,
-            )?;
-        }
-        let count = self.dma.pixels.len();
-        if let Err(e) = self.dma.prepare(
+            None
+        };
+        if let Err(e) = self.dma.prepare_variable(
             cx.now(),
             self.options.completion_ticks,
-            Raster {
-                address: dst + 2,
-                width: 1,
-                height: 1,
-                pitch: count,
-            },
-            count,
+            dst + 2,
+            capacity - 2,
         ) {
             if streaming {
                 self.stream.lock().unwrap().state = State::Ready;
             }
             return Err(e);
         }
-        self.pending = Some(Pending::Encode {
-            stream: streaming,
-            produced: (count + 2) as u32,
+        let codec = self.codec.clone();
+        let source = self.source.clone();
+        self.dma.pixels.defer_fallible(move |mut out| {
+            let result = (|| {
+                let pixels = match &input {
+                    Some(input) => input.bytes()?,
+                    None => &source,
+                };
+                codec.encode(pixels, w, h, restart, &mut out, capacity - 2)
+            })();
+            (out, result)
         });
+        if crate::work::worker_count() == 0
+            && let Err(error) = self.dma.check_result()
+        {
+            self.dma.cancel();
+            if streaming {
+                self.stream.lock().unwrap().state = State::Ready;
+            }
+            return Err(error);
+        }
+        self.pending = Some(Pending::Encode { stream: streaming });
         Ok(())
     }
     fn store(&mut self, cx: &Cx<'_>, o: usize, v: u32) -> Result<(), String> {
@@ -288,7 +285,17 @@ impl Device for Encoder {
                 self.cursor = 0;
                 self.ready = false;
             }
-            Pending::Encode { stream, produced } => {
+            Pending::Encode { stream } => {
+                if let Err(error) = self.dma.check_result() {
+                    self.dma.cancel();
+                    self.pending = None;
+                    if stream {
+                        self.stream.lock().unwrap().state = State::Ready;
+                    }
+                    cx.fail(error);
+                    return;
+                }
+                let produced = (self.dma.pixels.len() + 2) as u32;
                 match self.dma.write(cx) {
                     Ok(true) => {}
                     Ok(false) => return,
@@ -358,10 +365,7 @@ mod checkpoint_tests {
         device.fifo = (0..128).map(|i| (255 - i) as u8).collect();
         device.cursor = 16;
         device.ready = true;
-        device.pending = Some(Pending::Encode {
-            stream: false,
-            produced: 47,
-        });
+        device.pending = Some(Pending::Encode { stream: false });
         let identity = device.fingerprint().unwrap();
         let saved = device.checkpoint().unwrap();
         assert!(saved.bytes() < device.source.len() + device.fifo.len() + 1024);
@@ -380,10 +384,7 @@ mod checkpoint_tests {
         assert!(device.ready);
         assert!(matches!(
             device.pending,
-            Some(Pending::Encode {
-                stream: false,
-                produced: 47
-            })
+            Some(Pending::Encode { stream: false })
         ));
         assert_eq!(device.fingerprint().unwrap(), identity);
     }

@@ -121,6 +121,9 @@ pub struct Transfer {
     raster: Option<Raster>,
     row_bytes: usize,
     deadline: Option<u64>,
+    // Host-only: variable-size pure work resolves the ordinary DMA layout on
+    // inspection/completion. A checkpoint stores that materialized layout.
+    variable: bool,
 }
 impl Serialize for Transfer {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -134,10 +137,11 @@ impl Serialize for Transfer {
             #[serde(skip_serializing_if = "Option::is_none")]
             failure: Option<&'a str>,
         }
+        let (raster, row_bytes) = self.layout();
         Snapshot {
             pixels: &self.pixels,
-            raster: self.raster,
-            row_bytes: self.row_bytes,
+            raster,
+            row_bytes,
             deadline: self.deadline,
             failure: self.pixels.failure(),
         }
@@ -161,17 +165,15 @@ impl<'de> Deserialize<'de> for Transfer {
             raster: saved.raster,
             row_bytes: saved.row_bytes,
             deadline: saved.deadline,
+            variable: false,
         })
     }
 }
 impl Transfer {
     pub fn fingerprint(&self) -> serde_json::Value {
-        let Self {
-            pixels,
-            raster,
-            row_bytes,
-            deadline,
-        } = self;
+        let pixels = &self.pixels;
+        let (raster, row_bytes) = self.layout();
+        let deadline = self.deadline;
         let mut value = serde_json::json!({"pixels":crate::fingerprint::bytes(pixels),"raster":raster,
             "row_bytes":row_bytes,"deadline":deadline});
         if let Some(failure) = pixels.failure() {
@@ -195,21 +197,56 @@ impl Transfer {
         self.raster = Some(raster);
         self.row_bytes = row_bytes;
         self.deadline = Some(deadline);
+        self.variable = false;
         Ok(())
+    }
+    /// Reserve a bounded destination while a codec derives its actual byte
+    /// count. Allocation, computation and length resolution stay off START.
+    pub fn prepare_variable(
+        &mut self,
+        now: u64,
+        delay: u64,
+        address: u64,
+        capacity: usize,
+    ) -> Result<(), String> {
+        if self.deadline.is_some() {
+            return Err("image DMA is already pending".into());
+        }
+        let raster = Raster {
+            address,
+            width: 1,
+            height: 1,
+            pitch: capacity,
+        };
+        raster.validate(capacity)?;
+        let deadline = due(now, delay)?;
+        self.pixels.clear();
+        self.raster = Some(raster);
+        self.row_bytes = capacity;
+        self.deadline = Some(deadline);
+        self.variable = true;
+        Ok(())
+    }
+    fn layout(&self) -> (Option<Raster>, usize) {
+        if self.variable {
+            let size = self.pixels.len();
+            (self.raster.map(|r| Raster { pitch: size, ..r }), size)
+        } else {
+            (self.raster, self.row_bytes)
+        }
     }
     /// Validate owned staging and addressed rows before accepting a checkpoint.
     pub fn validate(&self) -> Result<(), String> {
-        match (self.deadline, self.raster) {
+        let (raster, row_bytes) = self.layout();
+        match (self.deadline, raster) {
             (Some(_), Some(raster)) => {
-                raster.validate(self.row_bytes)?;
-                if self.pixels.len() != self.row_bytes * raster.height {
+                raster.validate(row_bytes)?;
+                if self.pixels.len() != row_bytes * raster.height {
                     return Err("image DMA staging size differs from raster".into());
                 }
             }
             (None, None)
-                if self.row_bytes == 0
-                    && self.pixels.is_empty()
-                    && self.pixels.failure().is_none() => {}
+                if row_bytes == 0 && self.pixels.is_empty() && self.pixels.failure().is_none() => {}
             _ => return Err("inconsistent image DMA staging/deadline".into()),
         }
         Ok(())
@@ -228,6 +265,7 @@ impl Transfer {
         self.deadline = None;
         self.raster = None;
         self.row_bytes = 0;
+        self.variable = false;
         // Completed bytes live in guest RAM. Keep allocation capacity for the
         // next transfer without retaining a second full image in saved state.
         self.pixels.clear();
@@ -237,17 +275,21 @@ impl Transfer {
             return Ok(false);
         }
         self.check_result()?;
-        let r = self.raster.ok_or("image DMA has no destination")?;
+        let (raster, row_bytes) = self.layout();
+        let r = raster.ok_or("image DMA has no destination")?;
+        if self.variable && row_bytes > self.row_bytes {
+            return Err("image DMA result exceeds reserved capacity".into());
+        }
         // Every physical row span and nonoverlap were checked at preparation;
         // the runtime bus additionally enforces the selected body backing.
-        if self.row_bytes == r.pitch {
+        if row_bytes == r.pitch {
             write(cx, r.address, &self.pixels)?;
         } else {
             for y in 0..r.height {
                 write(
                     cx,
                     r.address + (y * r.pitch) as u64,
-                    &self.pixels[y * self.row_bytes..(y + 1) * self.row_bytes],
+                    &self.pixels[y * row_bytes..(y + 1) * row_bytes],
                 )?;
             }
         }

@@ -20,12 +20,16 @@ pub struct Stream {
 }
 pub type StreamHandle = Arc<Mutex<Stream>>;
 impl Stream {
-    pub fn claim(&mut self, width: usize, height: usize) -> Result<&[u8], String> {
+    pub fn claim(
+        &mut self,
+        width: usize,
+        height: usize,
+    ) -> Result<crate::work::FrozenBytes, String> {
         if self.state != State::Ready || self.width != width || self.height != height {
             return Err("JPEG has no matching started warp stream".into());
         }
         self.state = State::Claimed;
-        Ok(&self.pixels)
+        Ok(self.pixels.freeze())
     }
     pub fn finish(&mut self) -> Result<(), String> {
         if self.state != State::Claimed {

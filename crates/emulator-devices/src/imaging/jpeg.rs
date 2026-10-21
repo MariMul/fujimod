@@ -283,15 +283,14 @@ impl Codec {
         }
         Ok(())
     }
-    /// DHT..EOI, excluding SOI/reserved bytes. No full-frame component or
-    /// coefficient allocations: four 8x8 stack blocks per MCU.
-    pub fn encode(
+    /// Validate geometry, tables and the minimum header allocation without
+    /// reading image bytes or running the transform/entropy kernel.
+    pub fn validate(
         &self,
-        source: &[u8],
+        source_bytes: usize,
         width: usize,
         height: usize,
         restart: u16,
-        output: &mut Vec<u8>,
         capacity: usize,
     ) -> Result<(), String> {
         if width < 16
@@ -301,27 +300,38 @@ impl Codec {
             || width > 65535
             || height > 65535
             || width * height > 32_000_000
-            || source.len() != width * height * 2
+            || source_bytes != width * height * 2
             || self.uploaded.contains(&0)
             || capacity == 0
             || capacity > 64 * 1024 * 1024
         {
             return Err("JPEG input escapes bounded packed422 class".into());
         }
-        if crate::work::worker_count() != 0 {
-            let codec = self.clone();
-            let source: std::sync::Arc<[u8]> = source.into();
-            let staging = std::mem::take(output);
-            let (staging, result) = crate::work::Job::submit(move || {
-                let mut staging = staging;
-                // Workers have no owner executor, so this runs the serial kernel.
-                let result = codec.encode(&source, width, height, restart, &mut staging, capacity);
-                (staging, result)
-            })
-            .into_value();
-            *output = staging;
-            return result;
-        }
+        let mut header = [0; 1024];
+        self.headers(
+            &mut Writer {
+                out: &mut header[..capacity.min(1024)],
+                at: 0,
+                bits: 0,
+                count: 0,
+            },
+            width,
+            height,
+            restart,
+        )
+    }
+    /// DHT..EOI, excluding SOI/reserved bytes. Pure serial kernel; the owning
+    /// device chooses when and where to execute it.
+    pub fn encode(
+        &self,
+        source: &[u8],
+        width: usize,
+        height: usize,
+        restart: u16,
+        output: &mut Vec<u8>,
+        capacity: usize,
+    ) -> Result<(), String> {
+        self.validate(source.len(), width, height, restart, capacity)?;
         output.resize(capacity, 0);
         let mut w = Writer {
             out: output,

@@ -137,13 +137,38 @@ impl<T: Send + Sync + 'static> Job<T> {
 pub struct Buffer {
     bytes: Vec<u8>,
     failure: Option<String>,
-    job: Option<Job<BufferResult>>,
+    job: Option<Arc<Job<BufferResult>>>,
 }
 struct BufferResult {
     bytes: Vec<u8>,
     failure: Option<String>,
 }
+/// Immutable bytes that may still be deriving on the same executor. Consumers
+/// retain the dependency without making the device owner wait at START.
+#[derive(Clone)]
+pub struct FrozenBytes(Arc<Job<BufferResult>>);
+impl FrozenBytes {
+    pub fn bytes(&self) -> Result<&[u8], String> {
+        let result = self.0.get();
+        match &result.failure {
+            Some(error) => Err(error.clone()),
+            None => Ok(&result.bytes),
+        }
+    }
+}
 impl Buffer {
+    pub fn freeze(&mut self) -> FrozenBytes {
+        let job = self.job.get_or_insert_with(|| {
+            Arc::new(Job {
+                value: OnceLock::from(BufferResult {
+                    bytes: std::mem::take(&mut self.bytes),
+                    failure: self.failure.take(),
+                }),
+                receiver: None,
+            })
+        });
+        FrozenBytes(job.clone())
+    }
     pub fn defer(&mut self, compute: impl FnOnce(Vec<u8>) -> Vec<u8> + Send + 'static) {
         self.defer_fallible(move |bytes| (compute(bytes), Ok(())));
     }
@@ -156,13 +181,13 @@ impl Buffer {
         self.job = None;
         self.failure = None;
         let bytes = std::mem::take(&mut self.bytes);
-        self.job = Some(Job::submit(move || {
+        self.job = Some(Arc::new(Job::submit(move || {
             let (bytes, result) = compute(bytes);
             BufferResult {
                 bytes,
                 failure: result.err(),
             }
-        }));
+        })));
     }
     pub fn failure(&self) -> Option<&str> {
         self.job
@@ -221,7 +246,9 @@ impl Buffer {
         if let Some(job) = self.job.take() {
             // A consumed result can return its reusable allocation. Canceling
             // an unobserved job must not wait for computation to finish.
-            if let Some(result) = job.value.into_inner() {
+            if let Ok(job) = Arc::try_unwrap(job)
+                && let Some(result) = job.value.into_inner()
+            {
                 self.bytes = result.bytes;
             }
         }
@@ -245,7 +272,13 @@ impl Deref for Buffer {
 impl DerefMut for Buffer {
     fn deref_mut(&mut self) -> &mut Self::Target {
         if let Some(job) = self.job.take() {
-            let result = job.into_value();
+            let result = match Arc::try_unwrap(job) {
+                Ok(job) => job.into_value(),
+                Err(job) => BufferResult {
+                    bytes: job.get().bytes.clone(),
+                    failure: job.get().failure.clone(),
+                },
+            };
             self.bytes = result.bytes;
             self.failure = result.failure;
         }
@@ -267,6 +300,39 @@ impl<'de> serde::Deserialize<'de> for Buffer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn frozen_dependency_does_not_join_owner_or_lose_canceled_inputs() {
+        configure(2).unwrap();
+        let (release, held) = mpsc::channel();
+        let (started, running) = mpsc::channel();
+        let mut source = Buffer::default();
+        source.defer(move |_| {
+            started.send(()).unwrap();
+            held.recv().unwrap();
+            vec![7, 8, 9]
+        });
+        running.recv().unwrap();
+        let frozen = source.freeze();
+        let result = Job::submit(move || frozen.bytes().unwrap().to_vec());
+        source.clear();
+        release.send(()).unwrap();
+        assert_eq!(result.into_value(), [7, 8, 9]);
+        assert!(source.is_empty());
+        configure(0).unwrap();
+    }
+
+    #[test]
+    fn frozen_eager_bytes_stay_immutable_and_retain_supported_errors() {
+        let mut source = Buffer::from(vec![1, 2, 3]);
+        let frozen = source.freeze();
+        source[0] = 9;
+        assert_eq!(frozen.bytes().unwrap(), [1, 2, 3]);
+        assert_eq!(source.as_slice(), [9, 2, 3]);
+        source.defer_fallible(|bytes| (bytes, Err("invalid readout".into())));
+        let frozen = source.freeze();
+        source.clear();
+        assert_eq!(frozen.bytes().unwrap_err(), "invalid readout");
+    }
     #[test]
     fn owned_inputs_finish_out_of_order_without_changing_bytes_or_checkpoints() {
         configure(2).unwrap();
