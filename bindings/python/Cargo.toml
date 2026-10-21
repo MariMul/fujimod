@@ -27,7 +27,6 @@ host-profile = ["emulator", "fujimod-emulator/host-profile"]
 testing = ["fujimod-usb/testing"]
 
 [dependencies]
-fujimod-recording.workspace = true
 fujimod-firmware = { path = "../../crates/firmware" }
 pyo3 = { workspace = true, features = ["experimental-async", "experimental-inspect", "multiple-pymethods"] }
 fujimod-usb.workspace = true

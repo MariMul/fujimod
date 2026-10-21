@@ -485,7 +485,6 @@ impl Board {
                 contact_driver: None,
                 nodes: assembly.node_ids,
                 contacts: assembly.contacts,
-                recording_frames: Default::default(),
                 resources: assembly.resources,
             })),
             objects: adapters.objects,
@@ -726,13 +725,6 @@ impl Board {
                 ))
             })
             .transpose()
-    }
-    fn recording_frame<'py>(
-        &self,py:Python<'py>,node:&str,instance:usize,diagnostic_hashes:bool,
-    )->PyResult<Option<(Bound<'py,pyo3::types::PyBytes>,String,usize,usize)>> {
-        self.session()?.recording_frame(node,instance,diagnostic_hashes).map_err(error)?
-            .map(|frame|Ok((pyo3::types::PyBytes::new(py,frame.rgb.as_deref().ok_or_else(||error("Capture omitted RGB".into()))?),
-                serde_json::to_string(&frame.state.json()).map_err(|e|error(e.to_string()))?,frame.width,frame.height))).transpose()
     }
     fn scanout_main<'py>(
         &self,
