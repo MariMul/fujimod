@@ -474,6 +474,18 @@ impl Cpu for Core {
             // Observe only after backend-owned architectural entry. The
             // callback cannot replace exception classification or entry.
             Hook::Exception { .. } => None,
+            Hook::Memory {
+                read: false,
+                write: true,
+                range: HookRange::Inclusive { begin, end },
+                ..
+            } if begin <= end && end <= u32::MAX as u64 => {
+                // The permanent coherence hook already dispatches stores on
+                // watched pages. Reuse it instead of creating native hooks
+                // whose deferred deletion accumulates on parked processors.
+                e.cpu.watch_stores(begin, end - begin + 1)?;
+                None
+            }
             _ => Some(unsafe { e.cpu.install_hook(hook)? }),
         };
         e.observers
@@ -503,7 +515,11 @@ impl Cpu for Core {
                 e.block_observers.set(e.block_observers.get() - 1);
             }
             Hook::Exception { .. } => (),
-            _ => e.cpu.remove_hook(observer.native.unwrap())?,
+            _ => {
+                if let Some(native) = observer.native {
+                    e.cpu.remove_hook(native)?;
+                }
+            }
         }
         drop(observers);
         e.observers.borrow_mut().remove(&hook.key);
@@ -530,12 +546,19 @@ impl Cpu for Core {
     }
     fn hook_watched(&self, hook: HookId, watched: bool) -> Result<(), String> {
         let observers = self.execution.observers.borrow();
-        let native = observers
+        let observer = observers
             .get(&hook.key)
             .filter(|_| hook.owner == self.identity())
-            .and_then(|o| o.native)
             .ok_or("R-profile watched hook is not a memory hook")?;
-        self.execution.cpu.hook_watched(native, watched)
+        if !matches!(observer.hook, Hook::Memory { .. }) {
+            return Err("R-profile watched hook is not a memory hook".into());
+        }
+        match observer.native {
+            Some(native) => self.execution.cpu.hook_watched(native, watched),
+            // Its entire finite range is already watched by the permanent
+            // store dispatcher, so either filtering mode observes that range.
+            None => Ok(()),
+        }
     }
     fn precise_store_pc(&self, on: bool) -> Result<(), String> {
         if !on {

@@ -701,7 +701,7 @@ unsafe fn instruction(address: u64, size: u32, data: *mut c_void) {
     let e = unsafe { context(data) };
     e.guarded(|| e.instruction(address, size));
 }
-unsafe fn store(_: Access, address: u64, size: i32, _: i64, data: *mut c_void) {
+unsafe fn store(access: Access, address: u64, size: i32, value: i64, data: *mut c_void) {
     let e = unsafe { context(data) };
     e.guarded(|| {
         if size <= 0 {
@@ -709,6 +709,20 @@ unsafe fn store(_: Access, address: u64, size: i32, _: i64, data: *mut c_void) {
         }
         if e.memory.guest_store(e.id.get(), address, size as usize)? {
             e.cpu.request_restart()?;
+        }
+        for observer in e.observers.borrow().values() {
+            if observer.native.is_none()
+                && let Hook::Memory {
+                    callback,
+                    data,
+                    read: false,
+                    write: true,
+                    range,
+                } = observer.hook
+                && includes(range, address)
+            {
+                unsafe { callback(access, address, size, value, data) };
+            }
         }
         Ok(())
     });
