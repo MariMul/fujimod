@@ -1,6 +1,6 @@
 import { runtimeHeaders } from './src/security';
 import { defineConfig } from 'vite-plus';
-import { loadEnv, type Plugin, type Connect } from 'vite';
+import { loadEnv, normalizePath, type Plugin, type Connect } from 'vite';
 import solid from '@solidjs/vite-plugin';
 import { wasmProofRoute } from './scripts/wasm-proof-route';
 import { simulatorReports } from './scripts/local-reports.ts';
@@ -305,8 +305,8 @@ export default defineConfig(({ mode, command }) => ({
     watch: {
       ignored: [
         '**/build/**',
-        '**/dist/**',
-        '**/dist-local-preview/**',
+        `${normalizePath(resolve('dist'))}/**`,
+        `${normalizePath(resolve('dist-local-preview'))}/**`,
         '**/browser-bug-reports/**',
       ],
     },

@@ -210,7 +210,7 @@ export class EmulatorSession {
   private error(handle = this.handle) {
     if (this.call(() => this.module._camera_error(handle, this.scratch)) !== 0)
       return 'Wasm error unavailable.';
-    return new TextDecoder().decode(this.span(this.scratch));
+    return new TextDecoder().decode(this.span(this.scratch).slice());
   }
   private check(code: number) {
     if (code !== 0) throw Error(this.error());
@@ -295,7 +295,7 @@ export class EmulatorSession {
         }
         // Decode before freeing uploads: free is allowed to invalidate borrowed results.
         const result = JSON.parse(
-          new TextDecoder().decode(this.span(this.scratch)),
+          new TextDecoder().decode(this.span(this.scratch).slice()),
         ) as SessionCommands[K]['result'];
         return { result, bytes: this.span(this.scratch + 8).slice() };
       }),

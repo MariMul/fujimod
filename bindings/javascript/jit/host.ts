@@ -2,7 +2,7 @@
 declare const Module: Record<string, unknown>;
 declare const wasmMemory: WebAssembly.Memory;
 declare const wasmTable: WebAssembly.Table;
-declare const HEAPU8: Uint8Array<ArrayBuffer>;
+declare const HEAPU8: Uint8Array;
 declare function addToLibrary(library: Record<string, unknown>): void;
 
 addToLibrary({
@@ -23,7 +23,7 @@ addToLibrary({
     count: number,
   ): number {
     try {
-      const module = new WebAssembly.Module(HEAPU8.subarray(pointer, pointer + length));
+      const module = new WebAssembly.Module(HEAPU8.slice(pointer, pointer + length));
       const instance = new WebAssembly.Instance(module, {
         env: {
           memory: wasmMemory,
@@ -41,7 +41,7 @@ addToLibrary({
           name = view.getUint32(at, true),
           bytes = view.getUint32(at + 4, true),
           slot = view.getUint32(at + 8, true);
-        const value = instance.exports[decoder.decode(HEAPU8.subarray(name, name + bytes))];
+        const value = instance.exports[decoder.decode(HEAPU8.slice(name, name + bytes))];
         if (typeof value !== 'function')
           throw Error('Rust JIT requested a missing function export');
         functions.push({ slot, fn: value });

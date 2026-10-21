@@ -5,7 +5,18 @@ import { stripTypeScriptTypes } from 'node:module';
 import { runInNewContext } from 'node:vm';
 const source = (name: string) =>
   stripTypeScriptTypes(readFileSync(new URL(name, import.meta.url), 'utf8'), { mode: 'strip' });
-const memory = new WebAssembly.Memory({ initial: 4 }),
+// Browser TextDecoder rejects views over shared memory, unlike Node's decoder.
+class BrowserTextDecoder extends TextDecoder {
+  override decode(...args: Parameters<TextDecoder['decode']>) {
+    const [input] = args;
+    if (input) {
+      const buffer = ArrayBuffer.isView(input) ? input.buffer : input;
+      assert(!(buffer instanceof SharedArrayBuffer), 'TextDecoder input must be owned');
+    }
+    return super.decode(...args);
+  }
+}
+const memory = new WebAssembly.Memory({ initial: 4, maximum: 32, shared: true }),
   table = new WebAssembly.Table({ initial: 2, element: 'anyfunc' });
 let library: Record<string, unknown> = {};
 const module: Record<string, unknown> = {
@@ -20,7 +31,7 @@ const context = {
   wasmTable: table,
   HEAPU8: new Uint8Array(memory.buffer),
   TextEncoder,
-  TextDecoder,
+  TextDecoder: BrowserTextDecoder,
   DataView,
   WebAssembly,
   performance: { now: () => 123.5 },
@@ -80,7 +91,7 @@ assert.equal(table.get(2), null);
 assert.equal((library.unicorn_jit_host_now as () => number)(), 123.5);
 
 function loader(value: unknown, reject = false) {
-  const memory = new WebAssembly.Memory({ initial: 4 });
+  const memory = new WebAssembly.Memory({ initial: 4, maximum: 32, shared: true });
   let next = 0x10000,
     oldHook = 0,
     grow = true;
@@ -92,7 +103,7 @@ function loader(value: unknown, reject = false) {
     wasmMemory: memory,
     HEAPU8: new Uint8Array(memory.buffer),
     TextEncoder,
-    TextDecoder,
+    TextDecoder: BrowserTextDecoder,
     DataView,
   };
   const write = (out: number, text: string) => {

@@ -35,6 +35,7 @@ for (const type of types) {
       session: { scenes: number[]; profile: { ticks: number }; refusals: Record<string, string> };
     };
     assert(result.passed);
+    assert(await page.evaluate(() => crossOriginIsolated && typeof SharedArrayBuffer === 'function'));
     assert.ok(result.frames.length >= 2);
     assert.ok(
       result.frames.some(
@@ -50,7 +51,14 @@ for (const type of types) {
     assert.deepEqual(result.session.scenes, [0, 1, 2]);
     assert.equal(result.session.profile.ticks, 0);
     assert.deepEqual(Object.keys(result.session.refusals), ['press', 'release', 'set_position']);
-    assert(workers.length >= 3 && workers.every((worker) => worker.includes('wasm-worker')));
+    const owners = workers.filter((worker) => new URL(worker).pathname.endsWith('/wasm-worker.ts'));
+    const devices = workers.filter((worker) => new URL(worker).pathname.endsWith('/camera.mjs'));
+    assert(owners.length >= 3);
+    // Chromium's inspector reports nested pthreads; WebKit reports owners only.
+    // Both have already completed module startup, which waits for its pool.
+    if (type === chromium)
+      assert.equal(devices.length, owners.length * 2, 'Each module preloads two device pthreads.');
+    assert.equal(workers.length, owners.length + devices.length);
     assert.deepEqual(
       requests.filter((request) =>
         /pyodide|numpy|pillow|sources\.zip|_native\.so/i.test(new URL(request).pathname),

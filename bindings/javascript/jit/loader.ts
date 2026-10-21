@@ -39,7 +39,7 @@ if (typeof ENVIRONMENT_IS_PTHREAD === 'undefined' || !ENVIRONMENT_IS_PTHREAD) {
       const view = new DataView(wasmMemory.buffer),
         pointer = view.getUint32(out, true),
         length = view.getUint32(out + 4, true);
-      return decoder.decode(HEAPU8.subarray(pointer, pointer + length));
+      return decoder.decode(HEAPU8.slice(pointer, pointer + length));
     };
     const check = (code: number) => {
       if (code === 0) return;
