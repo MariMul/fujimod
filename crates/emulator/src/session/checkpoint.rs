@@ -1,0 +1,44 @@
+//! A session keyframe owns the stopped machine and its external connections.
+//! Restoring positions does not drive contacts again or emit duplicate edges.
+use super::Session;
+use crate::board::keyframe::Keyframe;
+use fujimod_emulator_devices::{exr2::board::ResourceSnapshot, parts::switch_panel::SwitchPanel};
+
+pub struct Snapshot {
+    pub(crate) board: Keyframe,
+    resources: ResourceSnapshot,
+    controls: Option<SwitchPanel>,
+    contact_driver: Option<super::contact_driver::Driver>,
+}
+impl Snapshot {
+    /// Conservative encoded-device cost, including shared blobs at every retention.
+    pub fn encoded_device_bytes(&self) -> usize {
+        self.board.encoded_device_bytes() + self.resources.encoded_bytes()
+    }
+    pub fn now(&self) -> u64 {
+        self.board.now()
+    }
+    pub fn instruction_counts(&self) -> &[u64] {
+        self.board.instruction_counts()
+    }
+}
+impl Session {
+    pub fn checkpoint(&self, previous: Option<&Snapshot>) -> Result<Snapshot, String> {
+        let resources = self.resources.checkpoint()?;
+        let board = self.board.checkpoint(previous.map(|p| &p.board))?;
+        Ok(Snapshot {
+            board,
+            resources,
+            controls: self.controls.clone(),
+            contact_driver: self.contact_driver.clone(),
+        })
+    }
+    pub fn restore(&mut self, saved: &Snapshot) -> Result<(), String> {
+        self.resources.validate_checkpoint(&saved.resources)?;
+        self.board.restore_keyframe(&saved.board)?;
+        self.resources.restore_checkpoint(&saved.resources)?;
+        self.controls = saved.controls.clone();
+        self.contact_driver = saved.contact_driver.clone();
+        Ok(())
+    }
+}

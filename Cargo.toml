@@ -4,7 +4,12 @@ members = [
   "crates/firmware",
   "crates/usb-proxy",
   "crates/simulation",
-  "crates/defs",
+  "crates/catalog",
+  "crates/emulator",
+  "crates/emulator-cpu",
+  "crates/emulator-cpu-hvf",
+  "crates/emulator-cpu-unicorn",
+  "crates/emulator-devices",
   "crates/fujimod",
   "crates/usb",
   "crates/workflows",
@@ -24,7 +29,7 @@ publish = false
 [workspace.dependencies]
 bevy = { version = "=0.20.0", default-features = false }
 fujimod-simulation = { path = "crates/simulation", version = "0.1.0" }
-fujimod-defs = { path = "crates/defs", version = "0.1.0" }
+fujimod-catalog = { path = "crates/catalog", version = "0.1.0" }
 serde = "1"
 serde_json = "1"
 fujimod-usb = { path = "crates/usb", version = "0.1.0" }

@@ -1,0 +1,554 @@
+use super::*;
+use crate::board::{
+    bus::{Bus, Mode},
+    factory,
+};
+use fujimod_emulator_devices::{
+    bus::InterruptLine,
+    exr2::sdhc::{self, SdHost},
+    storage::fat,
+};
+
+fn card_session() -> Session {
+    let contacts = sdhc::Contacts::new(true, false);
+    let card = fat::format(
+        &format(),
+        &[("/DCIM/100_FUJI/A.JPG".into(), b"card bytes".to_vec())],
+    )
+    .unwrap();
+    let host = SdHost::new(
+        sdhc::Options {
+            protocol: sdhc::Protocol::Sdhc,
+            transfer_ticks: 2,
+            clock_ticks: 2,
+            rca: 0x1234,
+            ram_bytes: 0x1000,
+        },
+        sdhc::Wiring {
+            card,
+            contacts: contacts.clone(),
+            irq: InterruptLine::Core { core: 0, line: 80 },
+        },
+    )
+    .unwrap();
+    let mut bus = Bus::new(Mode::Strict);
+    let id = bus.register(sdhc::BASE, 0x108, Box::new(host)).unwrap();
+    let analog = fujimod_emulator_devices::exr2::adc::controller::Converter::new(
+        fujimod_emulator_devices::exr2::adc::controller::Options {
+            conversion_ticks: 7,
+            samples: [1023; 12],
+        },
+    )
+    .unwrap();
+    let adc = bus.register(0xfff8a000, 0x60, Box::new(analog)).unwrap();
+    use fujimod_emulator_devices::{
+        exr2::{board::CardPins, gpio},
+        parts::pins::Pin,
+    };
+    let gpio = gpio::Gpio::new(
+        gpio::Options {
+            input_levels: [0; 16],
+            output_levels: Vec::new(),
+        },
+        gpio::Wiring { irqs: Vec::new() },
+    )
+    .unwrap();
+    let pads = gpio.pads();
+    let gpio_id = bus.register(0xfff89000, 0x480, Box::new(gpio)).unwrap();
+    let mut resources = Resources::default();
+    resources.card_pins.insert(
+        "sd".into(),
+        CardPins {
+            gpio: gpio_id,
+            pads,
+            detect: Pin { port: 12, pin: 7 },
+            present_high: false,
+            protect: Pin { port: 12, pin: 6 },
+            protected_high: true,
+        },
+    );
+    let graph:factory::Graph=serde_json::from_value(serde_json::json!({
+        "processors":[{"model":"cortex-r5f","registers":[],"released":true,"mprofile":null,"rprofile":{"cp14_identity":21930,"tcm":{"btcm":{"bytes":4096,"reset":1879048193},"atcm":{"bytes":8192,"reset":4294934529u32}}}}],
+        "ram":[{"base":0,"size":4096}],"dma_mappings":[{"address":0,"physical":0,"size":4096,"permissions":3}],
+        "mappings":[{"core":0,"address":0,"physical":0,"size":4096,"permissions":7}],
+        "peripherals":[],"decoders":[],"instructions_per_tick":[24,1]
+    })).unwrap();
+    let board = graph
+        .build(
+            factory::Options {
+                engine: factory::Engine::Unicorn,
+                unicorn: Some(crate::board::test_support::unicorn_library_path()),
+                translation_cache_bytes: 1 << 20,
+            },
+            bus,
+            None,
+        )
+        .unwrap();
+    Session {
+        definition: serde_json::json!({"fixture":"card-session"}),
+        board,
+        controls: None,
+        contact_driver: None,
+        resources,
+        nodes: BTreeMap::from([("sd".into(), id), ("adc".into(), adc)]),
+        contacts: BTreeMap::from([("sd".into(), contacts)]),
+    }
+}
+fn format() -> fat::Options {
+    fat::Options {
+        sectors: 0x800000,
+        max_dirty_sectors: 131072,
+        partition_start: 2048,
+        sectors_per_cluster: 64,
+        label: "TEST".into(),
+        read_only_files: Vec::new(),
+    }
+}
+#[test]
+fn card_observations_revision_retention_and_format_are_shared_session_operations() {
+    let mut session = card_session();
+    let before = session.board.state();
+    let state = session.card_state("sd").unwrap();
+    let revision = state["revision"].as_u64().unwrap();
+    assert_eq!(
+        session.card_tree("sd", Some(revision)).unwrap()["entries"][0]["path"],
+        "/DCIM"
+    );
+    assert_eq!(
+        session
+            .card_read("sd", "/DCIM/100_FUJI/A.JPG", Some(revision), 100)
+            .unwrap(),
+        b"card bytes"
+    );
+    assert_eq!(session.board.state(), before);
+    assert!(
+        session
+            .card_tree("sd", Some(revision + 1))
+            .unwrap_err()
+            .contains("revision")
+    );
+    session.card_contacts("sd", false, false).unwrap();
+    assert!(
+        session
+            .card_read("sd", "/DCIM/100_FUJI/A.JPG", None, 100)
+            .is_err()
+    );
+    session.card_contacts("sd", true, false).unwrap();
+    let medium = session.card_medium("sd").unwrap();
+    let mut cold = card_session();
+    cold.retain_card("sd", medium, true, false).unwrap();
+    assert_eq!(cold.card_state("sd").unwrap(), state);
+    cold.card_format("sd", &format(), &[("/B.TXT".into(), b"new bytes".to_vec())])
+        .unwrap();
+    assert!(cold.card_state("sd").unwrap()["revision"].as_u64().unwrap() > revision);
+    assert_eq!(
+        cold.card_read("sd", "/B.TXT", None, 100).unwrap(),
+        b"new bytes"
+    );
+    assert!(cold.card_read("sd", "/B.TXT", Some(revision), 100).is_err());
+    assert_eq!(
+        session
+            .card_read("sd", "/DCIM/100_FUJI/A.JPG", Some(revision), 100)
+            .unwrap(),
+        b"card bytes"
+    );
+    assert!(
+        session
+            .card_read("sd", "/DCIM/100_FUJI/A.JPG", None, 0)
+            .is_err()
+    );
+}
+
+#[test]
+fn initial_revision_is_external_metadata_only_before_guest_execution() {
+    let mut session = card_session();
+    session.initialize_card_revision("sd", 123).unwrap();
+    assert_eq!(session.card_state("sd").unwrap()["revision"], 123);
+    session
+        .board
+        .write_memory(0, 0, &0xeafffffeu32.to_le_bytes())
+        .unwrap();
+    session
+        .board
+        .write_register(0, fujimod_emulator_cpu::Register::Pstate, 0xd3)
+        .unwrap();
+    session
+        .board
+        .write_register(0, fujimod_emulator_cpu::Register::Pc, 0)
+        .unwrap();
+    session.board.run_for_instructions(1, 8).unwrap();
+    assert!(session.initialize_card_revision("sd", 456).is_err());
+    assert_eq!(session.card_state("sd").unwrap()["revision"], 123);
+}
+
+#[test]
+fn scene_rgb_prepares_only_the_next_sensor_exposure() {
+    use fujimod_emulator_devices::scene::{Frame, FramePixels, SensorFrames};
+    use std::sync::{Arc, Mutex};
+    let mut session = card_session();
+    let input = Arc::new(Mutex::new(SensorFrames::new(
+        Frame::new(1, 1, FramePixels::Rgb24(vec![1, 2, 3].into())).unwrap(),
+    )));
+    session
+        .resources
+        .inputs
+        .sensors
+        .insert("sensor".into(), input.clone());
+    let saved = session.checkpoint(None).unwrap();
+    let mut history = super::history::History::new(2, 128 << 20).unwrap();
+    history
+        .apply(
+            &mut session,
+            super::history::Input::SensorRgb {
+                source: "sensor".into(),
+                width: 1,
+                height: 1,
+                bytes: vec![4, 5, 6],
+                white_luminance: 1000.,
+            },
+        )
+        .unwrap();
+    let straight = session.fingerprint().unwrap();
+    let log = fujimod_emulator_devices::checkpoint::Checkpoint::encode("scene-input-log", &history.entries())
+        .unwrap();
+    let replay: Vec<super::history::Entry> = log.decode("scene-input-log").unwrap();
+    session.restore(&saved).unwrap();
+    super::history::History::replay(&mut session, &replay).unwrap();
+    assert_eq!(session.fingerprint().unwrap(), straight);
+    assert!(session.sensor_rgb("sensor", 1, 1, &[7], 10000.).is_err());
+    assert!(
+        session
+            .sensor_rgb("absent", 1, 1, &[4, 5, 6], 10000.)
+            .is_err()
+    );
+    for luminance in [0., -1., f64::NAN, f64::INFINITY] {
+        assert!(
+            session
+                .sensor_rgb("sensor", 1, 1, &[7, 8, 9], luminance)
+                .is_err()
+        );
+    }
+    let input = input.lock().unwrap();
+    assert_eq!(input.current.white_luminance, 1000.);
+    assert_eq!(input.latched.white_luminance, 10000.);
+    assert!(matches!(&input.current.pixels,FramePixels::Rgb24(bytes) if bytes.as_ref()==&[4,5,6]));
+    assert!(matches!(&input.latched.pixels,FramePixels::Rgb24(bytes) if bytes.as_ref()==&[1,2,3]));
+    assert_eq!(input.edge, None);
+    assert_eq!(session.board.now(), 0);
+}
+
+#[test]
+fn physical_controls_validate_every_target_and_change_only_external_electrical_inputs() {
+    use fujimod_emulator_devices::parts::switch_panel::{Case, Circuit, Control, Signal, Spec};
+    let mut session = card_session();
+    let signals = |node: &str, value| {
+        vec![Signal::Analog {
+            node: node.into(),
+            channel: 8,
+            value,
+        }]
+    };
+    let mut spec = Spec {
+        controls: vec![Control {
+            id: "menu".into(),
+            label: "MENU/OK".into(),
+            kind: "button".into(),
+            positions: vec!["released".into(), "pressed".into()],
+            initial: "released".into(),
+            unavailable: None,
+        }],
+        circuits: vec![Circuit {
+            controls: vec!["menu".into()],
+            cases: vec![
+                Case {
+                    positions: vec!["released".into()],
+                    signals: signals("adc", 1023),
+                },
+                Case {
+                    positions: vec!["pressed".into()],
+                    signals: signals("absent", 21),
+                },
+            ],
+        }],
+    };
+    assert!(session.configure_controls(spec.clone()).is_err());
+    assert!(session.controls.is_none());
+    assert_eq!(session.adc_samples("adc").unwrap()[8], 1023);
+    spec.circuits[0].cases[1].signals = signals("adc", 21);
+    session.configure_controls(spec).unwrap();
+    let before = session.board.now();
+    session.set_position("menu", "pressed").unwrap();
+    assert_eq!(session.adc_samples("adc").unwrap()[8], 21);
+    let handle = session
+        .board
+        .inspect_device::<fujimod_emulator_devices::exr2::adc::controller::Converter, _>(
+            session.node("adc").unwrap(),
+            |adc| Ok(adc.external_inputs()),
+        )
+        .unwrap();
+    assert_eq!(handle.values()[8], 21);
+    assert!(session.set_position("menu", "unknown").is_err());
+    assert_eq!(
+        session.control_state().unwrap()["positions"]["menu"],
+        "pressed"
+    );
+    let saved = session.checkpoint(None).unwrap();
+    session.set_position("menu", "released").unwrap();
+    assert_eq!(handle.values()[8], 1023);
+    session.restore(&saved).unwrap();
+    assert_eq!(handle.values()[8], 21);
+    assert_eq!(
+        session.control_state().unwrap()["positions"]["menu"],
+        "pressed"
+    );
+    session.set_position("menu", "released").unwrap();
+    assert_eq!(session.board.now(), before);
+    assert_eq!(session.board.instruction_counts(), vec![0]);
+}
+
+#[test]
+fn session_keyframe_and_input_replay_preserve_card_adc_and_fractional_cpu_boundary() {
+    use super::history::{Boundary, History, Input};
+    use fujimod_emulator_cpu::{Register, arm};
+    let mut session = card_session();
+    session
+        .board
+        .write_register(0, Register::Pstate, 0xd3)
+        .unwrap();
+    session.board.write_register(0, Register::Pc, 0).unwrap();
+    session
+        .board
+        .write_physical(0, &[0x01, 0x00, 0x80, 0xe2, 0xfd, 0xff, 0xff, 0xea])
+        .unwrap();
+    let mut history = History::new(8, usize::MAX).unwrap();
+    history.mark(&session).unwrap();
+    history
+        .apply(
+            &mut session,
+            Input::Run {
+                instructions: 13,
+                quantum: 17,
+                pause_after: None,
+                until: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(session.board.now(), 0);
+    history
+        .apply(
+            &mut session,
+            Input::Adc {
+                node: "adc".into(),
+                samples: vec![837; 12],
+            },
+        )
+        .unwrap();
+    let before = session.checkpoint(None).unwrap();
+    let cursor = history.entries().len();
+    history.mark(&session).unwrap();
+    history
+        .apply(
+            &mut session,
+            Input::Run {
+                instructions: 200,
+                quantum: 17,
+                pause_after: None,
+                until: None,
+            },
+        )
+        .unwrap();
+    history
+        .apply(
+            &mut session,
+            Input::CardContacts {
+                node: "sd".into(),
+                present: false,
+                protected: true,
+            },
+        )
+        .unwrap();
+    let straight = session.fingerprint().unwrap();
+    let encoded =
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode("input-log", &&history.entries()[cursor..])
+            .unwrap();
+    let replay: Vec<super::history::Entry> = encoded.decode("input-log").unwrap();
+    session.restore(&before).unwrap();
+    assert_eq!(session.board.instruction_counts(), [13]);
+    assert!(
+        session.card_state("sd").unwrap()["present"]
+            .as_bool()
+            .unwrap()
+    );
+    assert_eq!(session.adc_samples("adc").unwrap(), vec![837; 12]);
+    History::replay(&mut session, &replay).unwrap();
+    assert_eq!(session.fingerprint().unwrap(), straight);
+    history.undo(&mut session).unwrap();
+    assert_eq!(session.board.instruction_counts(), [13]);
+    assert_eq!(session.board.read_register(0, arm::CORE[0]).unwrap(), 7);
+    assert!(History::replay(&mut session, &replay[1..]).is_err());
+    let rollback_start = Boundary::capture(&session);
+    history
+        .apply(
+            &mut session,
+            Input::Run {
+                instructions: 240,
+                quantum: 17,
+                pause_after: None,
+                until: None,
+            },
+        )
+        .unwrap();
+    history.rollback(&mut session, 3).unwrap();
+    assert_eq!(session.board.now(), 3);
+    let rolled = session.fingerprint().unwrap();
+    // Repeat the same target directly from the retained earlier state.
+    session.restore(&before).unwrap();
+    assert_eq!(Boundary::capture(&session), rollback_start);
+    session
+        .board
+        .run_with_limits(240, 17, None, Some(3))
+        .unwrap();
+    assert_eq!(session.fingerprint().unwrap(), rolled);
+}
+
+#[test]
+fn rust_card_insertion_drives_the_declared_native_gpio_contacts() {
+    let mut session = card_session();
+    let pins = session.resources.card_pins.get("sd").unwrap();
+    let pads = pins.pads.clone();
+    let detect = pins.detect;
+    let protect = pins.protect;
+    let before = (session.board.now(), session.board.instruction_counts());
+    session.card_contacts("sd", false, true).unwrap();
+    assert_eq!(
+        (session.board.now(), session.board.instruction_counts()),
+        before
+    );
+    assert!(!pads.input_level(detect).unwrap());
+    assert!(!pads.input_level(protect).unwrap());
+    assert_eq!(session.card_state("sd").unwrap()["present"], false);
+    assert_eq!(session.card_state("sd").unwrap()["protected"], true);
+    session
+        .board
+        .write_memory(0, 0, &0xeafffffeu32.to_le_bytes())
+        .unwrap();
+    session
+        .board
+        .write_register(0, fujimod_emulator_cpu::Register::Pc, 0)
+        .unwrap();
+    session.board.run_for_instructions(1, 8).unwrap();
+    assert!(pads.input_level(detect).unwrap());
+    assert!(pads.input_level(protect).unwrap());
+}
+
+#[test]
+fn card_insertion_refuses_full_gpio_queue_before_replacing_media() {
+    let mut session = card_session();
+    let pins = session.resources.card_pins.get("sd").unwrap();
+    pins.pads
+        .request_many(&vec![(pins.detect, true); 1024])
+        .unwrap();
+    let before = session.board.state();
+    let replacement = fat::format(&format(), &[("/NEW.TXT".into(), b"new".to_vec())]).unwrap();
+    assert!(
+        session
+            .insert_card("sd", replacement, false, false)
+            .err()
+            .unwrap()
+            .contains("queue")
+    );
+    assert_eq!(session.board.state(), before);
+    assert_eq!(
+        session
+            .card_read("sd", "/DCIM/100_FUJI/A.JPG", None, 100)
+            .unwrap(),
+        b"card bytes"
+    );
+}
+
+#[cfg(feature = "serde")]
+#[test]
+fn sensor_radiance_is_retained_by_serialized_input_history_and_undo() {
+    use super::history::{Entry, History, Input};
+    use fujimod_emulator_devices::scene::{Frame, FramePixels, SensorFrames};
+    use std::sync::{Arc, Mutex};
+    let mut session = card_session();
+    let sensor = Arc::new(Mutex::new(SensorFrames::new(
+        Frame::new(1, 1, FramePixels::Rgb24(vec![1, 2, 3].into())).unwrap(),
+    )));
+    session
+        .resources
+        .inputs
+        .sensors
+        .insert("sensor".into(), sensor.clone());
+    let initial = sensor.lock().unwrap().fingerprint();
+    let mut history = History::new(2, 128 << 20).unwrap();
+    history.mark(&session).unwrap();
+    history
+        .apply(
+            &mut session,
+            Input::SensorRgb {
+                source: "sensor".into(),
+                width: 1,
+                height: 1,
+                bytes: vec![4, 5, 6],
+                white_luminance: 250.,
+            },
+        )
+        .unwrap();
+    let changed = sensor.lock().unwrap().fingerprint();
+    assert_eq!(sensor.lock().unwrap().current.white_luminance, 250.);
+    let recorded = serde_json::to_vec(history.entries()).unwrap();
+    history.undo(&mut session).unwrap();
+    assert_eq!(sensor.lock().unwrap().fingerprint(), initial);
+    let entries: Vec<Entry> = serde_json::from_slice(&recorded).unwrap();
+    History::replay(&mut session, &entries).unwrap();
+    assert_eq!(sensor.lock().unwrap().fingerprint(), changed);
+    assert_eq!(sensor.lock().unwrap().current.white_luminance, 250.);
+}
+
+#[test]
+fn history_device_budget_expires_old_marks_without_losing_latest_undo() {
+    let mut session = card_session();
+    session
+        .board
+        .write_register(0, fujimod_emulator_cpu::Register::Pstate, 0xd3)
+        .unwrap();
+    session
+        .board
+        .write_register(0, fujimod_emulator_cpu::Register::Pc, 0)
+        .unwrap();
+    session
+        .board
+        .write_physical(0, &[0xfe, 0xff, 0xff, 0xea])
+        .unwrap();
+    let mut history = super::history::History::new(8, 1).unwrap();
+    history.mark(&session).unwrap();
+    history
+        .apply(
+            &mut session,
+            super::history::Input::Run {
+                instructions: 120,
+                quantum: 17,
+                pause_after: None,
+                until: None,
+            },
+        )
+        .unwrap();
+    let expected = session.board.now();
+    history.mark(&session).unwrap();
+    assert_eq!(history.retained_marks(), 1);
+    history
+        .apply(
+            &mut session,
+            super::history::Input::Run {
+                instructions: 120,
+                quantum: 17,
+                pause_after: None,
+                until: None,
+            },
+        )
+        .unwrap();
+    history.undo(&mut session).unwrap();
+    assert_eq!(session.board.now(), expected);
+}

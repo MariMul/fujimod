@@ -1,0 +1,216 @@
+//! Shared host session capabilities for native and browser clients.
+//! Host observations never advance guest time or acknowledge device state.
+pub mod card;
+pub mod checkpoint;
+pub mod contact_driver;
+#[cfg(feature = "serde")]
+pub mod durable;
+pub mod history;
+pub mod inputs;
+pub mod nand;
+#[cfg(feature = "serde")]
+pub mod preparation;
+pub mod scanout;
+#[cfg(all(test, feature = "worker"))]
+mod tests;
+pub mod usb;
+
+use crate::board::Board;
+use fujimod_emulator_devices::exr2::{board::Resources, sdhc::Contacts};
+use std::collections::BTreeMap;
+
+pub struct Session {
+    pub definition: serde_json::Value,
+    pub board: Board,
+    pub controls: Option<fujimod_emulator_devices::parts::switch_panel::SwitchPanel>,
+    pub contact_driver: Option<contact_driver::Driver>,
+    pub resources: Resources,
+    pub nodes: BTreeMap<String, usize>,
+    pub contacts: BTreeMap<String, Contacts>,
+}
+impl Session {
+    pub fn fingerprint(&self) -> Result<serde_json::Value, String> {
+        Ok(
+            serde_json::json!({"schema":1,"definition":self.definition,"board":self.board.fingerprint()?,
+            "controls":self.controls.as_ref().map(|p| serde_json::json!({"spec":p.spec(),"positions":p.positions()})),
+            "contact_driver":self.contact_driver.as_ref().map(|d|d.fingerprint()).transpose()?,"resources":self.resources.fingerprint()?}),
+        )
+    }
+    pub fn logic_input(&mut self, name: &str, high: bool) -> Result<(), String> {
+        let level = self.resources.logic_level(name)?;
+        let users = self.resources.wire_users(name)?;
+        level.drive(high);
+        for user in users {
+            self.board.inputs_changed(user)?;
+        }
+        Ok(())
+    }
+    /// Change an explicitly wired HDMI sink input while processors are
+    /// stopped, and deliver the corresponding HPD edge through the
+    /// transmitter's native device context.
+    pub fn hdmi_connection(
+        &mut self,
+        sink: &str,
+        transmitter: &str,
+        connected: bool,
+    ) -> Result<(), String> {
+        let sink_id = self.node(sink)?;
+        let transmitter_id = self.node(transmitter)?;
+        self.board
+            .device_input::<fujimod_emulator_devices::parts::hdmi_sink::Input, _>(sink_id, |input, _| {
+                input.set_connected(connected);
+                Ok(())
+            })?;
+        self.board
+            .device_input::<fujimod_emulator_devices::exr2::hdmi::Transmitter, _>(
+                transmitter_id,
+                |device, cx| {
+                    device.set_connected(cx, connected);
+                    Ok(())
+                },
+            )
+    }
+    pub fn configure_frames(
+        &mut self,
+        name: &str,
+        period: u64,
+        cadence: fujimod_emulator_devices::scene::StatisticsCadence,
+    ) -> Result<(), String> {
+        let now = self.board.now();
+        self.board
+            .edit_device::<fujimod_emulator_devices::scene::clocked::ClockedFrames, _>(
+                self.node(name)?,
+                |frames| frames.configure(period, cadence, now),
+            )
+    }
+    pub fn frame_state(&self, name: &str) -> Result<serde_json::Value, String> {
+        use fujimod_emulator_devices::Device;
+        self.board
+            .inspect_device::<fujimod_emulator_devices::scene::clocked::ClockedFrames, _>(
+                self.node(name)?,
+                |frames| Ok(frames.save()),
+            )
+    }
+    pub fn serial_state(&self, name: &str) -> Result<serde_json::Value, String> {
+        use fujimod_emulator_devices::Device;
+        self.board
+            .inspect_device::<fujimod_emulator_devices::exr2::spi::SpiController, _>(
+                self.node(name)?,
+                |serial| Ok(serial.save()),
+            )
+    }
+    pub fn serial_status_input(
+        &mut self,
+        name: &str,
+        route: usize,
+        register: u8,
+        value: u8,
+    ) -> Result<(), String> {
+        self.board
+            .edit_device::<fujimod_emulator_devices::exr2::spi::SpiController, _>(
+                self.node(name)?,
+                |serial| serial.status_input(route, register, value),
+            )
+    }
+    pub fn node(&self, name: &str) -> Result<usize, String> {
+        self.nodes
+            .get(name)
+            .copied()
+            .ok_or_else(|| format!("no such session node {name}"))
+    }
+    pub fn gpio(&mut self, name: &str, port: u8, pin: u8, high: bool) -> Result<(), String> {
+        self.resources
+            .pads(name)?
+            .request(fujimod_emulator_devices::parts::pins::Pin { port, pin }, high)?;
+        self.board.inputs_changed(self.node(name)?)
+    }
+    pub fn gpio_level(&self, name: &str, port: u8, pin: u8) -> Result<bool, String> {
+        self.resources
+            .pads(name)?
+            .input_level(fujimod_emulator_devices::parts::pins::Pin { port, pin })
+    }
+    pub fn gpio_pad_state(
+        &self,
+        name: &str,
+        port: u8,
+        pin: u8,
+    ) -> Result<fujimod_emulator_devices::exr2::gpio::PadState, String> {
+        self.resources
+            .pads(name)?
+            .pad_state(fujimod_emulator_devices::parts::pins::Pin { port, pin })
+    }
+    pub fn rotate(&mut self, name: &str, cycles: i32) -> Result<(), String> {
+        self.resources
+            .encoder(name)?
+            .queue_cycles(self.board.now(), cycles)?;
+        self.board.inputs_changed(self.node(name)?)
+    }
+    fn image_inputs_changed(&mut self, name: &str) -> Result<(), String> {
+        for user in self.resources.image_users(name)? {
+            self.board.inputs_changed(user)?;
+        }
+        Ok(())
+    }
+    pub fn rgb(
+        &mut self,
+        name: &str,
+        width: usize,
+        height: usize,
+        bytes: &[u8],
+    ) -> Result<(), String> {
+        self.resources
+            .inputs
+            .images
+            .get(name)
+            .ok_or("no such image input")?
+            .prepare_rgb(width, height, bytes)?;
+        self.image_inputs_changed(name)
+    }
+    pub fn analytic(&mut self, name: &str) -> Result<(), String> {
+        self.resources
+            .inputs
+            .images
+            .get(name)
+            .ok_or("no such image input")?
+            .use_analytic();
+        self.image_inputs_changed(name)
+    }
+    pub fn sensor_image(&mut self, name: &str) -> Result<(), String> {
+        self.resources
+            .inputs
+            .images
+            .get(name)
+            .ok_or("no such image input")?
+            .use_sensor();
+        self.image_inputs_changed(name)
+    }
+    pub fn sensor_rgb(
+        &self,
+        name: &str,
+        width: usize,
+        height: usize,
+        bytes: &[u8],
+        white_luminance: f64,
+    ) -> Result<(), String> {
+        use fujimod_emulator_devices::scene::{Frame, FramePixels};
+        if !white_luminance.is_finite() || white_luminance <= 0. {
+            return Err("scene white luminance must be positive finite cd/m²".into());
+        }
+        let input = self
+            .resources
+            .inputs
+            .sensors
+            .get(name)
+            .ok_or("no such sensor input")?;
+        if bytes.len() > 64 << 20 {
+            return Err("sensor RGB input exceeds 64 MiB".into());
+        }
+        let mut frame = Frame::new(width, height, FramePixels::Rgb24(bytes.to_vec().into()))?;
+        frame.white_luminance = white_luminance;
+        input
+            .lock()
+            .map_err(|_| "sensor input is poisoned")?
+            .set_frame(frame);
+        Ok(())
+    }
+}

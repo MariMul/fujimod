@@ -1,7 +1,7 @@
 //! Bind the selected firmware's codecs to its declared ff80 mailbox.
 use super::*;
 use crate::app80::catalog::{Catalog, Command, CommandError, CommandReply, PreparedCommand};
-use fujimod_defs::service::{Definition, ServiceModes};
+use fujimod_catalog::service::{Definition, ServiceModes};
 
 #[derive(Clone, Debug)]
 pub struct Service {

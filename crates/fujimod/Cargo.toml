@@ -9,12 +9,12 @@ publish.workspace = true
 [features]
 default = []
 simulation = ["dep:fujimod-simulation"]
-defs = ["dep:fujimod-defs"]
-usb = ["defs", "dep:fujimod-usb"]
+catalog = ["dep:fujimod-catalog"]
+usb = ["catalog", "dep:fujimod-usb"]
 workflows = ["usb", "dep:fujimod-workflows"]
 
 [dependencies]
 fujimod-simulation = { workspace = true, optional = true }
-fujimod-defs = { workspace = true, optional = true }
+fujimod-catalog = { workspace = true, optional = true }
 fujimod-usb = { workspace = true, optional = true }
 fujimod-workflows = { workspace = true, optional = true }

@@ -5,8 +5,8 @@ pub use fujimod_usb as usb;
 #[cfg(feature = "workflows")]
 pub use fujimod_workflows as workflows;
 
-#[cfg(feature = "defs")]
-pub use fujimod_defs as defs;
+#[cfg(feature = "catalog")]
+pub use fujimod_catalog as catalog;
 
 #[cfg(feature = "simulation")]
 pub use fujimod_simulation as simulation;

@@ -20,7 +20,7 @@ async-lock = "3"
 fujimod-usb-proxy = { path = "../../crates/usb-proxy" }
 futures-timer.workspace = true
 fujimod-workflows.workspace = true
-fujimod-defs.workspace = true
+fujimod-catalog.workspace = true
 nusb.workspace = true
 js-sys.workspace = true
 web-sys = { version = "0.3", features = ["UsbDevice"] }

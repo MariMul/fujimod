@@ -1,0 +1,58 @@
+[package]
+name = "fujimod-emulator"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+[lib]
+name = "fujimod_emulator"
+crate-type = ["rlib"]
+
+[[bin]]
+name = "fujimod-emulator-worker"
+path = "src/bin/fujimod-emulator-worker.rs"
+required-features = ["worker"]
+
+[features]
+serde = ["fujimod-emulator-cpu/serde", "fujimod-emulator-cpu-unicorn/serde"]
+worker = ["serde", "dep:sha2"]
+host-profile = ["dep:libc"]
+default = []
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+fujimod-emulator-devices = { path = "../emulator-devices" }
+fujimod-emulator-cpu = { path = "../emulator-cpu" }
+fujimod-emulator-cpu-unicorn = { path = "../emulator-cpu-unicorn" }
+fujimod-catalog = { path = "../catalog" }
+serde_json = "1"
+sha2 = { version = "0.10", optional = true }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+sha2 = { version = "0.10", features = ["asm-aarch64"], optional = true }
+
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
+fujimod-emulator-cpu-hvf = { path = "../emulator-cpu-hvf" }
+
+# Optimized native profiling without selecting Cargo's release profile.
+# Tests retain the default development assertions and overflow checks.
+[profile.performance]
+inherits = "dev"
+opt-level = 3
+debug = 0
+debug-assertions = false
+overflow-checks = false
+codegen-units = 16
+lto = "off"
+incremental = false
+
+[target.'cfg(unix)'.dependencies]
+libc = { version = "0.2", optional = true }

@@ -25,7 +25,7 @@ for `fujimod::usb`. The [mod installation crate](crates/mod-install/README.md)
 provides checked uploads and borrowed callback batches. The [USB crate](crates/usb/README.md) provides the initial
 asynchronous service/debug protocol implementation.
 The [definitions crate](crates/defs/README.md) loads caller-selected firmware
-data through `fujimod::defs`, shared by USB and future emulator/SDK components.
+data through `fujimod::catalog`, shared by USB and future emulator/SDK components.
 
 ```sh
 cargo test --workspace --all-features

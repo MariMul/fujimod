@@ -10,7 +10,7 @@ use crate::{
     Limits,
     access::{Access, range},
 };
-use fujimod_defs::camera::{CameraDefinition, CameraError, Guard};
+use fujimod_catalog::camera::{CameraDefinition, CameraError, Guard};
 use fujimod_usb::{
     ff80::{
         Session, SessionState,

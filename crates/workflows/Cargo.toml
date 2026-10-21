@@ -11,7 +11,7 @@ description = "Camera workflows composed from fujimod-usb operations: service mo
 service-capture = ["dep:serde", "dep:serde_json"]
 
 [dependencies]
-fujimod-defs.workspace = true
+fujimod-catalog.workspace = true
 fujimod-usb.workspace = true
 thiserror.workspace = true
 serde = { workspace = true, features = ["derive"], optional = true }

@@ -1,0 +1,279 @@
+use super::*;
+use crate::Device;
+use crate::exr2::isp::{
+    Irq,
+    stream::{State, StreamHandle},
+    tests::support::{TestHost, advance, advance_from_checkpoint, read, write},
+};
+fn encoder(stream: StreamHandle) -> Encoder {
+    Encoder::new(
+        encoder::Options {
+            completion_ticks: 10,
+            reset_ticks: 2,
+        },
+        (Irq { core: 0, line: 77 }, stream),
+    )
+    .unwrap()
+}
+fn configure(d: &mut Encoder, h: &mut TestHost, stream: bool) {
+    for (o, v) in [
+        (0, 4),
+        (0x28, 0xfd0000),
+        (0x40, 1),
+        (0x44, 8 << 16 | 16),
+        (0x80, 4),
+        (0x84, 0x100),
+    ] {
+        write(d, h, 0xfff62000 + o, v);
+    }
+    for _ in 0..32 {
+        write(d, h, 0xfff6208c, 0x03030303);
+    }
+    write(d, h, 0xfff62084, 1);
+    for (o, v) in [
+        (0x100, 0x8000),
+        (0x10c, 0x9000),
+        (0x110, 4096),
+        (0x120, if stream { 2 } else { 0 }),
+    ] {
+        write(d, h, 0xfff62000 + o, v);
+    }
+}
+#[test]
+fn memory_encode_reserves_prefix_and_decoder_publishes_pixels_before_irq() {
+    let mut h = TestHost::new();
+    h.ram[0x8000..0x8100].fill(128);
+    h.ram[0x9000..0xa000].fill(0xa5);
+    let mut d = encoder(Default::default());
+    configure(&mut d, &mut h, false);
+    write(&mut d, &mut h, 0xfff62000, 5);
+    advance(&mut d, &mut h, 9);
+    assert!(h.effects.is_empty());
+    advance_from_checkpoint(&mut d, &mut h, 10);
+    let count = read(&mut d, &mut h, 0xfff62094) as u32;
+    assert!(count > 500);
+    assert_eq!(&h.ram[0x9000..0x9004], &[0xa5, 0xa5, 255, 0xc4]);
+    assert_eq!(h.effects, ["dma", "irq"]);
+    assert_eq!(read(&mut d, &mut h, 0xfff62024), 16);
+    let mut decoder = Decoder::new(
+        decoder::Options {
+            completion_ticks: 5,
+            reset_ticks: 2,
+        },
+        Irq { core: 0, line: 76 },
+    )
+    .unwrap();
+    for (o, v) in [
+        (8, 0xfd0020),
+        (0x100, 0xa000),
+        (0x104, 256),
+        (0x10c, 0x9000),
+        (0x110, count),
+        (0, 1),
+    ] {
+        write(&mut decoder, &mut h, 0xfff63000 + o, v);
+    }
+    advance(&mut decoder, &mut h, 14);
+    assert_eq!(h.irqs.len(), 1);
+    advance_from_checkpoint(&mut decoder, &mut h, 15);
+    assert_eq!(&h.ram[0xa000..0xa004], &[128, 128, 128, 128]);
+    assert_eq!(h.irqs, [(0, 77), (0, 76)]);
+    assert_eq!(read(&mut decoder, &mut h, 0xfff63108), count as u64);
+    write(&mut decoder, &mut h, 0xfff63004, 16);
+    assert_eq!(read(&mut decoder, &mut h, 0xfff63004), 0);
+    write(&mut decoder, &mut h, 0xfff63118, 1);
+    advance(&mut decoder, &mut h, 16);
+    assert_eq!(read(&mut decoder, &mut h, 0xfff63004), 0);
+    advance(&mut decoder, &mut h, 17);
+    assert_eq!(read(&mut decoder, &mut h, 0xfff63004), 0x10000);
+}
+#[test]
+fn warp_stream_requires_both_starts_and_releases_only_at_completion() {
+    use crate::exr2::isp::{Warp, warp};
+    let mut h = TestHost::new();
+    h.ram[0x8000..0x8100].fill(128);
+    let stream: StreamHandle = Default::default();
+    let mut w = Warp::new(
+        warp::Options {
+            completion_ticks: 5,
+            stop_ticks: 2,
+        },
+        (Irq { core: 0, line: 74 }, stream.clone()),
+    )
+    .unwrap();
+    let mut e = encoder(stream.clone());
+    configure(&mut e, &mut h, true);
+    {
+        let mut cx = h.cx();
+        e.write(&mut cx, 0xfff62000, 4, 5);
+        assert!(cx.refusal().is_some());
+    }
+    for (o, v) in [
+        (4, 0x40),
+        (0x10, 0x8000),
+        (0x14, 16),
+        (0x18, 8 << 16 | 16),
+        (0x20, 16),
+        (0x28, 8 << 16 | 16),
+        (0x40, 4096),
+        (0x44, 4096),
+        (0x4c, 0x10001),
+        (0x50, 7 << 16 | 15),
+        (0x54, 7 << 16 | 15),
+        (0x148, 0x21),
+        (0, 1),
+    ] {
+        write(&mut w, &mut h, 0xfff65000 + o, v);
+    }
+    assert_eq!(stream.lock().unwrap().state, State::Ready);
+    write(&mut e, &mut h, 0xfff62000, 5);
+    assert_eq!(stream.lock().unwrap().state, State::Claimed);
+    assert_eq!(stream.lock().unwrap().pixels.len(), 256);
+    {
+        let mut cx = h.cx();
+        w.write(&mut cx, 0xfff65000, 4, 0);
+        assert!(cx.refusal().is_some());
+    }
+    advance(&mut e, &mut h, 10);
+    assert_eq!(stream.lock().unwrap().state, State::Finished);
+    assert!(stream.lock().unwrap().pixels.is_empty());
+    assert_eq!(w.next_deadline(10), Some(10));
+    advance(&mut w, &mut h, 10);
+    assert_eq!(read(&mut w, &mut h, 0xfff65000), 0x10000);
+    assert_eq!(stream.lock().unwrap().state, State::Idle);
+    assert_eq!(h.irqs, [(0, 77)]);
+}
+#[test]
+fn encode_capacity_failure_does_not_claim_stream_or_write_ram() {
+    let mut h = TestHost::new();
+    let stream: StreamHandle = Default::default();
+    {
+        let mut s = stream.lock().unwrap();
+        s.state = State::Ready;
+        s.width = 16;
+        s.height = 8;
+        s.pixels = vec![128; 256];
+    }
+    let mut e = encoder(stream.clone());
+    configure(&mut e, &mut h, true);
+    write(&mut e, &mut h, 0xfff62110, 8);
+    let mut cx = h.cx();
+    e.write(&mut cx, 0xfff62000, 4, 5);
+    assert!(cx.refusal().is_some());
+    assert_eq!(stream.lock().unwrap().state, State::Ready);
+    assert!(h.effects.is_empty());
+    assert_eq!(e.next_deadline(0), None);
+}
+
+#[test]
+fn unselected_quantization_is_retained_without_fifo_dma_or_irq() {
+    let mut h = TestHost::new();
+    let mut d = encoder(Default::default());
+    configure(&mut d, &mut h, false);
+    let uploaded = d.save()[1].clone();
+    assert_eq!(d.save()[2], 128);
+    write(&mut d, &mut h, 0xfff62084, 0);
+    assert_eq!(d.save()[1], uploaded);
+    assert_eq!(d.save()[2], 128);
+    assert_eq!(d.save()[0][0x84 / 4], 0);
+    assert_eq!(d.next_deadline(0), None);
+    let before = d.fingerprint().unwrap();
+    advance(&mut d, &mut h, 10000);
+    assert_eq!(d.fingerprint().unwrap(), before);
+    assert!(h.effects.is_empty());
+    let mut cx = h.cx();
+    d.write(&mut cx, 0xfff6208c, 4, 0x03030303);
+    assert!(cx.refusal().unwrap().contains("outside FIFO"));
+    assert_eq!(d.fingerprint().unwrap(), before);
+    write(&mut d, &mut h, 0xfff62084, 1);
+    assert_eq!(d.save()[1], uploaded);
+    assert_eq!(d.save()[3], true);
+    assert!(h.effects.is_empty());
+    write(&mut d, &mut h, 0xfff62000, 5);
+    advance(&mut d, &mut h, 10010);
+    assert!(read(&mut d, &mut h, 0xfff62094) > 2);
+    assert_eq!(h.effects, ["dma", "irq"]);
+}
+
+#[test]
+fn programmed_restart_nine_reaches_the_real_codestream_and_decoder() {
+    // Restart interval 9 emits ten cyclic RST markers for a 128x96 4:2:2
+    // image (96 MCUs).
+    let mut h = TestHost::new();
+    h.ram[0x8000..0xe000].fill(128);
+    h.ram[0x10000..0x14000].fill(0xa5);
+    h.ram[0x10000..0x10002].copy_from_slice(&[255, 0xd8]);
+    let mut d = encoder(Default::default());
+    configure(&mut d, &mut h, false);
+    for (o, v) in [
+        (0x44, 96 << 16 | 128),
+        (0x80, 9),
+        (0x10c, 0x10000),
+        (0x110, 0x4000),
+    ] {
+        write(&mut d, &mut h, 0xfff62000 + o, v);
+    }
+    write(&mut d, &mut h, 0xfff62000, 5);
+    advance(&mut d, &mut h, 9);
+    assert_eq!(&h.ram[0x10002..0x10006], &[0xa5; 4]);
+    assert!(h.effects.is_empty());
+    advance(&mut d, &mut h, 10);
+    let bytes = read(&mut d, &mut h, 0xfff62094) as usize;
+    let encoded = &h.ram[0x10000..0x10000 + bytes];
+    assert!(encoded.windows(6).any(|v| v == [255, 0xdd, 0, 4, 0, 9]));
+    let markers = encoded
+        .windows(2)
+        .filter(|v| v[0] == 255 && (0xd0..=0xd7).contains(&v[1]))
+        .map(|v| v[1] - 0xd0)
+        .collect::<Vec<_>>();
+    assert_eq!(markers, (0..10).map(|v| v % 8).collect::<Vec<_>>());
+    let options = zune_core::options::DecoderOptions::new_safe().set_use_unsafe(false);
+    let mut decoder = zune_jpeg::JpegDecoder::new_with_options(
+        zune_core::bytestream::ZCursor::new(encoded),
+        options,
+    );
+    let rgb = decoder.decode().unwrap();
+    assert_eq!(rgb.len(), 128 * 96 * 3);
+    assert!(rgb.iter().all(|v| (127..=129).contains(v)));
+    assert_eq!(h.effects, ["dma", "irq"]);
+    assert_eq!(h.irqs, [(0, 77)]);
+}
+
+#[test]
+fn unqualified_source_field_names_its_register_and_refuses_before_any_effect() {
+    let mut h = TestHost::new();
+    let mut d = encoder(Default::default());
+    configure(&mut d, &mut h, false);
+    write(&mut d, &mut h, 0xfff62048, 0x12);
+    let before = d.fingerprint().unwrap();
+    let mut cx = h.cx();
+    d.write(&mut cx, 0xfff62000, 4, 5);
+    let message = cx.refusal().unwrap();
+    assert!(message.contains("0xfff62048=0x12"));
+    assert_eq!(d.fingerprint().unwrap(), before);
+    assert!(h.effects.is_empty());
+    assert_eq!(d.next_deadline(0), None);
+}
+
+#[test]
+fn implicit_and_explicit_packed_input_modes_encode_the_same_addressed_pixels() {
+    let mut encodings = Vec::new();
+    for mode in [0, 0x11] {
+        let mut h = TestHost::new();
+        h.ram[0x8000..0x8100].fill(128);
+        let mut d = encoder(Default::default());
+        configure(&mut d, &mut h, false);
+        write(&mut d, &mut h, 0xfff62048, mode);
+        write(&mut d, &mut h, 0xfff62000, 5);
+        assert_eq!(d.next_deadline(0), Some(10));
+        advance(&mut d, &mut h, 9);
+        assert!(h.effects.is_empty());
+        advance(&mut d, &mut h, 10);
+        let count = read(&mut d, &mut h, 0xfff62094) as usize;
+        assert!(count > 500);
+        assert_eq!(h.effects, ["dma", "irq"]);
+        assert_eq!(h.irqs, [(0, 77)]);
+        encodings.push(h.ram[0x9000..0x9000 + count].to_vec());
+    }
+    assert_eq!(encodings[0], encodings[1]);
+}

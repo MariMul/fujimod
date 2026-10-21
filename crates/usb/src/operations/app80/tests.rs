@@ -306,7 +306,7 @@ mod replay {
         ]
     }
     fn selected_service() -> Service {
-        use fujimod_defs::service::{Definition, FirmwareIdentity};
+        use fujimod_catalog::service::{Definition, FirmwareIdentity};
         let json = serde_json::json!({"schema":1,"firmware":{"id":"body-a-v1","model":"Synthetic","version":"1","sha256":"ab".repeat(32)},
           "mailbox":{"page":0,"offset":128,"configuration_limit":256},"entries":[
           {"code":34,"label":"save","codec":"flush_configuration","slots":[0],"enabled_modes":1,"next_mode":0,"firmware_kind":1,"handler":0,"parameter_table":0}]});
@@ -322,7 +322,7 @@ mod replay {
     #[test]
     fn typed_save_awaits_publish_and_returns_status_one_without_polling() {
         use crate::app80::catalog::{Command, ReplyValue, SaveStatus};
-        use fujimod_defs::service::ServiceModes;
+        use fujimod_catalog::service::ServiceModes;
         let invocation = selected_service()
             .prepare(ServiceModes::new(1).unwrap(), Command::FlushConfiguration)
             .unwrap();
@@ -351,7 +351,7 @@ mod replay {
     #[test]
     fn foreign_nested_reply_fences_the_session_after_completed_ff80_read() {
         use crate::app80::catalog::Command;
-        use fujimod_defs::service::ServiceModes;
+        use fujimod_catalog::service::ServiceModes;
         let invocation = selected_service()
             .prepare(ServiceModes::new(1).unwrap(), Command::FlushConfiguration)
             .unwrap();

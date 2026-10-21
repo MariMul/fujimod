@@ -1,0 +1,466 @@
+use super::*;
+
+impl Cpu for Core {
+    fn identity(&self) -> Identity {
+        self.execution.cpu.identity()
+    }
+    fn checkpoint_backings(&self) -> Result<Vec<(NonNull<u8>, usize)>, String> {
+        Ok(self
+            .execution
+            .maps
+            .borrow()
+            .iter()
+            .map(|m| {
+                (
+                    NonNull::new(m.pointer as *mut u8).expect("mapped backing"),
+                    m.bytes,
+                )
+            })
+            .collect())
+    }
+    fn fingerprint(&self) -> Result<serde_json::Value, String> {
+        self.execution.fingerprint()
+    }
+    fn model(&self) -> Model {
+        Model::CortexR5F
+    }
+    fn exclusive_domain(&self) -> Option<fujimod_emulator_cpu::exclusive::Shared> {
+        Some(self.execution.memory.monitors.clone())
+    }
+    fn features(&self) -> Features {
+        Features {
+            guest_clock: true,
+            instruction_limit: true,
+            instruction_progress: true,
+            architectural_exits: true,
+            tighten_instruction_limit: true,
+            backing_observation: self.execution.cpu.features().backing_observation,
+            watched_stores: true,
+            store_pc_control: true,
+            ..Features::default()
+        }
+    }
+    fn read_register(&self, r: Register, bytes: &mut [u8]) -> Result<usize, String> {
+        self.execution.cpu.read_register(r, bytes)
+    }
+    fn write_register(&self, r: Register, bytes: &[u8]) -> Result<(), String> {
+        self.execution.cpu.write_register(r, bytes)
+    }
+    fn coprocessor(&self, r: arm::Coprocessor, value: Option<u64>) -> Result<u64, String> {
+        if r.cp == 15 && r.opc1 == 0 && r.crn == 9 && r.crm == 1 {
+            if r.wide || r.opc2 > 1 || r.secure > 1 {
+                return Err("unmodeled R-profile TCM selector".into());
+            }
+            let e = &self.execution;
+            if let Some(value) = value {
+                if e.active.get() {
+                    return Err("host TCM writes require a stopped processor".into());
+                }
+                e.apply_tcm(
+                    r.opc2 as usize,
+                    u32::try_from(value).map_err(|_| "TCM value exceeds 32 bits")?,
+                )?;
+                return Ok(0);
+            }
+            return Ok(e.tcm[r.opc2 as usize].register.get() as u64);
+        }
+        if pmu::selected(r) {
+            if r.wide || r.crn != 9 || r.opc1 != 0 || r.secure > 1 {
+                return Err("unmodeled R-profile PMU selector".into());
+            }
+            let value = value
+                .map(|v| u32::try_from(v).map_err(|_| "R-profile PMU value exceeds 32 bits"))
+                .transpose()?;
+            return self
+                .execution
+                .pmu_access(r.crm, r.opc2, value)
+                .map(u64::from);
+        }
+        self.execution.cpu.coprocessor(r, value)
+    }
+    fn set_guest_clock(&self, clock: Clock) -> Result<(), String> {
+        let e = &self.execution;
+        if e.active.get() {
+            return Err("cannot replace an active R-profile guest clock".into());
+        }
+        clock.after(0)?;
+        if e.clock.get().is_some_and(|old| {
+            clock.now < old.now
+                || clock.now == old.now && clock.ratio == old.ratio && clock.phase < old.phase
+        }) {
+            return Err("R-profile guest clock may not move backward".into());
+        }
+        e.clock.set(Some(clock));
+        Ok(())
+    }
+    fn read_memory(&self, address: u64, bytes: &mut [u8]) -> Result<(), String> {
+        self.execution.cpu.read_memory(address, bytes)
+    }
+    fn translate(&self, address: u64, access: Access) -> Result<u64, String> {
+        self.execution.cpu.translate(address, access)
+    }
+    fn read_virtual(&self, address: u64, access: Access, bytes: &mut [u8]) -> Result<(), String> {
+        self.execution.cpu.read_virtual(address, access, bytes)
+    }
+    fn write_memory(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
+        self.execution.mark_direct_write(address, bytes.len())?;
+        self.execution.cpu.write_memory(address, bytes)?;
+        self.memory_written(address, bytes.len())
+    }
+    fn memory_written(&self, address: u64, bytes: usize) -> Result<(), String> {
+        let e = &self.execution;
+        e.mark_direct_write(address, bytes)?;
+        if e.memory.written(e.id.get(), address, bytes)? {
+            e.memory.prepare_external_write()?;
+        }
+        Ok(())
+    }
+    unsafe fn backing_written(
+        &self,
+        physical: u64,
+        backing: NonNull<u8>,
+        bytes: usize,
+    ) -> Result<(), String> {
+        self.execution
+            .mark_backing_write(backing.as_ptr() as usize, bytes)?;
+        let memory = &self.execution.memory;
+        if memory.backing_written(physical, backing.as_ptr() as usize, bytes)? {
+            memory.prepare_external_write()?;
+        }
+        Ok(())
+    }
+    fn memory_regions(&self) -> Result<Vec<MemoryRegion>, String> {
+        self.execution.cpu.memory_regions()
+    }
+    unsafe fn map_backing(
+        &self,
+        address: u64,
+        bytes: usize,
+        permissions: u32,
+        backing: NonNull<u8>,
+    ) -> Result<(), String> {
+        let e = &self.execution;
+        e.map_external(Mapping {
+            address,
+            bytes,
+            pointer: backing.as_ptr() as usize,
+            permissions,
+            physical: None,
+        })
+    }
+    unsafe fn map_physical(
+        &self,
+        address: u64,
+        physical: u64,
+        bytes: usize,
+        permissions: u32,
+        backing: NonNull<u8>,
+    ) -> Result<(), String> {
+        self.execution.map_external(Mapping {
+            address,
+            bytes,
+            permissions,
+            pointer: backing.as_ptr() as usize,
+            physical: Some(physical),
+        })
+    }
+    unsafe fn replace_physical(
+        &self,
+        address: u64,
+        physical: u64,
+        bytes: usize,
+        permissions: u32,
+        backing: NonNull<u8>,
+    ) -> Result<(), String> {
+        self.execution.replace_external(Mapping {
+            address,
+            bytes,
+            permissions,
+            pointer: backing.as_ptr() as usize,
+            physical: Some(physical),
+        })
+    }
+    fn map_zeroed(&self, address: u64, bytes: usize, permissions: u32) -> Result<(), String> {
+        self.execution.memory.require_stopped()?;
+        let backing = Backing::aligned_zeros(bytes, 4096)?;
+        let pointer = (backing.as_ptr() as usize + 4095) & !4095;
+        // Keep the allocation even if a later map/watch operation fails.
+        // An error must never leave a native mapping of a freed allocation.
+        self.execution.owned.borrow_mut().push(backing);
+        unsafe {
+            self.map_backing(
+                address,
+                bytes,
+                permissions,
+                NonNull::new(pointer as *mut u8).unwrap(),
+            )
+        }
+    }
+    unsafe fn map_mmio(&self, address: u64, bytes: usize, callbacks: Mmio) -> Result<(), String> {
+        let e = &self.execution;
+        if e.overlaps_tcm(address, bytes) {
+            return Err("MMIO overlaps processor-private TCM".into());
+        }
+        unsafe {
+            e.cpu.map_mmio(address, bytes, callbacks)?;
+        }
+        if let Err(error) = e.device_hook(address, bytes) {
+            e.cpu.unmap(address, bytes)?;
+            return Err(error);
+        }
+        Ok(())
+    }
+    fn unmap(&self, address: u64, bytes: usize) -> Result<(), String> {
+        let e = &self.execution;
+        if e.overlaps_tcm(address, bytes) {
+            return Err("TCM mappings are owned by the processor".into());
+        }
+        e.cpu.unmap(address, bytes)?;
+        e.memory.unmap(e.id.get(), address, bytes);
+        e.remove_external(address, bytes);
+        let end = address + bytes as u64;
+        let affected: Vec<_> = e
+            .mmio_hooks
+            .borrow()
+            .iter()
+            .filter(|(start, (n, _))| **start < end && address < **start + *n as u64)
+            .map(|(&start, &(n, hook))| (start, n, hook))
+            .collect();
+        for (start, n, hook) in affected {
+            e.cpu.remove_hook(hook)?;
+            e.mmio_hooks.borrow_mut().remove(&start);
+            if start < address {
+                e.device_hook(start, (address - start) as usize)?;
+            }
+            if start + n as u64 > end {
+                e.device_hook(end, (start + n as u64 - end) as usize)?;
+            }
+        }
+        Ok(())
+    }
+    fn protect(&self, address: u64, bytes: usize, permissions: u32) -> Result<(), String> {
+        let e = &self.execution;
+        if e.overlaps_tcm(address, bytes) {
+            return Err("TCM mappings are owned by the processor".into());
+        }
+        e.cpu.protect(address, bytes, permissions)?;
+        let changed: Vec<_> = e
+            .maps
+            .borrow()
+            .iter()
+            .filter_map(|m| m.clip(address, address + bytes as u64))
+            .collect();
+        e.remove_external(address, bytes);
+        for mut map in changed {
+            map.permissions = permissions;
+            e.memory.declare(
+                e.id.get(),
+                map.address,
+                map.pointer,
+                map.bytes,
+                map.physical,
+            );
+            e.maps.borrow_mut().push(map);
+        }
+        Ok(())
+    }
+    fn invalidate_code(&self, range: Option<(u64, u64)>) -> Result<(), String> {
+        self.execution.cpu.invalidate_code(range)
+    }
+    fn run(&self, request: Run) -> Result<Exit, ExecutionError> {
+        let e = &self.execution;
+        if e.active.get() {
+            return Err("nested R-profile execution is refused".into());
+        }
+        e.count.set(0);
+        if request.instructions == Some(0) {
+            return Ok(Exit::Stopped);
+        }
+        if request.watchdog_us != 0 {
+            return Err(
+                "counted R-profile host watchdog is not implemented; use explicit cancellation"
+                    .into(),
+            );
+        }
+        e.memory.flush()?;
+        e.cap.set(
+            request
+                .instructions
+                .map_or(i64::MAX as u64 / 2, |n| n as u64),
+        );
+        e.reset_budget();
+        e.restarted.set(None);
+        e.hint.set(None);
+        e.exception.set(None);
+        e.user_stop.set(false);
+        e.at_block.set(false);
+        e.at_instruction.set(false);
+        e.failure.borrow_mut().take();
+        e.settled_head.set(e.accounting().counters().1);
+        let mut begin = request.begin;
+        if e.irq.get() {
+            // Entry must use the requested architectural PC, including Thumb.
+            e.set(arm::PC, begin as u32)?;
+            if let Some(entry) = crate::rprofile::enter_irq(&*e.cpu)? {
+                e.clear_exclusive()?;
+                begin = entry.vector as u64;
+                e.observe_exception(arm::Exception::Irq);
+            }
+        }
+        let result = self.execute(request, begin);
+        if let Some(clock) = e.clock.get() {
+            e.clock.set(Some(clock.after(e.count.get())?));
+        }
+        result
+    }
+
+    fn tighten_instruction_limit(&self, total: u64) -> Result<(), String> {
+        self.execution.tighten(total)
+    }
+    fn instruction_progress(&self) -> Option<u64> {
+        self.execution.progress()
+    }
+    fn stop(&self) -> Result<(), String> {
+        self.execution.user_stop.set(true);
+        self.execution.cpu.stop()
+    }
+    fn stop_before_instruction(&self) -> Result<(), String> {
+        let e = &self.execution;
+        if !e.at_instruction.get() || e.user_stop.get() {
+            return Err("instruction interception requires a live, unconsumed entry".into());
+        }
+        e.count.set(
+            e.count
+                .get()
+                .checked_sub(1)
+                .ok_or("missing observed entry")?,
+        );
+        self.stop()
+    }
+    fn rprofile_identity(&self, value: Option<u32>) -> Result<u32, String> {
+        let e = &self.execution;
+        if let Some(value) = value {
+            if e.active.get() {
+                return Err("identity changes require a paused processor".into());
+            }
+            e.identity_input.set(value);
+        }
+        Ok(e.identity_input.get())
+    }
+    fn set_interrupt(&self, line: Interrupt, asserted: bool) -> Result<(), String> {
+        let e = &self.execution;
+        if line != Interrupt::Irq {
+            return Err("R-profile FIQ entry is not implemented".into());
+        }
+        e.irq.set(asserted);
+        if asserted && e.active.get() && e.scalar(arm::CPSR)? & 0x80 == 0 {
+            e.tighten(
+                e.progress()
+                    .ok_or("missing R-profile progress at IRQ input")?,
+            )?;
+        }
+        Ok(())
+    }
+    fn snapshot(&self, previous: Option<&dyn Snapshot>) -> Result<Box<dyn Snapshot>, String> {
+        self.capture(previous)
+    }
+    fn restore(&self, snapshot: &dyn Snapshot) -> Result<(), String> {
+        self.restore_captured(snapshot)
+    }
+    unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String> {
+        let e = &self.execution;
+        if e.active.get() {
+            return Err("cannot install a hook during R-profile execution".into());
+        }
+        let key = e.next_observer.get();
+        let next = key
+            .checked_add(1)
+            .ok_or("R-profile hook identity overflow")?;
+        let native = match hook {
+            Hook::Instruction { .. } => {
+                e.cpu.invalidate_code(None)?;
+                e.instruction_observers
+                    .set(e.instruction_observers.get() + 1);
+                None
+            }
+            Hook::Block { .. } => {
+                e.cpu.invalidate_code(None)?;
+                e.block_observers.set(e.block_observers.get() + 1);
+                None
+            }
+            // Observe only after backend-owned architectural entry. The
+            // callback cannot replace exception classification or entry.
+            Hook::Exception { .. } => None,
+            _ => Some(unsafe { e.cpu.install_hook(hook)? }),
+        };
+        e.observers
+            .borrow_mut()
+            .insert(key, Observer { hook, native });
+        e.next_observer.set(next);
+        Ok(HookId {
+            owner: self.identity(),
+            key,
+        })
+    }
+    fn remove_hook(&self, hook: HookId) -> Result<(), String> {
+        let e = &self.execution;
+        if e.active.get() || hook.owner != self.identity() {
+            return Err("invalid R-profile hook owner or execution state".into());
+        }
+        let observers = e.observers.borrow();
+        let observer = observers.get(&hook.key).ok_or("unknown R-profile hook")?;
+        match observer.hook {
+            Hook::Instruction { .. } => {
+                e.cpu.invalidate_code(None)?;
+                e.instruction_observers
+                    .set(e.instruction_observers.get() - 1);
+            }
+            Hook::Block { .. } => {
+                e.cpu.invalidate_code(None)?;
+                e.block_observers.set(e.block_observers.get() - 1);
+            }
+            Hook::Exception { .. } => (),
+            _ => e.cpu.remove_hook(observer.native.unwrap())?,
+        }
+        drop(observers);
+        e.observers.borrow_mut().remove(&hook.key);
+        Ok(())
+    }
+    unsafe fn translation_hooks(&self, _: Option<TranslationHooks>) -> Result<(), String> {
+        Err("R-profile translation hooks are owned by the backend".into())
+    }
+    fn retry_block(&self, _: u32) -> Result<(), String> {
+        Err("R-profile block retries are owned by the backend".into())
+    }
+    fn request_restart(&self) -> Result<(), String> {
+        Err("R-profile restarts are owned by the backend".into())
+    }
+    fn accounting(&self) -> Option<NonNull<BlockAccounting>> {
+        None
+    }
+    unsafe fn observe_backings(&self, ranges: &[BackingObserver]) -> Result<(), String> {
+        *self.execution.observed_backings.borrow_mut() = ranges.to_vec();
+        self.execution.rearm_observers()
+    }
+    fn watch_stores(&self, address: u64, bytes: u64) -> Result<(), String> {
+        self.execution.cpu.watch_stores(address, bytes)
+    }
+    fn hook_watched(&self, hook: HookId, watched: bool) -> Result<(), String> {
+        let observers = self.execution.observers.borrow();
+        let native = observers
+            .get(&hook.key)
+            .filter(|_| hook.owner == self.identity())
+            .and_then(|o| o.native)
+            .ok_or("R-profile watched hook is not a memory hook")?;
+        self.execution.cpu.hook_watched(native, watched)
+    }
+    fn precise_store_pc(&self, on: bool) -> Result<(), String> {
+        if !on {
+            return Err("R-profile code coherence requires precise store PCs".into());
+        }
+        Ok(())
+    }
+    fn exit_counters(&self) -> Result<BTreeMap<&'static str, u64>, String> {
+        self.execution.cpu.exit_counters()
+    }
+}

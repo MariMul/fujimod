@@ -1,0 +1,75 @@
+//! Checked board wiring for serial controllers and their attached parts.
+use crate::parts::{
+    power_controller::PowerController, serial::Endpoint, serial_calibration::CalibrationRegisters,
+};
+use crate::xp5::{
+    gpio::SharedPins,
+    spi::{Attachment, Select, Spi},
+};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Wiring {
+    source_hz: u64,
+    endpoints: Vec<Connection>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Connection {
+    select: Select,
+    part: Part,
+}
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+enum Part {
+    PowerController { rtc_seconds: u32, rtc_valid: bool },
+    SerialCalibrationRegisters { miso_high: bool },
+    BisConfigurationRegisters { revision: [u8; 2], idle_high: bool },
+    Lsm6dsConfigurationRegisters,
+}
+pub fn build(base: u64, pins: SharedPins, options: &toml::Table) -> Result<Spi, String> {
+    let wiring: Wiring = toml::Value::Table(options.clone())
+        .try_into()
+        .map_err(|e| format!("SPI wiring: {e}"))?;
+    Spi::new(base, pins, wiring.source_hz, attachments(wiring.endpoints)?)
+}
+fn attachments(connections: Vec<Connection>) -> Result<Vec<Attachment>, String> {
+    connections
+        .into_iter()
+        .map(|connection| {
+            let endpoint: Box<dyn Endpoint> = match connection.part {
+                Part::PowerController {
+                    rtc_seconds,
+                    rtc_valid,
+                } => {
+                    let mut part = PowerController::new();
+                    part.configure_rtc(rtc_seconds, rtc_valid);
+                    Box::new(part)
+                }
+                Part::SerialCalibrationRegisters { miso_high } => {
+                    Box::new(CalibrationRegisters::new(miso_high))
+                }
+                Part::BisConfigurationRegisters {
+                    revision,
+                    idle_high,
+                } => Box::new(crate::parts::bis_configuration::Registers::new(
+                    revision, idle_high,
+                )?),
+                Part::Lsm6dsConfigurationRegisters => {
+                    Box::new(crate::parts::lsm6ds::Registers::default())
+                }
+            };
+            Ok(Attachment::new(connection.select, endpoint))
+        })
+        .collect()
+}
+pub(super) fn gpio_wire(
+    pins: SharedPins,
+    connections: Vec<Connection>,
+) -> Result<Box<dyn crate::parts::serial::Wire>, String> {
+    Ok(Box::new(crate::xp5::spi::GpioWire::new(
+        pins,
+        attachments(connections)?,
+    )?))
+}

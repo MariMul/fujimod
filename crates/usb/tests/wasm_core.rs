@@ -37,7 +37,7 @@ fn script(extra: Vec<E>) -> Script {
 
 #[wasm_bindgen_test]
 fn selected_catalog_and_typed_replies_execute_in_wasm() {
-    use fujimod_defs::service::{Definition, FirmwareIdentity, ServiceModes};
+    use fujimod_catalog::service::{Definition, FirmwareIdentity, ServiceModes};
     use fujimod_usb::{
         app80::{
             Reply,

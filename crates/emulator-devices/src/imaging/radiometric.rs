@@ -1,0 +1,574 @@
+//! Immutable physical exposure and film inputs. Frame edges publish this
+//! descriptor; armed consumers request their own readout, never a fixture-sized
+//! intermediate. Scene binning precedes PSF, sensor response and film.
+use super::{
+    analysis::ImageLayout,
+    exposure::{ApertureHandle, Calibration, ExposedFrame, ExposureHandle},
+    film::{Film, FilmPixels},
+};
+use crate::{exr2::isp::parameters::ParameterHandle, scene::SensorFramesHandle};
+use serde::Deserialize;
+use std::sync::{Arc, Mutex};
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Spec {
+    pub frames: String,
+    pub exposure: String,
+    pub aperture: String,
+    pub parameters: String,
+    pub calibration: Calibration,
+    pub projection: Option<super::optics::Spec>,
+}
+pub struct Renderer {
+    frames: SensorFramesHandle,
+    exposure: ExposureHandle,
+    aperture: ApertureHandle,
+    calibration: Calibration,
+    parameters: ParameterHandle,
+    projection: Option<Arc<super::optics::Projection>>,
+    previous: Option<Arc<Image>>,
+}
+/// A latched hardware input. All memoized readouts derive from these immutable
+/// values; no later register write or lens step changes an exposed image.
+pub struct Image {
+    pub exposure: ExposedFrame,
+    film: Film,
+    gain: [u32; 3],
+    projection: Option<Arc<super::optics::Projection>>,
+    outputs: Mutex<Vec<(ImageLayout, Arc<[u8]>)>>,
+    measurements: Mutex<Vec<([usize; 2], Vec<[usize; 4]>, ExposedFrame)>>,
+    histograms: Mutex<Vec<([usize; 2], [usize; 4], [u8; 1024])>>,
+}
+impl Renderer {
+    pub fn new(
+        calibration: Calibration,
+        frames: SensorFramesHandle,
+        exposure: ExposureHandle,
+        aperture: ApertureHandle,
+        parameters: ParameterHandle,
+        projection: Option<super::optics::Projection>,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            frames,
+            exposure,
+            aperture,
+            calibration: calibration.validate()?,
+            parameters,
+            projection: projection.map(Arc::new),
+            previous: None,
+        })
+    }
+    pub(crate) fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
+        crate::checkpoint::Checkpoint::encode(
+            "radiometric-renderer",
+            &(self.calibration, self.projection.as_ref().map(|p| p.spec())),
+        )
+    }
+    pub(crate) fn validate_checkpoint(
+        &self,
+        saved: &crate::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        let (calibration, projection): (Calibration, Option<super::optics::Spec>) =
+            saved.decode("radiometric-renderer")?;
+        if calibration != self.calibration
+            || projection.as_ref() != self.projection.as_ref().map(|p| p.spec())
+            || !saved.blobs().is_empty()
+            || !saved.children().is_empty()
+        {
+            return Err("radiometric renderer checkpoint calibration differs".into());
+        }
+        Ok(())
+    }
+    pub(crate) fn restore_checkpoint(
+        &mut self,
+        saved: &crate::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        self.previous = None;
+        Ok(())
+    }
+    pub(crate) fn fingerprint(&self) -> serde_json::Value {
+        serde_json::json!({"calibration":self.calibration,"projection":self.projection.as_ref().map(|p|p.spec())})
+    }
+    pub fn capture(&mut self) -> Result<Option<Arc<Image>>, String> {
+        let Some(mut exposure) = ExposedFrame::capture(
+            &self.frames,
+            &self.exposure,
+            &self.aperture,
+            self.calibration,
+        )?
+        else {
+            return Ok(None);
+        };
+        exposure.focus_shift_mm = self.projection.as_ref().map(|p| p.focus()).transpose()?;
+        let p = self.parameters.lock().map_err(|_| "film bank poisoned")?;
+        let gain = [
+            p.words[0x200 / 4] & 32767,
+            p.words[0x200 / 4] >> 16 & 32767,
+            p.words[0x204 / 4] & 32767,
+        ];
+        if let Some(old) = &self.previous {
+            if Arc::ptr_eq(&old.exposure.frame, &exposure.frame)
+                && old.exposure.exposure == exposure.exposure
+                && old.exposure.aperture_squared == exposure.aperture_squared
+                && old.exposure.focus_shift_mm == exposure.focus_shift_mm
+                && old.gain == gain
+                && old.film.matches(|o| p.words[o / 4])
+            {
+                return Ok(Some(old.clone()));
+            }
+        }
+        let mut film = self
+            .previous
+            .as_ref()
+            .map(|p| p.film.clone())
+            .unwrap_or_default();
+        film.update(|o| p.words[o / 4])?;
+        let image = Arc::new(Image {
+            exposure,
+            film,
+            gain,
+            projection: self.projection.clone(),
+            outputs: Mutex::new(Vec::new()),
+            measurements: Mutex::new(Vec::new()),
+            histograms: Mutex::new(Vec::new()),
+        });
+        self.previous = Some(image.clone());
+        Ok(Some(image))
+    }
+}
+impl Image {
+    pub(crate) fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
+        Ok(crate::checkpoint::Checkpoint::encode(
+            "radiometric-image",
+            &(
+                &self.film,
+                self.gain,
+                self.projection.as_ref().map(|p| p.spec()),
+            ),
+        )?
+        .with_children(vec![self.exposure.checkpoint()?]))
+    }
+    pub(crate) fn from_checkpoint(saved: &crate::checkpoint::Checkpoint) -> Result<Self, String> {
+        let (film, gain, projection): (Film, [u32; 3], Option<super::optics::Spec>) =
+            saved.decode("radiometric-image")?;
+        if saved.children().len() != 1
+            || !saved.blobs().is_empty()
+            || gain.iter().any(|v| *v > 32767)
+        {
+            return Err("invalid radiometric image checkpoint".into());
+        }
+        let exposure = ExposedFrame::from_checkpoint(&saved.children()[0])?;
+        let projection = projection
+            .map(|spec| {
+                super::optics::Projection::new(
+                    spec,
+                    Arc::new(Mutex::new(exposure.focus_shift_mm.unwrap_or(0.))),
+                )
+            })
+            .transpose()?
+            .map(Arc::new);
+        Ok(Self {
+            exposure,
+            film,
+            gain,
+            projection,
+            outputs: Mutex::new(Vec::new()),
+            measurements: Mutex::new(Vec::new()),
+            histograms: Mutex::new(Vec::new()),
+        })
+    }
+    /// Observational cache inventory; inspection never prepares a readout.
+    pub(crate) fn readouts(&self) -> serde_json::Value {
+        let outputs = self.outputs.lock().unwrap();
+        let measurements = self.measurements.lock().unwrap();
+        serde_json::json!({"source":[self.exposure.frame.width,self.exposure.frame.height],
+            "packed_outputs":outputs.iter().map(|(l,p)|serde_json::json!({"dimensions":[l.width,l.height],"bytes":p.len()})).collect::<Vec<_>>(),
+            "raw_readouts":measurements.iter().map(|(g,w,f)|serde_json::json!({"grid":g,"dimensions":f.sample_dimensions(),"window_count":w.len(),"window_samples":w.iter().map(|w|w[2]*w[3]).sum::<usize>(),"projected_pixels":f.prepared_pixels()})).collect::<Vec<_>>()})
+    }
+    pub(crate) fn fingerprint(&self) -> serde_json::Value {
+        serde_json::json!({"exposure":self.exposure.fingerprint(),"film":self.film.words(),"gain":self.gain,"projection":self.projection.as_ref().map(|p|p.spec())})
+    }
+    pub(crate) fn measurement(&self, grid: [usize; 2]) -> Result<ExposedFrame, String> {
+        self.measurement_windows(grid, &[[0, 0, grid[0], grid[1]]])
+    }
+    pub(crate) fn measurement_windows(
+        &self,
+        grid: [usize; 2],
+        windows: &[[usize; 4]],
+    ) -> Result<ExposedFrame, String> {
+        if grid.contains(&0) || grid.iter().any(|&v| v > 16384) {
+            return Err("invalid physical readout grid".into());
+        }
+        let dimensions = [
+            grid[0].min(self.exposure.frame.width),
+            grid[1].min(self.exposure.frame.height),
+        ];
+        let mut cache = self
+            .measurements
+            .lock()
+            .map_err(|_| "readout cache poisoned")?;
+        if let Some((_, _, frame)) = cache
+            .iter()
+            .find(|(g, w, f)| *g == grid && (*w == windows || f.covers(grid, windows)))
+        {
+            return Ok(frame.clone());
+        }
+        let mut frame = self.exposure.clone();
+        if let Some(projection) = &self.projection {
+            projection.prepare_binned_windows(&mut frame, dimensions, grid, windows)?
+        } else {
+            super::optics::bin_exposure(&mut frame, dimensions)
+        }
+        // Bound retained derived pixels; the immutable source is shared.
+        let cost = dimensions[0] * dimensions[1];
+        while !cache.is_empty()
+            && (cache.len() >= 4
+                || cache
+                    .iter()
+                    .map(|(_, _, f)| f.sample_dimensions().iter().product::<usize>())
+                    .sum::<usize>()
+                    + cost
+                    > 4 * 1024 * 1024)
+        {
+            cache.remove(0);
+        }
+        if cost <= 4 * 1024 * 1024 {
+            cache.push((grid, windows.to_vec(), frame.clone()));
+        }
+        Ok(frame)
+    }
+    fn color(&self, raw: [u16; 3], pixels: &mut FilmPixels<'_>) -> [u8; 3] {
+        pixels.develop(self.white_balance(raw))
+    }
+    fn white_balance(&self, raw: [u16; 3]) -> [u16; 3] {
+        std::array::from_fn(|c| {
+            ((u64::from(raw[c]) * u64::from(self.gain[c])) >> 8).min(16383) as u16
+        })
+    }
+    pub(crate) fn render(&self, layout: ImageLayout) -> Result<Arc<[u8]>, String> {
+        layout.bytes()?;
+        let mut cache = self
+            .outputs
+            .lock()
+            .map_err(|_| "film readout cache poisoned")?;
+        if let Some((_, pixels)) = cache.iter().find(|(l, _)| *l == layout) {
+            return Ok(pixels.clone());
+        }
+        let frame = self.measurement([layout.width, layout.height])?;
+        let [width, height] = frame.sample_dimensions();
+        let mut memo = FilmPixels::new(&self.film);
+        let mut colors = Vec::with_capacity(width * height);
+        if let Some(readout) = frame.sample_offsets([width, height], [0, 0, width, height], 1) {
+            for &row in &readout.rows {
+                for &column in &readout.columns {
+                    colors.push(self.color(readout.sample(row, column), &mut memo));
+                }
+            }
+        } else {
+            for y in 0..height {
+                for x in 0..width {
+                    colors.push(self.color(frame.sample(x, y, [width, height]), &mut memo));
+                }
+            }
+        }
+        let mut out = vec![0; layout.bytes()?];
+        for (y, row) in out.chunks_exact_mut(layout.stride).enumerate() {
+            let sy = ((2 * y + 1) * height / (2 * layout.height)).min(height - 1);
+            for (x, pair) in row[..layout.width * 2].chunks_exact_mut(4).enumerate() {
+                let sample = |x: usize| {
+                    colors[sy * width + ((2 * x + 1) * width / (2 * layout.width)).min(width - 1)]
+                };
+                pair.copy_from_slice(&Film::pack(sample(x * 2), sample(x * 2 + 1)));
+            }
+        }
+        let out: Arc<[u8]> = out.into();
+        while cache.iter().map(|(_, p)| p.len()).sum::<usize>() + out.len() > 8 * 1024 * 1024
+            && !cache.is_empty()
+        {
+            cache.remove(0);
+        }
+        if out.len() <= 8 * 1024 * 1024 {
+            cache.push((layout, out.clone()));
+        }
+        Ok(out)
+    }
+    pub(crate) fn histogram(
+        &self,
+        grid: [usize; 2],
+        window: [usize; 4],
+        out: &mut [u8; 1024],
+    ) -> Result<(), String> {
+        if grid.contains(&0)
+            || grid.iter().any(|&v| v > 16384)
+            || window.iter().any(|&v| v > 8192)
+            || window[2] == 0
+            || window[3] == 0
+        {
+            return Err("invalid histogram readout window".into());
+        }
+        let mut cache = self
+            .histograms
+            .lock()
+            .map_err(|_| "histogram cache poisoned")?;
+        if let Some((_, _, bins)) = cache.iter().find(|(g, w, _)| *g == grid && *w == window) {
+            *out = *bins;
+            return Ok(());
+        }
+        let clipped = [
+            window[0].min(grid[0]),
+            window[1].min(grid[1]),
+            (window[0] + window[2])
+                .min(grid[0])
+                .saturating_sub(window[0]),
+            (window[1] + window[3])
+                .min(grid[1])
+                .saturating_sub(window[1]),
+        ];
+        let frame = self.measurement_windows(grid, &[clipped])?;
+        let [left, top, width, height] = window;
+        let mut bins = [0u32; 256];
+        let mut pixels = FilmPixels::new(&self.film);
+        if let Some(readout) = frame.sample_offsets(grid, window, 2) {
+            for &row in &readout.rows {
+                for &column in &readout.columns {
+                    let y = pixels.luma(self.white_balance(readout.sample(row, column)));
+                    bins[y as usize] += 1;
+                }
+            }
+        } else {
+            for y in top..(top + height).min(grid[1]) {
+                for x in (left..(left + width).min(grid[0])).step_by(2) {
+                    let y = pixels.luma(self.white_balance(frame.sample(x, y, grid)));
+                    bins[y as usize] += 1;
+                }
+            }
+        }
+        for (word, count) in out.chunks_exact_mut(4).zip(bins) {
+            word.copy_from_slice(&count.to_le_bytes());
+        }
+        if cache.len() == 8 {
+            cache.remove(0);
+        }
+        cache.push((grid, window, *out));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        exr2::isp::parameters::Parameters,
+        imaging::exposure::Exposure,
+        scene::{Frame, FramePixels, SensorFrames},
+    };
+    fn renderer() -> (Renderer, ParameterHandle, ExposureHandle) {
+        let frames = Arc::new(Mutex::new(SensorFrames::new(
+            Frame::new(
+                64,
+                48,
+                FramePixels::Rgb24(
+                    (0..64 * 48)
+                        .flat_map(|i| [if i % 2 == 0 { 0 } else { 255 }; 3])
+                        .collect(),
+                ),
+            )
+            .unwrap(),
+        )));
+        let exposure = Arc::new(Mutex::new(Exposure {
+            seconds: 0.0001,
+            analog_gain: 1.,
+        }));
+        let parameters = Arc::new(Mutex::new(Parameters {
+            words: crate::imaging::film::color_tests::words(),
+            film: Film::default(),
+        }));
+        let r = Renderer::new(
+            Calibration {
+                full_scale: 16380,
+                reference_white: [256; 3],
+                saturation_lux_seconds: 1.,
+                color_sample_weights: [2, 5, 2],
+            },
+            frames,
+            exposure.clone(),
+            Arc::new(Mutex::new(4.)),
+            parameters.clone(),
+            None,
+        )
+        .unwrap();
+        (r, parameters, exposure)
+    }
+    #[test]
+    fn exposure_publication_is_lazy_and_reuses_only_consumed_parameters() {
+        let (mut renderer, parameters, exposure) = renderer();
+        let first = renderer.capture().unwrap().unwrap();
+        assert!(first.outputs.lock().unwrap().is_empty());
+        assert!(first.measurements.lock().unwrap().is_empty());
+        let layout = ImageLayout {
+            width: 16,
+            height: 12,
+            stride: 36,
+        };
+        let pixels = first.render(layout).unwrap();
+        assert_eq!(first.measurements.lock().unwrap()[0].0, [16, 12]);
+        assert_eq!(pixels.len(), 432);
+        assert!(
+            pixels
+                .chunks_exact(36)
+                .all(|r| r[32..].iter().all(|v| *v == 0))
+        );
+        parameters.lock().unwrap().words[0] = 1;
+        let unchanged = renderer.capture().unwrap().unwrap();
+        assert!(Arc::ptr_eq(&first, &unchanged));
+        assert!(Arc::ptr_eq(&pixels, &unchanged.render(layout).unwrap()));
+        exposure.lock().unwrap().seconds *= 2.;
+        let changed = renderer.capture().unwrap().unwrap();
+        assert!(!Arc::ptr_eq(&first, &changed));
+        assert!(changed.outputs.lock().unwrap().is_empty());
+        assert_eq!(first.render(layout).unwrap(), pixels);
+    }
+    #[test]
+    fn binned_readout_integrates_light_before_film_and_roundtrips_without_rendering() {
+        let (mut renderer, _, _) = renderer();
+        let frame = renderer.capture().unwrap().unwrap();
+        let before = frame.fingerprint();
+        let saved = frame.checkpoint().unwrap();
+        assert!(frame.outputs.lock().unwrap().is_empty());
+        let restored = Image::from_checkpoint(&saved).unwrap();
+        assert_eq!(before, restored.fingerprint());
+        let layout = ImageLayout {
+            width: 16,
+            height: 12,
+            stride: 32,
+        };
+        let output = frame.render(layout).unwrap();
+        assert_eq!(output, restored.render(layout).unwrap());
+        // The two-pixel black/white pattern averages in linear irradiance;
+        // point sampling before film would select alternating endpoints.
+        assert!(output.chunks_exact(4).all(|p| p[0] == p[1]));
+        assert!(output.chunks_exact(4).all(|p| p == &output[..4]));
+        assert_eq!(before, frame.fingerprint());
+        let mut bins = [0; 1024];
+        frame
+            .histogram([64, 48], [0, 0, 64, 48], &mut bins)
+            .unwrap();
+        let total: u32 = bins
+            .chunks_exact(4)
+            .map(|w| u32::from_le_bytes(w.try_into().unwrap()))
+            .sum();
+        assert_eq!(total, 64 * 48 / 2);
+        assert_eq!(frame.histograms.lock().unwrap().len(), 1);
+    }
+    #[test]
+    fn readouts_match_scalar_film_across_binning_projection_padding_and_restore() {
+        use crate::imaging::optics::{Illumination, Projection, Spec};
+        for [width, height] in [[1, 1], [5, 3], [17, 11]] {
+            for [out_width, out_height] in [[2, 1], [14, 7], [4, 19], [40, 12]] {
+                for projection_mode in 0..3 {
+                    let rgb: Vec<u8> = (0..width * height * 3)
+                        .map(|i| ((i * 79 + i / 3 * 17) % 256) as u8)
+                        .collect();
+                    let frames = Arc::new(Mutex::new(SensorFrames::new(
+                        Frame::new(width, height, FramePixels::Rgb24(rgb.into())).unwrap(),
+                    )));
+                    let exposure = Arc::new(Mutex::new(Exposure {
+                        seconds: 0.0001,
+                        analog_gain: 1.3,
+                    }));
+                    let aperture = Arc::new(Mutex::new(4.));
+                    let calibration = Calibration {
+                        full_scale: 16380,
+                        reference_white: [256, 192, 320],
+                        saturation_lux_seconds: 1.,
+                        color_sample_weights: [8, 20, 8],
+                    };
+                    let mut words = crate::imaging::film::color_tests::words();
+                    words[0x200 / 4] = 257 | 193 << 16;
+                    words[0x204 / 4] = 311;
+                    let parameters = Arc::new(Mutex::new(Parameters {
+                        words: words.clone(),
+                        film: Film::default(),
+                    }));
+                    let spec = Spec {
+                        focus: "focus".into(),
+                        focal_length_mm: 18.5,
+                        subject_distance_mm: 2000.,
+                        sensor_width_mm: 2.,
+                        relative_illumination: if projection_mode == 2 {
+                            Illumination::CosineFourth
+                        } else {
+                            Illumination::Uniform
+                        },
+                    };
+                    let projection = || {
+                        (projection_mode != 0).then(|| {
+                            Projection::new(spec.clone(), Arc::new(Mutex::new(0.2))).unwrap()
+                        })
+                    };
+                    let layout = ImageLayout {
+                        width: out_width,
+                        height: out_height,
+                        stride: out_width * 2 + 8,
+                    };
+                    let mut expected = vec![0; layout.bytes().unwrap()];
+                    let mut sampled =
+                        ExposedFrame::capture(&frames, &exposure, &aperture, calibration)
+                            .unwrap()
+                            .unwrap();
+                    if let Some(p) = projection() {
+                        sampled.focus_shift_mm = Some(p.focus().unwrap());
+                        p.prepare_binned_windows(
+                            &mut sampled,
+                            [width.min(out_width), height.min(out_height)],
+                            [out_width, out_height],
+                            &[[0, 0, out_width, out_height]],
+                        )
+                        .unwrap();
+                    } else {
+                        crate::imaging::optics::bin_exposure(
+                            &mut sampled,
+                            [width.min(out_width), height.min(out_height)],
+                        );
+                    }
+                    let mut film = Film::default();
+                    film.update(|o| words[o / 4]).unwrap();
+                    for y in 0..out_height {
+                        for x in (0..out_width).step_by(2) {
+                            let color = |x| {
+                                let raw = sampled.sample(x, y, [out_width, out_height]);
+                                film.develop(std::array::from_fn(|c| {
+                                    ((u64::from(raw[c]) * [257, 193, 311][c]) >> 8).min(16383)
+                                        as u16
+                                }))
+                            };
+                            let at = y * layout.stride + x * 2;
+                            expected[at..at + 4]
+                                .copy_from_slice(&Film::pack(color(x), color(x + 1)));
+                        }
+                    }
+                    let mut renderer = Renderer::new(
+                        calibration,
+                        frames,
+                        exposure,
+                        aperture,
+                        parameters,
+                        projection(),
+                    )
+                    .unwrap();
+                    let image = renderer.capture().unwrap().unwrap();
+                    let saved = image.checkpoint().unwrap();
+                    let actual = image.render(layout).unwrap();
+                    let restored = Image::from_checkpoint(&saved).unwrap();
+                    assert_eq!(actual, restored.render(layout).unwrap());
+                    assert_eq!(
+                        actual.as_ref(),
+                        expected,
+                        "source {width}x{height}, output {out_width}x{out_height}, projection {projection_mode}"
+                    );
+                }
+            }
+        }
+    }
+}
