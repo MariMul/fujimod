@@ -8,7 +8,7 @@ import weakref
 from collections.abc import Buffer, Mapping, Sequence
 from dataclasses import dataclass
 from os import PathLike, fspath
-from typing import Literal, Self, TypedDict, TypeGuard, cast
+from typing import Literal, Protocol, Self, TypedDict, TypeGuard, cast
 
 from fujimod._native import emulator as _native
 
@@ -509,17 +509,24 @@ def make_board(
     return Board(definition, assets)
 
 
+class NativeBoardOwner(Protocol):
+    """Any board object that owns one native emulator board."""
+
+    @property
+    def native(self) -> _native.Board: ...
+
+
 class Session:
-    """Typed external inputs and passive observations for a :class:`Board`.
+    """Typed external inputs and passive observations for a native board.
 
     Obtain a facade from ``board.session``. It does not own a second native
     runtime: closing the board invalidates every session operation.
     """
 
-    def __init__(self, board: Board) -> None:
-        if not isinstance(board, Board):
-            raise TypeError("board must be a Board")
-        self._board_ref: weakref.ReferenceType[Board] = weakref.ref(board)
+    def __init__(self, board: NativeBoardOwner) -> None:
+        if not isinstance(board.native, _native.Board):
+            raise TypeError("board must own a native emulator board")
+        self._board_ref: weakref.ReferenceType[NativeBoardOwner] = weakref.ref(board)
 
     def _native_board(self) -> _native.Board:
         board = self._board_ref()
