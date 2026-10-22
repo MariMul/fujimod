@@ -267,13 +267,13 @@ pub fn read_raf<R: Read + Seek>(mut file: R) -> io::Result<RafScene> {
     }
 
     // Parse black level map (tag 0xf00a): type 4 (u32), count 36, offset in TIFF.
-    // This tag is optional; use X70 default if not present.
+    // Required; error if missing or invalid.
     let black_level = match tiff_tags.get(&0xf00au16) {
         Some((typ, count, offset)) => {
             if (*typ, *count) != (4, 36) {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
-                    "Unsupported black-level map",
+                    "Unsupported black-level map type or count",
                 ));
             }
             let offset = *offset as usize;
@@ -305,8 +305,10 @@ pub fn read_raf<R: Read + Seek>(mut file: R) -> io::Result<RafScene> {
             values[0]
         }
         None => {
-            // X70 default black level when not present in TIFF.
-            1023u16
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Missing black level tag (0xf00a) in RAF TIFF",
+            ));
         }
     };
 
@@ -819,27 +821,6 @@ mod tests {
     }
 
     #[test]
-    fn test_recorded_exposure_defaults() {
-        let exp = RecordedExposure {
-            seconds: 1.0 / 800.0,
-            f_number: 9.0,
-            iso: 800,
-            dynamic_range: 400,
-        };
-        // DR 400 at ISO 800: gain = (800/200) * 0.25 = 1.0.
-        // Norm = (1/800) / (9*9 * 1.0) = 1/64800.
-        let expected_norm = (1.0 / 800.0) / (81.0 * 1.0);
-        let calculated_dr_factor = match exp.dynamic_range {
-            200 => 0.5,
-            400 => 0.25,
-            _ => 1.0,
-        };
-        let calculated_gain = (exp.iso as f64 / 200.0) * calculated_dr_factor;
-        let calculated_norm = exp.seconds / ((exp.f_number * exp.f_number) * calculated_gain);
-        assert!((expected_norm - calculated_norm).abs() < 1e-6);
-    }
-
-    #[test]
     fn test_xtrans_pattern() {
         // Verify the X-Trans pattern constants are correct.
         assert_eq!(XTRANS[0][0], 0); // Red at (0, 0)
@@ -895,11 +876,14 @@ mod tests {
             let norm = scene.exposure.seconds / (scene.exposure.f_number * scene.exposure.f_number * sensor_gain);
 
             // Convert radiance back to raw counts: raw = radiance * norm + black.
+            // Compute over the visible area only (rawpy left_margin=6, width=4934).
+            let visible_x_start = 6usize;
+            let visible_x_end = 6 + 4934;
             let mut color_raw_sums = [0.0f64; 3];
             let mut color_raw_counts = [0usize; 3];
 
             for y in 0..scene.height as usize {
-                for x in 0..scene.width as usize {
+                for x in visible_x_start..visible_x_end {
                     let color = scene.cfa[y % 6][x % 6] as usize;
                     let idx = y * scene.width as usize + x;
                     if color < 3 && idx < scene.radiance.len() {
@@ -910,34 +894,32 @@ mod tests {
                 }
             }
 
-            // Expected raw means per rawpy over visible area (3296×4934 visible).
-            // From exiftool: R=1262.334, G=1480.546, B=1326.646
+            // Expected raw means per rawpy's raw_image_visible over visible area (3296×4934).
+            // These are the exact means from rawpy's visible crop.
             let expected_raw = [1262.334, 1480.546, 1326.646];
-            let tolerance = 0.005; // 0.5% tolerance
 
             for c in 0..3 {
                 if color_raw_counts[c] > 0 {
                     let mean_raw = color_raw_sums[c] / color_raw_counts[c] as f64;
-                    let error = (mean_raw - expected_raw[c]).abs() / expected_raw[c];
                     let color_name = match c {
                         0 => "Red",
                         1 => "Green",
                         _ => "Blue",
                     };
                     eprintln!(
-                        "{} raw mean: computed={:.3}, expected={:.3}, error={:.4}%",
+                        "{} raw mean: computed={:.6}, expected={:.6}, difference={:.6}",
                         color_name,
                         mean_raw,
                         expected_raw[c],
-                        error * 100.0
+                        (mean_raw - expected_raw[c]).abs()
                     );
+                    // Assert exact equality (within floating-point rounding)
                     assert!(
-                        error <= tolerance,
-                        "{} mean raw count out of tolerance: {:.3} vs {:.3} (error {:.4}%)",
+                        (mean_raw - expected_raw[c]).abs() < 0.001,
+                        "{} raw means differ: {:.6} vs {:.6}",
                         color_name,
                         mean_raw,
-                        expected_raw[c],
-                        error * 100.0
+                        expected_raw[c]
                     );
                 }
             }
