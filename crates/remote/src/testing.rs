@@ -177,7 +177,12 @@ impl Backend for Synthetic {
                 "selector.up" => self.word(520, 0),
                 "disp_back_button" if self.remembered_submenu && self.get(784) == 4352 => {
                     self.remembered_submenu = false;
-                    self.active(4096, 0);
+                    let parent = self.get(4352 + 20);
+                    if parent == 0 {
+                        self.word(776, 0);
+                    } else {
+                        self.active(parent, 0);
+                    }
                 }
                 "disp_back_button" => self.word(776, 0),
                 _ => {}
@@ -254,6 +259,32 @@ fn root_navigation_backs_out_of_a_remembered_submenu() {
     });
 }
 #[test]
+fn root_navigation_reopens_after_back_dismisses_a_startup_modal() {
+    futures_lite::future::block_on(async {
+        let mut backend = Synthetic::new();
+        backend.remembered_submenu = true;
+        // This modal's descriptor belongs to the menu graph, but BACK closes
+        // it instead of displaying its descriptor's parent.
+        backend.word(4352 + 20, 0);
+        let mut remote = Connection::connect(backend, facts()).unwrap();
+        let result = remote
+            .navigate(&menu("shooting").with_key(20), 100)
+            .await
+            .unwrap();
+        assert!(result.menu().unwrap().selected);
+        assert_eq!(
+            remote
+                .backend
+                .edges
+                .iter()
+                .filter(|edge| edge.control.id() == "menu_ok_button"
+                    && edge.state == InputState::Pressed)
+                .count(),
+            2
+        );
+    });
+}
+#[test]
 fn option_value_uses_selected_row_instead_of_viewport_origin() {
     futures_lite::future::block_on(async {
         let mut backend = Synthetic::new();
@@ -281,7 +312,6 @@ fn option_value_uses_selected_row_instead_of_viewport_origin() {
         );
     });
 }
-
 #[test]
 fn resolution_is_live_and_strict() {
     futures_lite::future::block_on(async {

@@ -174,7 +174,8 @@ async fn root<R: Remote + ?Sized>(
     for _ in 0..64 {
         let value = r.read(&reference).await?;
         if !value.state.menu_active {
-            return Err(format!("MENU closed while entering {name}"));
+            step(r, facts, &reference, "menu", deadline).await?;
+            continue;
         }
         if value.state.node == value.menu()?.node {
             return Ok(());
