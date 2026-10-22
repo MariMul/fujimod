@@ -104,7 +104,7 @@ fn definitions(value: &Value) -> Option<&Map<String, Value>> {
         .and_then(Value::as_object)
 }
 
-fn schemas(directory: &Path) -> Result<Definitions, String> {
+pub(crate) fn schemas(directory: &Path) -> Result<Definitions, String> {
     let mut result = Definitions::new();
     for (filename, expected_name) in RUST_SCHEMA_FILES {
         let path = directory.join(filename);

@@ -3,10 +3,12 @@
 use serde::Serialize;
 use std::{collections::BTreeMap, fs, path::Path};
 mod catalog_types;
+mod catalog_typescript;
 mod unions;
 use unions::Union;
 
 pub use catalog_types::generate as generate_catalog_types;
+pub use catalog_typescript::generate as generate_catalog_typescript;
 
 use syn::{Fields, FnArg, ImplItem, Item, ReturnType, Type, Visibility};
 

@@ -1,4 +1,23 @@
 import { usb, type UsbError, type Session, type Device, type InfoReply } from '../src/index.js';
+import type { LensClockMode, PartAttachment, StabilizerCommand, BodyProfile } from '../pkg/fujimod.js';
+declare const lensClock: LensClockMode;
+if (lensClock.kind === 'divided') {
+  const periods: number[] = lensClock.period_picoseconds;
+  // @ts-expect-error Divided clocks have no stage quantum.
+  void lensClock.ticks_per_quantum;
+  void periods;
+}
+declare const attachment: PartAttachment;
+const homePin: number | undefined = attachment.motor_home_pins?.[0]?.pin;
+declare const bodyProfile: BodyProfile;
+const constructionSchema: number | undefined = bodyProfile.construction?.schema;
+const stabilizer: StabilizerCommand = { code: 1, bits: 8, operation: { kind: 'ram_write', bank: 2 } };
+// @ts-expect-error Stabilizer command codes are numeric hardware values.
+const invalidStabilizer: StabilizerCommand = { code: '1', bits: 8, operation: { kind: 'write' } };
+void homePin;
+void constructionSchema;
+void stabilizer;
+void invalidStabilizer;
 declare const session: Session;
 declare const device: Device;
 const bytes: Promise<Uint8Array> = session.readMemory(0x1000, 4);
