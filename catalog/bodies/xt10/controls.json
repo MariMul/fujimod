@@ -78,7 +78,9 @@
           "kind": "debug_key",
           "name": "AE-LOCK"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "af_lock_button": {
       "name": "AF-L (focus lock) button",
@@ -97,7 +99,9 @@
           "kind": "debug_key",
           "name": "AF-LOCK"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "auto_mode_selector_lever": {
       "name": "Auto mode selector lever",
@@ -117,8 +121,6 @@
         "positions": [
           {
             "id": "manual",
-            "label": "icon",
-            "description": "Select from P (program AE), S (shutter-priority AE), A (aperture-priority AE), and M (manual) modes.",
             "key": {
               "kind": "native_input",
               "name": "KEY_RECL_MANUAL"
@@ -127,8 +129,6 @@
           },
           {
             "id": "AUTO",
-            "label": "AUTO",
-            "description": null,
             "key": {
               "kind": "native_input",
               "name": "KEY_RECL_AUTO"
@@ -137,7 +137,20 @@
           }
         ],
         "momentary": false
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "manual",
+          "label": "icon",
+          "description": "Select from P (program AE), S (shutter-priority AE), A (aperture-priority AE), and M (manual) modes."
+        },
+        {
+          "id": "AUTO",
+          "label": "AUTO",
+          "description": null
+        }
+      ]
     },
     "battery_chamber_cover_latch": {
       "name": "Battery-chamber cover latch",
@@ -150,7 +163,9 @@
       "default_function": "Slide to open the battery-chamber cover.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "battery_latch": {
       "name": "Battery latch",
@@ -163,7 +178,9 @@
       "default_function": "Press to the side to release the battery for removal.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "delete_button": {
       "name": "b (delete) button",
@@ -184,7 +201,9 @@
           "kind": "debug_key",
           "name": "DELETE"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",
@@ -197,7 +216,9 @@
       "default_function": "Adjusts viewfinder focus for individual vision; range −4 to +2 m⁻¹.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "disp_back_button": {
       "name": "DISP (display)/BACK button",
@@ -218,7 +239,9 @@
           "kind": "debug_key",
           "name": "DISP_B"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "drive_dial": {
       "name": "DRIVE dial",
@@ -231,7 +254,9 @@
       "default_function": "Selects bracketing, high-speed or low-speed burst, single frame, advanced filter, multiple exposure, or panorama shooting.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "exposure_compensation_dial": {
       "name": "Exposure compensation dial",
@@ -244,7 +269,9 @@
       "default_function": "Adjusts exposure compensation.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "flash_pop_up_lever": {
       "name": "N (flash pop-up) lever",
@@ -257,7 +284,9 @@
       "default_function": "Raises the built-in flash for use.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "fn7_button": {
       "name": "Function button (Fn7)",
@@ -270,7 +299,9 @@
       "default_function": "Opens wireless options.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "focus_mode_selector": {
       "name": "Focus mode selector",
@@ -290,8 +321,6 @@
         "positions": [
           {
             "id": "S",
-            "label": "S",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_A"
@@ -300,8 +329,6 @@
           },
           {
             "id": "C",
-            "label": "C",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_C"
@@ -310,8 +337,6 @@
           },
           {
             "id": "M",
-            "label": "M",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_M"
@@ -319,7 +344,25 @@
             "asserted": true
           }
         ]
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "S",
+          "label": "S",
+          "description": null
+        },
+        {
+          "id": "C",
+          "label": "C",
+          "description": null
+        },
+        {
+          "id": "M",
+          "label": "M",
+          "description": null
+        }
+      ]
     },
     "front_command_dial": {
       "name": "Front command dial",
@@ -332,7 +375,9 @@
       "default_function": "Rotation selects program shift, fine-tunes shutter speed, or views other pictures in playback; pressing the center activates Fn2, AF mode by default.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "lens_release_button": {
       "name": "Lens release button",
@@ -345,7 +390,9 @@
       "default_function": "Releases the attached lens for removal.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "menu_ok_button": {
       "name": "MENU/OK button",
@@ -366,7 +413,9 @@
           "kind": "debug_key",
           "name": "EXE_M"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "movie_record_button": {
       "name": "Movie-record button (Function button (Fn1))",
@@ -385,7 +434,9 @@
           "kind": "debug_key",
           "name": "MOVIE_REC"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "playback_button": {
       "name": "a (playback) button",
@@ -406,7 +457,9 @@
           "kind": "debug_key",
           "name": "K_PLAY"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "power_switch": {
       "name": "ON/OFF switch",
@@ -424,8 +477,6 @@
         "positions": [
           {
             "id": "ON",
-            "label": "ON",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "POWER"
@@ -434,8 +485,6 @@
           },
           {
             "id": "OFF",
-            "label": "OFF",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "POWER"
@@ -443,7 +492,20 @@
             "asserted": false
           }
         ]
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "ON",
+          "label": "ON",
+          "description": null
+        },
+        {
+          "id": "OFF",
+          "label": "OFF",
+          "description": null
+        }
+      ]
     },
     "quick_menu_button": {
       "name": "Q (quick menu) button",
@@ -464,7 +526,9 @@
           "kind": "debug_key",
           "name": "K_Q"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "rear_command_dial": {
       "name": "Rear command dial",
@@ -497,7 +561,9 @@
           "name": "CMD_PUSH"
         },
         "endless": true
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "selector": {
       "name": "Selector/function buttons",
@@ -533,7 +599,9 @@
           }
         },
         "press": null
-      }
+      },
+      "pushable": false,
+      "positions": []
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -569,7 +637,9 @@
             }
           ]
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "shutter_speed_dial": {
       "name": "Shutter speed dial",
@@ -582,7 +652,9 @@
       "default_function": "Selects shutter speed; A selects automatic shutter speed, T selects time exposure, and B selects bulb exposure.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "view_mode_button": {
       "name": "VIEW button",
@@ -603,7 +675,9 @@
           "kind": "debug_key",
           "name": "VIEW"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     }
   }
 }

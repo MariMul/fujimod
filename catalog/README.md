@@ -19,6 +19,14 @@ identical lens, sensor and control facts are not copied between bodies.
 Firmware identity includes its body and version; existing explicit
 firmware IDs remain selectors, never file locations.
 
+A body directory may contain only `controls.json`, without `body.json` or a
+hardware definition. `ReferenceCatalog::physical_controls` retrieves these
+standalone manuals. Documented positions and pushability remain available
+independently of executable behavior. Unlocated input bindings, assertion
+levels, spring-return behavior and analog resolution are null. Controls-only
+documents validate their own identities and manual declarations; connections
+or located bindings require the corresponding hardware records.
+
 Run configurations are executable preparation policy outside the reference
 catalog. A configuration selects immutable reference identities and explicit
 external inputs. REC with USB, service sessions and SD boot are small typed

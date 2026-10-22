@@ -355,11 +355,9 @@ class BootRomIdentity(TypedDict, total=False):
 
 
 class BoundPosition(TypedDict, total=False):
-    asserted: Required[bool]
-    description: NotRequired[str | None]
+    asserted: NotRequired[bool | None]
     id: Required[str]
-    key: Required[InputBinding]
-    label: NotRequired[str | None]
+    key: NotRequired[InputBinding | None]
 
 
 class BulkRange(TypedDict, total=False):
@@ -1077,29 +1075,29 @@ type ControlBehavior = (
 
 class ControlBehaviorVariant0(TypedDict, total=False):
     kind: Required[Literal["button"]]
-    press: Required[InputBinding]
+    press: NotRequired[InputBinding | None]
 
 
 class ControlBehaviorVariant1(TypedDict, total=False):
     kind: Required[Literal["shutter"]]
-    stages: Required[dict[str, list[InputBinding]]]
+    stages: Required[dict[str, list[InputBinding] | None]]
 
 
 class ControlBehaviorVariant2(TypedDict, total=False):
-    directions: Required[dict[str, InputBinding]]
+    directions: Required[dict[str, InputBinding | None]]
     kind: Required[Literal["pad"]]
     press: NotRequired[InputBinding | None]
 
 
 class ControlBehaviorVariant3(TypedDict, total=False):
-    endless: Required[bool]
+    endless: NotRequired[bool | None]
     kind: Required[Literal["dial"]]
     motion: Required[ControlMotion]
     press: NotRequired[InputBinding | None]
 
 
 class ControlBehaviorVariant4(TypedDict, total=False):
-    endless: Required[bool]
+    endless: NotRequired[bool | None]
     kind: Required[Literal["ring"]]
     motion: Required[ControlMotion]
     press: NotRequired[InputBinding | None]
@@ -1112,7 +1110,7 @@ class ControlBehaviorVariant5(TypedDict, total=False):
 
 class ControlBehaviorVariant6(TypedDict, total=False):
     kind: Required[Literal["lever"]]
-    momentary: Required[bool]
+    momentary: NotRequired[bool | None]
     positions: Required[list[BoundPosition]]
 
 
@@ -1174,15 +1172,21 @@ class ControlMotionVariant0(TypedDict, total=False):
 
 
 class ControlMotionVariant1(TypedDict, total=False):
-    decrease: Required[InputBinding]
-    increase: Required[InputBinding]
+    decrease: NotRequired[InputBinding | None]
+    increase: NotRequired[InputBinding | None]
     kind: Required[Literal["steps"]]
+
+
+class ControlPosition(TypedDict, total=False):
+    description: NotRequired[str | None]
+    id: Required[str]
+    label: NotRequired[str | None]
 
 
 type ControlRole = Literal["command_control"]
 
 
-type ControlSurface = Literal["top", "rear", "front", "bottom"]
+type ControlSurface = Literal["top", "rear", "front", "bottom", "lens", "left", "right"]
 
 
 class ControllerInterruptInput(TypedDict, total=False):
@@ -3298,6 +3302,8 @@ class PhysicalControl(TypedDict, total=False):
     manual_page: NotRequired[int | None]
     mechanical: Required[bool]
     name: Required[str]
+    positions: Required[list[ControlPosition]]
+    pushable: Required[bool]
     role: NotRequired[ControlRole | None]
 
 
@@ -3305,7 +3311,7 @@ PhysicalControls = TypedDict(
     "PhysicalControls",
     {
         "$schema": Required["str"],
-        "analog_levels": Required["int"],
+        "analog_levels": NotRequired["int | None"],
         "body_id": Required["str"],
         "controls": Required["dict[str, PhysicalControl]"],
         "id": Required["str"],

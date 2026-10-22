@@ -59,7 +59,9 @@
           "kind": "debug_key",
           "name": "AE"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "af_ae_lock_button": {
       "name": "AFL/AEL (focus lock/exposure) button",
@@ -80,7 +82,9 @@
           "kind": "debug_key",
           "name": "AEAF_LOCK"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "aperture_ring": {
       "name": "Aperture ring",
@@ -93,7 +97,9 @@
       "default_function": "Set aperture; A lets the camera select the aperture.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "battery_chamber_cover_latch": {
       "name": "Battery-chamber cover latch",
@@ -106,7 +112,9 @@
       "default_function": "Slide to open or close the battery-chamber cover.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "battery_latch": {
       "name": "Battery latch",
@@ -119,7 +127,9 @@
       "default_function": "Press to the side to release the battery.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "command_control": {
       "name": "Command control",
@@ -154,7 +164,9 @@
           "name": "CMD_PUSH"
         },
         "endless": true
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "command_dial": {
       "name": "Command dial",
@@ -184,7 +196,9 @@
         },
         "press": null,
         "endless": true
-      }
+      },
+      "pushable": false,
+      "positions": []
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",
@@ -197,7 +211,9 @@
       "default_function": "Adjust viewfinder focus for individual vision; range −2 to +1 m−1.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "disp_back_button": {
       "name": "DISP (display)/BACK button",
@@ -218,7 +234,9 @@
           "kind": "debug_key",
           "name": "DISP_B"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "drive_button": {
       "name": "DRIVE button",
@@ -231,7 +249,9 @@
       "default_function": "Display drive options; also zoom out during playback.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "exposure_compensation_dial": {
       "name": "Exposure compensation dial",
@@ -244,7 +264,9 @@
       "default_function": "Adjust exposure compensation; positive values increase exposure and negative values reduce exposure.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "fn_button": {
       "name": "Fn (Function) button",
@@ -265,7 +287,9 @@
           "kind": "debug_key",
           "name": "FUNCTION"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "focus_mode_selector": {
       "name": "Focus mode selector",
@@ -286,8 +310,6 @@
         "positions": [
           {
             "id": "AF-S",
-            "label": "AF-S",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_A"
@@ -296,8 +318,6 @@
           },
           {
             "id": "AF-C",
-            "label": "AF-C",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_C"
@@ -306,8 +326,6 @@
           },
           {
             "id": "MF",
-            "label": "MF",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_M"
@@ -315,7 +333,25 @@
             "asserted": true
           }
         ]
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "AF-S",
+          "label": "AF-S",
+          "description": null
+        },
+        {
+          "id": "AF-C",
+          "label": "AF-C",
+          "description": null
+        },
+        {
+          "id": "MF",
+          "label": "MF",
+          "description": null
+        }
+      ]
     },
     "focus_ring": {
       "name": "Focus ring",
@@ -343,7 +379,9 @@
         },
         "press": null,
         "endless": true
-      }
+      },
+      "pushable": false,
+      "positions": []
     },
     "front_ring": {
       "name": "Front ring",
@@ -356,7 +394,9 @@
       "default_function": "Remove to attach the adapter ring for an optional lens hood or filter, or the WCL-X100 wide conversion lens.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "menu_ok_button": {
       "name": "MENU/OK button",
@@ -377,7 +417,9 @@
           "kind": "debug_key",
           "name": "EXE_M"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "playback_button": {
       "name": "a (playback) button",
@@ -398,7 +440,9 @@
           "kind": "debug_key",
           "name": "K_PLAY"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "power_switch": {
       "name": "ON/OFF switch",
@@ -416,8 +460,6 @@
         "positions": [
           {
             "id": "ON",
-            "label": "ON",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "POWER"
@@ -426,8 +468,6 @@
           },
           {
             "id": "OFF",
-            "label": "OFF",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "POWER"
@@ -435,7 +475,20 @@
             "asserted": false
           }
         ]
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "ON",
+          "label": "ON",
+          "description": null
+        },
+        {
+          "id": "OFF",
+          "label": "OFF",
+          "description": null
+        }
+      ]
     },
     "quick_menu_button": {
       "name": "Q (quick menu) button",
@@ -448,7 +501,9 @@
       "default_function": "Open the quick menu; press and hold to enable the outdoor display mode.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -484,7 +539,9 @@
             }
           ]
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "shutter_speed_dial": {
       "name": "Shutter speed dial",
@@ -497,7 +554,9 @@
       "default_function": "Select shutter speed. A selects automatic shutter speed; T selects timed exposures; B holds the shutter open while the shutter button is pressed.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "view_mode_button": {
       "name": "VIEW MODE button",
@@ -516,7 +575,9 @@
           "kind": "debug_key",
           "name": "EVF_LCD"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "viewfinder_selector": {
       "name": "Viewfinder selector",
@@ -537,7 +598,9 @@
           "kind": "debug_key",
           "name": "EVF_OVF"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     }
   }
 }

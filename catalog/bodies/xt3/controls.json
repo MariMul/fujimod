@@ -67,7 +67,9 @@
           "kind": "debug_key",
           "name": "AE-LOCK"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "af_lock_button": {
       "name": "AF-L (focus lock) button",
@@ -86,7 +88,9 @@
           "kind": "debug_key",
           "name": "AF-LOCK"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "battery_chamber_cover_latch": {
       "name": "Battery-chamber cover latch",
@@ -99,7 +103,9 @@
       "default_function": "Slide the latch to open the battery-chamber cover.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "battery_latch": {
       "name": "Battery latch",
@@ -112,7 +118,9 @@
       "default_function": "Press the latch to the side to release the battery for removal.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "connector_cover_latch": {
       "name": "Connector cover (detachable)",
@@ -125,7 +133,9 @@
       "default_function": "Slide the latch down to remove the connector cover.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "delete_button": {
       "name": "b (delete) button",
@@ -144,7 +154,9 @@
           "kind": "debug_key",
           "name": "DELETE"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",
@@ -157,7 +169,9 @@
       "default_function": "Lift, rotate to focus the viewfinder, and return to lock in place.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "disp_back_button": {
       "name": "DISP (display)/BACK button",
@@ -176,7 +190,9 @@
           "kind": "debug_key",
           "name": "DISP_B"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "drive_dial": {
       "name": "Drive dial",
@@ -196,8 +212,6 @@
           "positions": [
             {
               "id": "movie",
-              "label": "icon",
-              "description": "Movie",
               "key": {
                 "kind": "debug_key",
                 "name": "DRV-MOV"
@@ -206,8 +220,6 @@
             },
             {
               "id": "BKT",
-              "label": "BKT",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "DRV-BKT"
@@ -216,8 +228,6 @@
             },
             {
               "id": "CH",
-              "label": "CH",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "DRV-C_H"
@@ -226,8 +236,6 @@
             },
             {
               "id": "CL",
-              "label": "CL",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "DRV-C_L"
@@ -236,8 +244,6 @@
             },
             {
               "id": "S",
-              "label": "S",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "DRV-ONE"
@@ -246,8 +252,6 @@
             },
             {
               "id": "multiple_exposure",
-              "label": "icon",
-              "description": "Multiple exposure",
               "key": {
                 "kind": "debug_key",
                 "name": "DRV-MULTI"
@@ -256,8 +260,6 @@
             },
             {
               "id": "ADV.",
-              "label": "ADV.",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "DRV-ADV"
@@ -266,8 +268,6 @@
             },
             {
               "id": "panorama",
-              "label": "icon",
-              "description": "Panorama",
               "key": {
                 "kind": "debug_key",
                 "name": "DRV-PANO"
@@ -278,7 +278,50 @@
         },
         "press": null,
         "endless": false
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "movie",
+          "label": "icon",
+          "description": "Movie"
+        },
+        {
+          "id": "BKT",
+          "label": "BKT",
+          "description": null
+        },
+        {
+          "id": "CH",
+          "label": "CH",
+          "description": null
+        },
+        {
+          "id": "CL",
+          "label": "CL",
+          "description": null
+        },
+        {
+          "id": "S",
+          "label": "S",
+          "description": null
+        },
+        {
+          "id": "multiple_exposure",
+          "label": "icon",
+          "description": "Multiple exposure"
+        },
+        {
+          "id": "ADV.",
+          "label": "ADV.",
+          "description": null
+        },
+        {
+          "id": "panorama",
+          "label": "icon",
+          "description": "Panorama"
+        }
+      ]
     },
     "exposure_compensation_dial": {
       "name": "Exposure compensation dial",
@@ -298,8 +341,6 @@
           "positions": [
             {
               "id": "−3",
-              "label": "−3",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D-3.0"
@@ -308,8 +349,6 @@
             },
             {
               "id": "−2",
-              "label": "−2",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D-2.0"
@@ -318,8 +357,6 @@
             },
             {
               "id": "−1",
-              "label": "−1",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D-1.0"
@@ -328,8 +365,6 @@
             },
             {
               "id": "0",
-              "label": "0",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D=0"
@@ -338,8 +373,6 @@
             },
             {
               "id": "+1",
-              "label": "+1",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D+1.0"
@@ -348,8 +381,6 @@
             },
             {
               "id": "+2",
-              "label": "+2",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D+2.0"
@@ -358,8 +389,6 @@
             },
             {
               "id": "+3",
-              "label": "+3",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D+3.0"
@@ -368,8 +397,6 @@
             },
             {
               "id": "C",
-              "label": "C",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D=C"
@@ -380,7 +407,50 @@
         },
         "press": null,
         "endless": false
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "−3",
+          "label": "−3",
+          "description": null
+        },
+        {
+          "id": "−2",
+          "label": "−2",
+          "description": null
+        },
+        {
+          "id": "−1",
+          "label": "−1",
+          "description": null
+        },
+        {
+          "id": "0",
+          "label": "0",
+          "description": null
+        },
+        {
+          "id": "+1",
+          "label": "+1",
+          "description": null
+        },
+        {
+          "id": "+2",
+          "label": "+2",
+          "description": null
+        },
+        {
+          "id": "+3",
+          "label": "+3",
+          "description": null
+        },
+        {
+          "id": "C",
+          "label": "C",
+          "description": null
+        }
+      ]
     },
     "fn1_button": {
       "name": "Fn1 button",
@@ -393,7 +463,9 @@
       "default_function": "Face/eye detection setting.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "fn2_button": {
       "name": "Fn2 button",
@@ -406,7 +478,9 @@
       "default_function": "Drive settings.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "focus_mode_selector": {
       "name": "Focus mode selector",
@@ -424,8 +498,6 @@
         "positions": [
           {
             "id": "S",
-            "label": "S",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_A"
@@ -434,8 +506,6 @@
           },
           {
             "id": "C",
-            "label": "C",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_C"
@@ -444,8 +514,6 @@
           },
           {
             "id": "M",
-            "label": "M",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_M"
@@ -453,7 +521,25 @@
             "asserted": true
           }
         ]
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "S",
+          "label": "S",
+          "description": null
+        },
+        {
+          "id": "C",
+          "label": "C",
+          "description": null
+        },
+        {
+          "id": "M",
+          "label": "M",
+          "description": null
+        }
+      ]
     },
     "focus_stick": {
       "name": "Focus stick (focus lever)",
@@ -490,7 +576,9 @@
           "kind": "debug_key",
           "name": "8DIR_PUSH"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "front_command_dial": {
       "name": "Front command dial",
@@ -521,7 +609,9 @@
           "name": "CMD2_PUSH"
         },
         "endless": true
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "lens_release_button": {
       "name": "Lens release button",
@@ -534,7 +624,9 @@
       "default_function": "Press while rotating the lens to remove it.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "memory_card_slot_cover_latch": {
       "name": "Memory card slot cover latch",
@@ -547,7 +639,9 @@
       "default_function": "Unlatch the memory card slot cover to open it.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "menu_ok_button": {
       "name": "MENU/OK button",
@@ -566,7 +660,9 @@
           "kind": "debug_key",
           "name": "EXE_M"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "metering_dial": {
       "name": "Metering dial",
@@ -586,8 +682,6 @@
           "positions": [
             {
               "id": "spot",
-              "label": "icon",
-              "description": "The camera meters lighting conditions in an area at the center of the frame equivalent to 2% of the total.",
               "key": {
                 "kind": "debug_key",
                 "name": "MET_SP"
@@ -596,8 +690,6 @@
             },
             {
               "id": "center_weighted",
-              "label": "icon",
-              "description": "The camera meters the entire frame but assigns the greatest weight to the area at the center.",
               "key": {
                 "kind": "debug_key",
                 "name": "MET_CN"
@@ -606,8 +698,6 @@
             },
             {
               "id": "multi",
-              "label": "icon",
-              "description": "The camera instantly determines exposure based on an analysis of composition, color, and brightness distribution. Recommended in most situations.",
               "key": {
                 "kind": "debug_key",
                 "name": "MET_MU"
@@ -616,8 +706,6 @@
             },
             {
               "id": "average",
-              "label": "icon",
-              "description": "Exposure is set to the average for the entire frame. Provides consistent exposure across multiple shots with the same lighting, and is particularly effective for landscapes and portraits of subjects dressed in black or white.",
               "key": {
                 "kind": "debug_key",
                 "name": "MET_AV"
@@ -628,7 +716,30 @@
         },
         "press": null,
         "endless": false
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "spot",
+          "label": "icon",
+          "description": "The camera meters lighting conditions in an area at the center of the frame equivalent to 2% of the total."
+        },
+        {
+          "id": "center_weighted",
+          "label": "icon",
+          "description": "The camera meters the entire frame but assigns the greatest weight to the area at the center."
+        },
+        {
+          "id": "multi",
+          "label": "icon",
+          "description": "The camera instantly determines exposure based on an analysis of composition, color, and brightness distribution. Recommended in most situations."
+        },
+        {
+          "id": "average",
+          "label": "icon",
+          "description": "Exposure is set to the average for the entire frame. Provides consistent exposure across multiple shots with the same lighting, and is particularly effective for landscapes and portraits of subjects dressed in black or white."
+        }
+      ]
     },
     "playback_button": {
       "name": "a (playback) button",
@@ -647,7 +758,9 @@
           "kind": "debug_key",
           "name": "K_PLAY"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "power_switch": {
       "name": "ON/OFF switch",
@@ -665,8 +778,6 @@
         "positions": [
           {
             "id": "ON",
-            "label": "ON",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "POWER"
@@ -675,8 +786,6 @@
           },
           {
             "id": "OFF",
-            "label": "OFF",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "POWER"
@@ -684,7 +793,20 @@
             "asserted": false
           }
         ]
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "ON",
+          "label": "ON",
+          "description": null
+        },
+        {
+          "id": "OFF",
+          "label": "OFF",
+          "description": null
+        }
+      ]
     },
     "quick_menu_button": {
       "name": "Q (quick menu) button",
@@ -703,7 +825,9 @@
           "kind": "debug_key",
           "name": "K_Q"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "rear_command_dial": {
       "name": "Rear command dial",
@@ -734,7 +858,9 @@
           "name": "CMD_PUSH"
         },
         "endless": true
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "selector": {
       "name": "Selector",
@@ -768,7 +894,9 @@
           }
         },
         "press": null
-      }
+      },
+      "pushable": false,
+      "positions": []
     },
     "sensitivity_dial": {
       "name": "Sensitivity dial",
@@ -781,7 +909,9 @@
       "default_function": "Set sensitivity automatically at A, manually from 160 to 12800, or use the assigned sensitivity at H or L.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "sensitivity_dial_lock_release": {
       "name": "Dial lock release",
@@ -794,7 +924,9 @@
       "default_function": "Release the sensitivity dial for rotation; press again to lock it.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -827,7 +959,9 @@
             }
           ]
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "shutter_speed_dial": {
       "name": "Shutter speed dial",
@@ -847,8 +981,6 @@
           "positions": [
             {
               "id": "A",
-              "label": "A",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-A"
@@ -857,8 +989,6 @@
             },
             {
               "id": "8000",
-              "label": "8000",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/8000"
@@ -867,8 +997,6 @@
             },
             {
               "id": "4000",
-              "label": "4000",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/4000"
@@ -877,8 +1005,6 @@
             },
             {
               "id": "2000",
-              "label": "2000",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/2000"
@@ -887,8 +1013,6 @@
             },
             {
               "id": "1000",
-              "label": "1000",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/1000"
@@ -897,8 +1021,6 @@
             },
             {
               "id": "500",
-              "label": "500",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/500"
@@ -907,8 +1029,6 @@
             },
             {
               "id": "250",
-              "label": "250",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/250"
@@ -917,8 +1037,6 @@
             },
             {
               "id": "125",
-              "label": "125",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/125"
@@ -927,8 +1045,6 @@
             },
             {
               "id": "60",
-              "label": "60",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/60"
@@ -937,8 +1053,6 @@
             },
             {
               "id": "30",
-              "label": "30",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/30"
@@ -947,8 +1061,6 @@
             },
             {
               "id": "15",
-              "label": "15",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/15"
@@ -957,8 +1069,6 @@
             },
             {
               "id": "8",
-              "label": "8",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/8"
@@ -967,8 +1077,6 @@
             },
             {
               "id": "4",
-              "label": "4",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/4"
@@ -977,8 +1085,6 @@
             },
             {
               "id": "2",
-              "label": "2",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/2"
@@ -987,8 +1093,6 @@
             },
             {
               "id": "1",
-              "label": "1",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/1"
@@ -997,8 +1101,6 @@
             },
             {
               "id": "T",
-              "label": "T",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-T"
@@ -1007,8 +1109,6 @@
             },
             {
               "id": "B",
-              "label": "B",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-B"
@@ -1019,7 +1119,95 @@
         },
         "press": null,
         "endless": false
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "A",
+          "label": "A",
+          "description": null
+        },
+        {
+          "id": "8000",
+          "label": "8000",
+          "description": null
+        },
+        {
+          "id": "4000",
+          "label": "4000",
+          "description": null
+        },
+        {
+          "id": "2000",
+          "label": "2000",
+          "description": null
+        },
+        {
+          "id": "1000",
+          "label": "1000",
+          "description": null
+        },
+        {
+          "id": "500",
+          "label": "500",
+          "description": null
+        },
+        {
+          "id": "250",
+          "label": "250",
+          "description": null
+        },
+        {
+          "id": "125",
+          "label": "125",
+          "description": null
+        },
+        {
+          "id": "60",
+          "label": "60",
+          "description": null
+        },
+        {
+          "id": "30",
+          "label": "30",
+          "description": null
+        },
+        {
+          "id": "15",
+          "label": "15",
+          "description": null
+        },
+        {
+          "id": "8",
+          "label": "8",
+          "description": null
+        },
+        {
+          "id": "4",
+          "label": "4",
+          "description": null
+        },
+        {
+          "id": "2",
+          "label": "2",
+          "description": null
+        },
+        {
+          "id": "1",
+          "label": "1",
+          "description": null
+        },
+        {
+          "id": "T",
+          "label": "T",
+          "description": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "description": null
+        }
+      ]
     },
     "shutter_speed_dial_lock_release": {
       "name": "Dial lock release",
@@ -1032,7 +1220,9 @@
       "default_function": "Release the shutter speed dial for rotation; press again to lock it.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "touchscreen": {
       "name": "Touch screen",
@@ -1047,7 +1237,9 @@
       "mechanical": false,
       "behavior": {
         "kind": "touch"
-      }
+      },
+      "pushable": false,
+      "positions": []
     },
     "view_mode_button": {
       "name": "VIEW MODE button",
@@ -1066,7 +1258,9 @@
           "kind": "debug_key",
           "name": "EVF_LCD"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     }
   }
 }

@@ -245,7 +245,7 @@ fn rename_menu_key(facts: &mut Facts, name: &str) {
         .get_mut("menu_ok_button")
         .unwrap()
         .behavior = Some(ControlBehavior::Button {
-        press: InputBinding::DebugKey { name: name.into() },
+        press: Some(InputBinding::DebugKey { name: name.into() }),
     });
 }
 

@@ -59,7 +59,9 @@
           "kind": "debug_key",
           "name": "AE-LOCK"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "af_lock_button": {
       "name": "AF-L (focus lock) button",
@@ -80,7 +82,9 @@
           "kind": "debug_key",
           "name": "AF-LOCK"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "battery_chamber_cover_latch": {
       "name": "Battery-chamber cover latch",
@@ -93,7 +97,9 @@
       "default_function": "Slide the battery-chamber latch as shown and open the battery-chamber cover.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "battery_latch": {
       "name": "Battery latch",
@@ -106,7 +112,9 @@
       "default_function": "To remove the battery, press the battery latch to the side, and slide the battery out of the camera as shown.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "command_dial": {
       "name": "Command dial",
@@ -119,7 +127,9 @@
       "default_function": "Rotate to select quick-menu options, review pictures, adjust focus-area size, or choose shutter speed or program shift. Press the center to zoom in on the active focus area; press and hold it to choose a manual-focus assist option. With a lens without an aperture ring, COMMAND DIAL SETTING chooses shutter speed (default) or aperture.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",
@@ -132,7 +142,9 @@
       "default_function": "Rotate to focus the viewfinder display.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "disp_back_button": {
       "name": "DISP (display)/BACK button",
@@ -153,7 +165,9 @@
           "kind": "debug_key",
           "name": "DISP_B"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "drive_button": {
       "name": "DRIVE button",
@@ -172,7 +186,9 @@
           "kind": "debug_key",
           "name": "DRIVE"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "exposure_compensation_dial": {
       "name": "Exposure compensation dial",
@@ -194,8 +210,6 @@
           "positions": [
             {
               "id": "+2",
-              "label": "+2",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D+2.0"
@@ -204,8 +218,6 @@
             },
             {
               "id": "5/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "native_input",
                 "name": "KEY_EXP_DIAL_P5_3"
@@ -214,8 +226,6 @@
             },
             {
               "id": "4/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "native_input",
                 "name": "KEY_EXP_DIAL_P4_3"
@@ -224,8 +234,6 @@
             },
             {
               "id": "+1",
-              "label": "+1",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D+1.0"
@@ -234,8 +242,6 @@
             },
             {
               "id": "2/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D+0.7"
@@ -244,8 +250,6 @@
             },
             {
               "id": "1/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D+0.3"
@@ -254,8 +258,6 @@
             },
             {
               "id": "0",
-              "label": "0",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D=0"
@@ -264,8 +266,6 @@
             },
             {
               "id": "-1/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D-0.3"
@@ -274,8 +274,6 @@
             },
             {
               "id": "-2/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D-0.7"
@@ -284,8 +282,6 @@
             },
             {
               "id": "-1",
-              "label": "-1",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D-1.0"
@@ -294,8 +290,6 @@
             },
             {
               "id": "-4/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "native_input",
                 "name": "KEY_EXP_DIAL_M4_3"
@@ -304,8 +298,6 @@
             },
             {
               "id": "-5/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "native_input",
                 "name": "KEY_EXP_DIAL_M5_3"
@@ -314,8 +306,6 @@
             },
             {
               "id": "-2",
-              "label": "-2",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D-2.0"
@@ -326,7 +316,75 @@
         },
         "press": null,
         "endless": false
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "+2",
+          "label": "+2",
+          "description": null
+        },
+        {
+          "id": "5/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "4/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "+1",
+          "label": "+1",
+          "description": null
+        },
+        {
+          "id": "2/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "1/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "0",
+          "label": "0",
+          "description": null
+        },
+        {
+          "id": "-1/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "-2/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "-1",
+          "label": "-1",
+          "description": null
+        },
+        {
+          "id": "-4/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "-5/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "-2",
+          "label": "-2",
+          "description": null
+        }
+      ]
     },
     "flash_pop_up_button": {
       "name": "N (flash pop-up) button",
@@ -339,7 +397,9 @@
       "default_function": "Raise the built-in flash.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "fn1_button": {
       "name": "Function button (Fn1)",
@@ -352,7 +412,9 @@
       "default_function": "Select photometry (autoexposure); in playback mode, zoom out.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "fn2_button": {
       "name": "Function button (Fn2)",
@@ -365,7 +427,9 @@
       "default_function": "Select white balance; in playback mode, delete pictures.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "fn7_button": {
       "name": "Function button (Fn7)",
@@ -378,7 +442,9 @@
       "default_function": "Start or stop movie recording; in playback mode, the button provides Wi-Fi access.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "focus_mode_selector": {
       "name": "Focus mode selector",
@@ -398,8 +464,6 @@
         "positions": [
           {
             "id": "S",
-            "label": "S",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_A"
@@ -408,8 +472,6 @@
           },
           {
             "id": "C",
-            "label": "C",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_C"
@@ -418,8 +480,6 @@
           },
           {
             "id": "M",
-            "label": "M",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_M"
@@ -427,7 +487,25 @@
             "asserted": true
           }
         ]
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "S",
+          "label": "S",
+          "description": null
+        },
+        {
+          "id": "C",
+          "label": "C",
+          "description": null
+        },
+        {
+          "id": "M",
+          "label": "M",
+          "description": null
+        }
+      ]
     },
     "menu_ok_button": {
       "name": "MENU/OK button",
@@ -448,7 +526,9 @@
           "kind": "debug_key",
           "name": "EXE_M"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "playback_button": {
       "name": "a (playback) button",
@@ -469,7 +549,9 @@
           "kind": "debug_key",
           "name": "K_PLAY"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "power_switch": {
       "name": "ON/OFF switch",
@@ -487,8 +569,6 @@
         "positions": [
           {
             "id": "ON",
-            "label": "ON",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "POWER"
@@ -497,8 +577,6 @@
           },
           {
             "id": "OFF",
-            "label": "OFF",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "POWER"
@@ -506,7 +584,20 @@
             "asserted": false
           }
         ]
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "ON",
+          "label": "ON",
+          "description": null
+        },
+        {
+          "id": "OFF",
+          "label": "OFF",
+          "description": null
+        }
+      ]
     },
     "quick_menu_button": {
       "name": "Q (quick menu) button",
@@ -527,7 +618,9 @@
           "kind": "debug_key",
           "name": "K_Q"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "selector": {
       "name": "Selector / Function button (Fn3—Fn6)",
@@ -563,7 +656,9 @@
           }
         },
         "press": null
-      }
+      },
+      "pushable": false,
+      "positions": []
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -599,7 +694,9 @@
             }
           ]
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "shutter_speed_dial": {
       "name": "Shutter speed dial",
@@ -612,7 +709,9 @@
       "default_function": "Select shutter speed; A selects automatic shutter speed, T selects time exposure, and B selects bulb exposure.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     }
   }
 }

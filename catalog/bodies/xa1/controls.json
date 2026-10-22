@@ -39,7 +39,9 @@
       "default_function": "Slide to open the battery-chamber cover.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "battery_latch": {
       "name": "Battery latch",
@@ -52,7 +54,9 @@
       "default_function": "Press to the side to release the battery.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "disp_back_button": {
       "name": "DISP (display)/BACK button",
@@ -73,7 +77,9 @@
           "kind": "debug_key",
           "name": "DISP_B"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "flash_pop_up_button": {
       "name": "N (flash pop-up) button",
@@ -86,7 +92,9 @@
       "default_function": "Press to raise the flash.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "fn_button": {
       "name": "Fn (function) button",
@@ -107,7 +115,9 @@
           "kind": "debug_key",
           "name": "FUNCTION"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "lens_release_button": {
       "name": "Lens release button",
@@ -120,7 +130,9 @@
       "default_function": "Press to release the attached lens for removal.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "main_command_dial": {
       "name": "Main command",
@@ -148,7 +160,9 @@
         },
         "press": null,
         "endless": true
-      }
+      },
+      "pushable": false,
+      "positions": []
     },
     "menu_ok_button": {
       "name": "MENU/OK button",
@@ -169,7 +183,9 @@
           "kind": "debug_key",
           "name": "EXE_M"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "mode_dial": {
       "name": "Mode dial",
@@ -191,8 +207,6 @@
           "positions": [
             {
               "id": "P",
-              "label": "P",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "PROGRAM"
@@ -201,8 +215,6 @@
             },
             {
               "id": "S",
-              "label": "S",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "SHUTTER"
@@ -211,8 +223,6 @@
             },
             {
               "id": "A",
-              "label": "A",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "APERTURE"
@@ -221,8 +231,6 @@
             },
             {
               "id": "M",
-              "label": "M",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "MANUAL"
@@ -231,8 +239,6 @@
             },
             {
               "id": "C",
-              "label": "C",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "C1"
@@ -241,8 +247,6 @@
             },
             {
               "id": "Adv.",
-              "label": "Adv.",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "ADVANCE"
@@ -251,8 +255,6 @@
             },
             {
               "id": "SP",
-              "label": "SP",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "SP"
@@ -261,8 +263,6 @@
             },
             {
               "id": "sport",
-              "label": "icon",
-              "description": "Choose when photographing moving subjects.",
               "key": {
                 "kind": "debug_key",
                 "name": "SPORTS"
@@ -271,8 +271,6 @@
             },
             {
               "id": "landscape",
-              "label": "icon",
-              "description": "Choose for daylight shots of buildings and landscapes.",
               "key": {
                 "kind": "debug_key",
                 "name": "LANDSCAPE"
@@ -281,8 +279,6 @@
             },
             {
               "id": "portrait",
-              "label": "icon",
-              "description": "Choose for portraits.",
               "key": {
                 "kind": "debug_key",
                 "name": "PORTRAIT"
@@ -291,8 +287,6 @@
             },
             {
               "id": "SR+",
-              "label": "SR+",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "SR"
@@ -301,8 +295,6 @@
             },
             {
               "id": "B",
-              "label": "B",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "AUTO"
@@ -313,7 +305,70 @@
         },
         "press": null,
         "endless": false
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "P",
+          "label": "P",
+          "description": null
+        },
+        {
+          "id": "S",
+          "label": "S",
+          "description": null
+        },
+        {
+          "id": "A",
+          "label": "A",
+          "description": null
+        },
+        {
+          "id": "M",
+          "label": "M",
+          "description": null
+        },
+        {
+          "id": "C",
+          "label": "C",
+          "description": null
+        },
+        {
+          "id": "Adv.",
+          "label": "Adv.",
+          "description": null
+        },
+        {
+          "id": "SP",
+          "label": "SP",
+          "description": null
+        },
+        {
+          "id": "sport",
+          "label": "icon",
+          "description": "Choose when photographing moving subjects."
+        },
+        {
+          "id": "landscape",
+          "label": "icon",
+          "description": "Choose for daylight shots of buildings and landscapes."
+        },
+        {
+          "id": "portrait",
+          "label": "icon",
+          "description": "Choose for portraits."
+        },
+        {
+          "id": "SR+",
+          "label": "SR+",
+          "description": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "description": null
+        }
+      ]
     },
     "movie_record_button": {
       "name": "t (movie recording) button",
@@ -334,7 +389,9 @@
           "kind": "debug_key",
           "name": "MOVIE_REC"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "playback_button": {
       "name": "a (playback) button",
@@ -355,7 +412,9 @@
           "kind": "debug_key",
           "name": "K_PLAY"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "power_switch": {
       "name": "ON/OFF switch",
@@ -373,8 +432,6 @@
         "positions": [
           {
             "id": "ON",
-            "label": "ON",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "POWER"
@@ -383,8 +440,6 @@
           },
           {
             "id": "OFF",
-            "label": "OFF",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "POWER"
@@ -392,7 +447,20 @@
             "asserted": false
           }
         ]
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "ON",
+          "label": "ON",
+          "description": null
+        },
+        {
+          "id": "OFF",
+          "label": "OFF",
+          "description": null
+        }
+      ]
     },
     "quick_menu_button": {
       "name": "Q (quick menu) button",
@@ -413,7 +481,9 @@
           "kind": "debug_key",
           "name": "K_Q"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "selector": {
       "name": "Selector",
@@ -449,7 +519,9 @@
           }
         },
         "press": null
-      }
+      },
+      "pushable": false,
+      "positions": []
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -485,7 +557,9 @@
             }
           ]
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "sub_command_dial": {
       "name": "Sub-command dial",
@@ -519,7 +593,9 @@
           "name": "CMD_PUSH"
         },
         "endless": true
-      }
+      },
+      "pushable": true,
+      "positions": []
     }
   }
 }

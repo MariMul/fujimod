@@ -51,7 +51,9 @@
           "kind": "debug_key",
           "name": "AE"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "af_ae_lock_button": {
       "name": "AEL/AFL (autoexposure/autofocus lock) button",
@@ -72,7 +74,9 @@
           "kind": "debug_key",
           "name": "AEAF_LOCK"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "battery_chamber_cover_latch": {
       "name": "Battery-chamber cover latch",
@@ -85,7 +89,9 @@
       "default_function": "Slide to open or close the battery-chamber cover.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "battery_latch": {
       "name": "Battery latch",
@@ -98,7 +104,9 @@
       "default_function": "Press to the side to release the battery.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "continuous_shooting_button": {
       "name": "I (continuous shooting) button / n (playback zoom out) button",
@@ -117,7 +125,9 @@
           "kind": "debug_key",
           "name": "CONT"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",
@@ -130,7 +140,9 @@
       "default_function": "Slide up or down until the viewfinder display is in sharp focus.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "disp_back_button": {
       "name": "DISP (display)/BACK button",
@@ -151,7 +163,9 @@
           "kind": "debug_key",
           "name": "DISP_B"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "exposure_compensation_dial": {
       "name": "Exposure compensation dial",
@@ -164,7 +178,9 @@
       "default_function": "Set exposure compensation; negative values reduce exposure and positive values increase it.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "flash_pop_up_switch": {
       "name": "N (flash pop-up) switch",
@@ -177,7 +193,9 @@
       "default_function": "Slide to raise the flash.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "fn_button": {
       "name": "Fn (Function) button",
@@ -198,7 +216,9 @@
           "kind": "debug_key",
           "name": "FUNCTION"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "focus_mode_selector": {
       "name": "Focus mode selector",
@@ -219,8 +239,6 @@
         "positions": [
           {
             "id": "S",
-            "label": "S",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_A"
@@ -229,8 +247,6 @@
           },
           {
             "id": "C",
-            "label": "C",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_C"
@@ -239,8 +255,6 @@
           },
           {
             "id": "M",
-            "label": "M",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_M"
@@ -248,7 +262,25 @@
             "asserted": true
           }
         ]
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "S",
+          "label": "S",
+          "description": null
+        },
+        {
+          "id": "C",
+          "label": "C",
+          "description": null
+        },
+        {
+          "id": "M",
+          "label": "M",
+          "description": null
+        }
+      ]
     },
     "main_command_dial": {
       "name": "Main-command dial",
@@ -261,7 +293,9 @@
       "default_function": "Rotate to set aperture or shutter speed and select items; press the center for operations such as switching the setting item in M mode.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "mode_dial": {
       "name": "Mode dial",
@@ -283,8 +317,6 @@
           "positions": [
             {
               "id": "B (AUTO)",
-              "label": "B (AUTO)",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "AUTO"
@@ -293,8 +325,6 @@
             },
             {
               "id": "Adv. (ADVANCED)",
-              "label": "Adv. (ADVANCED)",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "ADVANCE"
@@ -303,8 +333,6 @@
             },
             {
               "id": "SP (SCENE POSITION)",
-              "label": "SP (SCENE POSITION)",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "SP"
@@ -313,8 +341,6 @@
             },
             {
               "id": "S (ADVANCED SR AUTO)",
-              "label": "S (ADVANCED SR AUTO)",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "SR"
@@ -323,8 +349,6 @@
             },
             {
               "id": "P",
-              "label": "P",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "PROGRAM"
@@ -333,8 +357,6 @@
             },
             {
               "id": "S (SHUTTER PRIORITY AE)",
-              "label": "S (SHUTTER PRIORITY AE)",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "SHUTTER"
@@ -343,8 +365,6 @@
             },
             {
               "id": "A (APERTURE PRIORITY AE)",
-              "label": "A (APERTURE PRIORITY AE)",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "APERTURE"
@@ -353,8 +373,6 @@
             },
             {
               "id": "M (MANUAL)",
-              "label": "M (MANUAL)",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "MANUAL"
@@ -363,8 +381,6 @@
             },
             {
               "id": "C1",
-              "label": "C1",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "C1"
@@ -373,8 +389,6 @@
             },
             {
               "id": "C2",
-              "label": "C2",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "C2"
@@ -383,8 +397,6 @@
             },
             {
               "id": "F (MOVIE)",
-              "label": "F (MOVIE)",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "MOVIE"
@@ -395,7 +407,65 @@
         },
         "press": null,
         "endless": false
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "B (AUTO)",
+          "label": "B (AUTO)",
+          "description": null
+        },
+        {
+          "id": "Adv. (ADVANCED)",
+          "label": "Adv. (ADVANCED)",
+          "description": null
+        },
+        {
+          "id": "SP (SCENE POSITION)",
+          "label": "SP (SCENE POSITION)",
+          "description": null
+        },
+        {
+          "id": "S (ADVANCED SR AUTO)",
+          "label": "S (ADVANCED SR AUTO)",
+          "description": null
+        },
+        {
+          "id": "P",
+          "label": "P",
+          "description": null
+        },
+        {
+          "id": "S (SHUTTER PRIORITY AE)",
+          "label": "S (SHUTTER PRIORITY AE)",
+          "description": null
+        },
+        {
+          "id": "A (APERTURE PRIORITY AE)",
+          "label": "A (APERTURE PRIORITY AE)",
+          "description": null
+        },
+        {
+          "id": "M (MANUAL)",
+          "label": "M (MANUAL)",
+          "description": null
+        },
+        {
+          "id": "C1",
+          "label": "C1",
+          "description": null
+        },
+        {
+          "id": "C2",
+          "label": "C2",
+          "description": null
+        },
+        {
+          "id": "F (MOVIE)",
+          "label": "F (MOVIE)",
+          "description": null
+        }
+      ]
     },
     "playback_button": {
       "name": "a (playback) button",
@@ -416,7 +486,9 @@
           "kind": "debug_key",
           "name": "K_PLAY"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "quick_menu_button": {
       "name": "Q button",
@@ -429,7 +501,9 @@
       "default_function": "Open the quick menu; hold to trigger monitor sunlight mode.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "selector": {
       "name": "Selector button",
@@ -469,7 +543,9 @@
           "kind": "debug_key",
           "name": "EXE_M"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -505,7 +581,9 @@
             }
           ]
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "sub_command_dial": {
       "name": "Sub-command dial",
@@ -518,7 +596,9 @@
       "default_function": "Rotate to set aperture or shutter speed, select items, or adjust focus in MF.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "white_balance_button": {
       "name": "WB (white balance) button",
@@ -539,7 +619,9 @@
           "kind": "debug_key",
           "name": "WB"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "zoom_ring": {
       "name": "Zoom ring (ON/OFF switch)",
@@ -567,7 +649,9 @@
         },
         "press": null,
         "endless": false
-      }
+      },
+      "pushable": false,
+      "positions": []
     }
   }
 }

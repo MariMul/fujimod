@@ -64,7 +64,9 @@
           "kind": "debug_key",
           "name": "AE-LOCK"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "af_lock_button": {
       "name": "AF-L (focus lock) button",
@@ -85,7 +87,9 @@
           "kind": "debug_key",
           "name": "AF-LOCK"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "battery_chamber_cover_latch": {
       "name": "Battery-chamber cover latch",
@@ -98,7 +102,9 @@
       "default_function": "Slide the battery-chamber latch as shown and open the battery-chamber cover.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "battery_latch": {
       "name": "Battery latch",
@@ -111,7 +117,9 @@
       "default_function": "Press the battery latch to the side, and slide the battery out of the camera as shown.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "command_dial": {
       "name": "Command dial",
@@ -145,7 +153,9 @@
           "name": "CMD_PUSH"
         },
         "endless": true
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",
@@ -158,7 +168,9 @@
       "default_function": "Adjusts viewfinder focus to suit individual eyesight.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "disp_back_button": {
       "name": "DISP (display)/BACK button",
@@ -179,7 +191,9 @@
           "kind": "debug_key",
           "name": "DISP_B"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "drive_button": {
       "name": "DRIVE button",
@@ -198,7 +212,9 @@
           "kind": "debug_key",
           "name": "DRIVE"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "exposure_compensation_dial": {
       "name": "Exposure compensation dial",
@@ -220,8 +236,6 @@
           "positions": [
             {
               "id": "+3",
-              "label": "+3",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D+3.0"
@@ -230,8 +244,6 @@
             },
             {
               "id": "8/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D+2.7"
@@ -240,8 +252,6 @@
             },
             {
               "id": "7/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D+2.3"
@@ -250,8 +260,6 @@
             },
             {
               "id": "+2",
-              "label": "+2",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D+2.0"
@@ -260,8 +268,6 @@
             },
             {
               "id": "5/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "native_input",
                 "name": "KEY_EXP_DIAL_P5_3"
@@ -270,8 +276,6 @@
             },
             {
               "id": "4/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "native_input",
                 "name": "KEY_EXP_DIAL_P4_3"
@@ -280,8 +284,6 @@
             },
             {
               "id": "+1",
-              "label": "+1",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D+1.0"
@@ -290,8 +292,6 @@
             },
             {
               "id": "2/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D+0.7"
@@ -300,8 +300,6 @@
             },
             {
               "id": "1/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D+0.3"
@@ -310,8 +308,6 @@
             },
             {
               "id": "0",
-              "label": "0",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D=0"
@@ -320,8 +316,6 @@
             },
             {
               "id": "-1/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D-0.3"
@@ -330,8 +324,6 @@
             },
             {
               "id": "-2/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D-0.7"
@@ -340,8 +332,6 @@
             },
             {
               "id": "−1",
-              "label": "−1",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D-1.0"
@@ -350,8 +340,6 @@
             },
             {
               "id": "-4/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "native_input",
                 "name": "KEY_EXP_DIAL_M4_3"
@@ -360,8 +348,6 @@
             },
             {
               "id": "-5/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "native_input",
                 "name": "KEY_EXP_DIAL_M5_3"
@@ -370,8 +356,6 @@
             },
             {
               "id": "−2",
-              "label": "−2",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D-2.0"
@@ -380,8 +364,6 @@
             },
             {
               "id": "-7/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D-2.3"
@@ -390,8 +372,6 @@
             },
             {
               "id": "-8/3",
-              "label": null,
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D-2.7"
@@ -400,8 +380,6 @@
             },
             {
               "id": "−3",
-              "label": "−3",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D-3.0"
@@ -412,7 +390,105 @@
         },
         "press": null,
         "endless": false
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "+3",
+          "label": "+3",
+          "description": null
+        },
+        {
+          "id": "8/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "7/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "+2",
+          "label": "+2",
+          "description": null
+        },
+        {
+          "id": "5/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "4/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "+1",
+          "label": "+1",
+          "description": null
+        },
+        {
+          "id": "2/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "1/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "0",
+          "label": "0",
+          "description": null
+        },
+        {
+          "id": "-1/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "-2/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "−1",
+          "label": "−1",
+          "description": null
+        },
+        {
+          "id": "-4/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "-5/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "−2",
+          "label": "−2",
+          "description": null
+        },
+        {
+          "id": "-7/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "-8/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "−3",
+          "label": "−3",
+          "description": null
+        }
+      ]
     },
     "flash_pop_up_button": {
       "name": "N (flash pop-up) button",
@@ -425,7 +501,9 @@
       "default_function": "Pops up the built-in flash.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "fn1_button": {
       "name": "Function button (Fn1)",
@@ -438,7 +516,9 @@
       "default_function": "Displays photometry options by default; function-button roles are assignable. In playback, zooms out.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "fn2_button": {
       "name": "Function button (Fn2)",
@@ -451,7 +531,9 @@
       "default_function": "Turns auto mode on or off by default; function-button roles are assignable. In playback, deletes pictures.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "fn7_button": {
       "name": "Function button (Fn7)",
@@ -464,7 +546,9 @@
       "default_function": "Starts movie recording by default; function-button roles are assignable. In playback, the button provides Wi-Fi functions.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "focus_mode_selector": {
       "name": "Focus mode selector",
@@ -484,8 +568,6 @@
         "positions": [
           {
             "id": "S",
-            "label": "S",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_A"
@@ -494,8 +576,6 @@
           },
           {
             "id": "C",
-            "label": "C",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_C"
@@ -504,8 +584,6 @@
           },
           {
             "id": "M",
-            "label": "M",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_M"
@@ -513,7 +591,25 @@
             "asserted": true
           }
         ]
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "S",
+          "label": "S",
+          "description": null
+        },
+        {
+          "id": "C",
+          "label": "C",
+          "description": null
+        },
+        {
+          "id": "M",
+          "label": "M",
+          "description": null
+        }
+      ]
     },
     "lens_release_button": {
       "name": "Lens release button",
@@ -526,7 +622,9 @@
       "default_function": "Releases the lens for removal.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "menu_ok_button": {
       "name": "MENU/OK button",
@@ -547,7 +645,9 @@
           "kind": "debug_key",
           "name": "EXE_M"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "playback_button": {
       "name": "a (playback) button",
@@ -568,7 +668,9 @@
           "kind": "debug_key",
           "name": "K_PLAY"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "power_switch": {
       "name": "ON/OFF switch",
@@ -586,8 +688,6 @@
         "positions": [
           {
             "id": "ON",
-            "label": "ON",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "POWER"
@@ -596,8 +696,6 @@
           },
           {
             "id": "OFF",
-            "label": "OFF",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "POWER"
@@ -605,7 +703,20 @@
             "asserted": false
           }
         ]
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "ON",
+          "label": "ON",
+          "description": null
+        },
+        {
+          "id": "OFF",
+          "label": "OFF",
+          "description": null
+        }
+      ]
     },
     "quick_menu_button": {
       "name": "Q (quick menu) button",
@@ -626,7 +737,9 @@
           "kind": "debug_key",
           "name": "K_Q"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "selector": {
       "name": "Selector",
@@ -662,7 +775,9 @@
           }
         },
         "press": null
-      }
+      },
+      "pushable": false,
+      "positions": []
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -698,7 +813,9 @@
             }
           ]
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "shutter_speed_dial": {
       "name": "Shutter speed dial",
@@ -720,8 +837,6 @@
           "positions": [
             {
               "id": "A",
-              "label": "A",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-A"
@@ -730,8 +845,6 @@
             },
             {
               "id": "4000",
-              "label": "4000",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/4000"
@@ -740,8 +853,6 @@
             },
             {
               "id": "2000",
-              "label": "2000",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/2000"
@@ -750,8 +861,6 @@
             },
             {
               "id": "1000",
-              "label": "1000",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/1000"
@@ -760,8 +869,6 @@
             },
             {
               "id": "500",
-              "label": "500",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/500"
@@ -770,8 +877,6 @@
             },
             {
               "id": "250",
-              "label": "250",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/250"
@@ -780,8 +885,6 @@
             },
             {
               "id": "180",
-              "label": "180",
-              "description": null,
               "key": {
                 "kind": "native_input",
                 "name": "KEY_SHUTTER_DIAL_1_180"
@@ -790,8 +893,6 @@
             },
             {
               "id": "125",
-              "label": "125",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/125"
@@ -800,8 +901,6 @@
             },
             {
               "id": "60",
-              "label": "60",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/60"
@@ -810,8 +909,6 @@
             },
             {
               "id": "30",
-              "label": "30",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/30"
@@ -820,8 +917,6 @@
             },
             {
               "id": "15",
-              "label": "15",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/15"
@@ -830,8 +925,6 @@
             },
             {
               "id": "8",
-              "label": "8",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/8"
@@ -840,8 +933,6 @@
             },
             {
               "id": "4",
-              "label": "4",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-1/4"
@@ -850,8 +941,6 @@
             },
             {
               "id": "T",
-              "label": "T",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-T"
@@ -860,8 +949,6 @@
             },
             {
               "id": "B",
-              "label": "B",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "S-B"
@@ -872,7 +959,85 @@
         },
         "press": null,
         "endless": false
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "A",
+          "label": "A",
+          "description": null
+        },
+        {
+          "id": "4000",
+          "label": "4000",
+          "description": null
+        },
+        {
+          "id": "2000",
+          "label": "2000",
+          "description": null
+        },
+        {
+          "id": "1000",
+          "label": "1000",
+          "description": null
+        },
+        {
+          "id": "500",
+          "label": "500",
+          "description": null
+        },
+        {
+          "id": "250",
+          "label": "250",
+          "description": null
+        },
+        {
+          "id": "180",
+          "label": "180",
+          "description": null
+        },
+        {
+          "id": "125",
+          "label": "125",
+          "description": null
+        },
+        {
+          "id": "60",
+          "label": "60",
+          "description": null
+        },
+        {
+          "id": "30",
+          "label": "30",
+          "description": null
+        },
+        {
+          "id": "15",
+          "label": "15",
+          "description": null
+        },
+        {
+          "id": "8",
+          "label": "8",
+          "description": null
+        },
+        {
+          "id": "4",
+          "label": "4",
+          "description": null
+        },
+        {
+          "id": "T",
+          "label": "T",
+          "description": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "description": null
+        }
+      ]
     }
   }
 }

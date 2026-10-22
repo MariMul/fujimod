@@ -64,7 +64,9 @@
           "kind": "debug_key",
           "name": "AEAF_LOCK"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "battery_chamber_cover_latch": {
       "name": "Battery-chamber cover latch",
@@ -77,7 +79,9 @@
       "default_function": "Slide to open or close the battery-chamber cover.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "battery_latch": {
       "name": "Battery latch",
@@ -90,7 +94,9 @@
       "default_function": "Press to the side to release the battery.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "command_dial": {
       "name": "Command dial",
@@ -103,7 +109,9 @@
       "default_function": "Navigates menus, views pictures, and selects quick-menu options; pressing its center zooms in on the active focus area.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "control_ring": {
       "name": "Control ring",
@@ -131,7 +139,9 @@
         },
         "press": null,
         "endless": true
-      }
+      },
+      "pushable": false,
+      "positions": []
     },
     "control_ring_options_button": {
       "name": "Control ring options button",
@@ -144,7 +154,9 @@
       "default_function": "Selects the control-ring function from [DEFAULT], [ISO], [WHITE BALANCE], [FILM SIMULATION], or [CONTINUOUS]; in [M] mode it switches between shutter-speed and aperture selection.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "delete_button": {
       "name": "(delete) button (playback mode)",
@@ -163,7 +175,9 @@
           "kind": "debug_key",
           "name": "DELETE"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",
@@ -176,7 +190,9 @@
       "default_function": "Adjusts the viewfinder display until it is in sharp focus.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "disp_back_button": {
       "name": "[DISP] (display)/[BACK] button",
@@ -197,7 +213,9 @@
           "kind": "debug_key",
           "name": "DISP_B"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "drive_button": {
       "name": "[DRIVE] button",
@@ -218,7 +236,9 @@
           "kind": "debug_key",
           "name": "DRIVE"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "exposure_compensation_dial": {
       "name": "Exposure compensation dial",
@@ -231,7 +251,9 @@
       "default_function": "Adjusts exposure; positive values increase exposure and negative values reduce it.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "flash_pop_up_switch": {
       "name": "(flash pop-up) switch",
@@ -244,7 +266,9 @@
       "default_function": "Raises the built-in flash.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "focus_mode_selector": {
       "name": "Focus mode selector",
@@ -262,8 +286,6 @@
         "positions": [
           {
             "id": "S",
-            "label": "S",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_A"
@@ -272,8 +294,6 @@
           },
           {
             "id": "C",
-            "label": "C",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_C"
@@ -282,8 +302,6 @@
           },
           {
             "id": "M",
-            "label": "M",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_M"
@@ -291,7 +309,25 @@
             "asserted": true
           }
         ]
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "S",
+          "label": "S",
+          "description": null
+        },
+        {
+          "id": "C",
+          "label": "C",
+          "description": null
+        },
+        {
+          "id": "M",
+          "label": "M",
+          "description": null
+        }
+      ]
     },
     "mode_dial": {
       "name": "Mode dial",
@@ -313,8 +349,6 @@
           "positions": [
             {
               "id": "P",
-              "label": "P",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "PROGRAM"
@@ -323,8 +357,6 @@
             },
             {
               "id": "S",
-              "label": "S",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "SHUTTER"
@@ -333,8 +365,6 @@
             },
             {
               "id": "A",
-              "label": "A",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "APERTURE"
@@ -343,8 +373,6 @@
             },
             {
               "id": "M",
-              "label": "M",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "MANUAL"
@@ -353,8 +381,6 @@
             },
             {
               "id": "ADVANCED SR AUTO",
-              "label": "ADVANCED SR AUTO",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "SR"
@@ -363,8 +389,6 @@
             },
             {
               "id": "AUTO",
-              "label": "AUTO",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "AUTO"
@@ -373,8 +397,6 @@
             },
             {
               "id": "Filter",
-              "label": "Filter",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "FILTER"
@@ -383,8 +405,6 @@
             },
             {
               "id": "Adv.",
-              "label": "Adv.",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "ADVANCE"
@@ -393,8 +413,6 @@
             },
             {
               "id": "SP1",
-              "label": "SP1",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "SP"
@@ -403,8 +421,6 @@
             },
             {
               "id": "SP2",
-              "label": "SP2",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "SP2"
@@ -413,8 +429,6 @@
             },
             {
               "id": "MOTION PANORAMA 360",
-              "label": "MOTION PANORAMA 360",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "PANORAMA"
@@ -425,7 +439,65 @@
         },
         "press": null,
         "endless": false
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "P",
+          "label": "P",
+          "description": null
+        },
+        {
+          "id": "S",
+          "label": "S",
+          "description": null
+        },
+        {
+          "id": "A",
+          "label": "A",
+          "description": null
+        },
+        {
+          "id": "M",
+          "label": "M",
+          "description": null
+        },
+        {
+          "id": "ADVANCED SR AUTO",
+          "label": "ADVANCED SR AUTO",
+          "description": null
+        },
+        {
+          "id": "AUTO",
+          "label": "AUTO",
+          "description": null
+        },
+        {
+          "id": "Filter",
+          "label": "Filter",
+          "description": null
+        },
+        {
+          "id": "Adv.",
+          "label": "Adv.",
+          "description": null
+        },
+        {
+          "id": "SP1",
+          "label": "SP1",
+          "description": null
+        },
+        {
+          "id": "SP2",
+          "label": "SP2",
+          "description": null
+        },
+        {
+          "id": "MOTION PANORAMA 360",
+          "label": "MOTION PANORAMA 360",
+          "description": null
+        }
+      ]
     },
     "movie_record_button": {
       "name": "Movie-record button (function button 1)",
@@ -444,7 +516,9 @@
           "kind": "debug_key",
           "name": "MOVIE_REC"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "playback_button": {
       "name": "(playback) button",
@@ -465,7 +539,9 @@
           "kind": "debug_key",
           "name": "K_PLAY"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "quick_menu_button": {
       "name": "[Q] (quick menu) button; RAW conversion button (playback mode)",
@@ -486,7 +562,9 @@
           "kind": "debug_key",
           "name": "K_Q"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "selector": {
       "name": "Selector/function buttons",
@@ -525,7 +603,9 @@
           "kind": "debug_key",
           "name": "EXE_M"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -561,7 +641,9 @@
             }
           ]
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "view_mode_button": {
       "name": "[VIEW MODE] button",
@@ -580,7 +662,9 @@
           "kind": "debug_key",
           "name": "EVF_LCD"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "wifi_button": {
       "name": "[Fn] button (function button 6); [Wi-Fi] button (playback mode)",
@@ -599,7 +683,9 @@
           "kind": "debug_key",
           "name": "WLAN"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "zoom_power_ring": {
       "name": "Zoom ring; [ON/OFF] switch",
@@ -627,7 +713,9 @@
         },
         "press": null,
         "endless": false
-      }
+      },
+      "pushable": false,
+      "positions": []
     }
   }
 }

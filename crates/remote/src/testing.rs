@@ -21,7 +21,7 @@ pub fn facts() -> Facts {
         ("command_control", "PREVIOUS"),
         ("command_control", "NEXT"),
     ];
-    let button = |name: &str, key: &str| json!({"name":name,"location":"rear","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"default_function":null,"role":null,"mechanical":false,"behavior":{"kind":"button","press":{"kind":"debug_key","name":key}}});
+    let button = |name: &str, key: &str| json!({"name":name,"location":"rear","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"pushable":true,"positions":[],"default_function":null,"role":null,"mechanical":false,"behavior":{"kind":"button","press":{"kind":"debug_key","name":key}}});
     let physical_controls = json!({
         "$schema":fujimod_catalog::controls::PHYSICAL_CONTROLS_SCHEMA_URI,"schema":1,"id":"synthetic-controls","body_id":"synthetic",
         "manual":{"url":"https://example.test/manual","title":"Synthetic controls","pages":[]},"analog_levels":1,
@@ -29,11 +29,11 @@ pub fn facts() -> Facts {
             "menu_ok_button":button("MENU/OK button","MENU"),
             "playback_button":button("Playback button","PLAY"),
             "wifi_button":button("Function button","FN"),
-            "shutter_button":{"name":"Shutter","location":"top","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"default_function":null,"role":null,"mechanical":false,"behavior":{"kind":"shutter","stages":{"half_press":[{"kind":"debug_key","name":"HALF"}],"full_press":[{"kind":"debug_key","name":"HALF"},{"kind":"debug_key","name":"FULL"}]}}},
-            "position_dial":{"name":"Position dial","location":"top","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"default_function":null,"role":null,"mechanical":false,"behavior":{"kind":"dial","motion":{"kind":"positions","positions":[{"id":"A","label":"A","description":null,"key":{"kind":"debug_key","name":"AUTO"},"asserted":true}]},"press":null,"endless":false}},
-            "command_control":{"name":"Command dial","location":"rear","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"default_function":null,"role":null,"mechanical":false,"behavior":{"kind":"dial","motion":{"kind":"steps","decrease":{"kind":"debug_key","name":"PREVIOUS"},"increase":{"kind":"debug_key","name":"NEXT"}},"press":null,"endless":true}},
+            "shutter_button":{"name":"Shutter","location":"top","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"pushable":true,"positions":[],"default_function":null,"role":null,"mechanical":false,"behavior":{"kind":"shutter","stages":{"half_press":[{"kind":"debug_key","name":"HALF"}],"full_press":[{"kind":"debug_key","name":"HALF"},{"kind":"debug_key","name":"FULL"}]}}},
+            "position_dial":{"name":"Position dial","location":"top","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"pushable":false,"positions":[{"id":"A","label":"A","description":null}],"default_function":null,"role":null,"mechanical":false,"behavior":{"kind":"dial","motion":{"kind":"positions","positions":[{"id":"A","key":{"kind":"debug_key","name":"AUTO"},"asserted":true}]},"press":null,"endless":false}},
+            "command_control":{"name":"Command dial","location":"rear","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"pushable":false,"positions":[],"default_function":null,"role":null,"mechanical":false,"behavior":{"kind":"dial","motion":{"kind":"steps","decrease":{"kind":"debug_key","name":"PREVIOUS"},"increase":{"kind":"debug_key","name":"NEXT"}},"press":null,"endless":true}},
             "disp_back_button":button("DISP/BACK button","BACK"),
-            "selector":{"name":"Selector","location":"rear","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"default_function":null,"role":null,"mechanical":false,
+            "selector":{"name":"Selector","location":"rear","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"pushable":false,"positions":[],"default_function":null,"role":null,"mechanical":false,
                 "behavior":{"kind":"pad","press":null,"directions":{"up":{"kind":"debug_key","name":"UP"},"down":{"kind":"debug_key","name":"DOWN"},"left":{"kind":"debug_key","name":"LEFT"},"right":{"kind":"debug_key","name":"RIGHT"}}}}
         }
     });

@@ -71,7 +71,9 @@
           "kind": "debug_key",
           "name": "AEAF_LOCK"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "aperture_ring": {
       "name": "Aperture ring",
@@ -91,8 +93,6 @@
           "positions": [
             {
               "id": "A",
-              "label": "A",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "I-M_A"
@@ -101,8 +101,6 @@
             },
             {
               "id": "16",
-              "label": "16",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "I-M_F16"
@@ -111,8 +109,6 @@
             },
             {
               "id": "11",
-              "label": "11",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "I-M_F11"
@@ -121,8 +117,6 @@
             },
             {
               "id": "8",
-              "label": "8",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "I-M_F8.0"
@@ -131,8 +125,6 @@
             },
             {
               "id": "5.6",
-              "label": "5.6",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "I-M_F5.6"
@@ -141,8 +133,6 @@
             },
             {
               "id": "4",
-              "label": "4",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "I-M_F4.0"
@@ -151,8 +141,6 @@
             },
             {
               "id": "2.8",
-              "label": "2.8",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "I-M_F2.8"
@@ -161,8 +149,6 @@
             },
             {
               "id": "2",
-              "label": "2",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "I-M_F2.0"
@@ -173,7 +159,50 @@
         },
         "press": null,
         "endless": false
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "A",
+          "label": "A",
+          "description": null
+        },
+        {
+          "id": "16",
+          "label": "16",
+          "description": null
+        },
+        {
+          "id": "11",
+          "label": "11",
+          "description": null
+        },
+        {
+          "id": "8",
+          "label": "8",
+          "description": null
+        },
+        {
+          "id": "5.6",
+          "label": "5.6",
+          "description": null
+        },
+        {
+          "id": "4",
+          "label": "4",
+          "description": null
+        },
+        {
+          "id": "2.8",
+          "label": "2.8",
+          "description": null
+        },
+        {
+          "id": "2",
+          "label": "2",
+          "description": null
+        }
+      ]
     },
     "battery_chamber_cover_latch": {
       "name": "Battery-chamber cover latch",
@@ -186,7 +215,9 @@
       "default_function": "Slide to open or close the battery-chamber cover.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "battery_latch": {
       "name": "Battery latch",
@@ -199,7 +230,9 @@
       "default_function": "Press to the side to release the battery.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "bluetooth_button": {
       "name": "x(Bluetooth) button",
@@ -218,7 +251,9 @@
           "kind": "debug_key",
           "name": "WLAN"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "control_ring": {
       "name": "Control ring",
@@ -248,7 +283,9 @@
         },
         "press": null,
         "endless": true
-      }
+      },
+      "pushable": false,
+      "positions": []
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",
@@ -261,7 +298,9 @@
       "default_function": "Adjusts viewfinder focus.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "disp_back_button": {
       "name": "DISP (display)/BACK button",
@@ -280,7 +319,9 @@
           "kind": "debug_key",
           "name": "DISP_B"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "drive_delete_button": {
       "name": "DRIVE/DELETE button",
@@ -299,7 +340,9 @@
           "kind": "debug_key",
           "name": "DRIVE"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "exposure_compensation_dial": {
       "name": "Exposure compensation dial",
@@ -319,8 +362,6 @@
           "positions": [
             {
               "id": "C",
-              "label": "C",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D=C"
@@ -329,8 +370,6 @@
             },
             {
               "id": "−3",
-              "label": "−3",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D-3.0"
@@ -339,8 +378,6 @@
             },
             {
               "id": "−2",
-              "label": "−2",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D-2.0"
@@ -349,8 +386,6 @@
             },
             {
               "id": "−1",
-              "label": "−1",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D-1.0"
@@ -359,8 +394,6 @@
             },
             {
               "id": "0",
-              "label": "0",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D=0"
@@ -369,8 +402,6 @@
             },
             {
               "id": "+1",
-              "label": "+1",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D+1.0"
@@ -379,8 +410,6 @@
             },
             {
               "id": "+2",
-              "label": "+2",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D+2.0"
@@ -389,8 +418,6 @@
             },
             {
               "id": "+3",
-              "label": "+3",
-              "description": null,
               "key": {
                 "kind": "debug_key",
                 "name": "E-D+3.0"
@@ -401,7 +428,50 @@
         },
         "press": null,
         "endless": false
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "C",
+          "label": "C",
+          "description": null
+        },
+        {
+          "id": "−3",
+          "label": "−3",
+          "description": null
+        },
+        {
+          "id": "−2",
+          "label": "−2",
+          "description": null
+        },
+        {
+          "id": "−1",
+          "label": "−1",
+          "description": null
+        },
+        {
+          "id": "0",
+          "label": "0",
+          "description": null
+        },
+        {
+          "id": "+1",
+          "label": "+1",
+          "description": null
+        },
+        {
+          "id": "+2",
+          "label": "+2",
+          "description": null
+        },
+        {
+          "id": "+3",
+          "label": "+3",
+          "description": null
+        }
+      ]
     },
     "fn1_button": {
       "name": "Fn1 button",
@@ -414,7 +484,9 @@
       "default_function": "FACE DETECTION ON/OFF",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "fn2_button": {
       "name": "Fn2 button",
@@ -427,7 +499,9 @@
       "default_function": "CONTROL RING SETTING",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "focus_mode_selector": {
       "name": "Focus mode selector",
@@ -445,8 +519,6 @@
         "positions": [
           {
             "id": "S",
-            "label": "S",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_A"
@@ -455,8 +527,6 @@
           },
           {
             "id": "C",
-            "label": "C",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_C"
@@ -465,8 +535,6 @@
           },
           {
             "id": "M",
-            "label": "M",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "MF_AF_M"
@@ -474,7 +542,25 @@
             "asserted": true
           }
         ]
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "S",
+          "label": "S",
+          "description": null
+        },
+        {
+          "id": "C",
+          "label": "C",
+          "description": null
+        },
+        {
+          "id": "M",
+          "label": "M",
+          "description": null
+        }
+      ]
     },
     "focus_ring": {
       "name": "Focus ring",
@@ -502,7 +588,9 @@
         },
         "press": null,
         "endless": true
-      }
+      },
+      "pushable": false,
+      "positions": []
     },
     "focus_stick": {
       "name": "Focus stick (focus lever)",
@@ -539,7 +627,9 @@
           "kind": "debug_key",
           "name": "8DIR_PUSH"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "front_command_dial": {
       "name": "Front command dial",
@@ -570,7 +660,9 @@
           "name": "CMD2_PUSH"
         },
         "endless": true
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "front_ring": {
       "name": "Front ring (detachable)",
@@ -583,7 +675,9 @@
       "default_function": "Removed to attach the AR-X100 adapter ring or a conversion lens.",
       "role": null,
       "mechanical": true,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "menu_ok_button": {
       "name": "MENU/OK button",
@@ -602,7 +696,9 @@
           "kind": "debug_key",
           "name": "EXE_M"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "playback_button": {
       "name": "PLAY (playback) button",
@@ -621,7 +717,9 @@
           "kind": "debug_key",
           "name": "K_PLAY"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "power_switch": {
       "name": "ON/OFF switch",
@@ -639,8 +737,6 @@
         "positions": [
           {
             "id": "ON",
-            "label": "ON",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "POWER"
@@ -649,8 +745,6 @@
           },
           {
             "id": "OFF",
-            "label": "OFF",
-            "description": null,
             "key": {
               "kind": "debug_key",
               "name": "POWER"
@@ -658,7 +752,20 @@
             "asserted": false
           }
         ]
-      }
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "ON",
+          "label": "ON",
+          "description": null
+        },
+        {
+          "id": "OFF",
+          "label": "OFF",
+          "description": null
+        }
+      ]
     },
     "quick_menu_button": {
       "name": "Q (quick menu) button",
@@ -677,7 +784,9 @@
           "kind": "debug_key",
           "name": "K_Q"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "rear_command_dial": {
       "name": "Rear command dial",
@@ -708,7 +817,9 @@
           "name": "CMD_PUSH"
         },
         "endless": true
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -741,7 +852,9 @@
             }
           ]
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     },
     "shutter_speed_sensitivity_dial": {
       "name": "Shutter speed dial/Sensitivity dial",
@@ -754,7 +867,9 @@
       "default_function": "Rotate to set shutter speed. Lift and rotate to set sensitivity; A selects automatic sensitivity and C lets the front command dial select sensitivity from 64 to 51200.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": null,
+      "pushable": false,
+      "positions": []
     },
     "touchscreen": {
       "name": "Touch screen",
@@ -769,7 +884,9 @@
       "mechanical": false,
       "behavior": {
         "kind": "touch"
-      }
+      },
+      "pushable": false,
+      "positions": []
     },
     "viewfinder_selector": {
       "name": "Viewfinder selector",
@@ -788,7 +905,9 @@
           "kind": "debug_key",
           "name": "EVF_OVF"
         }
-      }
+      },
+      "pushable": true,
+      "positions": []
     }
   }
 }

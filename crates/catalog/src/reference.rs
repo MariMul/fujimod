@@ -2617,9 +2617,15 @@ impl ReferenceCatalog {
             }
         }
         for (body_id, controls) in &self.physical_controls {
-            if !self.bodies.contains_key(body_id) {
+            if !self.bodies.contains_key(body_id)
+                && (controls.has_bindings()
+                    || controls
+                        .controls
+                        .values()
+                        .any(|control| !control.connection_ids.is_empty()))
+            {
                 return Err(format!(
-                    "physical controls {} refer to missing body {body_id}",
+                    "physical controls {} require body {body_id} to validate their bindings or connections",
                     controls.id
                 ));
             }

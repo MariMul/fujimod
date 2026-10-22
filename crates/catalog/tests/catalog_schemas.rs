@@ -107,3 +107,53 @@ fn bundled_reference_records_resolve_by_identity() {
             .unwrap_or_else(|error| panic!("{body} / {firmware}: {error}"));
     }
 }
+
+#[test]
+fn controls_only_directories_validate_without_hardware_records() {
+    let package = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let source = package.join("../../catalog/bodies/xa10/controls.json");
+    let document: Value = serde_json::from_slice(&fs::read(source).unwrap()).unwrap();
+    let root = std::env::temp_dir().join(format!(
+        "catalog-manual-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let directory = root.join("bodies/xa10");
+    fs::create_dir_all(&directory).unwrap();
+    let path = directory.join("controls.json");
+    fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+    let catalog = fujimod_catalog::ReferenceCatalog::load(&root).unwrap();
+    assert!(catalog.body("xa10").is_none());
+    let controls = catalog.physical_controls("xa10").unwrap();
+    assert_eq!(controls.analog_levels, None);
+    assert!(
+        controls
+            .controls
+            .values()
+            .all(|control| !control.mechanical)
+    );
+    assert!(controls.controls["shutter_button"].pushable);
+    for kind in ["connection", "binding", "manual"] {
+        let mut invalid = document.clone();
+        match kind {
+            "connection" => {
+                invalid["controls"]["shutter_button"]["connection_ids"] =
+                    serde_json::json!(["absent"])
+            }
+            "binding" => {
+                invalid["controls"]["shutter_button"]["behavior"]["stages"]["half_press"] =
+                    serde_json::json!([{"kind":"debug_key","name":"UNLOCATED"}])
+            }
+            _ => invalid["manual"]["pages"] = serde_json::json!([]),
+        }
+        fs::write(&path, serde_json::to_vec(&invalid).unwrap()).unwrap();
+        assert!(
+            fujimod_catalog::ReferenceCatalog::load(&root).is_err(),
+            "{kind}"
+        );
+    }
+    fs::remove_dir_all(root).unwrap();
+}
