@@ -16,6 +16,13 @@ use fujimod_emulator_cpu::{Model, Register, arm};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Caller-supplied reset state for one processor in the selected SoC graph.
+pub struct ProcessorStart {
+    pub processor_id: String,
+    pub released: bool,
+    pub registers: Vec<(Register, u64)>,
+}
+
 fn core_index(soc: &Soc) -> Result<BTreeMap<&str, usize>, String> {
     let mut indexes = BTreeMap::new();
     for (index, processor) in soc.processors.iter().enumerate() {
@@ -45,7 +52,7 @@ fn register(register: ProcessorRegister) -> Register {
 
 fn build_processor(
     model: ProcessorModel,
-    registers: &[(ProcessorRegister, u64)],
+    registers: &[(Register, u64)],
     released: bool,
     mprofile: Option<crate::board::mprofile::Config>,
     rprofile: Option<&fujimod_catalog::reference::RProfileState>,
@@ -83,10 +90,7 @@ fn build_processor(
         .transpose()?;
     Ok(factory::Processor {
         model,
-        registers: registers
-            .iter()
-            .map(|(identifier, value)| (register(*identifier), *value))
-            .collect(),
+        registers: registers.to_vec(),
         released,
         mprofile,
         rprofile,
@@ -160,6 +164,17 @@ pub(super) fn assemble(
     rate: RunInstructionRate,
     board_ticks_per_second: Option<u64>,
 ) -> Result<factory::Graph, String> {
+    assemble_with_starts(selection, rate, board_ticks_per_second, &[])
+}
+
+/// Construct the checked catalog memory/peripheral graph with caller-owned
+/// processor reset state. Missing companion state remains held in reset.
+pub fn assemble_with_starts(
+    selection: &ResolvedSelection,
+    rate: RunInstructionRate,
+    board_ticks_per_second: Option<u64>,
+    starts: &[ProcessorStart],
+) -> Result<factory::Graph, String> {
     let soc = &selection.soc;
     let body = &selection.body;
     if body.soc_id != soc.id {
@@ -170,15 +185,42 @@ pub(super) fn assemble(
         .hardware
         .as_ref()
         .and_then(|hardware| hardware.companion.as_ref());
+    let mut start_by_id = BTreeMap::new();
+    for start in starts {
+        if start_by_id
+            .insert(start.processor_id.as_str(), start)
+            .is_some()
+        {
+            return Err(format!(
+                "caller repeats reset state for processor {}",
+                start.processor_id
+            ));
+        }
+        if !soc
+            .processors
+            .iter()
+            .any(|processor| processor.id == start.processor_id)
+        {
+            return Err(format!(
+                "caller reset state names absent processor {}",
+                start.processor_id
+            ));
+        }
+    }
     let processors = soc
         .processors
         .iter()
         .map(|processor| {
-            let registers = processor
-                .registers
-                .iter()
-                .map(|item| (item.register, item.value))
-                .collect::<Vec<_>>();
+            let start = start_by_id.get(processor.id.as_str()).copied();
+            let registers = if let Some(start) = start {
+                start.registers.clone()
+            } else {
+                processor
+                    .registers
+                    .iter()
+                    .map(|item| (register(item.register), item.value))
+                    .collect::<Vec<_>>()
+            };
             let mprofile = if processor.model == ProcessorModel::CortexM4 {
                 let companion = companion
                     .filter(|companion| companion.processor_id == processor.id)
@@ -212,12 +254,20 @@ pub(super) fn assemble(
             build_processor(
                 processor.model,
                 &registers,
-                processor.released.ok_or_else(|| {
-                    format!(
-                        "SoC {} does not declare the reset-release state for core {}",
-                        soc.id, processor.id
-                    )
-                })?,
+                start
+                    .map(|state| state.released)
+                    .or(processor.released)
+                    .or_else(|| {
+                        companion
+                            .is_some_and(|companion| companion.processor_id == processor.id)
+                            .then_some(false)
+                    })
+                    .ok_or_else(|| {
+                        format!(
+                            "SoC {} does not declare the reset-release state for core {}",
+                            soc.id, processor.id
+                        )
+                    })?,
                 mprofile,
                 processor.rprofile.as_ref(),
                 soc.architecture.clone(),

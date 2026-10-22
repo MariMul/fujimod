@@ -7,6 +7,11 @@ mod graph;
 mod x70;
 mod xp5;
 
+/// Caller-supplied processor reset state for catalog-resolved XP5 execution.
+pub use graph::ProcessorStart as Xp5ProcessorStart;
+/// Assemble the checked catalog CPU, RAM, peripheral, and mapping graph for XP5.
+pub use graph::assemble_with_starts as xp5_execution_graph;
+
 /// Resolve device windows from a selected XP5 hardware profile.
 pub use xp5::windows as xp5_device_windows;
 /// An XP5 device bus assembled from the selected SoC hardware profile.
