@@ -370,7 +370,8 @@ type BulkSource = BulkSourceVariant0 | BulkSourceVariant1 | BulkSourceVariant2
 
 class BulkSourceVariant0(TypedDict, total=False):
     base: Required[int]
-    callback: Required[int]
+    callback_offset: Required[int]
+    callback_table: Required[int]
     capacities: Required[list[int]]
     mechanism: Required[Literal["query"]]
     source_state: Required[int]

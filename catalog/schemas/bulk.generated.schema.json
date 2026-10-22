@@ -28,7 +28,7 @@
       "oneOf": [
         {
           "additionalProperties": false,
-          "description": "A stock diagnostic query sets the source to `base`; offsets are\nrelative to it. `callback` must hold `stock_callback` before the query.",
+          "description": "A stock diagnostic query sets the source to `base`; offsets are\nrelative to it. The callback slot, `callback_offset` bytes into the\ntable that `callback_table` points to, must hold `stock_callback`.",
           "properties": {
             "base": {
               "description": "Source base the query sets.",
@@ -36,8 +36,14 @@
               "minimum": 0,
               "type": "integer"
             },
-            "callback": {
-              "description": "Address of the query callback slot.",
+            "callback_offset": {
+              "description": "Byte offset of the query callback in that table.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "callback_table": {
+              "description": "Address of the pointer to the diagnostic callback table.",
               "format": "uint64",
               "minimum": 0,
               "type": "integer"
@@ -81,7 +87,8 @@
           "required": [
             "mechanism",
             "tag",
-            "callback",
+            "callback_table",
+            "callback_offset",
             "stock_callback",
             "base",
             "source_state",
@@ -262,7 +269,7 @@
       "type": "string"
     },
     "code_alias": {
-      "description": "Added to code-check and mapped-probe addresses for slow reads of code.",
+      "description": "Uncached RAM alias: added to code-check, mapped-probe and callback-table\naddresses that the firmware stores in their cached form.",
       "format": "uint64",
       "minimum": 0,
       "type": "integer"

@@ -164,15 +164,29 @@ impl Source {
         match bulk.source {
             BulkSource::Query {
                 tag,
-                callback,
+                callback_table,
+                callback_offset,
                 stock_callback,
                 base,
                 source_state,
                 ref capacities,
                 wrapping,
             } => {
+                // The table pointer may hold the cached or the uncached alias.
+                let table = u64::from(word(&access.raw(callback_table, 4).await?, 0));
+                let alias = bulk.code_alias;
+                let physical = if table >= alias { table - alias } else { table };
+                let slot = alias + physical + callback_offset;
                 require(
-                    access.raw(callback, 4).await? == address(stock_callback)?.to_le_bytes(),
+                    table % 4 == 0
+                        && bulk.window.contains(BulkRange {
+                            address: slot,
+                            size: 4,
+                        }),
+                    "Bulk callback table is outside the RAM window",
+                )?;
+                require(
+                    access.raw(slot, 4).await? == address(stock_callback)?.to_le_bytes(),
                     "Require the stock diagnostic query callback",
                 )?;
                 let reply = access

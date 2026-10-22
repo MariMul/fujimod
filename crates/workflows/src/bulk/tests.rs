@@ -54,7 +54,8 @@ fn facts(source: BulkSource) -> FirmwareBulk {
 fn query_camera() -> FirmwareBulk {
     facts(BulkSource::Query {
         tag: 0x80,
-        callback: 0x1100,
+        callback_table: 0x1100,
+        callback_offset: 12,
         stock_callback: 0x2000,
         base: 0x1000,
         source_state: 0x1200,
@@ -195,7 +196,8 @@ fn qualified() -> Vec<E> {
 #[test]
 fn query_source_reads_the_range_relative_to_the_stock_base() {
     let mut steps = qualified();
-    steps.extend(read(0x1100, &words(&[0x2000])));
+    steps.extend(read(0x1100, &words(&[0x1500])));
+    steps.extend(read(0x150c, &words(&[0x2000])));
     steps.extend(diagnostic(0x450006, 0x80, 32));
     steps.extend(read(0x1200, &words(&[0x1000, 32])));
     steps.extend(read(0x1000, b"stoc"));
@@ -288,7 +290,8 @@ fn reads_outside_the_window_or_from_another_camera_send_nothing_further() {
 #[test]
 fn foreign_query_callback_stops_before_the_query() {
     let mut steps = qualified();
-    steps.extend(read(0x1100, &words(&[0x2004])));
+    steps.extend(read(0x1100, &words(&[0x1500])));
+    steps.extend(read(0x150c, &words(&[0x2004])));
     let (mut session, script) = opened(steps);
     assert!(block_on(read_bulk(&mut session, &query_camera(), limits(), target())).is_err());
     assert_eq!(script.remaining(), 0);

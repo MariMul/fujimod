@@ -121,12 +121,12 @@
   "scopes": [
     {
       "name": "quick",
-      "basis": "Mapped update ranges through the highest located transfer-state address, rounded to 1 MiB. Static BSS and heap extents beyond it are not established.",
+      "basis": "Mapped update ranges in the RAM window through the highest located transfer-state address, rounded to 1 MiB. Static BSS and heap extents beyond it are not established.",
       "ranges": [
         {
           "name": "firmware",
-          "address": 8388608,
-          "size": 69206016
+          "address": 16384,
+          "size": 77578240
         }
       ]
     },

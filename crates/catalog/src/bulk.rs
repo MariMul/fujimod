@@ -31,7 +31,8 @@ pub struct FirmwareBulk {
     pub product: String,
     /// Internal version the camera reports.
     pub internal_version: String,
-    /// Added to code-check and mapped-probe addresses for slow reads of code.
+    /// Uncached RAM alias: added to code-check, mapped-probe and callback-table
+    /// addresses that the firmware stores in their cached form.
     pub code_alias: u64,
     /// Stock routine that points E1 reads at memory.
     pub source: BulkSource,
@@ -53,12 +54,15 @@ pub struct FirmwareBulk {
 #[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
 pub enum BulkSource {
     /// A stock diagnostic query sets the source to `base`; offsets are
-    /// relative to it. `callback` must hold `stock_callback` before the query.
+    /// relative to it. The callback slot, `callback_offset` bytes into the
+    /// table that `callback_table` points to, must hold `stock_callback`.
     Query {
         /// Diagnostic query tag.
         tag: u32,
-        /// Address of the query callback slot.
-        callback: u64,
+        /// Address of the pointer to the diagnostic callback table.
+        callback_table: u64,
+        /// Byte offset of the query callback in that table.
+        callback_offset: u64,
         /// Stock callback value.
         stock_callback: u64,
         /// Source base the query sets.
