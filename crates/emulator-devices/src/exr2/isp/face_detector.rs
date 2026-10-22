@@ -220,7 +220,9 @@ impl FaceDetector {
             (DmaPhase::ConfigCount, DmaOperation::Write, 0x28) if value == 0x100 => {
                 DmaPhase::ConfigExtra
             }
-            (DmaPhase::ConfigExtra, DmaOperation::Write, 0x44) if value == 0 => {
+            // The idle setup uses the same extra mode word as request setup.
+            // Reopening a channel can program 2 even when its retained word is 0.
+            (DmaPhase::ConfigExtra, DmaOperation::Write, 0x44) if matches!(value, 0 | 2) => {
                 DmaPhase::Configured
             }
             _ => return false,
@@ -370,7 +372,7 @@ impl FaceDetector {
                 && word(0x20) & !0x00700000 == 0x3000
                 && (word(0x20) >> 20) & 7 <= 4
                 && word(0x28) == 0x100
-                && word(0x44) == 0
+                && matches!(word(0x44), 0 | 2)
         })
     }
 
@@ -839,8 +841,18 @@ impl FaceDetector {
                     )
                 })
                 .unwrap_or_default();
+            let dma_context = Self::dma_location(offset)
+                .map(|(channel, local)| {
+                    let state = &self.state.dma[channel];
+                    format!(
+                        " (dma channel {channel} register {local:#x} phase {:?} stored {:#x})",
+                        state.phase,
+                        state.registers.get(&local).copied().unwrap_or(0)
+                    )
+                })
+                .unwrap_or_default();
             cx.fail(format!(
-                "face detector request {:?} at {offset:#x}{context} exceeds the modeled submission sequence",
+                "face detector request {:?} at {offset:#x} value {value:#x}{context}{dma_context} exceeds the modeled submission sequence",
                 operation
             ));
             return 0;
@@ -1050,7 +1062,7 @@ mod tests {
         cx.take_refusal()
     }
 
-    fn initialize(model: &mut FaceDetector) {
+    fn initialize(model: &mut FaceDetector, dma_extra: u64) {
         let mut offsets = FIXED_WORDS
             .iter()
             .map(|(offset, _)| *offset)
@@ -1105,7 +1117,7 @@ mod tests {
             assert_eq!(write(model, base + 0x20, 0x3000), None);
             assert_eq!(write(model, base + 4, 0), None);
             assert_eq!(write(model, base + 0x28, 0x100), None);
-            assert_eq!(write(model, base + 0x44, 0), None);
+            assert_eq!(write(model, base + 0x44, dma_extra), None);
         }
     }
 
@@ -1159,9 +1171,59 @@ mod tests {
         assert!(restored.restore(&corrupted).is_err());
     }
 
+    #[test]
+    fn idle_dma_setup_replays_extra_mode_two_from_zero() {
+        use DmaOperation::{Read, Write};
+        let mut model = FaceDetector::default();
+        // X-E2S idle reopen reaches +0x44 with 2 after this clear/poll/setup
+        // prefix; the retained extra word can still be zero at that point.
+        let accesses = [
+            (Read, 0x884, 0),
+            (Write, 0x884, 0),
+            (Read, 0x890, 0),
+            (Read, 0x884, 0),
+            (Write, 0x880, 0),
+            (Read, 0x8a0, 0),
+            (Write, 0x8a0, 0x403000),
+            (Write, 0x884, 0),
+            (Write, 0x8a8, 0x100),
+            (Write, 0x8c4, 2),
+        ];
+        for (operation, offset, value) in accesses {
+            if offset == 0x8c4 {
+                assert_eq!(model.state.dma[1].phase, DmaPhase::ConfigExtra);
+                assert_eq!(model.state.dma[1].registers.get(&0x44), None);
+                let saved = model.save();
+                for unknown in [1, 3, 4, u32::MAX.into()] {
+                    assert!(write(&mut model, offset, unknown).is_some());
+                    assert_eq!(model.save(), saved);
+                }
+            }
+            let mut host = Clock;
+            let mut cx = Cx::new(&mut host, 0, 0, 4);
+            if operation == Read {
+                assert_eq!(model.read(&mut cx, BASE + offset, 4), value);
+            } else {
+                model.write(&mut cx, BASE + offset, 4, value);
+            }
+            assert_eq!(cx.take_refusal(), None);
+            let saved = model.save();
+            let mut restored = FaceDetector::default();
+            restored.restore(&saved).unwrap();
+            assert_eq!(restored.save(), saved);
+        }
+        assert_eq!(model.state.dma[1].phase, DmaPhase::Configured);
+        assert_eq!(model.state.dma[1].registers[&0x44], 2);
+        let mut corrupt = model.save();
+        corrupt["dma"][1]["accesses"][9]["value"] = Value::from(3);
+        assert!(FaceDetector::default().restore(&corrupt).is_err());
+        assert_eq!(model.next_deadline(0), None);
+        assert!(read(&mut model, 0x600).is_some());
+    }
+
     fn armed() -> FaceDetector {
         let mut model = FaceDetector::new(Options::default());
-        initialize(&mut model);
+        initialize(&mut model, 0);
         assert_eq!(write(&mut model, 0x14, 0x0fff), None);
         assert_eq!(
             model.state.request.as_ref().unwrap().phase,
@@ -1337,7 +1399,7 @@ mod tests {
             }
             let reopening = model.save();
             FaceDetector::default().restore(&reopening).unwrap();
-            initialize(&mut model);
+            initialize(&mut model, 2);
             for access in &submission {
                 if access.operation == DmaOperation::Write {
                     assert_eq!(
