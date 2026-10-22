@@ -4,7 +4,7 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from fujimod import _native
-from fujimod.remote import Camera, control, menu, option
+from fujimod.remote import Camera, RemoteReadResult, control, menu, option
 
 
 def camera():
@@ -22,13 +22,15 @@ def test_references_are_immutable_without_a_camera():
 async def test_async_navigation_selection_readback_and_frame():
     remote = camera()
     item = menu("shooting", key=20)
-    assert (await remote.navigate(item, deadline=100)).value.selected
+    value = await remote.navigate(item, deadline=100)
+    assert isinstance(value, RemoteReadResult)
+    assert value.value.selected
     await remote.select(option(item, "ON"), deadline=100)
     await remote.navigate(item, deadline=100)
     await remote.press(control("selector.right"), deadline=100)
-    snapshot = await remote.wait_until(lambda value: value.value.selected,
+    read_result = await remote.wait_until(lambda value: value.value.selected,
         option(item, "ON"), deadline=100)
-    assert snapshot.value.value == "ON"
+    assert read_result.value.value == "ON"
     before = remote.now
     frame = await remote.screenshot(deadline=100)
     assert frame.time > before
@@ -36,7 +38,7 @@ async def test_async_navigation_selection_readback_and_frame():
     remote.close()
 
 
-def test_blocking_uses_the_same_actions_and_snapshot_types():
+def test_blocking_uses_the_same_actions_and_read_result_types():
     remote = camera()
     blocking = remote.blocking
     item = menu("shooting", key=20)
@@ -47,6 +49,7 @@ def test_blocking_uses_the_same_actions_and_snapshot_types():
     assert value.value.value == "ON"
     before = remote.now
     assert blocking.read(option(item, "ON")) == value
+    assert isinstance(value, RemoteReadResult)
     assert remote.now == before
     assert blocking.screenshot(deadline=100).frame.height == 1
 

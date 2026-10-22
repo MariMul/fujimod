@@ -2,7 +2,7 @@
 
 `fujimod-remote` resolves immutable menu, option and physical-control references
 against catalog facts and live memory. Navigation and selection use native
-inputs. Reads return typed snapshots without advancing a board.
+inputs. Reads return `RemoteReadResult` values without advancing a board.
 
 `Remote` has four asynchronous, local-future primitives: `set_input`, `read`,
 `frame` and `wait`. The `operations` module composes navigation, selection,
@@ -68,7 +68,7 @@ predicate remains false. Application exceptions and cancellation propagate
 unchanged. A deadline bounds waiting; it does not prove that a device operation
 stopped or authorize cleanup.
 
-`Observation.read_memory(address, size)` reads a caller-selected physical
+`RemoteReader.read_memory(address, size)` reads a caller-selected physical
 address range and returns its bytes with the backend read set. A Rust
 `wait_until` predicate may combine these byte reads with semantic reference
 reads; the operation tracks every range and waits on the resulting read set

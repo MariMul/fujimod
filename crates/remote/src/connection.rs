@@ -41,7 +41,7 @@ impl<B: Backend> Connection<B> {
     pub async fn turn(&mut self, control: &Control, steps: i32, deadline: u64) -> Result<()> {
         crate::operations::turn(self, control, steps, deadline).await
     }
-    pub async fn navigate(&mut self, menu: &Menu, deadline: u64) -> Result<Snapshot> {
+    pub async fn navigate(&mut self, menu: &Menu, deadline: u64) -> Result<RemoteReadResult> {
         let facts = self.facts.clone();
         crate::operations::navigate(self, &facts, menu, deadline).await
     }
@@ -57,18 +57,18 @@ struct View<'a, B> {
     backend: &'a mut B,
     facts: &'a Facts,
 }
-impl<B: Backend> Observation for View<'_, B> {
+impl<B: Backend> RemoteReader for View<'_, B> {
     fn now(&self) -> u64 {
         self.backend.now()
     }
-    fn read<'a>(&'a mut self, reference: &'a Reference) -> LocalFuture<'a, Snapshot> {
+    fn read<'a>(&'a mut self, reference: &'a Reference) -> LocalFuture<'a, RemoteReadResult> {
         Box::pin(async move {
             Memory {
                 backend: self.backend,
                 facts: self.facts,
                 reads: ReadSet::default(),
             }
-            .snapshot(reference)
+            .read_reference(reference)
             .await
         })
     }
@@ -95,11 +95,11 @@ impl<B: Backend> Observation for View<'_, B> {
         })
     }
 }
-impl<B: Backend> Observation for Connection<B> {
+impl<B: Backend> RemoteReader for Connection<B> {
     fn now(&self) -> u64 {
         self.backend.now()
     }
-    fn read<'a>(&'a mut self, reference: &'a Reference) -> LocalFuture<'a, Snapshot> {
+    fn read<'a>(&'a mut self, reference: &'a Reference) -> LocalFuture<'a, RemoteReadResult> {
         Box::pin(async move {
             View {
                 backend: &mut self.backend,
@@ -137,11 +137,11 @@ impl<B: Backend> Remote for Connection<B> {
                 self.ready(deadline).await?;
             }
             // Resolve physical identities immediately before supplying this edge.
-            let snapshot = self
+            let read_result = self
                 .read(&Reference::Control(input.control.clone()))
                 .await?;
             if matches!(
-                snapshot.value,
+                read_result.value,
                 Value::Control(ControlSnapshot {
                     supported: false,
                     ..

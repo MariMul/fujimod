@@ -130,9 +130,9 @@ impl Camera {
                     let predicate = predicate.clone();
                     let observed = observed.clone();
                     Box::pin(async move {
-                        let snapshot = view.read(&reference).await?;
+                        let read_result = view.read(&reference).await?;
                         let satisfied = Python::attach(|py| -> PyResult<bool> {
-                            let json = serde_json::to_string(&snapshot)
+                            let json = serde_json::to_string(&read_result)
                                 .map_err(|e| error(e.to_string()))?;
                             let value = py
                                 .import("fujimod.remote")?
@@ -141,7 +141,7 @@ impl Camera {
                             predicate.bind(py).call1((value,))?.extract()
                         })
                         .map_err(|e| e.to_string())?;
-                        *observed.borrow_mut() = Some(snapshot);
+                        *observed.borrow_mut() = Some(read_result);
                         Ok(satisfied)
                     })
                 },
@@ -149,11 +149,11 @@ impl Camera {
                 &condition,
             )
             .await?;
-            let snapshot = last
+            let read_result = last
                 .borrow_mut()
                 .take()
-                .ok_or("Predicate completed without a snapshot")?;
-            Ok(Output::Snapshot(snapshot))
+                .ok_or("Predicate completed without a read result")?;
+            Ok(Output::RemoteReadResult(read_result))
         })))
     }
     fn wait_until_memory(
@@ -288,12 +288,12 @@ impl Camera {
                 .as_deref_mut()
                 .ok_or("Camera operation lost its owner")?;
             match action.as_str() {
-                "read" => Ok(Output::Snapshot(
+                "read" => Ok(Output::RemoteReadResult(
                     r.read(reference.as_ref().ok_or("read requires a reference")?)
                         .await?,
                 )),
                 "navigate" => match reference {
-                    Some(Reference::Menu(item)) => Ok(Output::Snapshot(
+                    Some(Reference::Menu(item)) => Ok(Output::RemoteReadResult(
                         remote::operations::navigate(r, &facts, &item, deadline).await?,
                     )),
                     _ => Err("navigate requires a menu reference".into()),
@@ -321,10 +321,10 @@ impl Camera {
                 )),
                 "frame" => Ok(Output::Capture(r.frame().await?)),
                 "wait" => {
-                    let snapshot = r
+                    let read_result = r
                         .read(reference.as_ref().ok_or("wait requires a reference")?)
                         .await?;
-                    r.wait(&snapshot.reads, deadline).await?;
+                    r.wait(&read_result.reads, deadline).await?;
                     Ok(Output::Unit)
                 }
                 _ => Err(format!("Unknown camera operation {action}")),

@@ -237,11 +237,11 @@ fn option_value_uses_selected_row_instead_of_viewport_origin() {
         let mut remote = Connection::connect(backend, facts()).unwrap();
         let item = menu("shooting").with_key(20);
         for (label, selected) in [("ON", true), ("OFF", false)] {
-            let snapshot = remote
+            let read_result = remote
                 .read(&option(item.clone(), label).into())
                 .await
                 .unwrap();
-            let value = snapshot.menu().unwrap();
+            let value = read_result.menu().unwrap();
             assert_eq!(value.selected, selected);
             assert_eq!(value.value.as_deref(), Some("ON"));
         }
@@ -377,7 +377,7 @@ fn navigation_resolves_again_after_each_edge() {
     });
 }
 #[test]
-fn predicate_timeout_reports_last_snapshot() {
+fn predicate_timeout_reports_last_read_result() {
     futures_lite::future::block_on(async {
         let mut remote = Connection::connect(Synthetic::new(), facts()).unwrap();
         let error = operations::wait_until(
@@ -394,7 +394,7 @@ fn predicate_timeout_reports_last_snapshot() {
         .await
         .unwrap_err();
         assert!(error.contains("test condition"));
-        assert!(error.contains("last snapshots"));
+        assert!(error.contains("last remote reads"));
         assert!(error.contains("ControlSnapshot"));
     });
 }

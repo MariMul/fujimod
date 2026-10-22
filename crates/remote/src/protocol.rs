@@ -85,7 +85,7 @@ pub enum Value {
     Control(ControlSnapshot),
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Snapshot {
+pub struct RemoteReadResult {
     pub state: State,
     pub value: Value,
     pub reads: ReadSet,
@@ -98,7 +98,7 @@ pub struct MemoryRead {
     pub bytes: Vec<u8>,
     pub reads: ReadSet,
 }
-impl Snapshot {
+impl RemoteReadResult {
     pub fn menu(&self) -> Result<&MenuSnapshot> {
         match &self.value {
             Value::Menu(value) => Ok(value),
@@ -125,14 +125,14 @@ pub struct Capture {
 /// This view cannot supply inputs or advance time. Frame reads here are passive;
 /// screenshot() is the operation that waits for a completed frame. Each read
 /// inspects state now; wait_until repeats its predicate and tracks these reads.
-pub trait Observation {
+pub trait RemoteReader {
     fn now(&self) -> u64;
-    fn read<'a>(&'a mut self, reference: &'a Reference) -> LocalFuture<'a, Snapshot>;
+    fn read<'a>(&'a mut self, reference: &'a Reference) -> LocalFuture<'a, RemoteReadResult>;
     /// Read caller-selected physical bytes without assigning them semantic meaning.
     fn read_memory<'a>(&'a mut self, address: u64, size: usize) -> LocalFuture<'a, MemoryRead>;
     fn frame(&mut self) -> LocalFuture<'_, Capture>;
 }
-pub trait Remote: Observation {
+pub trait Remote: RemoteReader {
     fn set_input<'a>(&'a mut self, input: &'a Input, deadline: u64) -> LocalFuture<'a, ()>;
     fn wait<'a>(&'a mut self, reads: &'a ReadSet, deadline: u64) -> LocalFuture<'a, ()>;
 }

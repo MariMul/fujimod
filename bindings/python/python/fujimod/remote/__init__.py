@@ -92,7 +92,7 @@ class ControlState:
 
 
 @dataclass(frozen=True)
-class Snapshot:
+class RemoteReadResult:
     state: State
     value: MenuState | ControlState
     reads: dict
@@ -111,7 +111,7 @@ def _convert(value):
     if isinstance(value, str):
         data = json.loads(value)
         kind = MenuState if data["value"]["kind"] == "menu" else ControlState
-        return Snapshot(State(**data["state"]), kind(**data["value"]["value"]), data["reads"])
+        return RemoteReadResult(State(**data["state"]), kind(**data["value"]["value"]), data["reads"])
     if isinstance(value, tuple):
         png, time, clock, output, sequence = value
         return Capture(recording.Frame.from_png(png), time, clock, output, sequence)
@@ -173,7 +173,7 @@ class Camera:
     def _task(self, action: str, reference: Reference | None, deadline: int, steps: int = 0):
         return self._native.operation(action, _reference(reference), deadline, steps)
 
-    async def read(self, reference: Reference) -> Snapshot:
+    async def read(self, reference: Reference) -> RemoteReadResult:
         return await _drive(self._task("read", reference, 0))
 
     async def set_input(self, reference: Control, state: str, *, deadline: int,
@@ -205,7 +205,7 @@ class Camera:
                 raise TimeoutError(f"Timed out waiting for {condition}; read set: {reads}")
             await self.wait(reads, deadline=deadline)
 
-    async def navigate(self, reference: Menu, *, deadline: int) -> Snapshot:
+    async def navigate(self, reference: Menu, *, deadline: int) -> RemoteReadResult:
         return await _drive(self._task("navigate", reference, deadline))
 
     async def select(self, reference: Option, *, deadline: int) -> None:
@@ -223,8 +223,8 @@ class Camera:
     async def screenshot(self, *, deadline: int) -> Capture:
         return await _drive(self._task("screenshot", None, deadline))
 
-    async def wait_until(self, predicate: Callable[[Snapshot], bool], reference: Reference,
-                         *, deadline: int) -> Snapshot:
+    async def wait_until(self, predicate: Callable[[RemoteReadResult], bool], reference: Reference,
+                         *, deadline: int) -> RemoteReadResult:
         return await _drive(self._native.wait_until(_reference(reference), predicate, deadline))
 
     async def wait_until_memory(self, predicate: Callable[[list[tuple[int, bytes]]], bool],
@@ -249,10 +249,10 @@ class BlockingCamera:
     def _call(self, action: str, reference: Reference | None = None, deadline: int = 0, steps: int = 0):
         return _convert(self._camera._task(action, reference, deadline, steps).blocking())
 
-    def read(self, reference: Reference) -> Snapshot:
+    def read(self, reference: Reference) -> RemoteReadResult:
         return self._call("read", reference)
 
-    def navigate(self, reference: Menu, *, deadline: int) -> Snapshot:
+    def navigate(self, reference: Menu, *, deadline: int) -> RemoteReadResult:
         return self._call("navigate", reference, deadline)
 
     def select(self, reference: Option, *, deadline: int) -> None:
@@ -270,8 +270,8 @@ class BlockingCamera:
     def screenshot(self, *, deadline: int) -> Capture:
         return self._call("screenshot", deadline=deadline)
 
-    def wait_until(self, predicate: Callable[[Snapshot], bool], reference: Reference,
-                   *, deadline: int) -> Snapshot:
+    def wait_until(self, predicate: Callable[[RemoteReadResult], bool], reference: Reference,
+                   *, deadline: int) -> RemoteReadResult:
         return _convert(self._camera._native.wait_until(_reference(reference), predicate, deadline).blocking())
 
     def wait_until_memory(self, predicate: Callable[[list[tuple[int, bytes]]], bool],

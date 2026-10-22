@@ -1,5 +1,5 @@
 //! Reference-based camera control. Connections own transport and observation;
-//! operations own navigation. Callers supply facts and assert on snapshots.
+//! operations own navigation. Callers supply facts and assert on read results.
 #![forbid(unsafe_code)]
 #![recursion_limit = "256"]
 pub mod reference;
@@ -7,7 +7,7 @@ pub use reference::{Control, Menu, OptionReference, Reference, control, menu, op
 pub mod protocol;
 pub use protocol::{
     Capture, Clock, ControlSnapshot, Input, InputState, LocalFuture, MemoryRead, MenuSnapshot,
-    Observation, ReadSet, Remote, Result, Snapshot, State, Value,
+    ReadSet, Remote, RemoteReadResult, RemoteReader, Result, State, Value,
 };
 pub mod backend;
 pub mod memory;

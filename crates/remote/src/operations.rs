@@ -39,13 +39,13 @@ pub async fn turn<R: Remote + ?Sized>(
 struct Tracked<'a, R: ?Sized> {
     remote: &'a mut R,
     reads: ReadSet,
-    last: Vec<Snapshot>,
+    last: Vec<RemoteReadResult>,
 }
-impl<R: Observation + ?Sized> Observation for Tracked<'_, R> {
+impl<R: RemoteReader + ?Sized> RemoteReader for Tracked<'_, R> {
     fn now(&self) -> u64 {
         self.remote.now()
     }
-    fn read<'a>(&'a mut self, reference: &'a Reference) -> LocalFuture<'a, Snapshot> {
+    fn read<'a>(&'a mut self, reference: &'a Reference) -> LocalFuture<'a, RemoteReadResult> {
         Box::pin(async move {
             let v = self.remote.read(reference).await?;
             self.reads.extend(v.reads.clone());
@@ -70,7 +70,7 @@ impl<R: Observation + ?Sized> Observation for Tracked<'_, R> {
 }
 pub async fn wait_until<R: Remote + ?Sized>(
     r: &mut R,
-    mut predicate: impl for<'a> FnMut(&'a mut dyn Observation) -> LocalFuture<'a, bool>,
+    mut predicate: impl for<'a> FnMut(&'a mut dyn RemoteReader) -> LocalFuture<'a, bool>,
     deadline: u64,
     condition: &str,
 ) -> Result<()> {
@@ -87,7 +87,7 @@ pub async fn wait_until<R: Remote + ?Sized>(
         let last = view.last;
         if r.now() >= deadline {
             return Err(format!(
-                "Timed out waiting for {condition}; last snapshots: {last:?}; read set: {reads:?}"
+                "Timed out waiting for {condition}; last remote reads: {last:?}; read set: {reads:?}"
             ));
         }
         r.wait(&reads, deadline).await?;
@@ -115,7 +115,7 @@ async fn step<R: Remote + ?Sized>(
     reference: &Reference,
     role: &str,
     deadline: u64,
-) -> Result<Snapshot> {
+) -> Result<RemoteReadResult> {
     let before = r.read(reference).await?;
     press(r, &navigation_control(facts, role)?, deadline).await?;
     loop {
@@ -205,7 +205,7 @@ async fn focus<R: Remote + ?Sized>(
     facts: &Facts,
     reference: &Reference,
     deadline: u64,
-) -> Result<Snapshot> {
+) -> Result<RemoteReadResult> {
     let mut seen = std::collections::BTreeSet::new();
     for _ in 0..1024 {
         let value = r.read(reference).await?;
@@ -256,7 +256,7 @@ pub async fn navigate<R: Remote + ?Sized>(
     facts: &Facts,
     item: &Menu,
     deadline: u64,
-) -> Result<Snapshot> {
+) -> Result<RemoteReadResult> {
     let reference = Reference::Menu(item.clone());
     let initial = r.read(&reference).await?;
     if initial.state.menu_active && initial.state.node == initial.menu()?.node {

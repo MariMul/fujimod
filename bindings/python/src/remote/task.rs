@@ -2,7 +2,7 @@
 use super::*;
 pub(super) enum Output {
     Unit,
-    Snapshot(Snapshot),
+    RemoteReadResult(RemoteReadResult),
     MemoryReads(Vec<MemoryRead>),
     Capture(Capture),
 }
@@ -65,9 +65,9 @@ impl Task {
             .map_err(error)?;
         match result {
             Output::Unit => Ok(py.None()),
-            Output::Snapshot(snapshot) => Ok(pyo3::types::PyString::new(
+            Output::RemoteReadResult(read_result) => Ok(pyo3::types::PyString::new(
                 py,
-                &serde_json::to_string(&snapshot).map_err(|e| error(e.to_string()))?,
+                &serde_json::to_string(&read_result).map_err(|e| error(e.to_string()))?,
             )
             .into_any()
             .unbind()),

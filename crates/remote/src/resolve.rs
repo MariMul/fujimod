@@ -1,7 +1,7 @@
 //! Resolve each reference anew against the live descriptor graph and cursor.
 use fujimod_catalog::controls::InputTarget;
 use crate::{
-    ControlSnapshot, Menu, MenuSnapshot, Reference, Result, Snapshot, Value,
+    ControlSnapshot, Menu, MenuSnapshot, Reference, RemoteReadResult, Result, Value,
     backend::Backend,
     memory::{Memory, word},
 };
@@ -342,7 +342,7 @@ impl<B: Backend> Memory<'_, B> {
         }
         Ok(label)
     }
-    pub async fn snapshot(&mut self, reference: &Reference) -> Result<Snapshot> {
+    pub async fn read_reference(&mut self, reference: &Reference) -> Result<RemoteReadResult> {
         let state = self.state().await?;
         if let Reference::Control(control) = reference {
             let id = control.id();
@@ -353,7 +353,7 @@ impl<B: Backend> Memory<'_, B> {
                         if control_id == id
                             || control_id.strip_prefix(id).is_some_and(|rest| rest.starts_with('.')))
             });
-            return Ok(Snapshot {
+            return Ok(RemoteReadResult {
                 state,
                 value: Value::Control(ControlSnapshot {
                     id: id.into(),
@@ -453,7 +453,7 @@ impl<B: Backend> Memory<'_, B> {
         } else {
             String::new()
         };
-        Ok(Snapshot {
+        Ok(RemoteReadResult {
             state: state.clone(),
             value: Value::Menu(MenuSnapshot {
                 node: pointer,
