@@ -607,7 +607,11 @@ impl WorkerLoop {
         let progress = cpu.instruction_progress();
         let pc = read_stopped_pc(cpu);
         let pstate = read_stopped_pstate(cpu);
+        let is_synchronization = matches!(call, CallbackCall::Synchronization);
         let result = self.wait_callback_parked(cpu, callback, call, progress, pc, pstate);
+        if is_synchronization && !matches!(result, CallbackResult::Error) {
+            cpu.acknowledge_owner_barrier();
+        }
         if let Err(error) = cpu.owner_callback_parked(false) {
             *self.callback_error.borrow_mut() = Some(error);
             cpu.stop().ok();
@@ -3225,6 +3229,324 @@ mod tests {
         assert_eq!(probe.0.get(), 1);
         assert_eq!(read_u32(&cpu, arm::CORE[0]), 0x7654_3210);
         assert_eq!(read_u32(&cpu, arm::PC), 0x1004);
+    }
+
+    #[test]
+    fn interactive_store_barrier_coalescing_requires_and_resets_a_parked_cohort() {
+        struct Probe(Cell<u32>);
+        unsafe fn barrier(data: *mut std::ffi::c_void) {
+            let probe = unsafe { &*data.cast::<Probe>() };
+            probe.0.set(probe.0.get() + 1);
+        }
+        fn wait_for_callback(cpu: &CpuWorker, run: RunToken) -> bool {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+            loop {
+                match cpu.poll_run(run).unwrap() {
+                    RunStatus::CallbackPending => return true,
+                    RunStatus::Running => {
+                        if std::time::Instant::now() >= deadline {
+                            return false;
+                        }
+                        std::thread::yield_now();
+                    }
+                    RunStatus::Complete(_) => return false,
+                }
+            }
+        }
+        fn finish_run(cpu: &CpuWorker, run: RunToken) -> (Result<Exit, ExecutionError>, u32) {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+            let mut callbacks = 0;
+            loop {
+                match cpu.poll_run(run).unwrap() {
+                    RunStatus::Running => {
+                        if std::time::Instant::now() >= deadline {
+                            let _ = cpu.request_pause(run);
+                            return (
+                                Err(ExecutionError::Backend("worker run timed out".into())),
+                                callbacks,
+                            );
+                        }
+                        std::thread::yield_now();
+                    }
+                    RunStatus::CallbackPending => {
+                        callbacks += 1;
+                        if cpu.service_pending_callback(run).is_err() {
+                            let _ = cpu.cancel_pending_callback(run);
+                        }
+                    }
+                    RunStatus::Complete(result) => return (result, callbacks),
+                }
+            }
+        }
+
+        let code = Backing::aligned_zeros(4096, 4096).unwrap();
+        let data = Backing::aligned_zeros(4096, 4096).unwrap();
+        let memory = SharedMemory::default();
+        let first = worker(memory.clone());
+        let second = worker(memory.clone());
+        unsafe {
+            first
+                .map_physical(
+                    0x1000,
+                    0x1000,
+                    4096,
+                    7,
+                    NonNull::new(code.as_ptr()).unwrap(),
+                )
+                .unwrap();
+            first
+                .map_physical(
+                    0x5000,
+                    0x1000,
+                    4096,
+                    7,
+                    NonNull::new(code.as_ptr()).unwrap(),
+                )
+                .unwrap();
+            first
+                .map_physical(
+                    0x8000,
+                    0x8000,
+                    4096,
+                    7,
+                    NonNull::new(data.as_ptr()).unwrap(),
+                )
+                .unwrap();
+            second
+                .map_physical(
+                    0x8000,
+                    0x8000,
+                    4096,
+                    7,
+                    NonNull::new(data.as_ptr()).unwrap(),
+                )
+                .unwrap();
+        }
+        first.map_zeroed(0x11000, 4096, 7).unwrap();
+        first.map_zeroed(0x12000, 4096, 7).unwrap();
+        second.map_zeroed(0x9000, 4096, 7).unwrap();
+        write_words(
+            &first,
+            0x1000,
+            &[
+                0xe5812000, // str r2, [r1]
+                0xe5814000, // str r4, [r1]
+                0xe5832000, // str r2, [r3] through a code alias
+                0xe320f003, // wfi
+            ],
+        );
+        write_words(&first, 0x11000, &[0xe5812000, 0xe5814000, 0xe320f003]);
+        write_words(&first, 0x12000, &[0xe1910f9f]); // ldrex r0, [r1]
+        write_words(&second, 0x9000, &[0xe1910f9f]); // ldrex r0, [r1]
+        first
+            .write_register(arm::CORE[1], &0x8000u32.to_le_bytes())
+            .unwrap();
+        first
+            .write_register(arm::CORE[2], &0xe320f003u32.to_le_bytes())
+            .unwrap();
+        first
+            .write_register(arm::CORE[3], &0x5000u32.to_le_bytes())
+            .unwrap();
+        first
+            .write_register(arm::CORE[4], &0x1357_9bdfu32.to_le_bytes())
+            .unwrap();
+        second
+            .write_register(arm::CORE[1], &0x8000u32.to_le_bytes())
+            .unwrap();
+
+        // Prime the shared exclusive-watch page before either worker runs in
+        // parallel. Later ordinary stores to that page use the synchronization
+        // hook without invalidating translated code.
+        let prime = second
+            .start_run(Run {
+                begin: 0x9000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(1),
+            })
+            .unwrap();
+        assert!(matches!(
+            poll_to_completion(&second, prime).unwrap(),
+            Exit::Stopped
+        ));
+
+        for cpu in [&first, &second] {
+            cpu.set_execution_policy(ExecutionPolicy::Interactive)
+                .unwrap();
+        }
+        let mut first_probe = Probe(Cell::new(0));
+        let mut second_probe = Probe(Cell::new(0));
+        for (cpu, probe) in [(&first, &mut first_probe), (&second, &mut second_probe)] {
+            unsafe {
+                cpu.install_hook(Hook::Synchronization {
+                    callback: barrier,
+                    data: (probe as *mut Probe).cast(),
+                })
+                .unwrap();
+            }
+        }
+        let before = first.exit_counters().unwrap();
+        let first_run = first
+            .start_run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(8),
+            })
+            .unwrap();
+        let second_run = second
+            .start_run(Run {
+                begin: 0x9000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(1),
+            })
+            .unwrap();
+        let first_parked = wait_for_callback(&first, first_run);
+        let second_parked = wait_for_callback(&second, second_run);
+        first.request_pause(first_run).unwrap();
+        second.request_pause(second_run).unwrap();
+        if first_parked {
+            let _ = first.service_pending_callback(first_run);
+        }
+        let (first_result, first_extra_callbacks) = finish_run(&first, first_run);
+        if second_parked {
+            let _ = second.service_pending_callback(second_run);
+        }
+        let (second_result, second_extra_callbacks) = finish_run(&second, second_run);
+
+        let first_exit = first_result.unwrap_or(Exit::Stopped);
+        let second_exit = second_result.unwrap_or(Exit::Stopped);
+        let after = first.exit_counters().unwrap();
+        assert!(
+            first_parked && second_parked,
+            "both workers must park before the barrier"
+        );
+        assert!(matches!(first_exit, Exit::Stopped));
+        assert!(matches!(second_exit, Exit::Stopped));
+        assert_eq!(first_extra_callbacks, 0);
+        assert_eq!(second_extra_callbacks, 0);
+        assert_eq!(first.pause_requested.load(Ordering::Acquire), 1);
+        assert_eq!(second.pause_requested.load(Ordering::Acquire), 1);
+        assert_eq!(first_probe.0.get(), 1);
+        assert_eq!(second_probe.0.get(), 1); // the concurrent LDREX barrier
+        assert_eq!(
+            after["worker_callback_synchronization"] - before["worker_callback_synchronization"],
+            1
+        );
+        assert!(after["synchronization_requested"] - before["synchronization_requested"] >= 3);
+        assert!(after["synchronization_elided"] - before["synchronization_elided"] >= 1);
+        assert_eq!(
+            after["synchronization_barriers"] - before["synchronization_barriers"],
+            1
+        );
+
+        // The peer's LDREX callback was serviced only after the first run's
+        // lease ended. Its new run observes the completed ordinary stores.
+        let mut observed = [0; 4];
+        second.read_memory(0x8000, &mut observed).unwrap();
+        assert_eq!(u32::from_le_bytes(observed), 0x1357_9bdf);
+        let load = second
+            .start_run(Run {
+                begin: 0x9000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(1),
+            })
+            .unwrap();
+        let (load_result, _) = finish_run(&second, load);
+        assert!(matches!(load_result.unwrap(), Exit::Stopped));
+        assert_eq!(read_u32(&second, arm::CORE[0]), 0x1357_9bdf);
+
+        write_words(&second, 0x9004, &[0xe1813f92]); // strex r3, r2, [r1]
+        second
+            .write_register(arm::CORE[2], &0x2468_ace0u32.to_le_bytes())
+            .unwrap();
+        let exclusive_run = second
+            .start_run(Run {
+                begin: 0x9004,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(1),
+            })
+            .unwrap();
+        let (exclusive_result, _) = finish_run(&second, exclusive_run);
+        assert!(matches!(exclusive_result.unwrap(), Exit::Stopped));
+        assert_eq!(read_u32(&second, arm::CORE[3]), 0);
+        let mut exclusive_value = [0; 4];
+        second.read_memory(0x8000, &mut exclusive_value).unwrap();
+        assert_eq!(u32::from_le_bytes(exclusive_value), 0x2468_ace0);
+
+        // Resume the stopped code-alias store in a fresh run. Its invalidation
+        // must still reach every translated alias before the new instruction
+        // is fetched.
+        let alias_store = first
+            .start_run(Run {
+                begin: 0x1008,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(8),
+            })
+            .unwrap();
+        let (alias_result, _) = finish_run(&first, alias_store);
+        assert!(matches!(
+            alias_result.unwrap(),
+            Exit::Hint(Hint::WaitForInterrupt)
+        ));
+        let mut replaced = [0; 4];
+        first.read_memory(0x1000, &mut replaced).unwrap();
+        assert_eq!(u32::from_le_bytes(replaced), 0xe320f003);
+        let retranslated = first
+            .start_run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(1),
+            })
+            .unwrap();
+        assert!(matches!(
+            poll_to_completion(&first, retranslated).unwrap(),
+            Exit::Hint(Hint::WaitForInterrupt)
+        ));
+        assert_eq!(read_u32(&first, arm::CORE[0]), 0);
+
+        let before_next_run = first.exit_counters().unwrap();
+        let next_run = first
+            .start_run(Run {
+                begin: 0x11000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(16),
+            })
+            .unwrap();
+        let next_parked = wait_for_callback(&first, next_run);
+        first.request_pause(next_run).unwrap();
+        if next_parked {
+            let _ = first.service_pending_callback(next_run);
+        }
+        let (next_result, extra_callbacks) = finish_run(&first, next_run);
+        let next_callbacks = u32::from(next_parked) + extra_callbacks;
+        let after_next_run = first.exit_counters().unwrap();
+        assert!(next_parked);
+        assert!(matches!(
+            next_result.unwrap(),
+            Exit::Stopped | Exit::Hint(Hint::WaitForInterrupt)
+        ));
+        assert_eq!(next_callbacks, 1);
+        assert_eq!(
+            after_next_run["worker_callback_synchronization"]
+                - before_next_run["worker_callback_synchronization"],
+            1
+        );
+        assert_eq!(
+            after_next_run["synchronization_elided"] - before_next_run["synchronization_elided"],
+            1
+        );
+        assert_eq!(
+            after_next_run["synchronization_barriers"]
+                - before_next_run["synchronization_barriers"],
+            1
+        );
     }
 
     #[test]

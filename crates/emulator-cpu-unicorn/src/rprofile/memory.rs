@@ -98,6 +98,7 @@ struct State {
     active: HashSet<usize>,
     run_policies: HashMap<usize, ExecutionPolicy>,
     parked: HashMap<usize, usize>,
+    owner_barrier: Option<usize>,
 }
 /// Thread-safe ownership for memory identities and cross-processor code
 /// coherence. It contains no CPU handles; each processor creates its own
@@ -143,6 +144,22 @@ pub(super) struct RunReservation<'a> {
     memory: &'a Memory,
     core: usize,
 }
+pub(super) struct OwnerBarrierLease {
+    shared: SharedMemory,
+    core: usize,
+}
+impl Drop for OwnerBarrierLease {
+    fn drop(&mut self) {
+        let mut state = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if state.owner_barrier == Some(self.core) {
+            state.owner_barrier = None;
+        }
+    }
+}
 impl Drop for RunReservation<'_> {
     fn drop(&mut self) {
         self.memory.finish_run(self.core);
@@ -170,6 +187,32 @@ impl Memory {
         }
         Ok(())
     }
+    pub(super) fn acquire_owner_barrier(&self, core: usize) -> Option<OwnerBarrierLease> {
+        let mut state = self.state();
+        let has_peer = state
+            .cores
+            .iter()
+            .enumerate()
+            .any(|(id, live)| id != core && *live);
+        let all_parked = state
+            .run_policies
+            .keys()
+            .all(|id| state.active.contains(id) && state.parked.get(id).copied().unwrap_or(0) != 0);
+        if !has_peer
+            || state.owner_barrier.is_some()
+            || !state.run_policies.contains_key(&core)
+            || !state.active.contains(&core)
+            || state.parked.get(&core).copied().unwrap_or(0) == 0
+            || !all_parked
+        {
+            return None;
+        }
+        state.owner_barrier = Some(core);
+        Some(OwnerBarrierLease {
+            shared: self.shared.clone(),
+            core,
+        })
+    }
     fn quiescent(state: &State) -> bool {
         Self::quiescent_except(state, None)
     }
@@ -181,6 +224,11 @@ impl Memory {
     }
     pub(super) fn set_parked(&self, core: usize, parked: bool) -> Result<(), String> {
         let mut state = self.state();
+        if !parked && state.owner_barrier.is_some_and(|owner| owner != core) {
+            return Err(
+                "cannot resume a peer during another processor's synchronization barrier".into(),
+            );
+        }
         if !state.active.contains(&core) {
             return Err("cannot park an R-profile processor outside a run".into());
         }
@@ -204,6 +252,9 @@ impl Memory {
         policy: ExecutionPolicy,
     ) -> Result<RunReservation<'_>, String> {
         let mut state = self.state();
+        if state.owner_barrier.is_some_and(|owner| owner != core) {
+            return Err("a peer R-profile run is held at an owner synchronization barrier".into());
+        }
         if state.run_policies.contains_key(&core) {
             return Err("R-profile processor is already running".into());
         }
@@ -807,6 +858,50 @@ mod tests {
 
         a.end();
         b.end();
+    }
+
+    #[test]
+    fn owner_barrier_lease_holds_parked_peers_until_the_run_ends() {
+        let shared = SharedMemory::default();
+        let a = shared.processor();
+        let b = shared.processor();
+        let _a_run = a.reserve_run(1, ExecutionPolicy::Interactive).unwrap();
+        let _b_run = b.reserve_run(2, ExecutionPolicy::Interactive).unwrap();
+        a.start(1).unwrap();
+        b.start(2).unwrap();
+        a.set_parked(1, true).unwrap();
+        assert!(a.acquire_owner_barrier(1).is_none());
+        b.set_parked(2, true).unwrap();
+        {
+            let mut state = shared.state.lock().unwrap();
+            state.cores = vec![false, true, true];
+        }
+
+        let lease = a
+            .acquire_owner_barrier(1)
+            .expect("all processors are parked");
+        assert!(
+            b.reserve_run(3, ExecutionPolicy::Interactive)
+                .err()
+                .unwrap()
+                .contains("owner synchronization barrier")
+        );
+        assert!(
+            b.set_parked(2, false)
+                .unwrap_err()
+                .contains("cannot resume a peer")
+        );
+        assert_eq!(shared.state.lock().unwrap().parked.get(&2), Some(&1));
+
+        drop(lease);
+        b.set_parked(2, false).unwrap();
+        assert_eq!(shared.state.lock().unwrap().parked.get(&2), None);
+        drop(_b_run);
+        let next_b_run = b
+            .reserve_run(2, ExecutionPolicy::Interactive)
+            .expect("a released barrier permits a new peer run");
+        drop(next_b_run);
+        drop(_a_run);
     }
 
     #[test]

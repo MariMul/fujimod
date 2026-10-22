@@ -352,6 +352,7 @@ impl Cpu for Core {
         if e.active.get() {
             return Err("nested R-profile execution is refused".into());
         }
+        let _owner_barrier_run = e.owner_barrier_run_guard();
         let _window = loops::Window(&e.loops.window);
         e.clock_overshoot.set(0);
         e.count.set(0);
@@ -586,6 +587,18 @@ impl Cpu for Core {
         counters.insert(
             "loop_accelerated_instructions",
             l.accelerated_instructions.get(),
+        );
+        counters.insert(
+            "synchronization_requested",
+            self.execution.synchronization_requested.get(),
+        );
+        counters.insert(
+            "synchronization_elided",
+            self.execution.synchronization_elided.get(),
+        );
+        counters.insert(
+            "synchronization_barriers",
+            self.execution.synchronization_barriers.get(),
         );
         Ok(counters)
     }

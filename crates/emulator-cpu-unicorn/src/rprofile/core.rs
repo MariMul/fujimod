@@ -3,7 +3,7 @@
 //! translation metadata or the processor's architectural state.
 use super::{
     accounting::{Accounting, Span},
-    memory::Memory,
+    memory::{Memory, OwnerBarrierLease},
 };
 use crate::Core as UnicornCore;
 use fujimod_emulator_cpu::memory::Backing;
@@ -83,6 +83,11 @@ pub(super) struct Execution {
     thumb: Cell<bool>,
     restarted: Cell<Option<u64>>,
     active: Cell<bool>,
+    owner_barrier_complete: Cell<bool>,
+    owner_barrier_lease: RefCell<Option<OwnerBarrierLease>>,
+    synchronization_requested: Cell<u64>,
+    synchronization_elided: Cell<u64>,
+    synchronization_barriers: Cell<u64>,
     user_stop: Cell<bool>,
     irq: Cell<bool>,
     hint: Cell<Option<Hint>>,
@@ -99,6 +104,13 @@ pub(super) struct Execution {
 
 pub struct Core {
     execution: Rc<Execution>,
+}
+pub(super) struct OwnerBarrierRunGuard<'a>(&'a Execution);
+impl Drop for OwnerBarrierRunGuard<'_> {
+    fn drop(&mut self) {
+        drop(self.0.owner_barrier_lease.borrow_mut().take());
+        self.0.owner_barrier_complete.set(false);
+    }
 }
 impl Core {
     /// A raw engine has no other owner: translation and accounting hooks are
@@ -156,6 +168,11 @@ impl Core {
             thumb: Cell::new(false),
             restarted: Cell::new(None),
             active: Cell::new(false),
+            owner_barrier_complete: Cell::new(false),
+            owner_barrier_lease: RefCell::new(None),
+            synchronization_requested: Cell::new(0),
+            synchronization_elided: Cell::new(0),
+            synchronization_barriers: Cell::new(0),
             user_stop: Cell::new(false),
             irq: Cell::new(false),
             hint: Cell::new(None),
@@ -226,8 +243,27 @@ impl Core {
             .memory
             .set_parked(self.execution.id.get(), parked)
     }
+    pub(super) fn acknowledge_owner_barrier(&self) {
+        let execution = &self.execution;
+        if execution.policy.get() == ExecutionPolicy::Interactive
+            && execution.pause_requested.load(Ordering::Acquire) != 0
+            && !execution.owner_barrier_complete.get()
+            && let Some(lease) = execution.memory.acquire_owner_barrier(execution.id.get())
+        {
+            *execution.owner_barrier_lease.borrow_mut() = Some(lease);
+            execution.owner_barrier_complete.set(true);
+            execution
+                .synchronization_barriers
+                .set(execution.synchronization_barriers.get().saturating_add(1));
+        }
+    }
 }
 impl Execution {
+    pub(super) fn owner_barrier_run_guard(&self) -> OwnerBarrierRunGuard<'_> {
+        drop(self.owner_barrier_lease.borrow_mut().take());
+        self.owner_barrier_complete.set(false);
+        OwnerBarrierRunGuard(self)
+    }
     pub(super) fn set_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
         let enabled = policy == ExecutionPolicy::Interactive;
         if self.policy.get() != policy {
@@ -367,6 +403,20 @@ impl Execution {
     }
     fn synchronize(&self) -> Result<(), String> {
         if self.policy.get() == ExecutionPolicy::Exact {
+            return Ok(());
+        }
+        self.synchronization_requested
+            .set(self.synchronization_requested.get().saturating_add(1));
+        // ARM exclusive instructions synchronize from the instruction hook.
+        // Keep that rendezvous even after a worker barrier; only subsequent
+        // watched stores in the already admitted block can use the barrier.
+        if !self.at_instruction.get()
+            && self.owner_barrier_complete.get()
+            && self.pause_requested.load(Ordering::Acquire) != 0
+            && self.owner_barrier_lease.borrow().is_some()
+        {
+            self.synchronization_elided
+                .set(self.synchronization_elided.get().saturating_add(1));
             return Ok(());
         }
         let callbacks: Vec<_> = self
