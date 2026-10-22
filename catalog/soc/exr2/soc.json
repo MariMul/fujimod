@@ -267,7 +267,7 @@
     {
       "id": "sdhci-card-0",
       "base": 4294246400,
-      "size": 44,
+      "size": 48,
       "kind": "sd-card-controller",
       "clock_id": null
     },

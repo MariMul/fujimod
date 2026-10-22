@@ -827,6 +827,7 @@ impl Bus {
                     }
                 }
             }
+            let message = reason.unwrap_or_else(|| "unowned MMIO".into());
             self.record_frontier(
                 host.now(),
                 Site {
@@ -839,13 +840,13 @@ impl Bus {
                     size: Some(size),
                     write: Some(value.is_some()),
                     value: Some(value.unwrap_or(result) & mask),
-                    message: reason.unwrap_or_else(|| "unowned MMIO".into()),
+                    message: message.clone(),
                 },
                 index.map(|id| self.windows[id].device.name()),
             );
             if self.mode == Mode::Strict {
                 return Err(format!(
-                    "unmodeled MMIO {}{size} at {address:#x}, CPU{cpu} PC={pc:#x}",
+                    "unmodeled MMIO {}{size} at {address:#x}, CPU{cpu} PC={pc:#x}: {message}",
                     if value.is_some() { "write" } else { "read" }
                 ));
             }

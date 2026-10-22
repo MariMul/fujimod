@@ -390,7 +390,9 @@ impl Registers {
             if p.target == contract.pwic_address {
                 if p.payload.is_empty() {
                     if p.pwic_registers.get(value).is_none() {
-                        return super::fail("PWIC profile rejects unsupported register prefix");
+                        return super::fail(format!(
+                            "PWIC profile rejects unsupported register prefix {value:#x}"
+                        ));
                     }
                 } else if p.payload.len() == 1 {
                     self.secondary_field(true, p.payload[0].into(), value)?;

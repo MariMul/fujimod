@@ -315,7 +315,8 @@ const NODE_RULES: &[NodeRule] = &[
 /// The SDHC card host: present only when a browser camera declares its virtual card.
 const CARD_NODE_RULE: NodeRule = NodeRule {
     name: "sd",
-    // The SDHCI clock register at 0xfff5002c belongs to the sd_clocks device.
+    // The host window covers 0xfff5002c (SDHCI clock) and 0xfff5002e (reset/timeout),
+    // which the host model owns; no standalone sd_clocks node exists alongside it.
     blocks: &["sdhci-card-0", "sdhci-card-2", "sdhci-card-1"],
     dependencies: &["serial_gpio"],
 };
@@ -1778,6 +1779,7 @@ pub(super) fn assemble(
     let browser = configuration.browser_camera.as_ref();
     let rules = NODE_RULES
         .iter()
+        .filter(|rule| browser.is_none() || rule.name != "sd_clocks")
         .chain(browser.map(|_| &CARD_NODE_RULE));
     let mut nodes = Vec::with_capacity(NODE_RULES.len() + 1);
     let mut serialized_nodes = Vec::with_capacity(NODE_RULES.len() + 1);

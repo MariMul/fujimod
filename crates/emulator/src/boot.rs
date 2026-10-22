@@ -40,7 +40,9 @@ pub struct Options {
     pub update: PathBuf,
     pub boot_rom: PathBuf,
     pub unicorn: PathBuf,
-    /// Committed NAND image, or a complete main-area image without OOB/spare.
+    /// Committed NAND image, or a main-area image: exactly the geometry's main bytes,
+    /// optionally followed by a managed-spare trailer (`FJNANDS1`, a big-endian count,
+    /// then big-endian page row and 16-byte tag entries) for the spare areas it declares.
     pub nand: Option<PathBuf>,
     /// Sixteen-byte checksum-protected MCU persistent settings packet.
     pub settings: Option<PathBuf>,
@@ -573,6 +575,49 @@ fn set_clock_recursive(value: &mut Value, clock_seconds: u32, count: &mut usize)
     }
 }
 
+/// Magic that opens a managed-spare trailer after a main-area NAND image.
+const MANAGED_SPARE_MAGIC: &[u8; 8] = b"FJNANDS1";
+/// Bytes per trailer entry: a big-endian physical page row, then its 16-byte tag.
+const MANAGED_SPARE_ENTRY_BYTES: usize = 4 + 16;
+
+/// True when a NAND input carries a managed-spare trailer after its main area.
+fn managed_spare_trailer(bytes: &[u8], main_bytes: usize) -> bool {
+    bytes.len() > main_bytes && bytes[main_bytes..].starts_with(MANAGED_SPARE_MAGIC)
+}
+
+/// Split a main-area NAND input into its image and its managed spare rows.
+/// The trailer is `FJNANDS1`, a big-endian entry count, then the entries; each
+/// row must be unique and inside the main area's page grid.
+fn split_managed_spares(
+    bytes: &[u8],
+    main_bytes: usize,
+) -> Result<(&[u8], Vec<(u32, [u8; 16])>), String> {
+    if bytes.len() == main_bytes {
+        return Ok((bytes, Vec::new()));
+    }
+    let header = main_bytes + MANAGED_SPARE_MAGIC.len();
+    let count_bytes: [u8; 4] = bytes
+        .get(header..header + 4)
+        .and_then(|b| b.try_into().ok())
+        .ok_or("NAND managed spare trailer has no count")?;
+    let count = u32::from_be_bytes(count_bytes) as usize;
+    let entries = &bytes[header + 4..];
+    if entries.len() != count * MANAGED_SPARE_ENTRY_BYTES {
+        return Err("NAND managed spare trailer length differs from its count".into());
+    }
+    let mut rows = std::collections::BTreeSet::new();
+    let mut spares = Vec::with_capacity(count);
+    for entry in entries.chunks_exact(MANAGED_SPARE_ENTRY_BYTES) {
+        let row = u32::from_be_bytes(entry[..4].try_into().map_err(|_| "NAND spare row")?);
+        let tag: [u8; 16] = entry[4..].try_into().map_err(|_| "NAND spare tag")?;
+        if !rows.insert(row) {
+            return Err("NAND managed spare rows repeat".into());
+        }
+        spares.push((row, tag));
+    }
+    Ok((&bytes[..main_bytes], spares))
+}
+
 fn settings_packet(plan: &mut Value, mcu: &Mcu, bytes: &[u8]) -> Result<(), String> {
     packet(bytes)?;
     let nodes = plan["nodes"]
@@ -604,7 +649,9 @@ pub struct InputBytes {
     pub update: Vec<u8>,
     /// Boot ROM image, verified against the prepared boot-ROM identity.
     pub boot_rom: Vec<u8>,
-    /// Committed NAND image, or a complete main-area image without OOB/spare.
+    /// Committed NAND image, or a main-area image: exactly the geometry's main bytes,
+    /// optionally followed by a managed-spare trailer (`FJNANDS1`, a big-endian count,
+    /// then big-endian page row and 16-byte tag entries) for the spare areas it declares.
     pub nand: Option<Vec<u8>>,
     /// Sixteen-byte checksum-protected MCU persistent settings packet.
     pub settings: Option<Vec<u8>>,
@@ -743,21 +790,30 @@ pub fn open_prepared(
     }
     if let Some(bytes) = nand {
         let nand = &mut scene["nands"]["nand"];
-        if bytes.len() as u64
-            == nand["options"]["bytes"]
-                .as_u64()
-                .ok_or("NAND geometry is absent")?
-        {
-            if !bytes.starts_with(&assets["nand_base"]) {
+        let main_bytes = nand["options"]["bytes"]
+            .as_u64()
+            .and_then(|b| usize::try_from(b).ok())
+            .ok_or("NAND geometry is absent")?;
+        if bytes.len() == main_bytes || managed_spare_trailer(&bytes, main_bytes) {
+            let (image, spares) = split_managed_spares(&bytes, main_bytes)?;
+            if !image.starts_with(&assets["nand_base"]) {
                 return Err(
                     "NAND main-area firmware prefix differs from the selected update".into(),
                 );
             }
+            let mut spare_rows = Vec::with_capacity(spares.len());
+            for (row, tag) in spares {
+                let name = format!("nand_spare_{row}");
+                assets.insert(name.clone(), tag.to_vec());
+                spare_rows.push(json!([row, name]));
+            }
             nand["overlays"] = json!([[0, "nand_image"]]);
+            nand["spare"] = json!(spare_rows);
+            assets.insert("nand_image".into(), image.to_vec());
         } else {
             *nand = json!({"kind":"committed","options":nand["options"],"base":"nand_base","image":"nand_image"});
+            assets.insert("nand_image".into(), bytes);
         }
-        assets.insert("nand_image".into(), bytes);
     }
     let graph = prepared.execution;
     graph.validate()?;
