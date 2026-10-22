@@ -1,0 +1,22 @@
+[package]
+name = "fujimod-remote"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[features]
+default = ["board", "ff80"]
+board = ["dep:fujimod-emulator"]
+ff80 = ["dep:fujimod-usb", "dep:futures-timer"]
+
+[dependencies]
+fujimod-catalog.workspace = true
+fujimod-recording.workspace = true
+fujimod-emulator = { workspace = true, optional = true, features = ["serde"] }
+fujimod-usb = { workspace = true, optional = true }
+futures-timer = { workspace = true, optional = true }
+futures-lite.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true

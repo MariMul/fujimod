@@ -2,6 +2,7 @@
 members = [
   "crates/corpus",
   "crates/recording",
+  "crates/remote",
   "crates/firmware",
   "crates/usb-proxy",
   "crates/simulation",
@@ -29,6 +30,7 @@ repository = "https://github.com/justjake/fujimod"
 publish = false
 
 [workspace.dependencies]
+fujimod-remote = { path = "crates/remote", version = "0.1.0" }
 fujimod-recording = { path = "crates/recording", version = "0.1.0" }
 bevy = { version = "=0.20.0", default-features = false }
 fujimod-simulation = { path = "crates/simulation", version = "0.1.0" }
