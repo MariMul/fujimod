@@ -201,6 +201,36 @@ fn cbor_history_preserves_u64_runs_and_restores_failed_replay_at_ratio_24() {
 }
 
 #[test]
+fn late_pc_witnesses_are_observational_and_capture_only_future_entries() {
+    let h = create(false);
+    assert_eq!(camera_run_until(h, 5), 0, "{}", error(h));
+    let before = command(h, "fingerprint", json!({}), &[]).unwrap().0;
+    let history_before = command(h, "history", json!({}), &[]).unwrap();
+    command(h, "watch_pcs", json!({"addresses":[0x10000]}), &[]).unwrap();
+    assert_eq!(command(h, "fingerprint", json!({}), &[]).unwrap().0, before);
+    assert_eq!(
+        command(h, "history", json!({}), &[]).unwrap(),
+        history_before
+    );
+    assert_eq!(
+        command(h, "profile", json!({}), &[]).unwrap().0["pcEntries"],
+        json!([])
+    );
+    assert_eq!(camera_run_until(h, 6), 0, "{}", error(h));
+    let entries = command(h, "profile", json!({}), &[]).unwrap().0["pcEntries"].clone();
+    assert_eq!(entries.as_array().unwrap().len(), 1);
+    assert!(entries[0]["tick"].as_u64().unwrap() >= 5);
+    assert_eq!(entries[0]["pc"], 0x10000);
+    assert_eq!(camera_run_until(h, 7), 0, "{}", error(h));
+    assert_eq!(
+        command(h, "profile", json!({}), &[]).unwrap().0["pcEntries"],
+        entries
+    );
+    assert!(command(h, "watch_pcs", json!({"addresses":[0x10000]}), &[]).is_err());
+    assert_eq!(camera_destroy(h), 0);
+}
+
+#[test]
 fn positions_drive_external_levels_and_restore_with_the_machine() {
     let h = create(false);
     let initial = command(h, "checkpoint", json!({}), &[]).unwrap().0;

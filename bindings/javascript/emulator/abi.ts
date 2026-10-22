@@ -142,6 +142,10 @@ export interface SessionCommands {
     request: { address: string; size: number };
     result: { address: string; size: number };
   };
+  watch_pcs: {
+    request: { addresses: number[] };
+    result: { addresses: number[] };
+  };
   profile: {
     request: { limit?: number };
     result: { ticks: number; instructions: number[]; pcEntries: unknown[]; failed: boolean };

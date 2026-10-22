@@ -50,6 +50,11 @@ struct Profile {
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct WatchPcs {
+    addresses: Vec<u64>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct DeviceStates {
     kind: String,
 }
@@ -325,6 +330,11 @@ impl Session {
                     .board
                     .read_physical(address, &mut self.result_bytes)?;
                 json!({"address":address.to_string(),"size":o.size})
+            }
+            "watch_pcs" => {
+                let o: WatchPcs = options(c.options)?;
+                self.core.board.watch_pcs(&o.addresses)?;
+                json!({"addresses":o.addresses})
             }
             "profile" => {
                 let o: Profile = options(c.options)?;
