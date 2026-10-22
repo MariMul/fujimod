@@ -7,6 +7,9 @@ fn chinese_script(tag: &str) -> Option<&str> {
     if parts.first().copied() != Some("zh") {
         return None;
     }
+    if tag == "zh" {
+        return Some("hans");
+    }
     if parts.contains(&"hant") {
         return Some("hant");
     }
@@ -89,7 +92,10 @@ pub(super) fn select(
         if let Some(index) = offered.iter().position(|offered| *offered == tag) {
             return Ok(index);
         }
-        let primary = tag.split('-').next().unwrap_or_default();
+        let primary = match tag.split('-').next().unwrap_or_default() {
+            "nb" | "nn" => "no",
+            primary => primary,
+        };
         if let Some(index) = offered.iter().position(|offered| {
             offered.split('-').next() == Some(primary)
                 && (primary != "zh"
@@ -140,11 +146,17 @@ mod tests {
         assert_eq!(selected(&["xx"]), "BKUP_LANGUAGE_ENGLISH");
     }
     #[test]
+    fn norwegian_browser_tags_select_norway() {
+        for tag in ["no", "nb", "nb-NO", "nn", "nn-NO"] {
+            assert_eq!(selected(&[tag]), "BKUP_LANGUAGE_NORWAY");
+        }
+    }
+    #[test]
     fn chinese_scripts_never_cross() {
         for tag in ["zh-Hant", "zh-TW", "zh-HK", "zh-Hant-CN"] {
             assert_eq!(selected(&[tag]), "BKUP_LANGUAGE_CHINA2");
         }
-        for tag in ["zh-Hans", "zh-CN", "zh-SG", "zh-Hans-TW"] {
+        for tag in ["zh", "zh-Hans", "zh-CN", "zh-SG", "zh-Hans-TW"] {
             assert_eq!(selected(&[tag]), "BKUP_LANGUAGE_CHINA");
         }
         let mut menu = menu();
@@ -152,7 +164,6 @@ mod tests {
             .retain(|language| language.name != "BKUP_LANGUAGE_CHINA2");
         let index = select(&menu, &["zh-Hant".into(), "de".into()], None).unwrap();
         assert_eq!(menu.languages[index].name, "BKUP_LANGUAGE_GERMAN");
-        assert_eq!(selected(&["zh"]), "BKUP_LANGUAGE_ENGLISH");
     }
     #[test]
     fn explicit_language_must_be_offered() {

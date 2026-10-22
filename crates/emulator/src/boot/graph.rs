@@ -580,6 +580,7 @@ mod tests {
                 boot_rom: None,
                 installation: None,
                 generated_facts: None,
+                layouts: None,
             },
             parts: vec![],
             physical_controls: None,
