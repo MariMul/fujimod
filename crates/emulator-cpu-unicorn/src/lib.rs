@@ -667,6 +667,12 @@ impl Cpu for Core {
             return Err(ExecutionError::Backend(error));
         }
         if let Err(message) = self.check(status) {
+            // A faulting access leaves the PC at the instruction that made it.
+            let mut pc = [0u8; 4];
+            let message = match self.read_register(Register::Pc, &mut pc) {
+                Ok(_) => format!("{message} at PC {:#x}", u32::from_le_bytes(pc)),
+                Err(_) => message,
+            };
             return Err(match status {
                 10 => ExecutionError::InvalidInstruction(message),
                 6 => ExecutionError::Memory {
