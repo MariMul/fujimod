@@ -72,7 +72,7 @@ fn model_recipe(name: &str) -> Result<Value, String> {
         "input_auxiliary" => serde_json::from_str::<Value>("{\"kind\":\"block11000\",\"options\":{\"control_mode\":{\"ClearBit0Ack\":{\"delay_ticks\":2}}}}").map_err(|e| e.to_string())?,
         "parameters" => serde_json::from_str::<Value>("{\"kind\":\"parameters\",\"options\":{},\"bank\":\"parameters\"}").map_err(|e| e.to_string())?,
         "hdmisink" => serde_json::from_str::<Value>("{\"kind\":\"hdmi-sink\",\"options\":{\"connected\":false,\"edid\":[]}}").map_err(|e| e.to_string())?,
-        "hdmi" => serde_json::from_str::<Value>("{\"kind\":\"hdmi\",\"options\":{},\"sink\":\"hdmisink\",\"hot_plug\":{\"Core\":{\"core\":0,\"line\":0}}}").map_err(|e| e.to_string())?,
+        "hdmi" => serde_json::from_str::<Value>("{\"kind\":\"hdmi\",\"options\":{},\"sink\":\"hdmisink\"}").map_err(|e| e.to_string())?,
         "output" => serde_json::from_str::<Value>("{\"kind\":\"block86000\",\"options\":{}}").map_err(|e| e.to_string())?,
         "graphics" => serde_json::from_str::<Value>("{\"kind\":\"vector-gpu\",\"options\":{\"ram_bytes\":536870912,\"max_fill_bytes\":67108864,\"max_copy_bytes\":67108864,\"max_clear_bytes\":67108864,\"bytes_per_tick\":16,\"max_command_capture_bytes\":524288,\"copy_profile\":\"vg-32bpp-untile-unrotated\",\"clear_profile\":\"declared-vg-ui-primitives-unmeasured\"},\"controllers\":[\"irq0\",\"irq1\"]}").map_err(|e| e.to_string())?,
         "scanout" => serde_json::from_str::<Value>("{\"kind\":\"scanout\",\"options\":{\"ram_bytes\":536870912,\"packing\":\"yycbcr\",\"matrix\":\"bt601-full\",\"graphics_profile\":\"mode1-abgr8888-straight\",\"backdrop_profile\":\"declared-black-canvas-unmeasured\",\"rectangle_profile\":\"exr2-signed-ycbcr-rectangle-overlay-unmeasured\",\"max_pixels\":8847360,\"reset_ticks\":2}}").map_err(|e| e.to_string())?,
@@ -654,7 +654,6 @@ fn apply_interrupts(
         "image_output_1" => {
             recipe["irq"] = json!(irq(selection, "image-output-1", "output")?["Core"]["line"]);
         }
-        "hdmi" => recipe["hot_plug"] = irq(selection, "hdmi-1", "hot-plug")?,
         "sdio" => recipe["irq"] = irq(selection, "sdio-host", "host")?,
         "sd" => recipe["irq"] = irq(selection, "sdhci-card-0", "host")?,
         "companion" => {
