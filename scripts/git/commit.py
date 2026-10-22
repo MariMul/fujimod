@@ -5,7 +5,8 @@
 
 Whole paths take their current working-tree content (additions, edits and
 deletions). ``--patch`` applies a diff, relative to HEAD, holding only your
-hunks in files that also contain other work. Nothing else in the shared index
+hunks in files that also contain other work; a path that names a patched file
+is refused, since it would commit the whole file. Nothing else in the shared index
 or working tree is included. ``--ignored`` also takes named files that
 .gitignore covers. Commits that add logs, movies or 500 or more files are
 refused unless ``--allow-bulk`` is given. ``--untrack PATH`` removes tracked
@@ -45,6 +46,12 @@ class Arguments(argparse.Namespace):
     allow_bulk: bool
     untrack: list[str]
     paths: list[str]
+
+
+def within(name: str, path: str) -> bool:
+    """Whether repository file ``name`` is ``path`` or lies under it."""
+    root = os.path.normpath(path)
+    return root == "." or name == root or name.startswith(root + "/")
 
 
 class Repository(GitRepository):
@@ -108,17 +115,17 @@ class Repository(GitRepository):
                 "or capture output (use --allow-bulk for a deliberate move or import)"
             )
 
+    def patched(self, patch: Path | None) -> set[str]:
+        if not patch:
+            return set()
+        numstat = self.output("apply", "--numstat", "-z", str(patch))
+        # Each record is "added<TAB>deleted<TAB>path".
+        return {
+            record.split("\t")[-1] for record in numstat.split("\0") if "\t" in record
+        }
+
     def touched(self, paths: list[str], patch: Path | None) -> set[str]:
-        names = set(paths)
-        if patch:
-            numstat = self.output("apply", "--numstat", "-z", str(patch))
-            # Each record is "added<TAB>deleted<TAB>path".
-            names.update(
-                record.split("\t")[-1]
-                for record in numstat.split("\0")
-                if "\t" in record
-            )
-        return names
+        return set(paths) | self.patched(patch)
 
     def commit(
         self,
@@ -132,6 +139,18 @@ class Repository(GitRepository):
     ) -> str:
         ref = self.branch()
         name = ref.removeprefix("refs/heads/")
+        overlapping = sorted(
+            file
+            for file in self.patched(patch)
+            for path in paths
+            if within(file, path)
+        )
+        if overlapping:
+            raise Failure(
+                "these files are in the patch and also named as whole paths, which "
+                "would commit every hunk in them; name only paths outside the patch: "
+                + ", ".join(overlapping)
+            )
         conflicted = sorted(
             set(load_conflicts(self)).intersection(self.touched(paths, patch))
         )

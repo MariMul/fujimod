@@ -64,6 +64,21 @@ def test_patch_commits_chosen_hunks_and_keeps_the_rest(
     assert run("git", "diff", cwd=checkout).count("+other work") == 1
 
 
+def test_paths_that_name_patched_files_are_refused(
+    repos: tuple[Path, Path], tmp_path: Path
+) -> None:
+    remote, checkout = repos
+    before = run("git", "rev-parse", "main", cwd=remote)
+    (checkout / "a.txt").write_text("ONE\ntwo\nthree\n")
+    patch = tmp_path / "mine.diff"
+    patch.write_text(run("git", "diff", cwd=checkout))
+    (checkout / "a.txt").write_text("ONE\ntwo\nthree\nother work\n")
+    for path in ["a.txt", "."]:
+        with pytest.raises(Failure, match="a.txt"):
+            Repository(checkout).commit([path], patch, "Capitalize\n")
+    assert run("git", "rev-parse", "main", cwd=remote) == before
+
+
 def test_commit_rebuilds_on_a_newer_origin(
     repos: tuple[Path, Path], tmp_path: Path
 ) -> None:
