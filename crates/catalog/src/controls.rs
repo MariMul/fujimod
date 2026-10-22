@@ -319,12 +319,50 @@ pub struct FirmwareControlIds {
     /// Native names and their source table identity, when the table was located.
     #[cfg_attr(feature = "typescript", serde(default))]
     pub native_key_names: Option<NativeKeyNames>,
+    /// Physical-key to UI-event table of a processor whose scanner rows hold
+    /// physical keys; absent when the rows hold UI events directly.
+    #[cfg_attr(feature = "typescript", serde(default))]
+    pub event_translation: Option<EventTranslation>,
     /// Exact debug command vocabulary, independent of the native names.
     pub debug_keys: Vec<DebugKey>,
     /// Every located scanner or protocol input, including unclaimed connections.
     pub inputs: Vec<LocatedInput>,
     /// Protocols outside the key scanner, keyed by physical body connection ID.
     pub interfaces: BTreeMap<String, ControlInterface>,
+}
+
+/// A located table translating scanner physical keys to UI events.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct EventTranslation {
+    /// Table base address.
+    pub address: u64,
+    /// Table row size in bytes.
+    pub stride: u32,
+    /// SHA-256 of the rows and their terminator.
+    pub sha256: String,
+    /// Translated rows in table order.
+    pub rows: Vec<TranslatedKey>,
+}
+
+/// One physical key and the UI event the firmware delivers for it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct TranslatedKey {
+    /// Physical key stored in scanner rows.
+    pub physical_key: u32,
+    /// UI event delivered for that key.
+    pub event: u32,
 }
 
 /// Input routines located in one firmware; a routine the locators did not find is absent.
@@ -828,6 +866,13 @@ impl FirmwareControlIds {
             }
         }
         crate::reference::validate_sha256(&self.scanner.sha256)?;
+        if let Some(table) = &self.event_translation {
+            crate::reference::validate_sha256(&table.sha256)?;
+            let keys: BTreeSet<_> = table.rows.iter().map(|row| row.physical_key).collect();
+            if table.rows.is_empty() || keys.len() != table.rows.len() || keys.contains(&0) {
+                return Err("firmware event translation rows are empty or duplicated".into());
+            }
+        }
         if let Some(names) = &self.native_key_names {
             crate::reference::validate_sha256(&names.sha256)?;
         }
@@ -880,7 +925,7 @@ impl FirmwareControlIds {
             if let Some(scanner) = &input.scanner
                 && (scanner.index >= self.scanner.count
                     || !rows.insert(scanner.index)
-                    || scanner.witness.physical_key != input.event)
+                    || self.ui_event(scanner.witness.physical_key) != Some(input.event))
             {
                 return Err(format!(
                     "input {} has an invalid or repeated scanner row",
@@ -943,6 +988,18 @@ impl FirmwareControlIds {
             }
         }
         Ok(())
+    }
+
+    /// UI event delivered for a scanner row's physical key.
+    pub fn ui_event(&self, physical_key: u32) -> Option<u32> {
+        match &self.event_translation {
+            None => Some(physical_key),
+            Some(table) => table
+                .rows
+                .iter()
+                .find(|row| row.physical_key == physical_key)
+                .map(|row| row.event),
+        }
     }
 
     /// Resolve one explicit vocabulary name and require exact physical ownership.

@@ -423,6 +423,42 @@
         }
       ]
     },
+    "EventTranslation": {
+      "additionalProperties": false,
+      "description": "A located table translating scanner physical keys to UI events.",
+      "properties": {
+        "address": {
+          "description": "Table base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows": {
+          "description": "Translated rows in table order.",
+          "items": {
+            "$ref": "#/$defs/TranslatedKey"
+          },
+          "type": "array"
+        },
+        "sha256": {
+          "description": "SHA-256 of the rows and their terminator.",
+          "type": "string"
+        },
+        "stride": {
+          "description": "Table row size in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "stride",
+        "sha256",
+        "rows"
+      ],
+      "type": "object"
+    },
     "GpioScanner": {
       "description": "Firmware scanner predicates used for digital keys.",
       "oneOf": [
@@ -868,6 +904,29 @@
         "sha256"
       ],
       "type": "object"
+    },
+    "TranslatedKey": {
+      "additionalProperties": false,
+      "description": "One physical key and the UI event the firmware delivers for it.",
+      "properties": {
+        "event": {
+          "description": "UI event delivered for that key.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "physical_key": {
+          "description": "Physical key stored in scanner rows.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "physical_key",
+        "event"
+      ],
+      "type": "object"
     }
   },
   "$id": "https://fujimod.com/schemas/control-ids.schema.json",
@@ -886,6 +945,17 @@
         "$ref": "#/$defs/DebugKey"
       },
       "type": "array"
+    },
+    "event_translation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EventTranslation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Physical-key to UI-event table of a processor whose scanner rows hold\nphysical keys; absent when the rows hold UI events directly."
     },
     "firmware_id": {
       "description": "Firmware from which these inputs were located.",

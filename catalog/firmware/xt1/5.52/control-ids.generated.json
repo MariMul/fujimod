@@ -2386,6 +2386,7 @@
     "size": 8972,
     "sha256": "cfa44321c9c1c61ab8e746af7301686f2d5b4f77aa4aa0dea414a8b9ca34b516"
   },
+  "event_translation": null,
   "debug_keys": [
     {
       "name": "EXE_M",

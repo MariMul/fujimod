@@ -1403,6 +1403,13 @@ class ElectricalInputVariant3(TypedDict, total=False):
     kind: Required[Literal["gpio_fixed_cycle"]]
 
 
+class EventTranslation(TypedDict, total=False):
+    address: Required[int]
+    rows: Required[list[TranslatedKey]]
+    sha256: Required[str]
+    stride: Required[int]
+
+
 Firmware = TypedDict(
     "Firmware",
     {
@@ -1485,6 +1492,7 @@ FirmwareControlIds = TypedDict(
     {
         "$schema": Required["str"],
         "debug_keys": Required["list[DebugKey]"],
+        "event_translation": NotRequired["EventTranslation | None"],
         "firmware_id": Required["str"],
         "id": Required["str"],
         "input_readers": Required["InputReaders"],
@@ -4594,6 +4602,11 @@ type TimingOperation = Literal[
     "acknowledge",
     "complete",
 ]
+
+
+class TranslatedKey(TypedDict, total=False):
+    event: Required[int]
+    physical_key: Required[int]
 
 
 type VideoLayout = Literal["yycbcr422"]

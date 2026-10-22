@@ -25,6 +25,7 @@
     }
   },
   "native_key_names": null,
+  "event_translation": null,
   "debug_keys": [
     {
       "name": "EXE_M",
