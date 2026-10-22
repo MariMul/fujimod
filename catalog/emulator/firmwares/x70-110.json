@@ -58,7 +58,7 @@
   "board_id": "x70",
   "browser_camera": {
     "path": "emulator/scenarios/x70-110-browser-camera.json",
-    "sha256": "87d6255eb2a98c4073db2f18c729b8c9ced67623e2ce2b53b8cacb6ffe61f0d5"
+    "sha256": "595cb28a4d4ee815f2920ed6df485c7eed32f021dde82d848ce3953bdc3fef50"
   },
   "sdio_inputs": {
     "firmware_bytes": 136640,

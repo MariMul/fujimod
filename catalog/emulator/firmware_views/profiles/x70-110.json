@@ -13,7 +13,7 @@
   },
   "firmware": {
     "path": "emulator/firmwares/x70-110.json",
-    "sha256": "b257f443e9205ed38a92229a71485c5f73443ac1ceab52765defbbcfa34a8adb",
+    "sha256": "1a9325d59d106f0c4d33978e2f7946275e14d323e95364fe479db59a0be39302",
     "size": 21334
   },
   "$schema": "../../../schemas/emulator-profile.schema.json"
