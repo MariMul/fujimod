@@ -2,6 +2,8 @@ import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
 import { beforeAll, afterEach, expect, test, vi } from 'vite-plus/test';
 import { ControlSession, Controls } from './controls';
+import { LayoutEditor } from './layout-editor';
+import { LayoutInspector } from './LayoutInspector';
 import type { Engine } from '../engine/api';
 import type { Input } from 'fujimod/emulator';
 import type { DevicePanel } from './layout';
@@ -42,9 +44,19 @@ function mount(
     async () => {},
   );
   session.render(inputs, engine as unknown as Engine, data);
-  dispose = render(() => <Controls session={session} onLayoutChange={onLayoutChange} />, host);
+  session.ready = true;
+  const editor = new LayoutEditor({ runtime: { panel: session }, onLayoutChange });
+  dispose = render(
+    () => (
+      <>
+        <Controls session={session} editor={editor} />
+        <LayoutInspector session={session} editor={editor} />
+      </>
+    ),
+    host,
+  );
   flush();
-  return { host, engine, viewer, session };
+  return { host, engine, viewer, session, editor };
 }
 test('every segment selects through the engine and remains synchronized after power off and rollback', async () => {
   const { host, engine, session } = mount(
@@ -185,48 +197,47 @@ test('a mounted empty panel reacts to the guest input inventory arriving later',
   expect(host.querySelectorAll('button[data-id="q"]').length).toBe(1);
 });
 
-test('selects and edits a live control through the shared renderer without sending input', () => {
+function change(host: HTMLElement, label: string, value: string, type = 'change') {
+  const field = host.querySelector<HTMLInputElement | HTMLSelectElement>(`[aria-label="${label}"]`)!;
+  field.value = value;
+  field.dispatchEvent(new Event(type, { bubbles: true }));
+  flush();
+}
+
+const qAndFocus: Input[] = [
+  { id: 'q', label: 'Q (quick menu) button', kind: 'button', supported: true },
+  {
+    id: 'focus',
+    label: 'Focus mode selector',
+    kind: 'switch',
+    supported: true,
+    positions: [
+      { id: 'manual', label: 'M' },
+      { id: 'single', label: 'S' },
+    ],
+  },
+];
+
+test('Edit Controls selects a control and its sheet edits name, style and input without sending input', () => {
   const onLayoutChange = vi.fn();
   const { host, engine, session } = mount(
-    [
-      { id: 'q', label: 'Q', kind: 'button', supported: true },
-      {
-        id: 'focus',
-        label: 'Focus',
-        kind: 'switch',
-        supported: true,
-        positions: [
-          { id: 'manual', label: 'M' },
-          { id: 'single', label: 'S' },
-        ],
-      },
-    ],
-    {
-      schema: 1,
-      body: 'x70',
-      layout: [{ kind: 'control', id: 'q', variant: 'key' }],
-      combos: [],
-    },
+    qAndFocus,
+    { schema: 1, body: 'x70', layout: [{ kind: 'control', id: 'q', variant: 'key' }], combos: [] },
     onLayoutChange,
   );
-
-  host.querySelector<HTMLButtonElement>('[aria-label="Edit layout"]')!.click();
+  host.querySelector<HTMLButtonElement>('.edit-controls')!.click();
   flush();
+  expect(host.querySelector('.edit-controls')).toBeNull();
   host.querySelector<HTMLButtonElement>('[data-layout-path="0"] [data-id="q"]')!.click();
   flush();
-  expect(host.querySelector<HTMLInputElement>('[aria-label="Caption"]')?.value).toBe('');
-  expect(host.querySelector<HTMLSelectElement>('[aria-label="Bound input"]')?.value).toBe('q');
+  expect(host.querySelector('[data-layout-path="0"]')?.getAttribute('data-layout-selected')).toBe(
+    'true',
+  );
+  expect(host.querySelector<HTMLSelectElement>('[aria-label="Input"]')?.value).toBe('q');
 
-  const caption = host.querySelector<HTMLInputElement>('[aria-label="Caption"]')!;
-  caption.value = 'Focus mode';
-  caption.dispatchEvent(new Event('input', { bubbles: true }));
-  const variant = host.querySelector<HTMLSelectElement>('[aria-label="Variant"]')!;
-  variant.value = 'segment';
-  variant.dispatchEvent(new Event('change', { bubbles: true }));
-  const binding = host.querySelector<HTMLSelectElement>('[aria-label="Bound input"]')!;
-  binding.value = 'focus';
-  binding.dispatchEvent(new Event('change', { bubbles: true }));
-  flush();
+  change(host, 'Name', 'Focus mode');
+  change(host, 'Input', 'focus');
+  change(host, 'Style', 'segment');
 
   expect(session.data?.layout[0]).toMatchObject({
     kind: 'control',
@@ -239,19 +250,82 @@ test('selects and edits a live control through the shared renderer without sendi
   expect(onLayoutChange).toHaveBeenLastCalledWith(session.data);
 });
 
-test('imports through the layout editor and lists unknown input IDs', async () => {
+test('the minus badge removes a control and Done leaves editing', () => {
   const onLayoutChange = vi.fn();
-  const { host, session } = mount(
-    [{ id: 'q', label: 'Q', kind: 'button', supported: true }],
+  const { host, session, editor } = mount(
+    qAndFocus,
     {
       schema: 1,
       body: 'x70',
-      layout: [{ kind: 'control', id: 'q', variant: 'key' }],
+      layout: [
+        { kind: 'control', id: 'q', variant: 'key' },
+        { kind: 'control', id: 'focus', variant: 'segment' },
+      ],
       combos: [],
     },
     onLayoutChange,
   );
-  host.querySelector<HTMLButtonElement>('[aria-label="Edit layout"]')!.click();
+  editor.begin();
+  flush();
+  host.querySelector<HTMLButtonElement>('[aria-label="Remove Q (quick menu) button"]')!.click();
+  flush();
+  expect(session.data?.layout.map((node) => node.id)).toEqual(['focus']);
+  expect(onLayoutChange).toHaveBeenLastCalledWith(session.data);
+  host.querySelector<HTMLButtonElement>('[aria-label="Done"]')!.click();
+  flush();
+  expect(editor.editing()).toBe(false);
+  expect(host.querySelector('.layout-remove')).toBeNull();
+});
+
+test('a D-pad sheet binds each direction to an input', () => {
+  const { host, session, editor, engine } = mount(
+    [
+      ...['up', 'down', 'left', 'right'].map(
+        (direction): Input => ({
+          id: `selector.${direction}`,
+          label: `Selector / ${direction}`,
+          kind: 'button',
+          supported: true,
+        }),
+      ),
+      { id: 'menu_ok', label: 'MENU/OK button', kind: 'button', supported: true },
+    ],
+    {
+      schema: 1,
+      body: 'x70',
+      layout: [
+        {
+          kind: 'dpad',
+          face: ['MENU', 'OK'],
+          bindings: {
+            up: 'selector.up',
+            down: 'selector.down',
+            left: 'selector.left',
+            right: 'selector.right',
+          },
+        },
+      ],
+      combos: [],
+    },
+  );
+  editor.begin();
+  flush();
+  host.querySelector<HTMLElement>('.dpad .a.u')!.click();
+  flush();
+  expect(editor.selected()).toEqual([0]);
+  change(host, 'Center', 'menu_ok');
+  expect(session.data?.layout[0]?.bindings?.center).toBe('menu_ok');
+  expect(engine.press).not.toHaveBeenCalled();
+});
+
+test('importing a layout lists ids this camera does not have', async () => {
+  const onLayoutChange = vi.fn();
+  const { host, session, editor } = mount(
+    qAndFocus,
+    { schema: 1, body: 'x70', layout: [{ kind: 'control', id: 'q', variant: 'key' }], combos: [] },
+    onLayoutChange,
+  );
+  editor.begin();
   flush();
   const imported: DevicePanel = {
     schema: 1,
@@ -259,19 +333,14 @@ test('imports through the layout editor and lists unknown input IDs', async () =
     layout: [{ kind: 'control', id: 'missing-input', variant: 'key', caption: 'Missing' }],
     combos: [],
   };
-  const file = new File([JSON.stringify(imported)], 'layout.json', {
-    type: 'application/json',
-  });
+  const file = new File([JSON.stringify(imported)], 'layout.json', { type: 'application/json' });
   Object.defineProperty(file, 'text', { value: async () => JSON.stringify(imported) });
-  const picker = host.querySelector<HTMLInputElement>('[aria-label="Import"]')!;
+  const picker = host.querySelector<HTMLInputElement>('[aria-label="Layout file"]')!;
   Object.defineProperty(picker, 'files', { configurable: true, value: [file] });
   picker.dispatchEvent(new Event('change', { bubbles: true }));
-
   await vi.waitFor(() => {
     flush();
-    expect(host.querySelector('[aria-label="Unknown IDs"]')?.textContent).toContain(
-      'missing-input',
-    );
+    expect(host.querySelector('.layout-notice')?.textContent).toContain('missing-input');
   });
   expect(host.querySelector('[data-id="missing-input"] .cap')?.textContent).toBe('Missing');
   expect(session.data).toEqual(imported);

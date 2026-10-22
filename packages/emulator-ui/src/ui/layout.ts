@@ -188,3 +188,41 @@ export function importDevicePanel(
     unknownInputIds: unknownDevicePanelInputIds(value, inputs),
   };
 }
+
+/** A node's position in a panel: child indexes from the root layout. */
+export type NodePath = readonly number[];
+
+export function nodeAt(panel: DevicePanel, path: NodePath): ControlNode | undefined {
+  let nodes = panel.layout;
+  let node: ControlNode | undefined;
+  for (const index of path) {
+    node = nodes[index];
+    if (!node) return undefined;
+    nodes = node.children ?? [];
+  }
+  return node;
+}
+
+function rewrite(
+  nodes: ControlNode[],
+  path: NodePath,
+  change: (node: ControlNode) => ControlNode | undefined,
+): ControlNode[] {
+  const [index, ...rest] = path;
+  return nodes.flatMap((node, i) => {
+    if (i !== index) return [node];
+    if (!rest.length) {
+      const next = change(node);
+      return next ? [next] : [];
+    }
+    return [{ ...node, children: rewrite(node.children ?? [], rest, change) }];
+  });
+}
+
+export function replaceAt(panel: DevicePanel, path: NodePath, node: ControlNode): DevicePanel {
+  return { ...panel, layout: rewrite(panel.layout, path, () => node) };
+}
+
+export function removeAt(panel: DevicePanel, path: NodePath): DevicePanel {
+  return { ...panel, layout: rewrite(panel.layout, path, () => undefined) };
+}

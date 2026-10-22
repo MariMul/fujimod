@@ -6,6 +6,8 @@ import type { DevicePanel } from './ui/layout';
 import { ViewerOverlays } from './viewer/Overlays';
 import { LoadingAssets } from './LoadingAssets';
 import { Controls } from './ui/controls';
+import { LayoutEditor } from './ui/layout-editor';
+import { LayoutInspector } from './ui/LayoutInspector';
 import { CardBrowser } from './ui/card';
 import { Connections } from './ui/connections';
 import './style.css';
@@ -25,10 +27,11 @@ export function EmulatorWorkspace(props: {
   onLayoutChange?: (panel: DevicePanel) => void | Promise<void>;
 }) {
   const [dragging, setDragging] = createSignal(false);
+  const editor = new LayoutEditor(props);
   return (
     <section
       ref={(element) => props.workspace(element)}
-      class={['stage', { idle: props.state.idle }]}
+      class={['stage', { idle: props.state.idle, 'editing-controls': editor.editing() }]}
       id="workspace"
       aria-labelledby={props.labelledBy}
     >
@@ -84,7 +87,7 @@ export function EmulatorWorkspace(props: {
       >
         <p class="fullscreen-hint">Turn your phone sideways for controls beside the screen.</p>
         <div id="controls">
-          <Controls session={props.runtime?.panel} onLayoutChange={props.onLayoutChange} />
+          <Controls session={props.runtime?.panel} editor={editor} />
         </div>
         <hr />
         <CardBrowser
@@ -93,6 +96,7 @@ export function EmulatorWorkspace(props: {
           format={() => props.runtime?.formatCard() ?? Promise.resolve()}
         />
         <Connections rows={props.state.connections} />
+        <LayoutInspector session={props.runtime?.panel} editor={editor} />
       </aside>
     </section>
   );
