@@ -842,7 +842,7 @@ pub fn open_prepared(
     }
     let graph = prepared.execution;
     graph.validate()?;
-    let plan = if settings.is_some() {
+    let plan = if settings.is_some() || clock_seconds_2000.is_some() {
         Plan::parse(&serde_json::to_vec(&devices).map_err(|e| e.to_string())?)?
     } else {
         prepared.plan
