@@ -756,6 +756,12 @@ class ElectricalInputVariant2(TypedDict, total=False):
     transitions: Required[list[int]]
 
 
+class ElectricalInputVariant3(TypedDict, total=False):
+    connection_id: Required[str]
+    cycle_sign: Required[int]
+    kind: Required[Literal["gpio_fixed_cycle"]]
+
+
 Firmware = TypedDict(
     "Firmware",
     {

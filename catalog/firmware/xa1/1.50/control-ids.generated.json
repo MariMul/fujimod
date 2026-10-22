@@ -1783,7 +1783,11 @@
         "control_id": "sub_command_dial"
       },
       "scanner": null,
-      "electrical": null
+      "electrical": {
+        "kind": "gpio_fixed_cycle",
+        "connection_id": "controls-encoder-3-8-3-9",
+        "cycle_sign": 1
+      }
     },
     {
       "id": "encoder-45",
@@ -1794,7 +1798,11 @@
         "control_id": "sub_command_dial"
       },
       "scanner": null,
-      "electrical": null
+      "electrical": {
+        "kind": "gpio_fixed_cycle",
+        "connection_id": "controls-encoder-3-8-3-9",
+        "cycle_sign": -1
+      }
     },
     {
       "id": "debug-29",

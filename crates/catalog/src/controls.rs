@@ -433,6 +433,13 @@ pub enum ElectricalInput {
         /// Located decoder activation threshold.
         threshold: u32,
     },
+    /// Physical encoder whose firmware counts whole phase cycles, one event per cycle.
+    GpioFixedCycle {
+        /// Body connection carrying the encoder phases.
+        connection_id: String,
+        /// Sign of the physical phase cycle that produces this input's event.
+        cycle_sign: i8,
+    },
 }
 
 /// Ownership of a generated input record without a control alias map.
@@ -885,6 +892,7 @@ impl FirmwareControlIds {
                     ElectricalInput::Adc { connection_id, .. }
                     | ElectricalInput::Gpio { connection_id, .. }
                     | ElectricalInput::GpioQuadrature { connection_id, .. } => connection_id,
+                    | ElectricalInput::GpioFixedCycle { connection_id, .. } => connection_id,
                 };
                 if !connections.contains(connection_id.as_str()) {
                     return Err(format!(
@@ -903,6 +911,11 @@ impl FirmwareControlIds {
                         "input {} uses a connection not assigned to {control_id}",
                         input.id
                     ));
+                }
+                if let ElectricalInput::GpioFixedCycle { cycle_sign, .. } = electrical
+                    && !matches!(cycle_sign, -1 | 1)
+                {
+                    return Err(format!("input {} has an invalid encoder cycle sign", input.id));
                 }
                 if matches!(
                     electrical,

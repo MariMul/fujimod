@@ -6253,6 +6253,33 @@
             "threshold"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Physical encoder whose firmware counts whole phase cycles, one event per cycle.",
+          "properties": {
+            "connection_id": {
+              "description": "Body connection carrying the encoder phases.",
+              "type": "string"
+            },
+            "cycle_sign": {
+              "description": "Sign of the physical phase cycle that produces this input's event.",
+              "format": "int8",
+              "maximum": 127,
+              "minimum": -128,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "gpio_fixed_cycle",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "cycle_sign"
+          ],
+          "type": "object"
         }
       ]
     },
