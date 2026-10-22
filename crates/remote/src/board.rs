@@ -95,6 +95,7 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
         reads: &'a mut ReadSet,
     ) -> LocalFuture<'a, Vec<u8>> {
         Box::pin(async move {
+            self.now = self.owner.with_session(|s| Ok(s.board.now()))?;
             self.owner.with_session(|s| {
                 tracked(s, reads, |s| {
                     let mut bytes = vec![0; size];
@@ -107,9 +108,20 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
     fn input<'a>(&'a mut self, input: &'a Input, facts: &'a Facts) -> LocalFuture<'a, ()> {
         Box::pin(async move {
             let id = input.control.id();
-            self.owner.with_session(|s| match input.state {
+            use fujimod_catalog::controls::ControlOperation;
+            let operation = match &input.state {
+                InputState::Pressed => ControlOperation::Press,
+                InputState::Released => ControlOperation::Release,
+                InputState::Turn(delta) => ControlOperation::Step { delta: *delta },
+                InputState::Stage(id) => ControlOperation::Stage { id: id.clone() },
+                InputState::Position(id) => ControlOperation::Position { id: id.clone() },
+            };
+            facts
+                .physical_controls
+                .action(&facts.control_ids, id, operation)?;
+            self.owner.with_session(|s| match &input.state {
                 InputState::Turn(steps) => {
-                    let (node, cycles) = s.rotation(id, steps)?;
+                    let (node, cycles) = s.rotation(id, *steps)?;
                     s.rotate(&node, cycles)
                 }
                 _ => {
@@ -126,11 +138,19 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
                         .iter()
                         .find(|a| a.id == id)
                         .ok_or_else(|| format!("No physical actuator for {id}"))?;
-                    let index = usize::from(input.state == InputState::Pressed);
-                    let pose = actuator
-                        .states
-                        .get(index)
-                        .ok_or("Physical press pose is absent")?;
+                    let pose = match &input.state {
+                        InputState::Position(position) => {
+                            actuator.states.iter().find(|p| &p.position == position)
+                        }
+                        InputState::Stage(stage) => actuator
+                            .states
+                            .iter()
+                            .find(|p| p.position == stage.trim_end_matches("_press")),
+                        _ => actuator
+                            .states
+                            .get(usize::from(input.state == InputState::Pressed)),
+                    }
+                    .ok_or("Physical input pose is absent")?;
                     let position = pose.position.clone();
                     s.set_position(id, &position)
                 }
@@ -155,7 +175,19 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
                     .iter()
                     .find(|a| a.id == id)
                     .ok_or_else(|| format!("No checked actuator for {id}"))?;
-                let pose = &actuator.states[usize::from(input.state == InputState::Pressed)];
+                let pose = match &input.state {
+                    InputState::Position(position) => {
+                        actuator.states.iter().find(|p| &p.position == position)
+                    }
+                    InputState::Stage(stage) => actuator
+                        .states
+                        .iter()
+                        .find(|p| p.position == stage.trim_end_matches("_press")),
+                    _ => actuator
+                        .states
+                        .get(usize::from(input.state == InputState::Pressed)),
+                }
+                .ok_or("Physical acknowledgment pose is absent")?;
                 for check in pose.ready.iter().chain(&pose.expected) {
                     let address = if let Some(pointer) = check.pointer {
                         let mut raw = [0; 4];

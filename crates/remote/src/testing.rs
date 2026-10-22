@@ -13,6 +13,13 @@ pub fn facts() -> Facts {
         ("selector.down", "DOWN"),
         ("selector.left", "LEFT"),
         ("selector.right", "RIGHT"),
+        ("playback_button", "PLAY"),
+        ("wifi_button", "FN"),
+        ("shutter_button", "HALF"),
+        ("shutter_button", "FULL"),
+        ("position_dial", "AUTO"),
+        ("command_control", "PREVIOUS"),
+        ("command_control", "NEXT"),
     ];
     let button = |name: &str, key: &str| json!({"name":name,"location":"rear","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"default_function":null,"role":null,"mechanical":false,"behavior":{"kind":"button","press":{"kind":"debug_key","name":key}}});
     let physical_controls = json!({
@@ -20,6 +27,11 @@ pub fn facts() -> Facts {
         "manual":{"url":"https://example.test/manual","title":"Synthetic controls","pages":[]},"analog_levels":1,
         "controls":{
             "menu_ok_button":button("MENU/OK button","MENU"),
+            "playback_button":button("Playback button","PLAY"),
+            "wifi_button":button("Function button","FN"),
+            "shutter_button":{"name":"Shutter","location":"top","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"default_function":null,"role":null,"mechanical":false,"behavior":{"kind":"shutter","stages":{"half_press":[{"kind":"debug_key","name":"HALF"}],"full_press":[{"kind":"debug_key","name":"HALF"},{"kind":"debug_key","name":"FULL"}]}}},
+            "position_dial":{"name":"Position dial","location":"top","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"default_function":null,"role":null,"mechanical":false,"behavior":{"kind":"dial","motion":{"kind":"positions","positions":[{"id":"A","label":"A","description":null,"key":{"kind":"debug_key","name":"AUTO"},"asserted":true}]},"press":null,"endless":false}},
+            "command_control":{"name":"Command dial","location":"rear","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"default_function":null,"role":null,"mechanical":false,"behavior":{"kind":"dial","motion":{"kind":"steps","decrease":{"kind":"debug_key","name":"PREVIOUS"},"increase":{"kind":"debug_key","name":"NEXT"}},"press":null,"endless":true}},
             "disp_back_button":button("DISP/BACK button","BACK"),
             "selector":{"name":"Selector","location":"rear","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"default_function":null,"role":null,"mechanical":false,
                 "behavior":{"kind":"pad","press":null,"directions":{"up":{"kind":"debug_key","name":"UP"},"down":{"kind":"debug_key","name":"DOWN"},"left":{"kind":"debug_key","name":"LEFT"},"right":{"kind":"debug_key","name":"RIGHT"}}}}
@@ -318,7 +330,13 @@ fn navigation_resolves_again_after_each_edge() {
             .unwrap();
         assert!(value.menu().unwrap().selected);
         assert_eq!(value.menu().unwrap().index, Some(0));
-        assert!(remote.backend.edges.iter().any(|i| i.control.id() == "selector.up"));
+        assert!(
+            remote
+                .backend
+                .edges
+                .iter()
+                .any(|i| i.control.id() == "selector.up")
+        );
     });
 }
 #[test]
@@ -341,5 +359,77 @@ fn predicate_timeout_reports_last_snapshot() {
         assert!(error.contains("test condition"));
         assert!(error.contains("last snapshots"));
         assert!(error.contains("ControlSnapshot"));
+    });
+}
+
+#[test]
+fn input_task_boundary_is_live_and_tracks_tables_and_receive_states() {
+    use fujimod_catalog::remote::{InputTasks, ModeBusy};
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.input_tasks = Some(InputTasks {
+            headers: vec![900, 908],
+            entries: vec![0x10, 0x20],
+            address_mask: 0x3fffffff,
+            address_limit: 65536,
+            max_count: 128,
+            stride: 0x38,
+            descriptor_offset: 8,
+            entry_offset: 8,
+            descriptor_size: 0x28,
+            state_offset: 12,
+            receive_state: 0x12,
+            busy: vec![ModeBusy {
+                mode: 3,
+                address: 920,
+                width: 8,
+            }],
+        });
+        let mut backend = Synthetic::new();
+        for (address, value) in [
+            (900, 35000),
+            (904, 2),
+            (908, 35500),
+            (912, 1),
+            (35008, 36000),
+            (35064, 36040),
+            (35508, 36100),
+            (36008, 0x10),
+            (36048, 0x20),
+            (36108, 0x30),
+            (35012, 0x12),
+            (35068, 0x12),
+        ] {
+            backend.word(address, value);
+        }
+        let mut r = Connection::connect(backend, facts).unwrap();
+        let reference = control("selector.down").into();
+        let ready = r.read(&reference).await.unwrap();
+        assert!(ready.state.ready);
+        assert!(
+            ready
+                .reads
+                .stores
+                .iter()
+                .any(|&(lo, hi)| lo <= 35012 && hi > 35012)
+        );
+        r.backend.word(35068, 0);
+        assert!(!r.read(&reference).await.unwrap().state.ready);
+        r.backend.word(35068, 0x12);
+        r.backend.word(920, 1);
+        assert!(!r.read(&reference).await.unwrap().state.ready);
+        r.backend.word(920, 0);
+        r.backend.word(36108, 0x10);
+        assert!(r.read(&reference).await.unwrap_err().contains("ambiguous"));
+        r.backend.word(36108, 0x30);
+        r.backend.word(36048, 0x40);
+        assert!(r.read(&reference).await.unwrap_err().contains("missing"));
+        r.backend.word(904, 129);
+        assert!(
+            r.read(&reference)
+                .await
+                .unwrap_err()
+                .contains("unavailable")
+        );
     });
 }

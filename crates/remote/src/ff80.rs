@@ -82,44 +82,49 @@ impl<S: BorrowMut<Session>> Backend for Ff80Backend<S> {
             {
                 return Err("Rotation exceeds 4096 steps".into());
             }
-            let operation = match input.state {
+            let operation = match &input.state {
                 InputState::Pressed => ControlOperation::Press,
                 InputState::Released => ControlOperation::Release,
-                InputState::Turn(delta) => ControlOperation::Step { delta },
+                InputState::Turn(delta) => ControlOperation::Step { delta: *delta },
+                InputState::Stage(id) => ControlOperation::Stage { id: id.clone() },
+                InputState::Position(id) => ControlOperation::Position { id: id.clone() },
             };
             let action = facts
                 .physical_controls
                 .action(&facts.control_ids, id, operation)?;
-            let [located] = action.inputs.as_slice() else {
-                return Err(format!("Control {id} does not resolve to one debug key"));
-            };
-            let name = located.debug_key.clone().ok_or_else(|| {
-                format!("Control {id} is a native-only input; the debug transport cannot send it")
-            })?;
-            let states = match input.state {
-                InputState::Pressed => vec![KeyState::On],
-                InputState::Released => vec![KeyState::Off],
-                InputState::Turn(steps) => {
-                    if steps.unsigned_abs() > 4096 {
-                        return Err("Rotation exceeds 4096 steps".into());
+            // Resolve the entire action before sending any part of it.
+            let names = action
+                .inputs
+                .iter()
+                .map(|located| {
+                    located.debug_key.clone().ok_or_else(|| format!(
+                    "Control {id} is a native-only input; the debug transport cannot send it"))
+                    .and_then(|name| EventName::new(name).map_err(|e| e.to_string()))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            for _ in 0..action.repetitions {
+                for name in &names {
+                    let states = if matches!(input.state, InputState::Turn(_)) {
+                        vec![KeyState::On, KeyState::Off]
+                    } else if action.asserted {
+                        vec![KeyState::On]
+                    } else {
+                        vec![KeyState::Off]
+                    };
+                    for state in states {
+                        self.session
+                            .borrow_mut()
+                            .send_event(
+                                DebugEvent::Key {
+                                    name: name.clone(),
+                                    state,
+                                },
+                                self.options.event_bytes,
+                            )
+                            .await
+                            .map_err(|e| e.to_string())?;
                     }
-                    (0..steps.unsigned_abs())
-                        .flat_map(|_| [KeyState::On, KeyState::Off])
-                        .collect()
                 }
-            };
-            for state in states {
-                self.session
-                    .borrow_mut()
-                    .send_event(
-                        DebugEvent::Key {
-                            name: EventName::new(name.clone()).map_err(|e| e.to_string())?,
-                            state,
-                        },
-                        self.options.event_bytes,
-                    )
-                    .await
-                    .map_err(|e| e.to_string())?;
             }
             Ok(())
         })

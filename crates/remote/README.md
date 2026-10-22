@@ -52,3 +52,31 @@ capture.frame.save("quality.png")
 
 The `testing` feature supplies a synthetic transport for binding tests. Unit and
 USB replay tests use synthetic facts and memory only.
+
+`Camera.set_input(control(...), "stage", stage="half_press", deadline=...)`
+selects a shutter stage; `"released"` releases all shutter contacts.
+`"position", position=...` selects a catalog detent without inventing a release
+notification. The board acknowledges the selected physical pose; ff80 resolves
+all debug bindings before sending any part of the action and never retries it.
+
+For asynchronous application observations, `Camera.wait_for(predicate,
+reads=reads, condition=description, deadline=deadline)` returns the predicate's
+truthy result. The predicate records its memory ranges and device IDs in the
+provided `reads` dictionary on each evaluation. The operation clears that set
+before each observation and passes it to the remote `wait` primitive when the
+predicate remains false. Application exceptions and cancellation propagate
+unchanged. A deadline bounds waiting; it does not prove that a device operation
+stopped or authorize cleanup.
+
+`Camera.from_ff80(..., operation_scoped=True)` borrows the existing session for
+each remote operation and returns it before the next application observation.
+Its absolute clock is Python's `time.monotonic_ns()`. This permits existing
+session commands between operations while preserving refusal of overlapping
+USB exchanges. The default connection retains its session lease until close.
+
+Optional `Facts.input_tasks` supplies a checked task-table layout, required
+entry identities and receive state, plus mode-qualified busy registers. Input
+readiness resolves live task pointers on each observation, refuses missing or
+ambiguous tasks, and retains all table, descriptor and receive-state reads in
+the continuation's read set. Firmware-specific task identities belong to the
+caller supplying these facts.

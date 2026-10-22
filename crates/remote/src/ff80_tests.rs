@@ -166,3 +166,58 @@ fn rename_menu_key(facts: &mut Facts, name: &str) {
         press: InputBinding::DebugKey { name: name.into() },
     });
 }
+
+#[test]
+fn shutter_stages_release_all_contacts_and_positions_have_no_release_event() {
+    futures_lite::future::block_on(async {
+        let mut steps = vec![];
+        for payload in [
+            "HALF ON\n",
+            "HALF ON\n",
+            "FULL ON\n",
+            "FULL OFF\n",
+            "HALF OFF\n",
+            "AUTO ON\n",
+        ] {
+            let mut parameters = [0; 16];
+            parameters[12..].copy_from_slice(&(payload.len() as u32).to_le_bytes());
+            steps.extend(exchanges(
+                command(5, parameters, payload.as_bytes()),
+                command(5, parameters, &[]),
+            ));
+        }
+        let script = opened(steps);
+        let session = script.begin_session(1024, None).await.unwrap();
+        let facts = facts();
+        let mut remote = Ff80Remote::new(session, facts.clone(), options()).unwrap();
+        for state in [
+            InputState::Stage("half_press".into()),
+            InputState::Stage("full_press".into()),
+            InputState::Released,
+        ] {
+            remote
+                .backend
+                .input(
+                    &Input {
+                        control: control("shutter_button"),
+                        state,
+                    },
+                    &facts,
+                )
+                .await
+                .unwrap();
+        }
+        remote
+            .backend
+            .input(
+                &Input {
+                    control: control("position_dial"),
+                    state: InputState::Position("A".into()),
+                },
+                &facts,
+            )
+            .await
+            .unwrap();
+        assert_eq!(script.remaining(), 0);
+    });
+}

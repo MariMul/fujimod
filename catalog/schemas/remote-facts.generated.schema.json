@@ -1995,6 +1995,96 @@
         }
       ]
     },
+    "InputTasks": {
+      "additionalProperties": false,
+      "description": "Task-table layout used to observe input consumers without caching live pointers.",
+      "properties": {
+        "address_limit": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "address_mask": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "busy": {
+          "description": "Additional mode-qualified busy registers required at the input boundary.",
+          "items": {
+            "$ref": "#/$defs/ModeBusy"
+          },
+          "type": "array"
+        },
+        "descriptor_offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "descriptor_size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "entries": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "entry_offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "headers": {
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "max_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "receive_state": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state_offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stride": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "headers",
+        "entries",
+        "address_mask",
+        "address_limit",
+        "max_count",
+        "stride",
+        "descriptor_offset",
+        "entry_offset",
+        "descriptor_size",
+        "state_offset",
+        "receive_state",
+        "busy"
+      ],
+      "type": "object"
+    },
     "LinkedSymbol": {
       "additionalProperties": false,
       "description": "Linked symbol identity.",
@@ -2602,6 +2692,33 @@
         "cursor_address",
         "cursor",
         "q_grid"
+      ],
+      "type": "object"
+    },
+    "ModeBusy": {
+      "additionalProperties": false,
+      "description": "A busy register whose nonzero value withholds native input in one UI mode.",
+      "properties": {
+        "address": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mode",
+        "address",
+        "width"
       ],
       "type": "object"
     },
@@ -3769,6 +3886,18 @@
     "firmware": {
       "$ref": "#/$defs/FirmwareFacts",
       "description": "Selected firmware layouts and inputs."
+    },
+    "input_tasks": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/InputTasks"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional task receive boundary required by native input consumers."
     },
     "menu_manifest": {
       "anyOf": [

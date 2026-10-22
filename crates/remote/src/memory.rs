@@ -107,6 +107,56 @@ impl<B: Backend> Memory<'_, B> {
         if timer != 0 {
             pending.push(format!("operation alert timer={timer}"));
         }
+        // Every observation resolves task identity again. All descriptor and
+        // receive-state reads remain in the predicate's continuation read set.
+        if let Some(tasks) = self.facts.input_tasks.clone() {
+            for gate in &tasks.busy {
+                if mode == gate.mode && self.uint(gate.address, gate.width).await? != 0 {
+                    pending.push(format!("Input operation busy at {:#x}", gate.address));
+                }
+            }
+            let mut found = std::collections::BTreeMap::new();
+            for header in &tasks.headers {
+                let table = u64::from(self.word(*header).await?) & tasks.address_mask;
+                let count = self.word(*header + 4).await?;
+                let size = u64::from(count)
+                    .checked_mul(tasks.stride)
+                    .ok_or("Task table size overflow")?;
+                if count == 0
+                    || count > tasks.max_count
+                    || table == 0
+                    || table
+                        .checked_add(size)
+                        .is_none_or(|end| end >= tasks.address_limit)
+                {
+                    return Err("Input task table is unavailable".into());
+                }
+                for index in 0..count {
+                    let tcb = table + u64::from(index) * tasks.stride;
+                    let descriptor = u64::from(self.word(tcb + tasks.descriptor_offset).await?)
+                        & tasks.address_mask;
+                    if descriptor == 0
+                        || descriptor
+                            .checked_add(tasks.descriptor_size)
+                            .is_none_or(|end| end >= tasks.address_limit)
+                    {
+                        continue;
+                    }
+                    let entry = self.word(descriptor + tasks.entry_offset).await?;
+                    if tasks.entries.contains(&entry) && found.insert(entry, tcb).is_some() {
+                        return Err(format!("Input task is ambiguous: {entry:#x}"));
+                    }
+                }
+            }
+            for entry in &tasks.entries {
+                let tcb = found
+                    .get(entry)
+                    .ok_or_else(|| format!("Input task is missing: {entry:#x}"))?;
+                if self.uint(tcb + tasks.state_offset, 1).await? != u64::from(tasks.receive_state) {
+                    pending.push(format!("Input task {entry:#x} is not receiving"));
+                }
+            }
+        }
         Ok(State {
             mode,
             menu_active: active,

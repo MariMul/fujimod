@@ -26,6 +26,37 @@ pub struct Facts {
     pub firmware: FirmwareFacts,
     /// Installed build declarations, absent for stock firmware.
     pub menu_manifest: Option<BuildMenuManifest>,
+    /// Optional task receive boundary required by native input consumers.
+    #[serde(default)]
+    pub input_tasks: Option<InputTasks>,
+}
+
+/// Task-table layout used to observe input consumers without caching live pointers.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InputTasks {
+    pub headers: Vec<u64>,
+    pub entries: Vec<u32>,
+    pub address_mask: u64,
+    pub address_limit: u64,
+    pub max_count: u32,
+    pub stride: u64,
+    pub descriptor_offset: u64,
+    pub entry_offset: u64,
+    pub descriptor_size: u64,
+    pub state_offset: u64,
+    pub receive_state: u8,
+    /// Additional mode-qualified busy registers required at the input boundary.
+    pub busy: Vec<ModeBusy>,
+}
+
+/// A busy register whose nonzero value withholds native input in one UI mode.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ModeBusy {
+    pub mode: u32,
+    pub address: u64,
+    pub width: usize,
 }
 
 /// Firmware-specific remote inputs, without snapshots of live tables.
@@ -844,6 +875,34 @@ impl Facts {
     /// Validate identities before exposing any remote operations.
     pub fn validate(&self) -> Result<(), String> {
         self.firmware.validate()?;
+        if let Some(tasks) = &self.input_tasks {
+            let distinct: BTreeSet<_> = tasks.entries.iter().collect();
+            if tasks.headers.is_empty()
+                || tasks.entries.is_empty()
+                || distinct.len() != tasks.entries.len()
+                || tasks.max_count == 0
+                || tasks.max_count > 1024
+                || tasks.stride < 4
+                || tasks
+                    .descriptor_offset
+                    .checked_add(4)
+                    .is_none_or(|end| end > tasks.stride)
+                || tasks.state_offset >= tasks.stride
+                || tasks.entry_offset > 4096
+                || tasks
+                    .entry_offset
+                    .checked_add(4)
+                    .is_none_or(|end| end > tasks.descriptor_size)
+                || tasks.address_limit == 0
+                || tasks.address_mask == 0
+                || tasks
+                    .busy
+                    .iter()
+                    .any(|gate| gate.address == 0 || !matches!(gate.width, 1 | 2 | 4 | 8))
+            {
+                return Err("Invalid input task observation layout".into());
+            }
+        }
         if let Some(manifest) = &self.menu_manifest {
             manifest.validate()?;
             if manifest.firmware_id != self.firmware.firmware_id
@@ -1093,6 +1152,7 @@ impl Facts {
             control_ids,
             firmware,
             menu_manifest,
+            input_tasks: None,
         };
         facts.validate()?;
         Ok(facts)

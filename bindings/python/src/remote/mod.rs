@@ -7,6 +7,7 @@ use pyo3::{
 };
 use std::{
     cell::RefCell,
+    collections::BTreeMap,
     rc::Rc,
     sync::Arc,
     task::{Context, Wake, Waker},
@@ -25,6 +26,7 @@ type Slot = Rc<RefCell<Option<Box<dyn Remote>>>>;
 struct Camera {
     slot: Slot,
     facts: Rc<Facts>,
+    device_ids: BTreeMap<String, usize>,
 }
 struct Lease {
     slot: Slot,
@@ -102,6 +104,7 @@ impl Camera {
         Ok(Self {
             slot: Rc::new(RefCell::new(Some(Box::new(remote)))),
             facts: Rc::new(facts),
+            device_ids: BTreeMap::new(),
         })
     }
     fn close(&self) -> PyResult<()> {
@@ -151,6 +154,61 @@ impl Camera {
                 .take()
                 .ok_or("Predicate completed without a snapshot")?;
             Ok(Output::Snapshot(snapshot))
+        })))
+    }
+    fn wait_reads(&self, reads: &str, deadline: u64) -> PyResult<Task> {
+        #[derive(serde::Deserialize)]
+        #[serde(untagged)]
+        enum DeviceWatch {
+            Id(usize),
+            Name(String),
+        }
+        #[derive(serde::Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Reads {
+            stores: Vec<(u64, u64)>,
+            devices: Vec<DeviceWatch>,
+        }
+        let observed: Reads = decode(reads)?;
+        let mut reads = ReadSet {
+            stores: observed.stores,
+            devices: Default::default(),
+        };
+        for watch in observed.devices {
+            let id = match watch {
+                DeviceWatch::Id(id) => id,
+                DeviceWatch::Name(name) => *self.device_ids.get(&name).ok_or_else(|| {
+                    PyValueError::new_err(format!("Unknown observed device {name}"))
+                })?,
+            };
+            reads.devices.insert(id);
+        }
+        let mut lease = Lease::new(&self.slot)?;
+        Ok(Task::new(Box::pin(async move {
+            lease
+                .remote
+                .as_deref_mut()
+                .ok_or("Camera lost its owner")?
+                .wait(&reads, deadline)
+                .await?;
+            Ok(Output::Unit)
+        })))
+    }
+    fn set_input(&self, reference: &str, state: &str, deadline: u64) -> PyResult<Task> {
+        let reference: Reference = decode(reference)?;
+        let Reference::Control(control) = reference else {
+            return Err(PyValueError::new_err("Input requires a control"));
+        };
+        let state: InputState = decode(state)?;
+        let mut lease = Lease::new(&self.slot)?;
+        Ok(Task::new(Box::pin(async move {
+            lease
+                .remote
+                .as_deref_mut()
+                .ok_or("Camera lost its owner")?
+                .set_input(&Input { control, state }, deadline)
+                .await?;
+            Ok(Output::Unit)
         })))
     }
     #[getter]
@@ -246,11 +304,21 @@ impl Camera {
         options: &str,
     ) -> PyResult<Self> {
         let facts: Facts = decode(facts)?;
+        let device_ids = Python::attach(|py| -> PyResult<BTreeMap<String, usize>> {
+            let mut owner = board.bind(py).try_borrow_mut()?;
+            Ok(owner
+                .session_mut()?
+                .nodes
+                .iter()
+                .map(|(name, id)| (name.clone(), *id))
+                .collect())
+        })?;
         let remote = remote::BoardRemote::new(PythonBoard(board), facts.clone(), decode(options)?)
             .map_err(error)?;
         Ok(Self {
             slot: Rc::new(RefCell::new(Some(Box::new(remote)))),
             facts: Rc::new(facts),
+            device_ids,
         })
     }
 }
@@ -275,6 +343,7 @@ impl Camera {
         Ok(Self {
             slot: Rc::new(RefCell::new(Some(Box::new(remote)))),
             facts: Rc::new(facts),
+            device_ids: BTreeMap::from([("scanout".into(), 7)]),
         })
     }
 }

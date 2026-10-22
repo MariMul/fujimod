@@ -90,3 +90,68 @@ async def test_abandoned_usb_owner_fences_remote_without_more_io():
         await remote.frame()
     assert script.remaining == 0
     remote.close()
+
+
+async def test_async_observation_predicate_deadline_and_original_exception():
+    remote = camera()
+    reads = {'stores': [], 'devices': []}
+    calls = []
+
+    async def frozen():
+        calls.append(remote.now)
+        reads['stores'].append((16, 20))
+        return None
+
+    with pytest.raises(TimeoutError, match='frozen'):
+        await remote.wait_for(frozen, deadline=3, reads=reads, condition='frozen')
+    assert calls == [0, 1, 2, 3]
+    assert reads['stores'] == [(16, 20)]
+    failure = ValueError('unsafe observation')
+
+    async def unsafe():
+        raise failure
+
+    with pytest.raises(ValueError) as caught:
+        await remote.wait_for(unsafe, deadline=9, reads=reads, condition='unsafe')
+    assert caught.value is failure
+    assert remote.now == 3
+    remote.close()
+
+
+async def test_staged_shutter_and_position_inputs():
+    remote = camera()
+    await remote.set_input(control('shutter_button'), 'stage', stage='half_press', deadline=10)
+    await remote.set_input(control('shutter_button'), 'stage', stage='full_press', deadline=10)
+    await remote.set_input(control('shutter_button'), 'released', deadline=10)
+    await remote.set_input(control('position_dial'), 'position', position='A', deadline=10)
+    remote.close()
+
+
+async def test_operation_scoped_camera_returns_usb_between_wait_and_observation():
+    from fujimod import usb
+    from fujimod.remote import _ScopedNative
+    from test_async import opened
+    from test_stream import E, control as envelope
+
+    session, script = await opened([
+        E.control(envelope(0xC2, 2)), E.read(2, b'ok'),
+        E.control(envelope(0xC4, 2)), E.read(2, b'ok'),
+    ])
+    remote = Camera(_ScopedNative(lambda: _native.remote.Camera.synthetic_ff80(session)))
+    deadline = remote.now + 1_000_000_000
+    await remote.wait({'stores': [], 'devices': []}, deadline=deadline)
+    assert await session.ping() == b'ok'
+    await remote.wait({'stores': [], 'devices': []}, deadline=deadline)
+    remote.close()
+    await session.close()
+    assert script.remaining == 0
+
+
+async def test_observed_board_device_names_resolve_before_waiting():
+    remote = camera()
+    await remote.wait({'stores': [], 'devices': ['scanout']}, deadline=3)
+    assert remote.now == 1
+    with pytest.raises(ValueError, match='Unknown observed device'):
+        await remote.wait({'stores': [], 'devices': ['absent']}, deadline=3)
+    assert (await remote.read(control('selector.down'))).value.supported
+    remote.close()

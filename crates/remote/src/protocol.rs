@@ -38,6 +38,8 @@ pub enum InputState {
     Pressed,
     Released,
     Turn(i32),
+    Stage(String),
+    Position(String),
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Input {
