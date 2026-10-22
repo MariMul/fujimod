@@ -4,6 +4,7 @@ import {
   type LoadingProgress,
 } from '@fujimod/emulator-ui/engine/download-progress';
 import type { CardFile, EngineConfig, ReplayStep, Scene } from '@fujimod/emulator-ui/engine/api';
+import { loadPreparedBundle } from './prepared-bundle';
 import { CameraStore } from '../cameras/store';
 import { digest } from './identity';
 import { diagnosticReport } from './diagnostics';
@@ -464,7 +465,16 @@ export class WasmWorkerRuntime {
       message: 'Building camera…',
       assets: [loadingStep('build', 'loading')],
     });
-    this.timings.measure('create', () =>
+    if (manifest.construction === 'prepared') {
+      const prepared = manifest.prepared;
+      if (!prepared || !config.bundle) throw Error('Prepared camera has no bundle files.');
+      const { text, inputs } = await loadPreparedBundle(
+        prepared, new URL('wasm.json', config.bundle),
+      );
+      this.timings.measure('create', () =>
+        session.create(text, new Uint8Array(dat), 'prepared', inputs),
+      );
+    } else this.timings.measure('create', () =>
       session.create(
         manifest.construction === 'resolved'
           ? manifest.session
