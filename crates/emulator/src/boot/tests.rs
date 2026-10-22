@@ -229,9 +229,9 @@ fn settings_validate_marker_checksum_and_route_extent() {
     let mut input = vec![0; 16];
     input[14] = 0xaa;
     input[15] = 0x56;
-    settings(&mut spec.devices_value, &spec.mcu, &input).unwrap();
+    settings_packet(&mut spec.devices_value, &spec.mcu, &input).unwrap();
     input[0] = 1;
-    assert!(settings(&mut spec.devices_value, &spec.mcu, &input).is_err());
+    assert!(settings_packet(&mut spec.devices_value, &spec.mcu, &input).is_err());
     input[0] = 0;
     input[14] = 0;
     input[15] = 0;
@@ -239,7 +239,7 @@ fn settings_validate_marker_checksum_and_route_extent() {
     assert!(packet(&input[..15]).is_err());
     input[14] = 0xaa;
     input[15] = 0x56;
-    assert!(settings(&mut json!({}), &spec.mcu, &input).is_err());
+    assert!(settings_packet(&mut json!({}), &spec.mcu, &input).is_err());
 }
 
 #[test]
@@ -436,4 +436,105 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
     exr2_inputs(&mut resolved).card.present = true;
     assert!(prepared(resolved).is_err());
+}
+
+/// Boots the same run through `open` and through a serialized preparation, then
+/// compares retired instructions, guest time, the kernel image and the board
+/// fingerprint. Requires the selected files: FUJIMOD_TEST_UPDATE (the update
+/// container), FUJIMOD_TEST_BOOT_ROM (the ROM dump) and CAMERA_UNICORN_LIBRARY.
+#[test]
+fn shipped_preparation_opens_the_same_board_as_selected_files() {
+    let (Some(update), Some(boot_rom), Some(unicorn)) = (
+        std::env::var_os("FUJIMOD_TEST_UPDATE"),
+        std::env::var_os("FUJIMOD_TEST_BOOT_ROM"),
+        std::env::var_os("CAMERA_UNICORN_LIBRARY"),
+    ) else {
+        eprintln!(
+            "skipped: set FUJIMOD_TEST_UPDATE, FUJIMOD_TEST_BOOT_ROM and CAMERA_UNICORN_LIBRARY"
+        );
+        return;
+    };
+    const CONFIGURATION: &str = "x70-110-rec";
+    const INSTRUCTIONS: u64 = 5_000_000;
+    // Kernel 0 occupies 0x40000..0x40000 + 0xdba0 in the mapped update image.
+    const KERNEL0: (u64, usize) = (0x40000, 0xdba0);
+
+    let quantum = prepare(CONFIGURATION, &[]).unwrap().quantum;
+    let snapshot = |mut session: Session| {
+        session
+            .board
+            .run_for_instructions(INSTRUCTIONS, quantum)
+            .unwrap();
+        let mut kernel = vec![0; KERNEL0.1];
+        session.board.read_physical(KERNEL0.0, &mut kernel).unwrap();
+        (
+            session.definition.clone(),
+            session.board.instruction_counts(),
+            session.board.now(),
+            Content::identify(&kernel).sha256,
+            session.board.fingerprint().unwrap(),
+        )
+    };
+
+    let direct = snapshot(
+        open(Options {
+            configuration_id: CONFIGURATION.into(),
+            overlays: vec![],
+            update: PathBuf::from(&update),
+            boot_rom: PathBuf::from(&boot_rom),
+            unicorn: PathBuf::from(&unicorn),
+            nand: None,
+            settings: None,
+            clock_seconds_2000: None,
+        })
+        .unwrap(),
+    );
+    assert!(direct.1.iter().sum::<u64>() >= INSTRUCTIONS);
+
+    let document = prepare(CONFIGURATION, &[]).unwrap().to_json();
+    let text = serde_json::to_string(&document).unwrap();
+    let restored = Prepared::from_json(&serde_json::from_str(&text).unwrap()).unwrap();
+    let inputs = InputBytes {
+        update: std::fs::read(&update).unwrap(),
+        boot_rom: std::fs::read(&boot_rom).unwrap(),
+        nand: None,
+        settings: None,
+        clock_seconds_2000: None,
+    };
+    let shipped = snapshot(
+        open_prepared(restored, inputs, Some(PathBuf::from(&unicorn))).unwrap(),
+    );
+    assert_eq!(shipped, direct);
+}
+
+#[test]
+fn prepared_document_must_match_the_bundled_catalog_and_its_own_preparation() {
+    let document = prepare("x70-110-rec", &[]).unwrap().to_json();
+    assert!(Prepared::from_json(&document).is_ok());
+
+    let mut moved = document.clone();
+    moved["quantum"] = json!(1);
+    assert!(Prepared::from_json(&moved).is_err());
+
+    let mut missing = document.clone();
+    missing.as_object_mut().unwrap().remove("resolved");
+    assert!(Prepared::from_json(&missing).is_err());
+
+    let mut renamed = document;
+    renamed["resolved"]["configuration"]["id"] = json!("x70-110-other");
+    assert!(Prepared::from_json(&renamed).is_err());
+}
+
+#[test]
+fn input_bytes_are_refused_before_any_board_when_they_differ_from_the_prepared_identity() {
+    let prepared = prepare("x70-110-rec", &[]).unwrap();
+    let inputs = InputBytes {
+        update: vec![0; 4],
+        boot_rom: vec![0; 4],
+        nand: None,
+        settings: None,
+        clock_seconds_2000: None,
+    };
+    let error = open_prepared(prepared, inputs, None).err().unwrap();
+    assert!(error.starts_with("update:"), "{error}");
 }

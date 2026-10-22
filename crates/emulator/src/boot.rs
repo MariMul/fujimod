@@ -573,7 +573,7 @@ fn set_clock_recursive(value: &mut Value, clock_seconds: u32, count: &mut usize)
     }
 }
 
-fn settings(plan: &mut Value, mcu: &Mcu, bytes: &[u8]) -> Result<(), String> {
+fn settings_packet(plan: &mut Value, mcu: &Mcu, bytes: &[u8]) -> Result<(), String> {
     packet(bytes)?;
     let nodes = plan["nodes"]
         .as_array_mut()
@@ -596,19 +596,118 @@ fn settings(plan: &mut Value, mcu: &Mcu, bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-/// Construct an unexecuted strict board, loading the real ROM at its reset map.
+/// Caller-supplied bytes for one prepared run. Every buffer is checked against
+/// its prepared identity or declared bound before any CPU is constructed.
+#[derive(Clone)]
+pub struct InputBytes {
+    /// Complete update container, verified against the prepared update identity.
+    pub update: Vec<u8>,
+    /// Boot ROM image, verified against the prepared boot-ROM identity.
+    pub boot_rom: Vec<u8>,
+    /// Committed NAND image, or a complete main-area image without OOB/spare.
+    pub nand: Option<Vec<u8>>,
+    /// Sixteen-byte checksum-protected MCU persistent settings packet.
+    pub settings: Option<Vec<u8>>,
+    /// Real-time clock in seconds since 2000-01-01, or the configuration's default.
+    pub clock_seconds_2000: Option<u32>,
+}
+
+/// Largest NAND input accepted from the caller: a 256 MiB image.
+const NAND_INPUT_MAX_BYTES: usize = 256 << 20;
+
+impl Prepared {
+    /// Restore a prepared run from its `to_json` document. The embedded identity
+    /// must equal the bundled catalog's resolution, and preparing it again must
+    /// reproduce the document exactly, so a shipped document cannot describe a
+    /// different run than this build would prepare.
+    pub fn from_json(value: &Value) -> Result<Self, String> {
+        let resolved = value
+            .get("resolved")
+            .cloned()
+            .ok_or("prepared document has no resolved configuration")?;
+        let resolved: ResolvedConfiguration = serde_json::from_value(resolved)
+            .map_err(|error| format!("prepared document resolved configuration: {error}"))?;
+        let expected = ResolvedConfiguration::with_overlays(
+            &resolved.configuration.id,
+            &resolved.configuration.overlays,
+        )?;
+        if expected != resolved {
+            return Err("prepared document differs from the bundled catalog".into());
+        }
+        let prepared = prepared(resolved)?;
+        if prepared.to_json() != *value {
+            return Err("prepared document differs from its preparation".into());
+        }
+        Ok(prepared)
+    }
+}
+
+/// Construct an unexecuted strict board from explicitly selected files.
 /// No directory search, downloaded image, captured default or firmware patch is used.
 pub fn open(options: Options) -> Result<Session, String> {
     let prepared = prepare(&options.configuration_id, &options.overlays)?;
-    let mut session_definition = prepared.to_json();
-    session_definition["inputs"]["nand_selected"] = json!(options.nand.is_some());
-    session_definition["inputs"]["settings_selected"] = json!(options.settings.is_some());
     let update = checked(&options.update, &prepared.update)?;
-    let rom = checked(&options.boot_rom, &prepared.boot_rom.content)?;
+    let boot_rom = checked(&options.boot_rom, &prepared.boot_rom.content)?;
+    let inputs = InputBytes {
+        update,
+        boot_rom,
+        nand: options
+            .nand
+            .as_deref()
+            .map(|path| read(path, NAND_INPUT_MAX_BYTES as u64))
+            .transpose()?,
+        settings: options
+            .settings
+            .as_deref()
+            .map(|path| read(path, 16))
+            .transpose()?,
+        clock_seconds_2000: options.clock_seconds_2000,
+    };
+    open_prepared(prepared, inputs, Some(options.unicorn))
+}
+
+/// Construct an unexecuted strict board from a prepared run and byte inputs.
+/// `unicorn` selects the Unicorn library file; `None` selects the statically
+/// linked engine, which only emscripten builds provide. A prepared run opens
+/// one board; prepare again for another.
+pub fn open_prepared(
+    prepared: Prepared,
+    inputs: InputBytes,
+    unicorn: Option<PathBuf>,
+) -> Result<Session, String> {
+    prepared
+        .update
+        .check(&inputs.update)
+        .map_err(|error| format!("update: {error}"))?;
+    prepared
+        .boot_rom
+        .content
+        .check(&inputs.boot_rom)
+        .map_err(|error| format!("boot ROM: {error}"))?;
+    if inputs
+        .nand
+        .as_ref()
+        .is_some_and(|bytes| bytes.len() > NAND_INPUT_MAX_BYTES)
+    {
+        return Err("NAND image must be at most 256 MiB".into());
+    }
+    let mut session_definition = prepared.to_json();
+    session_definition["inputs"]["nand_selected"] = json!(inputs.nand.is_some());
+    session_definition["inputs"]["settings_selected"] = json!(inputs.settings.is_some());
+    let InputBytes {
+        update,
+        boot_rom,
+        nand,
+        settings,
+        clock_seconds_2000,
+    } = inputs;
     if prepared.flash_offset >= update.len() {
         return Err("update flash offset exceeds input".into());
     }
-    let flash: Vec<u8> = update[prepared.flash_offset..].iter().map(|b| !b).collect();
+    let flash: Vec<u8> = update[prepared.flash_offset..]
+        .iter()
+        .map(|b| !b)
+        .collect();
     let mut assets = BTreeMap::from([("nand_base".into(), flash)]);
     for input in &prepared.generated_assets {
         if input.pattern.is_empty()
@@ -631,7 +730,7 @@ pub fn open(options: Options) -> Result<Session, String> {
     let mut scene = prepared.scene.clone();
 
     // Set real-time clock if provided
-    if let Some(clock_seconds) = options.clock_seconds_2000 {
+    if let Some(clock_seconds) = clock_seconds_2000 {
         let mut clock_count = 0;
         set_clock_recursive(&mut devices, clock_seconds, &mut clock_count)?;
         if clock_count != 1 {
@@ -639,11 +738,10 @@ pub fn open(options: Options) -> Result<Session, String> {
         }
     }
 
-    if let Some(path) = &options.settings {
-        settings(&mut devices, &prepared.mcu, &read(path, 16)?)?;
+    if let Some(packet_bytes) = &settings {
+        settings_packet(&mut devices, &prepared.mcu, packet_bytes)?;
     }
-    if let Some(path) = &options.nand {
-        let bytes = read(path, 256 << 20)?;
+    if let Some(bytes) = nand {
         let nand = &mut scene["nands"]["nand"];
         if bytes.len() as u64
             == nand["options"]["bytes"]
@@ -663,7 +761,7 @@ pub fn open(options: Options) -> Result<Session, String> {
     }
     let graph = prepared.execution;
     graph.validate()?;
-    let plan = if options.settings.is_some() {
+    let plan = if settings.is_some() {
         Plan::parse(&serde_json::to_vec(&devices).map_err(|e| e.to_string())?)?
     } else {
         prepared.plan
@@ -700,7 +798,7 @@ pub fn open(options: Options) -> Result<Session, String> {
     let mut board = graph.build(
         factory::Options {
             engine,
-            unicorn: Some(options.unicorn),
+            unicorn,
             translation_cache_bytes: 16 << 20,
         },
         bus,
@@ -713,7 +811,7 @@ pub fn open(options: Options) -> Result<Session, String> {
             Box::new(controller.inputs),
         )?;
     }
-    board.write_physical(prepared.boot_rom.address, &rom)?;
+    board.write_physical(prepared.boot_rom.address, &boot_rom)?;
     for reset in prepared.reset_coprocessors {
         let cpu = board.cpu(reset.core)?;
         let old = cpu.coprocessor(reset.register, None)?;
