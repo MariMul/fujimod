@@ -8,6 +8,10 @@ use std::collections::BTreeMap;
 pub fn generated_documents() -> BTreeMap<&'static str, Value> {
     let mut documents = BTreeMap::new();
     documents.insert(
+        "emulator-factory-inputs.generated.schema.json",
+        schema::<crate::configuration::RunFactoryInputs>(crate::configuration::RUN_FACTORY_INPUTS_SCHEMA_URI),
+    );
+    documents.insert(
         "emulator-rehearsal.generated.schema.json",
         schema::<crate::rehearsal::Rehearsal>(crate::rehearsal::REHEARSAL_SCHEMA_URI),
     );

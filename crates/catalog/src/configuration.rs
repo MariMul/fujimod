@@ -1359,6 +1359,9 @@ pub enum RunOverlayChange {
 pub struct RunPreset {
     /// Closed device policy selections; omitted fields retain factory defaults.
     pub factory_options: RunFactoryOptions,
+    /// Caller-supplied factory input locations selected independently of policy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub factory_inputs_id: Option<String>,
     /// Boot and device layout selected within the chosen firmware identity.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub firmware_profile_id: Option<String>,
@@ -1421,6 +1424,9 @@ pub struct RunPreset {
 impl RunPreset {
     fn validate(&self) -> Result<(), String> {
         self.factory_options.validate()?;
+        if let Some(id) = &self.factory_inputs_id {
+            crate::emulator::validate_id(id)?;
+        }
         if let Some(id) = &self.firmware_profile_id {
             crate::emulator::validate_id(id)?;
         }

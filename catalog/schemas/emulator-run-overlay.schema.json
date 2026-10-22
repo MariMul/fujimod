@@ -2811,6 +2811,13 @@
           ],
           "description": "Restriction on the execution this configuration represents."
         },
+        "factory_inputs_id": {
+          "description": "Caller-supplied factory input locations selected independently of policy.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "factory_options": {
           "$ref": "#/$defs/RunFactoryOptions",
           "description": "Closed device policy selections; omitted fields retain factory defaults."
@@ -2994,10 +3001,19 @@
     },
     "RunProducerDataProfile": {
       "description": "Closed selection for producer data profile.",
-      "enum": [
-        "xm1-150-declared-continuous-statistics-scene-unmeasured"
-      ],
-      "type": "string"
+      "oneOf": [
+        {
+          "enum": [
+            "xm1-150-declared-continuous-statistics-scene-unmeasured"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "recorded-statistics",
+          "description": "Replay externally supplied statistics through the declared producer input.",
+          "type": "string"
+        }
+      ]
     },
     "RunProducerStopProfile": {
       "description": "Closed selection for producer stop profile.",

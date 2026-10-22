@@ -488,6 +488,9 @@ pub enum RunPhaseProfile {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub enum RunProducerDataProfile {
+    /// Replay externally supplied statistics through the declared producer input.
+    #[serde(rename = "recorded-statistics")]
+    RecordedStatistics,
     #[serde(rename = "xm1-150-declared-continuous-statistics-scene-unmeasured")]
     Xm1150DeclaredContinuousStatisticsSceneUnmeasured,
 }
