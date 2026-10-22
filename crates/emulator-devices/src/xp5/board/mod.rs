@@ -9,9 +9,9 @@ use crate::xp5::{
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 pub mod clocks;
-pub mod lz;
 pub mod general_dma;
 pub mod imaging;
+pub mod lz;
 pub mod renderer;
 pub mod serial;
 
@@ -28,6 +28,39 @@ pub struct Resources {
     pub storage: Option<Arc<Mutex<flash_storage::Storage>>>,
     pub displays: BTreeMap<u64, display::Config>,
 }
+
+fn gate_read_values(window: &DeviceWindow) -> Result<BTreeMap<u64, u32>, String> {
+    if window.options.keys().any(|key| key != "read_values") {
+        return Err(format!("{} has unsupported gate options", window.kind));
+    }
+    let Some(values) = window.options.get("read_values") else {
+        return Ok(BTreeMap::new());
+    };
+    let values = values
+        .as_table()
+        .ok_or("gate read_values must be an offset/value table")?;
+    values
+        .iter()
+        .map(|(offset, value)| {
+            let digits = offset
+                .strip_prefix("0x")
+                .ok_or_else(|| format!("gate read offset {offset} must use 0x notation"))?;
+            let offset = u64::from_str_radix(digits, 16)
+                .map_err(|error| format!("invalid gate read offset {offset}: {error}"))?;
+            let value = value
+                .as_integer()
+                .and_then(|value| u32::try_from(value).ok())
+                .ok_or_else(|| format!("gate read value at {offset:#x} must be a u32"))?;
+            if offset >= window.size {
+                return Err(format!(
+                    "gate read offset {offset:#x} is outside its window"
+                ));
+            }
+            Ok((offset, value))
+        })
+        .collect()
+}
+
 fn register_with_resources(
     bus: &mut DeviceGraph,
     window: &DeviceWindow,
@@ -164,7 +197,8 @@ fn register_with_resources(
         "clock-gates" | "power-gates" => {
             let gates =
                 gates::Gates::with_panel_clocks(window.kind == "power-gates", Some(clocks.clone()))
-                    .with_companion(companion);
+                    .with_companion(companion)
+                    .with_read_values(gate_read_values(window)?)?;
             bus.register(window.base, window.size, Box::new(gates))?;
         }
         "timer-extended" => {

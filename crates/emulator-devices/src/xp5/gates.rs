@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 pub struct Gates {
     power: bool,
     regs: BTreeMap<u64, u32>,
+    read_values: BTreeMap<u64, u32>,
     panel_clocks: Option<super::panel_clock::Clocks>,
     companion_cpu: Option<usize>,
 }
@@ -20,6 +21,7 @@ impl Gates {
         Self {
             power,
             regs: BTreeMap::new(),
+            read_values: BTreeMap::new(),
             panel_clocks,
             companion_cpu: None,
         }
@@ -28,6 +30,17 @@ impl Gates {
     pub fn with_companion(mut self, cpu: Option<usize>) -> Self {
         self.companion_cpu = cpu;
         self
+    }
+    /// Supply aligned, read-only register values from the caller's hardware inputs.
+    pub fn with_read_values(mut self, values: BTreeMap<u64, u32>) -> Result<Self, String> {
+        if values
+            .keys()
+            .any(|offset| offset & 3 != 0 || self.latch(*offset) || self.status(*offset).is_some())
+        {
+            return Err("gate read values must name aligned, otherwise-unmodeled registers".into());
+        }
+        self.read_values = values;
+        Ok(self)
     }
     fn drive_reset(&self, cx: &mut Cx<'_>) {
         if !self.power {
@@ -79,11 +92,17 @@ impl Device for Gates {
             o
         } else if let Some(a) = self.status(o) {
             a
+        } else if self.read_values.contains_key(&o) {
+            o
         } else {
             cx.unmodeled();
             return 0;
         };
-        self.regs.get(&a).copied().unwrap_or(0) as u64
+        self.regs
+            .get(&a)
+            .or_else(|| self.read_values.get(&a))
+            .copied()
+            .unwrap_or(0) as u64
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, n: u8, v: u64) {
         let o = address.wrapping_sub(if self.power { 0xff90d000 } else { 0xff90c000 });
