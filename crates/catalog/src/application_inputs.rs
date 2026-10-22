@@ -19,6 +19,11 @@ fn ids<'a>(values: impl IntoIterator<Item = &'a str>) -> Result<(), String> {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct ApplicationRunInputs {
     /// Virtual clock ticks per second used by the supplied timing policies.
     pub ticks_per_second: u64,
@@ -207,6 +212,11 @@ impl ApplicationRunInputs {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum ApplicationBlockInput {
     /// Explicit analog sample values in channel order.
     Adc { block_id: String, samples: Vec<u16> },
@@ -225,6 +235,7 @@ pub enum ApplicationBlockInput {
         block_id: String,
         part_id: String,
         source: ApplicationFlashSource,
+        #[cfg_attr(feature = "typescript", serde(default))]
         erased_tail: Option<u8>,
         seeds: Vec<FlashSeed>,
     },
@@ -247,6 +258,11 @@ impl ApplicationBlockInput {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct GpioOutputWord {
     /// GPIO port number.
     pub port: u8,
@@ -257,6 +273,11 @@ pub struct GpioOutputWord {
 /// Source of the nonvolatile backing supplied by a run.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum ApplicationFlashSource {
     /// The explicitly supplied, identity-checked selected firmware update.
     FirmwareUpdate,
@@ -266,6 +287,11 @@ pub enum ApplicationFlashSource {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct FlashSeed {
     /// Offset from the start of flash backing.
     pub offset: u64,
@@ -277,11 +303,17 @@ pub struct FlashSeed {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum ApplicationPartInput {
     /// Initial word registers and optional RTC timebase.
     RegisterWords {
         part_id: String,
         registers: Vec<RegisterWord>,
+        #[cfg_attr(feature = "typescript", serde(default))]
         rtc_ticks_per_second: Option<u64>,
     },
     /// Initial clock state for a power-controller endpoint.
@@ -316,6 +348,11 @@ impl ApplicationPartInput {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RegisterWord {
     /// Endpoint register number.
     pub register: u16,
@@ -327,6 +364,11 @@ pub struct RegisterWord {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum ApplicationTiming {
     /// The same delay policy applied to a set of named SoC blocks.
     Delay {
@@ -356,6 +398,11 @@ pub enum ApplicationTiming {
 /// Device operation to which a run's functional delay applies.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum TimingOperation {
     /// Clock or signal settling.
     Settle,
@@ -377,6 +424,11 @@ pub enum TimingOperation {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct ApplicationRunScene {
     /// Periodic frame sources bound to named SoC blocks.
     pub frames: Vec<ApplicationFrameInput>,
@@ -450,6 +502,11 @@ impl ApplicationRunScene {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct ApplicationCommandImageInput {
     /// Blocks consuming this command-driven image input.
     pub block_ids: Vec<String>,
@@ -461,14 +518,21 @@ pub struct ApplicationCommandImageInput {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct ApplicationFrameInput {
     /// Blocks consuming this external frame source.
     pub block_ids: Vec<String>,
     /// Period between frames in the run's virtual ticks.
     pub period_ticks: u64,
     /// Active duration within the frame period, when supplied.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub active_ticks: Option<u64>,
     /// Uniform source luma sample, when supplied.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub luma: Option<u16>,
 }
 
@@ -476,6 +540,11 @@ pub struct ApplicationFrameInput {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct ApplicationStatisticsInput {
     /// Imaging block consuming the statistics scene.
     pub block_id: String,

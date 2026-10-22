@@ -95,12 +95,12 @@ run = [
 ]
 
 [tasks.catalog-types]
-description = "Generate TypeScript and Python catalog types from Rust schemas"
-run = "cargo run --locked -p fujimod-bindgen -- --catalog-types catalog/schemas bindings/python/python/fujimod/emulator/_catalog_types.py bindings/javascript/src/catalog-types.ts"
+description = "Generate Python catalog types from Rust schemas"
+run = "cargo run --locked -p fujimod-bindgen -- --catalog-types catalog/schemas bindings/python/python/fujimod/emulator/_catalog_types.py"
 
 [tasks.catalog-types-check]
-description = "Check generated catalog language types against Rust schemas"
-run = "cargo run --locked -p fujimod-bindgen -- --check-catalog-types catalog/schemas bindings/python/python/fujimod/emulator/_catalog_types.py bindings/javascript/src/catalog-types.ts"
+description = "Check generated Python catalog types against Rust schemas"
+run = "cargo run --locked -p fujimod-bindgen -- --check-catalog-types catalog/schemas bindings/python/python/fujimod/emulator/_catalog_types.py"
 
 [tasks.python-build-test]
 run = [

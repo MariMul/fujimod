@@ -7,6 +7,11 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Physical controls documented for a body.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct BodyControls {
     /// Published manual identifying the physical controls.
     pub manual: ManualReference,
@@ -19,6 +24,11 @@ pub struct BodyControls {
 /// A published manual and the pages used to identify controls.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct ManualReference {
     /// Public manual URL.
     pub url: String,
@@ -31,6 +41,11 @@ pub struct ManualReference {
 /// A physical control's identity, positions, and body connections.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct BodyControl {
     /// Printed or documented control name.
     pub name: String,
@@ -43,10 +58,12 @@ pub struct BodyControl {
     /// Whether the control can be pressed.
     pub pushable: bool,
     /// Documented default function when available.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub default_function: Option<String>,
     /// Whether firmware allows its function to be assigned.
     pub assignable: bool,
     /// Relevant manual page when available.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub manual_page: Option<u32>,
     /// Physical body connections used by this control.
     pub connection_ids: Vec<String>,
@@ -55,6 +72,11 @@ pub struct BodyControl {
 /// Physical control categories.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum ControlKind {
     /// Rotary dial with named positions.
     Dial,
@@ -79,6 +101,11 @@ pub enum ControlKind {
 /// Locations used to identify physical controls.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum ControlLocation {
     /// Top surface.
     Top,
@@ -95,18 +122,30 @@ pub enum ControlLocation {
 /// A named mechanical position of a physical control.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct ControlPosition {
     /// Stable position identity or printed value.
     pub id: String,
     /// Printed label when available.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub label: Option<String>,
     /// Meaning of an icon or otherwise unlabeled position.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub description: Option<String>,
 }
 
 /// Firmware key scanning and logical control mappings.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct FirmwareControls {
     /// Logical behavior keyed by physical body control identity.
     pub controls: BTreeMap<String, FirmwareControl>,
@@ -123,24 +162,37 @@ pub struct FirmwareControls {
 /// A firmware mapping for one physical control.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct FirmwareControl {
     /// Logical key identities emitted by this control.
     pub keys: Vec<String>,
     /// Electrical predicates keyed by logical key identity.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub input: Option<BTreeMap<String, Vec<ControlInput>>>,
     /// Named logical actions and their required keys.
     pub actions: BTreeMap<String, ControlAction>,
     /// Firmware key combinations for named positions.
     pub positions: Vec<FirmwareControlPosition>,
     /// Firmware protocol interface for controls outside the key scanner.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub interface: Option<ControlInterface>,
     /// Reason no electronic mapping is established, when applicable.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub unavailable_reason: Option<String>,
 }
 
 /// Firmware interpretation of a control outside the key scanner.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum ControlInterface {
     /// Power switch sampled through a physical GPIO and serial status field.
     PowerSwitch {
@@ -191,6 +243,11 @@ pub enum ControlInterface {
 /// A logical action expressed through named keys.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct ControlAction {
     /// Logical keys selected by the action.
     pub keys: Vec<String>,
@@ -199,18 +256,29 @@ pub struct ControlAction {
 /// Firmware key selection for a named control position.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct FirmwareControlPosition {
     /// Position identity or printed value.
     pub position: String,
     /// Logical keys selecting this position.
     pub keys: Vec<String>,
     /// Whether this position asserts the associated binary control.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub active: Option<bool>,
 }
 
 /// An electrical predicate referencing physical body wiring by identity.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum ControlInput {
     /// Analog input with bounds obtained from firmware configuration.
     Adc {
@@ -219,8 +287,10 @@ pub enum ControlInput {
         /// Calibration-table intervals accepted by this predicate.
         intervals: Vec<CalibrationInterval>,
         /// Firmware callback that evaluates this input, when present.
+        #[cfg_attr(feature = "typescript", serde(default))]
         callback: Option<u64>,
         /// Callback result accepted as active, when present.
+        #[cfg_attr(feature = "typescript", serde(default))]
         expected_result: Option<u32>,
         /// Scanner record index within the firmware scanner table.
         scanner_index: u32,
@@ -262,6 +332,11 @@ pub enum ControlInput {
 /// Firmware scanner predicates used for digital keys.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum GpioScanner {
     /// Direct GPIO comparison using the declared expected logic level.
     Direct,
@@ -279,6 +354,11 @@ pub enum GpioScanner {
 /// Bounds stored as little-endian 16-bit values in firmware configuration.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct CalibrationInterval {
     /// Byte offset of the lower bound from the configuration base.
     pub lower: u32,
@@ -289,6 +369,11 @@ pub struct CalibrationInterval {
 /// Firmware routines used to read calibration and stable scanner state.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct ControlReaders {
     /// Routine reading 16-bit control calibration values.
     pub calibration: u64,
@@ -298,6 +383,11 @@ pub struct ControlReaders {
 
 /// Closed firmware scanner predicate discriminator from the scanner row.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum ScannerInputKind {
     /// Direct analog level predicate.
     #[serde(rename = "kind_0")]
@@ -335,6 +425,11 @@ impl ScannerInputKind {
 /// Checked identity and predicate operands stored in one scanner record.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct ScannerRecordWitness {
     /// Physical key identity stored at byte offset zero.
     pub physical_key: u32,
@@ -351,6 +446,11 @@ pub struct ScannerRecordWitness {
 /// A firmware scanner state reader.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct ScannerReader {
     /// Stable-state field offset within a scanner record.
     pub stable_offset: u32,
@@ -367,6 +467,11 @@ pub struct ScannerReader {
 /// A firmware table used to scan physical input predicates.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct ScannerTable {
     /// Table base address.
     pub base: u64,
@@ -383,6 +488,11 @@ pub struct ScannerTable {
 /// Native firmware event names and the identity of their source table.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct NativeKeyNames {
     /// Native event names and their numeric identities.
     pub rows: Vec<NativeKeyName>,
@@ -397,6 +507,11 @@ pub struct NativeKeyNames {
 /// One named native firmware event.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct NativeKeyName {
     /// Numeric event identity.
     pub event: u32,
@@ -409,6 +524,11 @@ pub struct NativeKeyName {
 /// An identified firmware address range without its contents.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct AddressIdentity {
     /// Start address.
     pub address: u64,
@@ -421,6 +541,11 @@ pub struct AddressIdentity {
 /// A configuration block addressed directly or through a firmware pointer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum ConfigurationLocation {
     /// Firmware address containing a configuration-block pointer.
     Pointer {
@@ -437,6 +562,11 @@ pub enum ConfigurationLocation {
 /// Firmware UI mode numbers beyond the REC and setup modes used by boot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct AdditionalUiModes {
     /// Playback UI mode.
     pub play: u32,
@@ -447,6 +577,11 @@ pub struct AdditionalUiModes {
 /// Firmware key identities used to navigate menus.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct MenuKeys {
     /// Accept or open-menu key identity.
     pub menu: String,

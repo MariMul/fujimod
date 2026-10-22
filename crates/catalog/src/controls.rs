@@ -18,6 +18,11 @@ pub const CONTROL_IDS_SCHEMA_URI: &str = "https://fujimod.com/schemas/control-id
 /// One explicitly located command in the firmware's debug transport vocabulary.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct DebugKey {
     /// Exact command token accepted by that transport.
     pub name: String,
@@ -28,6 +33,11 @@ pub struct DebugKey {
 /// Hand-maintained physical controls for one body.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct PhysicalControls {
     /// Schema identifying this document's closed Rust type.
     #[serde(rename = "$schema")]
@@ -49,28 +59,39 @@ pub struct PhysicalControls {
 /// A control's documented appearance and declared physical actions.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct PhysicalControl {
     /// Manual name of the control.
     pub name: String,
     /// Surface on which the control is located.
     pub location: ControlSurface,
     /// Manual page identifying the control, when available.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub manual_page: Option<u32>,
     /// Text printed on the control, when present.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub face: Option<String>,
     /// Meaning of a printed icon, when present.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub icon: Option<String>,
     /// Body connections carrying the control's electrical signals.
     pub connection_ids: Vec<String>,
     /// Whether the control's function can be assigned in the camera.
     pub assignable: bool,
     /// Documented initial function, when available.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub default_function: Option<String>,
     /// Physical role required by a declared cross-body operation.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub role: Option<ControlRole>,
     /// Whether this control has no electronic action.
     pub mechanical: bool,
     /// Actions defined by this control's mechanism; absent for mechanical controls.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub behavior: Option<ControlBehavior>,
 }
 
@@ -79,6 +100,11 @@ pub struct PhysicalControl {
     Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
 )]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum ControlRole {
     /// Relative command dial used to change the selected value.
     CommandControl,
@@ -87,6 +113,11 @@ pub enum ControlRole {
 /// Body surfaces used to locate a physical control in a manual.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum ControlSurface {
     /// Upper body surface.
     Top,
@@ -101,6 +132,11 @@ pub enum ControlSurface {
 /// An explicit binding in one of two distinct firmware input vocabularies.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum InputBinding {
     /// Command name accepted by the firmware's debug transport.
     DebugKey {
@@ -117,6 +153,11 @@ pub enum InputBinding {
 /// The actions offered by a physical control's mechanism.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum ControlBehavior {
     /// A momentary button.
     Button {
@@ -131,8 +172,13 @@ pub enum ControlBehavior {
     /// A directional pad with individually addressable direction identities.
     Pad {
         /// Inputs asserted by the four directions.
+        #[cfg_attr(
+            feature = "typescript",
+            tsify(type = "Partial<Record<PadDirection, InputBinding>>")
+        )]
         directions: BTreeMap<PadDirection, InputBinding>,
         /// Center press input, when present.
+        #[cfg_attr(feature = "typescript", serde(default))]
         press: Option<InputBinding>,
     },
     /// A dial with positions or relative steps.
@@ -140,6 +186,7 @@ pub enum ControlBehavior {
         /// Documented positions or relative step directions.
         motion: ControlMotion,
         /// Press input, when the dial is pushable.
+        #[cfg_attr(feature = "typescript", serde(default))]
         press: Option<InputBinding>,
         /// Whether the mechanism rotates without an end stop.
         endless: bool,
@@ -149,6 +196,7 @@ pub enum ControlBehavior {
         /// Documented positions or relative step directions.
         motion: ControlMotion,
         /// Press input, when the ring is pushable.
+        #[cfg_attr(feature = "typescript", serde(default))]
         press: Option<InputBinding>,
         /// Whether the mechanism rotates without an end stop.
         endless: bool,
@@ -170,6 +218,11 @@ pub enum ControlBehavior {
 /// A rotary mechanism's mutually exclusive position or step declarations.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum ControlMotion {
     /// Finite, named mechanical detents.
     Positions {
@@ -188,12 +241,19 @@ pub enum ControlMotion {
 /// A position's printed identity and explicit input selection.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct BoundPosition {
     /// Exact position identity accepted by the physical panel.
     pub id: String,
     /// Printed label, when present.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub label: Option<String>,
     /// Meaning of an unlabeled position or icon.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub description: Option<String>,
     /// Explicit firmware input binding.
     pub key: InputBinding,
@@ -206,6 +266,11 @@ pub struct BoundPosition {
     Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
 )]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum PadDirection {
     /// Upper direction.
     Up,
@@ -232,6 +297,11 @@ impl PadDirection {
 /// Generated firmware input facts, separate from the body's declarations.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct FirmwareControlIds {
     /// Schema identifying the generated document's closed Rust type.
     #[serde(rename = "$schema")]
@@ -259,24 +329,37 @@ pub struct FirmwareControlIds {
 /// One located input's identity, ownership, and checked electrical predicates.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct LocatedInput {
     /// Stable identity of the located input record.
     pub id: String,
     /// UI/native event identity established by the locator.
     pub event: u32,
     /// Exact debug command token for this input, absent for native-only inputs.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub debug_key: Option<String>,
     /// Physical control, connection detector, or unclaimed firmware input.
     pub target: InputTarget,
     /// Scanner row and its source witness, absent for inputs outside that table.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub scanner: Option<LocatedScannerRecord>,
     /// Located electrical interpretation, absent when the hardware is not modeled.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub electrical: Option<ElectricalInput>,
 }
 
 /// One scanner row's identity and located predicate operands.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct LocatedScannerRecord {
     /// Zero-based index within the identified scanner table.
     pub index: u32,
@@ -287,6 +370,11 @@ pub struct LocatedScannerRecord {
 /// Located electrical meaning, separate from scanner table operands.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum ElectricalInput {
     /// Analog input interpreted using located calibration intervals.
     Adc {
@@ -295,8 +383,10 @@ pub enum ElectricalInput {
         /// Configuration offsets for the accepted analog intervals.
         intervals: Vec<CalibrationInterval>,
         /// Firmware callback evaluating the input, when present.
+        #[cfg_attr(feature = "typescript", serde(default))]
         callback: Option<u64>,
         /// Callback result interpreted as active, when present.
+        #[cfg_attr(feature = "typescript", serde(default))]
         expected_result: Option<u32>,
     },
     /// Digital contact interpreted by a located scanner predicate.
@@ -330,6 +420,11 @@ pub enum ElectricalInput {
 /// Ownership of a generated input record without a control alias map.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum InputTarget {
     /// Input claimed by a canonical physical control identity.
     Control {

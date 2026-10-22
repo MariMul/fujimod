@@ -1,4 +1,4 @@
-//! Language type views generated from the catalog crate's schemars documents.
+//! Python catalog types generated from the catalog crate's schemars documents.
 use serde_json::{Map, Value};
 use std::{collections::BTreeMap, fs, path::Path};
 
@@ -204,23 +204,6 @@ fn validate_references(definitions: &Definitions) -> Result<(), String> {
     Ok(())
 }
 
-fn join_union(
-    types: impl IntoIterator<Item = Result<String, String>>,
-    separator: &str,
-) -> Result<String, String> {
-    let mut rendered = Vec::new();
-    for ty in types {
-        let ty = ty?;
-        if !rendered.contains(&ty) {
-            rendered.push(ty);
-        }
-    }
-    if rendered.is_empty() {
-        return Ok("never".into());
-    }
-    Ok(rendered.join(separator))
-}
-
 fn python_union(types: impl IntoIterator<Item = Result<String, String>>) -> Result<String, String> {
     let mut rendered = Vec::new();
     for ty in types {
@@ -371,87 +354,56 @@ fn python_alias(name: &str, value: &str) -> String {
     format!("{declaration}\n\n\n")
 }
 
-fn property_type(
-    schema: &Value,
-    is_python: bool,
-    python_string_refs: bool,
-) -> Result<String, String> {
+fn property_type(schema: &Value, python_string_refs: bool) -> Result<String, String> {
     if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
         let name = ref_name(reference)?;
-        return Ok(if is_python && python_string_refs {
+        return Ok(if python_string_refs {
             format!("\"{name}\"")
         } else {
             name
         });
     }
     if let Some(value) = schema.get("const") {
-        return literal(value, is_python);
+        return literal(value);
     }
     if let Some(values) = schema.get("enum").and_then(Value::as_array) {
-        if is_python {
-            return python_enum(values);
-        }
-        return join_union(values.iter().map(|value| literal(value, false)), " | ");
+        return python_enum(values);
     }
     for key in ["oneOf", "anyOf"] {
         if let Some(values) = schema.get(key).and_then(Value::as_array) {
-            if is_python {
-                if values.iter().all(|value| value.get("const").is_some()) {
-                    let literals: Vec<_> =
-                        values.iter().map(|value| value["const"].clone()).collect();
-                    return python_enum(&literals);
-                }
-                return python_union(
-                    values
-                        .iter()
-                        .map(|value| property_type(value, true, python_string_refs)),
-                );
+            if values.iter().all(|value| value.get("const").is_some()) {
+                let literals: Vec<_> = values.iter().map(|value| value["const"].clone()).collect();
+                return python_enum(&literals);
             }
-            return join_union(
+            return python_union(
                 values
                     .iter()
-                    .map(|value| property_type(value, is_python, python_string_refs)),
-                " | ",
+                    .map(|value| property_type(value, python_string_refs)),
             );
         }
     }
     if let Some(values) = schema.get("allOf").and_then(Value::as_array) {
-        if is_python && values.len() > 1 {
+        if values.len() > 1 {
             return Err("Python catalog types cannot express multi-branch allOf schemas".into());
         }
-        if is_python {
-            return python_union(
-                values
-                    .iter()
-                    .map(|value| property_type(value, true, python_string_refs)),
-            );
-        }
-        return join_union(
+        return python_union(
             values
                 .iter()
-                .map(|value| property_type(value, is_python, python_string_refs)),
-            " & ",
+                .map(|value| property_type(value, python_string_refs)),
         );
     }
     if let Some(types) = schema.get("type").and_then(Value::as_array) {
         if types.is_empty() || types.iter().any(|value| !value.is_string()) {
             return Err("catalog schema type arrays must contain string names".into());
         }
-        if is_python {
-            return python_union(types.iter().map(|value| {
-                primitive(value.as_str().unwrap(), schema, true, python_string_refs)
-            }));
-        }
-        return join_union(
+        return python_union(
             types
                 .iter()
-                .filter_map(Value::as_str)
-                .map(|name| primitive(name, schema, is_python, python_string_refs)),
-            " | ",
+                .map(|value| primitive(value.as_str().unwrap(), schema, python_string_refs)),
         );
     }
     if let Some(name) = schema.get("type").and_then(Value::as_str) {
-        return primitive(name, schema, is_python, python_string_refs);
+        return primitive(name, schema, python_string_refs);
     }
     if schema.get("properties").is_some() || schema.get("additionalProperties").is_some() {
         return Err("nested object catalog schemas must have a named Rust type".into());
@@ -459,46 +411,28 @@ fn property_type(
     Err("catalog schema has no type, reference, literal or composition".into())
 }
 
-fn literal(value: &Value, is_python: bool) -> Result<String, String> {
+fn literal(value: &Value) -> Result<String, String> {
     match value {
         Value::String(text) => {
             let encoded = serde_json::to_string(text).map_err(|error| error.to_string())?;
-            Ok(if is_python {
-                format!("Literal[{encoded}]")
-            } else {
-                encoded
-            })
+            Ok(format!("Literal[{encoded}]"))
         }
-        Value::Number(number) => Ok(if is_python {
-            format!("Literal[{number}]")
-        } else {
-            number.to_string()
-        }),
-        Value::Bool(value) => Ok(if is_python {
-            format!("Literal[{}]", if *value { "True" } else { "False" })
-        } else {
-            value.to_string()
-        }),
-        Value::Null => Ok(if is_python { "None" } else { "null" }.into()),
+        Value::Number(number) => Ok(format!("Literal[{number}]")),
+        Value::Bool(value) => Ok(format!(
+            "Literal[{}]",
+            if *value { "True" } else { "False" }
+        )),
+        Value::Null => Ok("None".into()),
         _ => Err("catalog schema enum values must be scalar".into()),
     }
 }
 
-fn primitive(
-    name: &str,
-    schema: &Value,
-    is_python: bool,
-    python_string_refs: bool,
-) -> Result<String, String> {
+fn primitive(name: &str, schema: &Value, python_string_refs: bool) -> Result<String, String> {
     match name {
         "object" => {
             if let Some(properties) = schema.get("properties").and_then(Value::as_object) {
                 if properties.is_empty() {
-                    return Ok(if is_python {
-                        "dict[str, Never]".into()
-                    } else {
-                        "Record<string, never>".into()
-                    });
+                    return Ok("dict[str, Never]".into());
                 }
                 return Err(
                     "inline object catalog schemas must be materialized as named types".into(),
@@ -506,18 +440,10 @@ fn primitive(
             }
             if let Some(additional) = schema.get("additionalProperties") {
                 if additional == &Value::Bool(false) {
-                    return Ok(if is_python {
-                        "dict[str, Never]".into()
-                    } else {
-                        "Record<string, never>".into()
-                    });
+                    return Ok("dict[str, Never]".into());
                 }
-                let item = property_type(additional, is_python, python_string_refs)?;
-                return Ok(if is_python {
-                    format!("dict[str, {item}]")
-                } else {
-                    format!("Record<string, {item}>")
-                });
+                let item = property_type(additional, python_string_refs)?;
+                return Ok(format!("dict[str, {item}]"));
             }
             Err("open catalog object has no typed additionalProperties schema".into())
         }
@@ -526,29 +452,21 @@ fn primitive(
                 .as_array()
                 .ok_or("catalog tuple prefixItems is not a list")?
                 .iter()
-                .map(|value| property_type(value, is_python, python_string_refs))
+                .map(|value| property_type(value, python_string_refs))
                 .collect::<Result<Vec<_>, _>>()?;
-            Ok(if is_python {
-                format!("tuple[{}]", members.join(", "))
-            } else {
-                format!("readonly [{}]", members.join(", "))
-            })
+            Ok(format!("tuple[{}]", members.join(", ")))
         }
         "array" => {
             let item = schema
                 .get("items")
-                .map(|value| property_type(value, is_python, python_string_refs))
+                .map(|value| property_type(value, python_string_refs))
                 .unwrap_or_else(|| Err("catalog array schema has no item type".into()))?;
-            Ok(if is_python {
-                format!("list[{item}]")
-            } else {
-                format!("readonly {item}[]")
-            })
+            Ok(format!("list[{item}]"))
         }
-        "integer" | "number" => Ok(if is_python { "int" } else { "number" }.into()),
-        "string" => Ok(if is_python { "str" } else { "string" }.into()),
-        "boolean" => Ok(if is_python { "bool" } else { "boolean" }.into()),
-        "null" => Ok(if is_python { "None" } else { "null" }.into()),
+        "integer" | "number" => Ok("int".into()),
+        "string" => Ok("str".into()),
+        "boolean" => Ok("bool".into()),
+        "null" => Ok("None".into()),
         other => Err(format!("unsupported catalog schema type {other:?}")),
     }
 }
@@ -564,33 +482,6 @@ fn object_members(schema: &Value) -> Option<(&Map<String, Value>, Vec<String>)> 
         .map(str::to_owned)
         .collect();
     Some((properties, required))
-}
-
-fn typescript(definitions: &Definitions) -> Result<String, String> {
-    let mut output = String::from("// Generated from the Rust catalog schemas.\n\n");
-    for (name, schema) in definitions {
-        output.push_str(&format!("export type {name} = "));
-        if let Some((properties, required)) = object_members(schema) {
-            output.push_str("{\n");
-            for (field, property) in properties {
-                let optional = if required.contains(field) { "" } else { "?" };
-                let ty = property_type(property, false, false)?;
-                let field = serde_json::to_string(field).map_err(|error| error.to_string())?;
-                output.push_str(&format!("  readonly {field}{optional}: {ty};\n"));
-            }
-            if schema.get("additionalProperties") != Some(&Value::Bool(false))
-                && schema.get("additionalProperties").is_some()
-            {
-                let ty = property_type(&schema["additionalProperties"], false, false)?;
-                output.push_str(&format!("  readonly [key: string]: {ty};\n"));
-            }
-            output.push_str("};\n\n");
-        } else {
-            output.push_str(&property_type(schema, false, false)?);
-            output.push_str(";\n\n");
-        }
-    }
-    Ok(output)
 }
 
 fn python_identifier(name: &str) -> bool {
@@ -650,7 +541,7 @@ fn python(definitions: &Definitions) -> Result<String, String> {
             if properties.keys().all(|field| python_identifier(field)) {
                 output.push_str(&format!("class {name}(TypedDict, total=False):\n"));
                 for (field, property) in properties {
-                    let ty = property_type(property, true, false)?;
+                    let ty = property_type(property, false)?;
                     let marker = if required.contains(field) {
                         "Required"
                     } else {
@@ -664,7 +555,7 @@ fn python(definitions: &Definitions) -> Result<String, String> {
                     // Functional TypedDict evaluates its annotations immediately. Keep the
                     // complete annotation as a forward-reference string so refs inside
                     // unions, optionals, lists, and maps do not depend on declaration order.
-                    let ty = property_type(property, true, false)?;
+                    let ty = property_type(property, false)?;
                     let ty = python_string_literal(&ty);
                     let marker = if required.contains(field) {
                         "Required"
@@ -688,7 +579,7 @@ fn python(definitions: &Definitions) -> Result<String, String> {
                 output.push_str("\n\n\n");
             }
         } else {
-            output.push_str(&python_alias(name, &property_type(schema, true, false)?));
+            output.push_str(&python_alias(name, &property_type(schema, false)?));
         }
     }
     let never_import = if output.contains("dict[str, Never]") {
@@ -702,18 +593,10 @@ fn python(definitions: &Definitions) -> Result<String, String> {
     ))
 }
 
-/// Generate Python and TypeScript catalog types from Rust-derived JSON Schema.
-pub fn generate(
-    schema_directory: &Path,
-    python_path: &Path,
-    typescript_path: &Path,
-    check: bool,
-) -> Result<(), String> {
+/// Generate the Python catalog types from Rust-derived JSON Schema.
+pub fn generate(schema_directory: &Path, python_path: &Path, check: bool) -> Result<(), String> {
     let definitions = schemas(schema_directory)?;
-    let expected = [
-        (python_path, python(&definitions)?),
-        (typescript_path, typescript(&definitions)?),
-    ];
+    let expected = [(python_path, python(&definitions)?)];
     for (path, content) in expected {
         if check {
             let actual =
@@ -740,7 +623,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
-    fn generates_python_and_typescript_from_closed_schema_graphs() {
+    fn generates_python_from_closed_schema_graphs() {
         let configuration = r##"{
             "$schema":"https://json-schema.org/draft/2020-12/schema",
             "$id":"https://fujimod.com/schemas/emulator-run-configuration.schema.json",
@@ -805,14 +688,9 @@ mod tests {
         fs::write(directory.join("emulator-run-overlay.schema.json"), overlay).unwrap();
         let schemas = schemas(&directory).unwrap();
         let python = python(&schemas).unwrap();
-        let typescript = typescript(&schemas).unwrap();
         assert!(python.contains("\"$schema\": Required[\"str\"]"));
         assert!(python.contains("\"firmware_id\": NotRequired[\"Identity\"]"));
         assert!(python.contains("type RunOverlay = RunOverlayVariant0 | RunOverlayVariant1"));
-        assert!(typescript.contains("readonly \"$schema\": string"));
-        assert!(typescript.contains("readonly \"body_id\": Identity"));
-        assert!(typescript.contains("\"display\""));
-        assert!(typescript.contains("\"controls\""));
         fs::remove_dir_all(directory).unwrap();
     }
 
@@ -823,14 +701,12 @@ mod tests {
             serde_json::json!({ "type": "object", "additionalProperties": true }),
             serde_json::json!({ "type": "array" }),
         ] {
-            assert!(property_type(&schema, true, false).is_err());
-            assert!(property_type(&schema, false, false).is_err());
+            assert!(property_type(&schema, false).is_err());
         }
         assert_eq!(
             primitive(
                 "object",
                 &serde_json::json!({ "type": "object", "additionalProperties": false }),
-                true,
                 false,
             )
             .unwrap(),
@@ -854,7 +730,7 @@ mod tests {
         )]);
         assert!(validate_references(&definitions).is_err());
         assert_eq!(
-            property_type(&definitions["Example"], true, false).unwrap(),
+            property_type(&definitions["Example"], false).unwrap(),
             "Literal[\"rom\"] | RunStart"
         );
     }

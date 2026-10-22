@@ -8,14 +8,22 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct SocHardware {
     /// Application-processor identification and cache topology, when declared.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub application: Option<ApplicationHardware>,
     /// Hardware interrupt-controller interfaces.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub interrupt_controller: Option<InterruptControllerHardware>,
     /// Inputs to a programmable interrupt controller; core routing is selected by its registers.
     pub interrupt_inputs: Vec<ControllerInterruptInput>,
     /// Companion-processor clock and mailbox connections, when present.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub companion: Option<CompanionHardware>,
     /// Additional block parameters, keyed by the block's identity.
     pub blocks: BTreeMap<String, BlockHardware>,
@@ -139,6 +147,11 @@ impl SocHardware {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct ControllerInterruptInput {
     /// Register block producing the interrupt.
     pub source_block_id: String,
@@ -152,6 +165,11 @@ pub struct ControllerInterruptInput {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum ApplicationHardware {
     /// ARMv7-A configuration base and cache capacities.
     Armv7a {
@@ -181,6 +199,11 @@ pub enum ApplicationHardware {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct CacheGeometry {
     /// Per-core level-one data-cache capacity.
     pub l1_data_bytes: u64,
@@ -194,6 +217,11 @@ pub struct CacheGeometry {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum InterruptControllerHardware {
     /// GICv2 distributor and CPU interface.
     GicV2 {
@@ -221,6 +249,11 @@ pub enum InterruptControllerHardware {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct CompanionHardware {
     /// Companion processor identity in the SoC processor list.
     pub processor_id: String,
@@ -238,6 +271,11 @@ pub struct CompanionHardware {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct CompanionMailbox {
     /// Request mailbox index.
     pub request: u32,
@@ -255,6 +293,11 @@ pub struct CompanionMailbox {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum BlockHardware {
     /// DMA channel count and request-multiplexer connection.
     Dma {
@@ -278,8 +321,10 @@ pub enum BlockHardware {
     /// Display-channel pixel packing declared by the controller contract.
     Display {
         /// Picture-plane packing, when specified.
+        #[cfg_attr(feature = "typescript", serde(default))]
         picture_layout: Option<PictureLayout>,
         /// Video-plane packing, when specified.
+        #[cfg_attr(feature = "typescript", serde(default))]
         video_layout: Option<VideoLayout>,
     },
     /// Serial-controller DMA request lines.
@@ -299,6 +344,11 @@ pub enum BlockHardware {
 /// Picture-plane pixel packing declared by a display controller.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum PictureLayout {
     /// Blue, green, red and straight-alpha bytes.
     Bgra8888Straight,
@@ -307,6 +357,11 @@ pub enum PictureLayout {
 /// Video-plane pixel packing declared by a display controller.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum VideoLayout {
     /// Two luma samples followed by shared chroma samples.
     Yycbcr422,

@@ -31,6 +31,11 @@ pub struct Facts {
 /// Firmware-specific remote inputs, without snapshots of live tables.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct FirmwareFacts {
     /// Schema identity.
     #[serde(rename = "$schema")]
@@ -62,6 +67,11 @@ pub struct FirmwareFacts {
 /// A name accepted by the stock debug key command.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct DebugKey {
     /// Native name.
     pub name: String,
@@ -72,6 +82,11 @@ pub struct DebugKey {
 /// Live menu roots, row descriptors and navigation.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct MenuTables {
     /// Address of the root pointer table.
     pub roots_address: u64,
@@ -100,16 +115,27 @@ pub struct MenuTables {
 /// A root menu entry strategy.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RootRoute {
     /// Navigation role used to open the root.
     pub entry: String,
     /// Optional tab key.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub tab: Option<u32>,
 }
 
 /// Native menu tab bounds.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct MenuNavigation {
     /// Shooting first tab.
     pub shooting_first_tab: u32,
@@ -122,6 +148,11 @@ pub struct MenuNavigation {
 /// Offsets within a native menu descriptor and row.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct MenuLayout {
     /// Node byte size.
     pub size: u32,
@@ -146,6 +177,11 @@ pub struct MenuLayout {
 /// Native menu descriptor word offsets.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct MenuFields {
     /// Menu id.
     pub menu_id: u32,
@@ -168,6 +204,11 @@ pub struct MenuFields {
 /// Live menu cursor and status-array offsets.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct CursorLayout {
     /// Cursor byte size.
     pub size: u32,
@@ -184,6 +225,11 @@ pub struct CursorLayout {
 /// Live cursor word offsets.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct CursorFields {
     /// Pointer.
     pub pointer: u32,
@@ -204,6 +250,11 @@ pub struct CursorFields {
 /// Quick menu dimensions.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct QuickGrid {
     /// Rows.
     pub rows: u32,
@@ -216,6 +267,11 @@ pub struct QuickGrid {
 /// A located framebuffer and its live selection pointer.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct Scanout {
     /// Address.
     pub address: u64,
@@ -242,6 +298,11 @@ pub struct Scanout {
 /// Implemented scanout encodings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum PixelFormat {
     Bgra8888,
 }
@@ -249,6 +310,11 @@ pub enum PixelFormat {
 /// Native text and bitmap resource table layouts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct Resources {
     /// Language.
     pub language: ConfigurationLocation,
@@ -293,6 +359,11 @@ pub struct Resources {
 /// Registry layout locating the native icon font resource.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct GlyphResources {
     /// Resource registry base address.
     pub registry_address: u64,
@@ -309,6 +380,11 @@ pub struct GlyphResources {
 /// Native bitmap descriptor table layout.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct BitmapResources {
     /// Table.
     pub table: u64,
@@ -329,6 +405,11 @@ pub struct BitmapResources {
 /// Bitmap record fields, with explicit widths.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct BitmapLayout {
     /// Data bytes.
     pub data_bytes: u32,

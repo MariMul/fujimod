@@ -8,6 +8,11 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct BodyHardware {
     /// Serial endpoints and their processor-side connections.
     pub serial_attachments: Vec<SerialAttachment>,
@@ -23,6 +28,11 @@ pub struct BodyHardware {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct SerialAttachment {
     /// Installed part identity.
     pub part_id: String,
@@ -31,6 +41,7 @@ pub struct SerialAttachment {
     /// Connection carrying endpoint data.
     pub connection_id: String,
     /// Connection selecting the endpoint, when declared.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub select_connection_id: Option<String>,
 }
 
@@ -38,6 +49,11 @@ pub struct SerialAttachment {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct GpioFeedback {
     /// Body connection exposing the output pad.
     pub output_connection_id: String,
@@ -87,6 +103,11 @@ impl BodyHardware {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum PeripheralPart {
     /// Focus actuator accepting serial commands.
     FocusActuator,
@@ -114,10 +135,13 @@ pub enum PeripheralPart {
     /// Serial NOR flash geometry and device identification, when declared.
     SerialNorFlash {
         /// JEDEC identification value, when supplied by the part definition.
+        #[cfg_attr(feature = "typescript", serde(default))]
         jedec_id: Option<u32>,
         /// Erase-unit capacity in bytes, when declared.
+        #[cfg_attr(feature = "typescript", serde(default))]
         erase_bytes: Option<u64>,
         /// Program-page capacity in bytes, when declared.
+        #[cfg_attr(feature = "typescript", serde(default))]
         page_bytes: Option<u64>,
     },
 }

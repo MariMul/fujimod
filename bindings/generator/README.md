@@ -50,9 +50,10 @@ omitted. Command validation and wire encoding remain ordinary Rust code.
 
 Catalog documents use their Rust serde structs as the source of truth. The
 catalog crate emits schemas with `schemars`; this generator turns the selected
-document schemas into public TypeScript aliases and Python `TypedDict` types.
-The Python module defines runtime-importable `TypedDict` classes. The Python
-and TypeScript bindings share those field names, requiredness,
-references and tagged unions. The catalog schema check verifies the Rust-to-
-schema step, while `mise run catalog-types-check` verifies the schema-to-
-language step. Regenerate both language views with `mise run catalog-types`.
+document schemas into runtime-importable Python `TypedDict` types. The catalog
+schema check verifies the Rust-to-schema step, while
+`mise run catalog-types-check` verifies the schema-to-Python step. Regenerate
+the Python module with `mise run catalog-types`. TypeScript declarations for the
+same documents come from `tsify` derives on the catalog types (the
+`fujimod-catalog` `typescript` feature) and are emitted by the wasm-bindgen build
+into `pkg/fujimod.d.ts`.

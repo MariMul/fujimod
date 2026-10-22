@@ -20,9 +20,18 @@ include!(concat!(env!("OUT_DIR"), "/bundled_configurations.rs"));
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunConfiguration {
     /// Stable schema URI for this run-configuration document.
     #[serde(rename = "$schema")]
+    #[cfg_attr(
+        feature = "typescript",
+        tsify(type = "\"https://fujimod.com/schemas/emulator-run-configuration.schema.json\"")
+    )]
     pub schema_uri: String,
     /// Run-configuration document version.
     pub schema: u32,
@@ -37,16 +46,20 @@ pub struct RunConfiguration {
     /// Firmware entry mode selected for this run.
     pub start: RunStart,
     /// Execution policy for this run.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub execution: Option<RunExecution>,
     /// Declared model-specific reset inputs, addressed by catalog identity.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub inputs: Option<RunInputs>,
     /// External scene inputs generated for this run.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub scene: Option<RunScene>,
     /// Named overlays to apply in declaration order.
     pub overlays: Vec<String>,
     /// Browser camera attachments declared by a selected overlay.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(default)]
+    #[cfg_attr(feature = "typescript", tsify(type = "RunBrowserCamera | null"))]
     pub browser_camera: Option<RunBrowserCamera>,
 }
 
@@ -378,6 +391,11 @@ impl RunConfiguration {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct ResolvedConfiguration {
     /// Validated run configuration selected by identity.
     pub configuration: RunConfiguration,
@@ -459,9 +477,7 @@ impl ResolvedConfiguration {
                 }
                 RunOverlayChange::BrowserCamera { browser_camera } => {
                     if !changed.insert("browser_camera") {
-                        return Err(
-                            "run overlays declare the browser camera more than once".into()
-                        );
+                        return Err("run overlays declare the browser camera more than once".into());
                     }
                     browser_camera.validate()?;
                     configuration.browser_camera = Some(browser_camera);
@@ -481,6 +497,11 @@ impl ResolvedConfiguration {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum RunStart {
     /// Reset through the selected firmware's real boot ROM.
     Rom,
@@ -493,6 +514,11 @@ pub enum RunStart {
 /// Intended operation selected by a run configuration.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum RunPurpose {
     /// Start the selected firmware for normal operation.
     RomBoot,
@@ -510,6 +536,11 @@ pub enum RunPurpose {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunInstructionRate {
     /// Instruction entries consumed per board tick.
     pub numerator: u64,
@@ -534,6 +565,11 @@ impl RunInstructionRate {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum RunInputs {
     /// Reset inputs for an EXR2-based body.
     Exr2(Exr2RunInputs),
@@ -557,6 +593,11 @@ impl RunInputs {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct Exr2RunInputs {
     /// GPIO reset state and explicitly released controls.
     pub gpio: RunGpioInputs,
@@ -575,6 +616,7 @@ pub struct Exr2RunInputs {
     /// Initial SD card insertion and protection state.
     pub card: RunCardInput,
     /// Policy for accepting a firmware first-start prompt, when needed.
+    #[cfg_attr(feature = "typescript", serde(default))]
     pub first_start: Option<RunFirstStart>,
 }
 
@@ -666,6 +708,11 @@ impl Exr2RunInputs {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunFirstStart {
     /// Firmware logical key identity, such as `EXE_M`.
     pub key_id: String,
@@ -691,6 +738,11 @@ impl RunFirstStart {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunGpioInputs {
     /// SoC GPIO block identity.
     pub block_id: String,
@@ -709,6 +761,11 @@ pub struct RunGpioInputs {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunGpioOutputState {
     /// Body connection identity for the output signal.
     pub connection_id: String,
@@ -722,6 +779,11 @@ pub struct RunGpioOutputState {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunKeyState {
     /// Body connection identity for the control.
     pub connection_id: String,
@@ -733,6 +795,11 @@ pub struct RunKeyState {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunEncoderInput {
     /// Body connection identity carrying both encoder signals.
     pub connection_id: String,
@@ -744,6 +811,11 @@ pub struct RunEncoderInput {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunConnectionState {
     /// Body connection identity.
     pub connection_id: String,
@@ -755,6 +827,11 @@ pub struct RunConnectionState {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunAdcInputs {
     /// SoC ADC block identity.
     pub block_id: String,
@@ -766,6 +843,11 @@ pub struct RunAdcInputs {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunPowerInput {
     /// Body power-controller part identity.
     pub part_id: String,
@@ -781,6 +863,11 @@ pub struct RunPowerInput {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunMcuInput {
     /// Body MCU-interface part identity.
     pub part_id: String,
@@ -794,6 +881,11 @@ pub struct RunMcuInput {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunRtcInput {
     /// Initial seconds in the device clock's declared epoch.
     pub initial_seconds: u32,
@@ -818,6 +910,11 @@ impl RunRtcInput {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunSerialRegisters {
     /// Body part identity whose external registers receive these values.
     pub part_id: String,
@@ -829,6 +926,11 @@ pub struct RunSerialRegisters {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunRegisterValue {
     /// External part register number.
     pub register: u8,
@@ -850,6 +952,11 @@ fn validate_register_values(values: &[RunRegisterValue]) -> Result<(), String> {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunUsbInput {
     /// Body USB connection identity.
     pub connection_id: String,
@@ -861,6 +968,11 @@ pub struct RunUsbInput {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunCardInput {
     /// Body connection identity for the removable-card slot.
     pub connection_id: String,
@@ -874,6 +986,11 @@ pub struct RunCardInput {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunBrowserCamera {
     /// Blank virtual card inserted into the declared card slot.
     pub virtual_card: RunVirtualCard,
@@ -898,6 +1015,11 @@ impl RunBrowserCamera {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunBrowserSensor {
     /// Identity of the run's scene asset that supplies the sensor's exposure input.
     pub frames: String,
@@ -916,6 +1038,11 @@ impl RunBrowserSensor {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunVirtualCard {
     /// Card filesystem.
     pub filesystem: RunCardFilesystem,
@@ -944,6 +1071,11 @@ impl RunVirtualCard {
 /// Card filesystems a virtual card can declare.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase", deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum RunCardFilesystem {
     /// FAT32 with the declared partition start and cluster size.
     Fat32,
@@ -952,6 +1084,11 @@ pub enum RunCardFilesystem {
 /// Still-capture policy identities a browser camera can select.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum RunStillCapture {
     /// Register-level capture, observed read-only on the card.
     RegisterCaptureReadonlyCardObservation,
@@ -961,6 +1098,11 @@ pub enum RunStillCapture {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunPreview {
     /// Preview frames per second: one through sixty.
     pub frames_per_second: u8,
@@ -994,9 +1136,18 @@ impl RunPreview {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunOverlay {
     /// Stable schema URI for this run-overlay document.
     #[serde(rename = "$schema")]
+    #[cfg_attr(
+        feature = "typescript",
+        tsify(type = "\"https://fujimod.com/schemas/emulator-run-overlay.schema.json\"")
+    )]
     pub schema_uri: String,
     /// Run-overlay document version.
     pub schema: u32,
@@ -1040,6 +1191,11 @@ impl RunOverlay {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum RunOverlayChange {
     /// Connect or disconnect the declared USB cable.
     UsbConnection { connected: bool },
@@ -1057,6 +1213,11 @@ pub enum RunOverlayChange {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunExecution {
     /// Strictly model unsupported hardware and bus behavior.
     pub mode: RunExecutionMode,
@@ -1071,6 +1232,11 @@ pub struct RunExecution {
 /// A supported run execution mode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum RunExecutionMode {
     /// Refuse unsupported hardware or bus behavior.
     Strict,
@@ -1079,6 +1245,11 @@ pub enum RunExecutionMode {
 /// A supported processor execution backend.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum RunEngine {
     /// Run the configured processors through the Unicorn backend.
     Unicorn,
@@ -1088,6 +1259,11 @@ pub enum RunEngine {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum RunScene {
     /// Generated scene assets for an EXR2-based body.
     Exr2(Exr2RunScene),
@@ -1122,6 +1298,11 @@ impl RunScene {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct Exr2RunScene {
     /// Deterministic external byte assets generated from fixed patterns.
     pub generated_assets: Vec<GeneratedSceneAsset>,
@@ -1187,6 +1368,11 @@ impl Exr2RunScene {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct GeneratedSceneAsset {
     /// Stable asset identity scoped to the configuration.
     pub id: String,
@@ -1214,6 +1400,11 @@ impl GeneratedSceneAsset {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunImages {
     /// Live-view image and raster layout.
     pub live_image: RunImage,
@@ -1223,6 +1414,11 @@ pub struct RunImages {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunImage {
     /// Raster width in pixels.
     pub width: usize,
@@ -1238,6 +1434,11 @@ pub struct RunImage {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunStatistics {
     /// Statistics spans presented to live-view hardware.
     pub live_statistics: Vec<RunStatisticsSpan>,
@@ -1247,6 +1448,11 @@ pub struct RunStatistics {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RunStatisticsSpan {
     /// Statistics destination selected by the device implementation.
     pub destination: usize,
@@ -1396,33 +1602,26 @@ mod tests {
 
     #[test]
     fn browser_camera_overlay_declares_card_still_capture_and_preview() {
-        let resolved = ResolvedConfiguration::with_overlays(
-            "x70-110-rec",
-            &["x70-110-browser-camera".into()],
-        )
-        .unwrap();
+        let resolved =
+            ResolvedConfiguration::with_overlays("x70-110-rec", &["x70-110-browser-camera".into()])
+                .unwrap();
         let browser = resolved.configuration.browser_camera.unwrap();
         assert_eq!(browser.virtual_card.label, "CAMERA");
         assert_eq!(browser.virtual_card.sectors, 0x0100_0000);
         assert_eq!(browser.virtual_card.partition_start, 8192);
         assert_eq!(browser.virtual_card.sectors_per_cluster, 64);
         assert_eq!(browser.preview.frames_per_second, 10);
-        assert_eq!(
-            resolved.configuration.overlays,
-            ["x70-110-browser-camera"]
-        );
+        assert_eq!(resolved.configuration.overlays, ["x70-110-browser-camera"]);
     }
 
     #[test]
     fn browser_camera_refuses_unsupported_card_and_cadence() {
-        let mut browser = ResolvedConfiguration::with_overlays(
-            "x70-110-rec",
-            &["x70-110-browser-camera".into()],
-        )
-        .unwrap()
-        .configuration
-        .browser_camera
-        .unwrap();
+        let mut browser =
+            ResolvedConfiguration::with_overlays("x70-110-rec", &["x70-110-browser-camera".into()])
+                .unwrap()
+                .configuration
+                .browser_camera
+                .unwrap();
         browser.virtual_card.label = "TOO-LONG-LABEL".into();
         assert!(browser.validate().is_err());
         browser.virtual_card.label = "CAMERA".into();
@@ -1448,14 +1647,16 @@ mod tests {
                 denominator: 1
             }
         );
-        assert!(ResolvedConfiguration::with_overlays(
-            "x20-103",
-            &[
-                "x20-103-discovery-execution".into(),
-                "x20-103-discovery-execution".into(),
-            ],
-        )
-        .is_err());
+        assert!(
+            ResolvedConfiguration::with_overlays(
+                "x20-103",
+                &[
+                    "x20-103-discovery-execution".into(),
+                    "x20-103-discovery-execution".into(),
+                ],
+            )
+            .is_err()
+        );
     }
 
     #[test]
