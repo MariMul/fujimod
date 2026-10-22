@@ -322,10 +322,12 @@ pub fn read_raf<R: Read + Seek>(mut file: R) -> io::Result<RafScene> {
     }
 
     // Read EXIF metadata from JPEG segment.
+    // EXIF headers are typically in the first 64 KiB of the JPEG.
     file.seek(SeekFrom::Start(jpeg_offset))?;
-    let mut jpeg_header = vec![0u8; jpeg_size.min(16384) as usize];
-    let jpeg_read = file.read(&mut jpeg_header)?;
-    let exif_metadata = parse_exif(&jpeg_header[..jpeg_read])?;
+    let jpeg_read_size = std::cmp::min(jpeg_size as usize, 65536);
+    let mut jpeg_buf = vec![0u8; jpeg_read_size];
+    let jpeg_read = file.read(&mut jpeg_buf)?;
+    let exif_metadata = parse_exif(&jpeg_buf[..jpeg_read])?;
 
     // Compute per-site radiance.
     let radiance = compute_radiance(&raw_samples, black_level, &exif_metadata);
@@ -414,74 +416,177 @@ pub fn raf_to_radiance_rgb(scene: &RafScene) -> RafRadianceRgb {
 }
 
 /// Parse exposure metadata from JPEG/EXIF headers.
-/// Searches for EXIF marker (0xFFE1) and extracts:
-/// - ISO (tag 0x8827)
-/// - Exposure time (tag 0x829A: rational numerator/denominator)
-/// - F-number (tag 0x829D: rational numerator/denominator)
-/// - Fujifilm maker notes: Dynamic Range (tag 0x1000, typically)
+/// Searches for EXIF marker (0xFFE1) and extracts from the ExifIFD (sub-directory):
+/// - ISO (tag 0x8827): type 3 (u16), count 1
+/// - Exposure time (tag 0x829A): type 5 (rational), count 1
+/// - F-number (tag 0x829D): type 5 (rational), count 1
+/// - Fujifilm maker notes (tag 0x927C): DevelopmentDynamicRange (0x1403, type 3 u16)
+/// Returns error if any required tag is missing or unparsable.
 fn parse_exif(jpeg_data: &[u8]) -> io::Result<RecordedExposure> {
-    // Find EXIF marker (0xFFE1) and skip TIFF header to IFD.
+    // Find EXIF marker (0xFFE1) and get TIFF base offset.
     let exif_start = find_exif_ifd(jpeg_data)?;
 
-    // Default values.
-    let mut iso: u16 = 200;
-    let mut exposure_time: f64 = 1.0 / 60.0;
-    let mut f_number: f64 = 5.6;
-    let mut dynamic_range: u16 = 100;
-
-    // Parse main IFD (offset 0 in EXIF TIFF).
-    let tags = parse_ifd(&jpeg_data[exif_start..], 0)?;
-
-    // Extract standard EXIF tags.
-    // Tag 0x8827: ISO sensitivity (u16, count 1).
-    if let Some((typ, count, value)) = tags.get(&0x8827u16) {
-        if *typ == 3 && *count == 1 {
-            iso = (*value & 0xFFFF) as u16;
-        }
+    // Read TIFF IFD offset from the TIFF header (bytes 4-7, little-endian).
+    if exif_start + 8 > jpeg_data.len() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "EXIF TIFF header truncated",
+        ));
     }
+    let main_ifd_offset = u32::from_le_bytes([
+        jpeg_data[exif_start + 4],
+        jpeg_data[exif_start + 5],
+        jpeg_data[exif_start + 6],
+        jpeg_data[exif_start + 7],
+    ]) as usize;
 
-    // Tag 0x829A: exposure time (rational, 2 u32: numerator, denominator).
-    if let Some((typ, count, offset)) = tags.get(&0x829Au16) {
-        if *typ == 5 && *count == 1 {
-            if let Some(exif_data) = jpeg_data.get((*offset as usize)..(*offset as usize + 8)) {
-                let num = u32::from_le_bytes([exif_data[0], exif_data[1], exif_data[2], exif_data[3]]);
-                let denom = u32::from_le_bytes([exif_data[4], exif_data[5], exif_data[6], exif_data[7]]);
-                if denom != 0 {
-                    exposure_time = num as f64 / denom as f64;
+    // Parse main IFD.
+    let main_ifd_tags = parse_ifd(&jpeg_data[exif_start..], main_ifd_offset)?;
+
+    // Find ExifOffset (tag 0x8769) which points to the ExifIFD.
+    let exif_ifd_offset = match main_ifd_tags.get(&0x8769u16) {
+        Some((_, _, offset)) => *offset as usize,
+        None => return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Missing ExifIFD pointer tag (0x8769)",
+        )),
+    };
+
+    // Parse ExifIFD.
+    let tags = parse_ifd(&jpeg_data[exif_start..], exif_ifd_offset)?;
+
+    // Extract ISO (tag 0x8827): type 3 (u16), count 1.
+    let iso = match tags.get(&0x8827u16) {
+        Some((typ, count, value)) if *typ == 3 && *count == 1 => *value as u16,
+        _ => return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Missing or invalid ISO tag (0x8827)",
+        )),
+    };
+
+    // Extract exposure time (tag 0x829A): type 5 (rational), count 1.
+    // Offset is relative to the start of the EXIF TIFF data.
+    let exposure_time = match tags.get(&0x829Au16) {
+        Some((typ, count, offset)) if *typ == 5 && *count == 1 => {
+            let abs_offset = exif_start + *offset as usize;
+            if abs_offset + 8 > jpeg_data.len() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Exposure time rational offset out of bounds",
+                ));
+            }
+            let num = u32::from_le_bytes([
+                jpeg_data[abs_offset],
+                jpeg_data[abs_offset + 1],
+                jpeg_data[abs_offset + 2],
+                jpeg_data[abs_offset + 3],
+            ]);
+            let denom = u32::from_le_bytes([
+                jpeg_data[abs_offset + 4],
+                jpeg_data[abs_offset + 5],
+                jpeg_data[abs_offset + 6],
+                jpeg_data[abs_offset + 7],
+            ]);
+            if denom == 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Exposure time denominator is zero",
+                ));
+            }
+            num as f64 / denom as f64
+        }
+        _ => return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Missing or invalid exposure time tag (0x829A)",
+        )),
+    };
+
+    // Extract f-number (tag 0x829D): type 5 (rational), count 1.
+    // Offset is relative to the start of the EXIF TIFF data.
+    let f_number = match tags.get(&0x829Du16) {
+        Some((typ, count, offset)) if *typ == 5 && *count == 1 => {
+            let abs_offset = exif_start + *offset as usize;
+            if abs_offset + 8 > jpeg_data.len() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "F-number rational offset out of bounds",
+                ));
+            }
+            let num = u32::from_le_bytes([
+                jpeg_data[abs_offset],
+                jpeg_data[abs_offset + 1],
+                jpeg_data[abs_offset + 2],
+                jpeg_data[abs_offset + 3],
+            ]);
+            let denom = u32::from_le_bytes([
+                jpeg_data[abs_offset + 4],
+                jpeg_data[abs_offset + 5],
+                jpeg_data[abs_offset + 6],
+                jpeg_data[abs_offset + 7],
+            ]);
+            if denom == 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "F-number denominator is zero",
+                ));
+            }
+            num as f64 / denom as f64
+        }
+        _ => return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Missing or invalid f-number tag (0x829D)",
+        )),
+    };
+
+    // Extract DevelopmentDynamicRange from Fujifilm maker notes (tag 0x927C).
+    // Offset is relative to the start of the EXIF TIFF data.
+    let dynamic_range = match tags.get(&0x927Cu16) {
+        Some((_, _, offset)) => {
+            let abs_offset = exif_start + *offset as usize;
+            // Maker notes start with "FUJIFILM\x0c\x00\x00\x00" (8 bytes magic + 4 bytes LE IFD offset).
+            if abs_offset + 12 > jpeg_data.len()
+                || &jpeg_data[abs_offset..abs_offset + 8] != b"FUJIFILM"
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Invalid Fujifilm maker notes header",
+                ));
+            }
+            // The IFD offset is at maker_notes_offset + 8 (LE u32).
+            let maker_ifd_offset = u32::from_le_bytes([
+                jpeg_data[abs_offset + 8],
+                jpeg_data[abs_offset + 9],
+                jpeg_data[abs_offset + 10],
+                jpeg_data[abs_offset + 11],
+            ]) as usize;
+
+            // Parse maker notes IFD relative to the maker notes start.
+            let maker_tags = parse_ifd(&jpeg_data[abs_offset..], maker_ifd_offset)?;
+
+            // Tag 0x1403: DevelopmentDynamicRange (type 3, u16).
+            match maker_tags.get(&0x1403u16) {
+                Some((typ, count, value)) if *typ == 3 && *count == 1 => {
+                    let dr_val = *value as u16;
+                    // Validate: should be 100, 200, or 400.
+                    match dr_val {
+                        100 | 200 | 400 => dr_val,
+                        _ => return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!("Invalid DynamicRange value: {}", dr_val),
+                        )),
+                    }
                 }
+                _ => return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Missing or invalid DevelopmentDynamicRange tag (0x1403)",
+                )),
             }
         }
-    }
-
-    // Tag 0x829D: f-number (rational, 2 u32: numerator, denominator).
-    if let Some((typ, count, offset)) = tags.get(&0x829Du16) {
-        if *typ == 5 && *count == 1 {
-            if let Some(exif_data) = jpeg_data.get((*offset as usize)..(*offset as usize + 8)) {
-                let num = u32::from_le_bytes([exif_data[0], exif_data[1], exif_data[2], exif_data[3]]);
-                let denom = u32::from_le_bytes([exif_data[4], exif_data[5], exif_data[6], exif_data[7]]);
-                if denom != 0 {
-                    f_number = num as f64 / denom as f64;
-                }
-            }
-        }
-    }
-
-    // Tag 0x8F97: maker notes offset.
-    if let Some((_, _, offset)) = tags.get(&0x8F97u16) {
-        if let Ok(maker_tags) = parse_ifd(&jpeg_data[exif_start..], *offset as usize) {
-            // Fujifilm maker tag for dynamic range: 0x1000.
-            // DR 100: 0, DR 200: 1, DR 400: 2.
-            if let Some((_, _, value)) = maker_tags.get(&0x1000u16) {
-                let dr_code = *value as u8;
-                dynamic_range = match dr_code {
-                    0 => 100,
-                    1 => 200,
-                    2 => 400,
-                    _ => 100,
-                };
-            }
-        }
-    }
+        None => return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Missing Fujifilm maker notes tag (0x927C)",
+        )),
+    };
 
     Ok(RecordedExposure {
         seconds: exposure_time,
@@ -526,11 +631,13 @@ fn parse_ifd(
     let mut tags = std::collections::HashMap::new();
 
     if ifd_offset + 2 > exif_data.len() {
+        // Silent return - check during debugging only
         return Ok(tags);
     }
 
     let entry_count = u16::from_le_bytes([exif_data[ifd_offset], exif_data[ifd_offset + 1]]) as usize;
     if ifd_offset + 2 + 12 * entry_count > exif_data.len() {
+        // Silent return - check during debugging only
         return Ok(tags);
     }
 
@@ -660,6 +767,58 @@ mod tests {
     }
 
     #[test]
+    fn test_exif_parsing_debug() {
+        // Debug test to verify EXIF parsing on real RAF file
+        if let Ok(raf_path) = std::env::var("FUJIMOD_TEST_RAF") {
+            if let Ok(mut file) = std::fs::File::open(&raf_path) {
+                let mut header_buf = [0u8; 148];
+                use std::io::Read;
+                if file.read_exact(&mut header_buf).is_ok() {
+                    let jpeg_off = u32::from_be_bytes([header_buf[84], header_buf[85], header_buf[86], header_buf[87]]) as u64;
+                    let jpeg_sz = u32::from_be_bytes([header_buf[88], header_buf[89], header_buf[90], header_buf[91]]) as u64;
+
+                    eprintln!("JPEG at offset {}, size {}", jpeg_off, jpeg_sz);
+
+                    // Seek and read
+                    use std::io::Seek;
+                    file.seek(std::io::SeekFrom::Start(jpeg_off)).ok();
+                    let read_size = std::cmp::min(jpeg_sz as usize, 65536);
+                    let mut jpeg_buf = vec![0u8; read_size];
+                    if let Ok(n) = file.read(&mut jpeg_buf) {
+                        eprintln!("Read {} bytes of JPEG (requested {})", n, jpeg_buf.len());
+
+                        // Try to find and parse EXIF
+                        match parse_exif(&jpeg_buf[..n]) {
+                            Ok(exp) => {
+                                eprintln!("SUCCESS: ISO {}, {:.6}s, f/{:.1}, DR{}", exp.iso, exp.seconds, exp.f_number, exp.dynamic_range);
+                            }
+                            Err(e) => {
+                                eprintln!("FAILED to parse EXIF: {}", e);
+
+                                // Try manual parsing for debugging
+                                eprintln!("Attempting manual EXIF debug...");
+                                if let Ok(exif_start_pos) = find_exif_ifd(&jpeg_buf[..n]) {
+                                    eprintln!("Found EXIF at position {}, slice len={}", exif_start_pos, n - exif_start_pos);
+                                    let tags = parse_ifd(&jpeg_buf[exif_start_pos..n], 0).unwrap_or_default();
+                                    eprintln!("Main IFD has {} tags", tags.len());
+                                    for (tag, (typ, count, val)) in &tags {
+                                        eprintln!("  Tag 0x{:04x}: type={}, count={}, value=0x{:08x}", tag, typ, count, val);
+                                    }
+                                    if let Some((_, _, exif_off)) = tags.get(&0x8769u16) {
+                                        eprintln!("Found ExifIFD at offset {}", exif_off);
+                                    } else {
+                                        eprintln!("ExifIFD tag (0x8769) NOT FOUND in main IFD!");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn test_recorded_exposure_defaults() {
         let exp = RecordedExposure {
             seconds: 1.0 / 800.0,
@@ -692,7 +851,8 @@ mod tests {
     #[test]
     fn test_real_raf_file() {
         // Test reading the real X70 RAF file if FUJIMOD_TEST_RAF is set.
-        // Cross-checks: decoded raw mean per CFA color within 0.5% of rawpy.
+        // Verifies: metadata exactly matches exiftool, raw means per CFA color
+        // within 0.5% of rawpy's raw_image_visible.
         if let Ok(raf_path) = std::env::var("FUJIMOD_TEST_RAF") {
             let file = std::fs::File::open(&raf_path).expect("Failed to open RAF file");
             let scene = read_raf(file).expect("Failed to parse RAF");
@@ -702,59 +862,85 @@ mod tests {
             assert_eq!(scene.height, 3296, "Expected height 3296");
             assert_eq!(scene.radiance.len(), (4992 * 3296) as usize);
             assert_eq!(scene.cfa, XTRANS, "CFA pattern mismatch");
+            assert_eq!(scene.black[0], 1023, "Expected black level 1023");
+            assert_eq!(scene.white, 16383, "Expected white level 16383");
 
-            // Compute mean radiance per CFA color.
-            let mut color_sums = [0.0f64; 3];
-            let mut color_counts = [0usize; 3];
+            // Verify exact metadata from exiftool.
+            assert_eq!(scene.exposure.iso, 800, "Expected ISO 800");
+            let exp_time_expected = 10.0 / 8000.0; // 1/800
+            assert!(
+                (scene.exposure.seconds - exp_time_expected).abs() / exp_time_expected < 0.001,
+                "Expected exposure time 1/800 (0.00125), got {}",
+                scene.exposure.seconds
+            );
+            assert_eq!(scene.exposure.f_number, 9.0, "Expected f-number 9.0");
+            assert_eq!(scene.exposure.dynamic_range, 400, "Expected DR 400");
+
+            eprintln!(
+                "Metadata verified: ISO {}, {:.6}s, f/{:.1}, DR{}",
+                scene.exposure.iso,
+                scene.exposure.seconds,
+                scene.exposure.f_number,
+                scene.exposure.dynamic_range
+            );
+
+            // Compute mean raw counts (before normalization) per CFA color.
+            // Compute normalization factor.
+            let dr_factor = match scene.exposure.dynamic_range {
+                200 => 0.5,
+                400 => 0.25,
+                _ => 1.0,
+            };
+            let sensor_gain = (scene.exposure.iso as f64 / 200.0) * dr_factor;
+            let norm = scene.exposure.seconds / (scene.exposure.f_number * scene.exposure.f_number * sensor_gain);
+
+            // Convert radiance back to raw counts: raw = radiance * norm + black.
+            let mut color_raw_sums = [0.0f64; 3];
+            let mut color_raw_counts = [0usize; 3];
 
             for y in 0..scene.height as usize {
                 for x in 0..scene.width as usize {
                     let color = scene.cfa[y % 6][x % 6] as usize;
                     let idx = y * scene.width as usize + x;
                     if color < 3 && idx < scene.radiance.len() {
-                        color_sums[color] += scene.radiance[idx] as f64;
-                        color_counts[color] += 1;
+                        let raw_count = scene.radiance[idx] as f64 * norm + scene.black[color] as f64;
+                        color_raw_sums[color] += raw_count;
+                        color_raw_counts[color] += 1;
                     }
                 }
             }
 
-            // Print statistics for cross-checking with rawpy.
+            // Expected raw means per rawpy over visible area (3296×4934 visible).
+            // From exiftool: R=1262.334, G=1480.546, B=1326.646
+            let expected_raw = [1262.334, 1480.546, 1326.646];
+            let tolerance = 0.005; // 0.5% tolerance
+
             for c in 0..3 {
-                if color_counts[c] > 0 {
-                    let mean = color_sums[c] / color_counts[c] as f64;
+                if color_raw_counts[c] > 0 {
+                    let mean_raw = color_raw_sums[c] / color_raw_counts[c] as f64;
+                    let error = (mean_raw - expected_raw[c]).abs() / expected_raw[c];
                     let color_name = match c {
                         0 => "Red",
                         1 => "Green",
                         _ => "Blue",
                     };
-                    eprintln!("{} mean radiance: {:.6}", color_name, mean);
+                    eprintln!(
+                        "{} raw mean: computed={:.3}, expected={:.3}, error={:.4}%",
+                        color_name,
+                        mean_raw,
+                        expected_raw[c],
+                        error * 100.0
+                    );
+                    assert!(
+                        error <= tolerance,
+                        "{} mean raw count out of tolerance: {:.3} vs {:.3} (error {:.4}%)",
+                        color_name,
+                        mean_raw,
+                        expected_raw[c],
+                        error * 100.0
+                    );
                 }
             }
-
-            // Verify exposure was parsed.
-            assert!(
-                scene.exposure.iso > 0 && scene.exposure.iso < 10000,
-                "ISO out of range: {}",
-                scene.exposure.iso
-            );
-            assert!(
-                scene.exposure.seconds > 0.0 && scene.exposure.seconds < 10.0,
-                "Exposure time out of range: {}",
-                scene.exposure.seconds
-            );
-            assert!(
-                scene.exposure.f_number > 0.0 && scene.exposure.f_number < 32.0,
-                "F-number out of range: {}",
-                scene.exposure.f_number
-            );
-
-            eprintln!(
-                "Exposure: ISO {}, {:.6}s, f/{:.1}, DR{}",
-                scene.exposure.iso,
-                scene.exposure.seconds,
-                scene.exposure.f_number,
-                scene.exposure.dynamic_range
-            );
         }
     }
 }
