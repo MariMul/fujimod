@@ -10,13 +10,13 @@ mod devices;
 use crate::board::discovery::Discovery;
 use crate::board::harness::arm32 as driver_guard;
 use crate::board::observation::calls as observe;
-use fujimod_emulator_devices::ip::arm::gicv2::Gic;
-use fujimod_emulator_devices::xp4::IntervalTimers;
 use fujimod_emulator_cpu::{
     self as cpu, Access, Cpu, ExecutionError, Exit, Fault, Hook as CpuHook, HookRange, Register,
     Run, arm, memory::Backing,
 };
 use fujimod_emulator_cpu_unicorn::Library;
+use fujimod_emulator_devices::ip::arm::gicv2::Gic;
+use fujimod_emulator_devices::xp4::IntervalTimers;
 use std::{
     cell::{Cell, RefCell, UnsafeCell},
     collections::{BTreeMap, BTreeSet, VecDeque},
@@ -829,6 +829,7 @@ impl Session {
             gpio,
             temperature,
             power_spi,
+            checksum_power_spi,
             imaging,
             movdc,
             sd_clocks,
@@ -954,6 +955,32 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .power_spi(base, idle, port, pin, high, inputs, rtc_ticks)?;
+        }
+        if let Some((
+            base,
+            idle,
+            port,
+            pin,
+            high,
+            inputs,
+            disable_writes,
+            rtc,
+            retained_registers,
+        )) = checksum_power_spi
+        {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .checksum_power_spi(
+                    base,
+                    idle,
+                    port,
+                    pin,
+                    high,
+                    inputs,
+                    disable_writes,
+                    rtc,
+                    retained_registers,
+                )?;
         }
         for (base, miso) in spi_inputs {
             devices

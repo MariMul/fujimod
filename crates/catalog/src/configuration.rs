@@ -2105,6 +2105,9 @@ mod tests {
             let resolved = ResolvedConfiguration::bundled(id)
                 .unwrap_or_else(|error| panic!("run configuration {id}: {error}"));
             assert_eq!(resolved.configuration.id, *id);
+            resolved
+                .hardware_inputs()
+                .unwrap_or_else(|error| panic!("run configuration {id}: {error}"));
         }
         for (id, _) in BUNDLED_RUN_OVERLAYS {
             let overlay =

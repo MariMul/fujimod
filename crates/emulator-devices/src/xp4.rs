@@ -1,11 +1,13 @@
 //! XP4 register models, bounded to observed peripheral interfaces.
 //! Addresses and IRQ routing are explicit SoC inputs, never software-derived.
 pub mod adc;
+pub mod checksum_power_serial;
 pub mod gpio;
 pub mod lcdc;
 pub mod movdc;
 pub mod power_serial;
 pub mod requests;
+pub mod rtc;
 pub mod spi;
 pub mod storage;
 pub mod temperature;

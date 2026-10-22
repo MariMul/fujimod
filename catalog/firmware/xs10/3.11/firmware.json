@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xs10-311",
+  "body_id": "xs10",
+  "version": "3.11",
+  "update": {
+    "size": 51081780,
+    "sha256": "141e8c3882dd456d3b954fd1dd3681b86e7d001f617dca2fb8d8dfd4f7eede53"
+  },
+  "boot_rom": null,
+  "installation": null,
+  "generated_facts": null
+}
