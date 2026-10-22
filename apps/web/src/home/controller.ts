@@ -103,7 +103,7 @@ export function startHome(
           }
         });
       }
-      storageStatus('Saved');
+      storageStatus('');
       void refreshCameras().catch((error) => storageStatus(String(error), true));
     },
   });
@@ -594,7 +594,6 @@ export function startHome(
   async function saveLayout(layout: DevicePanel) {
     const camera = activeCamera;
     if (!camera) return;
-    storageStatus('Saving');
     try {
       const updated = await cameras.saveLayout(camera.id, layout);
       if (activeCamera?.id !== camera.id) return;
@@ -602,7 +601,7 @@ export function startHome(
       setState((s) => {
         if (s.activeCamera?.id === camera.id) reconcile(updated)(s.activeCamera);
       });
-      storageStatus('Saved');
+      storageStatus('');
     } catch (error) {
       storageStatus(`Camera not saved · ${String(error)}`, true);
     }

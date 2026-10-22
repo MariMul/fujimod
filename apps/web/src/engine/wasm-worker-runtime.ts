@@ -126,6 +126,7 @@ export class WasmWorkerRuntime {
   private clockTicks = 0n;
   /** Recent (wall, guest tick) samples; speed spans about two seconds so menus and live view read alike. */
   private speedSamples: { wall: number; ticks: bigint }[] = [];
+  private lastPace = 0;
   private started = 0;
   private startedTicks = 0n;
   private nextSave = Infinity;
@@ -592,6 +593,16 @@ export class WasmWorkerRuntime {
             const s = this.require(),
               rate = this.manifest!.ticksPerSecond,
               now = s.status().ticks;
+            // Never race to recover missed wall time: after a stall (background tab, suspended
+            // app) or a slow stretch the camera continues in real time. Only a stall restarts the
+            // speed window, so a slow device still reads a smoothed speed.
+            const wall = performance.now();
+            const behind = ((wall - this.clockWall) * rate) / 1000 - Number(now - this.clockTicks);
+            if (behind > rate / 4) {
+              this.rebase();
+              if (wall - this.lastPace > 1000) this.speedSamples = [{ wall, ticks: now }];
+            }
+            this.lastPace = wall;
             const target =
               this.clockTicks +
               BigInt(Math.max(0, Math.floor(((performance.now() - this.clockWall) * rate) / 1000)));

@@ -22,6 +22,8 @@ export function ViewportControls(props: {
   selectMod: (enabled: boolean) => void;
 }) {
   const [picking, setPicking] = createSignal(false);
+  const [fullscreen, setFullscreen] = createSignal(false);
+  let bar: HTMLDivElement | undefined;
   let picker: HTMLDivElement | undefined;
   let trigger: HTMLButtonElement | undefined;
   function close() {
@@ -33,15 +35,46 @@ export function ViewportControls(props: {
       if (picker && event.target instanceof Node && !picker.contains(event.target))
         setPicking(false);
     };
+    const changed = () =>
+      setFullscreen(
+        !!document.fullscreenElement || !!viewer()?.classList.contains('viewer-fullscreen'),
+      );
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && viewer()?.classList.contains('viewer-fullscreen'))
+        toggleFullscreen();
+    };
     document.addEventListener('pointerdown', outside);
-    return () => document.removeEventListener('pointerdown', outside);
+    document.addEventListener('fullscreenchange', changed);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('fullscreenchange', changed);
+      document.removeEventListener('keydown', escape);
+    };
   });
+  const viewer = () => bar?.closest<HTMLElement>('.viewer') ?? undefined;
+  /** The Fullscreen API where the browser offers it for elements; iPhone Safari gets a page-filling viewer. */
+  function toggleFullscreen() {
+    const element = viewer();
+    if (!element) return;
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else if (element.classList.contains('viewer-fullscreen')) {
+      element.classList.remove('viewer-fullscreen');
+      setFullscreen(false);
+    } else if (document.fullscreenEnabled && element.requestFullscreen)
+      void element.requestFullscreen();
+    else {
+      element.classList.add('viewer-fullscreen');
+      setFullscreen(true);
+    }
+  }
   const choose = (enabled: boolean) => {
     close();
     if (enabled !== props.modEnabled) props.selectMod(enabled);
   };
   return (
     <div
+      ref={bar}
       id="viewer-tools"
       class="viewport-bar"
       data-ready={String(props.feedback.ready)}
@@ -125,7 +158,7 @@ export function ViewportControls(props: {
           disabled={props.webcamDisabled}
           onClick={() => props.toggleWebcam?.()}
         >
-          Webcam
+          <Icon name="camera" size={16} />
         </button>
       </Show>
       <Show when={props.active}>
@@ -137,8 +170,7 @@ export function ViewportControls(props: {
           disabled={!props.feedback.ready}
           onClick={() => props.feedback.open()}
         >
-          <Icon name="bug" size={14} />
-          Bug / Idea
+          <Icon name="bug" size={16} />
         </button>
       </Show>
       <Show when={props.feedback.saved}>
@@ -149,8 +181,19 @@ export function ViewportControls(props: {
           title="Download saved report"
           onClick={() => props.feedback.recover()}
         >
-          <Icon name="download" size={14} />
-          Saved report
+          <Icon name="download" size={16} />
+        </button>
+      </Show>
+      <Show when={props.active}>
+        <button
+          type="button"
+          id="fullscreen-toggle"
+          aria-label={fullscreen() ? 'Exit full screen' : 'Full screen'}
+          title={fullscreen() ? 'Exit full screen' : 'Full screen'}
+          aria-pressed={fullscreen() ? 'true' : 'false'}
+          onClick={toggleFullscreen}
+        >
+          <Icon name={fullscreen() ? 'minimize' : 'maximize'} size={16} />
         </button>
       </Show>
     </div>

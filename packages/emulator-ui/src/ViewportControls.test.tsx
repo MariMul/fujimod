@@ -137,9 +137,9 @@ test('the firmware picker offers both builds, dispatches a change and closes', (
 test('feedback and saved reports sit in the bar, which an idle viewer hides unless a report is saved', () => {
   const t = mount(),
     bar = t.host.querySelector<HTMLElement>('#viewer-tools')!;
-  t.click('Bug / Idea');
+  t.host.querySelector<HTMLButtonElement>('#feedback-open')!.click();
   expect(t.open).toHaveBeenCalledOnce();
-  t.click('Saved report');
+  t.host.querySelector<HTMLButtonElement>('#feedback-recover')!.click();
   expect(t.recover).toHaveBeenCalledOnce();
   expect(t.host.querySelector('#camera-title')?.textContent).toBe('Camera');
   t.setState((s) => {
@@ -181,4 +181,21 @@ test('webcam support, pending permission, disabled state and errors follow the s
   });
   flush();
   expect(t.host.querySelector('#webcam-toggle')).toBeNull();
+});
+
+test('full screen fills the page with the viewer where elements cannot use the Fullscreen API', () => {
+  const viewer = document.createElement('div');
+  viewer.className = 'viewer';
+  document.body.append(viewer);
+  const t = mount();
+  viewer.append(t.host);
+  const button = t.host.querySelector<HTMLButtonElement>('#fullscreen-toggle')!;
+  button.click();
+  flush();
+  expect(viewer.classList.contains('viewer-fullscreen')).toBe(true);
+  expect(button.getAttribute('aria-label')).toBe('Exit full screen');
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  flush();
+  expect(viewer.classList.contains('viewer-fullscreen')).toBe(false);
+  expect(button.getAttribute('aria-label')).toBe('Full screen');
 });
