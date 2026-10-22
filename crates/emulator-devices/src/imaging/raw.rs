@@ -49,9 +49,23 @@ impl RawView<'_> {
     }
     #[inline]
     pub fn sample(&self, x: usize, y: usize) -> u16 {
-        let i = y * self.pitch + x * if self.packing == Packing::U16 { 4 } else { 3 } / 2;
+        match self.packing {
+            Packing::U16 => self.sample_as::<false>(x, y),
+            Packing::Packed12 => self.sample_as::<true>(x, y),
+        }
+    }
+    #[inline(always)]
+    fn byte_offset<const PACKED12: bool>(x: usize) -> usize {
+        if PACKED12 { x * 3 / 2 } else { x * 2 }
+    }
+    #[inline(always)]
+    fn sample_as<const PACKED12: bool>(&self, x: usize, y: usize) -> u16 {
+        self.sample_from_offset::<PACKED12>(y * self.pitch + Self::byte_offset::<PACKED12>(x), x)
+    }
+    #[inline(always)]
+    fn sample_from_offset<const PACKED12: bool>(&self, i: usize, x: usize) -> u16 {
         let v = u16::from_le_bytes([self.bytes[i], self.bytes[i + 1]]);
-        if self.packing == Packing::U16 {
+        if !PACKED12 {
             v
         } else if x & 1 == 0 {
             v & 4095
@@ -66,6 +80,25 @@ pub struct Cfa {
     layout: Vec<u8>,
     nearest: Vec<[(i8, i8); 3]>,
 }
+
+#[derive(Clone, Copy)]
+struct CfaColumnSample {
+    x: u16,
+    byte_offset: u16,
+}
+
+#[derive(Clone, Copy)]
+struct CfaColumn {
+    phase: u8,
+    samples: [[CfaColumnSample; 3]; 6],
+}
+
+#[derive(Clone, Copy)]
+struct CfaRowSample {
+    y: usize,
+    byte_offset: usize,
+}
+
 impl Cfa {
     /// Six-by-six RGB color indices (0/1/2), supplied by the body graph.
     pub fn new(layout: Vec<u8>) -> Result<Self, String> {
@@ -104,10 +137,10 @@ impl Cfa {
     #[inline]
     fn sample_positions(&self, raw: &RawView<'_>, x: usize, y: usize) -> [(usize, usize); 3] {
         let row = &self.nearest[y % 6 * 6..][..6];
-        self.sample_positions_from_row::<false>(raw, row, x, y)
+        self.sample_positions_from_row(raw, row, x, y)
     }
     #[inline(always)]
-    fn sample_positions_from_row<const INTERIOR: bool>(
+    fn sample_positions_from_row(
         &self,
         raw: &RawView<'_>,
         nearest_row: &[[(i8, i8); 3]],
@@ -115,24 +148,17 @@ impl Cfa {
         y: usize,
     ) -> [(usize, usize); 3] {
         nearest_row[x % 6].map(|(dy, dx)| {
-            if INTERIOR {
-                (
-                    x.wrapping_add_signed(isize::from(dx)),
-                    y.wrapping_add_signed(isize::from(dy)),
-                )
-            } else {
-                let wrap = |v: usize, d: i8, n: usize| {
-                    let v = v as isize + isize::from(d);
-                    if v < 0 {
-                        (v + 6) as usize
-                    } else if v >= n as isize {
-                        (v - 6) as usize
-                    } else {
-                        v as usize
-                    }
-                };
-                (wrap(x, dx, raw.width), wrap(y, dy, raw.height))
-            }
+            let wrap = |v: usize, d: i8, n: usize| {
+                let v = v as isize + isize::from(d);
+                if v < 0 {
+                    (v + 6) as usize
+                } else if v >= n as isize {
+                    (v - 6) as usize
+                } else {
+                    v as usize
+                }
+            };
+            (wrap(x, dx, raw.width), wrap(y, dy, raw.height))
         })
     }
     /// `spatial_gain` is Q11 at the original CFA sample coordinates. It is
@@ -216,13 +242,87 @@ impl Cfa {
             && raw.width - (left + crop_width) >= 3
             && raw.height - (top + crop_height) >= 3;
         if interior {
-            self.render_rows_inner::<true>(
+            match raw.packing {
+                Packing::U16 => self.render_rows_inner::<true, false>(
+                    raw,
+                    film,
+                    black,
+                    gains,
+                    exposure,
+                    &spatial_gain,
+                    crop,
+                    width,
+                    height,
+                    rows,
+                    out,
+                ),
+                Packing::Packed12 => self.render_rows_inner::<true, true>(
+                    raw,
+                    film,
+                    black,
+                    gains,
+                    exposure,
+                    &spatial_gain,
+                    crop,
+                    width,
+                    height,
+                    rows,
+                    out,
+                ),
+            }
+        } else {
+            match raw.packing {
+                Packing::U16 => self.render_rows_inner::<false, false>(
+                    raw,
+                    film,
+                    black,
+                    gains,
+                    exposure,
+                    &spatial_gain,
+                    crop,
+                    width,
+                    height,
+                    rows,
+                    out,
+                ),
+                Packing::Packed12 => self.render_rows_inner::<false, true>(
+                    raw,
+                    film,
+                    black,
+                    gains,
+                    exposure,
+                    &spatial_gain,
+                    crop,
+                    width,
+                    height,
+                    rows,
+                    out,
+                ),
+            }
+        }
+    }
+    fn render_rows_inner<const INTERIOR: bool, const PACKED12: bool>(
+        &self,
+        raw: &RawView<'_>,
+        film: &Film,
+        black: u16,
+        gains: [u16; 3],
+        exposure: u16,
+        spatial_gain: &impl Fn(usize, usize) -> u16,
+        crop: [usize; 4],
+        width: usize,
+        height: usize,
+        rows: std::ops::Range<usize>,
+        out: &mut [u8],
+    ) {
+        if INTERIOR {
+            self.render_interior_rows::<PACKED12>(
                 raw,
                 film,
                 black,
                 gains,
                 exposure,
-                &spatial_gain,
+                spatial_gain,
                 crop,
                 width,
                 height,
@@ -230,13 +330,13 @@ impl Cfa {
                 out,
             );
         } else {
-            self.render_rows_inner::<false>(
+            self.render_edge_rows::<PACKED12>(
                 raw,
                 film,
                 black,
                 gains,
                 exposure,
-                &spatial_gain,
+                spatial_gain,
                 crop,
                 width,
                 height,
@@ -245,7 +345,83 @@ impl Cfa {
             );
         }
     }
-    fn render_rows_inner<const INTERIOR: bool>(
+    fn render_interior_rows<const PACKED12: bool>(
+        &self,
+        raw: &RawView<'_>,
+        film: &Film,
+        black: u16,
+        gains: [u16; 3],
+        exposure: u16,
+        spatial_gain: &impl Fn(usize, usize) -> u16,
+        crop: [usize; 4],
+        width: usize,
+        height: usize,
+        rows: std::ops::Range<usize>,
+        out: &mut [u8],
+    ) {
+        let [left, top, crop_width, crop_height] = crop;
+        let columns: Vec<_> = (0..width)
+            .map(|x| {
+                let raw_x = left + x * crop_width / width;
+                let phase = raw_x % 6;
+                let samples = std::array::from_fn(|row_phase| {
+                    self.nearest[row_phase * 6 + phase].map(|(_, dx)| {
+                        let x = raw_x.wrapping_add_signed(isize::from(dx));
+                        CfaColumnSample {
+                            x: x as u16,
+                            byte_offset: RawView::byte_offset::<PACKED12>(x) as u16,
+                        }
+                    })
+                });
+                CfaColumn {
+                    phase: phase as u8,
+                    samples,
+                }
+            })
+            .collect();
+        let exposure_gains = gains.map(|gain| u64::from(gain) * u64::from(exposure));
+        let mut pixels = FilmPixels::new(film);
+        for (local_y, y) in rows.enumerate() {
+            let yy = top + y * crop_height / height;
+            let row_phase = yy % 6;
+            let nearest_row = &self.nearest[row_phase * 6..][..6];
+            let row_samples: [[CfaRowSample; 3]; 6] = std::array::from_fn(|x_phase| {
+                nearest_row[x_phase].map(|(dy, _)| {
+                    let y = yy.wrapping_add_signed(isize::from(dy));
+                    CfaRowSample {
+                        y,
+                        byte_offset: y * raw.pitch,
+                    }
+                })
+            });
+            for x in (0..width).step_by(2) {
+                let mut pixel = |x: usize| {
+                    let column = &columns[x];
+                    let samples = &column.samples[row_phase];
+                    let row_samples = row_samples[usize::from(column.phase)];
+                    let w = std::array::from_fn(|c| {
+                        let sample = samples[c];
+                        let row_sample = row_samples[c];
+                        let sx = usize::from(sample.x);
+                        let sy = row_sample.y;
+                        let value = (u64::from(
+                            raw.sample_from_offset::<PACKED12>(
+                                row_sample.byte_offset + usize::from(sample.byte_offset),
+                                sx,
+                            )
+                            .saturating_sub(black),
+                        ) * exposure_gains[c])
+                            >> 16;
+                        ((value * u64::from(spatial_gain(sx, sy))) >> 11).min(16383) as u16
+                    });
+                    pixels.develop(w)
+                };
+                out[(local_y * width + x) * 2..(local_y * width + x) * 2 + 4]
+                    .copy_from_slice(&Film::pack(pixel(x), pixel(x + 1)));
+            }
+        }
+    }
+    fn render_edge_rows<const PACKED12: bool>(
         &self,
         raw: &RawView<'_>,
         film: &Film,
@@ -261,8 +437,6 @@ impl Cfa {
     ) {
         let [left, top, crop_width, crop_height] = crop;
         let xs: Vec<_> = (0..width).map(|x| left + x * crop_width / width).collect();
-        // This product is constant for each color channel. Moving it out of
-        // the pixel loop preserves the exact integer product before its shift.
         let exposure_gains = gains.map(|gain| u64::from(gain) * u64::from(exposure));
         let mut pixels = FilmPixels::new(film);
         for (local_y, y) in rows.enumerate() {
@@ -270,13 +444,13 @@ impl Cfa {
             let nearest_row = &self.nearest[yy % 6 * 6..][..6];
             for x in (0..width).step_by(2) {
                 let mut pixel = |x: usize| {
-                    let positions =
-                        self.sample_positions_from_row::<INTERIOR>(raw, nearest_row, xs[x], yy);
+                    let positions = self.sample_positions_from_row(raw, nearest_row, xs[x], yy);
                     let w = std::array::from_fn(|c| {
                         let (sx, sy) = positions[c];
-                        let value = (u64::from(raw.sample(sx, sy).saturating_sub(black))
-                            * exposure_gains[c])
-                            >> 16;
+                        let value =
+                            (u64::from(raw.sample_as::<PACKED12>(sx, sy).saturating_sub(black))
+                                * exposure_gains[c])
+                                >> 16;
                         ((value * u64::from(spatial_gain(sx, sy))) >> 11).min(16383) as u16
                     });
                     pixels.develop(w)
@@ -290,6 +464,7 @@ impl Cfa {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::RefCell;
     #[test]
     fn interior_raster_matches_scalar_for_both_packings_crops_and_scaling() {
         let cfa = Cfa::new(vec![
@@ -318,6 +493,7 @@ mod tests {
                 ([6, 4, 36, 22], 50, 37),
                 ([7, 5, 31, 19], 20, 11),
             ] {
+                let actual_gain_calls = RefCell::new(Vec::new());
                 let mut actual = vec![0; width * height * 2];
                 cfa.render(
                     &raw,
@@ -325,13 +501,17 @@ mod tests {
                     127,
                     [311, 257, 493],
                     193,
-                    spatial_gain,
+                    |x, y| {
+                        actual_gain_calls.borrow_mut().push((x, y));
+                        spatial_gain(x, y)
+                    },
                     crop,
                     width,
                     height,
                     &mut actual,
                 )
                 .unwrap();
+                let expected_gain_calls = RefCell::new(Vec::new());
                 let pixel = |x, y| {
                     let positions = cfa.sample_positions(
                         &raw,
@@ -340,6 +520,9 @@ mod tests {
                     );
                     let rgb = positions.map(|(x, y)| raw.sample(x, y));
                     film.develop(std::array::from_fn(|c| {
+                        expected_gain_calls
+                            .borrow_mut()
+                            .push((positions[c].0, positions[c].1));
                         let value =
                             (u64::from(rgb[c].saturating_sub(127)) * [311u64, 257, 493][c] * 193)
                                 >> 16;
@@ -354,6 +537,19 @@ mod tests {
                     }
                 }
                 assert_eq!(actual, expected);
+                assert_eq!(
+                    actual_gain_calls.borrow().as_slice(),
+                    expected_gain_calls.borrow().as_slice()
+                );
+                assert_eq!(actual_gain_calls.borrow().len(), width * height * 3);
+                let mut x_phases = [false; 6];
+                let mut y_phases = [false; 6];
+                for &(x, y) in actual_gain_calls.borrow().iter() {
+                    x_phases[x % 6] = true;
+                    y_phases[y % 6] = true;
+                }
+                assert!(x_phases.into_iter().all(|seen| seen));
+                assert!(y_phases.into_iter().all(|seen| seen));
             }
         }
     }
