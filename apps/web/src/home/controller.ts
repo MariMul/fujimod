@@ -516,14 +516,16 @@ export function startHome(
     }
   }
   async function initialize() {
-    try {
-      await refreshCameras();
-    } catch (error) {
-      storageStatus(`Browser storage unavailable · ${String(error)}`, true);
-    }
-    setState((s) => {
-      s.savedCamerasRead = true;
-    });
+    const markRead = () =>
+      setState((s) => {
+        s.savedCamerasRead = true;
+      });
+    const read = refreshCameras()
+      .catch((error) => storageStatus(`Browser storage unavailable · ${String(error)}`, true))
+      .finally(markRead);
+    // Browser storage can stall (seen on iOS); the launcher and catalog never wait on it past a second.
+    await Promise.race([read, new Promise((resolve) => setTimeout(resolve, 1000))]);
+    markRead();
     try {
       if (import.meta.env.DEV && new URLSearchParams(location.search).has('scenario')) {
         const { scenarioFromUrl } = await import('../scenarios');
