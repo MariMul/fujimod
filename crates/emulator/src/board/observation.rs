@@ -388,11 +388,7 @@ impl Board {
         mut addresses: Vec<u64>,
     ) -> Result<Box<InstructionPoints>, String> {
         let cpu = self.cpu(core)?;
-        if addresses.len() > 4096
-            || addresses
-                .iter()
-                .any(|pc| pc & 1 != 0 || *pc > u32::MAX as u64)
-        {
+        if addresses.len() > 4096 || addresses.iter().any(|pc| pc & 1 != 0) {
             return Err("Instruction points require bounded aligned addresses".into());
         }
         addresses.sort_unstable();

@@ -1,6 +1,7 @@
 //! Explicit isolated caller instrumentation above the common runtime.
 //! These optional CPU observers never provide peripheral capabilities.
 pub mod arm32;
+pub mod arm64;
 use super::{Board, scalar};
 use fujimod_emulator_cpu::{Access, Cpu, Hook, HookId, HookRange, Register, arm};
 #[cfg(feature = "serde")]
