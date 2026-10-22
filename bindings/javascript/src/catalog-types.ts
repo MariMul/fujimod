@@ -31,6 +31,197 @@ export type AperturePosition = {
   readonly "position": number;
 };
 
+export type ApplicationBlockInput = ApplicationBlockInputVariant0 | ApplicationBlockInputVariant1 | ApplicationBlockInputVariant2 | ApplicationBlockInputVariant3 | ApplicationBlockInputVariant4;
+
+export type ApplicationBlockInputVariant0 = {
+  readonly "block_id": string;
+  readonly "kind": "adc";
+  readonly "samples": readonly number[];
+};
+
+export type ApplicationBlockInputVariant1 = {
+  readonly "block_id": string;
+  readonly "kind": "gpio";
+  readonly "levels": readonly number[];
+  readonly "outputs": readonly GpioOutputWord[];
+};
+
+export type ApplicationBlockInputVariant2 = {
+  readonly "block_id": string;
+  readonly "kind": "temperature";
+  readonly "millicelsius": number;
+};
+
+export type ApplicationBlockInputVariant3 = {
+  readonly "block_id": string;
+  readonly "idle_high": boolean;
+  readonly "kind": "serial_line";
+};
+
+export type ApplicationBlockInputVariant4 = {
+  readonly "block_id": string;
+  readonly "erased_tail"?: number | null;
+  readonly "kind": "flash";
+  readonly "part_id": string;
+  readonly "seeds": readonly FlashSeed[];
+  readonly "source": ApplicationFlashSource;
+};
+
+export type ApplicationCommandImageInput = {
+  readonly "block_ids": readonly string[];
+  readonly "luma": number;
+};
+
+export type ApplicationFlashSource = "firmware_update";
+
+export type ApplicationFrameInput = {
+  readonly "active_ticks"?: number | null;
+  readonly "block_ids": readonly string[];
+  readonly "luma"?: number | null;
+  readonly "period_ticks": number;
+};
+
+export type ApplicationHardware = ApplicationHardwareVariant0 | ApplicationHardwareVariant1;
+
+export type ApplicationHardwareVariant0 = {
+  readonly "caches": CacheGeometry;
+  readonly "configuration_base": number;
+  readonly "kind": "armv7a";
+};
+
+export type ApplicationHardwareVariant1 = {
+  readonly "affinities": Record<string, number>;
+  readonly "counter_clock_id": string;
+  readonly "kind": "armv8a";
+  readonly "midr_el1": number;
+  readonly "physical_timer_irq": number;
+  readonly "pmu_clock_id": string;
+  readonly "virtual_timer_irq": number;
+};
+
+export type ApplicationPartInput = ApplicationPartInputVariant0 | ApplicationPartInputVariant1 | ApplicationPartInputVariant2 | ApplicationPartInputVariant3;
+
+export type ApplicationPartInputVariant0 = {
+  readonly "kind": "register_words";
+  readonly "part_id": string;
+  readonly "registers": readonly RegisterWord[];
+  readonly "rtc_ticks_per_second"?: number | null;
+};
+
+export type ApplicationPartInputVariant1 = {
+  readonly "kind": "clock";
+  readonly "part_id": string;
+  readonly "seconds": number;
+  readonly "valid": boolean;
+};
+
+export type ApplicationPartInputVariant2 = {
+  readonly "high": boolean;
+  readonly "kind": "idle_level";
+  readonly "part_id": string;
+};
+
+export type ApplicationPartInputVariant3 = {
+  readonly "idle_high": boolean;
+  readonly "kind": "bis_revision";
+  readonly "part_id": string;
+  readonly "revision": readonly number[];
+};
+
+export type ApplicationStatisticsInput = {
+  readonly "black_level": number;
+  readonly "block_id": string;
+  readonly "luma": number;
+  readonly "samples_per_cell": number;
+  readonly "signal_shift": number;
+};
+
+export type ApplicationTiming = ApplicationTimingVariant0 | ApplicationTimingVariant1 | ApplicationTimingVariant2 | ApplicationTimingVariant3;
+
+export type ApplicationTimingVariant0 = {
+  readonly "block_ids": readonly string[];
+  readonly "kind": "delay";
+  readonly "operation": TimingOperation;
+  readonly "ticks": number;
+};
+
+export type ApplicationTimingVariant1 = {
+  readonly "block_id": string;
+  readonly "bytes_per_tick": number;
+  readonly "kind": "throughput";
+  readonly "setup_ticks": number;
+};
+
+export type ApplicationTimingVariant2 = {
+  readonly "block_ids": readonly string[];
+  readonly "kind": "parent_clock";
+  readonly "ticks_per_parent": number;
+};
+
+export type ApplicationTimingVariant3 = {
+  readonly "erase_ticks": number;
+  readonly "kind": "storage_programming";
+  readonly "page_ticks": number;
+  readonly "part_id": string;
+};
+
+export type BitmapLayout = {
+  readonly "data_bytes": number;
+  readonly "data_offset": number;
+  readonly "height_bytes": number;
+  readonly "height_offset": number;
+  readonly "kind_bytes": number;
+  readonly "kind_offset": number;
+  readonly "width_bytes": number;
+  readonly "width_offset": number;
+};
+
+export type BitmapResources = {
+  readonly "final_first_index": number;
+  readonly "final_table": number;
+  readonly "last_index": number;
+  readonly "last_record": number;
+  readonly "layout": BitmapLayout;
+  readonly "stride": number;
+  readonly "table": number;
+};
+
+export type BlockHardware = BlockHardwareVariant0 | BlockHardwareVariant1 | BlockHardwareVariant2 | BlockHardwareVariant3 | BlockHardwareVariant4 | BlockHardwareVariant5;
+
+export type BlockHardwareVariant0 = {
+  readonly "channels": number;
+  readonly "kind": "dma";
+  readonly "request_mux_block_id": string;
+};
+
+export type BlockHardwareVariant1 = {
+  readonly "aperture_block_id": string;
+  readonly "kind": "serial_flash";
+};
+
+export type BlockHardwareVariant2 = {
+  readonly "bank_bytes": number;
+  readonly "kind": "imaging_input_buffer";
+  readonly "sram_region_id": string;
+};
+
+export type BlockHardwareVariant3 = {
+  readonly "kind": "display";
+  readonly "picture_layout"?: PictureLayout | null;
+  readonly "video_layout"?: VideoLayout | null;
+};
+
+export type BlockHardwareVariant4 = {
+  readonly "kind": "serial_dma";
+  readonly "receive_request": number;
+  readonly "transmit_request": number;
+};
+
+export type BlockHardwareVariant5 = {
+  readonly "companion_irq_base": number;
+  readonly "kind": "companion_dma";
+};
+
 export type BlockSignal = "detect" | "write_protect" | "data_ready" | "clock";
 
 export type Body = {
@@ -41,12 +232,14 @@ export type Body = {
   readonly "controls"?: BodyControls | null;
   readonly "display"?: DisplayAssembly | null;
   readonly "dram_bytes": number;
+  readonly "hardware"?: BodyHardware | null;
   readonly "id": string;
   readonly "lens"?: LensAssembly | null;
   readonly "microcontroller"?: MicrocontrollerAssembly | null;
   readonly "nand"?: NandGeometry | null;
   readonly "parts": readonly string[];
   readonly "power_control"?: PowerControlAssembly | null;
+  readonly "ram_regions"?: readonly BodyRamRegion[];
   readonly "schema": number;
   readonly "sensor"?: SensorAssembly | null;
   readonly "soc_id": string;
@@ -77,6 +270,20 @@ export type BodyControls = {
   readonly "manual": ManualReference;
 };
 
+export type BodyHardware = {
+  readonly "gpio_feedback": readonly GpioFeedback[];
+  readonly "keypad_samples": Record<string, number>;
+  readonly "serial_attachments": readonly SerialAttachment[];
+  readonly "thermal_connection_ids": readonly string[];
+};
+
+export type BodyRamRegion = {
+  readonly "base": number;
+  readonly "bytes": number;
+  readonly "id": string;
+  readonly "kind": MemoryKind;
+};
+
 export type BodyWiring = {
   readonly "signal": WireSignal;
   readonly "source_id": string;
@@ -86,6 +293,12 @@ export type BodyWiring = {
 export type BootRomIdentity = {
   readonly "address": number;
   readonly "content": ContentIdentity;
+};
+
+export type CacheGeometry = {
+  readonly "l1_data_bytes": number;
+  readonly "l1_instruction_bytes": number;
+  readonly "l2_bytes": number;
 };
 
 export type CalibrationInterval = {
@@ -107,6 +320,22 @@ export type ClockDomain = {
   readonly "parent_id"?: string | null;
 };
 
+export type CompanionHardware = {
+  readonly "clock_id": string;
+  readonly "mailbox": CompanionMailbox;
+  readonly "mailbox_block_id": string;
+  readonly "processor_id": string;
+  readonly "vector_base": number;
+};
+
+export type CompanionMailbox = {
+  readonly "control": number;
+  readonly "fault": number;
+  readonly "reply": number;
+  readonly "request": number;
+  readonly "status": number;
+};
+
 export type ConfigurationLocation = ConfigurationLocationVariant0 | ConfigurationLocationVariant1;
 
 export type ConfigurationLocationVariant0 = {
@@ -121,7 +350,7 @@ export type ConfigurationLocationVariant1 = {
 
 export type ConnectionKind = "control" | "usb" | "hdmi" | "sd-card" | "remote" | "hot-shoe" | "external-power" | "battery-door" | "sensor" | "lens" | "display" | "microcontroller" | "power-control";
 
-export type ConnectionSignal = ConnectionSignalVariant0 | ConnectionSignalVariant1 | ConnectionSignalVariant2 | ConnectionSignalVariant3;
+export type ConnectionSignal = ConnectionSignalVariant0 | ConnectionSignalVariant1 | ConnectionSignalVariant2 | ConnectionSignalVariant3 | ConnectionSignalVariant4;
 
 export type ConnectionSignalVariant0 = {
   readonly "active_level": boolean;
@@ -149,6 +378,12 @@ export type ConnectionSignalVariant3 = {
   readonly "kind": "serial";
 };
 
+export type ConnectionSignalVariant4 = {
+  readonly "controller_id": string;
+  readonly "kind": "interrupt";
+  readonly "line": number;
+};
+
 export type ContactPosition = {
   readonly "contacts": readonly boolean[];
   readonly "drive": number;
@@ -163,10 +398,17 @@ export type ControlAction = {
   readonly "keys": readonly string[];
 };
 
+export type ControlBusAttachment = {
+  readonly "address": number;
+  readonly "channel": number;
+  readonly "controller_id": string;
+};
+
 export type ControlBusChip = {
   readonly "address": number;
   readonly "channel": number;
   readonly "controller_id": string;
+  readonly "id": string;
   readonly "polarity_selector": number;
 };
 
@@ -246,6 +488,12 @@ export type ControlReaders = {
   readonly "scanner": ScannerReader;
 };
 
+export type ControllerInterruptInput = {
+  readonly "line": number;
+  readonly "output_id": string;
+  readonly "source_block_id": string;
+};
+
 export type CoprocessorWrite = {
   readonly "core": string;
   readonly "cp": number;
@@ -263,6 +511,29 @@ export type CoreRelease = {
   readonly "register": number;
   readonly "source": number;
   readonly "target": number;
+};
+
+export type CursorFields = {
+  readonly "cursor": number;
+  readonly "filtered_count": number;
+  readonly "pointer": number;
+  readonly "raw_count": number;
+  readonly "subcursor": number;
+  readonly "value_cursor": number;
+  readonly "visible_count": number;
+};
+
+export type CursorLayout = {
+  readonly "fields": CursorFields;
+  readonly "size": number;
+  readonly "status_offset": number;
+  readonly "status_stride": number;
+  readonly "status_width": number;
+};
+
+export type DebugKey = {
+  readonly "event": number;
+  readonly "name": string;
 };
 
 export type DecoderChoice = {
@@ -326,6 +597,25 @@ export type FirmwareControls = {
   readonly "scanner": ScannerTable;
 };
 
+export type FirmwareFacts = {
+  readonly "$schema": string;
+  readonly "body_id": string;
+  readonly "configuration": ConfigurationLocation;
+  readonly "control_names": Record<string, string>;
+  readonly "controls": FirmwareControls;
+  readonly "debug_keys": readonly DebugKey[];
+  readonly "firmware_id": string;
+  readonly "firmware_sha256": string;
+  readonly "identity_checks": readonly AddressIdentity[];
+  readonly "input_bindings": Record<string, string>;
+  readonly "menus": MenuTables;
+  readonly "resources": Resources;
+  readonly "scanout": Scanout;
+  readonly "schema": number;
+  readonly "state": FirmwareObservation;
+  readonly "uncached_alias": number;
+};
+
 export type FirmwareGeneratedFacts = {
   readonly "additional_ui_modes"?: AdditionalUiModes | null;
   readonly "cfgdata_location"?: ConfigurationLocation | null;
@@ -334,6 +624,7 @@ export type FirmwareGeneratedFacts = {
   readonly "menu_cursor"?: number | null;
   readonly "menu_keys"?: MenuKeys | null;
   readonly "observation"?: FirmwareObservation | null;
+  readonly "remote"?: FirmwareFacts | null;
   readonly "uncached_alias"?: number | null;
 };
 
@@ -368,6 +659,11 @@ export type FirmwareObservation = {
   readonly "ui_mode": number;
 };
 
+export type FlashSeed = {
+  readonly "offset": number;
+  readonly "value": number;
+};
+
 export type FocusAxis = {
   readonly "infinity_position": number;
   readonly "output": OpticalQuantity;
@@ -378,6 +674,24 @@ export type GeneratedSceneAsset = {
   readonly "id": string;
   readonly "pattern": readonly number[];
   readonly "size": number;
+};
+
+export type GlyphResources = {
+  readonly "data_address_offset": number;
+  readonly "data_size_offset": number;
+  readonly "icon_index": number;
+  readonly "record_size": number;
+  readonly "registry_address": number;
+};
+
+export type GpioFeedback = {
+  readonly "input_connection_id": string;
+  readonly "output_connection_id": string;
+};
+
+export type GpioOutputWord = {
+  readonly "levels": number;
+  readonly "port": number;
 };
 
 export type GpioScanner = GpioScannerVariant0 | GpioScannerVariant1;
@@ -397,9 +711,27 @@ export type HomeSwitch = {
   readonly "threshold": number;
 };
 
+export type InterruptControllerHardware = InterruptControllerHardwareVariant0 | InterruptControllerHardwareVariant1;
+
+export type InterruptControllerHardwareVariant0 = {
+  readonly "cpu_interface_block_id": string;
+  readonly "distributor_block_id": string;
+  readonly "kind": "gic_v2";
+  readonly "lines": number;
+};
+
+export type InterruptControllerHardwareVariant1 = {
+  readonly "distributor_block_id": string;
+  readonly "kind": "gic_v3";
+  readonly "lines": number;
+  readonly "redistributor_block_id": string;
+  readonly "redistributor_stride": number;
+};
+
 export type InterruptRoute = {
   readonly "core": string;
   readonly "line": number;
+  readonly "output_id"?: string | null;
   readonly "source_block": string;
 };
 
@@ -455,6 +787,17 @@ export type MemoryRegion = {
   readonly "size": RegionSize;
 };
 
+export type MenuFields = {
+  readonly "flags_word": number;
+  readonly "handlers_pointer": number;
+  readonly "item_array": number;
+  readonly "menu_id": number;
+  readonly "parent_pointer": number;
+  readonly "rows_per_page": number;
+  readonly "setting_id": number;
+  readonly "type_code": number;
+};
+
 export type MenuKeys = {
   readonly "back": string;
   readonly "down": string;
@@ -462,12 +805,51 @@ export type MenuKeys = {
   readonly "up": string;
 };
 
+export type MenuLayout = {
+  readonly "caption_words": number;
+  readonly "fields": MenuFields;
+  readonly "max_kind": number;
+  readonly "nowrap_flags": number;
+  readonly "row_child": number;
+  readonly "row_key": number;
+  readonly "row_size": number;
+  readonly "sentinel": number;
+  readonly "size": number;
+};
+
+export type MenuNavigation = {
+  readonly "setup_first_tab": number;
+  readonly "shooting_first_tab": number;
+  readonly "shooting_last_tab": number;
+};
+
+export type MenuTables = {
+  readonly "cursor": CursorLayout;
+  readonly "cursor_address": number;
+  readonly "layout": MenuLayout;
+  readonly "navigation": MenuNavigation;
+  readonly "page_tabs": MenuTablesVariant0;
+  readonly "q_grid": QuickGrid;
+  readonly "roles": Record<string, number>;
+  readonly "root_count": number;
+  readonly "root_routes": MenuTablesVariant1;
+  readonly "root_titles": MenuTablesVariant2;
+  readonly "roots_address": number;
+};
+
+export type MenuTablesVariant0 = Record<string, never>;
+
+export type MenuTablesVariant1 = Record<string, never>;
+
+export type MenuTablesVariant2 = Record<string, never>;
+
 export type MicrocontrollerAssembly = {
   readonly "channel": number;
   readonly "connection_id": string;
   readonly "controller_id": string;
   readonly "part_id": string;
   readonly "select_connection_id": string;
+  readonly "word_bits": number;
 };
 
 export type NandGeometry = {
@@ -504,7 +886,7 @@ export type PartEncoder = {
   readonly "rest_phase": number;
 };
 
-export type PartModel = PartModelVariant0 | PartModelVariant1 | PartModelVariant2 | PartModelVariant3 | PartModelVariant4 | PartModelVariant5 | PartModelVariant6 | PartModelVariant7;
+export type PartModel = PartModelVariant0 | PartModelVariant1 | PartModelVariant2 | PartModelVariant3 | PartModelVariant4 | PartModelVariant5 | PartModelVariant6 | PartModelVariant7 | PartModelVariant8;
 
 export type PartModelVariant0 = {
   readonly "encoder"?: PartEncoder | null;
@@ -562,12 +944,68 @@ export type PartModelVariant7 = {
   readonly "width"?: number | null;
 };
 
+export type PartModelVariant8 = {
+  readonly "interface": PeripheralPart;
+  readonly "kind": "peripheral";
+};
+
 export type PeripheralMapping = {
   readonly "address": number;
   readonly "block_id": string;
   readonly "core": string;
   readonly "offset"?: number | null;
 };
+
+export type PeripheralPart = PeripheralPartVariant0 | PeripheralPartVariant1 | PeripheralPartVariant2 | PeripheralPartVariant3 | PeripheralPartVariant4 | PeripheralPartVariant5 | PeripheralPartVariant6 | PeripheralPartVariant7 | PeripheralPartVariant8 | PeripheralPartVariant9;
+
+export type PeripheralPartVariant0 = {
+  readonly "kind": "focus-actuator";
+};
+
+export type PeripheralPartVariant1 = {
+  readonly "kind": "iris-actuator";
+};
+
+export type PeripheralPartVariant2 = {
+  readonly "kind": "audio-serial-output";
+};
+
+export type PeripheralPartVariant3 = {
+  readonly "kind": "imaging-serial-output";
+};
+
+export type PeripheralPartVariant4 = {
+  readonly "kind": "imaging-sensor";
+  readonly "read_gate_mask": number;
+  readonly "read_gate_register": number;
+};
+
+export type PeripheralPartVariant5 = {
+  readonly "kind": "power-controller";
+};
+
+export type PeripheralPartVariant6 = {
+  readonly "kind": "serial-calibration-registers";
+};
+
+export type PeripheralPartVariant7 = {
+  readonly "kind": "bis-configuration-registers";
+};
+
+export type PeripheralPartVariant8 = {
+  readonly "kind": "lsm6ds-configuration-registers";
+};
+
+export type PeripheralPartVariant9 = {
+  readonly "erase_bytes"?: number | null;
+  readonly "jedec_id"?: number | null;
+  readonly "kind": "serial-nor-flash";
+  readonly "page_bytes"?: number | null;
+};
+
+export type PictureLayout = "bgra8888-straight";
+
+export type PixelFormat = "bgra8888";
 
 export type PowerControlAssembly = {
   readonly "channel": number;
@@ -584,11 +1022,11 @@ export type ProcessorCore = {
   readonly "model": ProcessorModel;
   readonly "mprofile"?: MProfileState | null;
   readonly "registers": readonly RegisterValue[];
-  readonly "released": boolean;
+  readonly "released"?: boolean | null;
   readonly "rprofile"?: RProfileState | null;
 };
 
-export type ProcessorModel = "cortex-r5f" | "cortex-a7" | "cortex-a53";
+export type ProcessorModel = "cortex-r5f" | "cortex-a7" | "cortex-a53" | "cortex-m4";
 
 export type ProcessorRegister = "pc" | "sp" | "pstate" | "cpsr";
 
@@ -597,6 +1035,12 @@ export type PulseInterface = {
   readonly "initial_phase": number;
   readonly "quadrature": boolean;
   readonly "timer_channels": readonly number[];
+};
+
+export type QuickGrid = {
+  readonly "columns": number;
+  readonly "menu_code": number;
+  readonly "rows": number;
 };
 
 export type RProfileState = {
@@ -636,6 +1080,11 @@ export type RegisterValue = {
   readonly "value": number;
 };
 
+export type RegisterWord = {
+  readonly "register": number;
+  readonly "value": number;
+};
+
 export type ResolvedConfiguration = {
   readonly "configuration": RunConfiguration;
   readonly "reference": ResolvedSelection;
@@ -646,6 +1095,33 @@ export type ResolvedSelection = {
   readonly "firmware": Firmware;
   readonly "parts": readonly Part[];
   readonly "soc": Soc;
+};
+
+export type Resources = {
+  readonly "bitmaps": BitmapResources;
+  readonly "glyph_first": number;
+  readonly "glyph_last": number;
+  readonly "glyphs": GlyphResources;
+  readonly "language": ConfigurationLocation;
+  readonly "last_caption": number;
+  readonly "private_text_bias": number;
+  readonly "private_text_first": number;
+  readonly "private_text_last": number;
+  readonly "supplementary_address": number;
+  readonly "supplementary_first": number;
+  readonly "supplementary_max_units": number;
+  readonly "supplementary_stride": number;
+  readonly "text_max_units": number;
+  readonly "text_metrics_offset": number;
+  readonly "text_pointer_offset": number;
+  readonly "text_record_size": number;
+  readonly "text_unit_bytes": number;
+  readonly "text_variants_offset": number;
+};
+
+export type RootRoute = {
+  readonly "entry": string;
+  readonly "tab"?: number | null;
 };
 
 export type RunAdcInputs = {
@@ -662,12 +1138,13 @@ export type RunCardInput = {
 export type RunConfiguration = {
   readonly "$schema": "https://fujimod.com/schemas/emulator-run-configuration.schema.json";
   readonly "body_id": string;
-  readonly "execution": RunExecution;
+  readonly "execution"?: RunExecution | null;
   readonly "firmware_id": string;
   readonly "id": string;
-  readonly "inputs": RunInputs;
+  readonly "inputs"?: RunInputs | null;
   readonly "overlays": readonly string[];
-  readonly "scene": RunScene;
+  readonly "purpose": RunPurpose;
+  readonly "scene"?: RunScene | null;
   readonly "schema": number;
   readonly "start": RunStart;
 };
@@ -675,6 +1152,11 @@ export type RunConfiguration = {
 export type RunConnectionState = {
   readonly "connected": boolean;
   readonly "connection_id": string;
+};
+
+export type RunEncoderInput = {
+  readonly "connection_id": string;
+  readonly "phase": number;
 };
 
 export type RunEngine = "unicorn";
@@ -699,6 +1181,14 @@ export type RunGpioInputs = {
   readonly "block_id": string;
   readonly "connections": readonly RunConnectionState[];
   readonly "keys": readonly RunKeyState[];
+  readonly "outputs": readonly RunGpioOutputState[];
+  readonly "unassigned_input_level": boolean;
+};
+
+export type RunGpioOutputState = {
+  readonly "connection_id": string;
+  readonly "high": boolean;
+  readonly "signal_index": number;
 };
 
 export type RunImage = {
@@ -712,15 +1202,35 @@ export type RunImages = {
   readonly "live_image": RunImage;
 };
 
-export type RunInputs = {
+export type RunInputs = RunInputsVariant0 | RunInputsVariant1 | RunInputsVariant2;
+
+export type RunInputsVariant0 = {
   readonly "adc": RunAdcInputs;
   readonly "card": RunCardInput;
+  readonly "encoders": readonly RunEncoderInput[];
   readonly "first_start"?: RunFirstStart | null;
   readonly "gpio": RunGpioInputs;
+  readonly "kind": "exr2";
   readonly "mcu": RunMcuInput;
   readonly "power": RunPowerInput;
   readonly "serial_registers": readonly RunSerialRegisters[];
   readonly "usb": RunUsbInput;
+};
+
+export type RunInputsVariant1 = {
+  readonly "blocks": readonly ApplicationBlockInput[];
+  readonly "kind": "xp4";
+  readonly "parts": readonly ApplicationPartInput[];
+  readonly "ticks_per_second": number;
+  readonly "timings": readonly ApplicationTiming[];
+};
+
+export type RunInputsVariant2 = {
+  readonly "blocks": readonly ApplicationBlockInput[];
+  readonly "kind": "xp5";
+  readonly "parts": readonly ApplicationPartInput[];
+  readonly "ticks_per_second": number;
+  readonly "timings": readonly ApplicationTiming[];
 };
 
 export type RunInstructionRate = {
@@ -747,7 +1257,7 @@ export type RunOverlay = {
   readonly "schema": number;
 };
 
-export type RunOverlayChange = RunOverlayChangeVariant0 | RunOverlayChangeVariant1;
+export type RunOverlayChange = RunOverlayChangeVariant0 | RunOverlayChangeVariant1 | RunOverlayChangeVariant2 | RunOverlayChangeVariant3;
 
 export type RunOverlayChangeVariant0 = {
   readonly "connected": boolean;
@@ -759,12 +1269,24 @@ export type RunOverlayChangeVariant1 = {
   readonly "start": RunStart;
 };
 
+export type RunOverlayChangeVariant2 = {
+  readonly "kind": "purpose";
+  readonly "purpose": RunPurpose;
+};
+
+export type RunOverlayChangeVariant3 = {
+  readonly "execution": RunExecution;
+  readonly "kind": "execution";
+};
+
 export type RunPowerInput = {
   readonly "boot_reply": number;
   readonly "part_id": string;
   readonly "powered_on": boolean;
   readonly "spi_status": readonly RunRegisterValue[];
 };
+
+export type RunPurpose = "rom_boot" | "service_session" | "rehearsal" | "boot_access" | "shutdown";
 
 export type RunRegisterValue = {
   readonly "register": number;
@@ -778,11 +1300,28 @@ export type RunRtcInput = {
   readonly "ticks_per_second": number;
 };
 
-export type RunScene = {
+export type RunScene = RunSceneVariant0 | RunSceneVariant1 | RunSceneVariant2;
+
+export type RunSceneVariant0 = {
   readonly "frame_period_ticks": number;
   readonly "generated_assets": readonly GeneratedSceneAsset[];
   readonly "images": RunImages;
+  readonly "kind": "exr2";
   readonly "statistics": RunStatistics;
+};
+
+export type RunSceneVariant1 = {
+  readonly "command_images": readonly ApplicationCommandImageInput[];
+  readonly "frames": readonly ApplicationFrameInput[];
+  readonly "kind": "xp4";
+  readonly "statistics": readonly ApplicationStatisticsInput[];
+};
+
+export type RunSceneVariant2 = {
+  readonly "command_images": readonly ApplicationCommandImageInput[];
+  readonly "frames": readonly ApplicationFrameInput[];
+  readonly "kind": "xp5";
+  readonly "statistics": readonly ApplicationStatisticsInput[];
 };
 
 export type RunSerialRegisters = {
@@ -790,7 +1329,7 @@ export type RunSerialRegisters = {
   readonly "values": readonly RunRegisterValue[];
 };
 
-export type RunStart = RunStartVariant0 | RunStartVariant1;
+export type RunStart = RunStartVariant0 | RunStartVariant1 | RunStartVariant2;
 
 export type RunStartVariant0 = {
   readonly "kind": "rom";
@@ -798,6 +1337,10 @@ export type RunStartVariant0 = {
 
 export type RunStartVariant1 = {
   readonly "kind": "loader";
+};
+
+export type RunStartVariant2 = {
+  readonly "kind": "sd_card";
 };
 
 export type RunStatistics = {
@@ -816,8 +1359,11 @@ export type RunUsbInput = {
 };
 
 export type ScannerReader = {
+  readonly "pressed_value": number;
+  readonly "released_value": number;
   readonly "routine": AddressIdentity;
   readonly "stable_offset": number;
+  readonly "stable_width": number;
 };
 
 export type ScannerTable = {
@@ -828,8 +1374,22 @@ export type ScannerTable = {
   readonly "stride": number;
 };
 
+export type Scanout = {
+  readonly "address": number;
+  readonly "address_mask": number;
+  readonly "channel": number;
+  readonly "height": number;
+  readonly "instance": number;
+  readonly "layer": number;
+  readonly "pixel_format": PixelFormat;
+  readonly "pointer_address": number;
+  readonly "stride_bytes": number;
+  readonly "width": number;
+};
+
 export type SensorAssembly = {
   readonly "connection_id": string;
+  readonly "control_bus"?: ControlBusAttachment | null;
   readonly "part_id": string;
 };
 
@@ -843,6 +1403,13 @@ export type SensorRaster = {
   readonly "image_area": readonly number[];
   readonly "pixel_clock_hz"?: number | null;
   readonly "width": number;
+};
+
+export type SerialAttachment = {
+  readonly "connection_id": string;
+  readonly "controller_id": string;
+  readonly "part_id": string;
+  readonly "select_connection_id"?: string | null;
 };
 
 export type SerialOutputKind = "panel" | "registers" | "command_data" | "fixed";
@@ -863,6 +1430,7 @@ export type Soc = {
   readonly "clocks": readonly ClockDomain[];
   readonly "decoders": readonly AddressDecoder[];
   readonly "dma_mappings": readonly DmaMapping[];
+  readonly "hardware"?: SocHardware | null;
   readonly "id": string;
   readonly "interrupts": readonly InterruptRoute[];
   readonly "mappings": readonly AddressMapping[];
@@ -878,10 +1446,19 @@ export type SocBlock = {
   readonly "clock_id"?: string | null;
   readonly "id": string;
   readonly "kind": SocBlockKind;
+  readonly "processor_core_id"?: string | null;
   readonly "size": number;
 };
 
 export type SocBlockKind = "gpio" | "adc" | "interrupt-controller" | "timer" | "dma" | "control-bus" | "serial-controller" | "nand-controller" | "sd-card-controller" | "usb-controller" | "display-controller" | "imaging-controller" | "reset-controller" | "clock-controller" | "address-window";
+
+export type SocHardware = {
+  readonly "application"?: ApplicationHardware | null;
+  readonly "blocks": Record<string, BlockHardware>;
+  readonly "companion"?: CompanionHardware | null;
+  readonly "interrupt_controller"?: InterruptControllerHardware | null;
+  readonly "interrupt_inputs": readonly ControllerInterruptInput[];
+};
 
 export type SocReset = {
   readonly "coprocessor_writes": readonly CoprocessorWrite[];
@@ -898,7 +1475,11 @@ export type TcmState = {
   readonly "reset_address": number;
 };
 
-export type WireSignal = "gpio" | "adc" | "serial_data" | "serial_clock" | "image_data" | "display_data" | "microcontroller" | "storage" | "power";
+export type TimingOperation = "settle" | "sample" | "command" | "reset" | "pixel" | "acknowledge" | "complete";
+
+export type VideoLayout = "yycbcr422";
+
+export type WireSignal = "gpio" | "adc" | "serial_data" | "serial_clock" | "image_data" | "display_data" | "microcontroller" | "storage" | "pulse" | "power";
 
 export type ZoomMechanism = {
   readonly "maximum_position": number;

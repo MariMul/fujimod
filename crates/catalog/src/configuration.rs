@@ -438,6 +438,18 @@ impl ResolvedConfiguration {
                     }
                     configuration.purpose = purpose;
                 }
+                RunOverlayChange::Execution { execution } => {
+                    if !changed.insert("execution") {
+                        return Err(
+                            "run overlays change the execution policy more than once".into()
+                        );
+                    }
+                    if execution.quantum == 0 {
+                        return Err("run execution quantum must be positive".into());
+                    }
+                    execution.instructions_per_tick.validate()?;
+                    configuration.execution = Some(execution);
+                }
             }
             configuration.overlays.push(overlay.id);
         }
@@ -899,6 +911,8 @@ pub enum RunOverlayChange {
     Start { start: RunStart },
     /// Select one named run operation.
     Purpose { purpose: RunPurpose },
+    /// Declare the execution policy for a run whose base configuration has none.
+    Execution { execution: RunExecution },
 }
 
 /// Execution policy selected by the run configuration.
@@ -1240,6 +1254,34 @@ mod tests {
         };
         assert!(inputs.usb.connected);
         assert_eq!(resolved.configuration.overlays, ["x70-110-rec-usb"]);
+    }
+
+    #[test]
+    fn execution_overlay_declares_policy_once_for_a_base_without_one() {
+        let resolved = ResolvedConfiguration::with_overlays(
+            "x20-103",
+            &["x20-103-discovery-execution".into()],
+        )
+        .unwrap();
+        let execution = resolved.configuration.execution.unwrap();
+        assert_eq!(execution.mode, RunExecutionMode::Strict);
+        assert_eq!(execution.engine, RunEngine::Unicorn);
+        assert_eq!(execution.quantum, 1000);
+        assert_eq!(
+            execution.instructions_per_tick,
+            RunInstructionRate {
+                numerator: 24,
+                denominator: 1
+            }
+        );
+        assert!(ResolvedConfiguration::with_overlays(
+            "x20-103",
+            &[
+                "x20-103-discovery-execution".into(),
+                "x20-103-discovery-execution".into(),
+            ],
+        )
+        .is_err());
     }
 
     #[test]
