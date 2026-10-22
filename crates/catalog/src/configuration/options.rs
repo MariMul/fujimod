@@ -45,6 +45,9 @@ pub struct RunFactoryOptions {
     /// Selected face register mode. Absence preserves the base selection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub face_register_mode: Option<RunFaceRegisterMode>,
+    /// Declared face DMA stop policy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub face_stop_profile: Option<RunFaceStopProfile>,
     /// Selected graphics profile. Absence preserves the base selection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub graphics_profile: Option<RunGraphicsProfile>,
@@ -93,6 +96,9 @@ pub struct RunFactoryOptions {
     /// Selected lens response ticks. Absence preserves the base selection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lens_response_ticks: Option<u64>,
+    /// Requested lens continuation policy; consumers must support it explicitly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lens_continuation_profile: Option<RunLensContinuationProfile>,
     /// Selected mcu profile. Absence preserves the base selection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mcu_profile: Option<RunMcuProfile>,
@@ -368,6 +374,8 @@ pub enum RunImageWorkStopProfile {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub enum RunInputEventProfile {
+    #[serde(rename = "declared-rec-display-card-late-source-staging-unmeasured")]
+    DeclaredRecDisplayCardLateSourceStagingUnmeasured,
     #[serde(rename = "declared-rec-display-close-reentry-plus-one-ready-source0-edge-unmeasured")]
     DeclaredRecDisplayCloseReentryPlusOneReadySource0EdgeUnmeasured,
     #[serde(rename = "xm1-150-configured-phase-clock-unmeasured")]
@@ -711,4 +719,28 @@ pub enum RunClearedOption {
     LensResponseProfile,
     LensResponseTicks,
     LensContinuationProfile,
+}
+
+/// Explicit constructor policy selected by a run.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum RunFaceStopProfile {
+    #[serde(rename = "declared-armed-face-dma-idle-abort-unmeasured")]
+    DeclaredArmedFaceDmaIdleAbortUnmeasured,
+}
+
+/// Explicit constructor policy selected by a run.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum RunLensContinuationProfile {
+    #[serde(rename = "declared-lens-controller-close-focus-reference-target222-unmeasured")]
+    DeclaredLensControllerCloseFocusReferenceTarget222Unmeasured,
 }

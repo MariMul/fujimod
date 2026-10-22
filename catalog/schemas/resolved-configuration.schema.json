@@ -17093,6 +17093,13 @@
       ],
       "type": "string"
     },
+    "RunFaceStopProfile": {
+      "description": "Explicit constructor policy selected by a run.",
+      "enum": [
+        "declared-armed-face-dma-idle-abort-unmeasured"
+      ],
+      "type": "string"
+    },
     "RunFactoryOptions": {
       "additionalProperties": false,
       "properties": {
@@ -17210,6 +17217,17 @@
             }
           ],
           "description": "Selected face register mode. Absence preserves the base selection."
+        },
+        "face_stop_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunFaceStopProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared face DMA stop policy."
         },
         "graphics_profile": {
           "anyOf": [
@@ -17365,6 +17383,17 @@
             }
           ],
           "description": "Selected jpeg decode profile. Absence preserves the base selection."
+        },
+        "lens_continuation_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunLensContinuationProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Requested lens continuation policy; consumers must support it explicitly."
         },
         "lens_response_profile": {
           "anyOf": [
@@ -17840,6 +17869,7 @@
     "RunInputEventProfile": {
       "description": "Closed selection for input event profile.",
       "enum": [
+        "declared-rec-display-card-late-source-staging-unmeasured",
         "declared-rec-display-close-reentry-plus-one-ready-source0-edge-unmeasured",
         "xm1-150-configured-phase-clock-unmeasured"
       ],
@@ -18084,6 +18114,13 @@
         "pressed"
       ],
       "type": "object"
+    },
+    "RunLensContinuationProfile": {
+      "description": "Explicit constructor policy selected by a run.",
+      "enum": [
+        "declared-lens-controller-close-focus-reference-target222-unmeasured"
+      ],
+      "type": "string"
     },
     "RunLensResponseProfile": {
       "description": "Closed selection for lens response profile.",
