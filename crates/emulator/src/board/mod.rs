@@ -1022,10 +1022,10 @@ impl State {
                 format!("CPU{core} entry count moved backward: {progress} < {} (policy {}, parallel {})",
                     self.accounted[core], self.execution_policy.name(), self.parallel.is_some())
             })?;
-            let elapsed = self
-                .parallel
-                .as_mut()
-                .map_or(delta, |epoch| epoch.advance(core, progress));
+            let elapsed = match self.parallel.as_mut() {
+                Some(epoch) => epoch.advance(core, delta)?,
+                None => delta,
+            };
             let elapsed = if self.execution_policy == ExecutionPolicy::Interactive {
                 let boundary = self.timeline.ratio().budget(
                     self.timeline.now(),
@@ -1104,6 +1104,11 @@ impl State {
     fn due(&mut self, cpus: &[Rc<dyn Cpu>]) -> Result<(), String> {
         if self.decoders.pending() {
             return Ok(());
+        }
+        // Retain a newly created earlier boundary even after its event is
+        // consumed. Unfinished peers may catch up only to this cohort's cap.
+        if let Some(epoch) = self.parallel.as_mut() {
+            epoch.constrain(&self.timeline, self.clock_limit)?;
         }
         let mut count = 0;
         while let Some(event) = self.timeline.pop_due() {
@@ -1278,7 +1283,10 @@ impl State {
             let entered = cpu
                 .instruction_progress()
                 .ok_or("active entry count is unavailable")?;
-            let remaining = self.timeline.budget(self.scheduler_room(core))?;
+            let remaining = match self.parallel.as_ref() {
+                Some(epoch) => epoch.room(core),
+                None => self.timeline.budget(self.scheduler_room(core))?,
+            };
             cpu.tighten_instruction_limit(entered.saturating_add(remaining))?;
         }
         Ok(())

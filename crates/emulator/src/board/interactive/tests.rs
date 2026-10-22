@@ -3,7 +3,7 @@
 use crate::board::{
     Board,
     bus::{self, Bus},
-    factory::{Engine, Graph, MemoryMap, Options, Processor, Ram},
+    factory::{Engine, Graph, MemoryMap, Options, Peripheral, Processor, Ram},
     memory::BusMapping,
 };
 use fujimod_emulator_cpu::{ExecutionPolicy, Model, Register, timeline::Ratio};
@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 struct DeadlineSample {
     due: Option<u64>,
+    armed_at: Option<u64>,
     samples: Vec<(u64, u32)>,
 }
 
@@ -39,13 +40,16 @@ impl Device for DeadlineSample {
         serde_json::to_value(self).map_err(|error| error.to_string())
     }
 
-    fn read(&mut self, cx: &mut Cx<'_>, _: u64, _: u8) -> u64 {
-        cx.unmodeled();
-        0
+    fn read(&mut self, _: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+        u64::from(!self.samples.is_empty())
     }
 
-    fn write(&mut self, cx: &mut Cx<'_>, _: u64, _: u8, _: u64) {
-        cx.unmodeled();
+    fn write(&mut self, cx: &mut Cx<'_>, _: u64, _: u8, value: u64) {
+        self.armed_at = Some(cx.now());
+        match cx.now().checked_add(value) {
+            Some(due) => self.due = Some(due),
+            None => cx.fail("sample deadline overflow"),
+        }
     }
 
     fn next_deadline(&self, _: u64) -> Option<u64> {
@@ -95,16 +99,24 @@ fn board(policy: ExecutionPolicy, due: Option<u64>) -> (Board, usize) {
                 permissions: 7,
             })
             .collect(),
-        peripherals: vec![],
+        peripherals: (0..2)
+            .map(|core| Peripheral {
+                core,
+                address: 0x8000000,
+                physical: 0x8000000,
+                size: 0x1000,
+            })
+            .collect(),
         instructions_per_tick: Ratio::new(1, 1).unwrap(),
     };
     let mut bus = Bus::new(bus::Mode::Strict);
     let device = bus
         .register(
             0x8000000,
-            4,
+            0x1000,
             Box::new(DeadlineSample {
                 due,
+                armed_at: None,
                 samples: Vec::new(),
             }),
         )
@@ -200,5 +212,207 @@ fn interactive_instruction_limit_allows_only_bounded_block_overshoot() {
     assert!(
         retired <= 8,
         "two one-instruction shares can each overrun by at most one four-instruction block; retired {retired}"
+    );
+}
+
+fn check_mmio_progress(policy: ExecutionPolicy, tick_limit: bool) {
+    let (mut board, device) = board(policy, tick_limit.then_some(100_000));
+    // Core 0 reads the immediate MMIO peripheral 64 times, then publishes
+    // a flag. Core 1 only spins. Host callback latency is not guest work
+    // and must not let the spinner consume each newly divided remainder.
+    let code = [
+        0xe3a00040u32, // mov r0, #64
+        0xe59f1018,    // ldr r1, [pc, #24]
+        0xe5912000,    // ldr r2, [r1]
+        0xe2500001,    // subs r0, r0, #1
+        0x1afffffc,    // bne to the MMIO load
+        0xe3a03a03,    // mov r3, #0x3000
+        0xe3a0205a,    // mov r2, #0x5a
+        0xe5832000,    // str r2, [r3]
+        0xeafffffe,    // b .
+        0x08000000,
+    ];
+    board
+        .write_memory(
+            0,
+            0x1000,
+            &code
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    board
+        .write_memory(0, 0x2000, &0xeafffffeu32.to_le_bytes())
+        .unwrap();
+
+    // Start the spinner first so callback arrival order cannot grant it
+    // a fresh allowance at the expense of the MMIO core.
+    board.next_core.set(1);
+    if tick_limit {
+        board.run_until(100_000, 1000).unwrap();
+    } else {
+        board.run_for_instructions(200_000, 1000).unwrap();
+    }
+    let counts = board.instruction_counts();
+    let share = if policy == ExecutionPolicy::Exact && tick_limit {
+        50_000
+    } else {
+        100_000
+    };
+    assert!(
+        counts
+            .iter()
+            .all(|&count| (share..=share + 256).contains(&count)),
+        "{policy:?}: callback restarts must retain each core's share: {counts:?}"
+    );
+    let mut flag = [0; 4];
+    board.read_memory(0, 0x3000, &mut flag).unwrap();
+    assert_eq!(
+        u32::from_le_bytes(flag),
+        0x5a,
+        "{policy:?}: MMIO core was starved by a runnable spinner: {counts:?}"
+    );
+    let tick = board.state.borrow().timeline.now();
+    if tick_limit {
+        assert_eq!(tick, 100_000);
+        assert_eq!(
+            samples(&board, device)
+                .iter()
+                .map(|&(at, _)| at)
+                .collect::<Vec<_>>(),
+            [100_000]
+        );
+    } else if policy == ExecutionPolicy::Interactive {
+        assert!(
+            (100_000..=100_256).contains(&tick),
+            "callback segments must share one time ledger, got {tick}"
+        );
+    }
+    let before = board.fingerprint().unwrap();
+    let saved = board.checkpoint(None).unwrap();
+    board.run_for_instructions(1000, 1000).unwrap();
+    board.restore_keyframe(&saved).unwrap();
+    assert_eq!(board.fingerprint().unwrap(), before);
+}
+
+#[test]
+fn spinning_peer_does_not_exhaust_the_budget_before_mmio_work_can_progress() {
+    for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+        check_mmio_progress(policy, false);
+    }
+}
+
+#[test]
+fn device_deadline_window_keeps_each_peers_progress_through_mmio_stops() {
+    for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+        check_mmio_progress(policy, true);
+    }
+}
+
+#[test]
+fn mmio_created_deadline_survives_callback_restarts_and_checkpoint_restore() {
+    let (mut board, device) = board(ExecutionPolicy::Interactive, None);
+    // Arm a real one-shot event after 32 ticks, then keep taking MMIO reads.
+    let code = [
+        0xe3a00020u32, // mov r0, #32
+        0xe3a01302,    // mov r1, #0x08000000
+        0xe5810000,    // str r0, [r1]
+        0xe5912000,    // ldr r2, [r1]
+        0xeafffffd,    // b to the MMIO load
+    ];
+    board
+        .write_memory(
+            0,
+            0x1000,
+            &code
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    board
+        .write_memory(0, 0x2000, &0xeafffffeu32.to_le_bytes())
+        .unwrap();
+    board.run_until(10_000, 1000).unwrap();
+    let armed = board
+        .inspect_device::<DeadlineSample, _>(device, |sample| Ok(sample.armed_at.unwrap()))
+        .unwrap();
+    // A very late first callback can arm beyond this host boundary. Continue
+    // to that actual device deadline, without inventing a polling deadline.
+    board.run_until(armed + 32, 1000).unwrap();
+    assert_eq!(samples(&board, device), [(armed + 32, 0)]);
+    let saved = board.checkpoint(None).unwrap();
+    let before = board.fingerprint().unwrap();
+    board.run_until(20_000, 1000).unwrap();
+    board.restore_keyframe(&saved).unwrap();
+    assert_eq!(board.fingerprint().unwrap(), before);
+    assert_eq!(samples(&board, device), [(armed + 32, 0)]);
+}
+
+#[test]
+fn catch_up_mmio_observes_the_serviced_event_with_a_monotonic_local_pmu() {
+    let (mut board, device) = board(ExecutionPolicy::Interactive, Some(100_000));
+    let counter = |crm, opc2| fujimod_emulator_cpu::arm::Coprocessor {
+        cp: 15,
+        opc1: 0,
+        crn: 9,
+        crm,
+        opc2,
+        secure: 0,
+        wide: false,
+    };
+    let cpu = board.cpu(0).unwrap();
+    cpu.set_guest_clock(fujimod_emulator_cpu::Clock {
+        now: 0,
+        phase: 0,
+        ratio: Ratio::new(1, 1).unwrap(),
+    })
+    .unwrap();
+    cpu.coprocessor(counter(12, 0), Some(1)).unwrap();
+    cpu.coprocessor(counter(12, 1), Some(0x80000000)).unwrap();
+    let code = [
+        0xe59f1028u32, // ldr r1, address literal
+        0xe3a03a03,    // mov r3, #0x3000
+        0xee194f1d,    // mrc pmccntr, r4
+        0xe5834004,    // str r4, [r3, #4]
+        0xe5912000,    // ldr r2, [r1]: 1 after the event
+        0xe3520000,    // cmp r2, #0
+        0x0afffffa,    // beq to the PMU read
+        0xee194f1d,    // mrc pmccntr, r4
+        0xe5834008,    // str r4, [r3, #8]
+        0xe5832000,    // str r2, [r3]
+        0xeafffffe,    // b .
+        0xe1a00000,    // padding
+        0x08000000,
+    ];
+    board
+        .write_memory(
+            0,
+            0x1000,
+            &code
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    board
+        .write_memory(0, 0x2000, &0xeafffffeu32.to_le_bytes())
+        .unwrap();
+    board.next_core.set(1);
+    board.run_until(100_064, 1000).unwrap();
+    // The event samples RAM before the successful read can publish its flag.
+    assert_eq!(samples(&board, device), [(100_000, 0)]);
+    let mut bytes = [0; 12];
+    board.read_physical(0x3000, &mut bytes).unwrap();
+    let words: Vec<_> = bytes
+        .chunks_exact(4)
+        .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+        .collect();
+    assert_eq!(words[0], 1, "catch-up reads see the serviced global event");
+    assert!(words[1] <= words[2], "local PMU moved backward: {words:?}");
+    assert!(
+        words[2] <= 100_256,
+        "local PMU counted restarts twice: {words:?}"
     );
 }
