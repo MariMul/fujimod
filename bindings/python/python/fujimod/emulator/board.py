@@ -185,6 +185,7 @@ class Board:
         unicorn: str | PathLike[str],
         nand: str | PathLike[str] | None = None,
         settings: str | PathLike[str] | None = None,
+        clock_seconds_2000: int | None = None,
     ) -> Self:
         """Boot a catalog runtime from files selected by the caller.
 
@@ -198,6 +199,10 @@ class Board:
         ``update`` and ``boot_rom`` are required files. ``nand`` and
         ``settings`` supply optional persistent storage inputs. No file path
         is inferred from the selected configuration.
+
+        ``clock_seconds_2000`` sets the real-time clock in seconds since
+        2000-01-01, or uses the configuration's default if None. Must be
+        an unsigned 32-bit integer if provided.
         """
         configuration_id = cls._identifier(configuration_id, "configuration_id")
         if isinstance(overlays, (str, bytes)) or not isinstance(overlays, Sequence):
@@ -212,6 +217,11 @@ class Board:
         unicorn = cls._input_path(unicorn, "unicorn")
         nand = None if nand is None else cls._input_path(nand, "nand")
         settings = None if settings is None else cls._input_path(settings, "settings")
+        if clock_seconds_2000 is not None:
+            if type(clock_seconds_2000) is bool or type(clock_seconds_2000) is not int:
+                raise TypeError("clock_seconds_2000 must be a non-bool integer or None")
+            if not 0 <= clock_seconds_2000 <= 0xFFFFFFFF:
+                raise ValueError("clock_seconds_2000 must be in 0..=0xFFFFFFFF")
         native = _native.Board.from_inputs(
             configuration_id=configuration_id,
             overlays=selected_overlays,
@@ -220,6 +230,7 @@ class Board:
             unicorn=unicorn,
             nand=nand,
             settings=settings,
+            clock_seconds_2000=clock_seconds_2000,
         )
         quantum = native.boot_quantum
         if type(quantum) is not int or quantum < 1:
