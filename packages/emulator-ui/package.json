@@ -33,7 +33,7 @@
     "./ui/fault": "./src/ui/fault.tsx",
     "./ui/feedback.css": "./src/ui/feedback.css",
     "./ui/icons": "./src/ui/icons.tsx",
-    "./ui/input-panel": "./src/ui/input-panel.ts",
+    "./ui/default-layout": "./src/ui/default-layout.ts",
     "./ui/layout": "./src/ui/layout.ts",
     "./ui/local-reports": "./src/ui/local-reports.ts",
     "./ui/report-delivery": "./src/ui/report-delivery.ts",
