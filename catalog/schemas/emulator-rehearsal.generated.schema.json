@@ -601,9 +601,16 @@
     "review": {
       "$ref": "#/$defs/RehearsalReview",
       "description": "Declared review."
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
     }
   },
   "required": [
+    "schema",
     "$schema",
     "camera_operations_authorized",
     "capture",

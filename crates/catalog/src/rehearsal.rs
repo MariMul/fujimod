@@ -235,6 +235,8 @@ pub struct Review {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Rehearsal {
+    /// Document version.
+    pub schema: u32,
     /// Stable schema identity.
     #[serde(rename = "$schema")]
     pub schema_uri: String,

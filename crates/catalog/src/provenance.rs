@@ -27,6 +27,9 @@ pub struct CatalogAnnotations {
 pub struct SourceAnnotations {
     /// Logical record and optional execution profile qualified by these notes.
     pub subject: AnnotationSubject,
+    /// Hash-qualified source documents retained as evidence, never execution inputs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_documents: Option<BTreeMap<String, SourceDocument>>,
     /// Explicit synthetic byte fields in additional persistent records.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nondefault_records: Option<BTreeMap<String, Vec<StorageSignature>>>,
@@ -56,6 +59,28 @@ pub struct SourceAnnotations {
     /// Explicit caller file locations for the named input assets.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input_assets: Option<BTreeMap<String, InputAssetLocation>>,
+}
+
+/// A complete source inventory retained independently of its execution projection.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SourceDocument {
+    /// Caller-selected source location.
+    pub path: String,
+    /// SHA-256 of the complete source document.
+    pub sha256: String,
+    /// Source format whose fields the evidence preserves.
+    pub format: SourceDocumentFormat,
+}
+
+/// Formats of retained source evidence.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum SourceDocumentFormat {
+    /// Located observations and their proof spans.
+    LocatedFactsV2,
+    /// Physical control inventory and manual citations.
+    ControlInventory,
 }
 
 /// Recorded prose or a list of prose citations.
@@ -138,4 +163,8 @@ pub enum AnnotationKind {
     Firmware,
     /// Firmware table layout.
     FirmwareView,
+    /// Located firmware observations and their source evidence.
+    FirmwareFacts,
+    /// Physical control inventory evidence.
+    BodyControls,
 }

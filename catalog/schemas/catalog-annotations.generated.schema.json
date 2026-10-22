@@ -27,6 +27,16 @@
           "const": "firmware_view",
           "description": "Firmware table layout.",
           "type": "string"
+        },
+        {
+          "const": "firmware_facts",
+          "description": "Located firmware observations and their source evidence.",
+          "type": "string"
+        },
+        {
+          "const": "body_controls",
+          "description": "Physical control inventory evidence.",
+          "type": "string"
         }
       ]
     },
@@ -575,6 +585,16 @@
             "null"
           ]
         },
+        "source_documents": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SourceDocument"
+          },
+          "description": "Hash-qualified source documents retained as evidence, never execution inputs.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
         "storage_signature": {
           "anyOf": [
             {
@@ -596,6 +616,45 @@
         "notes"
       ],
       "type": "object"
+    },
+    "SourceDocument": {
+      "additionalProperties": false,
+      "description": "A complete source inventory retained independently of its execution projection.",
+      "properties": {
+        "format": {
+          "$ref": "#/$defs/SourceDocumentFormat",
+          "description": "Source format whose fields the evidence preserves."
+        },
+        "path": {
+          "description": "Caller-selected source location.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "SHA-256 of the complete source document.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "format"
+      ],
+      "type": "object"
+    },
+    "SourceDocumentFormat": {
+      "description": "Formats of retained source evidence.",
+      "oneOf": [
+        {
+          "const": "located-facts-v2",
+          "description": "Located observations and their proof spans.",
+          "type": "string"
+        },
+        {
+          "const": "control-inventory",
+          "description": "Physical control inventory and manual citations.",
+          "type": "string"
+        }
+      ]
     },
     "StorageSignature": {
       "additionalProperties": false,
