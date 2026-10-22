@@ -62,11 +62,6 @@ fn parse(
             return Err(format!("duplicate option: {key}"));
         }
     }
-    let mut take = |key: &str| {
-        values
-            .remove(key)
-            .ok_or_else(|| format!("required option: {key}"))
-    };
     let clock_seconds_2000 = values
         .remove("--clock-seconds-2000")
         .map(|v| {
@@ -76,6 +71,11 @@ fn parse(
                 .map_err(|_| "clock seconds must be an unsigned 32-bit integer")
         })
         .transpose()?;
+    let mut take = |key: &str| {
+        values
+            .remove(key)
+            .ok_or_else(|| format!("required option: {key}"))
+    };
     let options = Options {
         configuration_id: take("--configuration")?
             .into_string()
