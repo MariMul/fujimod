@@ -347,6 +347,7 @@ pub enum Model {
     Hdmi {
         options: hdmi::transmitter::Options,
         sink: String,
+        hot_plug: InterruptLine,
     },
     HdmiSink {
         options: hdmi_sink::Options,

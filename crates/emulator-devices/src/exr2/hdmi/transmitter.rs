@@ -3,6 +3,7 @@
 //! Startup selector values and HPD bit6 control the modeled transmitter. The
 //! attached sink supplies cable state and EDID bytes; status timing and DDC
 //! completion use guest virtual time. No transmitter lock or pixel output is synthesized.
+use crate::bus::InterruptLine;
 use crate::parts::hdmi_sink::HdmiSink;
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
@@ -65,17 +66,26 @@ struct State {
     generation: u64,
 }
 
+/// Board connections. The hot-plug output is a per-core interrupt source.
+pub struct Wiring {
+    pub hot_plug: InterruptLine,
+}
+
 pub struct Transmitter {
     state: State,
     sink: HdmiSink,
     edid_ticks: u64,
+    hot_plug: (usize, u32),
 }
 
 impl Transmitter {
-    pub fn new(options: Options, sink: HdmiSink) -> Result<Self, String> {
+    pub fn new(options: Options, sink: HdmiSink, wiring: Wiring) -> Result<Self, String> {
         if options.edid_ticks == 0 {
             return Err("HDMI EDID delay must be positive".into());
         }
+        let InterruptLine::Core { core, line } = wiring.hot_plug else {
+            return Err("HDMI hot-plug output requires a per-core interrupt source".into());
+        };
         let mut registers = BTreeMap::new();
         for offset in TX_STORED_OFFSETS {
             registers.insert(TX + offset, 0);
@@ -100,6 +110,7 @@ impl Transmitter {
             },
             sink,
             edid_ticks: options.edid_ticks,
+            hot_plug: (core, line),
         })
     }
 
@@ -110,7 +121,8 @@ impl Transmitter {
         }
         self.sink.set_connected(connected);
         if connected {
-            if let Err(error) = cx.raise_irq(0, 9) {
+            let (core, line) = self.hot_plug;
+            if let Err(error) = cx.raise_irq(core, line) {
                 cx.fail(format!(
                     "HDMI hot-plug interrupt could not be raised: {error}"
                 ));
@@ -396,7 +408,14 @@ mod tests {
 
     fn transmitter(connected: bool, edid: Vec<u8>) -> Transmitter {
         let sink = HdmiSink::new(SinkOptions { edid, connected }).unwrap();
-        Transmitter::new(Options { edid_ticks: 2 }, sink).unwrap()
+        Transmitter::new(
+            Options { edid_ticks: 2 },
+            sink,
+            Wiring {
+                hot_plug: InterruptLine::Core { core: 1, line: 17 },
+            },
+        )
+        .unwrap()
     }
 
     #[test]
@@ -434,6 +453,19 @@ mod tests {
     }
 
     #[test]
+    fn hot_plug_output_requires_a_per_core_interrupt_source() {
+        let sink = HdmiSink::new(SinkOptions {
+            edid: Vec::new(),
+            connected: false,
+        })
+        .unwrap();
+        let shared = Wiring {
+            hot_plug: InterruptLine::Shared(9),
+        };
+        assert!(Transmitter::new(Options { edid_ticks: 2 }, sink, shared).is_err());
+    }
+
+    #[test]
     fn hotplug_irq_and_unplug_cancel_pending_edid() {
         let mut model = transmitter(false, vec![0; 128]);
         let mut host = Clock {
@@ -444,7 +476,7 @@ mod tests {
             let mut cx = Cx::new(&mut host, 0, 0, 9);
             model.set_connected(&mut cx, true);
         }
-        assert_eq!(host.irqs, [(0, 9)]);
+        assert_eq!(host.irqs, [(1, 17)]);
         write(&mut model, &mut host, EDID_CONTROL, 6);
         write(&mut model, &mut host, EDID_OFFSET, 0);
         assert_eq!(model.next_deadline(host.now), Some(12));

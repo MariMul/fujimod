@@ -705,9 +705,16 @@ impl Builder<'_> {
                 resources.hdmi_sinks.insert(name.to_owned(), input.sink());
                 Box::new(input)
             }
-            Model::Hdmi { options, sink } => Box::new(hdmi::Transmitter::new(
+            Model::Hdmi {
+                options,
+                sink,
+                hot_plug,
+            } => Box::new(hdmi::Transmitter::new(
                 options,
                 resources.hdmi_sink(&sink)?,
+                hdmi::transmitter::Wiring {
+                    hot_plug: line(hot_plug)?,
+                },
             )?),
             Model::SerialAudio { options, sinks } => {
                 Box::new(audio::SerialAudio::new(options, sinks.map(AudioSink::new)))

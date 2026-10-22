@@ -2,7 +2,6 @@
 
 pub mod audio_sink;
 pub mod hdmi_sink;
-pub mod panel;
 pub mod spi_registers;
 
 pub mod bis_configuration;

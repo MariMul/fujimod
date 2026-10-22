@@ -2602,7 +2602,13 @@
         "model": {
           "kind": "hdmi",
           "options": {},
-          "sink": "hdmisink"
+          "sink": "hdmisink",
+          "hot_plug": {
+            "Core": {
+              "core": 0,
+              "line": 9
+            }
+          }
         }
       },
       {
