@@ -1822,6 +1822,10 @@ pub struct ReferenceCatalog {
     parts: BTreeMap<String, Part>,
     bodies: BTreeMap<String, Body>,
     firmwares: BTreeMap<String, Firmware>,
+    /// Hand-authored physical controls, keyed by body identity.
+    physical_controls: BTreeMap<String, crate::controls::PhysicalControls>,
+    /// Generated located inputs, keyed by firmware identity.
+    control_ids: BTreeMap<String, crate::controls::FirmwareControlIds>,
 }
 
 impl ReferenceCatalog {
@@ -1840,14 +1844,10 @@ impl ReferenceCatalog {
             insert_unique(&mut catalog.parts, value.id.clone(), value, &path)?;
         }
         for (path, bytes) in read_json_files(&root.join("bodies"))? {
-            let value: Body = decode(&bytes, &path)?;
-            value.validate(&value.id)?;
-            insert_unique(&mut catalog.bodies, value.id.clone(), value, &path)?;
+            catalog.insert_document(ReferenceKind::of_body_file(&path)?, &bytes, &path)?;
         }
         for (path, bytes) in read_json_files(&root.join("firmware"))? {
-            let value: Firmware = decode(&bytes, &path)?;
-            value.validate(&value.id)?;
-            insert_unique(&mut catalog.firmwares, value.id.clone(), value, &path)?;
+            catalog.insert_document(ReferenceKind::of_firmware_file(&path)?, &bytes, &path)?;
         }
         catalog.validate_references()?;
         Ok(catalog)
@@ -1868,26 +1868,7 @@ impl ReferenceCatalog {
                     value.validate(&value.id)?;
                     insert_unique(&mut catalog.parts, value.id.clone(), value, Path::new(path))?;
                 }
-                ReferenceKind::Body => {
-                    let value: Body = decode(bytes.as_bytes(), Path::new(path))?;
-                    value.validate(&value.id)?;
-                    insert_unique(
-                        &mut catalog.bodies,
-                        value.id.clone(),
-                        value,
-                        Path::new(path),
-                    )?;
-                }
-                ReferenceKind::Firmware => {
-                    let value: Firmware = decode(bytes.as_bytes(), Path::new(path))?;
-                    value.validate(&value.id)?;
-                    insert_unique(
-                        &mut catalog.firmwares,
-                        value.id.clone(),
-                        value,
-                        Path::new(path),
-                    )?;
-                }
+                kind => catalog.insert_document(kind, bytes.as_bytes(), Path::new(path))?,
             }
         }
         catalog.validate_references()?;
@@ -1959,12 +1940,103 @@ impl ReferenceCatalog {
         self.firmwares.get(id)
     }
 
+    /// Return a body's hand-authored physical controls.
+    pub fn physical_controls(&self, body_id: &str) -> Option<&crate::controls::PhysicalControls> {
+        self.physical_controls.get(body_id)
+    }
+
+    /// Return a firmware's generated located inputs.
+    pub fn control_ids(&self, firmware_id: &str) -> Option<&crate::controls::FirmwareControlIds> {
+        self.control_ids.get(firmware_id)
+    }
+
+    fn insert_document(
+        &mut self,
+        kind: ReferenceKind,
+        bytes: &[u8],
+        path: &Path,
+    ) -> Result<(), String> {
+        match kind {
+            ReferenceKind::Body => {
+                let value: Body = decode(bytes, path)?;
+                value.validate(&value.id)?;
+                insert_unique(&mut self.bodies, value.id.clone(), value, path)
+            }
+            ReferenceKind::Firmware => {
+                let value: Firmware = decode(bytes, path)?;
+                value.validate(&value.id)?;
+                insert_unique(&mut self.firmwares, value.id.clone(), value, path)
+            }
+            ReferenceKind::PhysicalControls => {
+                let value: crate::controls::PhysicalControls = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(
+                    &mut self.physical_controls,
+                    value.body_id.clone(),
+                    value,
+                    path,
+                )
+            }
+            ReferenceKind::ControlIds => {
+                let value: crate::controls::FirmwareControlIds = decode(bytes, path)?;
+                insert_unique(
+                    &mut self.control_ids,
+                    value.firmware_id.clone(),
+                    value,
+                    path,
+                )
+            }
+            ReferenceKind::Soc | ReferenceKind::Part => Err(format!(
+                "{} is not a body or firmware document",
+                path.display()
+            )),
+        }
+    }
+
+    fn validate_controls(&self) -> Result<(), String> {
+        for (body_id, controls) in &self.physical_controls {
+            if !self.bodies.contains_key(body_id) {
+                return Err(format!(
+                    "physical controls {} refer to missing body {body_id}",
+                    controls.id
+                ));
+            }
+        }
+        for (firmware_id, ids) in &self.control_ids {
+            let firmware = self.firmwares.get(firmware_id).ok_or_else(|| {
+                format!(
+                    "control IDs {} refer to missing firmware {firmware_id}",
+                    ids.id
+                )
+            })?;
+            let body = &self.bodies[&firmware.body_id];
+            let physical = self
+                .physical_controls
+                .get(&firmware.body_id)
+                .ok_or_else(|| {
+                    format!(
+                        "control IDs {} have no physical controls for body {}",
+                        ids.id, body.id
+                    )
+                })?;
+            let connections = body
+                .connections
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect();
+            ids.validate(physical, &connections)
+                .map_err(|error| format!("control IDs {}: {error}", ids.id))?;
+        }
+        Ok(())
+    }
+
     /// Return a resolved reusable part by its stable identity.
     pub fn part(&self, id: &str) -> Option<&Part> {
         self.parts.get(id)
     }
 
     fn validate_references(&self) -> Result<(), String> {
+        self.validate_controls()?;
         for body in self.bodies.values() {
             if !self.socs.contains_key(&body.soc_id) {
                 return Err(format!(
@@ -2398,6 +2470,26 @@ enum ReferenceKind {
     Part,
     Body,
     Firmware,
+    PhysicalControls,
+    ControlIds,
+}
+
+impl ReferenceKind {
+    fn of_body_file(path: &Path) -> Result<Self, String> {
+        match path.file_name().and_then(|name| name.to_str()) {
+            Some("body.json") => Ok(Self::Body),
+            Some("controls.json") => Ok(Self::PhysicalControls),
+            _ => Err(format!("{} is not a body document", path.display())),
+        }
+    }
+
+    fn of_firmware_file(path: &Path) -> Result<Self, String> {
+        match path.file_name().and_then(|name| name.to_str()) {
+            Some("firmware.json") => Ok(Self::Firmware),
+            Some("control-ids.generated.json") => Ok(Self::ControlIds),
+            _ => Err(format!("{} is not a firmware document", path.display())),
+        }
+    }
 }
 
 include!(concat!(env!("OUT_DIR"), "/bundled_catalog.rs"));

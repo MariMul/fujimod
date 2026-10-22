@@ -49,6 +49,17 @@ fn main() {
         let Some((_, kind)) = layers.iter().find(|(directory, _)| *directory == layer) else {
             continue;
         };
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default();
+        let kind = match (*kind, name) {
+            ("Body", "controls.json") => "PhysicalControls",
+            ("Firmware", "control-ids.generated.json") => "ControlIds",
+            ("Body", "body.json") | ("Firmware", "firmware.json") => kind,
+            ("Body" | "Firmware", _) => panic!("unknown catalog document {}", path.display()),
+            _ => kind,
+        };
         let relative = path
             .strip_prefix(&root)
             .expect("catalog file is under root");
