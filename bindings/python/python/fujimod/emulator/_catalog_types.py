@@ -4,6 +4,21 @@ from __future__ import annotations
 from typing import Literal, Never, NotRequired, Required, TypedDict
 
 
+type AdcInterval = AdcIntervalVariant0 | AdcIntervalVariant1
+
+
+class AdcIntervalVariant0(TypedDict, total=False):
+    kind: Required[Literal["literal"]]
+    lower: Required[int]
+    upper: Required[int]
+
+
+class AdcIntervalVariant1(TypedDict, total=False):
+    kind: Required[Literal["configuration_u16"]]
+    lower: Required[int]
+    upper: Required[int]
+
+
 class AdditionalUiModes(TypedDict, total=False):
     play: Required[int]
     setup_play: Required[int]
@@ -265,7 +280,6 @@ Body = TypedDict(
         "card_slot": NotRequired["CardSlotAssembly | None"],
         "connections": Required["list[BodyConnection]"],
         "control_bus_chips": Required["list[ControlBusChip]"],
-        "controls": NotRequired["BodyControls | None"],
         "display": NotRequired["DisplayAssembly | None"],
         "dram_bytes": Required["int"],
         "hardware": NotRequired["BodyHardware | None"],
@@ -289,24 +303,6 @@ class BodyConnection(TypedDict, total=False):
     id: Required[str]
     kind: Required[ConnectionKind]
     signals: Required[list[ConnectionSignal]]
-
-
-class BodyControl(TypedDict, total=False):
-    assignable: Required[bool]
-    connection_ids: Required[list[str]]
-    default_function: NotRequired[str | None]
-    kind: Required[ControlKind]
-    location: Required[ControlLocation]
-    manual_page: NotRequired[int | None]
-    name: Required[str]
-    positions: Required[list[ControlPosition]]
-    pushable: Required[bool]
-
-
-class BodyControls(TypedDict, total=False):
-    analog_levels: Required[int]
-    controls: Required[dict[str, BodyControl]]
-    manual: Required[ManualReference]
 
 
 class BodyHardware(TypedDict, total=False):
@@ -370,11 +366,6 @@ class CacheGeometry(TypedDict, total=False):
     l1_data_bytes: Required[int]
     l1_instruction_bytes: Required[int]
     l2_bytes: Required[int]
-
-
-class CalibrationInterval(TypedDict, total=False):
-    lower: Required[int]
-    upper: Required[int]
 
 
 class CardSlotAssembly(TypedDict, total=False):
@@ -1026,10 +1017,6 @@ class ContentIdentity(TypedDict, total=False):
     size: Required[int]
 
 
-class ControlAction(TypedDict, total=False):
-    keys: Required[list[str]]
-
-
 type ControlBehavior = (
     ControlBehaviorVariant0
     | ControlBehaviorVariant1
@@ -1079,6 +1066,7 @@ class ControlBehaviorVariant5(TypedDict, total=False):
 
 class ControlBehaviorVariant6(TypedDict, total=False):
     kind: Required[Literal["lever"]]
+    momentary: Required[bool]
     positions: Required[list[BoundPosition]]
 
 
@@ -1099,39 +1087,6 @@ class ControlBusChip(TypedDict, total=False):
     controller_id: Required[str]
     id: Required[str]
     polarity_selector: Required[int]
-
-
-type ControlInput = ControlInputVariant0 | ControlInputVariant1 | ControlInputVariant2
-
-
-class ControlInputVariant0(TypedDict, total=False):
-    callback: NotRequired[int | None]
-    connection_id: Required[str]
-    event: Required[int]
-    expected_result: NotRequired[int | None]
-    intervals: Required[list[CalibrationInterval]]
-    kind: Required[Literal["adc"]]
-    scanner_index: Required[int]
-
-
-class ControlInputVariant1(TypedDict, total=False):
-    connection_id: Required[str]
-    event: Required[int]
-    expected_level: Required[bool]
-    kind: Required[Literal["gpio"]]
-    scanner: Required[GpioScanner]
-    scanner_index: Required[int]
-
-
-class ControlInputVariant2(TypedDict, total=False):
-    connection_id: Required[str]
-    event: Required[int]
-    guard: Required[int]
-    kind: Required[Literal["gpio_quadrature"]]
-    phase_map: Required[list[int]]
-    reset: Required[list[int]]
-    threshold: Required[int]
-    transitions: Required[list[int]]
 
 
 type ControlInterface = ControlInterfaceVariant0 | ControlInterfaceVariant1
@@ -1164,22 +1119,6 @@ class ControlInterfaceVariant1(TypedDict, total=False):
     width: Required[int]
 
 
-type ControlKind = Literal[
-    "dial",
-    "button",
-    "lever",
-    "switch",
-    "ring",
-    "shutter",
-    "wheel",
-    "joystick",
-    "touchscreen",
-]
-
-
-type ControlLocation = Literal["top", "front", "rear", "lens", "bottom"]
-
-
 type ControlMotion = ControlMotionVariant0 | ControlMotionVariant1
 
 
@@ -1192,17 +1131,6 @@ class ControlMotionVariant1(TypedDict, total=False):
     decrease: Required[InputBinding]
     increase: Required[InputBinding]
     kind: Required[Literal["steps"]]
-
-
-class ControlPosition(TypedDict, total=False):
-    description: NotRequired[str | None]
-    id: Required[str]
-    label: NotRequired[str | None]
-
-
-class ControlReaders(TypedDict, total=False):
-    calibration: Required[int]
-    scanner: Required[ScannerReader]
 
 
 type ControlRole = Literal["command_control"]
@@ -1375,7 +1303,7 @@ class ElectricalInputVariant0(TypedDict, total=False):
     callback: NotRequired[int | None]
     connection_id: Required[str]
     expected_result: NotRequired[int | None]
-    intervals: Required[list[CalibrationInterval]]
+    intervals: Required[list[AdcInterval]]
     kind: Required[Literal["adc"]]
 
 
@@ -1472,15 +1400,6 @@ class FirmwareConfigurationdefaultsOutput(TypedDict, total=False):
     size: Required[int]
 
 
-class FirmwareControl(TypedDict, total=False):
-    actions: Required[dict[str, ControlAction]]
-    input: NotRequired[dict[str, list[ControlInput]] | None]
-    interface: NotRequired[ControlInterface | None]
-    keys: Required[list[str]]
-    positions: Required[list[FirmwareControlPosition]]
-    unavailable_reason: NotRequired[str | None]
-
-
 class FirmwareControlBusTables(TypedDict, total=False):
     descriptors: Required[FirmwareDescriptors]
     limits: Required[list[str]]
@@ -1504,20 +1423,6 @@ FirmwareControlIds = TypedDict(
     },
     total=False,
 )
-
-
-class FirmwareControlPosition(TypedDict, total=False):
-    active: NotRequired[bool | None]
-    keys: Required[list[str]]
-    position: Required[str]
-
-
-class FirmwareControls(TypedDict, total=False):
-    controls: Required[dict[str, FirmwareControl]]
-    debug_keys_available: Required[bool]
-    input_readers: Required[ControlReaders]
-    native_key_names: Required[NativeKeyNames]
-    scanner: Required[ScannerTable]
 
 
 class FirmwareCpu(TypedDict, total=False):
@@ -1633,7 +1538,6 @@ class FirmwareFlashSlices(TypedDict, total=False):
 class FirmwareGeneratedFacts(TypedDict, total=False):
     additional_ui_modes: NotRequired[AdditionalUiModes | None]
     cfgdata_location: NotRequired[ConfigurationLocation | None]
-    controls: NotRequired[FirmwareControls | None]
     identity_checks: Required[list[AddressIdentity]]
     menu_cursor: NotRequired[int | None]
     menu_keys: NotRequired[MenuKeys | None]

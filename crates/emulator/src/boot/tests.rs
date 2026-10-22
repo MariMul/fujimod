@@ -158,14 +158,7 @@ fn rec_configuration_starts_with_manual_lever_and_tilted_lcd() {
     for (port, pin) in [(2, 11), (1, 1)] {
         assert_eq!(levels[port].as_u64().unwrap() & (1 << pin), 0);
     }
-    let facts = spec
-        .resolved
-        .reference
-        .firmware
-        .generated_facts
-        .as_ref()
-        .unwrap();
-    let controls = &facts.controls.as_ref().unwrap().controls;
+    let controls = spec.resolved.reference.control_ids.as_ref().unwrap();
     for (control, key, connection) in [
         (
             "auto_mode_selector_lever",
@@ -174,8 +167,11 @@ fn rec_configuration_starts_with_manual_lever_and_tilted_lcd() {
         ),
         ("lcd_tilt_switch", "KEY_LCD_TILT", "controls-gpio-1-1"),
     ] {
-        assert!(controls[control].input.as_ref().unwrap()[key].iter().any(|input| {
-            matches!(input, ControlInput::Gpio { connection_id, expected_level: false, .. } if connection_id == connection)
+        assert!(controls.inputs.iter().any(|input| {
+            input.target == InputTarget::Control { control_id: control.into() }
+                && input.debug_key.is_none()
+                && controls.native_key_names.as_ref().unwrap().rows.iter().any(|name| name.name == key && name.event == input.event)
+                && matches!(&input.electrical, Some(ElectricalInput::Gpio { connection_id, expected_level: false, .. }) if connection_id == connection)
         }));
     }
 }

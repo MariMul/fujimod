@@ -40,13 +40,17 @@ are unsigned quantities. No body, command number, mailbox or firmware is chosen
 by default. Callers supply definitions in this schema to USB tooling, emulators
 and SDK generation.
 
-Remote control consumes `remote::Facts`: physical `BodyControls`, one
-`remote::FirmwareFacts`, and an optional `remote::BuildMenuManifest` for the
+Remote control consumes `remote::Facts`: `controls::PhysicalControls`,
+`controls::FirmwareControlIds`, `remote::FirmwareFacts`, and an optional `remote::BuildMenuManifest` for the
 installed build. `Facts::from_selection` assembles and validates these against a
 `ResolvedSelection`. Firmware records expose remote inputs through
 `generated_facts.remote`; stock operation requires no build manifest.
 
-`remote::FirmwareFacts` declares debug key names, control mappings, readiness
+Control documents own debug key names, physical bindings, scanner witnesses,
+and electrical predicates. ADC intervals explicitly distinguish literal sample
+bounds from offsets into loaded configuration bytes.
+
+`remote::FirmwareFacts` declares readiness
 addresses, menu node/row/cursor layouts and root routes, scanout, and text/glyph
 resource layouts. Each section has a generated JSON Schema. These are layouts
 and roots: consumers read menu rows, captions and cursor values from live RAM.

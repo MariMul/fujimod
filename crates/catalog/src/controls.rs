@@ -4,8 +4,8 @@
 //! the checked relationship; spelling is never used to translate vocabularies.
 
 use crate::facts::{
-    CalibrationInterval, ControlInterface, GpioScanner, ManualReference, NativeKeyNames,
-    ScannerReader, ScannerRecordWitness, ScannerTable,
+    ControlInterface, GpioScanner, ManualReference, NativeKeyNames, ScannerReader,
+    ScannerRecordWitness, ScannerTable,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -210,6 +210,8 @@ pub enum ControlBehavior {
     Lever {
         /// Inputs selecting each documented position.
         positions: Vec<BoundPosition>,
+        /// Whether releasing the lever returns it to an unasserted rest position.
+        momentary: bool,
     },
     /// A touch surface whose protocol is located in the firmware input document.
     Touch,
@@ -432,12 +434,12 @@ pub struct LocatedScannerRecord {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub enum ElectricalInput {
-    /// Analog input interpreted using located calibration intervals.
+    /// Analog input interpreted using located sample bands or calibration offsets.
     Adc {
         /// Body connection carrying this analog input.
         connection_id: String,
-        /// Configuration offsets for the accepted analog intervals.
-        intervals: Vec<CalibrationInterval>,
+        /// Accepted analog intervals and the source of their bounds.
+        intervals: Vec<AdcInterval>,
         /// Firmware callback evaluating the input, when present.
         #[cfg_attr(feature = "typescript", serde(default))]
         callback: Option<u64>,
@@ -477,6 +479,31 @@ pub enum ElectricalInput {
         connection_id: String,
         /// Sign of the physical phase cycle that produces this input's event.
         cycle_sign: i8,
+    },
+}
+
+/// Bounds of one accepted analog interval.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum AdcInterval {
+    /// Sample values stored directly in the firmware's input predicate.
+    Literal {
+        /// Inclusive lower sample value.
+        lower: u16,
+        /// Inclusive upper sample value.
+        upper: u16,
+    },
+    /// Byte offsets of little-endian u16 bounds in the loaded configuration.
+    ConfigurationU16 {
+        /// Byte offset of the inclusive lower sample value.
+        lower: u16,
+        /// Byte offset of the inclusive upper sample value.
+        upper: u16,
     },
 }
 
@@ -592,7 +619,8 @@ impl PhysicalControls {
                         }
                     }
                 }
-                ControlBehavior::Switch { positions } | ControlBehavior::Lever { positions } => {
+                ControlBehavior::Switch { positions }
+                | ControlBehavior::Lever { positions, .. } => {
                     for position in positions {
                         bindings.push((id.clone(), &position.key));
                     }
@@ -723,7 +751,7 @@ impl ControlBehavior {
                 }
             }
             Self::Switch { positions }
-            | Self::Lever { positions }
+            | Self::Lever { positions, .. }
             | Self::Dial {
                 motion: ControlMotion::Positions { positions },
                 ..
@@ -770,6 +798,14 @@ impl ControlBehavior {
                     let inputs: BTreeSet<_> = stages.values().flatten().collect();
                     Ok((inputs.into_iter().collect(), false, 1))
                 }
+                Self::Lever {
+                    positions,
+                    momentary: true,
+                } => Ok((
+                    positions.iter().map(|position| &position.key).collect(),
+                    false,
+                    1,
+                )),
                 _ => Err("control has no momentary release action".into()),
             },
             ControlOperation::Stage { id } => match self {
@@ -782,7 +818,7 @@ impl ControlBehavior {
             ControlOperation::Position { id } => {
                 let positions = match self {
                     Self::Switch { positions }
-                    | Self::Lever { positions }
+                    | Self::Lever { positions, .. }
                     | Self::Dial {
                         motion: ControlMotion::Positions { positions },
                         ..
@@ -937,7 +973,7 @@ impl FirmwareControlIds {
                     ElectricalInput::Adc { connection_id, .. }
                     | ElectricalInput::Gpio { connection_id, .. }
                     | ElectricalInput::GpioQuadrature { connection_id, .. } => connection_id,
-                    | ElectricalInput::GpioFixedCycle { connection_id, .. } => connection_id,
+                    ElectricalInput::GpioFixedCycle { connection_id, .. } => connection_id,
                 };
                 if !connections.contains(connection_id.as_str()) {
                     return Err(format!(
@@ -960,7 +996,30 @@ impl FirmwareControlIds {
                 if let ElectricalInput::GpioFixedCycle { cycle_sign, .. } = electrical
                     && !matches!(cycle_sign, -1 | 1)
                 {
-                    return Err(format!("input {} has an invalid encoder cycle sign", input.id));
+                    return Err(format!(
+                        "input {} has an invalid encoder cycle sign",
+                        input.id
+                    ));
+                }
+                if let ElectricalInput::Adc {
+                    intervals,
+                    callback,
+                    expected_result,
+                    ..
+                } = electrical
+                    && (intervals.is_empty()
+                        || callback.is_some() != expected_result.is_some()
+                        || intervals.iter().any(|interval| match interval {
+                            AdcInterval::Literal { lower, upper } => lower > upper,
+                            AdcInterval::ConfigurationU16 { lower, upper } => {
+                                *lower == u16::MAX || *upper == u16::MAX
+                            }
+                        }))
+                {
+                    return Err(format!(
+                        "input {} has an invalid ADC interval or callback",
+                        input.id
+                    ));
                 }
                 if matches!(
                     electrical,
@@ -1080,6 +1139,55 @@ impl ResolvedControlAction {
 mod tests {
     use super::*;
     use serde_json::{Value, json};
+
+    #[test]
+    fn adc_intervals_require_an_explicit_bound_source() {
+        for kind in ["literal", "configuration_u16"] {
+            let value = json!({"kind":kind,"lower":100,"upper":200});
+            let interval: AdcInterval = serde_json::from_value(value.clone()).unwrap();
+            assert_eq!(serde_json::to_value(interval).unwrap(), value);
+        }
+        assert!(serde_json::from_value::<AdcInterval>(json!({"lower":100,"upper":200})).is_err());
+        assert!(
+            serde_json::from_value::<AdcInterval>(
+                json!({"kind":"literal","lower":0,"upper":65536})
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn spring_return_lever_releases_all_held_directions() {
+        let position = |id: &str| BoundPosition {
+            id: id.into(),
+            label: None,
+            description: None,
+            key: InputBinding::DebugKey { name: id.into() },
+            asserted: true,
+        };
+        let lever = ControlBehavior::Lever {
+            positions: vec![position("wide"), position("tele")],
+            momentary: true,
+        };
+        let (held, asserted, _) = lever
+            .bindings(None, &ControlOperation::Position { id: "wide".into() })
+            .unwrap();
+        assert!(asserted);
+        assert_eq!(
+            held,
+            [&InputBinding::DebugKey {
+                name: "wide".into()
+            }]
+        );
+        let (released, asserted, _) = lever.bindings(None, &ControlOperation::Release).unwrap();
+        assert!(!asserted);
+        assert_eq!(released.len(), 2);
+        let fixed = ControlBehavior::Lever {
+            positions: vec![position("AUTO")],
+            momentary: false,
+        };
+        assert!(fixed.bindings(None, &ControlOperation::Release).is_err());
+    }
 
     fn control(behavior: Value) -> Value {
         json!({"name":"Documented control", "location":"rear", "manual_page":3,

@@ -218,6 +218,10 @@
               "const": "lever",
               "type": "string"
             },
+            "momentary": {
+              "description": "Whether releasing the lever returns it to an unasserted rest position.",
+              "type": "boolean"
+            },
             "positions": {
               "description": "Inputs selecting each documented position.",
               "items": {
@@ -228,7 +232,8 @@
           },
           "required": [
             "kind",
-            "positions"
+            "positions",
+            "momentary"
           ],
           "type": "object"
         },

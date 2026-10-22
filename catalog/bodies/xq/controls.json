@@ -345,7 +345,8 @@
             },
             "asserted": true
           }
-        ]
+        ],
+        "momentary": true
       }
     }
   }

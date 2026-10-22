@@ -73,102 +73,6 @@
       ],
       "type": "object"
     },
-    "BodyControl": {
-      "additionalProperties": false,
-      "description": "A physical control's identity, positions, and body connections.",
-      "properties": {
-        "assignable": {
-          "description": "Whether firmware allows its function to be assigned.",
-          "type": "boolean"
-        },
-        "connection_ids": {
-          "description": "Physical body connections used by this control.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "default_function": {
-          "description": "Documented default function when available.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "kind": {
-          "$ref": "#/$defs/ControlKind",
-          "description": "Mechanical control category."
-        },
-        "location": {
-          "$ref": "#/$defs/ControlLocation",
-          "description": "Physical position on the camera body."
-        },
-        "manual_page": {
-          "description": "Relevant manual page when available.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "name": {
-          "description": "Printed or documented control name.",
-          "type": "string"
-        },
-        "positions": {
-          "description": "Documented mechanical positions.",
-          "items": {
-            "$ref": "#/$defs/ControlPosition"
-          },
-          "type": "array"
-        },
-        "pushable": {
-          "description": "Whether the control can be pressed.",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "name",
-        "kind",
-        "location",
-        "positions",
-        "pushable",
-        "assignable",
-        "connection_ids"
-      ],
-      "type": "object"
-    },
-    "BodyControls": {
-      "additionalProperties": false,
-      "description": "Physical controls documented for a body.",
-      "properties": {
-        "analog_levels": {
-          "description": "Number of analog sample levels exposed by the controls.",
-          "format": "uint16",
-          "maximum": 65535,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "controls": {
-          "additionalProperties": {
-            "$ref": "#/$defs/BodyControl"
-          },
-          "description": "Physical controls keyed by stable control identity.",
-          "type": "object"
-        },
-        "manual": {
-          "$ref": "#/$defs/ManualReference",
-          "description": "Published manual identifying the physical controls."
-        }
-      },
-      "required": [
-        "manual",
-        "analog_levels",
-        "controls"
-      ],
-      "type": "object"
-    },
     "BodyHardware": {
       "additionalProperties": false,
       "description": "Additional body-specific physical wiring.",
@@ -3021,114 +2925,6 @@
       ],
       "type": "object"
     },
-    "ControlKind": {
-      "description": "Physical control categories.",
-      "oneOf": [
-        {
-          "const": "dial",
-          "description": "Rotary dial with named positions.",
-          "type": "string"
-        },
-        {
-          "const": "button",
-          "description": "Momentary button.",
-          "type": "string"
-        },
-        {
-          "const": "lever",
-          "description": "Mechanical lever.",
-          "type": "string"
-        },
-        {
-          "const": "switch",
-          "description": "Selector switch.",
-          "type": "string"
-        },
-        {
-          "const": "ring",
-          "description": "Lens or body ring.",
-          "type": "string"
-        },
-        {
-          "const": "shutter",
-          "description": "Two-stage shutter release.",
-          "type": "string"
-        },
-        {
-          "const": "wheel",
-          "description": "Relative command wheel.",
-          "type": "string"
-        },
-        {
-          "const": "joystick",
-          "description": "Directional selector.",
-          "type": "string"
-        },
-        {
-          "const": "touchscreen",
-          "description": "Touch-sensitive display.",
-          "type": "string"
-        }
-      ]
-    },
-    "ControlLocation": {
-      "description": "Locations used to identify physical controls.",
-      "oneOf": [
-        {
-          "const": "top",
-          "description": "Top surface.",
-          "type": "string"
-        },
-        {
-          "const": "front",
-          "description": "Front surface.",
-          "type": "string"
-        },
-        {
-          "const": "rear",
-          "description": "Rear surface.",
-          "type": "string"
-        },
-        {
-          "const": "lens",
-          "description": "Lens assembly.",
-          "type": "string"
-        },
-        {
-          "const": "bottom",
-          "description": "Bottom surface.",
-          "type": "string"
-        }
-      ]
-    },
-    "ControlPosition": {
-      "additionalProperties": false,
-      "description": "A named mechanical position of a physical control.",
-      "properties": {
-        "description": {
-          "description": "Meaning of an icon or otherwise unlabeled position.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "id": {
-          "description": "Stable position identity or printed value.",
-          "type": "string"
-        },
-        "label": {
-          "description": "Printed label when available.",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "id"
-      ],
-      "type": "object"
-    },
     "DeviceGraph": {
       "additionalProperties": false,
       "description": "Declared graph facts.",
@@ -5616,35 +5412,6 @@
       ],
       "type": "object"
     },
-    "ManualReference": {
-      "additionalProperties": false,
-      "description": "A published manual and the pages used to identify controls.",
-      "properties": {
-        "pages": {
-          "description": "Referenced page numbers.",
-          "items": {
-            "format": "uint32",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "title": {
-          "description": "Manual title.",
-          "type": "string"
-        },
-        "url": {
-          "description": "Public manual URL.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "url",
-        "title",
-        "pages"
-      ],
-      "type": "object"
-    },
     "MemoryKind": {
       "description": "Memory technologies exposed by the SoC.",
       "oneOf": [
@@ -6082,17 +5849,6 @@
         "$ref": "#/$defs/ControlBusChip"
       },
       "type": "array"
-    },
-    "controls": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/BodyControls"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "description": "Documented physical controls and their body connections."
     },
     "display": {
       "anyOf": [

@@ -771,9 +771,6 @@ pub struct Body {
     /// Optional display assembly and its physical characteristics.
     #[cfg_attr(feature = "typescript", serde(default))]
     pub display: Option<DisplayAssembly>,
-    /// Documented physical controls and their body connections.
-    #[cfg_attr(feature = "typescript", serde(default))]
-    pub controls: Option<crate::facts::BodyControls>,
     /// Optional MCU endpoint and its body-specific serial wiring.
     #[cfg_attr(feature = "typescript", serde(default))]
     pub microcontroller: Option<MicrocontrollerAssembly>,
@@ -854,14 +851,6 @@ impl Body {
                     self.id, chip.id
                 ));
             }
-        }
-        if let Some(controls) = &self.controls {
-            let connections: BTreeSet<_> = self
-                .connections
-                .iter()
-                .map(|item| item.id.as_str())
-                .collect();
-            controls.validate(&connections)?;
         }
         for connection_id in [
             self.sensor.as_ref().map(|item| item.connection_id.as_str()),
@@ -2302,9 +2291,6 @@ pub struct FirmwareGeneratedFacts {
     /// Layouts and declarations used by remote camera control.
     #[cfg_attr(feature = "typescript", serde(default))]
     pub remote: Option<crate::remote::FirmwareFacts>,
-    /// Firmware control-event tables and electrical input predicates.
-    #[cfg_attr(feature = "typescript", serde(default))]
-    pub controls: Option<crate::facts::FirmwareControls>,
     /// Firmware configuration-block location.
     #[cfg_attr(feature = "typescript", serde(default))]
     pub cfgdata_location: Option<crate::facts::ConfigurationLocation>,
@@ -2990,17 +2976,12 @@ impl ReferenceCatalog {
             }
         }
         for firmware in self.firmwares.values() {
-            let body = self.bodies.get(&firmware.body_id).ok_or_else(|| {
+            self.bodies.get(&firmware.body_id).ok_or_else(|| {
                 format!(
                     "firmware {} refers to missing body {}",
                     firmware.id, firmware.body_id
                 )
             })?;
-            if let Some(facts) = &firmware.generated_facts {
-                if let Some(controls) = &facts.controls {
-                    controls.validate(body)?;
-                }
-            }
         }
         Ok(())
     }

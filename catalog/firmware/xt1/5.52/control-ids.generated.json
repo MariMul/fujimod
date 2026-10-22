@@ -3379,7 +3379,19 @@
           "upper": 1023
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 0,
+            "upper": 1023
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-1",
@@ -3471,6 +3483,7 @@
         "connection_id": "controls-adc-8",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14312,
             "upper": 14310
           }
@@ -3502,6 +3515,7 @@
         "connection_id": "controls-adc-8",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14308,
             "upper": 14306
           }
@@ -3533,6 +3547,7 @@
         "connection_id": "controls-adc-8",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14304,
             "upper": 14302
           }
@@ -3564,6 +3579,7 @@
         "connection_id": "controls-adc-8",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14300,
             "upper": 14298
           }
@@ -3595,6 +3611,7 @@
         "connection_id": "controls-adc-9",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14292,
             "upper": 14290
           }
@@ -3625,6 +3642,7 @@
         "connection_id": "controls-adc-9",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14288,
             "upper": 14286
           }
@@ -3656,6 +3674,7 @@
         "connection_id": "controls-adc-9",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14284,
             "upper": 14282
           }
@@ -3687,6 +3706,7 @@
         "connection_id": "controls-adc-9",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14280,
             "upper": 14278
           }
@@ -4209,6 +4229,7 @@
         "connection_id": "controls-adc-3",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14018,
             "upper": 14016
           }
@@ -4239,6 +4260,7 @@
         "connection_id": "controls-adc-3",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14022,
             "upper": 14020
           }
@@ -4269,6 +4291,7 @@
         "connection_id": "controls-adc-3",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14026,
             "upper": 14024
           }
@@ -4299,6 +4322,7 @@
         "connection_id": "controls-adc-3",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14030,
             "upper": 14028
           }
@@ -4329,6 +4353,7 @@
         "connection_id": "controls-adc-3",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14034,
             "upper": 14032
           }
@@ -4359,6 +4384,7 @@
         "connection_id": "controls-adc-3",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14038,
             "upper": 14036
           }
@@ -4389,6 +4415,7 @@
         "connection_id": "controls-adc-3",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14042,
             "upper": 14040
           }
@@ -4419,6 +4446,7 @@
         "connection_id": "controls-adc-3",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14046,
             "upper": 14044
           }
@@ -4449,6 +4477,7 @@
         "connection_id": "controls-adc-3",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14050,
             "upper": 14048
           }
@@ -4479,6 +4508,7 @@
         "connection_id": "controls-adc-3",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14054,
             "upper": 14052
           }
@@ -4509,6 +4539,7 @@
         "connection_id": "controls-adc-3",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14058,
             "upper": 14056
           }
@@ -4539,6 +4570,7 @@
         "connection_id": "controls-adc-3",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14062,
             "upper": 14060
           }
@@ -4569,6 +4601,7 @@
         "connection_id": "controls-adc-3",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14066,
             "upper": 14064
           }
@@ -4599,6 +4632,7 @@
         "connection_id": "controls-adc-3",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14070,
             "upper": 14068
           }
@@ -4629,6 +4663,7 @@
         "connection_id": "controls-adc-3",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14074,
             "upper": 14072
           }
@@ -4659,6 +4694,7 @@
         "connection_id": "controls-adc-3",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14078,
             "upper": 14076
           }
@@ -4689,6 +4725,7 @@
         "connection_id": "controls-adc-3",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14082,
             "upper": 14080
           }
@@ -4719,6 +4756,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14086,
             "upper": 14084
           }
@@ -4749,6 +4787,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14090,
             "upper": 14088
           }
@@ -4779,6 +4818,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14094,
             "upper": 14092
           }
@@ -4809,6 +4849,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14098,
             "upper": 14096
           }
@@ -4839,6 +4880,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14102,
             "upper": 14100
           }
@@ -4869,6 +4911,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14106,
             "upper": 14104
           }
@@ -4899,6 +4942,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14110,
             "upper": 14108
           }
@@ -4929,6 +4973,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14114,
             "upper": 14112
           }
@@ -4959,6 +5004,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14118,
             "upper": 14116
           }
@@ -4989,6 +5035,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14122,
             "upper": 14120
           }
@@ -5019,6 +5066,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14126,
             "upper": 14124
           }
@@ -5049,6 +5097,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14130,
             "upper": 14128
           }
@@ -5079,6 +5128,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14134,
             "upper": 14132
           }
@@ -5109,6 +5159,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14138,
             "upper": 14136
           }
@@ -5139,6 +5190,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14142,
             "upper": 14140
           }
@@ -5169,6 +5221,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14146,
             "upper": 14144
           }
@@ -5199,6 +5252,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14150,
             "upper": 14148
           }
@@ -5229,6 +5283,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14154,
             "upper": 14152
           }
@@ -5259,6 +5314,7 @@
         "connection_id": "controls-adc-4",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14158,
             "upper": 14156
           }
@@ -5290,6 +5346,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14166,
             "upper": 14164
           }
@@ -5321,6 +5378,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14170,
             "upper": 14168
           }
@@ -5352,6 +5410,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14174,
             "upper": 14172
           }
@@ -5382,6 +5441,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14178,
             "upper": 14176
           }
@@ -5412,6 +5472,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14182,
             "upper": 14180
           }
@@ -5443,6 +5504,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14186,
             "upper": 14184
           }
@@ -5473,6 +5535,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14190,
             "upper": 14188
           }
@@ -5503,6 +5566,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14194,
             "upper": 14192
           }
@@ -5534,6 +5598,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14198,
             "upper": 14196
           }
@@ -5564,6 +5629,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14202,
             "upper": 14200
           }
@@ -5594,6 +5660,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14206,
             "upper": 14204
           }
@@ -5625,6 +5692,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14210,
             "upper": 14208
           }
@@ -5655,6 +5723,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14214,
             "upper": 14212
           }
@@ -5685,6 +5754,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14218,
             "upper": 14216
           }
@@ -5716,6 +5786,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14222,
             "upper": 14220
           }
@@ -5746,6 +5817,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14226,
             "upper": 14224
           }
@@ -5776,6 +5848,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14230,
             "upper": 14228
           }
@@ -5807,6 +5880,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14234,
             "upper": 14232
           }
@@ -5838,6 +5912,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14238,
             "upper": 14236
           }
@@ -5869,6 +5944,7 @@
         "connection_id": "controls-adc-1",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14242,
             "upper": 14236
           }
@@ -5900,6 +5976,7 @@
         "connection_id": "controls-adc-6",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14248,
             "upper": 14164
           }
@@ -5931,6 +6008,7 @@
         "connection_id": "controls-adc-6",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14252,
             "upper": 14168
           }
@@ -5962,6 +6040,7 @@
         "connection_id": "controls-adc-6",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14256,
             "upper": 14172
           }
@@ -5993,6 +6072,7 @@
         "connection_id": "controls-adc-6",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14260,
             "upper": 14176
           }
@@ -6024,6 +6104,7 @@
         "connection_id": "controls-adc-6",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14264,
             "upper": 14180
           }
@@ -6055,6 +6136,7 @@
         "connection_id": "controls-adc-6",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14268,
             "upper": 14184
           }
@@ -6086,6 +6168,7 @@
         "connection_id": "controls-adc-6",
         "intervals": [
           {
+            "kind": "configuration_u16",
             "lower": 14272,
             "upper": 14188
           }

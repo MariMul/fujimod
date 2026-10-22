@@ -9,7 +9,9 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
     let mut documents = BTreeMap::new();
     documents.insert(
         "emulator-factory-inputs.generated.schema.json",
-        schema::<crate::configuration::RunFactoryInputs>(crate::configuration::RUN_FACTORY_INPUTS_SCHEMA_URI),
+        schema::<crate::configuration::RunFactoryInputs>(
+            crate::configuration::RUN_FACTORY_INPUTS_SCHEMA_URI,
+        ),
     );
     documents.insert(
         "emulator-rehearsal.generated.schema.json",
@@ -21,7 +23,9 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
     );
     documents.insert(
         "emulator-hardware-inputs.generated.schema.json",
-        schema::<crate::configuration::HardwareInputs>(crate::configuration::HARDWARE_INPUTS_SCHEMA_URI),
+        schema::<crate::configuration::HardwareInputs>(
+            crate::configuration::HARDWARE_INPUTS_SCHEMA_URI,
+        ),
     );
     documents.insert(
         "emulator-firmware-inputs.generated.schema.json",
@@ -101,12 +105,6 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         "remote-scanout.generated.schema.json",
         schema::<crate::remote::Scanout>(
             "https://fujimod.com/schemas/remote-scanout.generated.schema.json",
-        ),
-    );
-    documents.insert(
-        "remote-controls.generated.schema.json",
-        schema::<crate::facts::FirmwareControls>(
-            "https://fujimod.com/schemas/remote-controls.generated.schema.json",
         ),
     );
     documents.insert(

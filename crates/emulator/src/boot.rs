@@ -18,8 +18,9 @@ use fujimod_catalog::{
         Exr2RunInputs, Exr2RunScene, ResolvedConfiguration, RunEngine, RunExecution,
         RunExecutionMode, RunInputs, RunPurpose, RunScene, RunStart,
     },
+    controls::{AdcInterval, ElectricalInput, InputTarget},
     emulator::Content,
-    facts::{CalibrationInterval, ConfigurationLocation, ControlInput},
+    facts::ConfigurationLocation,
     reference::PartModel,
 };
 use fujimod_emulator_cpu::arm::Coprocessor;
@@ -161,19 +162,17 @@ fn first_start_key(
         .generated_facts
         .as_ref()
         .ok_or("first-start input requires generated firmware control facts")?;
-    let controls = facts
-        .controls
+    let controls = resolved
+        .reference
+        .control_ids
         .as_ref()
-        .ok_or("first-start input requires firmware control predicates")?;
-    let mut matches = controls.controls.values().filter_map(|control| {
-        control
-            .keys
-            .iter()
-            .any(|key| key == key_id)
-            .then(|| control.input.as_ref()?.get(key_id))
-            .flatten()
+        .ok_or("first-start input requires firmware control IDs")?;
+    let mut matches = controls.inputs.iter().filter(|input| {
+        input.debug_key.as_deref() == Some(key_id)
+            && matches!(input.target, InputTarget::Control { .. })
+            && input.electrical.is_some()
     });
-    let predicates = matches
+    let input = matches
         .next()
         .ok_or_else(|| format!("firmware has no control predicate for key {}", key_id))?;
     if matches.next().is_some() {
@@ -182,23 +181,24 @@ fn first_start_key(
             key_id
         ));
     }
-    let mut adc_inputs = predicates.iter().filter_map(|predicate| match predicate {
-        ControlInput::Adc {
-            connection_id,
-            intervals,
-            ..
-        } => Some((connection_id, intervals.as_slice())),
-        _ => None,
-    });
-    let (connection_id, intervals) = adc_inputs
-        .next()
-        .ok_or_else(|| format!("firmware key {} has no ADC predicate", key_id))?;
-    if adc_inputs.next().is_some() || intervals.len() != 1 {
+    let Some(ElectricalInput::Adc {
+        connection_id,
+        intervals,
+        callback: None,
+        ..
+    }) = &input.electrical
+    else {
         return Err(format!(
-            "firmware key {} has unsupported multiple ADC calibration intervals",
+            "firmware key {} has no direct ADC predicate",
             key_id
         ));
-    }
+    };
+    let [AdcInterval::ConfigurationU16 { lower, upper }] = intervals.as_slice() else {
+        return Err(format!(
+            "firmware key {} requires one ADC calibration interval",
+            key_id
+        ));
+    };
     let connection = resolved
         .reference
         .body
@@ -226,15 +226,14 @@ fn first_start_key(
         ConfigurationLocation::Pointer { address } => (address, true),
         ConfigurationLocation::Direct { address } => (address, false),
     };
-    let CalibrationInterval { lower, upper } = intervals[0];
     Ok(Some(FirstStart {
         key_id: key_id.to_owned(),
         adc: inputs.adc.block_id.clone(),
         channel: channel[0],
         calibration_pointer,
         calibration_is_pointer,
-        lower_offset: u64::from(lower),
-        upper_offset: u64::from(upper),
+        lower_offset: u64::from(*lower),
+        upper_offset: u64::from(*upper),
         hold_ticks: policy.hold_ticks,
         settle_ticks: policy.settle_ticks,
         max_presses: usize::from(policy.max_presses),

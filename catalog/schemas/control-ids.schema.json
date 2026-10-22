@@ -1,5 +1,70 @@
 {
   "$defs": {
+    "AdcInterval": {
+      "description": "Bounds of one accepted analog interval.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Sample values stored directly in the firmware's input predicate.",
+          "properties": {
+            "kind": {
+              "const": "literal",
+              "type": "string"
+            },
+            "lower": {
+              "description": "Inclusive lower sample value.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "upper": {
+              "description": "Inclusive upper sample value.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "lower",
+            "upper"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Byte offsets of little-endian u16 bounds in the loaded configuration.",
+          "properties": {
+            "kind": {
+              "const": "configuration_u16",
+              "type": "string"
+            },
+            "lower": {
+              "description": "Byte offset of the inclusive lower sample value.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "upper": {
+              "description": "Byte offset of the inclusive upper sample value.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "lower",
+            "upper"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "AddressIdentity": {
       "additionalProperties": false,
       "description": "An identified firmware address range without its contents.",
@@ -25,29 +90,6 @@
         "address",
         "size",
         "sha256"
-      ],
-      "type": "object"
-    },
-    "CalibrationInterval": {
-      "additionalProperties": false,
-      "description": "Bounds stored as little-endian 16-bit values in firmware configuration.",
-      "properties": {
-        "lower": {
-          "description": "Byte offset of the lower bound from the configuration base.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "upper": {
-          "description": "Byte offset of the upper bound from the configuration base.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "lower",
-        "upper"
       ],
       "type": "object"
     },
@@ -244,7 +286,7 @@
       "oneOf": [
         {
           "additionalProperties": false,
-          "description": "Analog input interpreted using located calibration intervals.",
+          "description": "Analog input interpreted using located sample bands or calibration offsets.",
           "properties": {
             "callback": {
               "description": "Firmware callback evaluating the input, when present.",
@@ -269,9 +311,9 @@
               ]
             },
             "intervals": {
-              "description": "Configuration offsets for the accepted analog intervals.",
+              "description": "Accepted analog intervals and the source of their bounds.",
               "items": {
-                "$ref": "#/$defs/CalibrationInterval"
+                "$ref": "#/$defs/AdcInterval"
               },
               "type": "array"
             },

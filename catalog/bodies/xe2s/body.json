@@ -1440,7 +1440,6 @@
   "sensor": null,
   "lens": null,
   "display": null,
-  "controls": null,
   "microcontroller": null,
   "power_control": null,
   "card_slot": {
@@ -1727,6 +1726,24 @@
           "kind": "adc",
           "channel": 4,
           "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-encoder-3-8-3-9",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 8,
+          "active_level": true
+        },
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 9,
+          "active_level": true
         }
       ]
     }

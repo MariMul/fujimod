@@ -582,7 +582,19 @@
           "upper": 1023
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 0,
+            "upper": 1023
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-5",
@@ -814,7 +826,19 @@
           "upper": 832
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-8",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 778,
+            "upper": 832
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-14",
@@ -834,7 +858,19 @@
           "upper": 634
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-8",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 564,
+            "upper": 634
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-15",
@@ -854,7 +890,19 @@
           "upper": 434
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-8",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 365,
+            "upper": 434
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-16",
@@ -874,7 +922,19 @@
           "upper": 228
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-8",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 176,
+            "upper": 228
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-17",
@@ -894,7 +954,19 @@
           "upper": 50
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-9",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 0,
+            "upper": 50
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-18",
@@ -914,7 +986,19 @@
           "upper": 450
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-9",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 400,
+            "upper": 450
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-19",
@@ -953,7 +1037,19 @@
           "upper": 838
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-9",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 806,
+            "upper": 838
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-21",
@@ -1331,7 +1427,19 @@
           "upper": 137
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 50,
+            "upper": 137
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-40",
@@ -1351,7 +1459,19 @@
           "upper": 227
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 138,
+            "upper": 227
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-41",
@@ -1371,7 +1491,19 @@
           "upper": 317
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 228,
+            "upper": 317
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-42",
@@ -1391,7 +1523,19 @@
           "upper": 407
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 318,
+            "upper": 407
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-43",
@@ -1411,7 +1555,19 @@
           "upper": 497
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 408,
+            "upper": 497
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-44",
@@ -1430,7 +1586,19 @@
           "upper": 589
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 498,
+            "upper": 589
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-45",
@@ -1450,7 +1618,19 @@
           "upper": 681
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 590,
+            "upper": 681
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-46",
@@ -1470,7 +1650,19 @@
           "upper": 776
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 682,
+            "upper": 776
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-47",
@@ -1490,7 +1682,19 @@
           "upper": 872
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 777,
+            "upper": 872
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-48",
@@ -1510,7 +1714,19 @@
           "upper": 972
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 873,
+            "upper": 972
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-49",
@@ -1530,7 +1746,19 @@
           "upper": 1024
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 973,
+            "upper": 1024
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-50",

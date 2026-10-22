@@ -293,7 +293,8 @@
             },
             "asserted": true
           }
-        ]
+        ],
+        "momentary": false
       }
     },
     "battery_chamber_cover_latch": {

@@ -558,7 +558,6 @@ mod tests {
             sensor: None,
             lens: None,
             display: None,
-            controls: None,
             microcontroller: None,
             power_control: None,
             card_slot: None,
