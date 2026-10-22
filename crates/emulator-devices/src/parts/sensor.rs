@@ -15,7 +15,8 @@ pub trait Controls: Send {
 
     fn command(&mut self, bytes: &[u8]) -> Result<(), String>;
     /// Complete one physical exposure/readout edge before sampling its pixels.
-    fn frame(&mut self) -> Result<(), String>;
+    /// Returns whether the readout carries a valid frame.
+    fn frame(&mut self) -> Result<bool, String>;
     fn timing(
         &mut self,
         horizontal: u32,
@@ -125,6 +126,7 @@ mod tests {
                             pixel_clock_hz: 33_000_000,
                             shutter: None,
                             rolling_references: vec![],
+                            mode_change_frames: 0,
                         },
                         wire.clone(),
                         iris.clone(),
@@ -356,6 +358,7 @@ pub struct Sensor {
     radiometry: Option<(Calibration, ExposureHandle, ApertureHandle)>,
     exposed: Option<ExposedFrame>,
     projection: Option<crate::imaging::optics::Projection>,
+    readout_valid: bool,
 }
 /// A validated readout from one accepted exposure. It retains immutable image
 /// inputs, never the live sensor, controller, frame clock, or exposure handles.
@@ -421,6 +424,7 @@ impl Sensor {
             radiometry: None,
             exposed: None,
             projection: None,
+            readout_valid: true,
         })
     }
     pub fn attach_controls(
@@ -574,9 +578,10 @@ impl Sensor {
         })
     }
     pub fn latch(&mut self, tick: u64) -> Result<FrameEdge, String> {
-        if let Some(controls) = &mut self.controls {
-            controls.frame()?;
-        }
+        self.readout_valid = match &mut self.controls {
+            Some(controls) => controls.frame()?,
+            None => true,
+        };
         if let Some((calibration, exposure, aperture)) = &self.radiometry {
             self.exposed = ExposedFrame::capture(&self.frames, exposure, aperture, *calibration)?;
             if let (Some(projection), Some(frame)) = (&self.projection, &mut self.exposed) {
@@ -584,6 +589,10 @@ impl Sensor {
             }
         }
         self.frames.lock().unwrap().latch(tick)
+    }
+    /// Whether the last latched readout carried a valid frame.
+    pub fn readout_valid(&self) -> bool {
+        self.readout_valid
     }
     pub(crate) fn freeze_readout(
         &mut self,

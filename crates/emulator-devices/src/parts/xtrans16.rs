@@ -21,6 +21,10 @@ pub struct Options {
     pub shutter: Option<crate::parts::leaf_shutter::Options>,
     #[serde(default)]
     pub rolling_references: Vec<RollingReference>,
+    /// Frames read out without valid sync after a drive-mode change. The
+    /// receiver sees no frame edge for them.
+    #[serde(default)]
+    pub mode_change_frames: u8,
 }
 #[derive(Serialize, Deserialize)]
 struct State {
@@ -32,6 +36,8 @@ struct State {
     /// Integration started for the following rolling readout. Analog gain is
     /// applied when that readout reaches the ADC, rather than at reset time.
     rolling_seconds: Option<f64>,
+    /// Invalid frames still to come after the last drive-mode change.
+    settling: u8,
 }
 pub struct Sensor {
     state: State,
@@ -58,6 +64,7 @@ impl Sensor {
                 shutter_drive: None,
                 global_seconds: None,
                 rolling_seconds: None,
+                settling: 0,
             },
             shutter: options
                 .shutter
@@ -158,6 +165,31 @@ impl Sensor {
         self.publish()
     }
 }
+impl Sensor {
+    fn integrate(&mut self) -> Result<(), String> {
+        self.publish()?;
+        if self.state.registers[1] & 4 != 0 || self.state.global_seconds.is_some() {
+            // Global reset integrates until the physical leaf closes; it does
+            // not inherit the previous rolling frame's reset interval.
+            self.state.rolling_seconds = None;
+            return Ok(());
+        }
+        let mut readout = self
+            .exposure
+            .lock()
+            .map_err(|_| "sensor exposure poisoned")?;
+        if readout.seconds <= 0. {
+            self.state.rolling_seconds = None;
+            return Ok(());
+        }
+        let next = readout.seconds;
+        if let Some(integrated) = self.state.rolling_seconds {
+            readout.seconds = integrated;
+        }
+        self.state.rolling_seconds = Some(next);
+        Ok(())
+    }
+}
 impl Controls for Sensor {
     fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
         crate::checkpoint::Checkpoint::encode(
@@ -181,6 +213,7 @@ impl Controls for Sensor {
             || state
                 .rolling_seconds
                 .is_some_and(|v| !v.is_finite() || v <= 0.)
+            || state.settling > options.mode_change_frames
             || !saved.blobs().is_empty()
             || !saved.children().is_empty()
         {
@@ -212,6 +245,7 @@ impl Controls for Sensor {
         for b in bytes.chunks_exact(8) {
             if b[1] == 0 && b[2] & 0xfc != self.state.registers[0] & 0xfc {
                 self.state.global_seconds = None;
+                self.state.settling = self.options.mode_change_frames;
             }
             if b[1] == 1 && b[2] & 4 != 0 && self.state.registers[1] & 4 == 0 {
                 self.state.global_seconds = None;
@@ -220,28 +254,11 @@ impl Controls for Sensor {
         }
         self.publish()
     }
-    fn frame(&mut self) -> Result<(), String> {
-        self.publish()?;
-        if self.state.registers[1] & 4 != 0 || self.state.global_seconds.is_some() {
-            // Global reset integrates until the physical leaf closes; it does
-            // not inherit the previous rolling frame's reset interval.
-            self.state.rolling_seconds = None;
-            return Ok(());
-        }
-        let mut readout = self
-            .exposure
-            .lock()
-            .map_err(|_| "sensor exposure poisoned")?;
-        if readout.seconds <= 0. {
-            self.state.rolling_seconds = None;
-            return Ok(());
-        }
-        let next = readout.seconds;
-        if let Some(integrated) = self.state.rolling_seconds {
-            readout.seconds = integrated;
-        }
-        self.state.rolling_seconds = Some(next);
-        Ok(())
+    fn frame(&mut self) -> Result<bool, String> {
+        let valid = self.state.settling == 0;
+        self.state.settling = self.state.settling.saturating_sub(1);
+        self.integrate()?;
+        Ok(valid)
     }
     fn timing(
         &mut self,
@@ -277,6 +294,7 @@ mod tests {
                 pixel_clock_hz: 33_000_000,
                 shutter: None,
                 rolling_references: vec![],
+                mode_change_frames: 0,
             },
             wire.clone(),
             std::sync::Arc::new(std::sync::Mutex::new(8.)),
@@ -331,6 +349,7 @@ mod tests {
                     vertical: 9348,
                     lines: 856,
                 }],
+                mode_change_frames: 0,
             },
             exposure.clone(),
             std::sync::Arc::new(std::sync::Mutex::new(8.)),
@@ -376,6 +395,7 @@ mod tests {
                 pixel_clock_hz: 33000000,
                 shutter: None,
                 rolling_references: vec![],
+                mode_change_frames: 0,
             },
             wire.clone(),
             std::sync::Arc::new(std::sync::Mutex::new(8.)),
@@ -411,6 +431,7 @@ mod tests {
                     vertical: 9000,
                     lines: 1000,
                 }],
+                mode_change_frames: 0,
             },
             wire.clone(),
             std::sync::Arc::new(std::sync::Mutex::new(8.)),
@@ -441,5 +462,32 @@ mod tests {
         assert!((wire.lock().unwrap().seconds - 0.06548).abs() < 1e-12);
         s.restore(&saved).unwrap();
         assert!((wire.lock().unwrap().seconds - 0.0012).abs() < 1e-12);
+    }
+
+    #[test]
+    fn drive_mode_change_withholds_valid_frames() {
+        let wire: ExposureHandle = Default::default();
+        let mut sensor = Sensor::new(
+            Options {
+                pixel_clock_hz: 33_000_000,
+                shutter: None,
+                rolling_references: vec![],
+                mode_change_frames: 2,
+            },
+            wire,
+            std::sync::Arc::new(std::sync::Mutex::new(8.)),
+        )
+        .unwrap();
+        sensor.timing(660, 1000, None).unwrap();
+        let mode = |value| [0x81, 0, value, 0, 0, 0, 0, 0];
+        sensor.command(&mode(0xec)).unwrap();
+        let frames: Vec<bool> = (0..3).map(|_| sensor.frame().unwrap()).collect();
+        assert_eq!(frames, [false, false, true]);
+        // Low register-0 bits are not the drive mode.
+        sensor.command(&mode(0xed)).unwrap();
+        assert!(sensor.frame().unwrap());
+        sensor.command(&mode(0x28)).unwrap();
+        let frames: Vec<bool> = (0..3).map(|_| sensor.frame().unwrap()).collect();
+        assert_eq!(frames, [false, false, true]);
     }
 }

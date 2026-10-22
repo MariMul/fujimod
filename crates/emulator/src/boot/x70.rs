@@ -1477,6 +1477,10 @@ fn apply_image_sensor(
                 "pixel_clock_hz": pixel_clock_hz,
                 "shutter": {"closing_delay_seconds": radiometry.shutter_closing_delay_seconds},
                 "rolling_references": radiometry.rolling_references,
+                // Stock AF-S traces: the first RAW wait after a drive-mode change
+                // spans about three frame periods. The two frames read out before
+                // it carry no valid sync, raise no source edge and start no DMA.
+                "mode_change_frames": 2,
             },
             "calibration": calibration,
             "exposure": "sensor_exposure",

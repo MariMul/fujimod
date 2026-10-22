@@ -256,6 +256,85 @@ fn physical_sensor_latch_and_both_input_sources_share_one_edge() {
     assert!(frames.lock().unwrap().edge.unwrap().index > edge.index);
 }
 #[test]
+fn sensor_frames_after_a_drive_mode_change_raise_no_edge() {
+    use crate::imaging::exposure::{Calibration, Exposure};
+    use crate::scene::{Frame, FramePixels, SensorFrames};
+    use std::sync::{Arc, Mutex};
+    let frames = Arc::new(Mutex::new(SensorFrames::new(
+        Frame::new(2, 1, FramePixels::Rgb24(vec![128; 6].into())).unwrap(),
+    )));
+    let wire = Arc::new(Mutex::new(Exposure::default()));
+    let iris = Arc::new(Mutex::new(8.));
+    let mut sensor = crate::parts::sensor::Sensor::new(
+        crate::parts::sensor::Options {
+            width: 2,
+            height: 1,
+            image_area: [0, 0, 2, 1],
+            cfa: cfa(),
+            black: 0,
+            full_scale: 4095,
+            reference_white: [256; 3],
+        },
+        frames.clone(),
+    )
+    .unwrap();
+    sensor
+        .attach_controls(
+            Box::new(
+                crate::parts::xtrans16::Sensor::new(
+                    crate::parts::xtrans16::Options {
+                        pixel_clock_hz: 33_000_000,
+                        shutter: None,
+                        rolling_references: vec![],
+                        mode_change_frames: 2,
+                    },
+                    wire.clone(),
+                    iris.clone(),
+                )
+                .unwrap(),
+            ),
+            Calibration {
+                full_scale: 4095,
+                reference_white: [256; 3],
+                saturation_lux_seconds: 1.,
+                color_sample_weights: [2, 5, 2],
+            },
+            wire,
+            iris,
+        )
+        .unwrap();
+    sensor.command(&[0x81, 0, 0xec, 0, 0, 0, 0, 0]).unwrap();
+    let mut w = input_wiring();
+    w.frame_period = Some(Arc::new(Mutex::new(10)));
+    w.sensor = Some(sensor);
+    let edges = w.edges.clone();
+    let mut o = input_options();
+    o.sensor_period_ticks = Some(100);
+    o.clock = Some(input::Clock {
+        mode: input::ClockMode::InputEnable,
+        source: input::ClockSource::Sensor {},
+        secondary: false,
+        companion_secondary: false,
+    });
+    let mut d = ImageInput::new(o, w).unwrap();
+    let mut h = TestHost::new();
+    for (o, v) in [(0x48, 1), (0x38c, 0x10201)] {
+        write(&mut d, &mut h, 0xfff10000 + o, v);
+    }
+    advance(&mut d, &mut h, 5);
+    write(&mut d, &mut h, 0xfff1038c, 0x10203);
+    // The two readouts after the mode change carry no valid frame.
+    for tick in [10, 20] {
+        advance(&mut d, &mut h, tick);
+        assert_eq!(edges.lock().unwrap()[0], None);
+        assert!(h.irqs.is_empty());
+    }
+    advance(&mut d, &mut h, 30);
+    let edge = frames.lock().unwrap().edge.unwrap();
+    assert_eq!(edges.lock().unwrap()[0], Some(edge));
+    assert_eq!(h.irqs, [(0, 39)]);
+}
+#[test]
 fn register_sources_can_explicitly_follow_a_synthetic_sensor_without_input_enable() {
     use crate::scene::{Frame, FramePixels, SensorFrames};
     use std::sync::{Arc, Mutex};

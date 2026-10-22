@@ -627,12 +627,17 @@ impl ImageInput {
         )?;
         Ok(())
     }
-    fn frame(&mut self, cx: &Cx<'_>) -> Result<(), String> {
+    /// Latch one sensor frame and start its RAW transfer. Returns whether the
+    /// sensor delivered a valid frame; an invalid readout has no edge or DMA.
+    fn frame(&mut self, cx: &Cx<'_>) -> Result<bool, String> {
         self.sensor_timing()?;
         let Some(sensor) = &mut self.wiring.sensor else {
-            return Ok(());
+            return Ok(true);
         };
         sensor.latch(cx.now())?;
+        if !sensor.readout_valid() {
+            return Ok(false);
+        }
         let s = &mut self.state;
         let r = &s.r;
         if s.capture_ack
@@ -640,7 +645,7 @@ impl ImageInput {
             || r[1] & 1 == 0
             || r[0x354 / 4] & 0x10000000 == 0
         {
-            return Ok(());
+            return Ok(true);
         }
         let format = r[0x354 / 4] >> 20 & 7;
         if ![3, 4].contains(&format)
@@ -696,7 +701,7 @@ impl ImageInput {
         s.dma
             .pixels
             .defer_rows(row, height, move |rows, out| readout.write_rows(rows, out));
-        Ok(())
+        Ok(true)
     }
     fn tick(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
         let now = cx.now();
@@ -760,8 +765,7 @@ impl ImageInput {
                     .checked_mul(period)
                     .ok_or("sensor clock overflow")?,
             )?);
-            self.frame(cx)?;
-            if self.uses_sensor_clock() {
+            if self.frame(cx)? && self.uses_sensor_clock() {
                 let edge = self
                     .wiring
                     .sensor
