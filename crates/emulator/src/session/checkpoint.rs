@@ -7,6 +7,7 @@ use fujimod_emulator_devices::{exr2::board::ResourceSnapshot, parts::switch_pane
 pub struct Snapshot {
     pub(crate) board: Keyframe,
     resources: ResourceSnapshot,
+    xp5: bool,
     controls: Option<SwitchPanel>,
     contact_driver: Option<super::contact_driver::Driver>,
 }
@@ -29,11 +30,15 @@ impl Session {
         Ok(Snapshot {
             board,
             resources,
+            xp5: self.xp5.is_some(),
             controls: self.controls.clone(),
             contact_driver: self.contact_driver.clone(),
         })
     }
     pub fn restore(&mut self, saved: &Snapshot) -> Result<(), String> {
+        if saved.xp5 != self.xp5.is_some() {
+            return Err("checkpoint XP5 session resources differ".into());
+        }
         self.resources.validate_checkpoint(&saved.resources)?;
         self.board.restore_keyframe(&saved.board)?;
         self.resources.restore_checkpoint(&saved.resources)?;

@@ -525,6 +525,7 @@ impl Board {
                 contacts: assembly.contacts,
                 recording_frames: Default::default(),
                 resources: assembly.resources,
+                xp5: None,
             })),
             objects: adapters.objects,
             failures: adapters.failures,

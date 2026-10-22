@@ -14,6 +14,7 @@ pub mod scanout;
 #[cfg(all(test, feature = "worker"))]
 mod tests;
 pub mod usb;
+pub mod xp5;
 
 use crate::board::Board;
 use fujimod_emulator_devices::exr2::{board::Resources, sdhc::Contacts};
@@ -25,6 +26,8 @@ pub struct Session {
     pub controls: Option<fujimod_emulator_devices::parts::switch_panel::SwitchPanel>,
     pub contact_driver: Option<contact_driver::Driver>,
     pub resources: Resources,
+    /// XP5 external controls and GPIO inputs, when this board uses XP5 devices.
+    pub xp5: Option<xp5::State>,
     pub nodes: BTreeMap<String, usize>,
     pub contacts: BTreeMap<String, Contacts>,
     /// Host rendering memo; excluded from checkpoints, fingerprints and modeled state.
@@ -41,10 +44,18 @@ impl Session {
     pub fn fingerprint(&self) -> Result<serde_json::Value, String> {
         let mut value = serde_json::json!({"schema":1,"definition":self.definition,
             "controls":self.controls.as_ref().map(|p| serde_json::json!({"spec":p.spec(),"positions":p.positions()})),
-            "contact_driver":self.contact_driver.as_ref().map(|d|d.fingerprint()).transpose()?});
+            "contact_driver":self.contact_driver.as_ref().map(|d|d.fingerprint()).transpose()?,
+            "xp5_controls":self.xp5.is_some()});
         value["board"] = self.board.fingerprint()?;
         value["resources"] = self.resources.fingerprint()?;
         Ok(value)
+    }
+    pub fn attach_xp5(mut self, state: xp5::State) -> Result<Self, String> {
+        if self.xp5.is_some() {
+            return Err("session already has XP5 controls".into());
+        }
+        self.xp5 = Some(state);
+        Ok(self)
     }
     pub fn logic_input(&mut self, name: &str, high: bool) -> Result<(), String> {
         let level = self.resources.logic_level(name)?;

@@ -915,6 +915,7 @@ pub fn open_prepared(
         controls: None,
         contact_driver: None,
         resources: assembly.resources,
+        xp5: None,
         nodes: assembly.node_ids,
         contacts: assembly.contacts,
         recording_frames: Default::default(),
