@@ -3109,3 +3109,58 @@ fn bundled_documents() -> impl Iterator<Item = (ReferenceKind, &'static str, &'s
 
 #[cfg(test)]
 mod tests;
+
+/// Explicit selection of SoC and body hardware profiles.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct HardwareSelection {
+    /// Profile identity within the selected SoC.
+    pub soc_profile_id: String,
+    /// Profile identity within the selected body.
+    pub body_profile_id: String,
+}
+
+impl HardwareSelection {
+    /// Resolve both profile identities against already selected reference records.
+    pub fn resolve<'a>(
+        &self,
+        selection: &'a ResolvedSelection,
+    ) -> Result<
+        (
+            &'a crate::profiles::SocProfile,
+            &'a crate::profiles::BodyProfile,
+        ),
+        String,
+    > {
+        validate_id(&self.soc_profile_id)?;
+        validate_id(&self.body_profile_id)?;
+        let soc = selection
+            .soc
+            .hardware
+            .as_ref()
+            .and_then(|hardware| hardware.profiles.get(&self.soc_profile_id))
+            .ok_or_else(|| {
+                format!(
+                    "SoC {} has no hardware profile {}",
+                    selection.soc.id, self.soc_profile_id
+                )
+            })?;
+        let body = selection
+            .body
+            .hardware
+            .as_ref()
+            .and_then(|hardware| hardware.profiles.get(&self.body_profile_id))
+            .ok_or_else(|| {
+                format!(
+                    "body {} has no hardware profile {}",
+                    selection.body.id, self.body_profile_id
+                )
+            })?;
+        Ok((soc, body))
+    }
+}

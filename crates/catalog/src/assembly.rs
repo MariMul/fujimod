@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Additional body-specific physical wiring.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
 #[cfg_attr(
@@ -14,6 +14,10 @@ use std::collections::BTreeMap;
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct BodyHardware {
+    /// Named hardware profiles, selected explicitly by a run preset.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[cfg_attr(feature = "typescript", tsify(type = "Record<string, BodyProfile>"))]
+    pub profiles: BTreeMap<String, crate::profiles::BodyProfile>,
     /// Serial endpoints and their processor-side connections.
     pub serial_attachments: Vec<SerialAttachment>,
     /// Connections between GPIO output and input pads.
@@ -64,6 +68,12 @@ pub struct GpioFeedback {
 impl BodyHardware {
     /// Validate installed parts and all physical connection identities.
     pub fn validate(&self, body: &crate::reference::Body) -> Result<(), String> {
+        for (id, profile) in &self.profiles {
+            crate::reference::validate_id(id)?;
+            if let Some(graph) = &profile.graph {
+                graph.validate()?;
+            }
+        }
         let connection = |id: &str| {
             body.connections
                 .iter()

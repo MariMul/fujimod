@@ -20,3 +20,6 @@ pub use soc::SocHardware;
 
 /// Reusable part assembly attachments.
 pub mod parts;
+
+/// Named hardware profiles and device graphs.
+pub mod profiles;

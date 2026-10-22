@@ -107,6 +107,11 @@
       "thermal-0",
       "thermal-8",
       "thermal-10"
-    ]
+    ],
+    "profiles": {
+      "xt3-discovery": {
+        "dram_basis": "Declared catalog input."
+      }
+    }
   }
 }

@@ -58,3 +58,13 @@ must refuse an unresolved named option instead of inventing a name.
 Schemas are generated from these Rust types with
 `cargo run -p fujimod-catalog --bin catalog-schemas -- --write`. New remote
 schema filenames include `.generated`; `--check` verifies committed copies.
+
+Hardware profiles preserve qualified device graphs and controller settings while
+reference records continue to own identity, memory, and physical attachments.
+`reference::HardwareSelection` selects one entry from `Soc.hardware.profiles`
+and one from `Body.hardware.profiles`. Profile IDs distinguish REC, service,
+and discovery hardware configurations. Resolution refuses unknown profiles.
+Profiles contain no input file locations. A device graph records closed device
+kinds, named references, alternatives, and separate construction and attachment
+orders; both orders must cover its declared nodes exactly once. Run presets own
+execution policy and reset/scene inputs independently of these profiles.

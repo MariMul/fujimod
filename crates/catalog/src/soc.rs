@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Additional hardware parameters whose meaning depends on the processor family.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
 #[cfg_attr(
@@ -14,6 +14,10 @@ use std::collections::BTreeMap;
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct SocHardware {
+    /// Named hardware profiles, selected explicitly by a run preset.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[cfg_attr(feature = "typescript", tsify(type = "Record<string, SocProfile>"))]
+    pub profiles: BTreeMap<String, crate::profiles::SocProfile>,
     /// Application-processor identification and cache topology, when declared.
     #[cfg_attr(feature = "typescript", serde(default))]
     pub application: Option<ApplicationHardware>,

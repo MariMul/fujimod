@@ -320,6 +320,12 @@
       "left": 2829,
       "right": 2068
     },
-    "thermal_connection_ids": []
+    "thermal_connection_ids": [],
+    "profiles": {
+      "x100vi": {
+        "limits": [],
+        "dram_basis": "Declared catalog input."
+      }
+    }
   }
 }
