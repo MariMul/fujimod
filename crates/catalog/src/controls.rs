@@ -4,8 +4,8 @@
 //! the checked relationship; spelling is never used to translate vocabularies.
 
 use crate::facts::{
-    CalibrationInterval, ControlInterface, ControlReaders, GpioScanner, ManualReference,
-    NativeKeyNames, ScannerRecordWitness, ScannerTable,
+    CalibrationInterval, ControlInterface, GpioScanner, ManualReference, NativeKeyNames,
+    ScannerReader, ScannerRecordWitness, ScannerTable,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -315,15 +315,33 @@ pub struct FirmwareControlIds {
     /// Scanner table identity and extent.
     pub scanner: ScannerTable,
     /// Calibration and stable-state readers located in that firmware.
-    pub input_readers: ControlReaders,
-    /// Native names and their source table identity.
-    pub native_key_names: NativeKeyNames,
+    pub input_readers: InputReaders,
+    /// Native names and their source table identity, when the table was located.
+    #[cfg_attr(feature = "typescript", serde(default))]
+    pub native_key_names: Option<NativeKeyNames>,
     /// Exact debug command vocabulary, independent of the native names.
     pub debug_keys: Vec<DebugKey>,
     /// Every located scanner or protocol input, including unclaimed connections.
     pub inputs: Vec<LocatedInput>,
     /// Protocols outside the key scanner, keyed by physical body connection ID.
     pub interfaces: BTreeMap<String, ControlInterface>,
+}
+
+/// Input routines located in one firmware; a routine the locators did not find is absent.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct InputReaders {
+    /// Routine reading 16-bit control calibration values.
+    #[cfg_attr(feature = "typescript", serde(default))]
+    pub calibration: Option<u64>,
+    /// Routine reading stable key scanner state.
+    #[cfg_attr(feature = "typescript", serde(default))]
+    pub scanner: Option<ScannerReader>,
 }
 
 /// One located input's identity, ownership, and checked electrical predicates.
@@ -589,7 +607,7 @@ impl PhysicalControls {
             }
             if control.name.trim().is_empty()
                 || control.manual_page == Some(0)
-                || control.mechanical != control.behavior.is_none()
+                || (control.mechanical && control.behavior.is_some())
             {
                 return Err(format!("physical control {id} has an invalid declaration"));
             }
@@ -625,7 +643,7 @@ impl PhysicalControls {
             .control
             .behavior
             .as_ref()
-            .ok_or_else(|| format!("physical control {id} is mechanical"))?;
+            .ok_or_else(|| format!("physical control {id} has no bound actions"))?;
         let (bindings, asserted, repetitions) =
             behavior.bindings(selected.direction, &operation)?;
         let inputs = bindings
@@ -788,14 +806,24 @@ impl FirmwareControlIds {
             }
         }
         let mut native_names = BTreeSet::new();
-        for key in &self.native_key_names.rows {
+        for key in self.native_key_names.iter().flat_map(|names| &names.rows) {
             if key.name.is_empty() || !native_names.insert(&key.name) {
                 return Err("firmware native input names are empty or duplicated".into());
             }
         }
-        self.input_readers.scanner.routine.validate()?;
+        if let Some(reader) = &self.input_readers.scanner {
+            reader.routine.validate()?;
+            if reader.stable_width != 1
+                || reader.stable_offset >= self.scanner.stride
+                || reader.pressed_value == reader.released_value
+            {
+                return Err("firmware stable-state reader is invalid".into());
+            }
+        }
         crate::reference::validate_sha256(&self.scanner.sha256)?;
-        crate::reference::validate_sha256(&self.native_key_names.sha256)?;
+        if let Some(names) = &self.native_key_names {
+            crate::reference::validate_sha256(&names.sha256)?;
+        }
         if self.scanner.count == 0
             || self.scanner.stride < 20
             || self
@@ -803,11 +831,8 @@ impl FirmwareControlIds {
                 .base
                 .checked_add(u64::from(self.scanner.count) * u64::from(self.scanner.stride))
                 .is_none()
-            || self.input_readers.scanner.stable_width != 1
-            || self.input_readers.scanner.stable_offset >= self.scanner.stride
-            || self.input_readers.scanner.pressed_value == self.input_readers.scanner.released_value
         {
-            return Err("firmware input table or stable-state reader is invalid".into());
+            return Err("firmware input table is invalid".into());
         }
         let mut ids = BTreeSet::new();
         let mut rows = BTreeSet::new();
@@ -924,8 +949,8 @@ impl FirmwareControlIds {
             InputBinding::NativeInput { name } => {
                 let mut matches = self
                     .native_key_names
-                    .rows
                     .iter()
+                    .flat_map(|names| &names.rows)
                     .filter(|key| key.name == *name);
                 let event = matches
                     .next()
@@ -1228,6 +1253,21 @@ mod tests {
                 .unwrap_err()
                 .contains("undeclared debug key")
         );
+    }
+
+    #[test]
+    fn electronic_controls_may_be_unbound_but_mechanical_controls_have_no_actions() {
+        let (mut physical, _) = fixture();
+        physical.controls.get_mut("menu_ok").unwrap().behavior = None;
+        physical.validate().unwrap();
+        assert!(
+            physical
+                .action(&fixture().1, "menu_ok", ControlOperation::Press)
+                .is_err()
+        );
+        let control = physical.controls.get_mut("movie").unwrap();
+        control.mechanical = true;
+        assert!(physical.validate().is_err());
     }
 
     #[test]

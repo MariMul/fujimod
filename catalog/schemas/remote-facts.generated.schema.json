@@ -1013,27 +1013,6 @@
         }
       ]
     },
-    "ControlReaders": {
-      "additionalProperties": false,
-      "description": "Firmware routines used to read calibration and stable scanner state.",
-      "properties": {
-        "calibration": {
-          "description": "Routine reading 16-bit control calibration values.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "scanner": {
-          "$ref": "#/$defs/ScannerReader",
-          "description": "Routine reading stable key scanner state."
-        }
-      },
-      "required": [
-        "calibration",
-        "scanner"
-      ],
-      "type": "object"
-    },
     "ControlRole": {
       "description": "Physical roles that an operation may require from a body.",
       "oneOf": [
@@ -1499,7 +1478,7 @@
           "type": "string"
         },
         "input_readers": {
-          "$ref": "#/$defs/ControlReaders",
+          "$ref": "#/$defs/InputReaders",
           "description": "Calibration and stable-state readers located in that firmware."
         },
         "inputs": {
@@ -1517,8 +1496,15 @@
           "type": "object"
         },
         "native_key_names": {
-          "$ref": "#/$defs/NativeKeyNames",
-          "description": "Native names and their source table identity."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NativeKeyNames"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Native names and their source table identity, when the table was located."
         },
         "scanner": {
           "$ref": "#/$defs/ScannerTable",
@@ -1538,7 +1524,6 @@
         "firmware_id",
         "scanner",
         "input_readers",
-        "native_key_names",
         "debug_keys",
         "inputs",
         "interfaces"
@@ -1937,6 +1922,33 @@
           "type": "object"
         }
       ]
+    },
+    "InputReaders": {
+      "additionalProperties": false,
+      "description": "Input routines located in one firmware; a routine the locators did not find is absent.",
+      "properties": {
+        "calibration": {
+          "description": "Routine reading 16-bit control calibration values.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "scanner": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScannerReader"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Routine reading stable key scanner state."
+        }
+      },
+      "type": "object"
     },
     "InputTarget": {
       "description": "Ownership of a generated input record without a control alias map.",

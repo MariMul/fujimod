@@ -791,10 +791,10 @@ FirmwareControlIds = TypedDict(
         "debug_keys": Required["list[DebugKey]"],
         "firmware_id": Required["str"],
         "id": Required["str"],
-        "input_readers": Required["ControlReaders"],
+        "input_readers": Required["InputReaders"],
         "inputs": Required["list[LocatedInput]"],
         "interfaces": Required["dict[str, ControlInterface]"],
-        "native_key_names": Required["NativeKeyNames"],
+        "native_key_names": NotRequired["NativeKeyNames | None"],
         "scanner": Required["ScannerTable"],
         "schema": Required["int"],
     },
@@ -943,6 +943,11 @@ class InputBindingVariant0(TypedDict, total=False):
 class InputBindingVariant1(TypedDict, total=False):
     kind: Required[Literal["native_input"]]
     name: Required[str]
+
+
+class InputReaders(TypedDict, total=False):
+    calibration: NotRequired[int | None]
+    scanner: NotRequired[ScannerReader | None]
 
 
 type InputTarget = InputTargetVariant0 | InputTargetVariant1 | InputTargetVariant2
@@ -1143,6 +1148,88 @@ class NativeKeyNames(TypedDict, total=False):
     rows: Required[list[NativeKeyName]]
     sha256: Required[str]
     size: Required[int]
+
+
+type NativeLzInputsResize = Literal["declared_packed_pyramid"]
+
+
+class NativeOutputChannelInputsClock(TypedDict, total=False):
+    kind: Required[NativeOutputChannelInputsClockKind]
+    ticks: Required[int]
+
+
+type NativeOutputChannelInputsClockKind = Literal["fixed"]
+
+
+type NativeOutputChannelInputsGeometry = Literal["skip_incomplete"]
+
+
+type NativePhaseDetectionInputsArithmetic = Literal["aperture_sad"]
+
+
+class NativePowerInputsSpi0(TypedDict, total=False):
+    presence: Required[NativePowerInputsSpi0Presence]
+    required: Required[list[int]]
+    selection: Required[NativePowerInputsSpi0Selection]
+
+
+class NativePowerInputsSpi0Presence(TypedDict, total=False):
+    high: Required[bool]
+    pin: Required[NativePowerInputsSpi0PresencePin]
+
+
+class NativePowerInputsSpi0PresencePin(TypedDict, total=False):
+    pin: Required[int]
+    port: Required[int]
+
+
+class NativePowerInputsSpi0Selection(TypedDict, total=False):
+    high: Required[bool]
+    pin: Required[NativePowerInputsSpi0SelectionPin]
+
+
+class NativePowerInputsSpi0SelectionPin(TypedDict, total=False):
+    pin: Required[int]
+    port: Required[int]
+
+
+type NativeScanoutInputsBackdropProfile = Literal["declared-black-canvas-unmeasured"]
+
+
+type NativeScanoutInputsGraphicsProfile = Literal["mode1-abgr8888-straight"]
+
+
+type NativeScanoutInputsMatrix = Literal["bt601-full"]
+
+
+type NativeScanoutInputsPacking = Literal["yycbcr"]
+
+
+type NativeScanoutInputsRectangleProfile = Literal[
+    "exr2-signed-ycbcr-rectangle-overlay-unmeasured",
+]
+
+
+class NativeStatisticsInputsClock(TypedDict, total=False):
+    kind: Required[NativeStatisticsInputsClockKind]
+    ticks: Required[int]
+
+
+type NativeStatisticsInputsClockKind = Literal["fixed"]
+
+
+class NativeUsbEndpoints(TypedDict, total=False):
+    dma_limit: Required[int]
+    in_endpoints: Required[list[tuple[int, int]]]
+    out_endpoints: Required[list[tuple[int, int]]]
+    packet_bytes: Required[int]
+    transfer_ticks: Required[int]
+
+
+type NativeVectorGpuInputsClearProfile = Literal["declared-vg-ui-primitives-unmeasured"]
+
+
+type NativeVectorGpuInputsCopyProfile = Literal["vg-32bpp-untile-unrotated"]
 
 
 type OpticalQuantity = Literal["lens_focus", "lens_aperture"]
