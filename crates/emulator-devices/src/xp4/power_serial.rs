@@ -1,31 +1,20 @@
 //! Bounded physical power-controller SPI register protocol, not a CPU harness.
 //! 10a09fc clocks a 24-bit frame; 10a1d40 supplies the six-bit register address.
-use super::{gpio::SharedPins, spi::Input};
+use super::{gpio::SharedPins, rtc::Counter, spi::Input};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+/// Direct stop/load/start law over the shared counter.
 #[derive(serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Rtc {
-    seconds: u32,
-    anchor: u64,
-    running: bool,
-    ticks_per_second: u64,
-}
+#[serde(transparent)]
+struct Rtc(Counter);
 impl Rtc {
     fn counter(&self, tick: u64) -> Result<u32, String> {
-        let elapsed = tick
-            .checked_sub(self.anchor)
-            .ok_or("Power RTC clock moved backwards")?;
-        Ok(self.seconds.wrapping_add(if self.running {
-            (elapsed / self.ticks_per_second) as u32
-        } else {
-            0
-        }))
+        self.0.counter(tick)
     }
     fn read(&self, register: u8, tick: u64) -> Result<u16, String> {
         Ok(match register {
             32 => {
-                if self.running {
+                if self.0.running {
                     0x8000
                 } else {
                     0
@@ -41,21 +30,17 @@ impl Rtc {
             if !matches!(value, 0 | 0x8000) {
                 return Err("Unsupported power RTC control bits".into());
             }
-            if self.running != (value != 0) {
-                self.seconds = self.counter(tick)?;
-                self.anchor = tick;
-                self.running = value != 0;
-            }
+            self.0.set_running(value != 0, tick)?;
         } else {
-            if self.running {
+            if self.0.running {
                 return Err("Power RTC counter write while running".into());
             }
-            self.seconds = if register == 34 {
-                (self.seconds & 0xffff0000) | u32::from(value)
+            let seconds = if register == 34 {
+                (self.0.seconds & 0xffff0000) | u32::from(value)
             } else {
-                (self.seconds & 0xffff) | u32::from(value) << 16
+                (self.0.seconds & 0xffff) | u32::from(value) << 16
             };
-            self.anchor = tick;
+            self.0.load(seconds, tick);
         }
         Ok(())
     }
@@ -101,12 +86,11 @@ impl PowerSerial {
                 "Power SPI needs explicit ADC/status inputs and a physical chip select".into(),
             );
         }
-        let rtc = Rtc {
-            seconds: u32::from(inputs[&34]) | u32::from(inputs[&35]) << 16,
-            anchor: 0,
-            running: inputs[&32] != 0,
-            ticks_per_second: rtc_ticks_per_second,
-        };
+        let rtc = Rtc(Counter::new(
+            u32::from(inputs[&34]) | u32::from(inputs[&35]) << 16,
+            inputs[&32] != 0,
+            rtc_ticks_per_second,
+        )?);
         Ok(Self {
             pins,
             port,
@@ -233,7 +217,7 @@ impl Input for PowerSerial {
             || state.active_high != self.active_high
             || state.idle != self.idle
             || state.inputs != self.inputs
-            || state.rtc.ticks_per_second != self.rtc.ticks_per_second
+            || state.rtc.0.ticks_per_second != self.rtc.0.ticks_per_second
             || state.phase > 2
             || registers.len() != state.registers.len()
             || registers
@@ -282,12 +266,7 @@ mod tests {
     }
     #[test]
     fn rtc_counter_stop_load_start_wrap_and_observation() {
-        let mut rtc = Rtc {
-            seconds: 0,
-            anchor: 0,
-            running: false,
-            ticks_per_second: 10,
-        };
+        let mut rtc = Rtc(Counter::new(0, false, 10).unwrap());
         rtc.write(34, 0xfffe, 4).unwrap();
         rtc.write(35, 0xffff, 5).unwrap();
         rtc.write(32, 0x8000, 6).unwrap();
@@ -328,6 +307,10 @@ mod tests {
             (1 << 21) | (1 << 5),
         );
         source.rtc.write(32, 0x8000, 7).unwrap();
+        assert_eq!(
+            source.save()["rtc"],
+            json!({"seconds":0,"anchor":7,"running":true,"ticks_per_second":54_000_000})
+        );
         source.exchange(8, 18 * 4 + 1, 8).unwrap();
         source.exchange(8, 0x12, 9).unwrap();
         resumed.restore(&source.save()).unwrap();
