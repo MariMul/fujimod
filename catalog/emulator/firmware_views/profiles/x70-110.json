@@ -8,8 +8,8 @@
   },
   "board": {
     "path": "emulator/bodies/x70.json",
-    "sha256": "ff901ec88d3a316d6e02ba1925e442056e6e1a4557a897e16f81d3ef8f1cb2be",
-    "size": 18700
+    "sha256": "43c262756b5c52abdc47dc079180a91b53aceeda6114ccaaa4b05770b4be9b7b",
+    "size": 18812
   },
   "firmware": {
     "path": "emulator/firmwares/x70-110.json",
