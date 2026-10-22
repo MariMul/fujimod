@@ -29,6 +29,9 @@ struct State {
     vertical: u32,
     shutter_drive: Option<u64>,
     global_seconds: Option<f64>,
+    /// Integration started for the following rolling readout. Analog gain is
+    /// applied when that readout reaches the ADC, rather than at reset time.
+    rolling_seconds: Option<f64>,
 }
 pub struct Sensor {
     state: State,
@@ -54,6 +57,7 @@ impl Sensor {
                 vertical: 0,
                 shutter_drive: None,
                 global_seconds: None,
+                rolling_seconds: None,
             },
             shutter: options
                 .shutter
@@ -174,6 +178,9 @@ impl Controls for Sensor {
             || state
                 .global_seconds
                 .is_some_and(|v| !v.is_finite() || v <= 0.)
+            || state
+                .rolling_seconds
+                .is_some_and(|v| !v.is_finite() || v <= 0.)
             || !saved.blobs().is_empty()
             || !saved.children().is_empty()
         {
@@ -213,6 +220,29 @@ impl Controls for Sensor {
         }
         self.publish()
     }
+    fn frame(&mut self) -> Result<(), String> {
+        self.publish()?;
+        if self.state.registers[1] & 4 != 0 || self.state.global_seconds.is_some() {
+            // Global reset integrates until the physical leaf closes; it does
+            // not inherit the previous rolling frame's reset interval.
+            self.state.rolling_seconds = None;
+            return Ok(());
+        }
+        let mut readout = self
+            .exposure
+            .lock()
+            .map_err(|_| "sensor exposure poisoned")?;
+        if readout.seconds <= 0. {
+            self.state.rolling_seconds = None;
+            return Ok(());
+        }
+        let next = readout.seconds;
+        if let Some(integrated) = self.state.rolling_seconds {
+            readout.seconds = integrated;
+        }
+        self.state.rolling_seconds = Some(next);
+        Ok(())
+    }
     fn timing(
         &mut self,
         horizontal: u32,
@@ -239,6 +269,54 @@ impl Controls for Sensor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rolling_readout_uses_prior_integration_and_current_adc_gain() {
+        let wire: ExposureHandle = Default::default();
+        let mut sensor = Sensor::new(
+            Options {
+                pixel_clock_hz: 33_000_000,
+                shutter: None,
+                rolling_references: vec![],
+            },
+            wire.clone(),
+            std::sync::Arc::new(std::sync::Mutex::new(8.)),
+        )
+        .unwrap();
+        sensor.timing(660, 1000, None).unwrap();
+        sensor.frame().unwrap();
+        assert_eq!(wire.lock().unwrap().seconds, 0.02);
+        sensor
+            .command(&[
+                0x81, 5, 244, 0, 0, 0, 0, 0, 0x81, 6, 1, 0, 0, 0, 0, 0, 0x81, 0x32, 0, 0, 0, 0, 0,
+                0, 0x81, 0x33, 8, 0, 0, 0, 0, 0,
+            ])
+            .unwrap();
+        sensor.frame().unwrap();
+        let readout = *wire.lock().unwrap();
+        assert_eq!(readout.seconds, 0.02);
+        assert!((readout.analog_gain - 2.).abs() < 0.001);
+        sensor
+            .command(&[0x81, 5, 32, 0, 0, 0, 0, 0, 0x81, 6, 3, 0, 0, 0, 0, 0])
+            .unwrap();
+        // The snapshot must retain .01 even though the newest SHR configures
+        // .004. Reconstructing pending integration from the registers loses it.
+        let checkpoint = sensor.checkpoint().unwrap();
+        let fingerprint = sensor.fingerprint();
+        assert_eq!(sensor.fingerprint(), fingerprint);
+        sensor.save();
+        assert_eq!(sensor.fingerprint(), fingerprint);
+        sensor.frame().unwrap();
+        assert_eq!(wire.lock().unwrap().seconds, 0.01);
+        sensor.frame().unwrap();
+        assert_eq!(wire.lock().unwrap().seconds, 0.004);
+        sensor.restore_checkpoint(&checkpoint).unwrap();
+        assert_eq!(sensor.fingerprint(), fingerprint);
+        sensor.frame().unwrap();
+        assert_eq!(wire.lock().unwrap().seconds, 0.01);
+        sensor.frame().unwrap();
+        assert_eq!(wire.lock().unwrap().seconds, 0.004);
+    }
+
     #[test]
     fn physical_scan_clock_preserves_vertical_blanking_and_raster_extension() {
         let period: crate::imaging::timing::FramePeriod = Default::default();

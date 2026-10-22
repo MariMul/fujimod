@@ -14,6 +14,8 @@ pub trait Controls: Send {
     fn fingerprint(&self) -> serde_json::Value;
 
     fn command(&mut self, bytes: &[u8]) -> Result<(), String>;
+    /// Complete one physical exposure/readout edge before sampling its pixels.
+    fn frame(&mut self) -> Result<(), String>;
     fn timing(
         &mut self,
         horizontal: u32,
@@ -572,6 +574,9 @@ impl Sensor {
         })
     }
     pub fn latch(&mut self, tick: u64) -> Result<FrameEdge, String> {
+        if let Some(controls) = &mut self.controls {
+            controls.frame()?;
+        }
         if let Some((calibration, exposure, aperture)) = &self.radiometry {
             self.exposed = ExposedFrame::capture(&self.frames, exposure, aperture, *calibration)?;
             if let (Some(projection), Some(frame)) = (&self.projection, &mut self.exposed) {
