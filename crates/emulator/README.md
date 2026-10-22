@@ -1,9 +1,10 @@
 # Native emulator
 
-`fujimod-emulator` boots a catalog body and firmware from files you provide.
-The initial runtime supports **X70 / x70-110**. It runs the real boot ROM,
-NAND loader and firmware with strict native device models. Unsupported hardware
-stops execution and remains visible in the JSON report.
+`fujimod-emulator` runs catalog hardware models with caller-selected firmware
+and inputs. The catalog boot command currently supports **X70 / x70-110**. It
+runs the real boot ROM, NAND loader and firmware with strict native device
+models. Unsupported hardware stops execution and remains visible in the JSON
+report.
 
 Build the [Unicorn backend](../emulator-cpu-unicorn/README.md), then:
 
@@ -61,3 +62,18 @@ its other methods supply external inputs and passive observations. `to_rec`
 returns a stopped report while retaining the session for inspection. No Python
 runtime is required. The Python package exposes the same construction through
 `fujimod.emulator.Board.from_inputs`.
+
+## XP5 board and session API
+
+Rust callers can open an XP5 board through
+`fujimod_emulator::boot::open_xp5`. `Xp5OpenOptions` supplies a validated CPU
+graph, explicit device windows, interrupt state, A-profile setup, resistor-key
+options, device resources, and initial memory images. The function builds the
+same `board::factory::Graph`, strict device bus and `session::Session` used by
+the rest of the emulator. `xp5_device_windows` converts a selected SoC
+hardware profile to device windows; callers supply any run-specific device
+options and firmware bytes.
+
+Initial memory images must fit declared physical RAM and cannot overlap. The
+XP5 open function accepts those bytes without comparing them to a bundled
+firmware hash. The caller selects the firmware inputs and loading layout.

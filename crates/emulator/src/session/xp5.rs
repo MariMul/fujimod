@@ -9,27 +9,35 @@ use std::time::Duration;
 /// Their modeled state is checkpointed by the devices that consume them.
 pub struct State {
     pub(crate) pins: SharedPins,
-    pub(crate) controls: ResistorKeys,
+    pub(crate) controls: std::sync::Arc<ResistorKeys>,
     pub(crate) gpio_devices: Vec<usize>,
+    pub(crate) control_source: usize,
 }
 
 impl State {
-    pub fn new(pins: SharedPins, controls: ResistorKeys, gpio_devices: Vec<usize>) -> Self {
+    pub fn new(
+        pins: SharedPins,
+        controls: std::sync::Arc<ResistorKeys>,
+        gpio_devices: Vec<usize>,
+        control_source: usize,
+    ) -> Self {
         Self {
             pins,
             controls,
             gpio_devices,
+            control_source,
         }
     }
 }
 
 impl super::Session {
     /// Queue a physical XP5 key edge at an absolute guest nanosecond.
-    pub fn xp5_key(&self, at_ns: u64, key: Key, pressed: bool) -> Result<(), String> {
+    pub fn xp5_key(&mut self, at_ns: u64, key: Key, pressed: bool) -> Result<(), String> {
         let state = self.xp5.as_ref().ok_or("session has no XP5 controls")?;
         state
             .controls
-            .enqueue(Duration::from_nanos(at_ns), key, pressed)
+            .enqueue(Duration::from_nanos(at_ns), key, pressed)?;
+        self.board.inputs_changed(state.control_source)
     }
 
     /// Drive one external XP5 GPIO input level and wake its registered devices.
