@@ -1,0 +1,26 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "x70-110-browser-camera",
+  "configuration_id": "x70-110-rec",
+  "change": {
+    "kind": "browser_camera",
+    "browser_camera": {
+      "virtual_card": {
+        "filesystem": "fat32",
+        "label": "CAMERA",
+        "sectors": 16777216,
+        "partition_start": 8192,
+        "sectors_per_cluster": 64
+      },
+      "still_capture": "register-capture-readonly-card-observation",
+      "preview": {
+        "frames_per_second": 10,
+        "statistics_every_frames": 1,
+        "active_statistics_every_frames": 1,
+        "statistics_profile": "declared-x70-external-s1-statistics-divider-unmeasured",
+        "basis": "Declared catalog input."
+      }
+    }
+  }
+}

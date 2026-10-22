@@ -44,6 +44,10 @@ pub struct RunConfiguration {
     pub scene: Option<RunScene>,
     /// Named overlays to apply in declaration order.
     pub overlays: Vec<String>,
+    /// Browser camera attachments declared by a selected overlay.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(default)]
+    pub browser_camera: Option<RunBrowserCamera>,
 }
 
 impl RunConfiguration {
@@ -89,6 +93,9 @@ impl RunConfiguration {
         }
         if let Some(scene) = &self.scene {
             scene.validate()?;
+        }
+        if let Some(browser) = &self.browser_camera {
+            browser.validate()?;
         }
         Ok(())
     }
@@ -449,6 +456,15 @@ impl ResolvedConfiguration {
                     }
                     execution.instructions_per_tick.validate()?;
                     configuration.execution = Some(execution);
+                }
+                RunOverlayChange::BrowserCamera { browser_camera } => {
+                    if !changed.insert("browser_camera") {
+                        return Err(
+                            "run overlays declare the browser camera more than once".into()
+                        );
+                    }
+                    browser_camera.validate()?;
+                    configuration.browser_camera = Some(browser_camera);
                 }
             }
             configuration.overlays.push(overlay.id);
@@ -854,6 +870,105 @@ pub struct RunCardInput {
     pub write_protected: bool,
 }
 
+/// Browser camera attachments: a virtual card, still-capture policy and LCD preview cadence.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub struct RunBrowserCamera {
+    /// Blank virtual card inserted into the declared card slot.
+    pub virtual_card: RunVirtualCard,
+    /// Still-capture policy identity.
+    pub still_capture: RunStillCapture,
+    /// LCD preview statistics cadence.
+    pub preview: RunPreview,
+}
+
+impl RunBrowserCamera {
+    /// Check every declared attachment before a run is prepared.
+    pub fn validate(&self) -> Result<(), String> {
+        self.virtual_card.validate()?;
+        self.preview.validate()
+    }
+}
+
+/// A virtual FAT card geometry declared for one browser camera.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub struct RunVirtualCard {
+    /// Card filesystem.
+    pub filesystem: RunCardFilesystem,
+    /// FAT volume label: one to eleven ASCII bytes.
+    pub label: String,
+    /// Sectors on the blank card.
+    pub sectors: u32,
+    /// First sector of the FAT partition.
+    pub partition_start: u32,
+    /// Sectors per FAT cluster.
+    pub sectors_per_cluster: u8,
+}
+
+impl RunVirtualCard {
+    fn validate(&self) -> Result<(), String> {
+        if !(1..=11).contains(&self.label.len()) || !self.label.is_ascii() {
+            return Err("virtual card label must be one to eleven ASCII bytes".into());
+        }
+        if self.sectors == 0 || self.partition_start == 0 || self.sectors_per_cluster == 0 {
+            return Err("virtual card geometry must be positive".into());
+        }
+        Ok(())
+    }
+}
+
+/// Card filesystems a virtual card can declare.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
+pub enum RunCardFilesystem {
+    /// FAT32 with the declared partition start and cluster size.
+    Fat32,
+}
+
+/// Still-capture policy identities a browser camera can select.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub enum RunStillCapture {
+    /// Register-level capture, observed read-only on the card.
+    RegisterCaptureReadonlyCardObservation,
+}
+
+/// LCD preview statistics cadence, in frames.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub struct RunPreview {
+    /// Preview frames per second: one through sixty.
+    pub frames_per_second: u8,
+    /// Statistics period while idle: one through sixty frames.
+    pub statistics_every_frames: u8,
+    /// Statistics period while active: one through sixty frames.
+    pub active_statistics_every_frames: u8,
+    /// Statistics divider profile identity.
+    pub statistics_profile: String,
+    /// Declared basis for the cadence.
+    pub basis: String,
+}
+
+impl RunPreview {
+    fn validate(&self) -> Result<(), String> {
+        let cadence = |value: u8| (1..=60).contains(&value);
+        if !cadence(self.frames_per_second)
+            || !cadence(self.statistics_every_frames)
+            || !cadence(self.active_statistics_every_frames)
+        {
+            return Err("preview cadence values must be one through sixty".into());
+        }
+        if self.statistics_profile.is_empty() || self.basis.is_empty() {
+            return Err("preview requires a statistics profile and basis".into());
+        }
+        Ok(())
+    }
+}
+
 /// A named, typed change to one run configuration.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -913,6 +1028,8 @@ pub enum RunOverlayChange {
     Purpose { purpose: RunPurpose },
     /// Declare the execution policy for a run whose base configuration has none.
     Execution { execution: RunExecution },
+    /// Attach a virtual card, still-capture policy and preview cadence.
+    BrowserCamera { browser_camera: RunBrowserCamera },
 }
 
 /// Execution policy selected by the run configuration.
@@ -1254,6 +1371,42 @@ mod tests {
         };
         assert!(inputs.usb.connected);
         assert_eq!(resolved.configuration.overlays, ["x70-110-rec-usb"]);
+    }
+
+    #[test]
+    fn browser_camera_overlay_declares_card_still_capture_and_preview() {
+        let resolved = ResolvedConfiguration::with_overlays(
+            "x70-110-rec",
+            &["x70-110-browser-camera".into()],
+        )
+        .unwrap();
+        let browser = resolved.configuration.browser_camera.unwrap();
+        assert_eq!(browser.virtual_card.label, "CAMERA");
+        assert_eq!(browser.virtual_card.sectors, 0x0100_0000);
+        assert_eq!(browser.virtual_card.partition_start, 8192);
+        assert_eq!(browser.virtual_card.sectors_per_cluster, 64);
+        assert_eq!(browser.preview.frames_per_second, 10);
+        assert_eq!(
+            resolved.configuration.overlays,
+            ["x70-110-browser-camera"]
+        );
+    }
+
+    #[test]
+    fn browser_camera_refuses_unsupported_card_and_cadence() {
+        let mut browser = ResolvedConfiguration::with_overlays(
+            "x70-110-rec",
+            &["x70-110-browser-camera".into()],
+        )
+        .unwrap()
+        .configuration
+        .browser_camera
+        .unwrap();
+        browser.virtual_card.label = "TOO-LONG-LABEL".into();
+        assert!(browser.validate().is_err());
+        browser.virtual_card.label = "CAMERA".into();
+        browser.preview.frames_per_second = 0;
+        assert!(browser.validate().is_err());
     }
 
     #[test]

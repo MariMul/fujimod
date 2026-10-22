@@ -654,6 +654,40 @@
       ],
       "type": "object"
     },
+    "RunBrowserCamera": {
+      "additionalProperties": false,
+      "description": "Browser camera attachments: a virtual card, still-capture policy and LCD preview cadence.",
+      "properties": {
+        "preview": {
+          "$ref": "#/$defs/RunPreview",
+          "description": "LCD preview statistics cadence."
+        },
+        "still_capture": {
+          "$ref": "#/$defs/RunStillCapture",
+          "description": "Still-capture policy identity."
+        },
+        "virtual_card": {
+          "$ref": "#/$defs/RunVirtualCard",
+          "description": "Blank virtual card inserted into the declared card slot."
+        }
+      },
+      "required": [
+        "virtual_card",
+        "still_capture",
+        "preview"
+      ],
+      "type": "object"
+    },
+    "RunCardFilesystem": {
+      "description": "Card filesystems a virtual card can declare.",
+      "oneOf": [
+        {
+          "const": "fat32",
+          "description": "FAT32 with the declared partition start and cluster size.",
+          "type": "string"
+        }
+      ]
+    },
     "RunCardInput": {
       "additionalProperties": false,
       "description": "Initial removable-card state.",
@@ -1200,6 +1234,49 @@
       ],
       "type": "object"
     },
+    "RunPreview": {
+      "additionalProperties": false,
+      "description": "LCD preview statistics cadence, in frames.",
+      "properties": {
+        "active_statistics_every_frames": {
+          "description": "Statistics period while active: one through sixty frames.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis for the cadence.",
+          "type": "string"
+        },
+        "frames_per_second": {
+          "description": "Preview frames per second: one through sixty.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "statistics_every_frames": {
+          "description": "Statistics period while idle: one through sixty frames.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "statistics_profile": {
+          "description": "Statistics divider profile identity.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "frames_per_second",
+        "statistics_every_frames",
+        "active_statistics_every_frames",
+        "statistics_profile",
+        "basis"
+      ],
+      "type": "object"
+    },
     "RunPurpose": {
       "description": "Intended operation selected by a run configuration.",
       "oneOf": [
@@ -1526,6 +1603,16 @@
       ],
       "type": "object"
     },
+    "RunStillCapture": {
+      "description": "Still-capture policy identities a browser camera can select.",
+      "oneOf": [
+        {
+          "const": "register-capture-readonly-card-observation",
+          "description": "Register-level capture, observed read-only on the card.",
+          "type": "string"
+        }
+      ]
+    },
     "RunUsbInput": {
       "additionalProperties": false,
       "description": "Initial USB cable state.",
@@ -1542,6 +1629,47 @@
       "required": [
         "connection_id",
         "connected"
+      ],
+      "type": "object"
+    },
+    "RunVirtualCard": {
+      "additionalProperties": false,
+      "description": "A virtual FAT card geometry declared for one browser camera.",
+      "properties": {
+        "filesystem": {
+          "$ref": "#/$defs/RunCardFilesystem",
+          "description": "Card filesystem."
+        },
+        "label": {
+          "description": "FAT volume label: one to eleven ASCII bytes.",
+          "type": "string"
+        },
+        "partition_start": {
+          "description": "First sector of the FAT partition.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sectors": {
+          "description": "Sectors on the blank card.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sectors_per_cluster": {
+          "description": "Sectors per FAT cluster.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "filesystem",
+        "label",
+        "sectors",
+        "partition_start",
+        "sectors_per_cluster"
       ],
       "type": "object"
     },
@@ -1599,6 +1727,17 @@
     "body_id": {
       "description": "Selected body identity.",
       "type": "string"
+    },
+    "browser_camera": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunBrowserCamera"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Browser camera attachments declared by a selected overlay."
     },
     "execution": {
       "anyOf": [

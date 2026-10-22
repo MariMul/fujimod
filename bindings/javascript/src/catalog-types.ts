@@ -1129,6 +1129,14 @@ export type RunAdcInputs = {
   readonly "samples": readonly number[];
 };
 
+export type RunBrowserCamera = {
+  readonly "preview": RunPreview;
+  readonly "still_capture": RunStillCapture;
+  readonly "virtual_card": RunVirtualCard;
+};
+
+export type RunCardFilesystem = "fat32";
+
 export type RunCardInput = {
   readonly "connection_id": string;
   readonly "present": boolean;
@@ -1138,6 +1146,7 @@ export type RunCardInput = {
 export type RunConfiguration = {
   readonly "$schema": "https://fujimod.com/schemas/emulator-run-configuration.schema.json";
   readonly "body_id": string;
+  readonly "browser_camera"?: RunBrowserCamera | null;
   readonly "execution"?: RunExecution | null;
   readonly "firmware_id": string;
   readonly "id": string;
@@ -1257,7 +1266,7 @@ export type RunOverlay = {
   readonly "schema": number;
 };
 
-export type RunOverlayChange = RunOverlayChangeVariant0 | RunOverlayChangeVariant1 | RunOverlayChangeVariant2 | RunOverlayChangeVariant3;
+export type RunOverlayChange = RunOverlayChangeVariant0 | RunOverlayChangeVariant1 | RunOverlayChangeVariant2 | RunOverlayChangeVariant3 | RunOverlayChangeVariant4;
 
 export type RunOverlayChangeVariant0 = {
   readonly "connected": boolean;
@@ -1279,11 +1288,24 @@ export type RunOverlayChangeVariant3 = {
   readonly "kind": "execution";
 };
 
+export type RunOverlayChangeVariant4 = {
+  readonly "browser_camera": RunBrowserCamera;
+  readonly "kind": "browser_camera";
+};
+
 export type RunPowerInput = {
   readonly "boot_reply": number;
   readonly "part_id": string;
   readonly "powered_on": boolean;
   readonly "spi_status": readonly RunRegisterValue[];
+};
+
+export type RunPreview = {
+  readonly "active_statistics_every_frames": number;
+  readonly "basis": string;
+  readonly "frames_per_second": number;
+  readonly "statistics_every_frames": number;
+  readonly "statistics_profile": string;
 };
 
 export type RunPurpose = "rom_boot" | "service_session" | "rehearsal" | "boot_access" | "shutdown";
@@ -1353,9 +1375,19 @@ export type RunStatisticsSpan = {
   readonly "offset": number;
 };
 
+export type RunStillCapture = "register-capture-readonly-card-observation";
+
 export type RunUsbInput = {
   readonly "connected": boolean;
   readonly "connection_id": string;
+};
+
+export type RunVirtualCard = {
+  readonly "filesystem": RunCardFilesystem;
+  readonly "label": string;
+  readonly "partition_start": number;
+  readonly "sectors": number;
+  readonly "sectors_per_cluster": number;
 };
 
 export type ScannerReader = {

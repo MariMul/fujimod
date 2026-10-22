@@ -1264,6 +1264,15 @@ class RunAdcInputs(TypedDict, total=False):
     samples: Required[list[int]]
 
 
+class RunBrowserCamera(TypedDict, total=False):
+    preview: Required[RunPreview]
+    still_capture: Required[RunStillCapture]
+    virtual_card: Required[RunVirtualCard]
+
+
+type RunCardFilesystem = Literal["fat32"]
+
+
 class RunCardInput(TypedDict, total=False):
     connection_id: Required[str]
     present: Required[bool]
@@ -1277,6 +1286,7 @@ RunConfiguration = TypedDict(
             'Literal["https://fujimod.com/schemas/emulator-run-configuration.schema.json"]'
         ],
         "body_id": Required["str"],
+        "browser_camera": NotRequired["RunBrowserCamera | None"],
         "execution": NotRequired["RunExecution | None"],
         "firmware_id": Required["str"],
         "id": Required["str"],
@@ -1414,6 +1424,7 @@ type RunOverlayChange = (
     | RunOverlayChangeVariant1
     | RunOverlayChangeVariant2
     | RunOverlayChangeVariant3
+    | RunOverlayChangeVariant4
 )
 
 
@@ -1437,11 +1448,24 @@ class RunOverlayChangeVariant3(TypedDict, total=False):
     kind: Required[Literal["execution"]]
 
 
+class RunOverlayChangeVariant4(TypedDict, total=False):
+    browser_camera: Required[RunBrowserCamera]
+    kind: Required[Literal["browser_camera"]]
+
+
 class RunPowerInput(TypedDict, total=False):
     boot_reply: Required[int]
     part_id: Required[str]
     powered_on: Required[bool]
     spi_status: Required[list[RunRegisterValue]]
+
+
+class RunPreview(TypedDict, total=False):
+    active_statistics_every_frames: Required[int]
+    basis: Required[str]
+    frames_per_second: Required[int]
+    statistics_every_frames: Required[int]
+    statistics_profile: Required[str]
 
 
 type RunPurpose = Literal[
@@ -1520,9 +1544,20 @@ class RunStatisticsSpan(TypedDict, total=False):
     offset: Required[int]
 
 
+type RunStillCapture = Literal["register-capture-readonly-card-observation"]
+
+
 class RunUsbInput(TypedDict, total=False):
     connected: Required[bool]
     connection_id: Required[str]
+
+
+class RunVirtualCard(TypedDict, total=False):
+    filesystem: Required[RunCardFilesystem]
+    label: Required[str]
+    partition_start: Required[int]
+    sectors: Required[int]
+    sectors_per_cluster: Required[int]
 
 
 class ScannerReader(TypedDict, total=False):
