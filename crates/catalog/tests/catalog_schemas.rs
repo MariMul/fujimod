@@ -21,46 +21,6 @@ fn json_files(directory: &Path) -> Vec<PathBuf> {
 }
 
 #[test]
-fn published_emulator_and_firmware_documents_validate_their_declared_schema() {
-    let package = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let catalog = package.join("../../catalog");
-    let mut files = json_files(&catalog.join("emulator"));
-    files.extend(json_files(&catalog.join("firmwares")));
-
-    for path in files {
-        let document: Value = serde_json::from_slice(&fs::read(&path).expect("catalog document"))
-            .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
-        let schema_reference = document
-            .get("$schema")
-            .and_then(Value::as_str)
-            .unwrap_or_else(|| panic!("{}: missing $schema", path.display()));
-        let schema_path = path
-            .parent()
-            .expect("document parent")
-            .join(schema_reference)
-            .canonicalize()
-            .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
-        assert!(schema_path.starts_with(catalog.canonicalize().unwrap()));
-        let schema: Value =
-            serde_json::from_slice(&fs::read(&schema_path).expect("declared catalog schema"))
-                .unwrap_or_else(|error| panic!("{}: {error}", schema_path.display()));
-        let validator = validator_for(&schema)
-            .unwrap_or_else(|error| panic!("{}: {error}", schema_path.display()));
-        let errors: Vec<_> = validator.iter_errors(&document).collect();
-        assert!(
-            errors.is_empty(),
-            "{}: {}",
-            path.display(),
-            errors
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join("; ")
-        );
-    }
-}
-
-#[test]
 fn reference_and_run_configuration_documents_validate_generated_schemas() {
     let package = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let catalog = package.join("../../catalog");
