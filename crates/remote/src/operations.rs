@@ -53,6 +53,13 @@ impl<R: Observation + ?Sized> Observation for Tracked<'_, R> {
             Ok(v)
         })
     }
+    fn read_memory<'a>(&'a mut self, address: u64, size: usize) -> LocalFuture<'a, MemoryRead> {
+        Box::pin(async move {
+            let value = self.remote.read_memory(address, size).await?;
+            self.reads.extend(value.reads.clone());
+            Ok(value)
+        })
+    }
     fn frame(&mut self) -> LocalFuture<'_, Capture> {
         Box::pin(async move {
             let v = self.remote.frame().await?;

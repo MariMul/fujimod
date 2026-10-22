@@ -227,6 +227,13 @@ class Camera:
                          *, deadline: int) -> Snapshot:
         return await _drive(self._native.wait_until(_reference(reference), predicate, deadline))
 
+    async def wait_until_memory(self, predicate: Callable[[list[tuple[int, bytes]]], bool],
+                                ranges: list[tuple[int, int]], *, deadline: int,
+                                condition: str) -> list[tuple[int, bytes]]:
+        """Repeat explicit byte observations and predicate checks in Rust."""
+        return await _drive(self._native.wait_until_memory(
+            json.dumps(ranges), predicate, deadline, condition))
+
     def close(self) -> None:
         self._native.close()
 
@@ -266,6 +273,12 @@ class BlockingCamera:
     def wait_until(self, predicate: Callable[[Snapshot], bool], reference: Reference,
                    *, deadline: int) -> Snapshot:
         return _convert(self._camera._native.wait_until(_reference(reference), predicate, deadline).blocking())
+
+    def wait_until_memory(self, predicate: Callable[[list[tuple[int, bytes]]], bool],
+                          ranges: list[tuple[int, int]], *, deadline: int,
+                          condition: str) -> list[tuple[int, bytes]]:
+        return self._camera._native.wait_until_memory(
+            json.dumps(ranges), predicate, deadline, condition).blocking()
 
 
 class _ScopedTask:

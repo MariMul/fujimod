@@ -90,6 +90,14 @@ pub struct Snapshot {
     pub value: Value,
     pub reads: ReadSet,
 }
+/// Bytes from one explicitly requested range and the backend watch set that
+/// can wake a wait for changes to those bytes.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemoryRead {
+    pub address: u64,
+    pub bytes: Vec<u8>,
+    pub reads: ReadSet,
+}
 impl Snapshot {
     pub fn menu(&self) -> Result<&MenuSnapshot> {
         match &self.value {
@@ -115,10 +123,13 @@ pub struct Capture {
     pub completion_reads: ReadSet,
 }
 /// This view cannot supply inputs or advance time. Frame reads here are passive;
-/// screenshot() is the operation that waits for a completed frame.
+/// screenshot() is the operation that waits for a completed frame. Each read
+/// inspects state now; wait_until repeats its predicate and tracks these reads.
 pub trait Observation {
     fn now(&self) -> u64;
     fn read<'a>(&'a mut self, reference: &'a Reference) -> LocalFuture<'a, Snapshot>;
+    /// Read caller-selected physical bytes without assigning them semantic meaning.
+    fn read_memory<'a>(&'a mut self, address: u64, size: usize) -> LocalFuture<'a, MemoryRead>;
     fn frame(&mut self) -> LocalFuture<'_, Capture>;
 }
 pub trait Remote: Observation {

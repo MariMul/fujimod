@@ -3,6 +3,7 @@ use super::*;
 pub(super) enum Output {
     Unit,
     Snapshot(Snapshot),
+    MemoryReads(Vec<MemoryRead>),
     Capture(Capture),
 }
 #[pyclass(unsendable, module = "fujimod._native.remote")]
@@ -70,6 +71,13 @@ impl Task {
             )
             .into_any()
             .unbind()),
+            Output::MemoryReads(reads) => {
+                let values = pyo3::types::PyList::empty(py);
+                for read in reads {
+                    values.append((read.address, PyBytes::new(py, &read.bytes)))?;
+                }
+                Ok(values.into_any().unbind())
+            }
             Output::Capture(capture) => Ok(PyTuple::new(
                 py,
                 [

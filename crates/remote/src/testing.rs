@@ -319,6 +319,43 @@ fn predicate_tracks_only_its_reads() {
 }
 
 #[test]
+fn raw_memory_observation_tracks_the_requested_range_for_waiting() {
+    futures_lite::future::block_on(async {
+        let mut remote = Connection::connect(Synthetic::new(), facts()).unwrap();
+        let read = remote.read_memory(768, 4).await.unwrap();
+        assert_eq!(read.address, 768);
+        assert_eq!(read.bytes, 3u32.to_le_bytes());
+        assert_eq!(read.reads.stores, [(768, 772)]);
+    });
+}
+
+#[test]
+fn wait_until_can_repeat_raw_observations_and_wait_on_their_ranges() {
+    futures_lite::future::block_on(async {
+        let mut remote = Connection::connect(Synthetic::new(), facts()).unwrap();
+        let mut checks = 0;
+        operations::wait_until(
+            &mut remote,
+            |view| {
+                checks += 1;
+                let ready = checks == 3;
+                Box::pin(async move {
+                    let value = view.read_memory(768, 4).await?;
+                    Ok(value.bytes == 3u32.to_le_bytes() && ready)
+                })
+            },
+            10,
+            "synthetic raw condition",
+        )
+        .await
+        .unwrap();
+        assert_eq!(checks, 3);
+        assert_eq!(remote.backend.waits.len(), 2);
+        assert_eq!(remote.backend.waits[0].stores, [(768, 772)]);
+    });
+}
+
+#[test]
 fn navigation_resolves_again_after_each_edge() {
     futures_lite::future::block_on(async {
         let mut backend = Synthetic::new();

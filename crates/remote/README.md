@@ -68,6 +68,19 @@ predicate remains false. Application exceptions and cancellation propagate
 unchanged. A deadline bounds waiting; it does not prove that a device operation
 stopped or authorize cleanup.
 
+`Observation.read_memory(address, size)` reads a caller-selected physical
+address range and returns its bytes with the backend read set. A Rust
+`wait_until` predicate may combine these byte reads with semantic reference
+reads; the operation tracks every range and waits on the resulting read set
+between predicate evaluations. This leaves byte interpretation and any
+firmware-specific meaning with the caller.
+
+`Camera.wait_until_memory(predicate, ranges, deadline=..., condition=...)`
+provides the same tracked loop to Python. Each range is a `(physical_address,
+size)` pair. The synchronous predicate receives the latest `(address, bytes)`
+pairs; Rust repeats the reads, invokes the predicate and waits on the backend
+read set between checks.
+
 `Camera.from_ff80(..., operation_scoped=True)` borrows the existing session for
 each remote operation and returns it before the next application observation.
 Its absolute clock is Python's `time.monotonic_ns()`. This permits existing

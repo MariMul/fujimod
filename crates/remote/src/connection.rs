@@ -72,6 +72,21 @@ impl<B: Backend> Observation for View<'_, B> {
             .await
         })
     }
+    fn read_memory<'a>(&'a mut self, address: u64, size: usize) -> LocalFuture<'a, MemoryRead> {
+        Box::pin(async move {
+            let mut memory = Memory {
+                backend: self.backend,
+                facts: self.facts,
+                reads: ReadSet::default(),
+            };
+            let bytes = memory.bytes(address, size).await?;
+            Ok(MemoryRead {
+                address,
+                bytes,
+                reads: memory.reads,
+            })
+        })
+    }
     fn frame(&mut self) -> LocalFuture<'_, Capture> {
         Box::pin(async move {
             self.backend
@@ -91,6 +106,16 @@ impl<B: Backend> Observation for Connection<B> {
                 facts: &self.facts,
             }
             .read(reference)
+            .await
+        })
+    }
+    fn read_memory<'a>(&'a mut self, address: u64, size: usize) -> LocalFuture<'a, MemoryRead> {
+        Box::pin(async move {
+            View {
+                backend: &mut self.backend,
+                facts: &self.facts,
+            }
+            .read_memory(address, size)
             .await
         })
     }

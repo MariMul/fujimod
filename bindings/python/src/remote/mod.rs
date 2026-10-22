@@ -3,7 +3,7 @@ use fujimod_remote::{self as remote, *};
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
-    types::{PyBytes, PyTuple},
+    types::{PyBytes, PyList, PyTuple},
 };
 use std::{
     cell::RefCell,
@@ -154,6 +154,59 @@ impl Camera {
                 .take()
                 .ok_or("Predicate completed without a snapshot")?;
             Ok(Output::Snapshot(snapshot))
+        })))
+    }
+    fn wait_until_memory(
+        &self,
+        ranges: &str,
+        predicate: Py<PyAny>,
+        deadline: u64,
+        condition: String,
+    ) -> PyResult<Task> {
+        let ranges: Vec<(u64, usize)> = decode(ranges)?;
+        if ranges.is_empty() {
+            return Err(PyValueError::new_err(
+                "At least one memory range is required",
+            ));
+        }
+        let mut lease = Lease::new(&self.slot)?;
+        Ok(Task::new(Box::pin(async move {
+            let r = lease.remote.as_deref_mut().ok_or("Camera lost its owner")?;
+            let predicate = Rc::new(predicate);
+            let last = Rc::new(RefCell::new(None));
+            let observed = last.clone();
+            remote::operations::wait_until(
+                r,
+                move |view| {
+                    let ranges = ranges.clone();
+                    let predicate = predicate.clone();
+                    let observed = observed.clone();
+                    Box::pin(async move {
+                        let mut reads = Vec::with_capacity(ranges.len());
+                        for &(address, size) in &ranges {
+                            reads.push(view.read_memory(address, size).await?);
+                        }
+                        let satisfied = Python::attach(|py| -> PyResult<bool> {
+                            let values = PyList::empty(py);
+                            for read in &reads {
+                                values.append((read.address, PyBytes::new(py, &read.bytes)))?;
+                            }
+                            predicate.bind(py).call1((values,))?.extract()
+                        })
+                        .map_err(|error| error.to_string())?;
+                        *observed.borrow_mut() = Some(reads);
+                        Ok(satisfied)
+                    })
+                },
+                deadline,
+                &condition,
+            )
+            .await?;
+            Ok(Output::MemoryReads(
+                last.borrow_mut()
+                    .take()
+                    .ok_or("Predicate completed without memory reads")?,
+            ))
         })))
     }
     fn wait_reads(&self, reads: &str, deadline: u64) -> PyResult<Task> {

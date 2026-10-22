@@ -118,6 +118,24 @@ async def test_async_observation_predicate_deadline_and_original_exception():
     remote.close()
 
 
+async def test_memory_wait_repeats_raw_reads_and_predicate_in_rust():
+    remote = camera()
+    calls = []
+
+    def ready(reads):
+        calls.append(reads)
+        address, value = reads[0]
+        assert address == 768
+        assert value == (3).to_bytes(4, "little")
+        return len(calls) == 3
+
+    observed = await remote.wait_until_memory(ready, [(768, 4)], deadline=10,
+                                               condition="synthetic mode settled")
+    assert observed == [(768, (3).to_bytes(4, "little"))]
+    assert len(calls) == 3
+    remote.close()
+
+
 async def test_staged_shutter_and_position_inputs():
     remote = camera()
     await remote.set_input(control('shutter_button'), 'stage', stage='half_press', deadline=10)
