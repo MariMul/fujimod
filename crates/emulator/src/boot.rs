@@ -5,6 +5,10 @@
 mod first_start;
 mod graph;
 mod x70;
+mod xp5;
+
+/// Resolve device windows from a selected XP5 hardware profile.
+pub use xp5::windows as xp5_device_windows;
 
 use crate::{
     board::{
