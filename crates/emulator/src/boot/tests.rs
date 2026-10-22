@@ -26,6 +26,22 @@ fn model<'a>(prepared: &'a Prepared, name: &str) -> &'a serde_json::Value {
 }
 
 #[test]
+fn startup_presentation_uses_active_outputs_and_rejects_inactive_buffers() {
+    let mut state = json!({"instances":[
+        {"instance":0,"graphics":[]},
+        {"instance":1,"graphics":[{"channels":[
+            {"enabled":true,"configured":true,"width":720,"height":480}
+        ]}]}
+    ]});
+    assert_eq!(presented_instances(&state), [1]);
+    state["instances"][1]["graphics"][0]["channels"][0]["enabled"] = json!(false);
+    assert!(presented_instances(&state).is_empty());
+    state["instances"][1]["graphics"][0]["channels"][0]["enabled"] = json!(true);
+    state["instances"][1]["graphics"][0]["channels"][0]["configured"] = json!(false);
+    assert!(presented_instances(&state).is_empty());
+}
+
+#[test]
 fn runtime_catalog_builds_checked_graph_without_language_adapters() {
     let spec = prepare("x70-110-rec", &[]).unwrap();
     let graph = &spec.execution;
@@ -116,6 +132,35 @@ fn checked_run_configuration_selects_runtime_and_supplies_scene_and_quantum() {
     assert_eq!(json["inputs"]["first_start"]["key_id"], "EXE_M");
     assert_eq!(json["inputs"]["first_start"]["hold_ticks"], 3_600_000);
     assert_eq!(json["inputs"]["first_start"]["settle_ticks"], 20_000_000);
+}
+
+#[test]
+fn rec_configuration_starts_with_manual_lever_and_tilted_lcd() {
+    let spec = prepare("x70-110-rec", &[]).unwrap();
+    let levels = &model(&spec, "serial_gpio")["options"]["input_levels"];
+    for (port, pin) in [(2, 11), (1, 1)] {
+        assert_eq!(levels[port].as_u64().unwrap() & (1 << pin), 0);
+    }
+    let facts = spec
+        .resolved
+        .reference
+        .firmware
+        .generated_facts
+        .as_ref()
+        .unwrap();
+    let controls = &facts.controls.as_ref().unwrap().controls;
+    for (control, key, connection) in [
+        (
+            "auto_mode_selector_lever",
+            "KEY_RECL_MANUAL",
+            "controls-gpio-2-11",
+        ),
+        ("lcd_tilt_switch", "KEY_LCD_TILT", "controls-gpio-1-1"),
+    ] {
+        assert!(controls[control].input.as_ref().unwrap()[key].iter().any(|input| {
+            matches!(input, ControlInput::Gpio { connection_id, expected_level: false, .. } if connection_id == connection)
+        }));
+    }
 }
 
 #[test]

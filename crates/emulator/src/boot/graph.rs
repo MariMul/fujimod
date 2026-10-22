@@ -253,19 +253,27 @@ pub(super) fn assemble(
         .map(|decoder| {
             let initial =
                 decoder_selection(&decoder.initial, &mapping_by_id, &dma_by_id, &decoder.id)?;
-            let choices = decoder
+            let mut choices = decoder
                 .choices
                 .iter()
                 .map(|choice| {
                     decoder_selection(&choice.selection, &mapping_by_id, &dma_by_id, &decoder.id)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            let mut selections = Vec::with_capacity(choices.len() + 1);
-            selections.push(initial);
-            selections.extend(choices);
+            // Control bindings index the declared choices. Reuse a listed reset
+            // state, or append an unlisted one without shifting those indexes.
+            let initial_index = decoder
+                .choices
+                .iter()
+                .position(|choice| choice.selection == decoder.initial)
+                .unwrap_or_else(|| {
+                    let index = choices.len();
+                    choices.push(initial);
+                    index
+                });
             Ok::<_, String>(crate::board::decoder::Decoder {
-                initial: 0,
-                choices: selections,
+                initial: initial_index,
+                choices,
             })
         })
         .collect::<Result<_, _>>()?;
@@ -587,12 +595,39 @@ mod tests {
         assert_eq!(graph.mappings[0].physical, 0x2000_0000);
         assert_eq!(graph.dma_mappings.len(), 1);
         assert_eq!(graph.decoders.len(), 1);
-        assert_eq!(graph.decoders[0].initial, 0);
+        assert_eq!(graph.decoders[0].initial, 1);
         assert_eq!(graph.decoders[0].choices.len(), 2);
         assert_eq!(
-            graph.decoders[0].choices[1].processors[0].physical,
+            graph.decoders[0].choices[0].processors[0].physical,
             0x2000_1000
         );
-        assert_eq!(graph.decoders[0].choices[1].dma[0].physical, 0x2000_1000);
+        assert_eq!(graph.decoders[0].choices[0].dma[0].physical, 0x2000_1000);
+    }
+
+    #[test]
+    fn listed_reset_selection_preserves_rom_and_ram_handoff_indexes() {
+        let mut selection = fujimod_catalog::ReferenceCatalog::bundled()
+            .unwrap()
+            .resolve("x70", "x70-110")
+            .unwrap();
+        let rate = RunInstructionRate {
+            numerator: 24,
+            denominator: 1,
+        };
+        let graph = assemble(&selection, rate).unwrap();
+        let decoder = &graph.decoders[0];
+        assert_eq!(decoder.initial, 0);
+        assert_eq!(decoder.choices.len(), 2);
+        assert_eq!(decoder.choices[0].processors[0].physical, 0x8000_0000);
+        assert_eq!(decoder.choices[1].processors[0].physical, 0);
+        assert_eq!(decoder.choices[1].dma[0].physical, 0);
+
+        selection.soc.decoders[0].initial = selection.soc.decoders[0].choices[1].selection.clone();
+        let graph = assemble(&selection, rate).unwrap();
+        let decoder = &graph.decoders[0];
+        assert_eq!(decoder.initial, 1);
+        assert_eq!(decoder.choices.len(), 2);
+        assert_eq!(decoder.choices[0].processors[0].physical, 0x8000_0000);
+        assert_eq!(decoder.choices[1].processors[0].physical, 0);
     }
 }

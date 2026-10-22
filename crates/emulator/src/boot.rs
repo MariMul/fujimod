@@ -79,7 +79,6 @@ struct Observation {
     rec_mode: u32,
     setup_mode: u32,
     scanout: String,
-    instance: usize,
     readiness: Readiness,
 }
 #[derive(Clone)]
@@ -396,7 +395,6 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
         rec_mode: observation.rec_mode,
         setup_mode: observation.setup_mode,
         scanout: "scanout".into(),
-        instance: 0,
         readiness: Readiness {
             category_one: readiness.category_one,
             category_two: readiness.category_two,
@@ -483,7 +481,6 @@ impl Prepared {
                     "rec_mode":self.observation.rec_mode,
                     "setup_mode":self.observation.setup_mode,
                     "scanout":self.observation.scanout,
-                    "instance":self.observation.instance,
                     "readiness": {
                         "category_one":self.observation.readiness.category_one,
                         "category_two":self.observation.readiness.category_two,
@@ -707,6 +704,8 @@ pub struct Report {
     pub pending_mode: u32,
     pub pending: bool,
     pub setup_presses: usize,
+    /// First active scanout output presenting configured graphics, when present.
+    pub scanout_instance: Option<usize>,
     pub failure: Option<String>,
 }
 fn word(session: &Session, address: u64) -> Result<u32, String> {
@@ -748,8 +747,33 @@ fn observe(session: &Session, spec: &Prepared, presses: usize) -> Result<Report,
         pending_mode: word(session, o.pending_mode)?,
         pending,
         setup_presses: presses,
+        scanout_instance: presented_instances(&session.scanout_state(&o.scanout)?)
+            .into_iter()
+            .next(),
         failure: None,
     })
+}
+
+fn presented_instances(display: &Value) -> Vec<usize> {
+    display["instances"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|instance| {
+            instance["graphics"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .flat_map(|layer| layer["channels"].as_array().into_iter().flatten())
+                .any(|channel| {
+                    channel["enabled"] == true
+                        && channel["configured"] == true
+                        && channel["width"].as_u64().is_some_and(|n| n > 1)
+                        && channel["height"].as_u64().is_some_and(|n| n > 1)
+                })
+        })
+        .filter_map(|instance| instance["instance"].as_u64()?.try_into().ok())
+        .collect()
 }
 fn advance(
     session: &mut Session,
@@ -864,18 +888,7 @@ pub fn to_rec(session: &mut Session, instruction_limit: u64) -> Result<Report, S
             report.status = "instruction-limit".into();
             return Ok(report);
         }
-        let display = session.scanout_state(&spec.observation.scanout)?;
-        let presented = display["instances"][spec.observation.instance]["graphics"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .flat_map(|layer| layer["channels"].as_array().into_iter().flatten())
-            .any(|channel| {
-                channel["enabled"] == true
-                    && channel["configured"] == true
-                    && channel["width"].as_u64().is_some_and(|n| n > 1)
-                    && channel["height"].as_u64().is_some_and(|n| n > 1)
-            });
+        let presented = report.scanout_instance.is_some();
         if report.ui_mode == spec.observation.rec_mode
             && matches!(report.system_mode, 1 | 3)
             && report.menu_active == 0
@@ -921,17 +934,17 @@ pub fn to_rec(session: &mut Session, instruction_limit: u64) -> Result<Report, S
     }
 }
 
-/// Capture composed native scanout without advancing guest time.
+/// Capture the first active native scanout output without advancing guest time.
 pub fn screenshot(session: &Session) -> Result<Vec<u8>, String> {
     let spec = session_prepared(session)?;
+    let display = session.scanout_state(&spec.observation.scanout)?;
+    let instance = presented_instances(&display)
+        .into_iter()
+        .next()
+        .ok_or("no active scanout output presents configured graphics")?;
     let frame = session
-        .scanout(
-            &spec.observation.scanout,
-            spec.observation.instance,
-            true,
-            false,
-        )?
-        .ok_or("LCD has no configured frame")?;
+        .scanout(&spec.observation.scanout, instance, true, false)?
+        .ok_or("active scanout output has no configured frame")?;
     let rgb = frame.rgb.ok_or("scanout did not return RGB")?;
     fujimod_recording::Frame::rgb(
         frame

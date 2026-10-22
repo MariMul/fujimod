@@ -1133,7 +1133,16 @@ mod tests {
         );
         assert_eq!(scene.frame_period_ticks, 400000);
         assert!(!inputs.gpio.unassigned_input_level);
-        assert!(inputs.gpio.keys.iter().all(|key| !key.pressed));
+        assert_eq!(
+            inputs
+                .gpio
+                .keys
+                .iter()
+                .filter(|key| key.pressed)
+                .map(|key| key.connection_id.as_str())
+                .collect::<std::collections::BTreeSet<_>>(),
+            std::collections::BTreeSet::from(["controls-gpio-2-11", "controls-gpio-1-1"])
+        );
         assert_eq!(inputs.gpio.outputs.len(), 3);
         assert!(inputs.gpio.outputs.iter().all(|output| output.high));
         assert_eq!(inputs.encoders.len(), 1);
