@@ -150,6 +150,12 @@ fn viewer_diagnostics_bound_pending_pixels_without_weakening_checkpoint_or_finge
     assert_eq!(diagnostic["engine"]["pending_completions"], 1);
     assert!(diagnostic["engine"].get("completions").is_none());
     let saved = gpu.checkpoint().unwrap();
+    let payload_len = gpu.state.completions.values().next().unwrap().output[0]
+        .1
+        .len();
+    assert_eq!(payload_len, 2 * 1024 * 1024);
+    assert!(saved.bytes() < payload_len + payload_len / 100);
+    let deadline = gpu.next_deadline(host.now).unwrap();
     let identity = gpu.fingerprint().unwrap();
     assert_eq!(host.writes, 0);
     let pending = gpu.state.completions.values_mut().next().unwrap();
@@ -158,10 +164,12 @@ fn viewer_diagnostics_bound_pending_pixels_without_weakening_checkpoint_or_finge
     gpu.restore_checkpoint(&saved).unwrap();
     assert_eq!(gpu.fingerprint().unwrap(), identity);
     assert_eq!(gpu.save(), diagnostic);
-    host.now = gpu.next_deadline(host.now).unwrap();
+    assert_eq!(gpu.next_deadline(host.now), Some(deadline));
+    host.now = deadline;
     gpu.advance(&mut Cx::new(&mut host, 0, 0, 2));
     assert_eq!(host.writes, 1);
-    assert_eq!(&host.bytes[128..132], &0x12345678u32.to_le_bytes());
+    let expected = 0x12345678u32.to_le_bytes().repeat(payload_len / 4);
+    assert_eq!(&host.bytes[128..128 + payload_len], expected);
 }
 #[test]
 fn ambiguous_irq_unknown_commands_and_invalid_width_do_not_gain_dma_or_deadlines() {

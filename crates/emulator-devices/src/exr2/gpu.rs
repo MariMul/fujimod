@@ -53,6 +53,38 @@ pub type DmaOutput = Vec<(u64, Arc<Vec<u8>>)>;
 pub type RenderedBatch = (DmaOutput, u64, Value);
 pub type Fields = Vec<(&'static str, Value)>;
 pub type JobFields = Vec<(Cow<'static, str>, Value)>;
+
+/// Pending GPU DMA is immutable checkpoint data. Encode each payload as a
+/// binary string so CBOR snapshots do not serialize every pixel byte as an
+/// integer; JSON fingerprints retain their usual byte-array representation.
+mod dma_output_bytes {
+    use super::DmaOutput;
+    use serde::{Deserialize, Serializer, de::Deserializer, ser::SerializeSeq};
+    use std::sync::Arc;
+
+    struct Bytes<'a>(&'a [u8]);
+
+    impl serde::Serialize for Bytes<'_> {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            serializer.serialize_bytes(self.0)
+        }
+    }
+
+    pub fn serialize<S: Serializer>(output: &DmaOutput, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut entries = serializer.serialize_seq(Some(output.len()))?;
+        for (address, bytes) in output {
+            entries.serialize_element(&(*address, Bytes(bytes.as_slice())))?;
+        }
+        entries.end()
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<DmaOutput, D::Error> {
+        Ok(Vec::<(u64, Vec<u8>)>::deserialize(deserializer)?
+            .into_iter()
+            .map(|(address, bytes)| (address, Arc::new(bytes)))
+            .collect())
+    }
+}
 /// Owned receipt state. The binding retains Python job-view identity by id.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Job {
@@ -176,6 +208,7 @@ pub struct Completion {
     pub irq_cpu: i64,
     pub status: u32,
     pub bytes: u64,
+    #[serde(with = "dma_output_bytes")]
     pub output: DmaOutput,
     pub job: Job,
     pub event: CompletionEvent,
