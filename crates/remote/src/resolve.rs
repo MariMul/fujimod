@@ -448,12 +448,8 @@ impl<B: Backend> Memory<'_, B> {
         } else {
             0
         };
-        let value_index = if active {
-            let c = &self.facts.firmware.menus;
-            Some(
-                self.word(c.cursor_address + u64::from(c.cursor.fields.value_cursor))
-                    .await?,
-            )
+        let value_index = if active && matches!(reference, Reference::Option(_)) {
+            Some(state.cursor)
         } else {
             None
         };

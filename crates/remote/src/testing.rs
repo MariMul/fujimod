@@ -96,7 +96,7 @@ impl Synthetic {
         self.word(784, node);
         self.word(512, node);
         self.word(520, cursor);
-        self.word(532, self.value);
+        self.word(532, 0);
     }
 }
 impl Backend for Synthetic {
@@ -196,6 +196,35 @@ fn navigate_select_reopen_and_capture() {
         assert_eq!(r.backend.waits.last().unwrap().devices, [7].into());
     });
 }
+#[test]
+fn option_value_uses_selected_row_instead_of_viewport_origin() {
+    futures_lite::future::block_on(async {
+        let mut backend = Synthetic::new();
+        backend.active(4352, 1);
+        let mut remote = Connection::connect(backend, facts()).unwrap();
+        let item = menu("shooting").with_key(20);
+        for (label, selected) in [("ON", true), ("OFF", false)] {
+            let snapshot = remote
+                .read(&option(item.clone(), label).into())
+                .await
+                .unwrap();
+            let value = snapshot.menu().unwrap();
+            assert_eq!(value.selected, selected);
+            assert_eq!(value.value.as_deref(), Some("ON"));
+        }
+        assert_eq!(
+            remote
+                .read(&item.into())
+                .await
+                .unwrap()
+                .menu()
+                .unwrap()
+                .value,
+            None
+        );
+    });
+}
+
 #[test]
 fn resolution_is_live_and_strict() {
     futures_lite::future::block_on(async {
