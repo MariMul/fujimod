@@ -1,4 +1,5 @@
-import { test } from 'vite-plus/test';
+import { test, vi } from 'vite-plus/test';
+import { gzipSync } from 'node:zlib';
 import assert from 'node:assert/strict';
 import { EmulatorSession, type EmulatorManifest } from 'fujimod/emulator';
 import { WasmWorkerRuntime } from './wasm-worker-runtime';
@@ -68,7 +69,7 @@ function setup(
     camera: { id: 'camera', revision: 3, modEnabled: false },
     execution: { mode: 'replay' as const, clockSeconds2000: 0 },
   };
-  return { ...fake, runtime, events, saves, send, config };
+  return { ...fake, runtime, events, saves, send, config, manifest };
 }
 test('worker routes physical inputs, scene, card operations, restart, power, profile and rollback through the ABI', async () => {
   const f = setup();
@@ -371,4 +372,55 @@ test('USB worker preserves opaque packets, advances only on usb_step, and refuse
   const undo = await f.send({ action: 'undo' });
   assert.equal(undo.type, 'error');
   if (undo.type === 'error') assert.match(undo.error, /cannot rewind/);
+});
+
+test('prepared cameras expose controls, card storage, preview and replay through the session ABI', async () => {
+  const f = setup();
+  f.manifest.construction = 'prepared';
+  f.manifest.prepared = Object.assign(
+    { document: 'document.json', bootRom: 'boot.bin' },
+    { nand: 'nand.gz', settings: 'settings.bin' },
+  );
+  let creates = 0;
+  f.module._camera_prepared_session_create = () => {
+    creates++;
+    return 1;
+  };
+  vi.stubGlobal(
+    'fetch',
+    async (url: URL) =>
+      new Response(
+        url.pathname.endsWith('.gz') ? new Uint8Array(gzipSync(Uint8Array.of(255))) : '{}',
+      ),
+  );
+  try {
+    const boot = await f.send({
+      action: 'boot',
+      config: f.config,
+      dat: new ArrayBuffer(1),
+      files: [],
+      seedIdentity: [],
+    });
+    assert.equal(boot.type, 'reply', JSON.stringify(boot));
+    assert.equal(creates, 1);
+    assert.ok(f.calls.some((call) => call.action === 'state'));
+    assert.ok(f.calls.some((call) => call.action === 'preview'));
+    assert.ok(f.calls.some((call) => call.action === 'preview_state'));
+    assert.equal((await f.send({ action: 'card_tree' })).type, 'reply');
+    assert.equal(
+      (
+        await f.send({
+          action: 'replay',
+          steps: [
+            { action: 'press', id: 'menu' },
+            { action: 'advance', ticks: 100 },
+            { action: 'release', id: 'menu' },
+          ],
+        })
+      ).type,
+      'reply',
+    );
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

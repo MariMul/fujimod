@@ -1,4 +1,3 @@
-
 /** Load the explicit cold media inputs of a native prepared camera bundle. */
 export async function loadPreparedBundle(prepared: unknown, base: URL) {
   if (prepared === null || typeof prepared !== 'object')
@@ -18,7 +17,8 @@ export async function loadPreparedBundle(prepared: unknown, base: URL) {
       return response;
     }),
   );
-  if (!document || !bootRom || !nand || !settings) throw Error('Prepared camera inputs are incomplete.');
+  if (!document || !bootRom || !nand || !settings)
+    throw Error('Prepared camera inputs are incomplete.');
   if (!nand.body) throw Error('Prepared camera NAND input is empty.');
   const [text, bootRomBytes, nandBytes, settingsBytes] = await Promise.all([
     document.text(),

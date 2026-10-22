@@ -210,7 +210,7 @@ export class WasmWorkerRuntime {
     this.send({ type: 'state', state });
   }
   private observeCurrent() {
-    if (this.manifest?.construction === 'session')
+    if (this.manifest && this.manifest.construction !== 'resolved')
       this.observe(this.require().command('state', {}).result);
   }
   private async dispatch(request: WasmRequest): Promise<unknown> {
@@ -469,29 +469,31 @@ export class WasmWorkerRuntime {
       const prepared = manifest.prepared;
       if (!prepared || !config.bundle) throw Error('Prepared camera has no bundle files.');
       const { text, inputs } = await loadPreparedBundle(
-        prepared, new URL('wasm.json', config.bundle),
+        prepared,
+        new URL('wasm.json', config.bundle),
       );
       this.timings.measure('create', () =>
         session.create(text, new Uint8Array(dat), 'prepared', inputs),
       );
-    } else this.timings.measure('create', () =>
-      session.create(
-        manifest.construction === 'resolved'
-          ? manifest.session
-          : {
-              schema: 1,
-              graph: manifest.session,
-              firmwareId: config.firmwareId,
-              bootSource: manifest.session.bootSource,
-              bootInputs: config.bootInputs ?? [],
-              initialPositions: config.initialPositions ?? {},
-              clockSeconds2000: config.execution?.clockSeconds2000,
-            },
-        new Uint8Array(dat),
-        manifest.construction,
-      ),
-    );
-    if (manifest.construction === 'session') {
+    } else
+      this.timings.measure('create', () =>
+        session.create(
+          manifest.construction === 'resolved'
+            ? manifest.session
+            : {
+                schema: 1,
+                graph: manifest.session,
+                firmwareId: config.firmwareId,
+                bootSource: manifest.session.bootSource,
+                bootInputs: config.bootInputs ?? [],
+                initialPositions: config.initialPositions ?? {},
+                clockSeconds2000: config.execution?.clockSeconds2000,
+              },
+          new Uint8Array(dat),
+          manifest.construction,
+        ),
+      );
+    if (manifest.construction !== 'resolved') {
       if (saved)
         this.observe(session.command('restore_durable', {}, new Uint8Array(saved.durable)).result);
       if (files.length) {
@@ -553,7 +555,10 @@ export class WasmWorkerRuntime {
     if (this.state?.poweredOn !== false) {
       if (this.manifest!.bootTicks) s.run(s.status().ticks + BigInt(this.manifest!.bootTicks));
       if (this.scene) s.scene(this.scene);
-      if (this.manifest!.construction === 'session' && this.manifest!.session.preview)
+      if (
+        this.manifest!.construction === 'prepared' ||
+        (this.manifest!.construction === 'session' && this.manifest!.session.preview)
+      )
         s.command('preview', {});
       for (const input of held)
         if (input.position === undefined) s.command('release', { id: input.id });
@@ -575,7 +580,7 @@ export class WasmWorkerRuntime {
     this.startedTicks = s.status().ticks;
     this.speedSamples = [{ wall: this.started, ticks: this.startedTicks }];
     this.rebase();
-    if (this.manifest!.construction === 'session' && !this.manifest!.usb) this.captureCheckpoint();
+    if (this.manifest!.construction !== 'resolved' && !this.manifest!.usb) this.captureCheckpoint();
     this.publish(true);
     this.start();
   }
@@ -621,7 +626,7 @@ export class WasmWorkerRuntime {
               // A whole presentation quantum avoids tiny history transactions at the pacing edge.
               s.run(maximum);
               if (
-                this.manifest!.construction === 'session' &&
+                this.manifest!.construction !== 'resolved' &&
                 !this.manifest!.usb &&
                 s.status().ticks >= this.nextCheckpoint
               )
@@ -678,10 +683,11 @@ export class WasmWorkerRuntime {
     this.start();
   }
   private inspectSource(tick: bigint) {
-    if (this.manifest!.construction !== 'session' || tick < this.nextInspection) return;
-    this.sourceFrames = this.manifest!.session.preview
-      ? this.require().command('preview_state', {}).result.state.frames
-      : undefined;
+    if (this.manifest!.construction === 'resolved' || tick < this.nextInspection) return;
+    this.sourceFrames =
+      this.manifest!.construction === 'prepared' || this.manifest!.session.preview
+        ? this.require().command('preview_state', {}).result.state.frames
+        : undefined;
     this.sourceTicks = tick;
     this.nextInspection = tick + BigInt(Math.round(this.manifest!.ticksPerSecond / 10));
   }
@@ -698,7 +704,7 @@ export class WasmWorkerRuntime {
         const next = s.status().ticks + quantum;
         s.run(next < end ? next : end);
         if (
-          this.manifest!.construction === 'session' &&
+          this.manifest!.construction !== 'resolved' &&
           !this.manifest!.usb &&
           s.status().ticks >= this.nextCheckpoint
         )
