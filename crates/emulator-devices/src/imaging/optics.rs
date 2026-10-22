@@ -213,9 +213,25 @@ impl Projection {
             ));
             return Ok(());
         }
-        let coordinates = Arc::new(Coordinates::windows(dimensions, grid, windows)?);
-        let linear: Arc<[[u16; 3]]> =
-            readout::project_axes(&scene, &coordinates, whole, fraction).into();
+        let coordinates = match cache.iter().find(|old| {
+            Arc::ptr_eq(&old.scene, &scene) && old.grid == grid && old.windows == windows
+        }) {
+            Some(old) => old.coordinates.clone(),
+            None => Arc::new(Coordinates::windows(dimensions, grid, windows)?),
+        };
+        let horizontal = self
+            .horizontal
+            .lock()
+            .map_err(|_| "horizontal optical cache poisoned")?
+            .prepare(scene.clone(), coordinates.clone(), whole, fraction[0]);
+        let linear: Arc<[[u16; 3]]> = readout::project_prepared_axes(
+            &scene,
+            &coordinates,
+            whole,
+            fraction,
+            horizontal.as_ref(),
+        )
+        .into();
         let pixels = Arc::new(Projected::new_axes(
             scene.clone(),
             coordinates.clone(),
@@ -363,7 +379,7 @@ impl Projection {
                 .horizontal
                 .lock()
                 .map_err(|_| "horizontal optical cache poisoned")?
-                .prepare(scene.clone(), coordinates.clone(), radius, fraction);
+                .prepare(scene.clone(), coordinates.clone(), [radius; 2], fraction);
             Arc::from(readout::project(
                 &scene,
                 &coordinates,
@@ -474,15 +490,37 @@ fn encode_response_coordinates(
     coordinates: &Coordinates,
 ) -> Arc<[u8]> {
     let mut pixels = vec![0; linear.len() * 6];
+    // The normalized field axes do not depend on the other coordinate. Keep
+    // their original operation order while sharing them across the readout.
+    let xs: Vec<_> = coordinates
+        .xs
+        .iter()
+        .map(|&x| {
+            let x = ((x as f64 + 0.5) / dimensions[0] as f64 - 0.5) * sensor[0];
+            distance.map_or(0., |d| {
+                let x = x / d;
+                x * x
+            })
+        })
+        .collect();
     for (row, &y) in coordinates.ys.iter().enumerate() {
-        let yy = ((y as f64 + 0.5) / dimensions[1] as f64 - 0.5) * sensor[1];
-        for (col, &x) in coordinates.xs.iter().enumerate() {
-            let xx = ((x as f64 + 0.5) / dimensions[0] as f64 - 0.5) * sensor[0];
-            let field = distance.map_or(1., |d| relative_illumination(xx, yy, d));
+        let y = ((y as f64 + 0.5) / dimensions[1] as f64 - 0.5) * sensor[1];
+        let yy = distance.map_or(0., |d| {
+            let y = y / d;
+            y * y
+        });
+        for (col, &xx) in xs.iter().enumerate() {
+            let field = if distance.is_some() {
+                let v = 1. / (1. + xx + yy);
+                v * v
+            } else {
+                1.
+            };
             let i = row * coordinates.xs.len() + col;
             for c in 0..3 {
                 pixels[i * 6 + c * 2..i * 6 + c * 2 + 2].copy_from_slice(
-                    &(libm::rint(f64::from(linear[i][c]) * scale[c] / 65535. * field)
+                    &((f64::from(linear[i][c]) * scale[c] / 65535. * field)
+                        .round_ties_even()
                         .clamp(0., 16383.) as u16)
                         .to_le_bytes(),
                 );
@@ -542,6 +580,54 @@ mod tests {
             Default::default(),
         )
         .unwrap()
+    }
+    #[test]
+    fn response_axis_hoisting_matches_scalar_rounding_and_field_extremes() {
+        let dims = [19, 13];
+        for window in [[0, 0, 19, 13], [2, 3, 7, 5]] {
+            let coordinates = Coordinates::new(dims, dims, window).unwrap();
+            let linear: Vec<[u16; 3]> = (0..coordinates.xs.len() * coordinates.ys.len())
+                .map(|i| [(i * 811) as u16, (i * 1301) as u16, (i * 2113) as u16])
+                .collect();
+            for (sensor, distance) in [
+                ([23.6, 15.6], Some(18.5)),
+                ([1e200, 1e200], Some(1e-200)),
+                ([1., 3.], None),
+            ] {
+                for scale in [[0.; 3], [1e-100, 19371.5, 1e300], [65535.5, 16383.5, 0.5]] {
+                    let mut expected = Vec::new();
+                    for (row, &y) in coordinates.ys.iter().enumerate() {
+                        for (col, &x) in coordinates.xs.iter().enumerate() {
+                            let yy = ((y as f64 + 0.5) / dims[1] as f64 - 0.5) * sensor[1];
+                            let xx = ((x as f64 + 0.5) / dims[0] as f64 - 0.5) * sensor[0];
+                            let field = distance.map_or(1., |d| relative_illumination(xx, yy, d));
+                            for c in 0..3 {
+                                let value = libm::rint(
+                                    f64::from(linear[row * coordinates.xs.len() + col][c])
+                                        * scale[c]
+                                        / 65535.
+                                        * field,
+                                )
+                                .clamp(0., 16383.)
+                                    as u16;
+                                expected.extend_from_slice(&value.to_le_bytes());
+                            }
+                        }
+                    }
+                    assert_eq!(
+                        &*encode_response_coordinates(
+                            &linear,
+                            scale,
+                            dims,
+                            sensor,
+                            distance,
+                            &coordinates
+                        ),
+                        expected
+                    );
+                }
+            }
+        }
     }
     #[test]
     fn binned_sparse_psf_matches_full_readout_with_rectangular_pixels() {

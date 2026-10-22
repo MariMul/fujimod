@@ -400,6 +400,15 @@ pub(super) fn project_axes(
     radius: [usize; 2],
     fraction: [u32; 2],
 ) -> Vec<[u16; 3]> {
+    project_prepared_axes(scene, coordinates, radius, fraction, None)
+}
+pub(super) fn project_prepared_axes(
+    scene: &Scene,
+    coordinates: &Coordinates,
+    radius: [usize; 2],
+    fraction: [u32; 2],
+    horizontal: Option<&super::horizontal::Prepared>,
+) -> Vec<[u16; 3]> {
     if radius == [0; 2] && fraction == [0; 2] {
         return coordinates
             .ys
@@ -407,9 +416,18 @@ pub(super) fn project_axes(
             .flat_map(|&y| coordinates.xs.iter().map(move |&x| scene.linear(x, y)))
             .collect();
     }
-    project_sampled(scene, coordinates, radius[1], fraction[1], |_, x, y| {
-        scene.horizontal(x, y, radius[0], fraction[0])
-    })
+    match horizontal {
+        Some(prepared) => project_sampled(
+            scene,
+            coordinates,
+            radius[1],
+            fraction[1],
+            |column, _, y| prepared.sample(column, y),
+        ),
+        None => project_sampled(scene, coordinates, radius[1], fraction[1], |_, x, y| {
+            scene.horizontal(x, y, radius[0], fraction[0])
+        }),
+    }
 }
 fn project_sampled(
     scene: &Scene,
