@@ -17,11 +17,10 @@ try {
       saved.push(response.url().split('/').at(-2));
     }
   });
-  await page.goto(base);
+  await page.goto(new URL('?feedback', base).href);
   await page.waitForFunction(() => document.documentElement.dataset.reportsReady === 'true');
-  await page.locator('#viewer-tools[data-ready="true"]').waitFor();
-  await page.locator('#viewer-settings-toggle').click();
-  await page.locator('#feedback-open').click();
+  await page.locator('#viewer-tools[data-ready="true"]').waitFor({ state: 'attached' });
+  await page.locator('#feedback-dialog[open]').waitFor();
   await page.locator('#feedback-description').fill('Main-page local feedback integration');
   await page.locator('#feedback-prepare').click();
   await page

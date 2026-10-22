@@ -138,7 +138,13 @@ test('feedback, saved reports, escape and outside-click dismissal work from one 
   expect(t.host.querySelector('[aria-label="3D renderer"]')).toBeNull();
   expect(t.host.querySelector('[aria-label="Navigation mode"]')).toBeNull();
   expect(t.host.querySelector('#firmware-mode')).toBeNull();
-  expect(t.host.querySelector('#feedback-open')).not.toBeNull();
+  // An idle viewer has no menu unless a saved report needs recovering.
+  expect(t.host.querySelector('#viewer-settings-toggle')).toBeNull();
+  t.setState((s) => {
+    s.saved = true;
+  });
+  flush();
+  expect(t.host.querySelector('#feedback-recover')).not.toBeNull();
 });
 
 test('webcam support, pending permission, disabled state and errors follow the selected camera', () => {

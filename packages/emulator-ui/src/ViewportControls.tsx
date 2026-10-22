@@ -21,15 +21,17 @@ export function ViewportControls(props: {
   feedback: EmulatorFeedbackActions;
   selectMod: (enabled: boolean) => void;
 }) {
-  let settings!: HTMLDetailsElement;
-  let trigger!: HTMLElement;
+  // The menu exists only while a camera runs.
+  let settings: HTMLDetailsElement | undefined;
+  let trigger: HTMLElement | undefined;
   function close() {
-    settings.open = false;
-    trigger.focus();
+    if (settings) settings.open = false;
+    trigger?.focus();
   }
   onSettled(() => {
     const outside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !settings.contains(event.target)) settings.open = false;
+      if (settings && event.target instanceof Node && !settings.contains(event.target))
+        settings.open = false;
     };
     document.addEventListener('pointerdown', outside);
     return () => document.removeEventListener('pointerdown', outside);
@@ -79,74 +81,77 @@ export function ViewportControls(props: {
             </span>
           </Show>
         </Show>
-        <details
-          ref={settings}
-          class="viewport-settings"
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') {
-              event.preventDefault();
-              event.stopPropagation();
-              close();
-            }
-          }}
-        >
-          <summary
-            ref={trigger}
-            id="viewer-settings-toggle"
-            aria-label="Viewer settings"
-            title="Viewer settings"
+        {/* Idle viewers keep the menu only to recover a saved report. */}
+        <Show when={props.active || props.feedback.saved}>
+          <details
+            ref={settings}
+            class="viewport-settings"
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                close();
+              }
+            }}
           >
-            <Icon name="more" size={20} />
-          </summary>
-          <div class="viewport-settings-panel" role="group" aria-label="Viewer settings">
-            <Show when={props.active && props.modSupported}>
-              <div class="viewport-setting">
-                <span class="viewport-setting-label">Firmware</span>
-                <SegmentedControl
-                  id="firmware-mode"
-                  label="Firmware mode"
-                  options={[
-                    { value: true, label: 'FujiMod', data: { 'data-mod-enabled': 'true' } },
-                    { value: false, label: 'Unmodded', data: { 'data-mod-enabled': 'false' } },
-                  ]}
-                  value={props.modEnabled}
-                  disabled={props.modDisabled}
-                  onSelect={(enabled) => {
-                    close();
-                    props.selectMod(enabled);
-                  }}
-                />
-              </div>
-            </Show>
-            <div class="viewport-menu-actions">
-              <button
-                type="button"
-                id="feedback-open"
-                disabled={!props.feedback.ready}
-                onClick={() => {
-                  close();
-                  props.feedback.open();
-                }}
-              >
-                <Icon name="message" />
-                <span>Feedback</span>
-              </button>
-              <Show when={props.feedback.saved}>
+            <summary
+              ref={trigger}
+              id="viewer-settings-toggle"
+              aria-label="Viewer settings"
+              title="Viewer settings"
+            >
+              <Icon name="more" size={20} />
+            </summary>
+            <div class="viewport-settings-panel" role="group" aria-label="Viewer settings">
+              <Show when={props.active && props.modSupported}>
+                <div class="viewport-setting">
+                  <span class="viewport-setting-label">Firmware</span>
+                  <SegmentedControl
+                    id="firmware-mode"
+                    label="Firmware mode"
+                    options={[
+                      { value: true, label: 'FujiMod', data: { 'data-mod-enabled': 'true' } },
+                      { value: false, label: 'Unmodded', data: { 'data-mod-enabled': 'false' } },
+                    ]}
+                    value={props.modEnabled}
+                    disabled={props.modDisabled}
+                    onSelect={(enabled) => {
+                      close();
+                      props.selectMod(enabled);
+                    }}
+                  />
+                </div>
+              </Show>
+              <div class="viewport-menu-actions">
                 <button
                   type="button"
-                  id="feedback-recover"
+                  id="feedback-open"
+                  disabled={!props.feedback.ready}
                   onClick={() => {
                     close();
-                    props.feedback.recover();
+                    props.feedback.open();
                   }}
                 >
-                  <Icon name="download" />
-                  <span>Download saved report</span>
+                  <Icon name="message" />
+                  <span>Feedback</span>
                 </button>
-              </Show>
+                <Show when={props.feedback.saved}>
+                  <button
+                    type="button"
+                    id="feedback-recover"
+                    onClick={() => {
+                      close();
+                      props.feedback.recover();
+                    }}
+                  >
+                    <Icon name="download" />
+                    <span>Download saved report</span>
+                  </button>
+                </Show>
+              </div>
             </div>
-          </div>
-        </details>
+          </details>
+        </Show>
       </div>
     </>
   );

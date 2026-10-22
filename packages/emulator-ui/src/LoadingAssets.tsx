@@ -20,23 +20,23 @@ export function LoadingAssets(props: { assets: readonly AssetProgress[] }) {
                       ? `✓${asset().loaded ? ` ${size(asset().loaded)}` : ''}`
                       : `${mib(asset().loaded)}${asset().total ? ` / ${mib(asset().total!)}` : ''} MiB`}
               </span>
-              <Show when={asset().status === 'loading' || asset().status === 'waiting'}>
-                <progress
-                  max="100"
-                  value={
-                    asset().total
+              {/* Every row keeps its bar and rate line so finishing a download does not move the list. */}
+              <progress
+                max="100"
+                value={
+                  asset().status === 'complete'
+                    ? 100
+                    : asset().total
                       ? Math.min(100, (100 * asset().loaded) / asset().total!)
                       : undefined
-                  }
-                  aria-label={asset().label}
-                />
-                <Show when={asset().rate}>
-                  <span class="asset-rate">
-                    {mib(asset().rate!)} MiB/s
-                    {asset().remaining !== undefined ? ` · ~${asset().remaining} s remaining` : ''}
-                  </span>
-                </Show>
-              </Show>
+                }
+                aria-label={asset().label}
+              />
+              <span class="asset-rate">
+                {asset().rate && asset().status === 'loading'
+                  ? `${mib(asset().rate!)} MiB/s${asset().remaining !== undefined ? ` · ~${asset().remaining} s remaining` : ''}`
+                  : '\u00a0'}
+              </span>
             </li>
           )}
         </For>

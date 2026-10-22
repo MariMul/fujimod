@@ -45,7 +45,7 @@ for (const type of [chromium, webkit].filter(
     }
     async function chooser(expected: import('./store').CameraRecord[]) {
       await page.waitForFunction(() => performance.getEntriesByName('camera-catalog-ready').length);
-      await page.locator('#viewer-tools[data-ready="true"]').waitFor();
+      await page.locator('#viewer-tools[data-ready="true"]').waitFor({ state: 'attached' });
       await page.waitForFunction(() =>
         document.querySelector<HTMLElement>('#viewer')?.style.getPropertyValue('--body-preview'),
       );

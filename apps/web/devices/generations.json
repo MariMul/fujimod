@@ -1,11 +1,11 @@
 [
   [
-    { "name": "EXR", "years": "2011", "models": ["X100", "X10", "X-S1"] },
-    { "name": "EXR Pro", "years": "2012", "models": ["X-Pro1", "X-E1"] }
+    { "name": "EXR Processor", "years": "2011", "models": ["X100", "X10", "X-S1"] },
+    { "name": "EXR Processor Pro", "years": "2012", "models": ["X-Pro1", "X-E1"] }
   ],
   [
     {
-      "name": "EXR II",
+      "name": "EXR Processor II",
       "years": "2013–2016",
       "models": [
         "X70",

@@ -1,5 +1,8 @@
 :root {
   color-scheme: dark;
+  /* iOS otherwise enlarges text in landscape. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   background: #000;
   color: #eee;

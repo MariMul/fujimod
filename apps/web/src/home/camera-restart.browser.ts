@@ -20,7 +20,7 @@ try {
     if (/\[[A-Z_]+\]/.test(message.text())) errors.push(message.text());
   });
   await page.goto(base, { waitUntil: 'domcontentloaded' });
-  await page.locator('#viewer-tools[data-ready="true"]').waitFor();
+  await page.locator('#viewer-tools[data-ready="true"]').waitFor({ state: 'attached' });
   await page.waitForFunction(() => performance.getEntriesByName('camera-catalog-ready').length);
   const chooser = page.waitForEvent('filechooser');
   await page.locator('#firmware-prompt').click();
@@ -83,10 +83,11 @@ try {
     errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(base, { waitUntil: 'domcontentloaded' });
-  await page.locator('#viewer-tools[data-ready="true"]').waitFor();
+  await page.locator('#viewer-tools[data-ready="true"]').waitFor({ state: 'attached' });
   assert.equal(await page.locator('#camera-exit').count(), 0);
-  await page.locator('#viewer-settings-toggle').click();
-  await page.locator('#feedback-open').click();
+  assert.equal(await page.locator('#viewer-settings-toggle').count(), 0);
+  await page.goto(new URL('?feedback', base).href, { waitUntil: 'domcontentloaded' });
+  await page.locator('#feedback-dialog[open]').waitFor();
   assert.equal(
     await page
       .locator('#feedback-dialog')
@@ -95,7 +96,7 @@ try {
   );
   await page.screenshot({ path: new URL('webkit-feedback.png', output).pathname });
   assert.deepEqual(errors, []);
-  console.log('Passed: WebKit first-use settings menu and feedback dialog');
+  console.log('Passed: WebKit first use has no idle menu and opens the feedback dialog');
 } finally {
   await safari.close();
 }

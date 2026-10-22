@@ -13,7 +13,7 @@ function firmware(maturity: 'early' | 'supported'): Firmware {
     id: 'new-body-100',
     body: 'newbody',
     model: 'New body',
-    processor: 'EXR II',
+    processor: 'EXR Processor II',
     version: '1.00',
     sha256: '1'.repeat(64),
     bytes: 42,
@@ -34,7 +34,7 @@ test('a catalog camera absent from the model list appears under its processor an
   dispose = render(
     () => (
       <CameraTable
-        columns={[[{ name: 'EXR II', years: '', models: ['Older body'] }]]}
+        columns={[[{ name: 'EXR Processor II', years: '', models: ['Older body'] }]]}
         cameras={[{ firmware: entry, emu: true, mod: false }]}
         emulate={emulate}
       />

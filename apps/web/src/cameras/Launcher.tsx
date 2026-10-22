@@ -1,6 +1,7 @@
 import { For, Show, createSignal } from 'solid-js';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import type { CameraSupport } from '../ui/cameras';
+import bodies from '../../data/cameras.json';
 import type { CameraRecord } from './store';
 import './launcher.css';
 
@@ -13,8 +14,17 @@ const units: [Intl.RelativeTimeFormatUnit, number][] = [
   ['hour', 3600],
   ['minute', 60],
 ];
-/** Supported bodies listed before Show All; a search field appears past this. */
-export const COLLAPSED_CAMERAS = 8;
+/** A search field appears once the supported list scrolls. */
+export const SEARCH_THRESHOLD = 8;
+const announced = new Map(bodies.map((body) => [body.name, body.announced]));
+/** FujiMod bodies first, then newest announcement first. */
+export function cameraOrder(a: CameraSupport, b: CameraSupport) {
+  return (
+    Number(b.mod) - Number(a.mod) ||
+    (announced.get(b.firmware.model) ?? '').localeCompare(announced.get(a.firmware.model) ?? '') ||
+    a.firmware.model.localeCompare(b.firmware.model, 'en', { numeric: true })
+  );
+}
 export function lastUsed(camera: CameraRecord) {
   return camera.savedAt ?? camera.createdAt;
 }
@@ -28,6 +38,8 @@ const searchKey = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, '')
 
 /** Idle emulator: resume or create a saved camera, or add firmware for a supported body. */
 export function CameraLauncher(props: {
+  /** Saved cameras have been read; until then the launcher keeps its space but stays invisible. */
+  ready: boolean;
   cameras: CameraRecord[];
   supported: CameraSupport[];
   busy: boolean;
@@ -38,19 +50,16 @@ export function CameraLauncher(props: {
   now?: number;
 }) {
   const [query, setQuery] = createSignal('');
-  const [expanded, setExpanded] = createSignal(false);
-  const emulated = () =>
-    props.supported
-      .filter((camera) => camera.emu)
-      .sort((a, b) => a.firmware.model.localeCompare(b.firmware.model, 'en', { numeric: true }));
+  const emulated = () => props.supported.filter((camera) => camera.emu).sort(cameraOrder);
   const matches = () =>
     emulated().filter((camera) => searchKey(camera.firmware.model).includes(searchKey(query())));
-  const shown = () => (query() || expanded() ? matches() : matches().slice(0, COLLAPSED_CAMERAS));
   const model = (camera: CameraRecord) =>
     props.supported.find((entry) => entry.firmware.sha256 === camera.firmwareHash)?.firmware ?? {
       model: camera.name,
       version: '',
+      processor: undefined,
     };
+  const subtitle = (...parts: (string | undefined)[]) => parts.filter(Boolean).join(' · ');
   const recent = () => [...props.cameras].sort((a, b) => lastUsed(b) - lastUsed(a));
   const firmwares = () =>
     recent().filter(
@@ -58,7 +67,7 @@ export function CameraLauncher(props: {
         all.findIndex((other) => other.firmwareHash === camera.firmwareHash) === index,
     );
   return (
-    <div class="launcher">
+    <div class={{ launcher: true, 'launcher-pending': !props.ready }}>
       <div class="launcher-main">
         <Show when={props.cameras.length > 0}>
           <div class="launcher-list" role="list" aria-label="Your cameras">
@@ -72,7 +81,12 @@ export function CameraLauncher(props: {
                 >
                   <span class="launcher-row-text">
                     <strong>Resume {model(camera).model}</strong>
-                    <span>{usedLabel(lastUsed(camera), props.now ?? Date.now())}</span>
+                    <span>
+                      {subtitle(
+                        model(camera).processor,
+                        usedLabel(lastUsed(camera), props.now ?? Date.now()),
+                      )}
+                    </span>
                   </span>
                   <Icon name="forward" size={16} />
                 </button>
@@ -90,9 +104,12 @@ export function CameraLauncher(props: {
                 >
                   <span class="launcher-row-text">
                     <strong>New {model(camera).model}</strong>
-                    <Show when={model(camera).version}>
-                      <span>Firmware {model(camera).version}</span>
-                    </Show>
+                    <span>
+                      {subtitle(
+                        model(camera).processor,
+                        model(camera).version && `Firmware ${model(camera).version}`,
+                      )}
+                    </span>
                   </span>
                   <Icon name="plus" size={16} />
                 </button>
@@ -126,7 +143,7 @@ export function CameraLauncher(props: {
       </div>
       <section class="launcher-supported" aria-labelledby="supported-cameras-heading">
         <h4 id="supported-cameras-heading">Supported cameras</h4>
-        <Show when={emulated().length > COLLAPSED_CAMERAS}>
+        <Show when={emulated().length > SEARCH_THRESHOLD}>
           <label class="launcher-search">
             <Icon name="search" size={14} />
             <input
@@ -139,10 +156,15 @@ export function CameraLauncher(props: {
           </label>
         </Show>
         <ul class="launcher-list launcher-table">
-          <For each={shown()}>
+          <For each={matches()}>
             {(camera) => (
               <li class="launcher-camera">
-                <span class="launcher-camera-name">{camera.firmware.model}</span>
+                <span class="launcher-camera-name">
+                  {camera.firmware.model}
+                  <Show when={camera.firmware.processor}>
+                    <span>{camera.firmware.processor}</span>
+                  </Show>
+                </span>
                 <span class="launcher-camera-mod">
                   <Show when={camera.mod}>
                     <span class="launcher-tag">FujiMod</span>
@@ -165,11 +187,6 @@ export function CameraLauncher(props: {
         </ul>
         <Show when={query() && matches().length === 0}>
           <p class="launcher-empty">No supported camera matches “{query()}”.</p>
-        </Show>
-        <Show when={!query() && emulated().length > COLLAPSED_CAMERAS}>
-          <button class="launcher-more" onClick={() => setExpanded(!expanded())}>
-            {expanded() ? 'Show Fewer' : `Show All ${emulated().length}`}
-          </button>
         </Show>
       </section>
     </div>

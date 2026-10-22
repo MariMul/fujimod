@@ -109,8 +109,12 @@ export function startSession(
       if (assets)
         for (const asset of assets) {
           const index = s.loadingAssets.findIndex((entry) => entry.url === asset.url);
-          if (index < 0) s.loadingAssets.push(asset);
-          else reconcile(asset)(s.loadingAssets[index]);
+          const expected = s.loadingAssets.findIndex(
+            (entry) => entry.url.startsWith('expected:') && entry.label === asset.label,
+          );
+          if (index >= 0 || expected >= 0)
+            reconcile(asset)(s.loadingAssets[index >= 0 ? index : expected]);
+          else s.loadingAssets.push(asset);
         }
     });
   }

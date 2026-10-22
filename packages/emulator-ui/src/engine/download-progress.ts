@@ -27,6 +27,16 @@ function label(url: string) {
   );
 }
 
+/** Placeholder rows shown before the runtime requests its files; a download with the same label replaces each. */
+export function expectedAssets(): AssetProgress[] {
+  return ['wasm.json', 'camera.wasm', 'camera.mjs'].map((name) => ({
+    url: `expected:${name}`,
+    label: label(`https://expected.invalid/${name}`),
+    loaded: 0,
+    status: 'waiting',
+  }));
+}
+
 /** Observe consumed response bytes without buffering or delaying the download.
  * Retain every asset through setup, including requests waiting for headers and completed reads. */
 export class DownloadProgress {

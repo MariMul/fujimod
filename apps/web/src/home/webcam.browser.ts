@@ -56,7 +56,7 @@ try {
     if (/\[[A-Z_]+\]/.test(message.text())) errors.push(message.text());
   });
   await page.goto(new URL('#workspace', url).href);
-  await page.locator('#viewer-tools[data-ready="true"]').waitFor();
+  await page.locator('#viewer-tools[data-ready="true"]').waitFor({ state: 'attached' });
   console.log('Viewer ready; selecting firmware.');
   const chooser = page.waitForEvent('filechooser');
   await page.locator('#firmware-prompt').click();

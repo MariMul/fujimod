@@ -21,14 +21,16 @@ function support(model: string, version: string, sha256: string, emu = true): Ca
       bytes: 1,
       download_url: `https://example.com/${model}`,
       release_date: '2020-01-01',
+      processor: 'EXR Processor II',
     } as Firmware,
     mod: false,
     emu,
   };
 }
 const supported = [
-  { ...support('X70', '1.10', 'x70'), mod: true },
   support('X-M1', '1.50', 'xm1'),
+  support('X-T10', '1.31', 'xt10'),
+  { ...support('X70', '1.10', 'x70'), mod: true },
   support('X-T4', '2.12', 'xt4', false),
 ];
 function camera(id: string, firmwareHash: string, used: number): CameraRecord {
@@ -58,6 +60,7 @@ function mount(
   dispose = render(
     () => (
       <CameraLauncher
+        ready
         cameras={cameras}
         supported={bodies}
         busy={busy}
@@ -81,26 +84,25 @@ test('first use explains where firmware comes from and lists each emulated body'
   expect(host.querySelector('.launcher-steps')?.textContent).toContain('Fujifilm');
   expect(host.querySelector('#firmware-prompt')?.getAttribute('for')).toBe('firmware-file');
   expect(host.querySelector('.resume-camera')).toBeNull();
+  // FujiMod bodies first, then newest announcement first.
   expect(text(host.querySelectorAll('.launcher-camera'))).toEqual([
-    'X-M11.50Download',
-    'X70FujiMod1.10Download',
+    'X70EXR Processor IIFujiMod1.10Download',
+    'X-T10EXR Processor II1.31Download',
+    'X-M1EXR Processor II1.50Download',
   ]);
   expect(
     [...host.querySelectorAll<HTMLAnchorElement>('.launcher-download')].map((link) => link.href),
-  ).toEqual(['https://example.com/X-M1', 'https://example.com/X70']);
+  ).toEqual(['https://example.com/X70', 'https://example.com/X-T10', 'https://example.com/X-M1']);
   expect(host.querySelector('.launcher-search')).toBeNull();
 });
 
-test('a long camera list collapses and filters by search', () => {
+test('a long camera list scrolls in place and filters by search', () => {
   const bodies = Array.from({ length: 50 }, (_, n) => support(`X-T${n + 1}`, '1.00', `t${n}`));
   const { host } = mount([], false, '', false, bodies);
-  const names = () => text(host.querySelectorAll('.launcher-camera-name'));
-  expect(names()).toHaveLength(8);
-  const more = host.querySelector<HTMLButtonElement>('.launcher-more')!;
-  expect(more.textContent).toBe('Show All 50');
-  more.click();
-  flush();
+  const names = () =>
+    [...host.querySelectorAll('.launcher-camera-name')].map((node) => node.firstChild?.textContent);
   expect(names()).toHaveLength(50);
+  expect(host.querySelector('.launcher-more')).toBeNull();
   const search = host.querySelector<HTMLInputElement>('input[type=search]')!;
   search.value = 'xt4';
   search.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -119,13 +121,13 @@ test('returning visits resume saved cameras by recent use and start new ones fro
     middle = camera('c', 'x70', now - 86400_000);
   const { host, resume, create } = mount([older, newest, middle]);
   expect(text(host.querySelectorAll('.resume-camera'))).toEqual([
-    'Resume X-M1Used 3 hours ago',
-    'Resume X70Used yesterday',
-    'Resume X70Used 2 days ago',
+    'Resume X-M1EXR Processor II · Used 3 hours ago',
+    'Resume X70EXR Processor II · Used yesterday',
+    'Resume X70EXR Processor II · Used 2 days ago',
   ]);
   expect(text(host.querySelectorAll('.new-camera'))).toEqual([
-    'New X-M1Firmware 1.50',
-    'New X70Firmware 1.10',
+    'New X-M1EXR Processor II · Firmware 1.50',
+    'New X70EXR Processor II · Firmware 1.10',
   ]);
   host.querySelectorAll<HTMLButtonElement>('.resume-camera')[1]!.click();
   expect(resume).toHaveBeenCalledWith(middle);

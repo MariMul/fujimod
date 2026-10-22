@@ -18,8 +18,12 @@ for (const type of [chromium, webkit]) {
       if (route.request().resourceType() !== 'document') return route.continue();
       const response = await route.fetch();
       const body = (await response.text())
-        .replace(/<meta name="fujimod-local-reports"[^>]*>/g, '')
-        .replace(/<script src="\/__(?:simulator-reports|browser-diagnostics)\.js"><\/script>/g, '');
+        // Server rendering adds hydration attributes (`_hk`) to these tags.
+        .replace(/<meta [^>]*name="fujimod-local-reports"[^>]*>/g, '')
+        .replace(
+          /<script [^>]*src="\/__(?:simulator-reports|browser-diagnostics)\.js"[^>]*><\/script>/g,
+          '',
+        );
       await route.fulfill({ response, body });
     });
     await context.addInitScript(() => {
@@ -49,7 +53,8 @@ for (const type of [chromium, webkit]) {
     assert.ok(bounds && launcher && bounds.height <= launcher.height + 80);
     assert.equal(
       await page.locator('#workspace').evaluate((el) => getComputedStyle(el).borderTopWidth),
-      '1px',
+      '0px',
+      'The idle launcher fills a phone without a stage frame',
     );
     assert.equal(
       await page.locator('#lcd-source').evaluate((el) => getComputedStyle(el).touchAction),
@@ -58,8 +63,10 @@ for (const type of [chromium, webkit]) {
     const before = await page.evaluate(() => scrollY);
     if (type === chromium) {
       const session = await context.newCDPSession(page);
-      const x = bounds.x + bounds.width / 2;
-      const y = Math.min(bounds.y + bounds.height, page.viewportSize()!.height) - 24;
+      // Swipe on the steps: the supported-camera list scrolls on its own.
+      const steps = (await page.locator('.launcher-actions').boundingBox())!;
+      const x = steps.x + 8;
+      const y = steps.y + steps.height / 2;
       await session.send('Input.dispatchTouchEvent', {
         type: 'touchStart',
         touchPoints: [{ x, y }],

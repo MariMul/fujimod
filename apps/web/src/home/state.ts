@@ -36,6 +36,7 @@ export function createHomeState() {
     release,
     cameras: supportedCameras(catalog, release),
     savedCameras: [] as CameraRecord[],
+    savedCamerasRead: false,
     activeCamera: undefined as CameraRecord | undefined,
     cameraBusy: false,
     storageMessage: '',

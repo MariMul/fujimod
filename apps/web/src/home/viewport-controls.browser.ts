@@ -58,13 +58,14 @@ try {
     if (/\[[A-Z_]+\]/.test(message.text())) errors.push(message.text());
   });
   await page.goto(base, { waitUntil: 'domcontentloaded' });
-  await page.locator('#viewer-tools[data-ready="true"]').waitFor();
+  await page.locator('#viewer-tools[data-ready="true"]').waitFor({ state: 'attached' });
   assert.equal(await page.locator('#camera-exit').count(), 0);
   assert.equal(await page.locator('#idle-cameras').count(), 0);
   await page.locator('#workspace').scrollIntoViewIfNeeded();
   await screenshot(page, 'first-use');
-  await menu(page);
-  await page.locator('#feedback-open').click();
+  assert.equal(await page.locator('#viewer-settings-toggle').count(), 0);
+  await page.goto(new URL('?feedback', base).href, { waitUntil: 'domcontentloaded' });
+  await page.locator('#feedback-dialog[open]').waitFor();
   await page.locator('#feedback-description').fill('Viewport walkthrough');
   assert.equal(
     await page.locator('#feedback-dialog').evaluate((e) => (e as HTMLDialogElement).open),
@@ -206,10 +207,11 @@ const safari = await webkit.launch();
 try {
   const page = await safari.newPage({ viewport: { width: 390, height: 844 } });
   await page.goto(base, { waitUntil: 'domcontentloaded' });
-  await page.locator('#viewer-tools[data-ready="true"]').waitFor();
+  await page.locator('#viewer-tools[data-ready="true"]').waitFor({ state: 'attached' });
   assert.equal(await page.locator('#camera-exit').count(), 0);
-  await menu(page);
-  await page.locator('#feedback-open').click();
+  assert.equal(await page.locator('#viewer-settings-toggle').count(), 0);
+  await page.goto(new URL('?feedback', base).href, { waitUntil: 'domcontentloaded' });
+  await page.locator('#feedback-dialog[open]').waitFor();
   assert.equal(
     await page.locator('#feedback-dialog').evaluate((e) => (e as HTMLDialogElement).open),
     true,
@@ -229,7 +231,9 @@ try {
   assert.equal(await page.locator('#simulation-canvas,#view-3d').count(), 0);
   await screenshot(page, 'webkit-lcd');
   assert.deepEqual(graphicsRequests, []);
-  console.log('Passed: WebKit first-use menu, feedback and real LCD boot without 3D assets');
+  console.log(
+    'Passed: WebKit first use without idle menu, feedback and real LCD boot without 3D assets',
+  );
 } finally {
   await safari.close();
 }

@@ -3,7 +3,7 @@ import { createSignal, flush } from 'solid-js';
 import { expect, test } from 'vite-plus/test';
 import { LoadingAssets } from './LoadingAssets';
 import type { AssetProgress } from './engine/download-progress';
-test('each asset has its own progress and completed files remain visible through setup', () => {
+test('each asset has its own progress and completed files keep their row through setup', () => {
   const host = document.createElement('div');
   document.body.append(host);
   const [assets, setAssets] = createSignal<AssetProgress[]>([
@@ -39,7 +39,8 @@ test('each asset has its own progress and completed files remain visible through
     flush();
     expect(host.textContent).toContain('Runtime loader');
     expect(host.textContent).toContain('✓ 4.0 MiB');
-    expect(host.querySelectorAll('progress')).toHaveLength(0);
+    // A finished row keeps a full bar so the list does not reflow.
+    expect(host.querySelector('progress')?.value).toBe(100);
   } finally {
     dispose();
     host.remove();

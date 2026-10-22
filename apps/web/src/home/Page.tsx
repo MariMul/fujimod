@@ -64,13 +64,32 @@ export default function Home() {
           </div>
         </header>
         <main>
-          <Show when={!state.activeCamera && state.savedCameras.length === 0}>
-            <PersonalNote />
-            <FeatureCatalog />
-          </Show>
-          <h2 class="section-heading" id="emulator-heading">
-            Emulator
-          </h2>
+          <PersonalNote />
+          <FeatureCatalog />
+          <div class="emulator-heading">
+            <h2 class="section-heading" id="emulator-heading">
+              Emulator
+            </h2>
+            <Show when={state.activeCamera}>
+              <span
+                class={{ 'camera-storage-status': true, error: state.storageError }}
+                role="status"
+                aria-live="polite"
+              >
+                {state.storageMessage}
+              </span>
+              <button
+                type="button"
+                class="camera-exit"
+                id="camera-exit"
+                disabled={state.cameraBusy}
+                onClick={() => void runtime()?.closeCamera()}
+              >
+                <Icon name="power" size={14} />
+                Save & Exit
+              </button>
+            </Show>
+          </div>
           <EmulatorWorkspace
             state={state}
             runtime={runtime()}
@@ -90,55 +109,31 @@ export default function Home() {
             toolbar={
               <EmulatorFeedback runtime={runtime()} request={feedback()}>
                 {(actions) => (
-                  <>
-                    <Show when={state.activeCamera}>
-                      <div class="viewport-exit">
-                        <span
-                          class={{
-                            'camera-storage-status': true,
-                            error: state.storageError,
-                          }}
-                          role="status"
-                          aria-live="polite"
-                        >
-                          {state.storageMessage}
-                        </span>
-                        <button
-                          type="button"
-                          id="camera-exit"
-                          disabled={state.cameraBusy}
-                          onClick={() => void runtime()?.closeCamera()}
-                        >
-                          <Icon name="power" size={14} />
-                          Save & Exit
-                        </button>
-                      </div>
-                    </Show>
-                    <ViewportControls
-                      active={state.toolbarVisible}
-                      title={
-                        state.firmware ? `${state.firmware.model} · ${state.firmware.version}` : ''
-                      }
-                      speed={state.speed}
-                      webcamSupported={!!state.firmware?.emulate?.sceneInput}
-                      webcamActive={state.webcamActive}
-                      webcamBusy={state.webcamBusy}
-                      webcamDisabled={state.loading || !!state.fault}
-                      webcamError={state.webcamError}
-                      toggleWebcam={() => runtime()?.toggleWebcam()}
-                      modSupported={state.modSupported}
-                      modEnabled={state.modEnabled}
-                      modDisabled={state.modDisabled}
-                      feedback={actions}
-                      selectMod={(enabled) => void runtime()?.selectMod(enabled)}
-                    />
-                  </>
+                  <ViewportControls
+                    active={state.toolbarVisible}
+                    title={
+                      state.firmware ? `${state.firmware.model} · ${state.firmware.version}` : ''
+                    }
+                    speed={state.speed}
+                    webcamSupported={!!state.firmware?.emulate?.sceneInput}
+                    webcamActive={state.webcamActive}
+                    webcamBusy={state.webcamBusy}
+                    webcamDisabled={state.loading || !!state.fault}
+                    webcamError={state.webcamError}
+                    toggleWebcam={() => runtime()?.toggleWebcam()}
+                    modSupported={state.modSupported}
+                    modEnabled={state.modEnabled}
+                    modDisabled={state.modDisabled}
+                    feedback={actions}
+                    selectMod={(enabled) => void runtime()?.selectMod(enabled)}
+                  />
                 )}
               </EmulatorFeedback>
             }
           >
             <Show when={state.promptVisible}>
               <CameraLauncher
+                ready={state.savedCamerasRead}
                 cameras={state.savedCameras}
                 supported={state.cameras}
                 busy={state.cameraBusy}

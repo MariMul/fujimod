@@ -1,6 +1,6 @@
 import { reconcile } from 'solid-js';
 import { startSession } from '@fujimod/emulator-ui/session/controller';
-import { DownloadProgress } from '@fujimod/emulator-ui/engine/download-progress';
+import { DownloadProgress, expectedAssets } from '@fujimod/emulator-ui/engine/download-progress';
 import { CameraStore, type CameraRecord } from '../cameras/store';
 import '../home/site.css';
 import { flags } from '@fujimod/emulator-ui/flags';
@@ -204,6 +204,17 @@ export function startHome(
       });
     });
   }
+  /** Takes the running layout before loading so the stage never resizes mid-load. */
+  function runningLayout() {
+    setState((s) => {
+      s.idle = false;
+      s.panelVisible = true;
+      s.toolbarVisible = true;
+      s.promptVisible = false;
+      s.camerasVisible = false;
+      s.firmware = selectedFirmware;
+    });
+  }
   async function processFile(
     file?: File,
     restart = false,
@@ -238,6 +249,7 @@ export function startHome(
     selectedFile = undefined;
     selectedFirmware = undefined;
     firmwareHash = undefined;
+    runningLayout();
     progress('Checking firmware…');
     try {
       if (!file.size || file.size > 256 * 1024 * 1024)
@@ -310,6 +322,9 @@ export function startHome(
           }
           finishLoading();
           setState((s) => {
+            s.idle = true;
+            s.panelVisible = false;
+            s.toolbarVisible = false;
             s.promptVisible = true;
           });
           status(action ? 'Download ready' : '');
@@ -317,7 +332,8 @@ export function startHome(
         }
       }
       if (!entry.emulate || !device) throw Error('Emulation unsupported for this firmware.');
-      progress('Loading emulator…');
+      runningLayout();
+      progress('Loading emulator…', undefined, expectedAssets());
       if (!replayScenario && !activeCamera) {
         activeCamera = await cameras.create(file, entry, modEnabled);
         if (current !== generation) return;
@@ -329,24 +345,6 @@ export function startHome(
         void navigator.storage?.persist?.().catch(() => {});
       }
       if (camera && !restart) modEnabled = camera.modEnabled;
-      setState((s) => {
-        s.idle = false;
-      });
-      setState((s) => {
-        s.panelVisible = true;
-      });
-      setState((s) => {
-        s.toolbarVisible = true;
-      });
-      setState((s) => {
-        s.promptVisible = false;
-      });
-      setState((s) => {
-        s.camerasVisible = false;
-      });
-      setState((s) => {
-        s.firmware = selectedFirmware;
-      });
       const emulate = entry.emulate;
       await session.boot(
         bytes,
@@ -499,6 +497,9 @@ export function startHome(
     } catch (error) {
       storageStatus(`Browser storage unavailable · ${String(error)}`, true);
     }
+    setState((s) => {
+      s.savedCamerasRead = true;
+    });
     try {
       if (import.meta.env.DEV && new URLSearchParams(location.search).has('scenario')) {
         const { scenarioFromUrl } = await import('../scenarios');
