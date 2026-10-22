@@ -40,7 +40,7 @@
     "date_order": "MM/DD/YY",
     "date_time": "2026-01-01T00:00",
     "format_card": true,
-    "scene_file": "fujimod/apps/web/src/engine/assets/default-dunes.png",
+    "scene_file": "fujimod/apps/web/src/engine/assets/default-scene.png",
     "display_keys": [
       "VIEW",
       "EVF_OVF"

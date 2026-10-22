@@ -105,7 +105,7 @@ bandwidth-limited cold boot and the deterministic preview route.
 Firmwares declaring catalog `emulate.sceneInput` expose the webcam button beside
 Viewer settings. It requests video only and sends bounded RGB frames through
 `Engine.setScene`, waiting for each submission before capturing another. Disabling
-it restores the dunes scene. Reset, restart, faults, page hide and unload stop
+it restores the default scene. Reset, restart, faults, page hide and unload stop
 capture and release all tracks. `src/home/webcam.browser.ts` checks the virtual
 Chromium camera against actual guest LCD pixels, then verifies capture stops and
 the default scene returns. Both browser checks take `FUJIMOD_WEB_URL` and
@@ -128,8 +128,11 @@ bundle; there is one engine implementation.
 `@fujimod/emulator-ui/viewer/lcd` composes actual guest LCD frames and fault feedback. Native
 card state and FAT files supply the SD browser. Unsupported lifecycle operations
 return their native error. With no selected scene, the app supplies the bundled
-1536×1024 dunes PNG through the ordinary RGB scene interface. It was generated
-with OpenAI's built-in image generator for this background. Scene input and
+1536×1024 default scene PNG through the ordinary RGB scene interface: the
+Elogio del Horizonte in Gijón, photographed by the project's author with an
+X70 and rendered from the camera's own JPEG, with the deepest shadows lifted
+slightly. Its average brightness is close to where the camera's metering
+settles, so a correct exposure looks like the original photograph. Scene input and
 preview timing are applied through the graph's declared native policies.
 
 The model is **CAMERA ( Fujifilm X70 )** by

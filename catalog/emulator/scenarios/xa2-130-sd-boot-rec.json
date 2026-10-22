@@ -45,7 +45,7 @@
     "date_order": "MM/DD/YY",
     "date_time": "2026-01-01T00:00",
     "format_card": false,
-    "scene_file": "fujimod/apps/web/src/engine/assets/default-dunes.png"
+    "scene_file": "fujimod/apps/web/src/engine/assets/default-scene.png"
   },
   "$schema": "../../schemas/emulator-document.schema.json"
 }

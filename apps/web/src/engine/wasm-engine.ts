@@ -238,7 +238,7 @@ export class WasmEngine implements Engine {
     const scene = this.sceneInput
       ? (this.selectedScene ??
         (await (this.defaultScene ??= loadImageScene(
-          new URL('./assets/default-dunes.png', import.meta.url),
+          new URL('./assets/default-scene.png', import.meta.url),
         ))))
       : undefined;
     const inputs = await this.rpc<Input[]>(
@@ -352,7 +352,7 @@ export class WasmEngine implements Engine {
     const image =
       scene ??
       (await (this.defaultScene ??= loadImageScene(
-        new URL('./assets/default-dunes.png', import.meta.url),
+        new URL('./assets/default-scene.png', import.meta.url),
       )));
     if (this.selectedScene !== scene) return;
     await this.rpc({ action: 'scene', scene: image });
