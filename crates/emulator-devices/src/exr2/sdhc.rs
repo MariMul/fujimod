@@ -52,6 +52,37 @@ pub struct Options {
     pub rca: u16,
     pub ram_bytes: u64,
 }
+/// Direction of a multi-block data transfer on the card's data lines.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DataDirection {
+    Read,
+    Write,
+}
+/// An external data CRC failure on the card's data lines. It never selects a
+/// filesystem result: the host reports SDHCI data CRC error status and the
+/// guest's own recovery runs.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DataFault {
+    pub direction: DataDirection,
+    /// Sector whose transfer fails; `None` selects each transfer's first sector.
+    pub sector: Option<u32>,
+    /// Sectors after `sector` that still transfer before the failure.
+    pub after_sectors: u32,
+    /// Matching multi-block transfers that fail, firmware retries included.
+    pub occurrences: u32,
+}
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DataFaultEvent {
+    pub command: u8,
+    pub sector: u32,
+    pub transferred: usize,
+}
+const MAX_DATA_FAULTS: usize = 32;
+const DATA_CRC_ERROR: u16 = 0x20;
+const ERROR_INTERRUPT: u16 = 0x8000;
 pub struct Wiring {
     pub card: Card,
     pub contacts: Contacts,
@@ -105,6 +136,7 @@ struct Request {
     due: Option<u64>,
     fifo_position: usize,
     command: u8,
+    fault: Option<usize>,
 }
 /// Fixed register storage shared with SDIO. No map allocation on MMIO.
 #[derive(Serialize, Deserialize)]
@@ -179,6 +211,8 @@ pub struct SdHost {
     scratch: Box<[u8]>,
     rom_fifo_position: usize,
     rom_fifo_ready: bool,
+    faults: Vec<DataFault>,
+    fault_history: Vec<DataFaultEvent>,
 }
 impl SdHost {
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
@@ -207,7 +241,82 @@ impl SdHost {
             scratch: vec![0; 512 * 1024].into_boxed_slice(),
             rom_fifo_position: 0,
             rom_fifo_ready: false,
+            faults: Vec::new(),
+            fault_history: Vec::new(),
         })
+    }
+    /// Declare a data CRC failure for later multi-block transfers.
+    pub fn inject_data_fault(&mut self, fault: DataFault) -> Result<(), String> {
+        if self.busy() {
+            return Err("configure SD data faults while the host is idle".into());
+        }
+        if fault.sector.is_some_and(|s| s >= self.card.sectors())
+            || fault.after_sectors > 0xffff
+            || !(1..=0x10000).contains(&fault.occurrences)
+            || self.faults.len() >= MAX_DATA_FAULTS
+        {
+            return Err(
+                "SD data fault sector, prefix, occurrences or rule count unsupported".into(),
+            );
+        }
+        self.faults.push(fault);
+        Ok(())
+    }
+    pub fn clear_data_faults(&mut self) -> Result<(), String> {
+        if self.busy() {
+            return Err("clear SD data faults while the host is idle".into());
+        }
+        self.faults.clear();
+        Ok(())
+    }
+    pub fn data_faults(&self) -> &[DataFault] {
+        &self.faults
+    }
+    pub fn fault_history(&self) -> &[DataFaultEvent] {
+        &self.fault_history
+    }
+    fn select_fault(&mut self, r: &mut Request) -> Result<(), String> {
+        let (direction, first) = match (r.command, r.payload) {
+            (18, Payload::Read(first)) => (DataDirection::Read, first),
+            (25, Payload::Write(first)) => (DataDirection::Write, first),
+            _ => return Ok(()),
+        };
+        let Some((index, cursor)) = self.faults.iter().enumerate().find_map(|(index, f)| {
+            let cursor = (i64::from(f.sector.unwrap_or(first)) - i64::from(first)
+                + i64::from(f.after_sectors))
+                * 512;
+            (f.direction == direction && (0..r.quantity as i64).contains(&cursor))
+                .then_some((index, cursor as usize))
+        }) else {
+            return Ok(());
+        };
+        if r.transfer != Transfer::Dma && cursor != 0 {
+            return Err("partial PIO data CRC faults are not modeled".into());
+        }
+        r.fault = Some(cursor);
+        let fault = &mut self.faults[index];
+        fault.occurrences -= 1;
+        if fault.occurrences == 0 {
+            self.faults.remove(index);
+        }
+        Ok(())
+    }
+    /// Data CRC error status ends the transfer at the failing byte position.
+    fn data_error(&mut self, cx: &mut Cx<'_>, r: Request) -> Result<(), String> {
+        let sector = match r.payload {
+            Payload::Read(first) | Payload::Write(first) => first,
+            _ => unreachable!(),
+        };
+        if self.fault_history.len() == MAX_DATA_FAULTS {
+            self.fault_history.remove(0);
+        }
+        self.fault_history.push(DataFaultEvent {
+            command: r.command,
+            sector,
+            transferred: r.cursor,
+        });
+        self.regs.set(0x32, self.regs.get(0x32) | DATA_CRC_ERROR);
+        self.finish(cx, r, ERROR_INTERRUPT)
     }
     pub fn card(&self) -> &Card {
         &self.card
@@ -353,6 +462,7 @@ impl SdHost {
             due: None,
             fifo_position: 0,
             command,
+            fault: None,
         };
         let mut response = self.r1();
         let rca = (self.options.rca as u32) << 16;
@@ -576,6 +686,7 @@ impl SdHost {
                 .checked_add(self.options.transfer_ticks)
                 .ok_or("SD deadline overflow")?,
         );
+        self.select_fault(&mut r)?;
         self.regs.put_word(12, word);
         self.request = Some(r);
         Ok(())
@@ -629,6 +740,9 @@ impl SdHost {
                 r.cursor += 512;
             }
             self.regs.set(6, ((r.quantity - r.cursor) / 512) as u16);
+            if r.fault == Some(r.cursor) {
+                return self.data_error(cx, r);
+            }
             if r.cursor == r.quantity {
                 return self.finish(cx, r, 2);
             }
@@ -654,12 +768,16 @@ impl SdHost {
             self.regs.set(0x30, self.regs.get(0x30) | status);
             return self.signal(cx);
         }
+        if r.fault == Some(r.cursor) {
+            return self.data_error(cx, r);
+        }
         let boundary = 4096usize << (self.regs.get(4) >> 12 & 7);
         let address = r
             .address
             .checked_add(r.cursor as u32)
             .ok_or("SDMA address overflow")?;
-        let length = (r.quantity - r.cursor).min(boundary - address as usize % boundary);
+        let end = r.fault.filter(|f| *f > r.cursor).unwrap_or(r.quantity);
+        let length = (end - r.cursor).min(boundary - address as usize % boundary);
         let physical = self.physical(address, length, rom || r.command == 17)?;
         match r.payload {
             Payload::Write(first) => {
@@ -687,6 +805,9 @@ impl SdHost {
             (r.quantity.div_ceil(self.block_length) - r.cursor / self.block_length) as u16,
         );
         self.regs.put_word(0, r.address + r.cursor as u32);
+        if r.fault == Some(r.cursor) {
+            return self.data_error(cx, r);
+        }
         if r.cursor < r.quantity {
             r.phase = Phase::Boundary;
             self.request = Some(r);
@@ -890,6 +1011,8 @@ struct Snapshot {
     scratch: Box<[u8]>,
     rom_fifo_position: usize,
     rom_fifo_ready: bool,
+    faults: Vec<DataFault>,
+    fault_history: Vec<DataFaultEvent>,
 }
 impl Device for SdHost {
     fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
@@ -910,6 +1033,8 @@ impl Device for SdHost {
             scratch: &'a [u8],
             rom_fifo_position: usize,
             rom_fifo_ready: bool,
+            faults: &'a [DataFault],
+            fault_history: &'a [DataFaultEvent],
         }
         crate::checkpoint::Checkpoint::encode(
             self.name(),
@@ -928,6 +1053,8 @@ impl Device for SdHost {
                 scratch: &self.scratch,
                 rom_fifo_position: self.rom_fifo_position,
                 rom_fifo_ready: self.rom_fifo_ready,
+                faults: &self.faults,
+                fault_history: &self.fault_history,
             },
         )
     }
@@ -951,6 +1078,8 @@ impl Device for SdHost {
         self.scratch = s.scratch;
         self.rom_fifo_position = s.rom_fifo_position;
         self.rom_fifo_ready = s.rom_fifo_ready;
+        self.faults = s.faults;
+        self.fault_history = s.fault_history;
         Ok(())
     }
 
@@ -964,13 +1093,14 @@ impl Device for SdHost {
             };
             serde_json::json!({"state":r.state,"app":r.app,"block_length":r.block_length,"bus_width":r.bus_width,"response":r.response,
                 "payload":payload,"transfer":r.transfer,"quantity":r.quantity,"cursor":r.cursor,"address":r.address,"phase":r.phase,
-                "due":r.due,"fifo_position":r.fifo_position,"command":r.command})
+                "due":r.due,"fifo_position":r.fifo_position,"command":r.command,"fault":r.fault})
         });
         Ok(
             serde_json::json!({"card":self.card.fingerprint(),"contacts":[self.contacts.present(),self.contacts.protected()],"registers":self.regs.0.as_slice(),
             "clocks":self.clocks.save(),"state":self.state,"app":self.app,"block_length":self.block_length,"bus_width":self.bus_width,
             "response":self.response,"request":request,"fifo":crate::fingerprint::bytes(&self.fifo),"scratch":crate::fingerprint::bytes(&self.scratch),
-            "rom_fifo_position":self.rom_fifo_position,"rom_fifo_ready":self.rom_fifo_ready}),
+            "rom_fifo_position":self.rom_fifo_position,"rom_fifo_ready":self.rom_fifo_ready,
+            "faults":self.faults,"fault_history":self.fault_history}),
         )
     }
     fn name(&self) -> &'static str {
@@ -1081,7 +1211,7 @@ impl Device for SdHost {
             "busy":self.busy(), "response":self.response, "registers":self.regs.0.as_slice(),
             "request":self.request.as_ref().map(|r| serde_json::json!({"command":r.command,
                 "cursor":r.cursor,"quantity":r.quantity,"deadline":r.due})),
-            "clocks":self.clocks.save()
+            "clocks":self.clocks.save(), "data_faults":self.faults, "fault_history":self.fault_history
         })
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
@@ -1237,6 +1367,116 @@ mod tests {
         assert_eq!(&h.bytes[0xf00..0x1300], &[0x5a; 1024]);
         assert_eq!(read(&mut m, &mut h, 6, 2), 0);
         assert!(!m.busy());
+    }
+    fn fault(direction: DataDirection, sector: Option<u32>, occurrences: u32) -> DataFault {
+        DataFault {
+            direction,
+            sector,
+            after_sectors: 0,
+            occurrences,
+        }
+    }
+    #[test]
+    fn sdma_read_crc_fault_delivers_prefix_then_error_status_and_irq() {
+        let mut m = host(Protocol::Application);
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        write(&mut m, &mut h, 0x36, 2, 0xffff);
+        write(&mut m, &mut h, 0x3a, 2, 0xffff);
+        m.state = State::Transfer;
+        m.card.write_bytes(512 * 8, &[0x5a; 1024]).unwrap();
+        m.inject_data_fault(fault(DataDirection::Read, Some(9), 1))
+            .unwrap();
+        write(&mut m, &mut h, 0, 4, 0x1000);
+        write(&mut m, &mut h, 4, 2, 512);
+        write(&mut m, &mut h, 6, 2, 2);
+        command(&mut m, &mut h, 0x123a0037, 8);
+        assert!(m.data_faults().is_empty());
+        let checkpoint = m.checkpoint().unwrap();
+        due(&mut m, &mut h);
+        assert!(!m.busy());
+        assert_eq!(&h.bytes[0x1000..0x1200], &[0x5a; 512]);
+        assert_eq!(&h.bytes[0x1200..0x1400], &[0; 512]);
+        assert_eq!(read(&mut m, &mut h, 0x32, 2), 0x20);
+        assert_eq!(read(&mut m, &mut h, 0x30, 2), 0x8000);
+        assert_eq!(read(&mut m, &mut h, 6, 2), 1);
+        assert_eq!(h.effects.last(), Some(&Effect::Irq(78, true)));
+        assert_eq!(
+            m.fault_history(),
+            [DataFaultEvent {
+                command: 18,
+                sector: 8,
+                transferred: 512
+            }]
+        );
+        write(&mut m, &mut h, 0x32, 2, 0xffff);
+        write(&mut m, &mut h, 0x30, 2, 0xffff);
+        assert_eq!(h.effects.last(), Some(&Effect::Irq(78, false)));
+        // A retry is a fresh transfer; the exhausted rule no longer applies.
+        write(&mut m, &mut h, 0, 4, 0x1000);
+        write(&mut m, &mut h, 6, 2, 2);
+        command(&mut m, &mut h, 0x123a0037, 8);
+        due(&mut m, &mut h);
+        assert_eq!(&h.bytes[0x1000..0x1400], &[0x5a; 1024]);
+        assert_eq!(read(&mut m, &mut h, 0x32, 2), 0);
+        assert_eq!(read(&mut m, &mut h, 0x30, 2), 3);
+        // The checkpoint retains the armed request and fault position.
+        let mut restored = host(Protocol::Application);
+        restored.restore_checkpoint(&checkpoint).unwrap();
+        let mut g = Ram::new(0x10000);
+        g.now = h.now;
+        due(&mut restored, &mut g);
+        assert_eq!(restored.regs.get(0x32), 0x20);
+        assert_eq!(restored.fault_history().len(), 1);
+    }
+    #[test]
+    fn write_crc_faults_apply_to_sdma_prefixes_and_pio_command_start() {
+        let mut m = host(Protocol::Application);
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        m.state = State::Transfer;
+        h.bytes[0x1000..0x1400].fill(0x77);
+        m.inject_data_fault(DataFault {
+            direction: DataDirection::Write,
+            sector: None,
+            after_sectors: 1,
+            occurrences: 1,
+        })
+        .unwrap();
+        m.inject_data_fault(fault(DataDirection::Write, None, 1))
+            .unwrap();
+        assert!(
+            m.inject_data_fault(fault(DataDirection::Read, None, 0))
+                .is_err()
+        );
+        write(&mut m, &mut h, 0, 4, 0x1000);
+        write(&mut m, &mut h, 4, 2, 512);
+        write(&mut m, &mut h, 6, 2, 2);
+        command(&mut m, &mut h, 0x193a0027, 4);
+        due(&mut m, &mut h);
+        assert_eq!(m.card.sector(4).unwrap(), [0x77; 512]);
+        assert_eq!(m.card.sector(5).unwrap(), [0; 512]);
+        assert_eq!(read(&mut m, &mut h, 0x32, 2), 0x20);
+        write(&mut m, &mut h, 0x32, 2, 0xffff);
+        write(&mut m, &mut h, 6, 2, 1);
+        command(&mut m, &mut h, 0x193a0026, 6);
+        due(&mut m, &mut h);
+        assert!(!m.busy());
+        assert_eq!(read(&mut m, &mut h, 0x30, 2), 0x8000);
+        assert_eq!(read(&mut m, &mut h, 0x32, 2), 0x20);
+        assert_eq!(m.fault_history()[1].transferred, 0);
+        assert!(m.data_faults().is_empty());
+        // A PIO failure after a committed prefix is not modeled.
+        write(&mut m, &mut h, 0x32, 2, 0xffff);
+        write(&mut m, &mut h, 0x30, 2, 0xffff);
+        m.inject_data_fault(fault(DataDirection::Write, Some(7), 1))
+            .unwrap();
+        write(&mut m, &mut h, 6, 2, 2);
+        write(&mut m, &mut h, 8, 2, 6);
+        write(&mut m, &mut h, 10, 2, 0);
+        let mut cx = h.cx();
+        m.write(&mut cx, BASE + 12, 4, 0x193a0026);
+        assert!(cx.refusal().is_some());
     }
     #[test]
     fn pio_sector_latency_reset_and_write_protection() {

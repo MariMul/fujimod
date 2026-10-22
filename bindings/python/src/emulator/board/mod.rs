@@ -1143,6 +1143,17 @@ impl Board {
             .card_contacts(name, present, protected)
             .map_err(error)
     }
+    /// `fault` is a JSON data CRC fault: direction, sector, after_sectors, occurrences.
+    fn card_data_fault(&mut self, name: &str, fault: &str) -> PyResult<()> {
+        self.session_mut()?
+            .card_data_fault(name, json(fault)?)
+            .map_err(error)
+    }
+    fn card_clear_data_faults(&mut self, name: &str) -> PyResult<()> {
+        self.session_mut()?
+            .card_clear_data_faults(name)
+            .map_err(error)
+    }
     fn card_state(&self, name: &str) -> PyResult<String> {
         Ok(self.session()?.card_state(name).map_err(error)?.to_string())
     }

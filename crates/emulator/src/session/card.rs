@@ -1,6 +1,10 @@
 //! Host FAT access to the very medium owned by the native SD controller.
 use super::Session;
-use fujimod_emulator_devices::{exr2::sdhc::SdHost, parts::sd_card::Card, storage::fat};
+use fujimod_emulator_devices::{
+    exr2::sdhc::{DataFault, SdHost},
+    parts::sd_card::Card,
+    storage::fat,
+};
 use serde_json::{Value, json};
 
 impl Session {
@@ -9,7 +13,17 @@ impl Session {
         self.board.inspect_device::<SdHost, _>(self.node(name)?, |host| Ok(json!({
             "supported": true, "present": contacts.present(), "protected": contacts.protected(), "busy": host.busy(),
             "revision": host.card().revision(), "capacity_bytes": host.card().sectors() as u64 * 512,
+            "data_faults": host.data_faults(), "fault_history": host.fault_history(),
         })))
+    }
+    /// Declare a data CRC failure on the card's data lines for later transfers.
+    pub fn card_data_fault(&mut self, name: &str, fault: DataFault) -> Result<(), String> {
+        self.board
+            .edit_device::<SdHost, _>(self.node(name)?, |host| host.inject_data_fault(fault))
+    }
+    pub fn card_clear_data_faults(&mut self, name: &str) -> Result<(), String> {
+        self.board
+            .edit_device::<SdHost, _>(self.node(name)?, |host| host.clear_data_faults())
     }
     pub fn card_tree(&self, name: &str, revision: Option<u64>) -> Result<Value, String> {
         let entries = self
