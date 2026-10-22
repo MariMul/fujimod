@@ -39,11 +39,12 @@ pub struct Session {
 }
 impl Session {
     pub fn fingerprint(&self) -> Result<serde_json::Value, String> {
-        Ok(
-            serde_json::json!({"schema":1,"definition":self.definition,"board":self.board.fingerprint()?,
+        let mut value = serde_json::json!({"schema":1,"definition":self.definition,
             "controls":self.controls.as_ref().map(|p| serde_json::json!({"spec":p.spec(),"positions":p.positions()})),
-            "contact_driver":self.contact_driver.as_ref().map(|d|d.fingerprint()).transpose()?,"resources":self.resources.fingerprint()?}),
-        )
+            "contact_driver":self.contact_driver.as_ref().map(|d|d.fingerprint()).transpose()?});
+        value["board"] = self.board.fingerprint()?;
+        value["resources"] = self.resources.fingerprint()?;
+        Ok(value)
     }
     pub fn logic_input(&mut self, name: &str, high: bool) -> Result<(), String> {
         let level = self.resources.logic_level(name)?;

@@ -211,18 +211,21 @@ impl Bus {
         Ok(())
     }
     pub(super) fn fingerprint(&self) -> Result<Value, String> {
-        let mut state = self.state();
         let devices = self
             .windows
             .iter()
             .enumerate()
             .map(|(index, node)| {
-                Ok(json!({"kind":node.device.name(),"windows":node.mappings,
-                "native_dependencies":node.native_dependencies,"state":node.device.fingerprint()
-                    .map_err(|e|format!("device {index} ({}): {e}",node.device.name()))?}))
+                let mut value = json!({"kind":node.device.name(),"windows":node.mappings,
+                    "native_dependencies":node.native_dependencies});
+                value["state"] = node
+                    .device
+                    .fingerprint()
+                    .map_err(|e| format!("device {index} ({}): {e}", node.device.name()))?;
+                Ok(value)
             })
             .collect::<Result<Vec<_>, String>>()?;
-        state["devices"] = json!(devices);
+        let mut state = self.state_with_devices(Value::Array(devices));
         state["skipped_deadlines"] = json!(self.skipped_deadlines);
         // Visit stamps only deduplicate one already-drained worklist. Their
         // arbitrary identities are accelerator bookkeeping, not pending work.
@@ -1000,6 +1003,14 @@ impl Bus {
         Ok(())
     }
     pub fn state(&self) -> Value {
+        let devices = self.windows.iter().map(|w| {
+            let mut value = json!({"windows":w.mappings,"kind":w.device.name(),"native_dependencies":w.native_dependencies});
+            value["state"] = w.device.save();
+            value
+        }).collect();
+        self.state_with_devices(Value::Array(devices))
+    }
+    fn state_with_devices(&self, devices: Value) -> Value {
         let mut frontier = self
             .unknown
             .iter()
@@ -1013,9 +1024,11 @@ impl Bus {
             })
             .collect::<Vec<_>>();
         frontier.sort_by_key(|r| r["first"].as_u64().unwrap());
-        json!({"mode":self.mode.name(),"devices":self.windows.iter().map(|w|json!({"windows":w.mappings,"kind":w.device.name(),"native_dependencies":w.native_dependencies,"state":w.device.save()})).collect::<Vec<_>>(),
+        let mut state = json!({"mode":self.mode.name(),
             "unmodeled":self.unknown.iter().filter(|(site,_)|site.kind=="unmodeled-mmio").map(|(site,r)|json!({"address":site.address,"pc":site.pc,"reads":r.reads,"writes":r.writes,"sizes":r.sizes,"cpus":r.cpus,"values":r.values,"values_omitted":r.values_omitted,"reasons":r.reasons})).collect::<Vec<_>>(),"discovery_shadow":self.shadow.iter().collect::<Vec<_>>(),
-            "continue_refusals":self.continue_refusals,"frontier":frontier})
+            "continue_refusals":self.continue_refusals,"frontier":frontier});
+        state["devices"] = devices;
+        state
     }
     pub fn finish(&mut self) -> Result<(), String> {
         for w in &mut self.windows {
@@ -1071,6 +1084,40 @@ mod tests {
             panic!("unexpected record")
         }
     }
+    #[test]
+    fn fingerprint_uses_complete_device_state_without_building_diagnostic_summaries() {
+        struct Complete;
+        impl Device for Complete {
+            fn name(&self) -> &'static str {
+                "complete"
+            }
+            fn save(&self) -> Value {
+                panic!("discarded diagnostic allocation")
+            }
+            fn fingerprint(&self) -> Result<Value, String> {
+                Ok(json!({"payload":[1,2,3],"pending":7}))
+            }
+            fn read(&mut self, _: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+                unreachable!()
+            }
+            fn write(&mut self, _: &mut Cx<'_>, _: u64, _: u8, _: u64) {
+                unreachable!()
+            }
+        }
+        let mut bus = Bus::new(Mode::Strict);
+        let mut expected = bus.state();
+        bus.register(0x1000, 4, Box::new(Complete)).unwrap();
+        expected["devices"] = json!([{"kind":"complete","windows":bus.windows[0].mappings,
+            "native_dependencies":[],"state":{"payload":[1,2,3],"pending":7}}]);
+        expected["skipped_deadlines"] = json!({});
+        expected["wakeups"] =
+            json!({"touched":bus.touched,"dirty":bus.dirty,"queue":bus.wake_queue});
+        assert_eq!(
+            serde_json::to_vec(&bus.fingerprint().unwrap()).unwrap(),
+            serde_json::to_vec(&expected).unwrap()
+        );
+    }
+
     struct Register(u64);
     impl Device for Register {
         fn name(&self) -> &'static str {

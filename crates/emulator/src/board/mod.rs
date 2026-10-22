@@ -211,8 +211,7 @@ impl Board {
         if state.active_slice.is_some() || state.parallel.is_some() || state.memory_access {
             return Err("fingerprint requires a stopped board".into());
         }
-        let mut runtime = self.state();
-        runtime["bus"] = state.bus.fingerprint()?;
+        let mut runtime = self.state_with_bus(state.bus.fingerprint()?);
         // accounted is progress relative to the last backend host call. Every
         // new processor run resets it; it is not future-affecting guest state.
         runtime["scheduler"] = json!({"deadlines":state.deadlines,"generations":state.generations,
@@ -235,10 +234,10 @@ impl Board {
             "width":f.width,"height":f.height,"rgba":fujimod_emulator_devices::fingerprint::bytes(&f.rgba)})
             })
             .collect();
-        Ok(
-            json!({"runtime":runtime,"memory":state.memory.fingerprint(),
-            "processors":self.cpus.iter().map(|c|c.fingerprint()).collect::<Result<Vec<_>,_>>()?,"pc_entries":self.pc_entries()}),
-        )
+        let mut value = json!({"memory":state.memory.fingerprint(),
+            "processors":self.cpus.iter().map(|c|c.fingerprint()).collect::<Result<Vec<_>,_>>()?,"pc_entries":self.pc_entries()});
+        value["runtime"] = runtime;
+        Ok(value)
     }
     pub fn new(
         cpus: Vec<Box<dyn Cpu>>,
@@ -902,11 +901,17 @@ impl Board {
         }
     }
     pub fn state(&self) -> Value {
+        let bus = self.state.borrow().bus.state();
+        self.state_with_bus(bus)
+    }
+    fn state_with_bus(&self, bus: Value) -> Value {
         let s = self.state.borrow();
         self.track_all_devices(&s.bus);
-        json!({"execution_mode":s.bus.mode().name(),"execution_policy":s.execution_policy.name(),"counts_as_boot":s.bus.mode()==bus::Mode::Strict,
+        let mut value = json!({"execution_mode":s.bus.mode().name(),"execution_policy":s.execution_policy.name(),"counts_as_boot":s.bus.mode()==bus::Mode::Strict,
             "timeline":s.timeline.save(),"instructions":s.instructions,"released":s.released,"waiting":s.waiting,"waiting_event":s.waiting_event,"events":s.events,"next_core":self.next_core.get(),"slice_left":self.slice_left.get(),"quantum":self.quantum.get(),"failure":s.error,
-            "memory_decoders":s.decoders.state(),"dma_mappings":s.memory.state(),"bus":s.bus.state(),"gic":s.interrupts.as_ref().map(|g|g.gic.save()),"core_interrupt_devices":s.core_interrupts.iter().map(|c|c.as_ref().map(|c|c.device)).collect::<Vec<_>>(),"outputs":s.outputs,"implementation_cluster":s.implementation_cluster,"unmodeled_system":s.unmodeled_system.iter().map(|(&(core,register,pc),&(reads,writes))|json!({"core":core,"register":register,"pc":pc,"reads":reads,"writes":writes})).collect::<Vec<_>>(),"aprofile":s.aprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()).unwrap_or_else(|e|json!({"error":e})))).collect::<Vec<_>>(),"mprofile":s.mprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()))).collect::<Vec<_>>()})
+            "memory_decoders":s.decoders.state(),"dma_mappings":s.memory.state(),"gic":s.interrupts.as_ref().map(|g|g.gic.save()),"core_interrupt_devices":s.core_interrupts.iter().map(|c|c.as_ref().map(|c|c.device)).collect::<Vec<_>>(),"outputs":s.outputs,"implementation_cluster":s.implementation_cluster,"unmodeled_system":s.unmodeled_system.iter().map(|(&(core,register,pc),&(reads,writes))|json!({"core":core,"register":register,"pc":pc,"reads":reads,"writes":writes})).collect::<Vec<_>>(),"aprofile":s.aprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()).unwrap_or_else(|e|json!({"error":e})))).collect::<Vec<_>>(),"mprofile":s.mprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()))).collect::<Vec<_>>()});
+        value["bus"] = bus;
+        value
     }
     pub fn take_frames(&mut self) -> Vec<fujimod_emulator_devices::graphics::scanout::Frame> {
         std::mem::take(&mut self.state.borrow_mut().frames)
