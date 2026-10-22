@@ -327,6 +327,64 @@ pub unsafe extern "C" fn camera_session_create(
         }
     })
 }
+/// Optional input span: a zero length means the input is not selected.
+unsafe fn optional_bytes(data: *const u8, len: u32) -> Result<Option<Vec<u8>>, String> {
+    if len == 0 {
+        return Ok(None);
+    }
+    Ok(Some(unsafe { bytes(data, len)? }.to_vec()))
+}
+
+/// Create a camera from a native prepared run. `document` is
+/// `{schema, prepared, clockSeconds2000?, browser}`; the boot ROM is the static
+/// engine's companion input, and NAND and settings are optional spans.
+///
+/// # Safety
+/// Input spans must remain valid and immutable during construction.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn camera_prepared_session_create(
+    document: *const u8,
+    document_len: u32,
+    update: *const u8,
+    update_len: u32,
+    boot_rom: *const u8,
+    boot_rom_len: u32,
+    nand: *const u8,
+    nand_len: u32,
+    settings: *const u8,
+    settings_len: u32,
+) -> u32 {
+    OWNER.with(|owner| {
+        let mut owner = owner.borrow_mut();
+        let result = (|| {
+            let handle = owner
+                .next
+                .checked_add(1)
+                .ok_or("session handle space exhausted")?;
+            let session = Session::create_prepared(
+                unsafe { bytes(document, document_len)? },
+                unsafe { bytes(update, update_len)? }.to_vec(),
+                unsafe { bytes(boot_rom, boot_rom_len)? }.to_vec(),
+                unsafe { optional_bytes(nand, nand_len)? },
+                unsafe { optional_bytes(settings, settings_len)? },
+                owner.execution_policy,
+            )?;
+            owner.sessions.insert(handle, session);
+            owner.next = handle;
+            Ok::<_, String>(handle)
+        })();
+        match result {
+            Ok(handle) => {
+                owner.error.clear();
+                handle
+            }
+            Err(e) => {
+                owner.error = e;
+                0
+            }
+        }
+    })
+}
 /// # Safety
 /// Inputs must be valid immutable spans; out must point to aligned writable storage.
 #[unsafe(no_mangle)]

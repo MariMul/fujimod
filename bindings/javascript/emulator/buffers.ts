@@ -1,4 +1,4 @@
-import { EmulatorSession, type EmulatorModule } from './abi.ts';
+import { EmulatorSession, type EmulatorModule, type PreparedInputs } from './abi.ts';
 import type { EmulatorManifest } from './module.ts';
 
 export interface BufferFile {
@@ -56,10 +56,11 @@ export function createBufferSession(
   config: unknown,
   dat: Uint8Array,
   construction: EmulatorManifest['construction'] = 'session',
+  inputs?: PreparedInputs,
 ) {
   const session = new EmulatorSession(module);
   try {
-    session.create(config, dat, construction);
+    session.create(config, dat, construction, inputs);
     return session;
   } catch (error) {
     session.dispose();

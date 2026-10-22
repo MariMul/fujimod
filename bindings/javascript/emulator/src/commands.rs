@@ -122,6 +122,12 @@ struct Cycle {
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct RecBoot {
+    /// Instruction budget for the native first-start and REC observation.
+    limit: u64,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct File {
     path: String,
     offset: usize,
@@ -389,6 +395,11 @@ impl Session {
                 let o: Power = options(c.options)?;
                 self.power(o.on)?;
                 self.session_state()?
+            }
+            "boot_to_rec" => {
+                let o: RecBoot = options(c.options)?;
+                let report = fujimod_emulator::boot::to_rec(&mut self.core, o.limit)?;
+                serde_json::to_value(report).map_err(|e| e.to_string())?
             }
             "power_cycle" => {
                 let o: Cycle = options(c.options)?;

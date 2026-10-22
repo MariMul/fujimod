@@ -163,7 +163,178 @@ pub(super) struct Metadata {
     pub preview: Option<Preview>,
 }
 
+/// Browser fields applied after boot-time construction, shared by both constructors.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BrowserFields {
+    #[serde(default)]
+    watch_pcs: Vec<u64>,
+    #[serde(default)]
+    initial_positions: BTreeMap<String, String>,
+    #[serde(default)]
+    boot_inputs: Vec<super::lifecycle::BootInput>,
+    card: Option<Card>,
+    scene_input: Option<Scene>,
+    controls: Option<fujimod_emulator_devices::parts::switch_panel::Spec>,
+    contact_driver: Option<fujimod_emulator::session::contact_driver::Spec>,
+    preview: Option<Preview>,
+}
+
+/// A prepared run and its browser fields, `{schema, prepared, clockSeconds2000?, browser}`.
+/// `prepared` is `fujimod_emulator::boot::Prepared::to_json` output.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PreparedConfig {
+    schema: u32,
+    prepared: serde_json::Value,
+    clock_seconds2000: Option<u32>,
+    browser: BrowserFields,
+}
+
+/// Everything a constructed camera needs beyond its boot-time core session.
+struct Attachments {
+    quantum: usize,
+    gpio: Vec<Gpio>,
+    watch_pcs: Vec<u64>,
+    card: Option<Card>,
+    scene: Option<Scene>,
+    preview: Option<Preview>,
+    controls: Option<fujimod_emulator_devices::parts::switch_panel::Spec>,
+    contact_driver: Option<fujimod_emulator::session::contact_driver::Spec>,
+    storage: fujimod_emulator::session::durable::Spec,
+    identity: [u8; 32],
+    scanout: Option<String>,
+    initial_positions: BTreeMap<String, String>,
+    boot_inputs: Vec<super::lifecycle::BootInput>,
+}
+
+/// Scanout and NAND roles selected by the plan's boot entry.
+fn device_roles(plan: &Plan) -> Result<(Option<String>, Vec<String>), String> {
+    let scanouts = plan
+        .nodes
+        .iter()
+        .filter(|n| {
+            n.boot_entries.contains(&plan.boot_entry)
+                && matches!(
+                    n.model,
+                    fujimod_emulator_devices::exr2::board::Model::Scanout { .. }
+                )
+        })
+        .map(|n| n.name.clone())
+        .collect::<Vec<_>>();
+    let scanout = match scanouts.as_slice() {
+        [] => None,
+        [name] => Some(name.clone()),
+        _ => return Err("session has multiple scanout devices".into()),
+    };
+    let nands = plan
+        .nodes
+        .iter()
+        .filter(|n| {
+            n.boot_entries.contains(&plan.boot_entry)
+                && matches!(
+                    n.model,
+                    fujimod_emulator_devices::exr2::board::Model::Nand { .. }
+                )
+        })
+        .map(|n| n.name.clone())
+        .collect();
+    Ok((scanout, nands))
+}
+
+/// Storage identity: the firmware identity, its DAT hash and the declared storage roles.
+fn camera_identity(
+    firmware_id: &str,
+    firmware_sha256: &str,
+    storage: &fujimod_emulator::session::durable::Spec,
+) -> Result<[u8; 32], String> {
+    Ok(Sha256::digest(
+        serde_json::to_vec(&serde_json::json!({
+            "firmwareId": firmware_id,
+            "firmware": firmware_sha256,
+            "storage": storage,
+        }))
+        .map_err(|e| e.to_string())?,
+    )
+    .into())
+}
+
 impl Session {
+    /// Build a camera from the native prepared run: the same boot-time construction
+    /// as `boot::open_prepared`, with the browser's card, scene, preview and controls.
+    pub fn create_prepared(
+        document: &[u8],
+        update: Vec<u8>,
+        boot_rom: Vec<u8>,
+        nand: Option<Vec<u8>>,
+        settings: Option<Vec<u8>>,
+        policy: fujimod_emulator_cpu::ExecutionPolicy,
+    ) -> Result<Self, String> {
+        let config: PreparedConfig = serde_json::from_slice(document).map_err(|e| e.to_string())?;
+        if config.schema != 1 {
+            return Err("prepared camera document schema mismatch".into());
+        }
+        let quantum = config.prepared["quantum"]
+            .as_u64()
+            .and_then(|q| usize::try_from(q).ok())
+            .filter(|q| *q > 0)
+            .ok_or("prepared run has no positive quantum")?;
+        let firmware_id = config.prepared["firmware_id"]
+            .as_str()
+            .ok_or("prepared run has no firmware identity")?
+            .to_owned();
+        let firmware_sha256 = config.prepared["resolved"]["reference"]["firmware"]["update"]
+            ["sha256"]
+            .as_str()
+            .ok_or("prepared run has no firmware update identity")?
+            .to_owned();
+        let plan = Plan::parse(
+            &serde_json::to_vec(&config.prepared["devices"]).map_err(|e| e.to_string())?,
+        )?;
+        let (scanout, nands) = device_roles(&plan)?;
+        let prepared = fujimod_emulator::boot::Prepared::from_json(&config.prepared)?;
+        let mut core = fujimod_emulator::boot::open_prepared(
+            prepared,
+            fujimod_emulator::boot::InputBytes {
+                update,
+                boot_rom,
+                nand,
+                settings,
+                clock_seconds_2000: config.clock_seconds2000,
+            },
+            None,
+        )?;
+        core.board.set_execution_policy(policy)?;
+        let browser = config.browser;
+        let storage = fujimod_emulator::session::durable::Spec {
+            cards: browser
+                .card
+                .as_ref()
+                .map(|c| vec![c.node.clone()])
+                .unwrap_or_default(),
+            nands,
+        };
+        let identity = camera_identity(&firmware_id, &firmware_sha256, &storage)?;
+        Self::start_camera(
+            core,
+            Attachments {
+                quantum,
+                gpio: vec![],
+                watch_pcs: browser.watch_pcs,
+                card: browser.card,
+                scene: browser.scene_input,
+                preview: browser.preview,
+                controls: browser.controls,
+                contact_driver: browser.contact_driver,
+                storage,
+                identity,
+                scanout,
+                initial_positions: browser.initial_positions,
+                boot_inputs: browser.boot_inputs,
+            },
+        )
+    }
+
     pub fn create_camera(
         config: &[u8],
         dat: &[u8],
@@ -210,25 +381,8 @@ impl Session {
                 })
                 .collect::<Vec<_>>(),
         )?;
+        let (scanout, nands) = device_roles(&g.devices)?;
         let mut resources = Resources::default();
-        let scanouts = g
-            .devices
-            .nodes
-            .iter()
-            .filter(|n| {
-                n.boot_entries.contains(&g.devices.boot_entry)
-                    && matches!(
-                        n.model,
-                        fujimod_emulator_devices::exr2::board::Model::Scanout { .. }
-                    )
-            })
-            .map(|n| n.name.clone())
-            .collect::<Vec<_>>();
-        let scanout = match scanouts.as_slice() {
-            [] => None,
-            [name] => Some(name.clone()),
-            _ => return Err("session has multiple scanout devices".into()),
-        };
         let assets = g
             .assets
             .into_iter()
@@ -241,21 +395,9 @@ impl Session {
                 .as_ref()
                 .map(|c| vec![c.node.clone()])
                 .unwrap_or_default(),
-            nands: g
-                .devices
-                .nodes
-                .iter()
-                .filter(|n| {
-                    n.boot_entries.contains(&g.devices.boot_entry)
-                        && matches!(
-                            n.model,
-                            fujimod_emulator_devices::exr2::board::Model::Nand { .. }
-                        )
-                })
-                .map(|n| n.name.clone())
-                .collect(),
+            nands,
         };
-        let identity: [u8;32]=Sha256::digest(serde_json::to_vec(&serde_json::json!({"firmwareId":g.firmware_id,"firmware":g.firmware.sha256,"storage":storage})).map_err(|e|e.to_string())?).into();
+        let identity = camera_identity(&g.firmware_id, &g.firmware.sha256, &storage)?;
         let assembly = g.devices.build(resources, 0, &mut RefuseAdapters)?;
         let bus = Bus::from_graph(Mode::Strict, assembly.graph)?;
         let mut board = g.execution.build(
@@ -282,8 +424,7 @@ impl Session {
             };
             cpu.coprocessor(c.register, Some(value | c.set_bits))?;
         }
-        board.watch_pcs(&g.watch_pcs)?;
-        let mut core = fujimod_emulator::session::Session {
+        let core = fujimod_emulator::session::Session {
             definition,
             controls: None,
             contact_driver: None,
@@ -293,22 +434,48 @@ impl Session {
             contacts: assembly.contacts,
             recording_frames: Default::default(),
         };
-        for p in g.gpio {
+        Self::start_camera(
+            core,
+            Attachments {
+                quantum: g.quantum,
+                gpio: g.gpio,
+                watch_pcs: g.watch_pcs,
+                card: g.card,
+                scene: g.scene_input,
+                preview: g.preview,
+                controls: g.controls,
+                contact_driver: g.contact_driver,
+                storage,
+                identity,
+                scanout,
+                initial_positions: c.initial_positions,
+                boot_inputs: c.boot_inputs,
+            },
+        )
+    }
+
+    /// Apply the browser attachments to a booted core and start its checkpoint.
+    fn start_camera(
+        mut core: fujimod_emulator::session::Session,
+        a: Attachments,
+    ) -> Result<Self, String> {
+        core.board.watch_pcs(&a.watch_pcs)?;
+        for p in a.gpio {
             core.gpio(&p.node, p.port, p.pin, p.high)?;
         }
-        if let Some(spec) = g.controls {
+        if let Some(spec) = a.controls {
             core.configure_controls(spec)?;
         }
-        if let Some(spec) = g.contact_driver {
+        if let Some(spec) = a.contact_driver {
             core.configure_contact_driver(spec)?;
         }
-        if let Some(preview) = &g.preview {
+        if let Some(preview) = &a.preview {
             core.frame_state(&preview.node)?;
         }
-        if let Some(card) = &g.card {
+        if let Some(card) = &a.card {
             core.card_state(&card.node)?;
         }
-        if let Some(scene) = &g.scene_input {
+        if let Some(scene) = &a.scene {
             core.node(&scene.node)?;
             if scene.sensor.is_some()
                 && !scene
@@ -334,7 +501,7 @@ impl Session {
             reset_image: None,
             powered_on: true,
             generation: 0,
-            quantum: g.quantum,
+            quantum: a.quantum,
             input: None,
             frames: Default::default(),
             history: None,
@@ -345,19 +512,19 @@ impl Session {
             scene_upload: vec![],
             scene_dimensions: None,
             camera: Some(Metadata {
-                card: g.card,
-                storage,
-                identity,
-                scene: g.scene_input,
-                scanout,
-                preview: g.preview,
+                card: a.card,
+                storage: a.storage,
+                identity: a.identity,
+                scene: a.scene,
+                scanout: a.scanout,
+                preview: a.preview,
             }),
         };
         session.reset_image = Some(Arc::new(session.core.checkpoint(None)?));
-        for (id, position) in c.initial_positions {
+        for (id, position) in a.initial_positions {
             session.core.set_position(&id, &position)?;
         }
-        session.boot_holds(&c.boot_inputs)?;
+        session.boot_holds(&a.boot_inputs)?;
         Ok(session)
     }
 }

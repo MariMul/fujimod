@@ -60,12 +60,36 @@ export async function openCamera(
   const configBytes = await readFile(configPath);
   const datBytes = await readFile(datPath);
   const config: unknown = JSON.parse(configBytes.toString('utf8'));
+  return attachCamera(module, (session) => session.create(config, datBytes, 'session'));
+}
+
+/** Open a native prepared run: its document, update container and boot ROM files. */
+export async function openPreparedCamera(
+  modulePath: string,
+  documentPath: string,
+  updatePath: string,
+  bootRomPath: string,
+  moduleOptions: ModuleOptions = {},
+) {
+  const module = await loadNodeModule(modulePath, moduleOptions);
+  const document: unknown = JSON.parse(await readFile(documentPath, 'utf8'));
+  const update = await readFile(updatePath);
+  const bootRom = await readFile(bootRomPath);
+  return attachCamera(module, (session) =>
+    session.create(document, update, 'prepared', { bootRom }),
+  );
+}
+
+function attachCamera(
+  module: Awaited<ReturnType<typeof loadNodeModule>>,
+  create: (session: EmulatorSession) => void,
+) {
   let alive = true;
   const session = new EmulatorSession(module, () => {
     alive = false;
   });
   try {
-    session.create(config, datBytes, 'session');
+    create(session);
   } catch (error) {
     if (alive) session.dispose();
     throw error;

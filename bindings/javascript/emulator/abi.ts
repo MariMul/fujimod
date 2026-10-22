@@ -40,6 +40,19 @@ export interface EmulatorModule {
   _camera_error(this: void, handle: number, out: number): number;
   /** Session extensions: absent exports refuse the operation, never emulate success. */
   _camera_session_create?: EmulatorModule['_camera_create'];
+  /** Native prepared run: document, update, boot ROM, optional NAND and settings spans. */
+  _camera_prepared_session_create?: (
+    document: number,
+    documentLength: number,
+    update: number,
+    updateLength: number,
+    bootRom: number,
+    bootRomLength: number,
+    nand: number,
+    nandLength: number,
+    settings: number,
+    settingsLength: number,
+  ) => number;
   _camera_command?: (
     handle: number,
     json: number,
@@ -51,6 +64,13 @@ export interface EmulatorModule {
   _camera_scene_buffer?: (handle: number, width: number, height: number, out: number) => number;
   _camera_scene_commit?: (handle: number, enabled: number) => number;
 }
+/** Byte inputs of a prepared run. The update container is the `create` argument. */
+export interface PreparedInputs {
+  bootRom: Uint8Array;
+  nand?: Uint8Array;
+  settings?: Uint8Array;
+}
+
 export interface UsbStatus {
   connected: boolean;
   endpoint: {
@@ -76,6 +96,21 @@ export interface SessionState {
   poweredOn: boolean;
   inputQueue?: { pending: number; active: unknown; completed: number };
 }
+/** Native REC observation after `boot_to_rec`; `status` is `rec` at REC. */
+export interface RecReport {
+  status: string;
+  instructions: number;
+  virtual_ticks: number;
+  ui_mode: number;
+  system_mode: number;
+  menu_active: number;
+  menu_node: number;
+  pending_mode: number;
+  pending: boolean;
+  setup_presses: number;
+  scanout_instance: number | null;
+  failure: string | null;
+}
 export interface SaveResult {
   format: 'camera-media-cbor';
   schema: 1;
@@ -95,6 +130,8 @@ export interface SessionCommands {
   };
   usb_in_token: { request: { node: string; endpoint: number }; result: Record<string, never> };
   state: { request: Record<string, never>; result: SessionState };
+  /** Native first-start and REC observation, bounded by an instruction budget. */
+  boot_to_rec: { request: { limit: number }; result: RecReport };
   press: {
     request: { id: string; stage?: string };
     result: SessionState;
@@ -228,14 +265,43 @@ export class EmulatorSession {
   private check(code: number) {
     if (code !== 0) throw Error(this.error());
   }
-  create(config: unknown, dat: Uint8Array, construction: EmulatorManifest['construction']) {
+  create(
+    config: unknown,
+    dat: Uint8Array,
+    construction: EmulatorManifest['construction'],
+    inputs?: PreparedInputs,
+  ) {
     if (this.handle) throw Error('Session already created.');
+    if (construction === 'prepared') {
+      this.createPrepared(config, dat, inputs);
+      return;
+    }
     const create =
       construction === 'resolved' ? this.module._camera_create : this.module._camera_session_create;
     if (!create)
       throw new UnsupportedEmulatorOperation('Missing C ABI export: camera_session_create.');
     this.handle = this.json(config, (p, n) =>
       this.upload(dat, (d, l) => this.call(() => create(p, n, d, l))),
+    );
+    if (!this.handle) throw Error(this.error(0));
+  }
+  /** Construct from a native prepared run; the boot ROM is required, NAND and settings are optional. */
+  private createPrepared(document: unknown, update: Uint8Array, inputs: PreparedInputs | undefined) {
+    const create = this.module._camera_prepared_session_create;
+    if (!create)
+      throw new UnsupportedEmulatorOperation('Missing C ABI export: camera_prepared_session_create.');
+    if (!inputs || inputs.bootRom.length === 0) throw Error('Prepared session requires a boot ROM.');
+    const empty = new Uint8Array();
+    this.handle = this.json(document, (p, n) =>
+      this.upload(update, (u, ul) =>
+        this.upload(inputs.bootRom, (r, rl) =>
+          this.upload(inputs.nand ?? empty, (m, ml) =>
+            this.upload(inputs.settings ?? empty, (s, sl) =>
+              this.call(() => create(p, n, u, ul, r, rl, m, ml, s, sl)),
+            ),
+          ),
+        ),
+      ),
     );
     if (!this.handle) throw Error(this.error(0));
   }

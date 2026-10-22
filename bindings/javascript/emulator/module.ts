@@ -46,6 +46,7 @@ const requiredFunctions = [
   '_camera_free',
   '_camera_create',
   '_camera_session_create',
+  '_camera_prepared_session_create',
   '_camera_command',
   '_camera_scene_buffer',
   '_camera_scene_commit',
@@ -131,7 +132,7 @@ export function parseEmulatorManifest(value: unknown): EmulatorManifest {
     manifest.module.length === 0 ||
     typeof manifest.wasm !== 'string' ||
     manifest.wasm.length === 0 ||
-    !['resolved', 'session'].includes(manifest.construction) ||
+    !['resolved', 'session', 'prepared'].includes(manifest.construction) ||
     (manifest.executionPolicy !== undefined &&
       !['interactive', 'exact'].includes(manifest.executionPolicy)) ||
     !record(manifest.session) ||
@@ -177,7 +178,7 @@ export interface EmulatorManifest {
   abi: 1;
   module: string;
   wasm: string;
-  construction: 'resolved' | 'session';
+  construction: 'resolved' | 'session' | 'prepared';
   /** Override the default policy for native-parity qualification bundles. */
   executionPolicy?: ModuleOptions['executionPolicy'];
   session: Record<string, unknown>;
