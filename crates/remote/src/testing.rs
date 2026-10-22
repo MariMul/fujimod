@@ -313,6 +313,25 @@ fn option_value_uses_selected_row_instead_of_viewport_origin() {
     });
 }
 #[test]
+fn option_matching_and_readback_prefer_full_labels_over_compact_summaries() {
+    futures_lite::future::block_on(async {
+        let mut backend = Synthetic::new();
+        backend.bytes[28720..28723].copy_from_slice(b"N\0\0");
+        backend.bytes[28800..28807].copy_from_slice(b"NORMAL\0");
+        backend.word(12544 + 8 + 4, 28800);
+        let mut remote = Connection::connect(backend, facts()).unwrap();
+        let item = menu("shooting").with_key(20);
+        let normal = option(item.clone(), "NORMAL");
+        remote.select(&normal, 100).await.unwrap();
+        remote.navigate(&item, 100).await.unwrap();
+        remote.press(&control("selector.right"), 100).await.unwrap();
+        let result = remote.read(&normal.into()).await.unwrap();
+        assert!(result.menu().unwrap().selected);
+        assert_eq!(result.menu().unwrap().value.as_deref(), Some("NORMAL"));
+    });
+}
+
+#[test]
 fn resolution_is_live_and_strict() {
     futures_lite::future::block_on(async {
         let mut r = Connection::connect(Synthetic::new(), facts()).unwrap();

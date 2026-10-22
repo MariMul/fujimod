@@ -330,7 +330,10 @@ impl<B: Backend> Memory<'_, B> {
             )
             .await?;
         let label = String::new();
-        for offset in (0..width.min(2)).map(|n| n * 4) {
+        // Caption records store the compact summary first and the full menu
+        // label second. Prefer the full label; summaries can be only an icon
+        // or an abbreviation (for example N versus NORMAL).
+        for offset in (0..width.min(2)).rev().map(|n| n * 4) {
             let resource = word(&raw, offset)?;
             if resource == 0 || resource == 0x7ffffffe || resource >= 0xff000000 {
                 continue;
