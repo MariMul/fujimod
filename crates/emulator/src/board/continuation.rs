@@ -268,3 +268,7 @@ impl Board {
         Ok(fired)
     }
 }
+
+#[cfg(test)]
+#[path = "continuation_tests.rs"]
+mod tests;
