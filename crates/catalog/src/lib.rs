@@ -6,6 +6,7 @@ pub mod configuration;
 pub mod controls;
 pub mod emulator;
 pub mod facts;
+pub mod first_start;
 pub mod persistent_inputs;
 pub mod reference;
 pub mod remote;

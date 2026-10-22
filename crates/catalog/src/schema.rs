@@ -8,6 +8,10 @@ use std::collections::BTreeMap;
 pub fn generated_documents() -> BTreeMap<&'static str, Value> {
     let mut documents = BTreeMap::new();
     documents.insert(
+        "first-start.generated.schema.json",
+        schema::<crate::first_start::FirstStartMenu>(crate::first_start::FIRST_START_SCHEMA_URI),
+    );
+    documents.insert(
         "soc.schema.json",
         schema::<crate::reference::Soc>("https://fujimod.com/schemas/soc.schema.json"),
     );

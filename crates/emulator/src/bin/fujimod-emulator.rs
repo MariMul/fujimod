@@ -26,11 +26,13 @@ fn parse(
     }
     let mut values = BTreeMap::new();
     let mut overlays = Vec::new();
+    let mut preferred_languages = Vec::new();
     while let Some(key) = args.next() {
         let key = key.to_str().ok_or("option name is not UTF-8")?.to_owned();
         if ![
             "--configuration",
             "--overlay",
+            "--language",
             "--update",
             "--boot-rom",
             "--unicorn",
@@ -48,6 +50,14 @@ fn parse(
         let value = args
             .next()
             .ok_or_else(|| format!("missing value for {key}"))?;
+        if key == "--language" {
+            preferred_languages.push(
+                value
+                    .into_string()
+                    .map_err(|_| "language tag must be UTF-8")?,
+            );
+            continue;
+        }
         if key == "--overlay" {
             let id = value
                 .into_string()
@@ -87,6 +97,7 @@ fn parse(
         nand: None,
         settings: None,
         clock_seconds_2000: None,
+        preferred_languages,
     };
     let options = Options {
         nand: values.remove("--nand").map(PathBuf::from),

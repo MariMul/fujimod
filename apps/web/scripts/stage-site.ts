@@ -38,6 +38,7 @@ export function runtimeBundleFiles(manifest: unknown) {
     throw Error('Prepared runtime has no bundle files.');
   for (const key of ['document', 'bootRom', 'nand', 'settings']) {
     const name: unknown = Reflect.get(manifest.prepared, key);
+    if ((key === 'nand' || key === 'settings') && name === undefined) continue;
     if (typeof name !== 'string' || !/^[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$/.test(name))
       throw Error(`Prepared runtime has an invalid ${key} filename.`);
     files.push(name);

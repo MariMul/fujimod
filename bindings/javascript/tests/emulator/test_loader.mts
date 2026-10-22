@@ -149,12 +149,10 @@ function configuration(quantum: number) {
     firmwareId: 'generated',
     bootSource: 'internal',
     initialPositions: {},
-    clockSeconds2000: 0,
     graph: {
       schema: 1,
       firmwareId: 'generated',
       bootSource: 'internal',
-      clockSeconds2000: 0,
       quantum,
       translationCacheBytes: 1 << 20,
       execution: {

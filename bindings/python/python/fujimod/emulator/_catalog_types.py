@@ -1537,6 +1537,7 @@ type RunExecutionMode = Literal["strict"]
 class RunFirstStart(TypedDict, total=False):
     hold_ticks: Required[int]
     key_id: Required[str]
+    language: NotRequired[str | None]
     max_presses: Required[int]
     settle_ticks: Required[int]
 

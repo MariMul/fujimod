@@ -105,4 +105,14 @@ test('prepared runtime staging follows declared cold input filenames and refuses
     /invalid nand filename/,
   );
   assert.throws(() => runtimeBundleFiles({ construction: 'prepared' }), /no bundle files/);
+  assert.deepEqual(
+    runtimeBundleFiles({
+      construction: 'prepared',
+      prepared: {
+        document: 'document.json',
+        bootRom: 'boot.bin',
+      },
+    }).slice(4),
+    ['document.json', 'boot.bin'],
+  );
 });

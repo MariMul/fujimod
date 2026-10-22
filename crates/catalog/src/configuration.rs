@@ -704,7 +704,7 @@ impl Exr2RunInputs {
     }
 }
 
-/// Run policy for one logical key used to accept the first-start prompt.
+/// Policy for navigating and accepting stock first-start setup.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
@@ -714,13 +714,16 @@ impl Exr2RunInputs {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct RunFirstStart {
+    /// Optional exact firmware language name to select from START MENU.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
     /// Firmware logical key identity, such as `EXE_M`.
     pub key_id: String,
     /// Virtual ticks to hold the input active.
     pub hold_ticks: u64,
     /// Virtual ticks to wait after releasing the input.
     pub settle_ticks: u64,
-    /// Maximum input presses accepted for this startup policy.
+    /// Maximum confirmation presses accepted for this startup policy.
     pub max_presses: u8,
 }
 

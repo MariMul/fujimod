@@ -62,8 +62,8 @@ fn create_with(scanner: bool, configure: impl FnOnce(&mut Value)) -> u32 {
     };
     let firmware: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
     let mapping = json!({"address":0x10000,"physical":0x10000,"size":0x4000,"permissions":3});
-    let mut config = json!({"schema":1,"firmwareId":"generated","bootSource":"internal","initialPositions":{},"clockSeconds2000":0,"graph":{
-        "schema":1,"firmwareId":"generated","bootSource":"internal","clockSeconds2000":0,"quantum":17,"translationCacheBytes":1048576,
+    let mut config = json!({"schema":1,"firmwareId":"generated","bootSource":"internal","initialPositions":{},"graph":{
+        "schema":1,"firmwareId":"generated","bootSource":"internal","quantum":17,"translationCacheBytes":1048576,
         "execution":{"processors":[{"model":"cortex-r5f","released":true,"registers":[["Pc",0x10000]],"mprofile":null,"rprofile":{"cp14_identity":0x4003,"tcm":{"atcm":{"bytes":0,"reset":0},"btcm":{"bytes":0,"reset":0}}}}],
             "ram":[{"base":0x10000,"size":0x4000}],"mappings":[{"core":0,"address":0x10000,"physical":0x10000,"size":0x4000,"permissions":7}],"dma_mappings":[mapping],"decoders":[],"instructions_per_tick":[24,1],"peripherals":[{"core":0,"address":0xfffb3000u64,"physical":0xfffb3000u64,"size":4096}]},
         "devices":{"schema":1,"boot_entry":"loader","wires":{},"nodes":[{"name":"irq","boot_entries":["loader"],"windows":[{"base":0xfffb3000u64,"size":4096}],"dependencies":[],"model":{"kind":"exr2-interrupt-controller","options":{"arbitration":"unique"},"core":0,"base":0xfffb3000u64,"routes":null,"software":[]}}]},

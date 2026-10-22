@@ -2,6 +2,7 @@
 //!
 //! Preparation runs before execution. Host readiness checks only observe RAM;
 //! first-start acceptance drives the ordinary ADC input on the guest timeline.
+mod first_start;
 mod graph;
 mod x70;
 
@@ -48,6 +49,8 @@ pub struct Options {
     pub settings: Option<PathBuf>,
     /// Real-time clock in seconds since 2000-01-01, or the configuration's default.
     pub clock_seconds_2000: Option<u32>,
+    /// Preferred BCP 47 language tags, in caller order.
+    pub preferred_languages: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -141,6 +144,17 @@ fn first_start(
     let Some(policy) = &inputs.first_start else {
         return Ok(None);
     };
+    first_start_key(resolved, inputs, &policy.key_id)
+}
+
+fn first_start_key(
+    resolved: &ResolvedConfiguration,
+    inputs: &Exr2RunInputs,
+    key_id: &str,
+) -> Result<Option<FirstStart>, String> {
+    let Some(policy) = &inputs.first_start else {
+        return Ok(None);
+    };
     let facts = resolved
         .reference
         .firmware
@@ -154,20 +168,18 @@ fn first_start(
     let mut matches = controls.controls.values().filter_map(|control| {
         control
             .keys
-            .contains(&policy.key_id)
-            .then(|| control.input.as_ref()?.get(&policy.key_id))
+            .iter()
+            .any(|key| key == key_id)
+            .then(|| control.input.as_ref()?.get(key_id))
             .flatten()
     });
-    let predicates = matches.next().ok_or_else(|| {
-        format!(
-            "firmware has no control predicate for key {}",
-            policy.key_id
-        )
-    })?;
+    let predicates = matches
+        .next()
+        .ok_or_else(|| format!("firmware has no control predicate for key {}", key_id))?;
     if matches.next().is_some() {
         return Err(format!(
             "firmware key {} has ambiguous physical control predicates",
-            policy.key_id
+            key_id
         ));
     }
     let mut adc_inputs = predicates.iter().filter_map(|predicate| match predicate {
@@ -180,11 +192,11 @@ fn first_start(
     });
     let (connection_id, intervals) = adc_inputs
         .next()
-        .ok_or_else(|| format!("firmware key {} has no ADC predicate", policy.key_id))?;
+        .ok_or_else(|| format!("firmware key {} has no ADC predicate", key_id))?;
     if adc_inputs.next().is_some() || intervals.len() != 1 {
         return Err(format!(
             "firmware key {} has unsupported multiple ADC calibration intervals",
-            policy.key_id
+            key_id
         ));
     }
     let connection = resolved
@@ -216,7 +228,7 @@ fn first_start(
     };
     let CalibrationInterval { lower, upper } = intervals[0];
     Ok(Some(FirstStart {
-        key_id: policy.key_id.clone(),
+        key_id: key_id.to_owned(),
         adc: inputs.adc.block_id.clone(),
         channel: channel[0],
         calibration_pointer,
@@ -547,7 +559,21 @@ fn packet(bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-fn set_clock_recursive(value: &mut Value, clock_seconds: u32, count: &mut usize) -> Result<(), String> {
+/// Apply caller local wall time to the single RTC declared by a device plan.
+pub fn apply_clock(devices: &mut Value, clock_seconds: u32) -> Result<(), String> {
+    let mut count = 0;
+    set_clock_recursive(devices, clock_seconds, &mut count)?;
+    if count != 1 {
+        return Err("selected configuration has no single real-time clock".into());
+    }
+    Ok(())
+}
+
+fn set_clock_recursive(
+    value: &mut Value,
+    clock_seconds: u32,
+    count: &mut usize,
+) -> Result<(), String> {
     match value {
         Value::Object(map) => {
             // Check if this object has a "clock" key with "initial_seconds"
@@ -657,6 +683,8 @@ pub struct InputBytes {
     pub settings: Option<Vec<u8>>,
     /// Real-time clock in seconds since 2000-01-01, or the configuration's default.
     pub clock_seconds_2000: Option<u32>,
+    /// Preferred BCP 47 language tags, in caller order.
+    pub preferred_languages: Vec<String>,
 }
 
 /// Largest NAND input accepted from the caller: a 256 MiB image.
@@ -709,6 +737,7 @@ pub fn open(options: Options) -> Result<Session, String> {
             .map(|path| read(path, 16))
             .transpose()?,
         clock_seconds_2000: options.clock_seconds_2000,
+        preferred_languages: options.preferred_languages,
     };
     open_prepared(prepared, inputs, Some(options.unicorn))
 }
@@ -747,14 +776,14 @@ pub fn open_prepared(
         nand,
         settings,
         clock_seconds_2000,
+        preferred_languages,
     } = inputs;
+    session_definition["inputs"]["preferred_languages"] = json!(preferred_languages);
+    session_definition["inputs"]["clock_seconds_2000"] = json!(clock_seconds_2000);
     if prepared.flash_offset >= update.len() {
         return Err("update flash offset exceeds input".into());
     }
-    let flash: Vec<u8> = update[prepared.flash_offset..]
-        .iter()
-        .map(|b| !b)
-        .collect();
+    let flash: Vec<u8> = update[prepared.flash_offset..].iter().map(|b| !b).collect();
     let mut assets = BTreeMap::from([("nand_base".into(), flash)]);
     for input in &prepared.generated_assets {
         if input.pattern.is_empty()
@@ -778,11 +807,7 @@ pub fn open_prepared(
 
     // Set real-time clock if provided
     if let Some(clock_seconds) = clock_seconds_2000 {
-        let mut clock_count = 0;
-        set_clock_recursive(&mut devices, clock_seconds, &mut clock_count)?;
-        if clock_count != 1 {
-            return Err("selected configuration has no single real-time clock".into());
-        }
+        apply_clock(&mut devices, clock_seconds)?;
     }
 
     if let Some(packet_bytes) = &settings {
@@ -1028,7 +1053,7 @@ fn session_prepared(session: &Session) -> Result<Prepared, String> {
     prepare(id, &overlays)
 }
 
-fn accept_setup(
+fn press_setup_key(
     session: &mut Session,
     spec: &Prepared,
     s: &FirstStart,
@@ -1047,13 +1072,13 @@ fn accept_setup(
     let lower = half(s.lower_offset)?;
     let upper = half(s.upper_offset)?;
     if lower >= upper || upper >= 1023 {
-        return Err("MENU/OK calibration does not describe a pressed ADC interval".into());
+        return Err("first-start key calibration does not describe a pressed ADC interval".into());
     }
     let original = session.adc_samples(&s.adc)?;
     let mut pressed = original.clone();
     *pressed
         .get_mut(s.channel)
-        .ok_or("MENU/OK ADC channel is absent")? = (lower + upper) / 2;
+        .ok_or("first-start key ADC channel is absent")? = (lower + upper) / 2;
     session.set_adc_samples(&s.adc, &pressed)?;
     let held = advance_ticks(session, spec, end, s.hold_ticks);
     // Release even if the instruction budget or a modeled refusal stops the hold.
@@ -1062,8 +1087,119 @@ fn accept_setup(
     advance_ticks(session, spec, end, s.settle_ticks)
 }
 
+fn setup_key(
+    session: &mut Session,
+    spec: &Prepared,
+    inputs: &Exr2RunInputs,
+    key: &str,
+    end: u64,
+    presses: &mut usize,
+) -> Result<(), String> {
+    let key =
+        first_start_key(&spec.resolved, inputs, key)?.ok_or("first-start policy is absent")?;
+    *presses += 1;
+    press_setup_key(session, spec, &key, end)
+}
+
+fn setup_calendar(
+    session: &mut Session,
+    spec: &Prepared,
+    inputs: &Exr2RunInputs,
+    menu: &fujimod_catalog::first_start::FirstStartMenu,
+    end: u64,
+    presses: &mut usize,
+) -> Result<(), String> {
+    let seconds = session.definition["inputs"]["clock_seconds_2000"]
+        .as_u64()
+        .map(u32::try_from)
+        .transpose()
+        .map_err(|_| "local clock exceeds u32")?
+        .unwrap_or(inputs.mcu.rtc.initial_seconds);
+    let target = first_start::calendar(seconds);
+    let read = |session: &Session| -> Result<([u16; 5], u8), String> {
+        let mut bytes = [0; 8];
+        session.board.read_physical(menu.date_editor, &mut bytes)?;
+        Ok((
+            [
+                u16::from_le_bytes([bytes[0], bytes[1]]),
+                u16::from(bytes[2]),
+                u16::from(bytes[3]),
+                u16::from(bytes[4]),
+                u16::from(bytes[5]),
+            ],
+            bytes[7],
+        ))
+    };
+    for (field, wanted) in target.into_iter().enumerate() {
+        for _ in 0..6 {
+            if read(session)?.1 as usize == field {
+                break;
+            }
+            setup_key(session, spec, inputs, "RIGHT", end, presses)?;
+        }
+        if read(session)?.1 as usize != field {
+            return Err("date editor did not select the requested field".into());
+        }
+        let (minimum, maximum) = match field {
+            0 => (2000, 2099),
+            1 => (1, 12),
+            2 => (1, first_start::month_days(target[0], target[1])),
+            3 => (0, 23),
+            _ => (0, 59),
+        };
+        for _ in 0..=maximum - minimum {
+            let current = read(session)?.0[field];
+            if current == wanted {
+                break;
+            }
+            if !(minimum..=maximum).contains(&current) {
+                return Err("date editor field is outside its calendar range".into());
+            }
+            let increase = if field == 0 {
+                current < wanted
+            } else {
+                let count = maximum - minimum + 1;
+                (wanted + count - current) % count <= (current + count - wanted) % count
+            };
+            let expected = if increase {
+                if current == maximum {
+                    minimum
+                } else {
+                    current + 1
+                }
+            } else if current == minimum {
+                maximum
+            } else {
+                current - 1
+            };
+            setup_key(
+                session,
+                spec,
+                inputs,
+                if increase { "UP" } else { "DOWN" },
+                end,
+                presses,
+            )?;
+            let after = read(session)?;
+            if after.0[field] != expected || after.1 as usize != field {
+                return Err(format!(
+                    "date editor field {field} did not change from {current} to {expected}: {}",
+                    after.0[field]
+                ));
+            }
+        }
+        if read(session)?.0[field] != wanted {
+            return Err("date editor exceeded its field navigation bound".into());
+        }
+    }
+    if read(session)?.0 != target {
+        return Err("date editor does not show the requested local time".into());
+    }
+    Ok(())
+}
+
 /// Run a named runtime to REC or an explicit stopped frontier. First-start menus
-/// are accepted through calibrated MENU/OK ADC presses, never RAM writes.
+/// use calibrated UP/DOWN and MENU/OK ADC presses, never RAM writes.
 pub fn to_rec(session: &mut Session, instruction_limit: u64) -> Result<Report, String> {
     if instruction_limit == 0 {
         return Err("instruction limit must be positive".into());
@@ -1077,6 +1213,7 @@ pub fn to_rec(session: &mut Session, instruction_limit: u64) -> Result<Report, S
         .checked_add(instruction_limit)
         .ok_or("instruction limit overflows")?;
     let mut presses = 0;
+    let mut confirmations = 0;
     loop {
         let mut report = observe(session, &spec, presses)?;
         if report.instructions >= end {
@@ -1103,15 +1240,73 @@ pub fn to_rec(session: &mut Session, instruction_limit: u64) -> Result<Report, S
             && spec
                 .first_start
                 .as_ref()
-                .is_some_and(|first_start| presses < first_start.max_presses)
+                .is_some_and(|first_start| confirmations < first_start.max_presses)
         {
-            presses += 1;
-            accept_setup(
-                session,
-                &spec,
-                spec.first_start.as_ref().expect("checked above"),
-                end,
-            )
+            let start = spec.first_start.as_ref().expect("checked above");
+            let inputs = match spec.resolved.configuration.inputs.as_ref() {
+                Some(RunInputs::Exr2(inputs)) => inputs,
+                _ => return Err("first start requires EXR II run inputs".into()),
+            };
+            let menu = spec
+                .resolved
+                .reference
+                .first_start
+                .as_ref()
+                .ok_or("selected firmware has no first-start menu facts")?;
+            let result = if u64::from(report.menu_node) == menu.menu_node {
+                let children = u64::from(word(session, menu.menu_node + menu.children_offset)?);
+                for (row, language) in menu.languages.iter().enumerate() {
+                    if word(session, children + row as u64 * menu.row_bytes)? != language.key {
+                        return Err(
+                            "START MENU language rows differ from their firmware facts".into()
+                        );
+                    }
+                }
+                let preferred: Vec<String> = session.definition["inputs"]["preferred_languages"]
+                    .as_array()
+                    .map(|tags| {
+                        tags.iter()
+                            .filter_map(|tag| tag.as_str().map(str::to_owned))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let selected = first_start::select(
+                    menu,
+                    &preferred,
+                    inputs
+                        .first_start
+                        .as_ref()
+                        .and_then(|p| p.language.as_deref()),
+                )?;
+                let current = word(session, menu.cursor)? as usize;
+                if current >= menu.languages.len() {
+                    return Err("START MENU cursor is outside its language rows".into());
+                }
+                if current != selected {
+                    presses += 1;
+                    let key = if current > selected { "UP" } else { "DOWN" };
+                    let key = first_start_key(&spec.resolved, inputs, key)?
+                        .ok_or("first-start policy is absent")?;
+                    press_setup_key(session, &spec, &key, end).and_then(|()| {
+                        let after = word(session, menu.cursor)? as usize;
+                        let expected = if current > selected { current - 1 } else { current + 1 };
+                        if after != expected { return Err(format!("START MENU cursor did not move from {current} to {expected}: {after}")); }
+                        Ok(())
+                    })
+                } else {
+                    presses += 1;
+                    confirmations += 1;
+                    press_setup_key(session, &spec, start, end)
+                }
+            } else {
+                if word(session, u64::from(report.menu_node))? == menu.date_kind {
+                    setup_calendar(session, &spec, inputs, &menu, end, &mut presses)?;
+                }
+                presses += 1;
+                confirmations += 1;
+                press_setup_key(session, &spec, start, end)
+            };
+            result
         } else {
             advance(session, &spec, end, None)
         };

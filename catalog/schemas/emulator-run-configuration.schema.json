@@ -825,7 +825,7 @@
     },
     "RunFirstStart": {
       "additionalProperties": false,
-      "description": "Run policy for one logical key used to accept the first-start prompt.",
+      "description": "Policy for navigating and accepting stock first-start setup.",
       "properties": {
         "hold_ticks": {
           "description": "Virtual ticks to hold the input active.",
@@ -837,8 +837,15 @@
           "description": "Firmware logical key identity, such as `EXE_M`.",
           "type": "string"
         },
+        "language": {
+          "description": "Optional exact firmware language name to select from START MENU.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "max_presses": {
-          "description": "Maximum input presses accepted for this startup policy.",
+          "description": "Maximum confirmation presses accepted for this startup policy.",
           "format": "uint8",
           "maximum": 255,
           "minimum": 0,

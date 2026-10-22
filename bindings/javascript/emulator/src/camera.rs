@@ -21,7 +21,7 @@ struct Config {
     initial_positions: BTreeMap<String, String>,
     #[serde(default)]
     boot_inputs: Vec<super::lifecycle::BootInput>,
-    clock_seconds2000: Option<u64>,
+    clock_seconds2000: Option<u32>,
 }
 // Select the same constructor identity as the native client without retaining
 // transport byte arrays or reparsing those arrays into a second asset tree.
@@ -51,7 +51,6 @@ struct Graph {
     schema: u32,
     firmware_id: String,
     boot_source: BootSource,
-    clock_seconds2000: Option<u64>,
     execution: factory::Graph,
     devices: Plan,
     #[serde(default)]
@@ -180,15 +179,24 @@ struct BrowserFields {
     preview: Option<Preview>,
 }
 
-/// A prepared run and its browser fields, `{schema, prepared, clockSeconds2000?, browser}`.
+/// A prepared run and its browser fields, `{schema, prepared, browser}`.
 /// `prepared` is `fujimod_emulator::boot::Prepared::to_json` output.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PreparedConfig {
     schema: u32,
     prepared: serde_json::Value,
-    clock_seconds2000: Option<u32>,
     browser: BrowserFields,
+}
+
+/// Preserve the prepared document's numeric representation while forwarding run inputs.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PreparedRequest {
+    document: String,
+    clock_seconds2000: Option<u32>,
+    #[serde(default)]
+    preferred_languages: Vec<String>,
 }
 
 /// Everything a constructed camera needs beyond its boot-time core session.
@@ -270,7 +278,10 @@ impl Session {
         settings: Option<Vec<u8>>,
         policy: fujimod_emulator_cpu::ExecutionPolicy,
     ) -> Result<Self, String> {
-        let config: PreparedConfig = serde_json::from_slice(document).map_err(|e| e.to_string())?;
+        let request: PreparedRequest =
+            serde_json::from_slice(document).map_err(|e| e.to_string())?;
+        let config: PreparedConfig =
+            serde_json::from_str(&request.document).map_err(|e| e.to_string())?;
         if config.schema != 1 {
             return Err("prepared camera document schema mismatch".into());
         }
@@ -283,11 +294,11 @@ impl Session {
             .as_str()
             .ok_or("prepared run has no firmware identity")?
             .to_owned();
-        let firmware_sha256 = config.prepared["resolved"]["reference"]["firmware"]["update"]
-            ["sha256"]
-            .as_str()
-            .ok_or("prepared run has no firmware update identity")?
-            .to_owned();
+        let firmware_sha256 =
+            config.prepared["resolved"]["reference"]["firmware"]["update"]["sha256"]
+                .as_str()
+                .ok_or("prepared run has no firmware update identity")?
+                .to_owned();
         let plan = Plan::parse(
             &serde_json::to_vec(&config.prepared["devices"]).map_err(|e| e.to_string())?,
         )?;
@@ -300,7 +311,8 @@ impl Session {
                 boot_rom,
                 nand,
                 settings,
-                clock_seconds_2000: config.clock_seconds2000,
+                clock_seconds_2000: request.clock_seconds2000,
+                preferred_languages: request.preferred_languages,
             },
             None,
         )?;
@@ -342,9 +354,9 @@ impl Session {
     ) -> Result<Self, String> {
         let identity: DefinitionEnvelope =
             serde_json::from_slice(config).map_err(|e| e.to_string())?;
-        let definition = serde_json::to_value(identity.graph).map_err(|e| e.to_string())?;
+        let mut definition = serde_json::to_value(identity.graph).map_err(|e| e.to_string())?;
         let c: Config = serde_json::from_slice(config).map_err(|e| e.to_string())?;
-        let g = c.graph;
+        let mut g = c.graph;
         if c.schema != 1
             || g.schema != 1
             || c.firmware_id != g.firmware_id
@@ -353,8 +365,11 @@ impl Session {
         {
             return Err("session graph identity, boot source or schema mismatch".into());
         }
-        if c.clock_seconds2000.is_some() && c.clock_seconds2000 != g.clock_seconds2000 {
-            return Err("RTC override differs from the resolved graph clock".into());
+        if let Some(clock) = c.clock_seconds2000 {
+            let mut devices = definition["devices"].clone();
+            fujimod_emulator::boot::apply_clock(&mut devices, clock)?;
+            g.devices = Plan::parse(&serde_json::to_vec(&devices).map_err(|e| e.to_string())?)?;
+            definition["devices"] = devices;
         }
         if let Some(preview) = &g.preview {
             if preview.tick_hz == 0 || preview.period_ticks == 0 {

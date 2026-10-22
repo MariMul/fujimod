@@ -205,13 +205,11 @@ function configuration(
     schema: 1,
     firmwareId: 'generated',
     bootSource: 'internal',
-    clockSeconds2000: 0,
     initialPositions: {},
     graph: {
       schema: 1,
       firmwareId: 'generated',
       bootSource: 'internal',
-      clockSeconds2000: 0,
       quantum,
       translationCacheBytes: 1 << 20,
       execution: {

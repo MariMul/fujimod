@@ -10,6 +10,24 @@ const manifest = {
   settings: 'settings.bin',
 };
 const base = new URL('https://example.invalid/runtime/wasm.json');
+test('fresh cameras need only the prepared document and boot ROM', async () => {
+  vi.stubGlobal(
+    'fetch',
+    async (url: URL) =>
+      new Response(url.pathname.endsWith('document.json') ? '{"schema":1}' : Uint8Array.of(7, 8)),
+  );
+  try {
+    const loaded = await loadPreparedBundle(
+      { document: 'document.json', bootRom: 'boot.bin' },
+      base,
+    );
+    assert.equal(loaded.inputs.nand, undefined);
+    assert.equal(loaded.inputs.settings, undefined);
+    assert.deepEqual(loaded.inputs.bootRom, Uint8Array.of(7, 8));
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
 test('prepared bundle inflates NAND and preserves boot ROM and MCU bytes', async () => {
   const nand = Uint8Array.from([255, 0, 1, 2, 255]);
   const files = new Map<string, string | Uint8Array>([

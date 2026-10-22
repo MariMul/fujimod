@@ -99,6 +99,9 @@ export function testCameraModule(shared = false) {
       let result: unknown = state,
         binary = new Uint8Array();
       switch (request.action) {
+        case 'boot_to_rec':
+          result = { status: 'rec', failure: null };
+          break;
         case 'power':
           state.poweredOn = Boolean(request.options.on);
           ticks = 0n;

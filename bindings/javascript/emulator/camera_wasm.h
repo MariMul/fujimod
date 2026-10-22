@@ -42,7 +42,8 @@ int32_t camera_error(CameraHandle handle, CameraBytes *out);
  * board so durable inputs can be restored before guest boot writes. */
 CameraHandle camera_session_create(const uint8_t *json, uint32_t json_len,
                                    const uint8_t *dat, uint32_t dat_len);
-/* Native prepared run: `document` is {schema, prepared, clockSeconds2000?, browser}.
+/* Native prepared run: `document` is {document, clockSeconds2000?, preferredLanguages?},
+ * where the nested document is the exact JSON text of {schema, prepared, browser}.
  * The update container and boot ROM are required; NAND and settings are optional
  * (zero length selects none). Inputs are copied before construction. */
 CameraHandle camera_prepared_session_create(const uint8_t *document, uint32_t document_len,

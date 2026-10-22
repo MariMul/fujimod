@@ -2274,6 +2274,9 @@ pub struct ResolvedSelection {
     /// The firmware's generated located inputs, when generated.
     #[cfg_attr(feature = "typescript", serde(default))]
     pub control_ids: Option<crate::controls::FirmwareControlIds>,
+    /// Stock first-start menus, when located for this firmware.
+    #[cfg_attr(feature = "typescript", serde(default))]
+    pub first_start: Option<crate::first_start::FirstStartMenu>,
 }
 
 /// A checked, ID-indexed catalog of processor, part, body and firmware facts.
@@ -2287,6 +2290,7 @@ pub struct ReferenceCatalog {
     physical_controls: BTreeMap<String, crate::controls::PhysicalControls>,
     /// Generated located inputs, keyed by firmware identity.
     control_ids: BTreeMap<String, crate::controls::FirmwareControlIds>,
+    first_start: BTreeMap<String, crate::first_start::FirstStartMenu>,
 }
 
 impl ReferenceCatalog {
@@ -2372,6 +2376,7 @@ impl ReferenceCatalog {
         Ok(ResolvedSelection {
             physical_controls: self.physical_controls.get(&body.id).cloned(),
             control_ids: self.control_ids.get(&firmware.id).cloned(),
+            first_start: self.first_start.get(&firmware.id).cloned(),
             soc,
             body,
             firmware,
@@ -2420,6 +2425,16 @@ impl ReferenceCatalog {
         path: &Path,
     ) -> Result<(), String> {
         match kind {
+            ReferenceKind::FirstStart => {
+                let value: crate::first_start::FirstStartMenu = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(
+                    &mut self.first_start,
+                    value.firmware_id.clone(),
+                    value,
+                    path,
+                )
+            }
             ReferenceKind::Body => {
                 let value: Body = decode(bytes, path)?;
                 value.validate(&value.id)?;
@@ -2457,6 +2472,13 @@ impl ReferenceCatalog {
     }
 
     fn validate_controls(&self) -> Result<(), String> {
+        for firmware_id in self.first_start.keys() {
+            if !self.firmwares.contains_key(firmware_id) {
+                return Err(format!(
+                    "first-start menu refers to missing firmware {firmware_id}"
+                ));
+            }
+        }
         for (body_id, controls) in &self.physical_controls {
             if !self.bodies.contains_key(body_id) {
                 return Err(format!(
@@ -2935,6 +2957,7 @@ enum ReferenceKind {
     Firmware,
     PhysicalControls,
     ControlIds,
+    FirstStart,
 }
 
 impl ReferenceKind {
@@ -2950,6 +2973,7 @@ impl ReferenceKind {
         match path.file_name().and_then(|name| name.to_str()) {
             Some("firmware.json") => Ok(Self::Firmware),
             Some("control-ids.generated.json") => Ok(Self::ControlIds),
+            Some("first-start.generated.json") => Ok(Self::FirstStart),
             _ => Err(format!("{} is not a firmware document", path.display())),
         }
     }

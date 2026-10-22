@@ -59,6 +59,8 @@ class emulator:
             unicorn: str | PathLike[str],
             nand: str | PathLike[str] | None = None,
             settings: str | PathLike[str] | None = None,
+            clock_seconds_2000: int | None = None,
+            preferred_languages: Sequence[str] = ...,
         ) -> emulator.Board: ...
         def boot_to_rec(
             self, /, instruction_limit: SupportsIndex = ...

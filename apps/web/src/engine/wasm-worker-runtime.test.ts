@@ -374,6 +374,47 @@ test('USB worker preserves opaque packets, advances only on usb_step, and refuse
   if (undo.type === 'error') assert.match(undo.error, /cannot rewind/);
 });
 
+test('live cameras forward browser languages and local wall time', async () => {
+  const f = setup();
+  f.state.poweredOn = false;
+  f.manifest.construction = 'prepared';
+  f.manifest.prepared = { document: 'document.json', bootRom: 'boot.bin' };
+  let supplied: { clockSeconds2000: number; preferredLanguages: string[] } | undefined;
+  f.module._camera_prepared_session_create = (p, n) => {
+    supplied = JSON.parse(
+      new TextDecoder().decode(f.module.HEAPU8.subarray(p, p + n)),
+    ) as typeof supplied;
+    return 1;
+  };
+  vi.stubGlobal('navigator', { languages: ['de-AT', 'en-US'] });
+  vi.stubGlobal('fetch', async () => new Response('{}'));
+  const localSeconds = () => {
+    const date = new Date();
+    return Math.floor(
+      (date.valueOf() - date.getTimezoneOffset() * 60_000 - Date.UTC(2000, 0, 1)) / 1000,
+    );
+  };
+  const before = localSeconds();
+  try {
+    const boot = await f.send({
+      action: 'boot',
+      config: {
+        ...f.config,
+        execution: { mode: 'live' },
+      },
+      dat: new ArrayBuffer(1),
+      files: [],
+      seedIdentity: [],
+    });
+    assert.equal(boot.type, 'reply', JSON.stringify(boot));
+    assert.ok(supplied);
+    assert.deepEqual(supplied.preferredLanguages, ['de-AT', 'en-US']);
+    assert.ok(supplied.clockSeconds2000 >= before && supplied.clockSeconds2000 <= localSeconds());
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
 test('prepared cameras expose controls, card storage, preview and replay through the session ABI', async () => {
   const f = setup();
   f.manifest.construction = 'prepared';
@@ -382,7 +423,15 @@ test('prepared cameras expose controls, card storage, preview and replay through
     { nand: 'nand.gz', settings: 'settings.bin' },
   );
   let creates = 0;
-  f.module._camera_prepared_session_create = () => {
+  f.module._camera_prepared_session_create = (p, n) => {
+    const request = JSON.parse(new TextDecoder().decode(f.module.HEAPU8.subarray(p, p + n))) as {
+      document: string;
+      clockSeconds2000: number;
+      preferredLanguages: string[];
+    };
+    assert.equal(request.document, '{"number":1.0}');
+    assert.equal(request.clockSeconds2000, 0);
+    assert.deepEqual(request.preferredLanguages, []);
     creates++;
     return 1;
   };
@@ -390,7 +439,9 @@ test('prepared cameras expose controls, card storage, preview and replay through
     'fetch',
     async (url: URL) =>
       new Response(
-        url.pathname.endsWith('.gz') ? new Uint8Array(gzipSync(Uint8Array.of(255))) : '{}',
+        url.pathname.endsWith('.gz')
+          ? new Uint8Array(gzipSync(Uint8Array.of(255)))
+          : '{"number":1.0}',
       ),
   );
   try {
@@ -405,6 +456,7 @@ test('prepared cameras expose controls, card storage, preview and replay through
     assert.equal(creates, 1);
     assert.ok(f.calls.some((call) => call.action === 'state'));
     assert.ok(f.calls.some((call) => call.action === 'preview'));
+    assert.ok(f.calls.some((call) => call.action === 'boot_to_rec'));
     assert.ok(f.calls.some((call) => call.action === 'preview_state'));
     assert.equal((await f.send({ action: 'card_tree' })).type, 'reply');
     assert.equal(

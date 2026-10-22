@@ -465,6 +465,23 @@ export class WasmWorkerRuntime {
       message: 'Building camera…',
       assets: [loadingStep('build', 'loading')],
     });
+    this.replayMode = config.execution?.mode === 'replay';
+    const now = new Date();
+    const clockSeconds2000 = this.replayMode
+      ? config.execution?.clockSeconds2000
+      : Math.floor(
+          (Date.UTC(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+            now.getHours(),
+            now.getMinutes(),
+            now.getSeconds(),
+          ) -
+            Date.UTC(2000, 0, 1)) /
+            1000,
+        );
+    const preferredLanguages = this.replayMode ? [] : [...navigator.languages];
     if (manifest.construction === 'prepared') {
       const prepared = manifest.prepared;
       if (!prepared || !config.bundle) throw Error('Prepared camera has no bundle files.');
@@ -473,7 +490,12 @@ export class WasmWorkerRuntime {
         new URL('wasm.json', config.bundle),
       );
       this.timings.measure('create', () =>
-        session.create(text, new Uint8Array(dat), 'prepared', inputs),
+        session.create(
+          JSON.stringify({ document: text, clockSeconds2000, preferredLanguages }),
+          new Uint8Array(dat),
+          'prepared',
+          inputs,
+        ),
       );
     } else
       this.timings.measure('create', () =>
@@ -487,7 +509,7 @@ export class WasmWorkerRuntime {
                 bootSource: manifest.session.bootSource,
                 bootInputs: config.bootInputs ?? [],
                 initialPositions: config.initialPositions ?? {},
-                clockSeconds2000: config.execution?.clockSeconds2000,
+                clockSeconds2000,
               },
           new Uint8Array(dat),
           manifest.construction,
@@ -510,7 +532,6 @@ export class WasmWorkerRuntime {
       this.observeCurrent();
     } else if (files.length || config.camera || Object.keys(config.initialPositions ?? {}).length)
       throw Error('Resolved ABI has no storage or initial positions.');
-    this.replayMode = config.execution?.mode === 'replay';
     this.send({
       type: 'progress',
       message: 'Booting camera…',
@@ -554,6 +575,11 @@ export class WasmWorkerRuntime {
     if (this.scene) s.scene(this.scene);
     if (this.state?.poweredOn !== false) {
       if (this.manifest!.bootTicks) s.run(s.status().ticks + BigInt(this.manifest!.bootTicks));
+      if (this.manifest!.construction === 'prepared') {
+        const report = s.command('boot_to_rec', { limit: 2_000_000_000 }).result;
+        if (report.status !== 'rec')
+          throw Error(report.failure ?? `Camera boot stopped: ${report.status}`);
+      }
       if (this.scene) s.scene(this.scene);
       if (
         this.manifest!.construction === 'prepared' ||

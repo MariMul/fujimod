@@ -9,27 +9,32 @@ export async function loadPreparedBundle(prepared: unknown, base: URL) {
       throw Error(`Prepared camera has an invalid ${key} input.`);
     return new URL(value, base);
   };
-  const urls = ['document', 'bootRom', 'nand', 'settings'].map(path);
+  const urls = ['document', 'bootRom'].map(path);
+  const optional = (key: string) => (key in prepared ? path(key) : undefined);
+  const nandUrl = optional('nand'),
+    settingsUrl = optional('settings');
   const [document, bootRom, nand, settings] = await Promise.all(
-    urls.map(async (url) => {
+    [...urls, nandUrl, settingsUrl].map(async (url) => {
+      if (!url) return undefined;
       const response = await fetch(url);
       if (!response.ok) throw Error(`Prepared camera input is unavailable: ${url.pathname}`);
       return response;
     }),
   );
-  if (!document || !bootRom || !nand || !settings)
-    throw Error('Prepared camera inputs are incomplete.');
-  if (!nand.body) throw Error('Prepared camera NAND input is empty.');
+  if (!document || !bootRom) throw Error('Prepared camera inputs are incomplete.');
+  if (nand && !nand.body) throw Error('Prepared camera NAND input is empty.');
   const [text, bootRomBytes, nandBytes, settingsBytes] = await Promise.all([
     document.text(),
     bootRom.arrayBuffer(),
-    new Response(nand.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer(),
-    settings.arrayBuffer(),
+    nand?.body
+      ? new Response(nand.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()
+      : undefined,
+    settings?.arrayBuffer(),
   ]);
   const inputs = {
     bootRom: new Uint8Array(bootRomBytes),
-    nand: new Uint8Array(nandBytes),
-    settings: new Uint8Array(settingsBytes),
+    nand: nandBytes ? new Uint8Array(nandBytes) : undefined,
+    settings: settingsBytes ? new Uint8Array(settingsBytes) : undefined,
   };
   return { text, inputs };
 }

@@ -1,5 +1,22 @@
 use super::*;
 
+#[test]
+fn clock_override_updates_the_device_clock_and_requires_one_rtc() {
+    let mut plan = json!({"nodes":[{"endpoint":{"clock":{
+        "initial_seconds": 0, "maximum_seconds": u32::MAX,
+        "ticks_per_second": 12_000_000, "started": false
+    }}}]});
+    apply_clock(&mut plan, 845_000_000).unwrap();
+    assert_eq!(
+        plan["nodes"][0]["endpoint"]["clock"]["initial_seconds"],
+        845_000_000
+    );
+    assert_eq!(plan["nodes"][0]["endpoint"]["clock"]["started"], false);
+    assert!(apply_clock(&mut json!({}), 1).is_err());
+    let mut two = json!([plan.clone(), plan]);
+    assert!(apply_clock(&mut two, 1).is_err());
+}
+
 fn exr2_inputs(resolved: &mut ResolvedConfiguration) -> &mut Exr2RunInputs {
     match resolved.configuration.inputs.as_mut().unwrap() {
         RunInputs::Exr2(inputs) => inputs,
@@ -486,6 +503,7 @@ fn shipped_preparation_opens_the_same_board_as_selected_files() {
             nand: None,
             settings: None,
             clock_seconds_2000: None,
+            preferred_languages: vec![],
         })
         .unwrap(),
     );
@@ -500,6 +518,7 @@ fn shipped_preparation_opens_the_same_board_as_selected_files() {
         nand: None,
         settings: None,
         clock_seconds_2000: None,
+        preferred_languages: vec![],
     };
     let shipped = snapshot(open_prepared(restored, inputs, Some(PathBuf::from(&unicorn))).unwrap());
     assert_eq!(shipped, direct);
@@ -532,6 +551,7 @@ fn input_bytes_are_refused_before_any_board_when_they_differ_from_the_prepared_i
         nand: None,
         settings: None,
         clock_seconds_2000: None,
+        preferred_languages: vec![],
     };
     let error = open_prepared(prepared, inputs, None).err().unwrap();
     assert!(error.starts_with("update:"), "{error}");

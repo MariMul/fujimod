@@ -186,6 +186,7 @@ class Board:
         nand: str | PathLike[str] | None = None,
         settings: str | PathLike[str] | None = None,
         clock_seconds_2000: int | None = None,
+        preferred_languages: Sequence[str] = (),
     ) -> Self:
         """Boot a catalog runtime from files selected by the caller.
 
@@ -203,6 +204,9 @@ class Board:
         ``clock_seconds_2000`` sets the real-time clock in seconds since
         2000-01-01, or uses the configuration's default if None. Must be
         an unsigned 32-bit integer if provided.
+
+        ``preferred_languages`` supplies BCP 47 tags in preference order for
+        stock first-start setup.
         """
         configuration_id = cls._identifier(configuration_id, "configuration_id")
         if isinstance(overlays, (str, bytes)) or not isinstance(overlays, Sequence):
@@ -217,6 +221,10 @@ class Board:
         unicorn = cls._input_path(unicorn, "unicorn")
         nand = None if nand is None else cls._input_path(nand, "nand")
         settings = None if settings is None else cls._input_path(settings, "settings")
+        if isinstance(preferred_languages, (str, bytes)) or not isinstance(preferred_languages, Sequence):
+            raise TypeError("preferred_languages must be a sequence of BCP 47 tags")
+        if any(not isinstance(tag, str) for tag in preferred_languages):
+            raise TypeError("preferred_languages must contain strings")
         if clock_seconds_2000 is not None:
             if type(clock_seconds_2000) is bool or type(clock_seconds_2000) is not int:
                 raise TypeError("clock_seconds_2000 must be a non-bool integer or None")
@@ -231,6 +239,7 @@ class Board:
             nand=nand,
             settings=settings,
             clock_seconds_2000=clock_seconds_2000,
+            preferred_languages=list(preferred_languages),
         )
         quantum = native.boot_quantum
         if type(quantum) is not int or quantum < 1:

@@ -336,7 +336,8 @@ unsafe fn optional_bytes(data: *const u8, len: u32) -> Result<Option<Vec<u8>>, S
 }
 
 /// Create a camera from a native prepared run. `document` is
-/// `{schema, prepared, clockSeconds2000?, browser}`; the boot ROM is the static
+/// `{document, clockSeconds2000?, preferredLanguages?}`; `document` is the exact
+/// JSON text of `{schema, prepared, browser}`. The boot ROM is the static
 /// engine's companion input, and NAND and settings are optional spans.
 ///
 /// # Safety
