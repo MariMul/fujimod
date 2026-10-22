@@ -4,7 +4,7 @@ import type { ReportSubmission } from '@fujimod/emulator-ui/engine/report';
 import { errorReportZip } from '@fujimod/emulator-ui/engine/report';
 import { LocalReports } from '@fujimod/emulator-ui/ui/local-reports';
 import type { CameraModel } from './camera-model';
-import { Wizard } from './CameraTools';
+import { toolAt, type Wizard } from './routes';
 import { remoteControlUrl } from './sharing';
 import { pageCameraModel } from './usb-camera-model';
 import { Workbench } from './Workbench';
@@ -13,13 +13,11 @@ import './style.css';
 
 declare const __FUJIMOD_SIMULATOR_BUILD__: string;
 
-/** A `?tool=` deep link opens one of the guided workflows directly. */
+/** A `/dev-tools/<tool>/` path opens one of the guided workflows directly. */
 function initialWizard(): Wizard | undefined {
   const url =
     getRequestEvent()?.request.url ?? (typeof window === 'undefined' ? undefined : location.href);
-  if (!url) return undefined;
-  const tool = new URL(url).searchParams.get('tool');
-  return Object.values(Wizard).find((wizard) => wizard === tool);
+  return url ? toolAt(new URL(url).pathname) : undefined;
 }
 
 /** The crash and feedback report: the log, with each entry's bytes as a binary file. */

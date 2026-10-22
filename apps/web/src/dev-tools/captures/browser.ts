@@ -13,7 +13,7 @@ declare global {
 
 const firmwareId = process.env.FUJIMOD_TEST_FIRMWARE || 'x70-110';
 const url = new URL(
-  'dev-tools/?tool=state-captures',
+  'dev-tools/state-captures/',
   process.env.FUJIMOD_WEB_URL || 'http://127.0.0.1:5204/',
 );
 const output = new URL(`../../../build/state-captures/${firmwareId}/`, import.meta.url);

@@ -14,7 +14,7 @@ for (const browserType of [chromium, webkit]) {
       if (message.type() === 'warning' && /hydration/i.test(message.text()))
         errors.push(message.text());
     });
-    await page.goto(new URL('dev-tools/?tool=enable', base).href);
+    await page.goto(new URL('dev-tools/enable/', base).href);
     await page.getByRole('button', { name: 'Begin', exact: true }).click();
     await page.getByRole('button', { name: 'X70 · 1.10 Supported', exact: true }).click();
     const allow = page.getByRole('button', { name: 'Allow camera access', exact: true });

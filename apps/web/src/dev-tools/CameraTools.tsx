@@ -11,13 +11,7 @@ export interface Readings {
 }
 export const emptyReadings = (): Readings => ({ memory: [], errors: [] });
 
-export enum Wizard {
-  Enable = 'enable',
-  Disable = 'disable',
-  Service = 'service',
-  StateCaptures = 'state-captures',
-  MapControls = 'map-controls',
-}
+import { Wizard } from './routes';
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : String(error);

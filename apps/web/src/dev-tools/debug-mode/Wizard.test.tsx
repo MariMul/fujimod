@@ -2,7 +2,7 @@ import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
 import type { ToolSession } from '../camera-model';
-import { Wizard } from '../CameraTools';
+import { Wizard } from '../routes';
 import { Workbench } from '../Workbench';
 import { createTestCameraModel, testCamera } from '../test-camera-model';
 import type { DebugModeSession } from './operations';

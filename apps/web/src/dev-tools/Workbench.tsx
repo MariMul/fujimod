@@ -12,7 +12,8 @@ import {
 import type { CameraModel } from './camera-model';
 import { CameraDetails } from './CameraDetails';
 import { CameraStrip } from './CameraStrip';
-import { CameraTools, Wizard, emptyReadings, type Readings } from './CameraTools';
+import { CameraTools, emptyReadings, type Readings } from './CameraTools';
+import { Wizard, toolAt, toolPath } from './routes';
 import { ConsoleLog } from './ConsoleLog';
 import { ToolDeck, type SavedCamera } from './ToolDeck';
 import { CameraStore } from '../cameras/store';
@@ -32,7 +33,15 @@ export function Workbench(props: {
   initialWizard?: Wizard;
 }) {
   const [selected, setSelected] = createSignal<string>();
-  const [wizard, setWizard] = createSignal(props.initialWizard);
+  const [wizard, showWizard] = createSignal<Wizard | undefined>(props.initialWizard);
+  // Each tool has its own path; Back returns to the previous one.
+  function setWizard(tool: Wizard | undefined) {
+    showWizard(tool);
+    if (toolAt(location.pathname) !== tool) history.pushState(null, '', toolPath(tool));
+  }
+  const follow = () => showWizard(toolAt(location.pathname));
+  onSettled(() => addEventListener('popstate', follow));
+  onCleanup(() => globalThis.removeEventListener?.('popstate', follow));
   const [connecting, setConnecting] = createSignal(false);
   const [connectError, setConnectError] = createSignal('');
   const [readings, setReadings] = createSignal<ReadonlyMap<string, Readings>>(new Map());
