@@ -334,6 +334,14 @@ class BootRomIdentity(TypedDict, total=False):
     content: Required[ContentIdentity]
 
 
+class BoundPosition(TypedDict, total=False):
+    asserted: Required[bool]
+    description: NotRequired[str | None]
+    id: Required[str]
+    key: Required[InputBinding]
+    label: NotRequired[str | None]
+
+
 class CacheGeometry(TypedDict, total=False):
     l1_data_bytes: Required[int]
     l1_instruction_bytes: Required[int]
@@ -462,6 +470,62 @@ class ControlAction(TypedDict, total=False):
     keys: Required[list[str]]
 
 
+type ControlBehavior = (
+    ControlBehaviorVariant0
+    | ControlBehaviorVariant1
+    | ControlBehaviorVariant2
+    | ControlBehaviorVariant3
+    | ControlBehaviorVariant4
+    | ControlBehaviorVariant5
+    | ControlBehaviorVariant6
+    | ControlBehaviorVariant7
+)
+
+
+class ControlBehaviorVariant0(TypedDict, total=False):
+    kind: Required[Literal["button"]]
+    press: Required[InputBinding]
+
+
+class ControlBehaviorVariant1(TypedDict, total=False):
+    kind: Required[Literal["shutter"]]
+    stages: Required[dict[str, list[InputBinding]]]
+
+
+class ControlBehaviorVariant2(TypedDict, total=False):
+    directions: Required[dict[str, InputBinding]]
+    kind: Required[Literal["pad"]]
+    press: NotRequired[InputBinding | None]
+
+
+class ControlBehaviorVariant3(TypedDict, total=False):
+    endless: Required[bool]
+    kind: Required[Literal["dial"]]
+    motion: Required[ControlMotion]
+    press: NotRequired[InputBinding | None]
+
+
+class ControlBehaviorVariant4(TypedDict, total=False):
+    endless: Required[bool]
+    kind: Required[Literal["ring"]]
+    motion: Required[ControlMotion]
+    press: NotRequired[InputBinding | None]
+
+
+class ControlBehaviorVariant5(TypedDict, total=False):
+    kind: Required[Literal["switch"]]
+    positions: Required[list[BoundPosition]]
+
+
+class ControlBehaviorVariant6(TypedDict, total=False):
+    kind: Required[Literal["lever"]]
+    positions: Required[list[BoundPosition]]
+
+
+class ControlBehaviorVariant7(TypedDict, total=False):
+    kind: Required[Literal["touch"]]
+
+
 class ControlBusAttachment(TypedDict, total=False):
     address: Required[int]
     channel: Required[int]
@@ -555,6 +619,20 @@ type ControlKind = Literal[
 type ControlLocation = Literal["top", "front", "rear", "lens", "bottom"]
 
 
+type ControlMotion = ControlMotionVariant0 | ControlMotionVariant1
+
+
+class ControlMotionVariant0(TypedDict, total=False):
+    kind: Required[Literal["positions"]]
+    positions: Required[list[BoundPosition]]
+
+
+class ControlMotionVariant1(TypedDict, total=False):
+    decrease: Required[InputBinding]
+    increase: Required[InputBinding]
+    kind: Required[Literal["steps"]]
+
+
 class ControlPosition(TypedDict, total=False):
     description: NotRequired[str | None]
     id: Required[str]
@@ -564,6 +642,12 @@ class ControlPosition(TypedDict, total=False):
 class ControlReaders(TypedDict, total=False):
     calibration: Required[int]
     scanner: Required[ScannerReader]
+
+
+type ControlRole = Literal["command_control"]
+
+
+type ControlSurface = Literal["top", "rear", "front", "bottom"]
 
 
 class ControllerInterruptInput(TypedDict, total=False):
@@ -614,6 +698,11 @@ class DebugKey(TypedDict, total=False):
     name: Required[str]
 
 
+class DebugKey2(TypedDict, total=False):
+    event: Required[int]
+    name: Required[str]
+
+
 class DecoderChoice(TypedDict, total=False):
     id: Required[str]
     selection: Required[DecoderSelection]
@@ -639,6 +728,37 @@ class DmaMapping(TypedDict, total=False):
     permissions: Required[int]
     physical: Required[int]
     size: Required[RegionSize]
+
+
+type ElectricalInput = (
+    ElectricalInputVariant0 | ElectricalInputVariant1 | ElectricalInputVariant2
+)
+
+
+class ElectricalInputVariant0(TypedDict, total=False):
+    callback: NotRequired[int | None]
+    connection_id: Required[str]
+    expected_result: NotRequired[int | None]
+    intervals: Required[list[CalibrationInterval]]
+    kind: Required[Literal["adc"]]
+
+
+class ElectricalInputVariant1(TypedDict, total=False):
+    connection_id: Required[str]
+    expected_level: Required[bool]
+    kind: Required[Literal["gpio"]]
+    scanner: Required[GpioScanner]
+
+
+class ElectricalInputVariant2(TypedDict, total=False):
+    connection_id: Required[str]
+    decoder_event: Required[int]
+    guard: Required[int]
+    kind: Required[Literal["gpio_quadrature"]]
+    phase_map: Required[list[int]]
+    reset: Required[list[int]]
+    threshold: Required[int]
+    transitions: Required[list[int]]
 
 
 Firmware = TypedDict(
@@ -667,6 +787,24 @@ class FirmwareControl(TypedDict, total=False):
     keys: Required[list[str]]
     positions: Required[list[FirmwareControlPosition]]
     unavailable_reason: NotRequired[str | None]
+
+
+FirmwareControlIds = TypedDict(
+    "FirmwareControlIds",
+    {
+        "$schema": Required["str"],
+        "debug_keys": Required["list[DebugKey2]"],
+        "firmware_id": Required["str"],
+        "id": Required["str"],
+        "input_readers": Required["ControlReaders"],
+        "inputs": Required["list[LocatedInput]"],
+        "interfaces": Required["dict[str, ControlInterface]"],
+        "native_key_names": Required["NativeKeyNames"],
+        "scanner": Required["ScannerTable"],
+        "schema": Required["int"],
+    },
+    total=False,
+)
 
 
 class FirmwareControlPosition(TypedDict, total=False):
@@ -803,6 +941,36 @@ class HomeSwitch(TypedDict, total=False):
     threshold: Required[int]
 
 
+type InputBinding = InputBindingVariant0 | InputBindingVariant1
+
+
+class InputBindingVariant0(TypedDict, total=False):
+    kind: Required[Literal["debug_key"]]
+    name: Required[str]
+
+
+class InputBindingVariant1(TypedDict, total=False):
+    kind: Required[Literal["native_input"]]
+    name: Required[str]
+
+
+type InputTarget = InputTargetVariant0 | InputTargetVariant1 | InputTargetVariant2
+
+
+class InputTargetVariant0(TypedDict, total=False):
+    control_id: Required[str]
+    kind: Required[Literal["control"]]
+
+
+class InputTargetVariant1(TypedDict, total=False):
+    connection_id: Required[str]
+    kind: Required[Literal["connection"]]
+
+
+class InputTargetVariant2(TypedDict, total=False):
+    kind: Required[Literal["unclaimed"]]
+
+
 type InterruptControllerHardware = (
     InterruptControllerHardwareVariant0 | InterruptControllerHardwareVariant1
 )
@@ -861,6 +1029,20 @@ class LensMotor(TypedDict, total=False):
 
 
 type LensProtocol = Literal["banked", "three-byte", "mixed-width", "dc-zoom"]
+
+
+class LocatedInput(TypedDict, total=False):
+    debug_key: NotRequired[str | None]
+    electrical: NotRequired[ElectricalInput | None]
+    event: Required[int]
+    id: Required[str]
+    scanner: NotRequired[LocatedScannerRecord | None]
+    target: Required[InputTarget]
+
+
+class LocatedScannerRecord(TypedDict, total=False):
+    index: Required[int]
+    witness: Required[ScannerRecordWitness]
 
 
 class MProfileState(TypedDict, total=False):
@@ -1048,6 +1230,7 @@ class PartModelVariant6(TypedDict, total=False):
     control: Required[SensorControlInterface]
     full_scale: Required[int]
     kind: Required[Literal["image-sensor"]]
+    radiometry: NotRequired[SensorRadiometry | None]
     raster: Required[SensorRaster]
     reference_white: Required[list[int]]
 
@@ -1130,6 +1313,35 @@ class PeripheralPartVariant9(TypedDict, total=False):
     jedec_id: NotRequired[int | None]
     kind: Required[Literal["serial-nor-flash"]]
     page_bytes: NotRequired[int | None]
+
+
+class PhysicalControl(TypedDict, total=False):
+    assignable: Required[bool]
+    behavior: NotRequired[ControlBehavior | None]
+    connection_ids: Required[list[str]]
+    default_function: NotRequired[str | None]
+    face: NotRequired[str | None]
+    icon: NotRequired[str | None]
+    location: Required[ControlSurface]
+    manual_page: NotRequired[int | None]
+    mechanical: Required[bool]
+    name: Required[str]
+    role: NotRequired[ControlRole | None]
+
+
+PhysicalControls = TypedDict(
+    "PhysicalControls",
+    {
+        "$schema": Required["str"],
+        "analog_levels": Required["int"],
+        "body_id": Required["str"],
+        "controls": Required["dict[str, PhysicalControl]"],
+        "id": Required["str"],
+        "manual": Required["ManualReference"],
+        "schema": Required["int"],
+    },
+    total=False,
+)
 
 
 type PictureLayout = Literal["bgra8888-straight"]
@@ -1227,8 +1439,10 @@ class ResolvedConfiguration(TypedDict, total=False):
 
 class ResolvedSelection(TypedDict, total=False):
     body: Required[Body]
+    control_ids: NotRequired[FirmwareControlIds | None]
     firmware: Required[Firmware]
     parts: Required[list[Part]]
+    physical_controls: NotRequired[PhysicalControls | None]
     soc: Required[Soc]
 
 
@@ -1266,8 +1480,13 @@ class RunAdcInputs(TypedDict, total=False):
 
 class RunBrowserCamera(TypedDict, total=False):
     preview: Required[RunPreview]
+    sensor: Required[RunBrowserSensor]
     still_capture: Required[RunStillCapture]
     virtual_card: Required[RunVirtualCard]
+
+
+class RunBrowserSensor(TypedDict, total=False):
+    frames: Required[str]
 
 
 type RunCardFilesystem = Literal["fat32"]
@@ -1560,12 +1779,30 @@ class RunVirtualCard(TypedDict, total=False):
     sectors_per_cluster: Required[int]
 
 
+type ScannerInputKind = Literal[
+    "kind_0",
+    "kind_1",
+    "kind_2",
+    "kind_3",
+    "kind_4",
+    "kind_5",
+]
+
+
 class ScannerReader(TypedDict, total=False):
     pressed_value: Required[int]
     released_value: Required[int]
     routine: Required[AddressIdentity]
     stable_offset: Required[int]
     stable_width: Required[int]
+
+
+class ScannerRecordWitness(TypedDict, total=False):
+    input_kind: Required[ScannerInputKind]
+    lower: Required[int]
+    physical_key: Required[int]
+    source: Required[int]
+    upper: Required[int]
 
 
 class ScannerTable(TypedDict, total=False):
@@ -1600,11 +1837,39 @@ class SensorControlInterface(TypedDict, total=False):
     register_address_bits: Required[int]
 
 
+type SensorIllumination = Literal["uniform", "cosine-fourth"]
+
+
+class SensorProjection(TypedDict, total=False):
+    focal_length_mm: Required[int]
+    relative_illumination: Required[SensorIllumination]
+    sensor_width_mm: Required[int]
+    subject_distance_mm: Required[int]
+
+
+class SensorRadiometry(TypedDict, total=False):
+    period_ticks: Required[int]
+    projection: Required[SensorProjection]
+    rolling_references: Required[list[SensorRollingReference]]
+    saturation_lux_seconds: Required[int]
+    shutter_closing_delay_seconds: Required[list[tuple[int, int]]]
+    shutter_output: Required[int]
+    ticks_per_second: Required[int]
+    white_luminance: Required[int]
+
+
 class SensorRaster(TypedDict, total=False):
     height: Required[int]
     image_area: Required[list[int]]
     pixel_clock_hz: NotRequired[int | None]
     width: Required[int]
+
+
+class SensorRollingReference(TypedDict, total=False):
+    horizontal: Required[int]
+    lines: Required[int]
+    mode: Required[int]
+    vertical: Required[int]
 
 
 class SerialAttachment(TypedDict, total=False):

@@ -1813,6 +1813,10 @@ pub struct ResolvedSelection {
     pub firmware: Firmware,
     /// Resolved reusable parts referenced by the body.
     pub parts: Vec<Part>,
+    /// The body's hand-authored physical controls, when documented.
+    pub physical_controls: Option<crate::controls::PhysicalControls>,
+    /// The firmware's generated located inputs, when generated.
+    pub control_ids: Option<crate::controls::FirmwareControlIds>,
 }
 
 /// A checked, ID-indexed catalog of processor, part, body and firmware facts.
@@ -1909,6 +1913,8 @@ impl ReferenceCatalog {
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(ResolvedSelection {
+            physical_controls: self.physical_controls.get(&body.id).cloned(),
+            control_ids: self.control_ids.get(&firmware.id).cloned(),
             soc,
             body,
             firmware,

@@ -295,6 +295,14 @@ export type BootRomIdentity = {
   readonly "content": ContentIdentity;
 };
 
+export type BoundPosition = {
+  readonly "asserted": boolean;
+  readonly "description"?: string | null;
+  readonly "id": string;
+  readonly "key": InputBinding;
+  readonly "label"?: string | null;
+};
+
 export type CacheGeometry = {
   readonly "l1_data_bytes": number;
   readonly "l1_instruction_bytes": number;
@@ -398,6 +406,52 @@ export type ControlAction = {
   readonly "keys": readonly string[];
 };
 
+export type ControlBehavior = ControlBehaviorVariant0 | ControlBehaviorVariant1 | ControlBehaviorVariant2 | ControlBehaviorVariant3 | ControlBehaviorVariant4 | ControlBehaviorVariant5 | ControlBehaviorVariant6 | ControlBehaviorVariant7;
+
+export type ControlBehaviorVariant0 = {
+  readonly "kind": "button";
+  readonly "press": InputBinding;
+};
+
+export type ControlBehaviorVariant1 = {
+  readonly "kind": "shutter";
+  readonly "stages": Record<string, readonly InputBinding[]>;
+};
+
+export type ControlBehaviorVariant2 = {
+  readonly "directions": Record<string, InputBinding>;
+  readonly "kind": "pad";
+  readonly "press"?: InputBinding | null;
+};
+
+export type ControlBehaviorVariant3 = {
+  readonly "endless": boolean;
+  readonly "kind": "dial";
+  readonly "motion": ControlMotion;
+  readonly "press"?: InputBinding | null;
+};
+
+export type ControlBehaviorVariant4 = {
+  readonly "endless": boolean;
+  readonly "kind": "ring";
+  readonly "motion": ControlMotion;
+  readonly "press"?: InputBinding | null;
+};
+
+export type ControlBehaviorVariant5 = {
+  readonly "kind": "switch";
+  readonly "positions": readonly BoundPosition[];
+};
+
+export type ControlBehaviorVariant6 = {
+  readonly "kind": "lever";
+  readonly "positions": readonly BoundPosition[];
+};
+
+export type ControlBehaviorVariant7 = {
+  readonly "kind": "touch";
+};
+
 export type ControlBusAttachment = {
   readonly "address": number;
   readonly "channel": number;
@@ -477,6 +531,19 @@ export type ControlKind = "dial" | "button" | "lever" | "switch" | "ring" | "shu
 
 export type ControlLocation = "top" | "front" | "rear" | "lens" | "bottom";
 
+export type ControlMotion = ControlMotionVariant0 | ControlMotionVariant1;
+
+export type ControlMotionVariant0 = {
+  readonly "kind": "positions";
+  readonly "positions": readonly BoundPosition[];
+};
+
+export type ControlMotionVariant1 = {
+  readonly "decrease": InputBinding;
+  readonly "increase": InputBinding;
+  readonly "kind": "steps";
+};
+
 export type ControlPosition = {
   readonly "description"?: string | null;
   readonly "id": string;
@@ -487,6 +554,10 @@ export type ControlReaders = {
   readonly "calibration": number;
   readonly "scanner": ScannerReader;
 };
+
+export type ControlRole = "command_control";
+
+export type ControlSurface = "top" | "rear" | "front" | "bottom";
 
 export type ControllerInterruptInput = {
   readonly "line": number;
@@ -536,6 +607,11 @@ export type DebugKey = {
   readonly "name": string;
 };
 
+export type DebugKey2 = {
+  readonly "event": number;
+  readonly "name": string;
+};
+
 export type DecoderChoice = {
   readonly "id": string;
   readonly "selection": DecoderSelection;
@@ -562,6 +638,34 @@ export type DmaMapping = {
   readonly "size": RegionSize;
 };
 
+export type ElectricalInput = ElectricalInputVariant0 | ElectricalInputVariant1 | ElectricalInputVariant2;
+
+export type ElectricalInputVariant0 = {
+  readonly "callback"?: number | null;
+  readonly "connection_id": string;
+  readonly "expected_result"?: number | null;
+  readonly "intervals": readonly CalibrationInterval[];
+  readonly "kind": "adc";
+};
+
+export type ElectricalInputVariant1 = {
+  readonly "connection_id": string;
+  readonly "expected_level": boolean;
+  readonly "kind": "gpio";
+  readonly "scanner": GpioScanner;
+};
+
+export type ElectricalInputVariant2 = {
+  readonly "connection_id": string;
+  readonly "decoder_event": number;
+  readonly "guard": number;
+  readonly "kind": "gpio_quadrature";
+  readonly "phase_map": readonly number[];
+  readonly "reset": readonly number[];
+  readonly "threshold": number;
+  readonly "transitions": readonly number[];
+};
+
 export type Firmware = {
   readonly "$schema": "https://fujimod.com/schemas/firmware.schema.json";
   readonly "body_id": string;
@@ -581,6 +685,19 @@ export type FirmwareControl = {
   readonly "keys": readonly string[];
   readonly "positions": readonly FirmwareControlPosition[];
   readonly "unavailable_reason"?: string | null;
+};
+
+export type FirmwareControlIds = {
+  readonly "$schema": string;
+  readonly "debug_keys": readonly DebugKey2[];
+  readonly "firmware_id": string;
+  readonly "id": string;
+  readonly "input_readers": ControlReaders;
+  readonly "inputs": readonly LocatedInput[];
+  readonly "interfaces": Record<string, ControlInterface>;
+  readonly "native_key_names": NativeKeyNames;
+  readonly "scanner": ScannerTable;
+  readonly "schema": number;
 };
 
 export type FirmwareControlPosition = {
@@ -711,6 +828,34 @@ export type HomeSwitch = {
   readonly "threshold": number;
 };
 
+export type InputBinding = InputBindingVariant0 | InputBindingVariant1;
+
+export type InputBindingVariant0 = {
+  readonly "kind": "debug_key";
+  readonly "name": string;
+};
+
+export type InputBindingVariant1 = {
+  readonly "kind": "native_input";
+  readonly "name": string;
+};
+
+export type InputTarget = InputTargetVariant0 | InputTargetVariant1 | InputTargetVariant2;
+
+export type InputTargetVariant0 = {
+  readonly "control_id": string;
+  readonly "kind": "control";
+};
+
+export type InputTargetVariant1 = {
+  readonly "connection_id": string;
+  readonly "kind": "connection";
+};
+
+export type InputTargetVariant2 = {
+  readonly "kind": "unclaimed";
+};
+
 export type InterruptControllerHardware = InterruptControllerHardwareVariant0 | InterruptControllerHardwareVariant1;
 
 export type InterruptControllerHardwareVariant0 = {
@@ -766,6 +911,20 @@ export type LensMotor = {
 };
 
 export type LensProtocol = "banked" | "three-byte" | "mixed-width" | "dc-zoom";
+
+export type LocatedInput = {
+  readonly "debug_key"?: string | null;
+  readonly "electrical"?: ElectricalInput | null;
+  readonly "event": number;
+  readonly "id": string;
+  readonly "scanner"?: LocatedScannerRecord | null;
+  readonly "target": InputTarget;
+};
+
+export type LocatedScannerRecord = {
+  readonly "index": number;
+  readonly "witness": ScannerRecordWitness;
+};
 
 export type MProfileState = {
   readonly "cpuid": number;
@@ -931,6 +1090,7 @@ export type PartModelVariant6 = {
   readonly "control": SensorControlInterface;
   readonly "full_scale": number;
   readonly "kind": "image-sensor";
+  readonly "radiometry"?: SensorRadiometry | null;
   readonly "raster": SensorRaster;
   readonly "reference_white": readonly number[];
 };
@@ -1001,6 +1161,30 @@ export type PeripheralPartVariant9 = {
   readonly "jedec_id"?: number | null;
   readonly "kind": "serial-nor-flash";
   readonly "page_bytes"?: number | null;
+};
+
+export type PhysicalControl = {
+  readonly "assignable": boolean;
+  readonly "behavior"?: ControlBehavior | null;
+  readonly "connection_ids": readonly string[];
+  readonly "default_function"?: string | null;
+  readonly "face"?: string | null;
+  readonly "icon"?: string | null;
+  readonly "location": ControlSurface;
+  readonly "manual_page"?: number | null;
+  readonly "mechanical": boolean;
+  readonly "name": string;
+  readonly "role"?: ControlRole | null;
+};
+
+export type PhysicalControls = {
+  readonly "$schema": string;
+  readonly "analog_levels": number;
+  readonly "body_id": string;
+  readonly "controls": Record<string, PhysicalControl>;
+  readonly "id": string;
+  readonly "manual": ManualReference;
+  readonly "schema": number;
 };
 
 export type PictureLayout = "bgra8888-straight";
@@ -1092,8 +1276,10 @@ export type ResolvedConfiguration = {
 
 export type ResolvedSelection = {
   readonly "body": Body;
+  readonly "control_ids"?: FirmwareControlIds | null;
   readonly "firmware": Firmware;
   readonly "parts": readonly Part[];
+  readonly "physical_controls"?: PhysicalControls | null;
   readonly "soc": Soc;
 };
 
@@ -1131,8 +1317,13 @@ export type RunAdcInputs = {
 
 export type RunBrowserCamera = {
   readonly "preview": RunPreview;
+  readonly "sensor": RunBrowserSensor;
   readonly "still_capture": RunStillCapture;
   readonly "virtual_card": RunVirtualCard;
+};
+
+export type RunBrowserSensor = {
+  readonly "frames": string;
 };
 
 export type RunCardFilesystem = "fat32";
@@ -1390,12 +1581,22 @@ export type RunVirtualCard = {
   readonly "sectors_per_cluster": number;
 };
 
+export type ScannerInputKind = "kind_0" | "kind_1" | "kind_2" | "kind_3" | "kind_4" | "kind_5";
+
 export type ScannerReader = {
   readonly "pressed_value": number;
   readonly "released_value": number;
   readonly "routine": AddressIdentity;
   readonly "stable_offset": number;
   readonly "stable_width": number;
+};
+
+export type ScannerRecordWitness = {
+  readonly "input_kind": ScannerInputKind;
+  readonly "lower": number;
+  readonly "physical_key": number;
+  readonly "source": number;
+  readonly "upper": number;
 };
 
 export type ScannerTable = {
@@ -1430,11 +1631,38 @@ export type SensorControlInterface = {
   readonly "register_address_bits": number;
 };
 
+export type SensorIllumination = "uniform" | "cosine-fourth";
+
+export type SensorProjection = {
+  readonly "focal_length_mm": number;
+  readonly "relative_illumination": SensorIllumination;
+  readonly "sensor_width_mm": number;
+  readonly "subject_distance_mm": number;
+};
+
+export type SensorRadiometry = {
+  readonly "period_ticks": number;
+  readonly "projection": SensorProjection;
+  readonly "rolling_references": readonly SensorRollingReference[];
+  readonly "saturation_lux_seconds": number;
+  readonly "shutter_closing_delay_seconds": readonly readonly [number, number][];
+  readonly "shutter_output": number;
+  readonly "ticks_per_second": number;
+  readonly "white_luminance": number;
+};
+
 export type SensorRaster = {
   readonly "height": number;
   readonly "image_area": readonly number[];
   readonly "pixel_clock_hz"?: number | null;
   readonly "width": number;
+};
+
+export type SensorRollingReference = {
+  readonly "horizontal": number;
+  readonly "lines": number;
+  readonly "mode": number;
+  readonly "vertical": number;
 };
 
 export type SerialAttachment = {

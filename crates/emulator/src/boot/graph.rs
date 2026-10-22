@@ -582,6 +582,8 @@ mod tests {
                 generated_facts: None,
             },
             parts: vec![],
+            physical_controls: None,
+            control_ids: None,
         };
         let graph = assemble(
             &selection,

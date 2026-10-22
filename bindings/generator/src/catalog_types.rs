@@ -521,6 +521,19 @@ fn primitive(
             }
             Err("open catalog object has no typed additionalProperties schema".into())
         }
+        "array" if schema.get("prefixItems").is_some() => {
+            let members = schema["prefixItems"]
+                .as_array()
+                .ok_or("catalog tuple prefixItems is not a list")?
+                .iter()
+                .map(|value| property_type(value, is_python, python_string_refs))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(if is_python {
+                format!("tuple[{}]", members.join(", "))
+            } else {
+                format!("readonly [{}]", members.join(", "))
+            })
+        }
         "array" => {
             let item = schema
                 .get("items")
