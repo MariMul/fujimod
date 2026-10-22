@@ -15,7 +15,9 @@ checks and tests before committing. The policy check runs in CI.
 Checked-in generated files carry `.generated` before their extension
 (`control-ids.generated.json`). Never edit them by hand: change their inputs or
 generator and regenerate. Their checks fail when the checked-in copy differs
-from a fresh generation.
+from a fresh generation. Never mix generated and hand-authored content in one
+file: a generator writes whole files, and hand-authored facts live in separate
+files that generators only read.
 
 Never put binary data larger than 128 bytes in JSON, whether as base64, hex or
 number arrays. Write it to a separate binary file and reference that file (path,
