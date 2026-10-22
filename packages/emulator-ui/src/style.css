@@ -450,6 +450,13 @@ svg.i {
   justify-content: space-between;
   gap: 10px;
 }
+.back .c1 > .side-keys:last-child {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  justify-items: center;
+  gap: 14px 8px;
+  margin-top: 0;
+}
 .clusters {
   display: flex;
   flex-direction: column;

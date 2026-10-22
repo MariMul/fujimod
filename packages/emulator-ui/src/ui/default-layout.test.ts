@@ -47,24 +47,32 @@ for (const [body, inputs] of Object.entries(bodies)) {
 }
 
 test('direction groups become one D-pad, centered on press or MENU/OK', () => {
-  const x20 = nodes(defaultLayout(bodies['x20-103']!, 'x20').layout).filter((n) => n.kind === 'dpad');
+  const x20 = nodes(defaultLayout(bodies['x20-103']!, 'x20').layout).filter(
+    (n) => n.kind === 'dpad',
+  );
   expect(x20).toHaveLength(1);
   expect(x20[0]!.bindings!.center).toBe('selector_button.press');
-  const x70 = nodes(defaultLayout(bodies['x70-110']!, 'x70').layout).filter((n) => n.kind === 'dpad');
+  const x70 = nodes(defaultLayout(bodies['x70-110']!, 'x70').layout).filter(
+    (n) => n.kind === 'dpad',
+  );
   expect(x70).toHaveLength(1);
   expect(x70[0]!.bindings!.center).toBe('menu_ok_button');
   expect(x70[0]!.face).toEqual(['MENU', 'OK']);
 });
 
 test('step groups become command controls', () => {
-  const x70 = nodes(defaultLayout(bodies['x70-110']!, 'x70').layout).find((n) => n.kind === 'command');
+  const x70 = nodes(defaultLayout(bodies['x70-110']!, 'x70').layout).find(
+    (n) => n.kind === 'command',
+  );
   expect(x70!.bindings).toEqual({
     left: 'command_control.decrease',
     right: 'command_control.increase',
     center: 'command_control.press',
   });
   expect(x70!.caption).toBe('CMD');
-  const xq1 = nodes(defaultLayout(bodies['xq1-121']!, 'xq1').layout).find((n) => n.kind === 'command');
+  const xq1 = nodes(defaultLayout(bodies['xq1-121']!, 'xq1').layout).find(
+    (n) => n.kind === 'command',
+  );
   expect(xq1!.bindings).toEqual({ left: 'zoom_control.wide', right: 'zoom_control.tele' });
 });
 

@@ -12,7 +12,16 @@ export interface ControlFace {
 }
 
 export type InputGroup =
-  | { kind: 'pad'; id: string; label: string; up: Input; down: Input; left: Input; right: Input; center?: Input }
+  | {
+      kind: 'pad';
+      id: string;
+      label: string;
+      up: Input;
+      down: Input;
+      left: Input;
+      right: Input;
+      center?: Input;
+    }
   | { kind: 'command'; id: string; label: string; decrease: Input; increase: Input; press?: Input }
   | { kind: 'single'; input: Input };
 
@@ -136,13 +145,21 @@ function shown(input: Input) {
   return input.supported && input.kind !== 'touch' && !input.id.endsWith('_latch');
 }
 
+/** Keys beside the D-pad and command controls, as on the back of the camera. */
+const SIDE_KEYS = 6;
+
 function controlNode(input: Input): ControlNode {
   const variant = compatibleVariants(input)[0]!;
   const node: ControlNode = { kind: 'control', id: input.id, variant };
   if (variant !== 'key' && variant !== 'record') {
-    node.caption = caption(input.id, input.label.replace(/\s+(dial|ring|switch|selector|lever|button)$/i, ''));
+    node.caption = caption(
+      input.id,
+      input.label.replace(/\s+(dial|ring|switch|selector|lever|button)$/i, ''),
+    );
     if (input.positions)
-      node.labels = Object.fromEntries(input.positions.map((position) => [position.id, position.label]));
+      node.labels = Object.fromEntries(
+        input.positions.map((position) => [position.id, position.label]),
+      );
     return node;
   }
   const face = controlFace(input);
@@ -159,7 +176,11 @@ function controlNode(input: Input): ControlNode {
 function groupNode(group: Exclude<InputGroup, { kind: 'single' }>): ControlNode {
   if (group.kind === 'pad') {
     const center = group.center;
-    const face = center?.id.endsWith('.press') ? ['OK'] : center ? (controlFace(center).face ?? []) : [];
+    const face = center?.id.endsWith('.press')
+      ? ['OK']
+      : center
+        ? (controlFace(center).face ?? [])
+        : [];
     return {
       kind: 'dpad',
       face,
@@ -199,8 +220,21 @@ export function defaultLayout(inputs: readonly Input[], body: string): DevicePan
   if (positional.length) layout.push({ kind: 'grid', className: 'g2', children: positional });
   if (clusters.length || keys.length) {
     if (layout.length) layout.push({ kind: 'divider' });
-    if (clusters.length) layout.push({ kind: 'column', className: 'clusters', children: clusters });
-    if (keys.length) layout.push({ kind: 'grid', className: 'key-grid', children: keys });
+    const rest = clusters.length ? keys.slice(SIDE_KEYS) : keys;
+    if (clusters.length)
+      layout.push({
+        kind: 'grid',
+        className: 'back',
+        children: [
+          {
+            kind: 'column',
+            className: 'c1',
+            children: [{ kind: 'grid', className: 'side-keys', children: keys.slice(0, SIDE_KEYS) }],
+          },
+          { kind: 'column', className: 'c2 clusters', children: clusters },
+        ],
+      });
+    if (rest.length) layout.push({ kind: 'grid', className: 'key-grid', children: rest });
   }
   return { schema: DEVICE_PANEL_SCHEMA, body, combos: [], layout };
 }
