@@ -80,6 +80,10 @@ provides all firmware memory images.
 `xp5_apply_run_scene` maps a resolved application scene's frame timing and
 command-image values onto caller-owned XP5 device windows before assembly.
 
+Discovery callers can install explicit AArch64 callee substitutions with
+`Board::install_discovery_callee_stubs`. The API rejects strict boards and
+reports each requested substitution and its hit count in board state.
+
 Initial memory images must fit declared physical RAM and cannot overlap. The
 XP5 open function accepts those bytes without comparing them to a bundled
 firmware hash. The caller selects the firmware inputs and loading layout.
