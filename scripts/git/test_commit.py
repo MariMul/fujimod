@@ -144,3 +144,15 @@ def test_logs_and_bulk_additions_need_allow_bulk(repos: tuple[Path, Path]) -> No
     with pytest.raises(Failure, match="500 files"):
         Repository(checkout).commit(["out"], None, "Output\n")
     Repository(checkout).commit(["out"], None, "Import\n", allow_bulk=True)
+
+
+def test_untrack_keeps_the_file_on_disk(repos: tuple[Path, Path]) -> None:
+    _, checkout = repos
+    (checkout / ".gitignore").write_text("b.txt\n")
+    result = Repository(checkout).commit(
+        [".gitignore"], None, "Untrack b\n", untrack=["b.txt"]
+    )
+    files = run("git", "ls-tree", "--name-only", result, cwd=checkout).split()
+    assert "b.txt" not in files
+    assert (checkout / "b.txt").read_text() == "b\n"
+    assert run("git", "status", "--porcelain", cwd=checkout) == ""

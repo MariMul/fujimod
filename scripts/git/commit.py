@@ -8,7 +8,8 @@ deletions). ``--patch`` applies a diff, relative to HEAD, holding only your
 hunks in files that also contain other work. Nothing else in the shared index
 or working tree is included. ``--ignored`` also takes named files that
 .gitignore covers. Commits that add logs, movies or 500 or more files are
-refused unless ``--allow-bulk`` is given.
+refused unless ``--allow-bulk`` is given. ``--untrack PATH`` removes tracked
+files from Git and leaves them on disk; add an ignore rule so they stay out.
 
 The commit is built in a private index on the checked-out branch's HEAD, after
 ``sync.py`` brings that branch to its ``origin`` counterpart, merging origin's
@@ -42,6 +43,7 @@ class Arguments(argparse.Namespace):
     repo: Path
     ignored: bool
     allow_bulk: bool
+    untrack: list[str]
     paths: list[str]
 
 
@@ -55,6 +57,7 @@ class Repository(GitRepository):
         *,
         ignored: bool = False,
         allow_bulk: bool = False,
+        untrack: list[str] | None = None,
     ) -> str:
         with tempfile.TemporaryDirectory() as scratch:
             env = dict(os.environ, GIT_INDEX_FILE=str(Path(scratch) / "index"))
@@ -72,6 +75,17 @@ class Repository(GitRepository):
                     "--pathspec-file-nul",
                     env=env,
                     input="\0".join(paths) + "\0",
+                )
+            if untrack:
+                self.git(
+                    "rm",
+                    "-r",
+                    "-q",
+                    "--cached",
+                    "--pathspec-from-file=-",
+                    "--pathspec-file-nul",
+                    env=env,
+                    input="\0".join(untrack) + "\0",
                 )
             tree = self.git("write-tree", env=env).stdout.strip()
         if tree == self.output("rev-parse", f"{parent}^{{tree}}"):
@@ -114,6 +128,7 @@ class Repository(GitRepository):
         *,
         ignored: bool = False,
         allow_bulk: bool = False,
+        untrack: list[str] | None = None,
     ) -> str:
         ref = self.branch()
         name = ref.removeprefix("refs/heads/")
@@ -137,6 +152,7 @@ class Repository(GitRepository):
                     message,
                     ignored=ignored,
                     allow_bulk=allow_bulk,
+                    untrack=untrack,
                 )
                 if self.git("update-ref", ref, result, parent, check=False).returncode:
                     raise Failure(
@@ -178,10 +194,17 @@ def main() -> None:
         action="store_true",
         help="allow adding logs, movies or 500 or more files in one commit",
     )
+    parser.add_argument(
+        "--untrack",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="remove PATH from Git but keep it on disk (repeatable)",
+    )
     parser.add_argument("paths", nargs="*")
     args = parser.parse_args(namespace=Arguments())
-    if not args.paths and not args.patch:
-        parser.error("name the paths to commit or give --patch")
+    if not args.paths and not args.patch and not args.untrack:
+        parser.error("name the paths to commit, give --patch or --untrack")
     message = args.message if args.message.endswith("\n") else args.message + "\n"
     patch = args.patch.resolve() if args.patch else None
     try:
@@ -192,6 +215,7 @@ def main() -> None:
             message,
             ignored=args.ignored,
             allow_bulk=args.allow_bulk,
+            untrack=args.untrack,
         )
     except (Failure, subprocess.CalledProcessError) as error:
         print(f"commit: {error}", file=sys.stderr)
