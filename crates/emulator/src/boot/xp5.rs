@@ -153,10 +153,25 @@ pub fn assemble_devices(
         .filter(|window| matches!(window.kind.as_str(), "gpio" | "gpio-port3"))
         .map(|window| graph.at(window.base))
         .collect::<Result<Vec<_>, _>>()?;
-    let nodes = windows
-        .iter()
-        .map(|window| Ok((format!("{:#x}", window.base), graph.at(window.base)?)))
-        .collect::<Result<BTreeMap<_, _>, String>>()?;
+    let mut nodes = BTreeMap::new();
+    for window in &windows {
+        match graph.at(window.base) {
+            Ok(node) => {
+                nodes.insert(format!("{:#x}", window.base), node);
+            }
+            // Clock banks are a sparse envelope: its base is not itself a
+            // register device, and holes in the envelope must remain unmapped.
+            Err(_) if window.kind == "clock-banks" => {}
+            Err(error) => return Err(error),
+        }
+    }
+    // Expose the actual mapped nodes inside composite envelopes for callers
+    // that need to inspect a specific clock bank.
+    for node in &graph.nodes {
+        for mapping in &node.mappings {
+            nodes.insert(format!("{:#x}", mapping.base), graph.at(mapping.base)?);
+        }
+    }
     for &device in &gpio_devices {
         let mut causes = graph.nodes[device].native_dependencies.clone();
         causes.push(control_source);
