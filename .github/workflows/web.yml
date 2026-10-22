@@ -1,17 +1,6 @@
 name: Web checks
 on:
-  pull_request:
-    paths:
-      - 'apps/web/**'
-      - 'packages/emulator-ui/**'
-      - 'bindings/javascript/**'
-      - 'bindings/generator/**'
-      - 'crates/usb/**'
-      - 'crates/defs/**'
-      - 'crates/simulation/**'
-      - 'Cargo.*'
-      - 'bindings/python/python/fujimod/presentation/controls.json'
-      - '.github/workflows/web.yml'
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:

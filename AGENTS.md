@@ -46,3 +46,6 @@ the catch-up writes files, and only origin's changes. For a file that also holds
 pass a diff of only your hunks with `--patch FILE`. The shared index only
 mirrors `HEAD`: do not stage, `git commit`, `merge`, `rebase`, `stash` or
 `pull` in a shared checkout.
+
+GitHub Actions workflows run only on `workflow_dispatch`, started by a person.
+Do not add `push`, `pull_request`, `schedule` or other automatic triggers.
