@@ -9,7 +9,7 @@ use std::{any::Any, ffi::c_void, ptr::NonNull};
 mod architecture;
 mod ffi;
 pub mod jit;
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, Ref, RefCell};
 use std::collections::BTreeMap;
 use std::ffi::CStr;
 use std::path::Path;
@@ -62,6 +62,9 @@ impl Library {
             callback_error: Rc::new(RefCell::new(None)),
             inspection: Rc::new(Inspection::default()),
             run_until: Cell::new(None),
+            memory_regions: RefCell::new(None),
+            #[cfg(test)]
+            memory_region_queries: Cell::new(0),
             mmio: RefCell::new(BTreeMap::new()),
             mmio_contexts: RefCell::new(Vec::new()),
         };
@@ -110,6 +113,9 @@ pub struct Core {
     callback_error: Rc<RefCell<Option<String>>>,
     inspection: Rc<Inspection>,
     run_until: Cell<Option<u64>>,
+    memory_regions: RefCell<Option<Vec<MemoryRegion>>>,
+    #[cfg(test)]
+    memory_region_queries: Cell<u64>,
     // Stable callback contexts survive partial unmaps and remapping. They are
     // released only after uc_close has destroyed all remaining mappings.
     #[allow(clippy::vec_box)]
@@ -319,6 +325,7 @@ impl Core {
                 pointer,
             )
         })?;
+        self.invalidate_memory_regions();
         self.mmio_contexts.borrow_mut().push(context);
         self.mmio.borrow_mut().insert(
             address,
@@ -348,7 +355,7 @@ impl Core {
         if affected.is_empty() {
             return Ok(());
         }
-        let regions = self.memory_regions()?;
+        let regions = self.cached_memory_regions()?.to_vec();
         for (base, mapping) in affected {
             let fragments = regions
                 .iter()
@@ -370,6 +377,7 @@ impl Core {
                 // Rebind only those fragments, retaining original offsets and
                 // permissions. Large windows remain a single native mapping.
                 self.check(unsafe { (self.api.uc_mem_unmap)(self.raw, fragment.begin, bytes) })?;
+                self.invalidate_memory_regions();
                 unsafe {
                     self.map_io(
                         fragment.begin,
@@ -382,9 +390,44 @@ impl Core {
                 self.check(unsafe {
                     (self.api.uc_mem_protect)(self.raw, fragment.begin, bytes, fragment.permissions)
                 })?;
+                self.invalidate_memory_regions();
             }
         }
         Ok(())
+    }
+    fn cached_memory_regions(&self) -> Result<Ref<'_, [MemoryRegion]>, String> {
+        if self.memory_regions.borrow().is_none() {
+            let regions = self.query_memory_regions()?;
+            *self.memory_regions.borrow_mut() = Some(regions);
+        }
+        Ok(Ref::map(self.memory_regions.borrow(), |regions| {
+            regions.as_deref().expect("region cache populated")
+        }))
+    }
+    fn query_memory_regions(&self) -> Result<Vec<MemoryRegion>, String> {
+        #[cfg(test)]
+        self.memory_region_queries
+            .set(self.memory_region_queries.get().saturating_add(1));
+        let mut raw = std::ptr::null_mut();
+        let mut count = 0;
+        self.check(unsafe { (self.api.uc_mem_regions)(self.raw, &mut raw, &mut count) })?;
+        let regions = if count == 0 {
+            Vec::new()
+        } else {
+            unsafe { std::slice::from_raw_parts(raw, count as usize) }
+                .iter()
+                .map(|r| MemoryRegion {
+                    begin: r.begin,
+                    end: r.end,
+                    permissions: r.perms,
+                })
+                .collect()
+        };
+        self.check(unsafe { (self.api.uc_free)(raw.cast()) })?;
+        Ok(regions)
+    }
+    fn invalidate_memory_regions(&self) {
+        *self.memory_regions.borrow_mut() = None;
     }
     fn hook_key(&self, hook: HookId) -> Result<usize, String> {
         if hook.owner != self.identity || !self.hooks.borrow().contains_key(&hook.key) {
@@ -532,23 +575,7 @@ impl Cpu for Core {
         })
     }
     fn memory_regions(&self) -> Result<Vec<MemoryRegion>, String> {
-        let mut raw = std::ptr::null_mut();
-        let mut count = 0;
-        self.check(unsafe { (self.api.uc_mem_regions)(self.raw, &mut raw, &mut count) })?;
-        let regions = if count == 0 {
-            Vec::new()
-        } else {
-            unsafe { std::slice::from_raw_parts(raw, count as usize) }
-                .iter()
-                .map(|r| MemoryRegion {
-                    begin: r.begin,
-                    end: r.end,
-                    permissions: r.perms,
-                })
-                .collect()
-        };
-        self.check(unsafe { (self.api.uc_free)(raw.cast()) })?;
-        Ok(regions)
+        Ok(self.cached_memory_regions()?.to_vec())
     }
     unsafe fn map_backing(
         &self,
@@ -565,10 +592,14 @@ impl Cpu for Core {
                 permissions,
                 backing.as_ptr().cast(),
             )
-        })
+        })?;
+        self.invalidate_memory_regions();
+        Ok(())
     }
     fn map_zeroed(&self, address: u64, bytes: usize, permissions: u32) -> Result<(), String> {
-        self.check(unsafe { (self.api.uc_mem_map)(self.raw, address, bytes as u64, permissions) })
+        self.check(unsafe { (self.api.uc_mem_map)(self.raw, address, bytes as u64, permissions) })?;
+        self.invalidate_memory_regions();
+        Ok(())
     }
     unsafe fn map_mmio(&self, address: u64, bytes: usize, callbacks: Mmio) -> Result<(), String> {
         unsafe { self.map_io(address, bytes, callbacks, Vec::new(), 0) }
@@ -585,6 +616,7 @@ impl Cpu for Core {
     fn unmap(&self, address: u64, bytes: usize) -> Result<(), String> {
         let affected = self.affected_mmio(address, bytes)?;
         self.check(unsafe { (self.api.uc_mem_unmap)(self.raw, address, bytes as u64) })?;
+        self.invalidate_memory_regions();
         self.normalize_mmio(affected)
     }
     fn protect(&self, address: u64, bytes: usize, permissions: u32) -> Result<(), String> {
@@ -592,6 +624,7 @@ impl Cpu for Core {
         self.check(unsafe {
             (self.api.uc_mem_protect)(self.raw, address, bytes as u64, permissions)
         })?;
+        self.invalidate_memory_regions();
         self.normalize_mmio(affected)
     }
     fn invalidate_code(&self, range: Option<(u64, u64)>) -> Result<(), String> {
@@ -1282,6 +1315,34 @@ mod tests {
                 .contains("MMIO")
         );
         assert!(probe.accesses.is_empty());
+    }
+    #[test]
+    fn virtual_reads_reuse_mapped_regions_until_mapping_changes() {
+        let library = library();
+        let cpu = library.open(Model::CortexR5F, 4 * 1024 * 1024).unwrap();
+        cpu.map_zeroed(0x1000, 0x2000, 7).unwrap();
+        cpu.write_memory(0x1000, &[0x34, 0x12, 0xed, 0xfe]).unwrap();
+
+        let mut bytes = [0; 4];
+        cpu.read_virtual(0x1000, Access::Read, &mut bytes).unwrap();
+        cpu.read_virtual(0x1000, Access::Read, &mut bytes).unwrap();
+        assert_eq!(bytes, [0x34, 0x12, 0xed, 0xfe]);
+        assert_eq!(cpu.memory_region_queries.get(), 1);
+
+        cpu.protect(0x1000, 0x1000, 1).unwrap();
+        cpu.read_virtual(0x1000, Access::Read, &mut bytes).unwrap();
+        assert_eq!(cpu.memory_region_queries.get(), 2);
+        assert!(cpu.read_virtual(0x1000, Access::Write, &mut bytes).is_err());
+        assert_eq!(cpu.memory_region_queries.get(), 2);
+
+        cpu.unmap(0x1000, 0x1000).unwrap();
+        assert!(cpu.read_virtual(0x1000, Access::Read, &mut bytes).is_err());
+        assert_eq!(cpu.memory_region_queries.get(), 3);
+
+        cpu.map_zeroed(0x1000, 0x1000, 3).unwrap();
+        cpu.read_virtual(0x1000, Access::Read, &mut bytes).unwrap();
+        assert_eq!(bytes, [0; 4]);
+        assert_eq!(cpu.memory_region_queries.get(), 4);
     }
     #[derive(Default)]
     struct MmioProbe {
