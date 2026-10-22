@@ -1465,7 +1465,6 @@ a:focus-visible,
 }
 
 /* Rapid taps on keys must not trigger iOS double-tap zoom. */
-.control-surface,
-.control-surface * {
+.control-surface {
   touch-action: manipulation;
 }
