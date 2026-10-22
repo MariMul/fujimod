@@ -1961,6 +1961,36 @@
       "electrical": null
     },
     {
+      "id": "encoder-519",
+      "event": 519,
+      "debug_key": "W_DIAL+",
+      "target": {
+        "kind": "control",
+        "control_id": "command_dial"
+      },
+      "scanner": null,
+      "electrical": {
+        "kind": "gpio_fixed_cycle",
+        "connection_id": "controls-encoder-3-11-3-12",
+        "cycle_sign": 1
+      }
+    },
+    {
+      "id": "encoder-520",
+      "event": 520,
+      "debug_key": "W_DIAL-",
+      "target": {
+        "kind": "control",
+        "control_id": "command_dial"
+      },
+      "scanner": null,
+      "electrical": {
+        "kind": "gpio_fixed_cycle",
+        "connection_id": "controls-encoder-3-11-3-12",
+        "cycle_sign": -1
+      }
+    },
+    {
       "id": "debug-38",
       "event": 38,
       "debug_key": "EVF_LCD",

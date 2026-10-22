@@ -162,12 +162,29 @@
       "manual_page": 4,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-encoder-3-11-3-12"
+      ],
       "assignable": false,
       "default_function": "Rotate to adjust settings or navigate; press up for delete or autofocus, right for flash, down for white balance, left for macro, or press the center MENU/OK button.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "steps",
+          "decrease": {
+            "kind": "debug_key",
+            "name": "W_DIAL-"
+          },
+          "increase": {
+            "kind": "debug_key",
+            "name": "W_DIAL+"
+          }
+        },
+        "press": null,
+        "endless": true
+      }
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",

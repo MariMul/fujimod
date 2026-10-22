@@ -544,6 +544,26 @@
           "device-4",
           "device-5",
           "device-6"
+        ],
+        "encoders": [
+          {
+            "name": "command_dial",
+            "options": {
+              "pins": [
+                {
+                  "port": 3,
+                  "pin": 11
+                },
+                {
+                  "port": 3,
+                  "pin": 12
+                }
+              ],
+              "phase_ticks": 120000,
+              "rest_phase": 3
+            },
+            "counter": null
+          }
         ]
       },
       "x100s-121-browser-usb": {
@@ -1109,6 +1129,26 @@
           "device-4",
           "device-5",
           "device-6"
+        ],
+        "encoders": [
+          {
+            "name": "command_dial",
+            "options": {
+              "pins": [
+                {
+                  "port": 3,
+                  "pin": 11
+                },
+                {
+                  "port": 3,
+                  "pin": 12
+                }
+              ],
+              "phase_ticks": 120000,
+              "rest_phase": 3
+            },
+            "counter": null
+          }
         ]
       }
     }
@@ -1382,6 +1422,24 @@
           "port": 3,
           "pin": 7,
           "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-encoder-3-11-3-12",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 11,
+          "active_level": true
+        },
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 12,
+          "active_level": true
         }
       ]
     }
