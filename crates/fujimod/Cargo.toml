@@ -7,6 +7,7 @@ repository.workspace = true
 publish.workspace = true
 
 [features]
+remote = ["dep:fujimod-remote"]
 default = []
 simulation = ["dep:fujimod-simulation"]
 catalog = ["dep:fujimod-catalog"]
@@ -25,6 +26,7 @@ emulator-cpu-unicorn = ["emulator-cpu", "dep:fujimod-emulator-cpu-unicorn"]
 emulator-cpu-hvf = ["emulator-cpu", "dep:fujimod-emulator-cpu-hvf"]
 
 [dependencies]
+fujimod-remote = { workspace = true, optional = true }
 fujimod-simulation = { workspace = true, optional = true }
 fujimod-catalog = { workspace = true, optional = true }
 fujimod-usb = { workspace = true, optional = true }

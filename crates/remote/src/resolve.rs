@@ -328,7 +328,7 @@ impl<B: Backend> Memory<'_, B> {
                 width as usize * 4,
             )
             .await?;
-        let mut label = String::new();
+        let label = String::new();
         for offset in (0..width.min(2)).map(|n| n * 4) {
             let resource = word(&raw, offset)?;
             if resource == 0 || resource == 0x7ffffffe || resource >= 0xff000000 {
@@ -336,7 +336,7 @@ impl<B: Backend> Memory<'_, B> {
             }
             let text = self.text(resource).await?;
             if !text.is_empty() {
-                label = text;
+                return Ok(text);
             }
         }
         Ok(label)

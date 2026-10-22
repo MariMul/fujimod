@@ -110,6 +110,7 @@ pub struct Capture {
     pub output: String,
     pub sequence: u64,
     pub reads: ReadSet,
+    pub completion_reads: ReadSet,
 }
 /// This view cannot supply inputs or advance time. Frame reads here are passive;
 /// screenshot() is the operation that waits for a completed frame.

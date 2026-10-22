@@ -47,6 +47,9 @@ impl<S: SessionOwner> Connection<BoardBackend<S>> {
             facts,
         )
     }
+    pub fn into_session(self) -> S {
+        self.backend.owner
+    }
     pub fn checkpoint(&mut self, previous: Option<&Checkpoint>) -> Result<Checkpoint> {
         self.backend.owner.with_session(|s| s.checkpoint(previous))
     }
@@ -182,12 +185,16 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
             let options = &self.options;
             self.owner
                 .with_session(|s| {
-                    tracked(s, reads, |s| {
+                    let mut completion_reads = ReadSet::default();
+                    let sequence = tracked(s, &mut completion_reads, |s| {
                         let counters = s.board.device_states(&options.frame_counter_kind)?;
-                        let sequence = counters
+                        counters
                             .pointer(&options.frame_counter_pointer)
                             .and_then(serde_json::Value::as_u64)
-                            .ok_or("Completed frame counter is unavailable")?;
+                            .ok_or_else(|| "Completed frame counter is unavailable".to_string())
+                    })?;
+                    reads.extend(completion_reads.clone());
+                    tracked(s, reads, |s| {
                         let frame = s
                             .recording_frame(
                                 &options.scanout_node,
@@ -207,6 +214,7 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
                             output: options.output.clone(),
                             sequence,
                             reads: ReadSet::default(),
+                            completion_reads,
                         })
                     })
                 })

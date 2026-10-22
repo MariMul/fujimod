@@ -29,3 +29,6 @@ pub use fujimod_emulator_cpu_unicorn as emulator_cpu_unicorn;
     target_arch = "aarch64"
 ))]
 pub use fujimod_emulator_cpu_hvf as emulator_cpu_hvf;
+
+#[cfg(feature = "remote")]
+pub use fujimod_remote as remote;

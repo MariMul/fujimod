@@ -1,8 +1,10 @@
 use super::*;
-use crate::{backend::Backend, connection::Connection};
+use crate::backend::Backend;
+#[cfg(test)]
+use crate::connection::Connection;
 use serde_json::json;
 
-fn facts() -> Facts {
+pub fn facts() -> Facts {
     let hash = "00".repeat(32);
     let ids = ["menu", "ok", "back", "left", "right", "up", "down"];
     let physical: serde_json::Map<_, _> = ids.iter().map(|id| (id.to_string(), json!({"name":id,"kind":"button","location":"rear","positions":[],"pushable":true,"default_function":null,"assignable":false,"manual_page":null,"connection_ids":[]}))).collect();
@@ -28,7 +30,7 @@ fn facts() -> Facts {
         },"menu_manifest":null
     })).unwrap()
 }
-struct Synthetic {
+pub struct Synthetic {
     bytes: Vec<u8>,
     now: u64,
     sequence: u64,
@@ -36,9 +38,10 @@ struct Synthetic {
     waits: Vec<ReadSet>,
     value: u32,
     stuck: bool,
+    reorder_on_down: bool,
 }
 impl Synthetic {
-    fn new() -> Self {
+    pub fn new() -> Self {
         let mut s = Self {
             bytes: vec![0; 65536],
             now: 0,
@@ -47,6 +50,7 @@ impl Synthetic {
             waits: vec![],
             value: 0,
             stuck: false,
+            reorder_on_down: false,
         };
         for (address, value) in [(256, 4096), (260, 4352), (768, 3), (824, 1), (832, 32768)] {
             s.word(address, value);
@@ -122,7 +126,13 @@ impl Backend for Synthetic {
             match input.control.id() {
                 "menu" => self.active(4096, 0),
                 "right" => self.active(4352, self.value),
-                "down" => self.word(520, 1),
+                "down" => {
+                    self.word(520, 1);
+                    if self.reorder_on_down {
+                        self.bytes[8192..8208].rotate_left(8);
+                        self.reorder_on_down = false;
+                    }
+                }
                 "up" => self.word(520, 0),
                 "ok" => {
                     self.value = self.get(520);
@@ -147,6 +157,7 @@ impl Backend for Synthetic {
                 output: "lcd".into(),
                 sequence: self.sequence,
                 reads: reads.clone(),
+                completion_reads: reads.clone(),
             })
         })
     }
@@ -157,6 +168,7 @@ impl Backend for Synthetic {
             if !self.stuck {
                 self.sequence += 1;
             }
+            futures_lite::future::yield_now().await;
             Ok(())
         })
     }
@@ -241,5 +253,43 @@ fn predicate_tracks_only_its_reads() {
         .unwrap();
         assert!(!r.backend.waits[0].stores.is_empty());
         assert!(r.backend.waits[0].devices.is_empty());
+    });
+}
+
+#[test]
+fn navigation_resolves_again_after_each_edge() {
+    futures_lite::future::block_on(async {
+        let mut backend = Synthetic::new();
+        backend.reorder_on_down = true;
+        let mut remote = Connection::connect(backend, facts()).unwrap();
+        let value = remote
+            .navigate(&menu("shooting").with_key(20), 100)
+            .await
+            .unwrap();
+        assert!(value.menu().unwrap().selected);
+        assert_eq!(value.menu().unwrap().index, Some(0));
+        assert!(remote.backend.edges.iter().any(|i| i.control.id() == "up"));
+    });
+}
+#[test]
+fn predicate_timeout_reports_last_snapshot() {
+    futures_lite::future::block_on(async {
+        let mut remote = Connection::connect(Synthetic::new(), facts()).unwrap();
+        let error = operations::wait_until(
+            &mut remote,
+            |view| {
+                Box::pin(async move {
+                    view.read(&control("down").into()).await?;
+                    Ok(false)
+                })
+            },
+            2,
+            "test condition",
+        )
+        .await
+        .unwrap_err();
+        assert!(error.contains("test condition"));
+        assert!(error.contains("last snapshots"));
+        assert!(error.contains("ControlSnapshot"));
     });
 }

@@ -39,6 +39,7 @@ pub async fn turn<R: Remote + ?Sized>(
 struct Tracked<'a, R: ?Sized> {
     remote: &'a mut R,
     reads: ReadSet,
+    last: Vec<Snapshot>,
 }
 impl<R: Observation + ?Sized> Observation for Tracked<'_, R> {
     fn now(&self) -> u64 {
@@ -48,6 +49,7 @@ impl<R: Observation + ?Sized> Observation for Tracked<'_, R> {
         Box::pin(async move {
             let v = self.remote.read(reference).await?;
             self.reads.extend(v.reads.clone());
+            self.last.push(v.clone());
             Ok(v)
         })
     }
@@ -69,14 +71,16 @@ pub async fn wait_until<R: Remote + ?Sized>(
         let mut view = Tracked {
             remote: r,
             reads: ReadSet::default(),
+            last: vec![],
         };
         if predicate(&mut view).await? {
             return Ok(());
         }
         let reads = view.reads;
+        let last = view.last;
         if r.now() >= deadline {
             return Err(format!(
-                "Timed out waiting for {condition}; last read set: {reads:?}"
+                "Timed out waiting for {condition}; last snapshots: {last:?}; read set: {reads:?}"
             ));
         }
         r.wait(&reads, deadline).await?;
@@ -285,6 +289,6 @@ pub async fn screenshot<R: Remote + ?Sized>(r: &mut R, deadline: u64) -> Result<
                 frame.output, frame.sequence, frame.time
             ));
         }
-        r.wait(&frame.reads, deadline).await?;
+        r.wait(&frame.completion_reads, deadline).await?;
     }
 }

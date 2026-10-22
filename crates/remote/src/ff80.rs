@@ -30,6 +30,9 @@ pub struct Ff80Backend<S> {
 }
 pub type Ff80Remote<S> = Connection<Ff80Backend<S>>;
 impl<S: BorrowMut<Session>> Connection<Ff80Backend<S>> {
+    pub fn into_session(self) -> S {
+        self.backend.session
+    }
     pub fn new(session: S, facts: Facts, options: Options) -> Result<Self> {
         if options.poll_interval.is_zero() || options.output.is_empty() {
             return Err("Invalid ff80 polling options".into());
@@ -82,38 +85,19 @@ impl<S: BorrowMut<Session>> Backend for Ff80Backend<S> {
                 })
                 .map(|(role, _)| role.as_str())
                 .unwrap_or(id);
-            let name = if let Some(name) = facts.firmware.input_bindings.get(role) {
-                name.clone()
+            let binding = if let InputState::Turn(steps) = input.state {
+                format!("{role}.{}", if steps > 0 { "increase" } else { "decrease" })
             } else {
-                let mapping = facts
-                    .firmware
-                    .controls
-                    .controls
-                    .get(id)
-                    .ok_or_else(|| format!("Unknown control {id}"))?;
-                let keys = if let InputState::Turn(steps) = input.state {
-                    &mapping
-                        .actions
-                        .get(if steps > 0 { "increase" } else { "decrease" })
-                        .ok_or_else(|| format!("No debug rotation mapping for {id}"))?
-                        .keys
-                } else {
-                    &mapping.keys
-                };
-                let matches: Vec<_> = facts
-                    .firmware
-                    .debug_keys
-                    .iter()
-                    .filter(|key| keys.iter().any(|name| name.eq_ignore_ascii_case(&key.name)))
-                    .collect();
-                if matches.len() != 1 {
-                    return Err(format!(
-                        "Control {id} resolves to {} debug keys",
-                        matches.len()
-                    ));
-                }
-                matches[0].name.clone()
+                role.to_owned()
             };
+            let name = facts
+                .firmware
+                .input_bindings
+                .get(&binding)
+                .ok_or_else(|| {
+                    format!("Control {id} has no explicit debug command binding {binding}")
+                })?
+                .clone();
             let states = match input.state {
                 InputState::Pressed => vec![KeyState::On],
                 InputState::Released => vec![KeyState::Off],
@@ -184,6 +168,13 @@ impl<S: BorrowMut<Session>> Backend for Ff80Backend<S> {
                 output: self.options.output.clone(),
                 sequence: after,
                 reads: reads.clone(),
+                completion_reads: ReadSet {
+                    stores: vec![(
+                        scanout.pointer_address | self.alias,
+                        (scanout.pointer_address | self.alias) + 4,
+                    )],
+                    devices: Default::default(),
+                },
             })
         })
     }
@@ -202,3 +193,6 @@ impl<S: BorrowMut<Session>> Backend for Ff80Backend<S> {
         Ok(None)
     }
 }
+#[cfg(test)]
+#[path = "ff80_tests.rs"]
+mod tests;

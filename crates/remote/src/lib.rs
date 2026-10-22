@@ -25,5 +25,5 @@ pub use board::BoardRemote;
 pub mod ff80;
 #[cfg(feature = "ff80")]
 pub use ff80::Ff80Remote;
-#[cfg(test)]
-mod tests;
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;

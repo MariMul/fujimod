@@ -3372,6 +3372,7 @@ dependencies = [
  "fujimod-emulator-cpu-hvf",
  "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
+ "fujimod-remote",
  "fujimod-simulation",
  "fujimod-usb",
  "fujimod-workflows",
@@ -3551,6 +3552,20 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "fujimod-remote"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-emulator",
+ "fujimod-recording",
+ "fujimod-usb",
+ "futures-lite",
+ "futures-timer",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
