@@ -750,6 +750,9 @@ pub struct Touch {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BodyProfile {
+    /// Exported construction topology, including native node identities and hardware parameters.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub construction: Option<crate::construction::ConstructionProfile>,
     /// Declared attachments.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attachments: Option<PartAssemblies>,
@@ -1235,6 +1238,12 @@ pub struct RegisterLayouts {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ResetRelease {
+    /// Qualification of the release mechanism for this firmware.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub basis: Option<String>,
+    /// Immutable instruction words expected at the release destination.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checks: Option<Vec<ResetCheck>>,
     /// Declared mask.
     pub mask: u64,
     /// Declared register.
@@ -1370,6 +1379,9 @@ pub struct RegisterWindow {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SocProfile {
+    /// Qualification of the declared processor cache capacities.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_basis: Option<String>,
     /// Declared board ticks per second.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub board_ticks_per_second: Option<u64>,
@@ -1583,4 +1595,14 @@ impl DeviceGraph {
         }
         Ok(())
     }
+}
+
+/// A checked word at a secondary processor release destination.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ResetCheck {
+    /// Address of the expected word.
+    pub address: u64,
+    /// Expected bytes in memory order.
+    pub expected_hex: String,
 }

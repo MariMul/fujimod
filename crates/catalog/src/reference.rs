@@ -2132,6 +2132,10 @@ pub struct Firmware {
     /// Generated observation facts consumed by supported runs.
     #[cfg_attr(feature = "typescript", serde(default))]
     pub generated_facts: Option<FirmwareGeneratedFacts>,
+    /// Located boot, device and persistent-storage layout facts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", tsify(type = "FirmwareLayouts | null"))]
+    pub layouts: Option<crate::firmware::FirmwareLayouts>,
 }
 
 impl Firmware {

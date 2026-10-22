@@ -4,7 +4,194 @@
   "id": "xa2",
   "soc_id": "exr2",
   "dram_bytes": 536870912,
-  "hardware": null,
+  "hardware": {
+    "serial_attachments": [],
+    "gpio_feedback": [],
+    "keypad_samples": {},
+    "thermal_connection_ids": [],
+    "profiles": {
+      "xa2-130-browser-usb": {
+        "dram_basis": "Declared catalog input.",
+        "controllers": {
+          "usb": {
+            "transfer_ticks": 4,
+            "packet_bytes": 512,
+            "out_endpoints": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ],
+            "in_endpoints": [
+              [
+                128,
+                0
+              ],
+              [
+                130,
+                1
+              ],
+              [
+                131,
+                2
+              ]
+            ],
+            "basis": "Declared catalog input."
+          },
+          "control_bus1": {
+            "profile": "declared-bus1-register-replies-unmeasured",
+            "transfer_ticks": 4,
+            "replies": {
+              "register_address": 10,
+              "pwic_address": 48,
+              "register_values": [
+                [
+                  2,
+                  0
+                ],
+                [
+                  5,
+                  0
+                ],
+                [
+                  7,
+                  0
+                ],
+                [
+                  8,
+                  0
+                ],
+                [
+                  9,
+                  0
+                ],
+                [
+                  10,
+                  0
+                ],
+                [
+                  11,
+                  0
+                ],
+                [
+                  12,
+                  0
+                ],
+                [
+                  13,
+                  0
+                ],
+                [
+                  14,
+                  0
+                ],
+                [
+                  16,
+                  0
+                ],
+                [
+                  17,
+                  0
+                ],
+                [
+                  18,
+                  0
+                ],
+                [
+                  19,
+                  0
+                ]
+              ],
+              "register_write_masks": [
+                [
+                  7,
+                  255
+                ],
+                [
+                  8,
+                  255
+                ],
+                [
+                  9,
+                  255
+                ],
+                [
+                  10,
+                  255
+                ],
+                [
+                  11,
+                  255
+                ],
+                [
+                  12,
+                  255
+                ],
+                [
+                  13,
+                  255
+                ],
+                [
+                  14,
+                  255
+                ],
+                [
+                  16,
+                  255
+                ],
+                [
+                  17,
+                  255
+                ],
+                [
+                  18,
+                  255
+                ]
+              ],
+              "pwic_values": [
+                [
+                  97,
+                  0
+                ],
+                [
+                  32,
+                  128
+                ]
+              ],
+              "pwic_write_masks": [
+                [
+                  97,
+                  16
+                ],
+                [
+                  32,
+                  2
+                ]
+              ],
+              "pwic_read_prefixes": [
+                [
+                  32,
+                  "000000"
+                ]
+              ],
+              "register_modes": [
+                1,
+                9
+              ],
+              "pwic_modes": [
+                1
+              ]
+            },
+            "basis": "Declared catalog input."
+          }
+        }
+      }
+    }
+  },
   "ram_regions": [],
   "nand": null,
   "sensor": null,

@@ -823,7 +823,8 @@
             "basis": "Declared catalog input."
           }
         },
-        "limits": []
+        "limits": [],
+        "cache_basis": "Declared catalog input."
       }
     }
   }

@@ -9,6 +9,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+pub mod hardware_inputs;
+pub use hardware_inputs::{HARDWARE_INPUTS_SCHEMA_URI, HardwareInputs, HardwareReset};
 mod options;
 pub use options::*;
 

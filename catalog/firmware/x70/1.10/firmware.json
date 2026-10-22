@@ -553,7 +553,7 @@
               "active": null
             },
             {
-              "position": "−1",
+              "position": "\u22121",
               "keys": [
                 "KEY_EXP_DIAL_M1"
               ],
@@ -574,7 +574,7 @@
               "active": null
             },
             {
-              "position": "−2",
+              "position": "\u22122",
               "keys": [
                 "KEY_EXP_DIAL_M2"
               ],
@@ -595,7 +595,7 @@
               "active": null
             },
             {
-              "position": "−3",
+              "position": "\u22123",
               "keys": [
                 "KEY_EXP_DIAL_M3"
               ],
@@ -3081,6 +3081,1000 @@
           "icon_index": 7,
           "data_address_offset": 8,
           "data_size_offset": 12
+        }
+      }
+    }
+  },
+  "layouts": {
+    "profiles": {
+      "x70-110-rec-usb": {
+        "fixture_layouts": {
+          "status": "Existing X70 module contracts retained; address extraction proceeds in steps4/5/9"
+        },
+        "control_bus_tables_id": "control-bus-x70-110",
+        "usb_interrupt_tables": [
+          {
+            "name": "irq",
+            "address": 11448480,
+            "size": 12,
+            "sha256": "5cc548bd54d16b6bd80ce6376a79b9ccbc8a7b17e379bcab9c9b58e7f1ebcbb1",
+            "sampling": "immutable-source"
+          },
+          {
+            "name": "dma_irq",
+            "address": 11449140,
+            "size": 12,
+            "sha256": "879883a19c7732f9ec2115a2a01006f101c4762956464fd7107bc25166125600",
+            "sampling": "immutable-source"
+          }
+        ],
+        "reset_release": {
+          "register": 4294656204,
+          "mask": 16777216,
+          "source": 120,
+          "target": 1073676288
+        }
+      },
+      "x70-110": {
+        "fixture_layouts": {
+          "status": "Existing X70 module contracts retained; address extraction proceeds in steps4/5/9"
+        },
+        "persistent_inputs": {
+          "geometry": {
+            "bytes": 134217728,
+            "page_bytes": 2048,
+            "pages_per_block": 64,
+            "spare_bytes": 512
+          },
+          "assets": {
+            "bank0_captured": {
+              "file_offset": 0,
+              "bytes": 5242880,
+              "sha256": "e09bbebcfcb24cf381b257150b276e5eca0812649101d4609d5425b684399090",
+              "normalized_sha256": "e09bbebcfcb24cf381b257150b276e5eca0812649101d4609d5425b684399090",
+              "patches": []
+            },
+            "bank0_browser": {
+              "file_offset": 0,
+              "bytes": 5242880,
+              "sha256": "e09bbebcfcb24cf381b257150b276e5eca0812649101d4609d5425b684399090",
+              "normalized_sha256": "58919ae3ea385eef12f87daf4e926cefd95e0425f845025090e74a83c5afcad7",
+              "patches": [
+                {
+                  "offset": 38681,
+                  "bytes": [
+                    176,
+                    184,
+                    200,
+                    0,
+                    202,
+                    254
+                  ]
+                },
+                {
+                  "offset": 38722,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32
+                  ]
+                }
+              ]
+            },
+            "bank1_captured": {
+              "file_offset": 0,
+              "bytes": 131072,
+              "sha256": "b5a41c3758763bbec72769fab4a2533bf2db0b6312d93d25a695f9e4b9e02260",
+              "normalized_sha256": "b5a41c3758763bbec72769fab4a2533bf2db0b6312d93d25a695f9e4b9e02260",
+              "patches": []
+            },
+            "bank1_browser": {
+              "file_offset": 0,
+              "bytes": 131072,
+              "sha256": "b5a41c3758763bbec72769fab4a2533bf2db0b6312d93d25a695f9e4b9e02260",
+              "normalized_sha256": "b5a41c3758763bbec72769fab4a2533bf2db0b6312d93d25a695f9e4b9e02260",
+              "patches": []
+            },
+            "main_captured": {
+              "file_offset": 0,
+              "bytes": 262144,
+              "sha256": "95bf825976ba3289988cdf9b41c9918a008f31e14bd03c14cf34bf94604c0b16",
+              "normalized_sha256": "95bf825976ba3289988cdf9b41c9918a008f31e14bd03c14cf34bf94604c0b16",
+              "patches": []
+            },
+            "main_browser": {
+              "file_offset": 0,
+              "bytes": 262144,
+              "sha256": "95bf825976ba3289988cdf9b41c9918a008f31e14bd03c14cf34bf94604c0b16",
+              "normalized_sha256": "e4a8a886c67746e7c17bfb08081938836791f7f565e14e2eb60efbc714756716",
+              "patches": [
+                {
+                  "offset": 720,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 4816,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 8912,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 13008,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 17104,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 21200,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 25296,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 29392,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 33488,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 37584,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 41680,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 45776,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 131792,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 135888,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 139984,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 144080,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 148176,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 152272,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 156368,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 160464,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 164560,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 168656,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 172752,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 176848,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 180944,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 185040,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 189136,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 193232,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                }
+              ]
+            },
+            "custom_captured": {
+              "file_offset": 0,
+              "bytes": 262144,
+              "sha256": "62aba5db73b7e084b601e0d85be1cdfb9c801b87450e5a840347b2f56a106203",
+              "normalized_sha256": "62aba5db73b7e084b601e0d85be1cdfb9c801b87450e5a840347b2f56a106203",
+              "patches": []
+            },
+            "custom_browser": {
+              "file_offset": 0,
+              "bytes": 262144,
+              "sha256": "62aba5db73b7e084b601e0d85be1cdfb9c801b87450e5a840347b2f56a106203",
+              "normalized_sha256": "62aba5db73b7e084b601e0d85be1cdfb9c801b87450e5a840347b2f56a106203",
+              "patches": []
+            }
+          },
+          "sets": {
+            "erased": {
+              "placements": [],
+              "append": null,
+              "mcu_packet": null
+            },
+            "captured": {
+              "placements": [
+                {
+                  "asset": "bank0_captured",
+                  "source_offset": 0,
+                  "bytes": 5242880,
+                  "physical_offset": 122028032,
+                  "managed_index": 41
+                },
+                {
+                  "asset": "bank1_captured",
+                  "source_offset": 0,
+                  "bytes": 131072,
+                  "physical_offset": 127270912,
+                  "managed_index": 81
+                }
+              ],
+              "append": null,
+              "mcu_packet": null
+            },
+            "captured_restored": {
+              "placements": [
+                {
+                  "asset": "bank0_captured",
+                  "source_offset": 0,
+                  "bytes": 5242880,
+                  "physical_offset": 122028032,
+                  "managed_index": 41
+                },
+                {
+                  "asset": "bank1_captured",
+                  "source_offset": 0,
+                  "bytes": 131072,
+                  "physical_offset": 127270912,
+                  "managed_index": 81
+                },
+                {
+                  "asset": "main_captured",
+                  "source_offset": 0,
+                  "bytes": 131072,
+                  "physical_offset": 127926272,
+                  "managed_index": 86
+                },
+                {
+                  "asset": "main_captured",
+                  "source_offset": 131072,
+                  "bytes": 131072,
+                  "physical_offset": 128057344,
+                  "managed_index": 87
+                },
+                {
+                  "asset": "custom_captured",
+                  "source_offset": 0,
+                  "bytes": 131072,
+                  "physical_offset": 128319488,
+                  "managed_index": 89
+                },
+                {
+                  "asset": "custom_captured",
+                  "source_offset": 131072,
+                  "bytes": 131072,
+                  "physical_offset": 128188416,
+                  "managed_index": 88
+                }
+              ],
+              "append": null,
+              "mcu_packet": {
+                "kind": "bytes",
+                "bytes": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  208,
+                  7,
+                  57,
+                  255,
+                  0,
+                  128,
+                  0,
+                  7,
+                  0,
+                  0,
+                  170,
+                  192
+                ]
+              }
+            },
+            "browser": {
+              "placements": [
+                {
+                  "asset": "bank0_browser",
+                  "source_offset": 0,
+                  "bytes": 5242880,
+                  "physical_offset": 122028032,
+                  "managed_index": 41
+                },
+                {
+                  "asset": "bank1_browser",
+                  "source_offset": 0,
+                  "bytes": 131072,
+                  "physical_offset": 127270912,
+                  "managed_index": 81
+                }
+              ],
+              "append": null,
+              "mcu_packet": null
+            },
+            "browser_restored": {
+              "placements": [
+                {
+                  "asset": "bank0_browser",
+                  "source_offset": 0,
+                  "bytes": 5242880,
+                  "physical_offset": 122028032,
+                  "managed_index": 41
+                },
+                {
+                  "asset": "bank1_browser",
+                  "source_offset": 0,
+                  "bytes": 131072,
+                  "physical_offset": 127270912,
+                  "managed_index": 81
+                },
+                {
+                  "asset": "main_browser",
+                  "source_offset": 0,
+                  "bytes": 131072,
+                  "physical_offset": 127926272,
+                  "managed_index": 86
+                },
+                {
+                  "asset": "main_browser",
+                  "source_offset": 131072,
+                  "bytes": 131072,
+                  "physical_offset": 128057344,
+                  "managed_index": 87
+                },
+                {
+                  "asset": "custom_browser",
+                  "source_offset": 0,
+                  "bytes": 131072,
+                  "physical_offset": 128319488,
+                  "managed_index": 89
+                },
+                {
+                  "asset": "custom_browser",
+                  "source_offset": 131072,
+                  "bytes": 131072,
+                  "physical_offset": 128188416,
+                  "managed_index": 88
+                }
+              ],
+              "append": null,
+              "mcu_packet": {
+                "kind": "bytes",
+                "bytes": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  208,
+                  7,
+                  57,
+                  255,
+                  0,
+                  128,
+                  0,
+                  7,
+                  0,
+                  0,
+                  170,
+                  192
+                ]
+              }
+            }
+          }
+        },
+        "sdio_inputs": {
+          "firmware_bytes": 136640,
+          "mac_address": [
+            176,
+            184,
+            200,
+            0,
+            202,
+            254
+          ],
+          "ssid": "FUJIFILM-X70-CAFE"
+        },
+        "browser_configuration_id": "x70-110-browser-camera",
+        "hdmi_configuration_id": "x70-110-connected-hdmi",
+        "reset_release": {
+          "register": 4294656204,
+          "mask": 16777216,
+          "source": 120,
+          "target": 1073676288
+        }
+      }
+    },
+    "views": {
+      "control-bus-x70-110": {
+        "kind": "control_bus_tables",
+        "data": {
+          "descriptors": {
+            "address": 11452536,
+            "size": 120,
+            "count": 10,
+            "sha256": "52a3fa4847f2e027d9091ddd549f171361aeed488d330de51758eb5b9570bf6a",
+            "sampling": "immutable-source",
+            "format": "little-endian address/polarity-selector/channel u32"
+          },
+          "polarity_words": {
+            "address": 11488036,
+            "size": 8,
+            "sha256": "01acecb507abfe1a354aa8064f4af5d3f1acd019e37db3c11c97523b71c76e9d",
+            "sampling": "transaction"
+          },
+          "limits": []
         }
       }
     }

@@ -327,5 +327,19 @@
         "dram_basis": "Declared catalog input."
       }
     }
-  }
+  },
+  "ram_regions": [
+    {
+      "id": "dram-0",
+      "base": 0,
+      "bytes": 1073741824,
+      "kind": "dram"
+    },
+    {
+      "id": "dram-1",
+      "base": 1073741824,
+      "bytes": 671088640,
+      "kind": "dram"
+    }
+  ]
 }

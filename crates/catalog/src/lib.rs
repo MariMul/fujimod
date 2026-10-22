@@ -23,3 +23,9 @@ pub mod parts;
 
 /// Named hardware profiles and device graphs.
 pub mod profiles;
+
+/// Located firmware boot and storage layouts.
+pub mod firmware;
+
+/// Exported hardware construction profiles.
+pub mod construction;
