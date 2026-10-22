@@ -100,7 +100,9 @@ pub async fn wait_until<R: Remote + ?Sized>(
 fn navigation_control(facts: &Facts, step: &str) -> Result<Control> {
     let controls = &facts.physical_controls;
     let id = match step {
-        "menu" | "ok" if controls.controls.contains_key("menu_ok_button") => "menu_ok_button".into(),
+        "menu" | "ok" if controls.controls.contains_key("menu_ok_button") => {
+            "menu_ok_button".into()
+        }
         "menu" | "ok" => "selector".into(),
         "back" => "disp_back_button".into(),
         "up" | "down" | "left" | "right" => format!("selector.{step}"),
@@ -167,11 +169,36 @@ async fn root<R: Remote + ?Sized>(
         return Err(format!("Could not close menus while entering {name}"));
     }
     step(r, facts, &reference, "menu", deadline).await?;
+    // MENU may restore a remembered submenu. Return through its real BACK
+    // path to a routed root before selecting another root's tab.
+    for _ in 0..64 {
+        let value = r.read(&reference).await?;
+        if !value.state.menu_active {
+            return Err(format!("MENU closed while entering {name}"));
+        }
+        if value.state.node == value.menu()?.node {
+            return Ok(());
+        }
+        let mut routed = false;
+        for code in facts.firmware.menus.root_routes.keys() {
+            let root = r.read(&menu(code.to_string()).into()).await?;
+            if root.state.node == root.menu()?.node {
+                routed = true;
+                break;
+            }
+        }
+        if routed {
+            break;
+        }
+        step(r, facts, &reference, "back", deadline).await?;
+    }
     match route.entry.as_str() {
-        "shooting_menu" => {}
-        "setup_menu" => {
+        "shooting_menu" | "setup_menu" => {
             step(r, facts, &reference, "left", deadline).await?;
-            let tab = route.tab.ok_or("Setup entry route lacks a tab key")?;
+            let tab = route
+                .tab
+                .or_else(|| facts.firmware.menus.page_tabs.get(&code).copied())
+                .ok_or("Root entry route lacks a tab key")?;
             for _ in 0..64 {
                 let value = r.read(&reference).await?;
                 if value.state.current_key == Some(tab) {
@@ -181,7 +208,10 @@ async fn root<R: Remote + ?Sized>(
                     .state
                     .current_key
                     .ok_or("Tab rail has no selected row")?;
-                step(r, facts, &reference,
+                step(
+                    r,
+                    facts,
+                    &reference,
                     if current < tab { "down" } else { "up" },
                     deadline,
                 )
@@ -239,7 +269,10 @@ async fn focus<R: Remote + ?Sized>(
             ));
         }
         let index = target.index.ok_or("Page has no focusable row")?;
-        step(r, facts, reference,
+        step(
+            r,
+            facts,
+            reference,
             if value.state.cursor < index {
                 "down"
             } else {

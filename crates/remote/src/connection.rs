@@ -135,25 +135,25 @@ impl<B: Backend> Remote for Connection<B> {
         Box::pin(async move {
             if input.state != InputState::Released {
                 self.ready(deadline).await?;
+                let read_result = self
+                    .read(&Reference::Control(input.control.clone()))
+                    .await?;
+                if matches!(
+                    read_result.value,
+                    Value::Control(ControlSnapshot {
+                        supported: false,
+                        ..
+                    })
+                ) {
+                    return Err(format!("Control {} is unavailable", input.control.id()));
+                }
             }
-            // Resolve physical identities immediately before supplying this edge.
-            let read_result = self
-                .read(&Reference::Control(input.control.clone()))
-                .await?;
-            if matches!(
-                read_result.value,
-                Value::Control(ControlSnapshot {
-                    supported: false,
-                    ..
-                })
-            ) {
-                return Err(format!("Control {} is unavailable", input.control.id()));
-            }
-            let mut resolved = input.clone();
-            self.backend.input(&resolved, &self.facts).await?;
+            // Backends validate the complete physical action before applying it.
+            // OFF must not depend on live state reads that can block its release.
+            self.backend.input(input, &self.facts).await?;
             loop {
                 let mut reads = ReadSet::default();
-                if self.backend.accepted(&resolved, &mut reads)? {
+                if self.backend.accepted(input, &mut reads)? {
                     return Ok(());
                 }
                 if self.now() >= deadline {

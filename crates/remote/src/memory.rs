@@ -91,7 +91,9 @@ impl<B: Backend> Memory<'_, B> {
             self.word(f.operation_alert_timer).await?
         };
         let override_value = self.word(f.override_address).await?;
-        if one != 0 {
+        // REC parameter readiness observes category-one bit 9. Other
+        // category-one operations may remain active while inputs are accepted.
+        if one & (1 << 9) != 0 {
             pending.push(format!("UI category one={one:#x}"));
         }
         if two & !u64::from(f.excluded_mask) != 0

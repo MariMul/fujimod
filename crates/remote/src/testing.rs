@@ -72,6 +72,7 @@ pub struct Synthetic {
     value: u32,
     stuck: bool,
     reorder_on_down: bool,
+    remembered_submenu: bool,
 }
 impl Synthetic {
     pub fn new() -> Self {
@@ -84,6 +85,7 @@ impl Synthetic {
             value: 0,
             stuck: false,
             reorder_on_down: false,
+            remembered_submenu: false,
         };
         for (address, value) in [(256, 4096), (260, 4352), (768, 3), (824, 1), (832, 32768)] {
             s.word(address, value);
@@ -157,7 +159,9 @@ impl Backend for Synthetic {
                 return Ok(());
             }
             match input.control.id() {
-                "menu_ok_button" if self.get(776) == 0 => self.active(4096, 0),
+                "menu_ok_button" if self.get(776) == 0 => {
+                    self.active(if self.remembered_submenu { 4352 } else { 4096 }, 0)
+                }
                 "menu_ok_button" => {
                     self.value = self.get(520);
                     self.active(4096, 1);
@@ -171,6 +175,10 @@ impl Backend for Synthetic {
                     }
                 }
                 "selector.up" => self.word(520, 0),
+                "disp_back_button" if self.remembered_submenu && self.get(784) == 4352 => {
+                    self.remembered_submenu = false;
+                    self.active(4096, 0);
+                }
                 "disp_back_button" => self.word(776, 0),
                 _ => {}
             }
@@ -227,6 +235,22 @@ fn navigate_select_reopen_and_capture() {
         let frame = r.screenshot(100).await.unwrap();
         assert_eq!(frame.time, 1);
         assert_eq!(r.backend.waits.last().unwrap().devices, [7].into());
+    });
+}
+#[test]
+fn root_navigation_backs_out_of_a_remembered_submenu() {
+    futures_lite::future::block_on(async {
+        let mut backend = Synthetic::new();
+        backend.remembered_submenu = true;
+        let mut remote = Connection::connect(backend, facts()).unwrap();
+        let result = remote
+            .navigate(&menu("shooting").with_key(20), 100)
+            .await
+            .unwrap();
+        assert!(result.menu().unwrap().selected);
+        assert!(remote.backend.edges.iter().any(
+            |edge| edge.control.id() == "disp_back_button" && edge.state == InputState::Pressed
+        ));
     });
 }
 #[test]
@@ -294,6 +318,32 @@ fn frame_timeout_names_condition() {
                 .unwrap()
                 .contains("next completed lcd frame")
         );
+    });
+}
+#[test]
+fn rec_readiness_gates_parameter_changes_without_blocking_other_category_one_work() {
+    futures_lite::future::block_on(async {
+        let mut remote = Connection::connect(Synthetic::new(), facts()).unwrap();
+        let reference = control("selector.down").into();
+        for bit in 0..64 {
+            let category = 1u64 << bit;
+            remote.backend.bytes[800..808].copy_from_slice(&category.to_le_bytes());
+            let result = remote.read(&reference).await.unwrap();
+            assert_eq!(result.state.ready, bit != 9, "category-one bit {bit}");
+            assert!(
+                result
+                    .reads
+                    .stores
+                    .iter()
+                    .any(|&(start, end)| start <= 800 && end >= 808)
+            );
+        }
+        remote.backend.word(800, 0x28);
+        remote.backend.word(804, 0);
+        remote
+            .navigate(&menu("shooting").with_key(20), 100)
+            .await
+            .unwrap();
     });
 }
 #[test]
