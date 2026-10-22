@@ -33,7 +33,10 @@ pub(super) fn prepare(cx: &Cx<'_>, word: impl Fn(u16) -> u32) -> Result<Prepared
         || word(0x40) != 0
         || word(0x4c) != 0
     {
-        return Err("unsupported combination mask-blend format or geometry".into());
+        return Err(format!(
+            "unsupported combination mask-blend format or geometry: control={control:#x} size={:#x} windows={:#x} format={format:#x} 20={:#x} 24={:#x} 40={:#x} 4c={:#x}",
+            word(0x38), word(0x3c), word(0x20), word(0x24), word(0x40), word(0x4c)
+        ));
     }
     let raster = |offset: u16, width, height, units| -> Result<Raster, String> {
         let address = word(offset);
