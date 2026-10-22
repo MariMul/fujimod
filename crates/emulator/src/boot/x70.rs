@@ -1066,6 +1066,7 @@ fn apply_body_facts(
                 motors,
                 encoder,
                 zoom,
+                ..
             } = &part(selection, &lens.part_id)?.model
             else {
                 return Err("X70 lens attachment is not a lens mechanism part".into());

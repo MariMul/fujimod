@@ -17,3 +17,6 @@ pub mod soc;
 pub use configuration::{ResolvedConfiguration, RunConfiguration, RunOverlay, RunOverlayChange};
 pub use reference::{Body, Firmware, Part, ReferenceCatalog, ResolvedSelection, Soc};
 pub use soc::SocHardware;
+
+/// Reusable part assembly attachments.
+pub mod parts;

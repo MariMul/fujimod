@@ -1555,6 +1555,10 @@ pub struct Part {
     pub id: String,
     /// Typed physical or protocol model for this part.
     pub model: PartModel,
+    /// Declared board attachment for this reusable part assembly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", tsify(type = "PartAttachment | null"))]
+    pub attachment: Option<crate::parts::PartAttachment>,
 }
 
 impl Part {
@@ -1564,6 +1568,27 @@ impl Part {
             return Err("part schema or identity differs".into());
         }
         validate_id(&self.id)?;
+        if let Some(attachment) = &self.attachment {
+            attachment.validate()?;
+        }
+        if let PartModel::LensMechanism {
+            motors,
+            motor_counters,
+            ..
+        } = &self.model
+        {
+            let mut assignments = BTreeSet::new();
+            if motor_counters.iter().any(|counter| {
+                usize::from(counter.motor) >= motors.len()
+                    || counter.divider == 0
+                    || !assignments.insert((counter.motor, counter.channel))
+            }) {
+                return Err(format!(
+                    "lens part {} has an invalid counter assignment",
+                    self.id
+                ));
+            }
+        }
         if let PartModel::Microcontroller {
             registers,
             packet_registers,
@@ -1648,6 +1673,21 @@ pub enum PartModel {
     LensMechanism {
         /// Lens protocol and electrical timing.
         protocol: LensProtocol,
+        /// Protocol direction polarity, when declared.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        direction_high: Option<bool>,
+        /// Protocol behavior when a command requests a stop.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        stop_response: Option<LensStopResponse>,
+        /// Protocol-specific clock modes.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        clock_modes: Option<Vec<LensClockMode>>,
+        /// Protocol period in guest ticks, when specified.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        period_ticks: Option<u64>,
+        /// Pulse-counter channels assigned to each lens motor by the part protocol.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        motor_counters: Vec<LensMotorCounter>,
         /// Lens motors and their travel/response mechanics.
         motors: Vec<LensMotor>,
         /// Optional physical encoder input.
@@ -1682,6 +1722,13 @@ pub enum PartModel {
         status_register: Option<u32>,
         /// Other explicitly initialized register addresses accepted by a run.
         initial_registers: Vec<u32>,
+    },
+    /// A byte-addressed register bank carried in sixteen-bit SPI words.
+    SerialRegisterBank {
+        /// Register addresses admitted by this protocol bank.
+        registers: Vec<u8>,
+        /// Whether read commands are supported by this bank.
+        readable: bool,
     },
     /// A power-control endpoint with named startup inputs.
     PowerControl {
@@ -1751,6 +1798,40 @@ pub enum LensProtocol {
     DcZoom,
 }
 
+/// Lens command response after a stop request.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LensStopResponse {
+    /// Report stopped only after the current movement settles.
+    Settled,
+}
+
+/// A clocking mode declared by a lens protocol.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub enum LensClockMode {
+    /// Use a fixed clock selected by the body attachment.
+    Fixed,
+    /// Clock phases advance through a divided frequency table.
+    Divided {
+        /// Frequency used to derive the periods.
+        ticks_per_second: u64,
+        /// Clock periods in picoseconds.
+        period_picoseconds: Vec<u64>,
+    },
+    /// Clock is advanced for each microstep stage.
+    MicrostepStages {
+        /// Guest ticks per stage quantum.
+        ticks_per_quantum: u64,
+    },
+    /// Clock is advanced for each encoder stage.
+    EncoderStages {
+        /// Guest ticks per stage quantum.
+        ticks_per_quantum: u64,
+    },
+}
+
 /// A pulse interface required by an optical mechanism.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -1769,6 +1850,9 @@ pub struct PulseInterface {
     pub quadrature: bool,
     /// Initial pulse phase.
     pub initial_phase: u32,
+    /// Timer capture channel assigned to this lens, when documented.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capture_channel: Option<u8>,
 }
 
 /// One lens motor and its physical response limits.
@@ -1806,6 +1890,31 @@ pub struct LensMotor {
 pub struct HomeSwitch {
     /// Position threshold used to detect home.
     pub threshold: i32,
+    /// Side of the position threshold that asserts home.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub side: Option<HomeSwitchSide>,
+}
+
+/// Position comparison used by a lens home switch.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum HomeSwitchSide {
+    /// Home is asserted above the threshold.
+    Above,
+    /// Home is asserted below the threshold.
+    Below,
+}
+
+/// A motor's pulse-counter channel and divider.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct LensMotorCounter {
+    /// Motor index within the part.
+    pub motor: u8,
+    /// Counter channel.
+    pub channel: u8,
+    /// Pulses per counter transition.
+    pub divider: u8,
 }
 
 /// An optional encoder attached to a physical part.
@@ -1819,9 +1928,13 @@ pub struct HomeSwitch {
 )]
 pub struct PartEncoder {
     /// Guest ticks per encoder phase transition.
-    pub phase_ticks: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase_ticks: Option<u64>,
     /// Initial encoder phase.
     pub rest_phase: u8,
+    /// Encoder edges per phase in the declared protocol, when specified.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steps_per_phase: Option<u32>,
 }
 
 /// A zoom mechanism's travel and pulse settings.
@@ -1834,12 +1947,21 @@ pub struct PartEncoder {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct ZoomMechanism {
+    /// Zoom mechanism's initial position.
+    pub initial_position: i32,
     /// Minimum zoom position.
     pub minimum_position: i32,
     /// Maximum zoom position.
     pub maximum_position: i32,
     /// Guest ticks per zoom pulse.
-    pub pulse_ticks: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pulse_ticks: Option<u64>,
+    /// Counter-to-position scale declared for the zoom mechanism.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edge_scale: Option<u32>,
+    /// Zoom home-switch threshold and polarity, when specified.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub home: Option<HomeSwitch>,
 }
 
 /// A pin drive position and its resulting contact states.

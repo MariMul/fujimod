@@ -132,6 +132,25 @@ pub enum PeripheralPart {
     BisConfigurationRegisters,
     /// LSM6DS configuration-register protocol.
     Lsm6dsConfigurationRegisters,
+    /// Lens image-stabilizer command and status protocol.
+    Stabilizer {
+        /// Supported command encodings.
+        commands: Vec<StabilizerCommand>,
+        /// Status register value exposed by this endpoint.
+        status: u32,
+        /// Telemetry register address exposed by this endpoint.
+        telemetry: u32,
+    },
+    /// Command/data serial output endpoint.
+    CommandDataOutput {
+        /// Prefix byte used for command transfers.
+        command_prefix: u8,
+        /// Prefix byte used for data transfers.
+        data_prefix: u8,
+        /// Maximum data payload size in bytes.
+        payload_bytes: u32,
+    },
+
     /// Serial NOR flash geometry and device identification, when declared.
     SerialNorFlash {
         /// JEDEC identification value, when supplied by the part definition.
@@ -143,5 +162,34 @@ pub enum PeripheralPart {
         /// Program-page capacity in bytes, when declared.
         #[cfg_attr(feature = "typescript", serde(default))]
         page_bytes: Option<u64>,
+    },
+}
+
+/// A command accepted by a lens stabilizer endpoint.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub struct StabilizerCommand {
+    /// Command address.
+    pub code: u8,
+    /// Payload width in bits.
+    pub bits: u8,
+    /// Command operation.
+    pub operation: StabilizerCommandOperation,
+}
+
+/// Operation performed by a lens stabilizer command.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub enum StabilizerCommandOperation {
+    /// Write a register value.
+    Write,
+    /// Select an endpoint bank.
+    Select,
+    /// Write a register in a named RAM bank.
+    RamWrite {
+        /// RAM bank selected by the command.
+        bank: u8,
     },
 }
