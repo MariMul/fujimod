@@ -131,3 +131,16 @@ def test_ignored_files_need_the_flag(repos: tuple[Path, Path]) -> None:
     )
     files = run("git", "show", "--name-only", "--format=", result, cwd=checkout)
     assert files.split() == ["runs/one/input.json"]
+
+
+def test_logs_and_bulk_additions_need_allow_bulk(repos: tuple[Path, Path]) -> None:
+    _, checkout = repos
+    (checkout / "run.log").write_text("output\n")
+    with pytest.raises(Failure, match="logs or movies"):
+        Repository(checkout).commit(["run.log"], None, "Log\n")
+    (checkout / "out").mkdir()
+    for number in range(500):
+        (checkout / "out" / f"{number}.txt").write_text(f"{number}\n")
+    with pytest.raises(Failure, match="500 files"):
+        Repository(checkout).commit(["out"], None, "Output\n")
+    Repository(checkout).commit(["out"], None, "Import\n", allow_bulk=True)

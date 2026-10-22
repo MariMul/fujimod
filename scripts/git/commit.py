@@ -6,7 +6,9 @@
 Whole paths take their current working-tree content (additions, edits and
 deletions). ``--patch`` applies a diff, relative to HEAD, holding only your
 hunks in files that also contain other work. Nothing else in the shared index
-or working tree is included.
+or working tree is included. ``--ignored`` also takes named files that
+.gitignore covers. Commits that add logs, movies or 500 or more files are
+refused unless ``--allow-bulk`` is given.
 
 The commit is built in a private index on the checked-out branch's HEAD, after
 ``sync.py`` brings that branch to its ``origin`` counterpart, merging origin's
@@ -29,6 +31,9 @@ from repository import Repository as GitRepository
 from sync import load_conflicts, locked, update
 
 ATTEMPTS = 5
+# Commits that add this many files, or logs and movies, are usually build or test output.
+BULK_FILES = 500
+UNWANTED_SUFFIXES = (".log", ".mov", ".mp4", ".m4v", ".mkv", ".avi")
 
 
 class Arguments(argparse.Namespace):
@@ -36,6 +41,7 @@ class Arguments(argparse.Namespace):
     patch: Path | None
     repo: Path
     ignored: bool
+    allow_bulk: bool
     paths: list[str]
 
 
@@ -48,6 +54,7 @@ class Repository(GitRepository):
         message: str,
         *,
         ignored: bool = False,
+        allow_bulk: bool = False,
     ) -> str:
         with tempfile.TemporaryDirectory() as scratch:
             env = dict(os.environ, GIT_INDEX_FILE=str(Path(scratch) / "index"))
@@ -69,7 +76,23 @@ class Repository(GitRepository):
             tree = self.git("write-tree", env=env).stdout.strip()
         if tree == self.output("rev-parse", f"{parent}^{{tree}}"):
             raise Failure("nothing to commit: the chosen paths and hunks match HEAD")
+        if not allow_bulk:
+            self.refuse_output(parent, tree)
         return self.git("commit-tree", tree, "-p", parent, input=message).stdout.strip()
+
+    def refuse_output(self, parent: str, tree: str) -> None:
+        added = self.names("diff-tree", "-r", "--diff-filter=A", parent, tree)
+        unwanted = [name for name in added if name.lower().endswith(UNWANTED_SUFFIXES)]
+        if unwanted:
+            raise Failure(
+                "refusing to commit logs or movies (use --allow-bulk if code reads "
+                "them): " + ", ".join(unwanted[:10])
+            )
+        if len(added) >= BULK_FILES:
+            raise Failure(
+                f"refusing to add {len(added)} files at once; this is usually build "
+                "or capture output (use --allow-bulk for a deliberate move or import)"
+            )
 
     def touched(self, paths: list[str], patch: Path | None) -> set[str]:
         names = set(paths)
@@ -90,6 +113,7 @@ class Repository(GitRepository):
         message: str,
         *,
         ignored: bool = False,
+        allow_bulk: bool = False,
     ) -> str:
         ref = self.branch()
         name = ref.removeprefix("refs/heads/")
@@ -106,7 +130,14 @@ class Repository(GitRepository):
             for _ in range(ATTEMPTS):
                 update(self)
                 parent = self.output("rev-parse", "HEAD")
-                result = self.build(parent, paths, patch, message, ignored=ignored)
+                result = self.build(
+                    parent,
+                    paths,
+                    patch,
+                    message,
+                    ignored=ignored,
+                    allow_bulk=allow_bulk,
+                )
                 if self.git("update-ref", ref, result, parent, check=False).returncode:
                     raise Failure(
                         f"{name} moved outside the commit tool during a commit"
@@ -142,6 +173,11 @@ def main() -> None:
         action="store_true",
         help="also commit named files that .gitignore covers (name each file)",
     )
+    parser.add_argument(
+        "--allow-bulk",
+        action="store_true",
+        help="allow adding logs, movies or 500 or more files in one commit",
+    )
     parser.add_argument("paths", nargs="*")
     args = parser.parse_args(namespace=Arguments())
     if not args.paths and not args.patch:
@@ -150,7 +186,13 @@ def main() -> None:
     patch = args.patch.resolve() if args.patch else None
     try:
         repository = Repository(GitRepository.toplevel(args.repo))
-        result = repository.commit(args.paths, patch, message, ignored=args.ignored)
+        result = repository.commit(
+            args.paths,
+            patch,
+            message,
+            ignored=args.ignored,
+            allow_bulk=args.allow_bulk,
+        )
     except (Failure, subprocess.CalledProcessError) as error:
         print(f"commit: {error}", file=sys.stderr)
         sys.exit(1)
