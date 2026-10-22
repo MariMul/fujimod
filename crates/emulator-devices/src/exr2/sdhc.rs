@@ -607,7 +607,13 @@ impl SdHost {
         r.due = None;
         self.response = r.response;
         if r.quantity == 0 {
-            let status = if rom && r.command == 7 { 3 } else { 1 };
+            // A busy response (R1b) ends with transfer complete when enabled.
+            let busy_end = if r.command == 7 && (rom || self.options.protocol == Protocol::Sdhc) {
+                2 & self.regs.get(0x34)
+            } else {
+                0
+            };
+            let status = 1 | busy_end;
             return self.finish(
                 cx,
                 r,
@@ -1313,6 +1319,20 @@ mod tests {
         due(&mut m, &mut h);
         assert_eq!(m.state, State::Idle);
         assert_eq!(m.card.sector(0).unwrap(), [0x42; 512]);
+    }
+    #[test]
+    fn busy_select_ends_with_enabled_transfer_complete() {
+        for (enabled, status) in [(0xffff, 3), (0xfffd, 1)] {
+            let mut m = host(Protocol::Sdhc);
+            let mut h = Ram::new(0x10000);
+            setup(&mut m, &mut h);
+            write(&mut m, &mut h, 0x34, 2, enabled);
+            m.state = State::Standby;
+            command(&mut m, &mut h, 0x071b0000, 0x12340000);
+            due(&mut m, &mut h);
+            assert_eq!(read(&mut m, &mut h, 0x30, 2), status);
+            assert_eq!(m.state, State::Transfer);
+        }
     }
     #[test]
     fn rom_single_sector_pio_and_alias_dma() {
