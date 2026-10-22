@@ -24,7 +24,8 @@ export function SpeedGauge(props: { speed: number }) {
         color: speedColor(props.speed),
       }}
     >
-      {Math.round(Math.max(0, props.speed) * 100)}% speed
+      {/* Nearest 5% keeps the reading steady while menus and live view alternate. */}
+      {Math.round(Math.max(0, props.speed) * 20) * 5}% speed
     </span>
   );
 }

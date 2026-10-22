@@ -75,7 +75,7 @@ export function ViewportControls(props: {
               onClick={() => setPicking(!picking())}
             >
               {props.modEnabled ? 'FujiMod' : 'Unmodded'}
-              <Icon name="chevron" size={12} />
+              <Icon name="chevron" size={11} />
             </button>
             <Show when={picking()}>
               <div class="firmware-menu" role="menu" aria-label="Firmware">
@@ -125,7 +125,7 @@ export function ViewportControls(props: {
           disabled={props.webcamDisabled}
           onClick={() => props.toggleWebcam?.()}
         >
-          <Icon name="camera" size={14} />
+          <Icon name="camera" size={17} />
           <span class="viewport-bar-label">Webcam</span>
         </button>
       </Show>
@@ -138,7 +138,7 @@ export function ViewportControls(props: {
           disabled={!props.feedback.ready}
           onClick={() => props.feedback.open()}
         >
-          <Icon name="message" size={14} />
+          <Icon name="message" size={17} />
           <span class="viewport-bar-label">Feedback</span>
         </button>
       </Show>
@@ -150,7 +150,7 @@ export function ViewportControls(props: {
           title="Download saved report"
           onClick={() => props.feedback.recover()}
         >
-          <Icon name="download" size={14} />
+          <Icon name="download" size={17} />
           <span class="viewport-bar-label">Saved report</span>
         </button>
       </Show>
