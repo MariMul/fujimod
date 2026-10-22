@@ -46,13 +46,8 @@ function InputPicker(props: {
         onChange={(event) => props.onChange(event.currentTarget.value)}
       >
         <option value="">None</option>
-        <For each={props.inputs}>
-          {(input) => (
-            <option value={input.id} disabled={!input.supported}>
-              {input.label}
-              {input.supported ? '' : ' · not emulated'}
-            </option>
-          )}
+        <For each={props.inputs.filter((input) => input.supported || input.id === props.value)}>
+          {(input) => <option value={input.id}>{input.label}</option>}
         </For>
       </select>
     </label>
