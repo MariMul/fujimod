@@ -12,6 +12,11 @@ scripts and tests without `@ts-nocheck`, `@ts-ignore`, blanket `any` or weakened
 compiler checks. Run `npm run check:typescript-policy` and the affected type
 checks and tests before committing. The policy check runs in CI.
 
+Checked-in generated files carry `.generated` before their extension
+(`control-ids.generated.json`). Never edit them by hand: change their inputs or
+generator and regenerate. Their checks fail when the checked-in copy differs
+from a fresh generation.
+
 ## Checkouts and commits
 
 Work, test and commit in the existing checkout on `main`. Do not create Git
