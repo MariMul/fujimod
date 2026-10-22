@@ -589,6 +589,11 @@ fn capture_chain_uses_catalog_windows_interrupts_and_sensor_phase() {
         model(&prepared, "jpeg_encoder")["stream"],
         model(&prepared, "warp")["stream"]
     );
+    for aperture in &prepared.execution.peripherals {
+        assert_eq!(aperture.address % 4096, 0);
+        assert_eq!(aperture.physical % 4096, 0);
+        assert_eq!(aperture.size % 4096, 0);
+    }
     let nodes = prepared.devices_value["nodes"].as_array().unwrap();
     let still = nodes
         .iter()

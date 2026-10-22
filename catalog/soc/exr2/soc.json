@@ -809,6 +809,125 @@
       "size": 112,
       "kind": "address-window",
       "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff1a000",
+      "base": 4294025216,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff1c000",
+      "base": 4294033408,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff30000",
+      "base": 4294115328,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff31000",
+      "base": 4294119424,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff32000",
+      "base": 4294123520,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff33000",
+      "base": 4294127616,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff34000",
+      "base": 4294131712,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff38000",
+      "base": 4294148096,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff40000",
+      "base": 4294180864,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff41000",
+      "base": 4294184960,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff42000",
+      "base": 4294189056,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff44000",
+      "base": 4294197248,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff45000",
+      "base": 4294201344,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff47000",
+      "base": 4294209536,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff62000",
+      "base": 4294320128,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff63000",
+      "base": 4294324224,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff65000",
+      "base": 4294332416,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
     }
   ],
   "interrupts": [
@@ -1446,8 +1565,8 @@
     },
     {
       "core": "core0",
-      "block_id": "power-registers-1",
-      "address": 4294205568,
+      "block_id": "peripheral-window-fff46000",
+      "address": 4294205440,
       "offset": null
     },
     {
@@ -1578,8 +1697,8 @@
     },
     {
       "core": "core1",
-      "block_id": "power-registers-1",
-      "address": 4294205568,
+      "block_id": "peripheral-window-fff46000",
+      "address": 4294205440,
       "offset": null
     },
     {
@@ -1656,182 +1775,206 @@
     },
     {
       "core": "core0",
-      "block_id": "prefilter",
+      "block_id": "peripheral-window-fff1a000",
       "address": 4294025216,
       "offset": null
     },
     {
       "core": "core1",
-      "block_id": "prefilter",
+      "block_id": "peripheral-window-fff1a000",
       "address": 4294025216,
       "offset": null
     },
     {
       "core": "core0",
-      "block_id": "raw-statistics",
+      "block_id": "peripheral-window-fff1c000",
       "address": 4294033408,
       "offset": null
     },
     {
       "core": "core1",
-      "block_id": "raw-statistics",
+      "block_id": "peripheral-window-fff1c000",
       "address": 4294033408,
       "offset": null
     },
     {
       "core": "core0",
-      "block_id": "raw-conversion",
-      "address": 4294189056,
-      "offset": null
-    },
-    {
-      "core": "core1",
-      "block_id": "raw-conversion",
-      "address": 4294189056,
-      "offset": null
-    },
-    {
-      "core": "core0",
-      "block_id": "image-scaler",
-      "address": 4294209536,
-      "offset": null
-    },
-    {
-      "core": "core1",
-      "block_id": "image-scaler",
-      "address": 4294209536,
-      "offset": null
-    },
-    {
-      "core": "core0",
-      "block_id": "warp",
-      "address": 4294332416,
-      "offset": null
-    },
-    {
-      "core": "core1",
-      "block_id": "warp",
-      "address": 4294332416,
-      "offset": null
-    },
-    {
-      "core": "core0",
-      "block_id": "jpeg-encoder",
-      "address": 4294320128,
-      "offset": null
-    },
-    {
-      "core": "core1",
-      "block_id": "jpeg-encoder",
-      "address": 4294320128,
-      "offset": null
-    },
-    {
-      "core": "core0",
-      "block_id": "jpeg-decoder",
-      "address": 4294324224,
-      "offset": null
-    },
-    {
-      "core": "core1",
-      "block_id": "jpeg-decoder",
-      "address": 4294324224,
-      "offset": null
-    },
-    {
-      "core": "core0",
-      "block_id": "still-processor-0",
+      "block_id": "peripheral-window-fff30000",
       "address": 4294115328,
       "offset": null
     },
     {
       "core": "core1",
-      "block_id": "still-processor-0",
+      "block_id": "peripheral-window-fff30000",
       "address": 4294115328,
       "offset": null
     },
     {
       "core": "core0",
-      "block_id": "still-processor-1",
-      "address": 4294115508,
+      "block_id": "peripheral-window-fff31000",
+      "address": 4294119424,
       "offset": null
     },
     {
       "core": "core1",
-      "block_id": "still-processor-1",
-      "address": 4294115508,
+      "block_id": "peripheral-window-fff31000",
+      "address": 4294119424,
       "offset": null
     },
     {
       "core": "core0",
-      "block_id": "still-processor-2",
-      "address": 4294120448,
+      "block_id": "peripheral-window-fff32000",
+      "address": 4294123520,
       "offset": null
     },
     {
       "core": "core1",
-      "block_id": "still-processor-2",
-      "address": 4294120448,
+      "block_id": "peripheral-window-fff32000",
+      "address": 4294123520,
       "offset": null
     },
     {
       "core": "core0",
-      "block_id": "still-processor-3",
+      "block_id": "peripheral-window-fff33000",
+      "address": 4294127616,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff33000",
+      "address": 4294127616,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff34000",
+      "address": 4294131712,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff34000",
+      "address": 4294131712,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff38000",
       "address": 4294148096,
       "offset": null
     },
     {
       "core": "core1",
-      "block_id": "still-processor-3",
+      "block_id": "peripheral-window-fff38000",
       "address": 4294148096,
       "offset": null
     },
     {
       "core": "core0",
-      "block_id": "still-processor-4",
+      "block_id": "peripheral-window-fff40000",
       "address": 4294180864,
       "offset": null
     },
     {
       "core": "core1",
-      "block_id": "still-processor-4",
+      "block_id": "peripheral-window-fff40000",
       "address": 4294180864,
       "offset": null
     },
     {
       "core": "core0",
-      "block_id": "still-processor-5",
+      "block_id": "peripheral-window-fff41000",
       "address": 4294184960,
       "offset": null
     },
     {
       "core": "core1",
-      "block_id": "still-processor-5",
+      "block_id": "peripheral-window-fff41000",
       "address": 4294184960,
       "offset": null
     },
     {
       "core": "core0",
-      "block_id": "still-processor-6",
+      "block_id": "peripheral-window-fff42000",
+      "address": 4294189056,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff42000",
+      "address": 4294189056,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff44000",
       "address": 4294197248,
       "offset": null
     },
     {
       "core": "core1",
-      "block_id": "still-processor-6",
+      "block_id": "peripheral-window-fff44000",
       "address": 4294197248,
       "offset": null
     },
     {
       "core": "core0",
-      "block_id": "still-processor-7",
-      "address": 4294205584,
+      "block_id": "peripheral-window-fff45000",
+      "address": 4294201344,
       "offset": null
     },
     {
       "core": "core1",
-      "block_id": "still-processor-7",
-      "address": 4294205584,
+      "block_id": "peripheral-window-fff45000",
+      "address": 4294201344,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff47000",
+      "address": 4294209536,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff47000",
+      "address": 4294209536,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff62000",
+      "address": 4294320128,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff62000",
+      "address": 4294320128,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff63000",
+      "address": 4294324224,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff63000",
+      "address": 4294324224,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff65000",
+      "address": 4294332416,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff65000",
+      "address": 4294332416,
       "offset": null
     }
   ],
