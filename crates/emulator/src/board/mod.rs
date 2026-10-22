@@ -54,7 +54,16 @@ struct CoreInterruptMap {
 fn device_workers(policy: ExecutionPolicy) -> usize {
     match policy {
         ExecutionPolicy::Exact => 0,
-        ExecutionPolicy::Interactive => 2,
+        ExecutionPolicy::Interactive => {
+            #[cfg(target_os = "emscripten")]
+            {
+                2
+            }
+            #[cfg(not(target_os = "emscripten"))]
+            {
+                0
+            }
+        }
     }
 }
 fn prepare_device_workers(policy: ExecutionPolicy) -> Result<(), String> {

@@ -3,10 +3,11 @@
 use crate::board::{
     Board,
     bus::{self, Bus},
-    factory::{Engine, Graph, MemoryMap, Options, Peripheral, Processor, Ram},
     memory::BusMapping,
+    set,
 };
-use fujimod_emulator_cpu::{ExecutionPolicy, Model, Register, timeline::Ratio};
+use fujimod_emulator_cpu::{Cpu, ExecutionPolicy, Register, memory::Backing, timeline::Ratio};
+use fujimod_emulator_cpu_unicorn::rprofile::{memory as rprofile_memory, worker};
 use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint};
 use serde::{Deserialize, Serialize};
 
@@ -70,45 +71,32 @@ impl Device for DeadlineSample {
 }
 
 fn board(policy: ExecutionPolicy, due: Option<u64>) -> (Board, usize) {
-    let processors = (0..2)
-        .map(|core| Processor {
-            model: Model::CortexR5F,
-            registers: vec![
-                (Register::Pc, 0x1000 + core * 0x1000),
-                (Register::Pstate, 0xd3),
-            ],
-            released: true,
-            mprofile: None,
-            rprofile: Some(Default::default()),
+    let backing = Backing::aligned_zeros(0x4000, 4096).unwrap();
+    let shared_memory = rprofile_memory::Memory::default().shared();
+    let cpus = (0..2)
+        .map(|core| {
+            let cpu = worker::spawn(worker::Config {
+                library: crate::board::test_support::unicorn_library_path(),
+                translation_cache_bytes: 1024 * 1024,
+                options: Default::default(),
+                memory: shared_memory.clone(),
+            })
+            .unwrap();
+            unsafe {
+                cpu.map_physical(
+                    0,
+                    0,
+                    0x4000,
+                    7,
+                    std::ptr::NonNull::new(backing.as_ptr()).unwrap(),
+                )
+                .unwrap();
+            }
+            set(&cpu, Register::Pc, 0x1000 + core * 0x1000).unwrap();
+            set(&cpu, Register::Pstate, 0xd3).unwrap();
+            Box::new(cpu) as Box<dyn fujimod_emulator_cpu::Cpu>
         })
         .collect();
-    let graph = Graph {
-        processors,
-        ram: vec![Ram {
-            base: 0,
-            size: 0x4000,
-        }],
-        dma_mappings: vec![BusMapping::ram(0, 0x4000)],
-        decoders: vec![],
-        mappings: (0..2)
-            .map(|core| MemoryMap {
-                core,
-                address: 0,
-                physical: 0,
-                size: 0x4000,
-                permissions: 7,
-            })
-            .collect(),
-        peripherals: (0..2)
-            .map(|core| Peripheral {
-                core,
-                address: 0x8000000,
-                physical: 0x8000000,
-                size: 0x1000,
-            })
-            .collect(),
-        instructions_per_tick: Ratio::new(1, 1).unwrap(),
-    };
     let mut bus = Bus::new(bus::Mode::Strict);
     let device = bus
         .register(
@@ -121,17 +109,19 @@ fn board(policy: ExecutionPolicy, due: Option<u64>) -> (Board, usize) {
             }),
         )
         .unwrap();
-    let mut board = graph
-        .build(
-            Options {
-                engine: Engine::Unicorn,
-                unicorn: Some(crate::board::test_support::unicorn_library_path()),
-                translation_cache_bytes: 1024 * 1024,
-            },
-            bus,
-            None,
-        )
-        .unwrap();
+    let mut board = Board::new(
+        cpus,
+        bus,
+        Ratio::new(1, 1).unwrap(),
+        None,
+        vec![true; 2],
+        crate::board::memory::Memory::new(vec![(0, backing)], vec![BusMapping::ram(0, 0x4000)])
+            .unwrap(),
+    )
+    .unwrap();
+    for core in 0..2 {
+        board.map_mmio(core, 0x8000000, 0x1000, 0x8000000).unwrap();
+    }
     let code = [0xe3a0005au32, 0xe3a01a03, 0xe5810000, 0xeafffffe];
     board
         .write_memory(
@@ -143,8 +133,8 @@ fn board(policy: ExecutionPolicy, due: Option<u64>) -> (Board, usize) {
                 .collect::<Vec<_>>(),
         )
         .unwrap();
-    // Either host thread may finish first. Both complete the same store so
-    // the sampled value does not depend on which worker reaches its barrier.
+    // Both processors complete the same store so the sample does not depend
+    // on which worker reaches the owner barrier first.
     board
         .write_memory(
             0,

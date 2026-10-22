@@ -1024,7 +1024,7 @@ fn continuation_observes_due_device_publications_without_changing_the_timeline()
 
 #[test]
 fn serialized_interactive_cores_share_execution_before_the_host_deadline() {
-    let (mut board, _) = per_core_irq_board_with_backend(true);
+    let (mut board, _) = per_core_irq_board();
     board
         .set_execution_policy(ExecutionPolicy::Interactive)
         .unwrap();
