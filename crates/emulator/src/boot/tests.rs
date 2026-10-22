@@ -580,6 +580,7 @@ fn browser_camera_overlay_declares_a_virtual_card_host_on_the_native_plan() {
     );
 
     let prepared = prepare("x70-110-rec", &["x70-110-browser-camera".into()]).unwrap();
+    assert_eq!(prepared.resolved.configuration.start, RunStart::Rom);
     let sd = model(&prepared, "sd");
     assert_eq!(sd["kind"], "sd-host");
     assert_eq!(sd["options"]["protocol"], "sdhc");
