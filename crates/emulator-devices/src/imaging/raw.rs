@@ -103,18 +103,36 @@ impl Cfa {
     }
     #[inline]
     fn sample_positions(&self, raw: &RawView<'_>, x: usize, y: usize) -> [(usize, usize); 3] {
-        self.nearest[y % 6 * 6 + x % 6].map(|(dy, dx)| {
-            let wrap = |v: usize, d: i8, n: usize| {
-                let v = v as isize + d as isize;
-                if v < 0 {
-                    (v + 6) as usize
-                } else if v >= n as isize {
-                    (v - 6) as usize
-                } else {
-                    v as usize
-                }
-            };
-            (wrap(x, dx, raw.width), wrap(y, dy, raw.height))
+        let row = &self.nearest[y % 6 * 6..][..6];
+        self.sample_positions_from_row::<false>(raw, row, x, y)
+    }
+    #[inline(always)]
+    fn sample_positions_from_row<const INTERIOR: bool>(
+        &self,
+        raw: &RawView<'_>,
+        nearest_row: &[[(i8, i8); 3]],
+        x: usize,
+        y: usize,
+    ) -> [(usize, usize); 3] {
+        nearest_row[x % 6].map(|(dy, dx)| {
+            if INTERIOR {
+                (
+                    x.wrapping_add_signed(isize::from(dx)),
+                    y.wrapping_add_signed(isize::from(dy)),
+                )
+            } else {
+                let wrap = |v: usize, d: i8, n: usize| {
+                    let v = v as isize + isize::from(d);
+                    if v < 0 {
+                        (v + 6) as usize
+                    } else if v >= n as isize {
+                        (v - 6) as usize
+                    } else {
+                        v as usize
+                    }
+                };
+                (wrap(x, dx, raw.width), wrap(y, dy, raw.height))
+            }
         })
     }
     /// `spatial_gain` is Q11 at the original CFA sample coordinates. It is
@@ -193,18 +211,71 @@ impl Cfa {
         out: &mut [u8],
     ) {
         let [left, top, crop_width, crop_height] = crop;
+        let interior = left >= 3
+            && top >= 3
+            && raw.width - (left + crop_width) >= 3
+            && raw.height - (top + crop_height) >= 3;
+        if interior {
+            self.render_rows_inner::<true>(
+                raw,
+                film,
+                black,
+                gains,
+                exposure,
+                &spatial_gain,
+                crop,
+                width,
+                height,
+                rows,
+                out,
+            );
+        } else {
+            self.render_rows_inner::<false>(
+                raw,
+                film,
+                black,
+                gains,
+                exposure,
+                &spatial_gain,
+                crop,
+                width,
+                height,
+                rows,
+                out,
+            );
+        }
+    }
+    fn render_rows_inner<const INTERIOR: bool>(
+        &self,
+        raw: &RawView<'_>,
+        film: &Film,
+        black: u16,
+        gains: [u16; 3],
+        exposure: u16,
+        spatial_gain: &impl Fn(usize, usize) -> u16,
+        crop: [usize; 4],
+        width: usize,
+        height: usize,
+        rows: std::ops::Range<usize>,
+        out: &mut [u8],
+    ) {
+        let [left, top, crop_width, crop_height] = crop;
         let xs: Vec<_> = (0..width).map(|x| left + x * crop_width / width).collect();
+        // This product is constant for each color channel. Moving it out of
+        // the pixel loop preserves the exact integer product before its shift.
+        let exposure_gains = gains.map(|gain| u64::from(gain) * u64::from(exposure));
         let mut pixels = FilmPixels::new(film);
         for (local_y, y) in rows.enumerate() {
             let yy = top + y * crop_height / height;
+            let nearest_row = &self.nearest[yy % 6 * 6..][..6];
             for x in (0..width).step_by(2) {
                 let mut pixel = |x: usize| {
-                    let positions = self.sample_positions(raw, xs[x], yy);
+                    let positions =
+                        self.sample_positions_from_row::<INTERIOR>(raw, nearest_row, xs[x], yy);
                     let w = std::array::from_fn(|c| {
                         let (sx, sy) = positions[c];
                         let value = (u64::from(raw.sample(sx, sy).saturating_sub(black))
-                            * u64::from(gains[c])
-                            * u64::from(exposure))
+                            * exposure_gains[c])
                             >> 16;
                         ((value * u64::from(spatial_gain(sx, sy))) >> 11).min(16383) as u16
                     });
@@ -220,7 +291,7 @@ impl Cfa {
 mod tests {
     use super::*;
     #[test]
-    fn raster_reuse_is_identical_for_both_packings_crops_and_scaling() {
+    fn interior_raster_matches_scalar_for_both_packings_crops_and_scaling() {
         let cfa = Cfa::new(vec![
             1, 2, 1, 1, 0, 1, 0, 1, 0, 2, 1, 2, 1, 2, 1, 1, 0, 1, 1, 0, 1, 1, 2, 1, 2, 1, 2, 0, 1,
             0, 1, 0, 1, 1, 2, 1,
@@ -241,6 +312,7 @@ mod tests {
                 pitch,
                 packing,
             };
+            let spatial_gain = |x, y| [1024u16, 2048, 3072][(x + 2 * y) % 3];
             for (crop, width, height) in [
                 ([0, 0, 48, 30], 48, 30),
                 ([6, 4, 36, 22], 50, 37),
@@ -253,7 +325,7 @@ mod tests {
                     127,
                     [311, 257, 493],
                     193,
-                    |_, _| 2048,
+                    spatial_gain,
                     crop,
                     width,
                     height,
@@ -261,14 +333,17 @@ mod tests {
                 )
                 .unwrap();
                 let pixel = |x, y| {
-                    let rgb = cfa.rgb(
+                    let positions = cfa.sample_positions(
                         &raw,
                         crop[0] + x * crop[2] / width,
                         crop[1] + y * crop[3] / height,
                     );
+                    let rgb = positions.map(|(x, y)| raw.sample(x, y));
                     film.develop(std::array::from_fn(|c| {
-                        ((u64::from(rgb[c].saturating_sub(127)) * [311u64, 257, 493][c] * 193)
-                            >> 16)
+                        let value =
+                            (u64::from(rgb[c].saturating_sub(127)) * [311u64, 257, 493][c] * 193)
+                                >> 16;
+                        ((value * u64::from(spatial_gain(positions[c].0, positions[c].1))) >> 11)
                             .min(16383) as u16
                     }))
                 };
