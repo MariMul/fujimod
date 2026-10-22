@@ -90,10 +90,10 @@ pub(super) fn records<'py>(
     for record in saved {
         let row = PyDict::new(py);
         row.set_item("name", record.name.as_ref())?;
-        for (key, value) in record.fields {
+        for (key, value) in record.fields.iter() {
             row.set_item(
                 key.as_ref(),
-                crate::emulator::python_values::value_to_py(py, &value)?,
+                crate::emulator::python_values::value_to_py(py, value)?,
             )?;
         }
         list.append(row)?;

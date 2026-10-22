@@ -1,5 +1,5 @@
 //! Event-log records and effects returned by device models.
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
 
 /// A structured scalar, sequence or mapping in an event-log record.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -65,7 +65,9 @@ const _: () = {
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Record {
     pub name: Cow<'static, str>,
-    pub fields: Vec<(Cow<'static, str>, Value)>,
+    /// Published observations are immutable; whole-board captures share their
+    /// field trees instead of recursively copying every retained event.
+    pub fields: Arc<[(Cow<'static, str>, Value)]>,
 }
 
 impl Record {
@@ -113,3 +115,47 @@ impl From<String> for Unsupported {
 }
 
 pub type Result<T> = std::result::Result<T, Unsupported>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shared_event_fields_preserve_json_and_binary_checkpoint_layout() {
+        #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+        struct OwnedRecord {
+            name: Cow<'static, str>,
+            fields: Vec<(Cow<'static, str>, Value)>,
+        }
+        let owned = OwnedRecord {
+            name: Cow::Owned("Completed graphics batch".into()),
+            fields: vec![
+                (Cow::Borrowed("token"), Value::Int(17)),
+                (
+                    Cow::Owned("destination".into()),
+                    Value::dict(vec![
+                        ("bytes", Value::Bytes((0..64).collect())),
+                        (
+                            "bounds",
+                            Value::Tuple(vec![Value::Int(720), Value::Int(480)]),
+                        ),
+                    ]),
+                ),
+            ],
+        };
+        let record = Record::new(owned.name.clone(), owned.fields.clone());
+        assert_eq!(
+            serde_json::to_vec(&record).unwrap(),
+            serde_json::to_vec(&owned).unwrap()
+        );
+        let mut before = Vec::new();
+        let mut after = Vec::new();
+        ciborium::into_writer(&owned, &mut before).unwrap();
+        ciborium::into_writer(&record, &mut after).unwrap();
+        assert_eq!(before, after);
+        let restored: Record = ciborium::from_reader(before.as_slice()).unwrap();
+        assert_eq!(restored, record);
+        let decoded: OwnedRecord = ciborium::from_reader(after.as_slice()).unwrap();
+        assert_eq!(decoded, owned);
+    }
+}

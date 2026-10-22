@@ -655,7 +655,7 @@ impl Compositor {
         if canvas & 0xf000f000 != 0 || (w * h) as i64 > self.max_pixels {
             return Err("Unknown graphics canvas controls or pixel budget".into());
         }
-        let main = self.main_plane(i, cpu, pixels, false, host)?;
+        let mut main = self.main_plane(i, cpu, pixels, false, host)?;
         // Optional canvas colors are declared fixtures, not a panel model.
         let backdrop_color = match self.backdrop_profile {
             Some(BackdropProfile::Black) => Some(0),
@@ -665,15 +665,17 @@ impl Compositor {
         let backdrop = main.is_none() && backdrop_color.is_some();
         let mut rgb = if pixels {
             Some(
-                main.as_ref()
-                    .and_then(|f| f.rgb.clone())
+                main.as_mut()
+                    .and_then(|f| f.rgb.take())
                     .unwrap_or_else(|| vec![backdrop_color.unwrap_or(0); w * h * 3]),
             )
         } else {
             None
         };
         let mut covered = vec![main.is_some() || backdrop; w * h];
-        let mut raw = main.as_ref().map_or(Vec::new(), |f| f.raw.clone());
+        let mut raw = main
+            .as_mut()
+            .map_or_else(Vec::new, |f| std::mem::take(&mut f.raw));
         let mut plane_states = Vec::new();
         // Group 1 composes over group 0, including when windows touch, overlap,
         // or sit inside enabled group 0 windows. The ascending sort above draws
@@ -802,21 +804,30 @@ impl Compositor {
                             plane[source + bytes.alpha] as u32
                         } * c.alpha;
                         let denominator = 255 * 128;
-                        for color in 0..3 {
-                            let value = colors.as_ref().map_or_else(
-                                || plane[source + bytes.rgb[color]],
-                                |colors| colors[((yy / scale) * c.width + xx / scale) * 3 + color],
-                            );
-                            let front = value as u32 * numerator;
-                            let back = if covered[target] {
-                                rgb[target * 3 + color] as u32
-                            } else {
-                                0
-                            };
-                            rgb[target * 3 + color] =
-                                ((front + back * (denominator - numerator) + denominator / 2)
+                        // Coverage was checked before drawing. A transparent
+                        // pixel preserves that backdrop, and an opaque pixel
+                        // replaces it without reading or blending its colors.
+                        if numerator == 0 {
+                            continue;
+                        }
+                        let front = if let Some(colors) = &colors {
+                            let start = ((yy / scale) * c.width + xx / scale) * 3;
+                            [colors[start], colors[start + 1], colors[start + 2]]
+                        } else {
+                            bytes.rgb.map(|color| plane[source + color])
+                        };
+                        let back = &mut rgb[target * 3..target * 3 + 3];
+                        if numerator == denominator {
+                            back.copy_from_slice(&front);
+                        } else {
+                            for (color, value) in back.iter_mut().zip(front) {
+                                let original = if covered[target] { *color as u32 } else { 0 };
+                                *color = ((value as u32 * numerator
+                                    + original * (denominator - numerator)
+                                    + denominator / 2)
                                     / denominator)
                                     .min(255) as u8;
+                            }
                         }
                         covered[target] = true;
                     }
