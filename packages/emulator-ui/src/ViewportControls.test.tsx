@@ -97,53 +97,65 @@ test('the visible webcam button toggles capture and reflects its state', () => {
   expect(button.getAttribute('aria-pressed')).toBe('false');
 });
 
-test('every firmware choice dispatches its value and closes the menu', () => {
+test('the firmware picker offers both builds, dispatches a change and closes', () => {
   const t = mount();
-  const details = t.host.querySelector('details')!;
-  for (const label of ['Unmodded', 'FujiMod']) {
-    details.open = true;
-    t.click(label);
-    expect(details.open).toBe(false);
-    expect(t.button(label).getAttribute('aria-pressed')).toBe('true');
+  const trigger = t.host.querySelector<HTMLButtonElement>('#firmware-mode > button')!;
+  const option = (enabled: boolean) =>
+    t.host.querySelector<HTMLButtonElement>(`[data-mod-enabled="${enabled}"]`);
+  expect(trigger.textContent).toBe('FujiMod');
+  expect(option(false)).toBeNull();
+  for (const enabled of [false, true]) {
+    trigger.click();
+    flush();
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(option(!enabled)!.getAttribute('aria-checked')).toBe('true');
+    option(enabled)!.click();
+    flush();
+    expect(option(enabled)).toBeNull();
+    expect(trigger.textContent).toBe(enabled ? 'FujiMod' : 'Unmodded');
   }
   expect(t.selectMod.mock.calls).toEqual([[false], [true]]);
+  trigger.click();
+  flush();
+  option(true)!.click();
+  expect(t.selectMod).toHaveBeenCalledTimes(2);
+  trigger.click();
+  flush();
+  t.host
+    .querySelector('#firmware-mode')!
+    .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  flush();
+  expect(option(true)).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+  trigger.click();
+  flush();
+  document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+  flush();
+  expect(option(true)).toBeNull();
 });
 
-test('feedback, saved reports, escape and outside-click dismissal work from one menu', () => {
+test('feedback and saved reports sit in the bar, which an idle viewer hides unless a report is saved', () => {
   const t = mount(),
-    details = t.host.querySelector('details')!,
-    summary = t.host.querySelector('summary')!;
-  details.open = true;
+    bar = t.host.querySelector<HTMLElement>('#viewer-tools')!;
   t.click('Feedback');
   expect(t.open).toHaveBeenCalledOnce();
-  expect(details.open).toBe(false);
-  details.open = true;
-  t.click('Download saved report');
+  t.click('Saved report');
   expect(t.recover).toHaveBeenCalledOnce();
-  expect(details.open).toBe(false);
-  details.open = true;
-  details.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  expect(details.open).toBe(false);
-  expect(document.activeElement).toBe(summary);
-  details.open = true;
-  document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
-  expect(details.open).toBe(false);
+  expect(t.host.querySelector('#camera-title')?.textContent).toBe('Camera');
   t.setState((s) => {
     s.saved = false;
     s.active = false;
   });
   flush();
+  expect(bar.hidden).toBe(true);
   expect(t.host.querySelector('#feedback-recover')).toBeNull();
-  expect(t.host.querySelector('#view-3d,#view-lcd,#face-screen,#face-lens')).toBeNull();
-  expect(t.host.querySelector('[aria-label="3D renderer"]')).toBeNull();
-  expect(t.host.querySelector('[aria-label="Navigation mode"]')).toBeNull();
   expect(t.host.querySelector('#firmware-mode')).toBeNull();
-  // An idle viewer has no menu unless a saved report needs recovering.
-  expect(t.host.querySelector('#viewer-settings-toggle')).toBeNull();
+  expect(t.host.querySelector('#feedback-open')).toBeNull();
   t.setState((s) => {
     s.saved = true;
   });
   flush();
+  expect(bar.hidden).toBe(false);
   expect(t.host.querySelector('#feedback-recover')).not.toBeNull();
 });
 

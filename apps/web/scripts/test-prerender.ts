@@ -108,7 +108,7 @@ try {
       });
       await page.goto(base + '/');
       try {
-        await page.locator('#viewer-tools[data-ready="true"]').waitFor();
+        await page.locator('#viewer-tools[data-ready="true"]').waitFor({ state: 'attached' });
       } catch (error) {
         console.log(type.name(), { errors, diagnostics });
         console.log(
@@ -138,8 +138,9 @@ try {
       assert.equal(new URL(page.url()).hash, '#workspace');
       await page.locator('#features .catalog-ref').first().focus();
       assert.equal(await page.locator('.catalog-card.on').count(), 1);
-      await page.locator('#viewer-settings-toggle').click();
-      await page.locator('#feedback-open').click();
+      // The idle homepage has no camera bar; feedback opens from its URL.
+      await page.goto(base + '/?feedback');
+      await page.locator('#feedback-dialog[open]').waitFor();
       assert.equal(
         await page.locator('#feedback-dialog').evaluate((node) => (node as HTMLDialogElement).open),
         true,

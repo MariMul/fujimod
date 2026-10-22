@@ -1,5 +1,6 @@
 import {
   DownloadProgress,
+  loadingStep,
   type LoadingProgress,
 } from '@fujimod/emulator-ui/engine/download-progress';
 import type { CardFile, EngineConfig, ReplayStep, Scene } from '@fujimod/emulator-ui/engine/api';
@@ -123,8 +124,8 @@ export class WasmWorkerRuntime {
   private replayMode = false;
   private clockWall = 0;
   private clockTicks = 0n;
-  private metricWall = 0;
-  private metricTicks = 0n;
+  /** Recent (wall, guest tick) samples; speed spans about two seconds so menus and live view read alike. */
+  private speedSamples: { wall: number; ticks: bigint }[] = [];
   private started = 0;
   private startedTicks = 0n;
   private nextSave = Infinity;
@@ -457,7 +458,11 @@ export class WasmWorkerRuntime {
         ),
       ),
     );
-    this.send({ type: 'progress', message: 'Verifying firmware…' });
+    this.send({
+      type: 'progress',
+      message: 'Building camera…',
+      assets: [loadingStep('build', 'loading')],
+    });
     this.timings.measure('create', () =>
       session.create(
         manifest.construction === 'resolved'
@@ -493,7 +498,17 @@ export class WasmWorkerRuntime {
     } else if (files.length || config.camera || Object.keys(config.initialPositions ?? {}).length)
       throw Error('Resolved ABI has no storage or initial positions.');
     this.replayMode = config.execution?.mode === 'replay';
+    this.send({
+      type: 'progress',
+      message: 'Booting camera…',
+      assets: [loadingStep('build', 'complete'), loadingStep('boot', 'loading')],
+    });
     await this.coldBoot(config.bootInputs);
+    this.send({
+      type: 'progress',
+      message: 'Booting camera…',
+      assets: [loadingStep('boot', 'complete')],
+    });
     const inputs = (this.state?.inputs ?? manifest.inputs ?? []).map((input) => ({
       ...input,
       initial: this.state?.positions[input.id] ?? input.initial,
@@ -545,8 +560,9 @@ export class WasmWorkerRuntime {
       }
     }
     this.observeCurrent();
-    this.started = this.metricWall = performance.now();
-    this.startedTicks = this.metricTicks = s.status().ticks;
+    this.started = performance.now();
+    this.startedTicks = s.status().ticks;
+    this.speedSamples = [{ wall: this.started, ticks: this.startedTicks }];
     this.rebase();
     if (this.manifest!.construction === 'session' && !this.manifest!.usb) this.captureCheckpoint();
     this.publish(true);
@@ -629,8 +645,9 @@ export class WasmWorkerRuntime {
     const tick = this.require().status().ticks;
     this.points = this.points.filter((point) => BigInt(point.tick) <= tick);
     this.nextCheckpoint = tick + BigInt(this.manifest!.ticksPerSecond * 2);
-    this.started = this.metricWall = performance.now();
-    this.startedTicks = this.metricTicks = tick;
+    this.started = performance.now();
+    this.startedTicks = tick;
+    this.speedSamples = [{ wall: this.started, ticks: tick }];
     this.nextInspection = tick;
     this.nextPresentation = tick;
     this.failed = this.require().status().failed;
@@ -694,8 +711,10 @@ export class WasmWorkerRuntime {
         virtualSeconds: Number(status.ticks - this.startedTicks) / rate,
         wallSeconds: elapsed,
         speed:
-          wall > this.metricWall
-            ? Number(status.ticks - this.metricTicks) / rate / ((wall - this.metricWall) / 1000)
+          wall > this.speedSamples[0]!.wall
+            ? Number(status.ticks - this.speedSamples[0]!.ticks) /
+              rate /
+              ((wall - this.speedSamples[0]!.wall) / 1000)
             : 0,
         averageSpeed: elapsed > 0 ? Number(status.ticks - this.startedTicks) / rate / elapsed : 0,
         runtime: {
@@ -708,8 +727,9 @@ export class WasmWorkerRuntime {
         },
       },
     });
-    this.metricTicks = status.ticks;
-    this.metricWall = wall;
+    this.speedSamples.push({ wall, ticks: status.ticks });
+    while (this.speedSamples.length > 2 && wall - this.speedSamples[1]!.wall >= 2000)
+      this.speedSamples.shift();
     const frame = s.frame(this.manifest!.output);
     if (!frame) return;
     const { rgba, width, height } = frame,

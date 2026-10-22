@@ -1,10 +1,10 @@
-import { Show, onSettled } from 'solid-js';
-import { SegmentedControl } from './ui/SegmentedControl';
+import { Show, createSignal, onSettled } from 'solid-js';
 import { Icon } from './ui/icons';
 import { SpeedGauge } from './ui/speed';
 import type { EmulatorFeedbackActions } from './Feedback';
 import './viewport-controls.css';
 
+/** The short bar under the display: camera, firmware picker, speed, webcam and feedback. */
 export function ViewportControls(props: {
   active: boolean;
   title: string;
@@ -21,138 +21,139 @@ export function ViewportControls(props: {
   feedback: EmulatorFeedbackActions;
   selectMod: (enabled: boolean) => void;
 }) {
-  // The menu exists only while a camera runs.
-  let settings: HTMLDetailsElement | undefined;
-  let trigger: HTMLElement | undefined;
+  const [picking, setPicking] = createSignal(false);
+  let picker: HTMLDivElement | undefined;
+  let trigger: HTMLButtonElement | undefined;
   function close() {
-    if (settings) settings.open = false;
+    setPicking(false);
     trigger?.focus();
   }
   onSettled(() => {
     const outside = (event: PointerEvent) => {
-      if (settings && event.target instanceof Node && !settings.contains(event.target))
-        settings.open = false;
+      if (picker && event.target instanceof Node && !picker.contains(event.target))
+        setPicking(false);
     };
     document.addEventListener('pointerdown', outside);
     return () => document.removeEventListener('pointerdown', outside);
   });
+  const choose = (enabled: boolean) => {
+    close();
+    if (enabled !== props.modEnabled) props.selectMod(enabled);
+  };
   return (
-    <>
+    <div
+      id="viewer-tools"
+      class="viewport-bar"
+      data-ready={String(props.feedback.ready)}
+      role="toolbar"
+      aria-label="Camera"
+      // An idle viewer shows the bar only to recover a saved report.
+      hidden={!props.active && !props.feedback.saved}
+    >
       <Show when={props.active}>
-        <div class="viewport-status">
-          <span id="camera-title">{props.title}</span>
-          <Show when={props.speed !== undefined && Number.isFinite(props.speed)}>
-            <SpeedGauge speed={props.speed!} />
-          </Show>
-        </div>
-      </Show>
-      <div
-        id="viewer-tools"
-        class="viewport-tools"
-        data-ready={String(props.feedback.ready)}
-        role="group"
-        aria-label="Viewport controls"
-      >
-        <Show when={props.active && props.webcamSupported}>
-          <button
-            id="webcam-toggle"
-            class="webcam-toggle"
-            type="button"
-            aria-label={
-              props.webcamActive || props.webcamBusy
-                ? 'Disable webcam input'
-                : 'Enable webcam input'
-            }
-            title={
-              props.webcamActive || props.webcamBusy
-                ? 'Disable webcam input'
-                : 'Enable webcam input'
-            }
-            aria-pressed={props.webcamActive ? 'true' : 'false'}
-            aria-busy={props.webcamBusy ? 'true' : 'false'}
-            disabled={props.webcamDisabled}
-            onClick={() => props.toggleWebcam?.()}
-          >
-            <Icon name="camera" size={18} />
-          </button>
-          <Show when={props.webcamError}>
-            <span class="webcam-error" role="status">
-              {props.webcamError}
-            </span>
-          </Show>
-        </Show>
-        {/* Idle viewers keep the menu only to recover a saved report. */}
-        <Show when={props.active || props.feedback.saved}>
-          <details
-            ref={settings}
-            class="viewport-settings"
+        <span id="camera-title">{props.title}</span>
+        <Show when={props.modSupported}>
+          <div
+            ref={picker}
+            id="firmware-mode"
+            class="firmware-picker"
             onKeyDown={(event) => {
-              if (event.key === 'Escape') {
+              if (event.key === 'Escape' && picking()) {
                 event.preventDefault();
                 event.stopPropagation();
                 close();
               }
             }}
           >
-            <summary
+            <button
               ref={trigger}
-              id="viewer-settings-toggle"
-              aria-label="Viewer settings"
-              title="Viewer settings"
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={picking() ? 'true' : 'false'}
+              aria-label="Firmware"
+              disabled={props.modDisabled}
+              onClick={() => setPicking(!picking())}
             >
-              <Icon name="more" size={20} />
-            </summary>
-            <div class="viewport-settings-panel" role="group" aria-label="Viewer settings">
-              <Show when={props.active && props.modSupported}>
-                <div class="viewport-setting">
-                  <span class="viewport-setting-label">Firmware</span>
-                  <SegmentedControl
-                    id="firmware-mode"
-                    label="Firmware mode"
-                    options={[
-                      { value: true, label: 'FujiMod', data: { 'data-mod-enabled': 'true' } },
-                      { value: false, label: 'Unmodded', data: { 'data-mod-enabled': 'false' } },
-                    ]}
-                    value={props.modEnabled}
-                    disabled={props.modDisabled}
-                    onSelect={(enabled) => {
-                      close();
-                      props.selectMod(enabled);
-                    }}
-                  />
-                </div>
-              </Show>
-              <div class="viewport-menu-actions">
-                <button
-                  type="button"
-                  id="feedback-open"
-                  disabled={!props.feedback.ready}
-                  onClick={() => {
-                    close();
-                    props.feedback.open();
-                  }}
-                >
-                  <Icon name="message" />
-                  <span>Feedback</span>
-                </button>
-                <Show when={props.feedback.saved}>
+              {props.modEnabled ? 'FujiMod' : 'Unmodded'}
+              <Icon name="chevron" size={12} />
+            </button>
+            <Show when={picking()}>
+              <div class="firmware-menu" role="menu" aria-label="Firmware">
+                {[
+                  { value: true, label: 'FujiMod' },
+                  { value: false, label: 'Unmodded' },
+                ].map((option) => (
                   <button
                     type="button"
-                    id="feedback-recover"
-                    onClick={() => {
-                      close();
-                      props.feedback.recover();
-                    }}
+                    role="menuitemradio"
+                    aria-checked={props.modEnabled === option.value ? 'true' : 'false'}
+                    data-mod-enabled={String(option.value)}
+                    onClick={() => choose(option.value)}
                   >
-                    <Icon name="download" />
-                    <span>Download saved report</span>
+                    <span class="firmware-check">
+                      {props.modEnabled === option.value ? '✓' : ''}
+                    </span>
+                    {option.label}
                   </button>
-                </Show>
+                ))}
               </div>
-            </div>
-          </details>
+            </Show>
+          </div>
         </Show>
-      </div>
-    </>
+        <Show when={props.speed !== undefined && Number.isFinite(props.speed)}>
+          <SpeedGauge speed={props.speed!} />
+        </Show>
+      </Show>
+      <span class="viewport-bar-spacer" />
+      <Show when={props.active && props.webcamSupported}>
+        <Show when={props.webcamError}>
+          <span class="webcam-error" role="status">
+            {props.webcamError}
+          </span>
+        </Show>
+        <button
+          id="webcam-toggle"
+          type="button"
+          aria-label={
+            props.webcamActive || props.webcamBusy ? 'Disable webcam input' : 'Enable webcam input'
+          }
+          title={
+            props.webcamActive || props.webcamBusy ? 'Disable webcam input' : 'Enable webcam input'
+          }
+          aria-pressed={props.webcamActive ? 'true' : 'false'}
+          aria-busy={props.webcamBusy ? 'true' : 'false'}
+          disabled={props.webcamDisabled}
+          onClick={() => props.toggleWebcam?.()}
+        >
+          <Icon name="camera" size={14} />
+          <span class="viewport-bar-label">Webcam</span>
+        </button>
+      </Show>
+      <Show when={props.active}>
+        <button
+          type="button"
+          id="feedback-open"
+          aria-label="Feedback"
+          title="Feedback"
+          disabled={!props.feedback.ready}
+          onClick={() => props.feedback.open()}
+        >
+          <Icon name="message" size={14} />
+          <span class="viewport-bar-label">Feedback</span>
+        </button>
+      </Show>
+      <Show when={props.feedback.saved}>
+        <button
+          type="button"
+          id="feedback-recover"
+          aria-label="Download saved report"
+          title="Download saved report"
+          onClick={() => props.feedback.recover()}
+        >
+          <Icon name="download" size={14} />
+          <span class="viewport-bar-label">Saved report</span>
+        </button>
+      </Show>
+    </div>
   );
 }

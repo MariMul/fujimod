@@ -30,13 +30,11 @@ async function ready(page: Page) {
   );
 }
 async function menu(page: Page) {
-  await page.locator('#viewer-settings-toggle').click();
-  assert.equal(
-    await page
-      .locator('.viewport-settings')
-      .evaluate((element) => (element as HTMLDetailsElement).open),
-    true,
-  );
+  await page.locator('#firmware-mode > button').click();
+  assert.equal(await page.locator('#firmware-mode > button').getAttribute('aria-expanded'), 'true');
+}
+async function closeMenu(page: Page) {
+  await page.locator('#firmware-mode > button').press('Escape');
 }
 const browser = await chromium.launch({ headless: true });
 let activePage: Page | undefined;
@@ -63,7 +61,7 @@ try {
   assert.equal(await page.locator('#idle-cameras').count(), 0);
   await page.locator('#workspace').scrollIntoViewIfNeeded();
   await screenshot(page, 'first-use');
-  assert.equal(await page.locator('#viewer-settings-toggle').count(), 0);
+  assert.equal(await page.locator('#viewer-tools').isVisible(), false);
   await page.goto(new URL('?feedback', base).href, { waitUntil: 'domcontentloaded' });
   await page.locator('#feedback-dialog[open]').waitFor();
   await page.locator('#feedback-description').fill('Viewport walkthrough');
@@ -91,14 +89,12 @@ try {
     await page.setViewportSize({ width, height: 1000 });
     await page.locator('#viewer-tools').scrollIntoViewIfNeeded();
     await menu(page);
-    const bounds = await page
-      .locator('#viewer-tools,.viewport-settings-panel')
-      .evaluateAll((elements) =>
-        elements.map((element) => {
-          const rect = element.getBoundingClientRect();
-          return { left: rect.left, right: rect.right, top: rect.top };
-        }),
-      );
+    const bounds = await page.locator('#viewer-tools,.firmware-menu').evaluateAll((elements) =>
+      elements.map((element) => {
+        const rect = element.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, top: rect.top };
+      }),
+    );
     assert.ok(
       bounds.every((rect) => rect.left >= -1 && rect.right <= width + 1 && rect.top >= 0),
       JSON.stringify({ width, bounds }),
@@ -123,34 +119,31 @@ try {
       ),
     );
     await screenshot(page, `layout-${width}`);
-    await page.locator('#viewer-settings-toggle').press('Escape');
+    await closeMenu(page);
   }
   console.log('Responsive viewport geometry passed');
   await menu(page);
   await screenshot(page, 'settings');
-  await page.locator('#viewer-settings-toggle').press('Escape');
-  assert.equal(
-    await page.locator('.viewport-settings').evaluate((e) => (e as HTMLDetailsElement).open),
-    false,
-  );
+  await closeMenu(page);
+  assert.equal(await page.locator('.firmware-menu').count(), 0);
   await menu(page);
-  await page.locator('.camera-library-heading h2').click();
-  assert.equal(
-    await page.locator('.viewport-settings').evaluate((e) => (e as HTMLDetailsElement).open),
-    false,
-  );
+  await page.locator('#emulator-heading').click();
+  assert.equal(await page.locator('.firmware-menu').count(), 0);
   for (const label of ['Unmodded', 'FujiMod']) {
     await menu(page);
-    await page.getByRole('button', { name: label, exact: true }).click();
+    await page.locator(`[data-mod-enabled="${label === 'FujiMod'}"]`).click();
     await ready(page);
     console.log(`${label} boot passed`);
+    assert.equal(await page.locator('#firmware-mode > button').innerText(), label);
     await menu(page);
     assert.equal(
-      await page.getByRole('button', { name: label, exact: true }).getAttribute('aria-pressed'),
+      await page
+        .locator(`[data-mod-enabled="${label === 'FujiMod'}"]`)
+        .getAttribute('aria-checked'),
       'true',
     );
     await screenshot(page, label.toLowerCase());
-    await page.locator('#viewer-settings-toggle').press('Escape');
+    await closeMenu(page);
   }
   // The shareable preview executes the same checked native boot from a fixed initial state.
   const preview = new URL('?scenario=x70-lcd#workspace', base).href;
@@ -209,7 +202,7 @@ try {
   await page.goto(base, { waitUntil: 'domcontentloaded' });
   await page.locator('#viewer-tools[data-ready="true"]').waitFor({ state: 'attached' });
   assert.equal(await page.locator('#camera-exit').count(), 0);
-  assert.equal(await page.locator('#viewer-settings-toggle').count(), 0);
+  assert.equal(await page.locator('#viewer-tools').isVisible(), false);
   await page.goto(new URL('?feedback', base).href, { waitUntil: 'domcontentloaded' });
   await page.locator('#feedback-dialog[open]').waitFor();
   assert.equal(

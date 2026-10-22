@@ -3,7 +3,7 @@ import { createSignal, flush } from 'solid-js';
 import { expect, test } from 'vite-plus/test';
 import { LoadingAssets } from './LoadingAssets';
 import type { AssetProgress } from './engine/download-progress';
-test('each asset has its own progress and completed files keep their row through setup', () => {
+test('every step is one row with the same bar, waiting rows empty and finished rows full', () => {
   const host = document.createElement('div');
   document.body.append(host);
   const [assets, setAssets] = createSignal<AssetProgress[]>([
@@ -23,10 +23,11 @@ test('each asset has its own progress and completed files keep their row through
     flush();
     expect(host.querySelectorAll('li')).toHaveLength(2);
     expect(host.querySelector('progress')?.value).toBe(25);
-    expect(host.querySelectorAll('progress')[1].hasAttribute('value')).toBe(false);
+    // A waiting row has an empty bar and no label; there is no rate or ETA text.
+    expect(host.querySelectorAll('progress')[1].value).toBe(0);
+    expect(host.querySelectorAll('.asset-size')[1].textContent).toBe('');
     expect(host.textContent).toContain('1.0 / 4.0 MiB');
-    expect(host.textContent).toContain('~6 s remaining');
-    expect(host.textContent).toContain('Waiting…');
+    expect(host.textContent).not.toContain('remaining');
     setAssets([
       {
         url: '/camera.mjs',

@@ -18,6 +18,22 @@ and a small standalone frontend served by a native emulator process.
 - Control layouts are data (`DevicePanel`). The same renderer draws them in
   every frontend.
 
+## Homepage emulator presentation
+
+- Idle: the launcher (`src/cameras/Launcher.tsx`) offers Resume and New for
+  saved cameras, the add-camera steps, and the supported list with a download
+  button linking each body's Fujifilm DAT.
+- Loading: one list of technically named steps, each with the same bar and no
+  rate or ETA text: Verifying firmware, Runtime manifest, Camera emulator,
+  Runtime loader, Patching firmware (FujiMod boots only), Building camera,
+  Booting camera. Rows exist before they start; a waiting row has an empty bar
+  and no label. A step without a measured size uses an indeterminate bar.
+- Running: a short bar under the display holds the camera name, a firmware
+  picker (FujiMod or Unmodded), smoothed speed, webcam input and Feedback.
+  There is no overflow menu. Save & Exit sits in the Emulator heading row.
+- The emulator section keeps one set of colors, type sizes and controls; Dev
+  Tools and the rest of the site are outside this scope.
+
 ## Transport
 
 WebRTC only. A native emulator process serves the UI bundle over HTTP, and the

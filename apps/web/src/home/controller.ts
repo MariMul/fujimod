@@ -1,6 +1,10 @@
 import { reconcile } from 'solid-js';
 import { startSession } from '@fujimod/emulator-ui/session/controller';
-import { DownloadProgress, expectedAssets } from '@fujimod/emulator-ui/engine/download-progress';
+import {
+  DownloadProgress,
+  expectedAssets,
+  loadingStep,
+} from '@fujimod/emulator-ui/engine/download-progress';
 import { CameraStore, type CameraRecord } from '../cameras/store';
 import '../home/site.css';
 import { flags } from '@fujimod/emulator-ui/flags';
@@ -165,7 +169,12 @@ export function startHome(
           sha256: meta.outputs[name as 'ffboot' | 'ffsys'].sha256,
         })),
       ),
-      load: () => patchedFiles(file),
+      load: async () => {
+        progress(state.message, undefined, [loadingStep('patch', 'loading')]);
+        const files = await patchedFiles(file);
+        progress(state.message, undefined, [loadingStep('patch', 'complete')]);
+        return files;
+      },
     };
   }
   function patchedFiles(file: File): Promise<CardFile[]> {
@@ -250,7 +259,10 @@ export function startHome(
     selectedFirmware = undefined;
     firmwareHash = undefined;
     runningLayout();
-    progress('Checking firmware…');
+    setState((s) => {
+      reconcile([...firmwareAssets, ...expectedAssets(false)], 'url')(s.loadingAssets);
+    });
+    progress('Checking firmware…', undefined, [loadingStep('verify', 'loading')]);
     try {
       if (!file.size || file.size > 256 * 1024 * 1024)
         throw Error('Choose a firmware DAT smaller than 256 MB.');
@@ -259,6 +271,9 @@ export function startHome(
       if (current !== generation) return;
       performance.mark('camera-dat-verified');
       firmwareHash = hash;
+      progress('Checking firmware…', undefined, [
+        loadingStep('verify', 'complete', bytes.byteLength),
+      ]);
       const entry: Firmware | undefined =
         catalog.firmwares.find((item) => item.sha256 === hash) ??
         (release?.firmwares.find((item) => item.sha256 === hash) as Firmware | undefined);
@@ -333,7 +348,19 @@ export function startHome(
       }
       if (!entry.emulate || !device) throw Error('Emulation unsupported for this firmware.');
       runningLayout();
-      progress('Loading emulator…', undefined, expectedAssets());
+      if (camera && !restart) modEnabled = camera.modEnabled;
+      const modSupported =
+        'sdBoot' in device && !!device.sdBoot && !!release?.patches[entry.sha256];
+      // A FujiMod boot patches the firmware before the camera is built.
+      if (modSupported && modEnabled)
+        setState((s) => {
+          if (s.loadingAssets.some((asset) => asset.url === 'step:patch')) return;
+          const rows = s.loadingAssets.map((asset) => ({ ...asset }));
+          const build = rows.findIndex((asset) => asset.url === 'step:build');
+          rows.splice(build < 0 ? rows.length : build, 0, loadingStep('patch', 'waiting'));
+          reconcile(rows, 'url')(s.loadingAssets);
+        });
+      progress('Loading emulator…');
       if (!replayScenario && !activeCamera) {
         activeCamera = await cameras.create(file, entry, modEnabled);
         if (current !== generation) return;
@@ -344,15 +371,12 @@ export function startHome(
         // A browser may decline this request; quota errors are still surfaced on every write.
         void navigator.storage?.persist?.().catch(() => {});
       }
-      if (camera && !restart) modEnabled = camera.modEnabled;
       const emulate = entry.emulate;
       await session.boot(
         bytes,
         layout!,
         () => !disposed && current === generation,
         () => {
-          const modSupported =
-            'sdBoot' in device && !!device.sdBoot && !!release?.patches[entry.sha256];
           updateModButtons(true);
           setState((s) => {
             s.modSupported = modSupported;

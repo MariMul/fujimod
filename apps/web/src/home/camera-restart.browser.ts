@@ -53,18 +53,13 @@ try {
   await ready();
   const id = (await records())[0].id;
   for (const label of ['Unmodded', 'FujiMod']) {
-    await page.locator('#viewer-settings-toggle').click();
-    await page.getByRole('button', { name: label, exact: true }).click();
+    await page.locator('#firmware-mode > button').click();
+    await page.locator(`[data-mod-enabled="${label === 'FujiMod'}"]`).click();
     await ready();
     const saved = await records();
     assert.equal(saved.length, 1);
     assert.equal(saved[0].id, id);
-    await page.locator('#viewer-settings-toggle').click();
-    assert.equal(
-      await page.getByRole('button', { name: label, exact: true }).getAttribute('aria-pressed'),
-      'true',
-    );
-    await page.locator('#viewer-settings-toggle').press('Escape');
+    assert.equal(await page.locator('#firmware-mode > button').innerText(), label);
     console.log(`${label}: native boot and owned-camera identity passed`);
   }
   assert.deepEqual(errors, []);
@@ -85,7 +80,7 @@ try {
   await page.goto(base, { waitUntil: 'domcontentloaded' });
   await page.locator('#viewer-tools[data-ready="true"]').waitFor({ state: 'attached' });
   assert.equal(await page.locator('#camera-exit').count(), 0);
-  assert.equal(await page.locator('#viewer-settings-toggle').count(), 0);
+  assert.equal(await page.locator('#viewer-tools').isVisible(), false);
   await page.goto(new URL('?feedback', base).href, { waitUntil: 'domcontentloaded' });
   await page.locator('#feedback-dialog[open]').waitFor();
   assert.equal(

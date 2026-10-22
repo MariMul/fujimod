@@ -27,14 +27,39 @@ function label(url: string) {
   );
 }
 
-/** Placeholder rows shown before the runtime requests its files; a download with the same label replaces each. */
-export function expectedAssets(): AssetProgress[] {
-  return ['wasm.json', 'camera.wasm', 'camera.mjs'].map((name) => ({
-    url: `expected:${name}`,
-    label: label(`https://expected.invalid/${name}`),
-    loaded: 0,
-    status: 'waiting',
-  }));
+/** A non-download loading step: verification, patching, construction or boot. */
+export function loadingStep(
+  id: 'verify' | 'patch' | 'build' | 'boot',
+  status: AssetProgress['status'],
+  bytes?: number,
+): AssetProgress {
+  return {
+    url: `step:${id}`,
+    label: {
+      verify: 'Verifying firmware',
+      patch: 'Patching firmware',
+      build: 'Building camera',
+      boot: 'Booting camera',
+    }[id],
+    loaded: bytes ?? 0,
+    total: bytes,
+    status,
+  };
+}
+/** Every row of a boot, in order, before any starts; a download with the same label replaces its placeholder. */
+export function expectedAssets(patch: boolean): AssetProgress[] {
+  return [
+    loadingStep('verify', 'waiting'),
+    ...['wasm.json', 'camera.wasm', 'camera.mjs'].map((name): AssetProgress => ({
+      url: `expected:${name}`,
+      label: label(`https://expected.invalid/${name}`),
+      loaded: 0,
+      status: 'waiting',
+    })),
+    ...(patch ? [loadingStep('patch', 'waiting')] : []),
+    loadingStep('build', 'waiting'),
+    loadingStep('boot', 'waiting'),
+  ];
 }
 
 /** Observe consumed response bytes without buffering or delaying the download.

@@ -179,7 +179,7 @@ export function CameraLauncher(props: {
                   aria-label={`Download ${camera.firmware.model} firmware ${camera.firmware.version} from Fujifilm`}
                 >
                   Download
-                  <Icon name="external" size={11} />
+                  <Icon name="download" size={13} />
                 </a>
               </li>
             )}

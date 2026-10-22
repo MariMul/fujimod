@@ -62,31 +62,13 @@ export function EmulatorWorkspace(props: {
         {props.toolbar}
         {props.children}
         <div id="camera-loading" class="camera-loading" hidden={!props.state.loading}>
-          {/* Visibility, not removal, keeps the loading layout fixed while downloads finish. */}
-          <p
-            style={{
-              visibility: props.state.loadingAssets.some(
-                (asset) => asset.status === 'loading' || asset.status === 'waiting',
-              )
-                ? 'hidden'
-                : 'visible',
-            }}
-          >
-            {props.state.message}
-          </p>
-          <LoadingAssets assets={props.state.loadingAssets} />
-          <progress
-            id="boot-progress"
-            style={{
-              visibility: props.state.loadingAssets.some(
-                (asset) => asset.status === 'loading' || asset.status === 'waiting',
-              )
-                ? 'hidden'
-                : 'visible',
-            }}
-            max="100"
-            value={props.state.progress}
-            aria-label={props.state.message || 'Loading camera'}
+          {/* A load without listed steps (restart, format) still uses the same row. */}
+          <LoadingAssets
+            assets={
+              props.state.loadingAssets.length
+                ? props.state.loadingAssets
+                : [{ url: 'status', label: props.state.message, loaded: 0, status: 'loading' }]
+            }
           />
         </div>
         <span id="status" class={{ error: props.state.error }} role="status" aria-live="polite">
