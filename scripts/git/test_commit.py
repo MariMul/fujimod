@@ -115,3 +115,19 @@ def test_a_stale_index_lock_is_removed(repos: tuple[Path, Path]) -> None:
     result = Repository(checkout).commit(["a.txt"], None, "Recover\n")
     assert run("git", "rev-parse", "main", cwd=remote).strip() == result
     assert not lock.exists()
+
+
+def test_ignored_files_need_the_flag(repos: tuple[Path, Path]) -> None:
+    _, checkout = repos
+    (checkout / ".gitignore").write_text("runs/*/\n")
+    Repository(checkout).commit([".gitignore"], None, "Ignore runs\n")
+    (checkout / "runs/one").mkdir(parents=True)
+    (checkout / "runs/one/input.json").write_text("{}\n")
+    (checkout / "runs/one/frame.bin").write_text("data\n")
+    with pytest.raises(Failure, match="ignored"):
+        Repository(checkout).commit(["runs/one/input.json"], None, "Input\n")
+    result = Repository(checkout).commit(
+        ["runs/one/input.json"], None, "Input\n", ignored=True
+    )
+    files = run("git", "show", "--name-only", "--format=", result, cwd=checkout)
+    assert files.split() == ["runs/one/input.json"]

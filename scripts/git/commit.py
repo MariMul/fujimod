@@ -35,12 +35,19 @@ class Arguments(argparse.Namespace):
     message: str
     patch: Path | None
     repo: Path
+    ignored: bool
     paths: list[str]
 
 
 class Repository(GitRepository):
     def build(
-        self, parent: str, paths: list[str], patch: Path | None, message: str
+        self,
+        parent: str,
+        paths: list[str],
+        patch: Path | None,
+        message: str,
+        *,
+        ignored: bool = False,
     ) -> str:
         with tempfile.TemporaryDirectory() as scratch:
             env = dict(os.environ, GIT_INDEX_FILE=str(Path(scratch) / "index"))
@@ -53,6 +60,7 @@ class Repository(GitRepository):
                 self.git(
                     "add",
                     "-A",
+                    *(["--force"] if ignored else []),
                     "--pathspec-from-file=-",
                     "--pathspec-file-nul",
                     env=env,
@@ -75,7 +83,14 @@ class Repository(GitRepository):
             )
         return names
 
-    def commit(self, paths: list[str], patch: Path | None, message: str) -> str:
+    def commit(
+        self,
+        paths: list[str],
+        patch: Path | None,
+        message: str,
+        *,
+        ignored: bool = False,
+    ) -> str:
         ref = self.branch()
         name = ref.removeprefix("refs/heads/")
         conflicted = sorted(
@@ -91,7 +106,7 @@ class Repository(GitRepository):
             for _ in range(ATTEMPTS):
                 update(self)
                 parent = self.output("rev-parse", "HEAD")
-                result = self.build(parent, paths, patch, message)
+                result = self.build(parent, paths, patch, message, ignored=ignored)
                 if self.git("update-ref", ref, result, parent, check=False).returncode:
                     raise Failure(
                         f"{name} moved outside the commit tool during a commit"
@@ -122,6 +137,11 @@ def main() -> None:
     parser.add_argument(
         "--repo", type=Path, default=Path.cwd(), help="checkout to commit in"
     )
+    parser.add_argument(
+        "--ignored",
+        action="store_true",
+        help="also commit named files that .gitignore covers (name each file)",
+    )
     parser.add_argument("paths", nargs="*")
     args = parser.parse_args(namespace=Arguments())
     if not args.paths and not args.patch:
@@ -130,7 +150,7 @@ def main() -> None:
     patch = args.patch.resolve() if args.patch else None
     try:
         repository = Repository(GitRepository.toplevel(args.repo))
-        result = repository.commit(args.paths, patch, message)
+        result = repository.commit(args.paths, patch, message, ignored=args.ignored)
     except (Failure, subprocess.CalledProcessError) as error:
         print(f"commit: {error}", file=sys.stderr)
         sys.exit(1)
