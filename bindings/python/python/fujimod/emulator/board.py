@@ -337,7 +337,7 @@ class Board:
     @property
     def failure(self) -> dict[str, object] | None:
         self._ensure_open()
-        failure = self.state()["failure"]
+        failure = _json_object(json.loads(self._native.observation()))["failure"]
         return None if failure is None else _json_object(failure)
 
     def run(
@@ -584,6 +584,16 @@ class Session:
         self._native_board().set_position(
             self._control(control_id), self._position(position)
         )
+
+    def press(self, control_id: str, *, stage: str | None = None) -> None:
+        """Queue a checked physical press, optionally to a named stage."""
+        if stage is not None:
+            stage = self._position(stage)
+        self._native_board().contact_input(self._control(control_id), stage, False)
+
+    def release(self, control_id: str) -> None:
+        """Queue a checked release after any pending physical stages."""
+        self._native_board().contact_input(self._control(control_id), None, True)
 
     def rotate(self, control_id: str, steps: int) -> None:
         """Rotate an encoder by a signed number of logical detents."""

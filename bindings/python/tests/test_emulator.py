@@ -24,6 +24,7 @@ from fujimod.emulator import board as board_module
 from fujimod.emulator.board import Session, _boot_report
 
 NATIVE_EXPORTS = frozenset({
+    "prepare_configuration",
     "load_input_assets",
     "verify_input_assets",
     "Sha256",
@@ -81,7 +82,7 @@ NATIVE_EXPORTS = frozenset({
 
 
 def test_emulator_is_a_nested_native_module_with_complete_exports() -> None:
-    assert len(NATIVE_EXPORTS) == 53
+    assert len(NATIVE_EXPORTS) == 54
     importlib.import_module("fujimod")
     assert importlib.import_module("fujimod.catalog") is catalog
     assert importlib.import_module("fujimod.usb") is usb
@@ -329,8 +330,39 @@ def test_boot_report_decodes_the_stopped_guest_observation() -> None:
         _boot_report({"status": "ready"})
 
 
-def test_session_facade_validates_inputs_and_returns_typed_observations() -> None:
+def test_failure_poll_does_not_materialize_device_snapshots() -> None:
     class Native:
+        failure: dict[str, object] | None = None
+
+        def observation(self) -> str:
+            import json
+
+            return json.dumps({"failure": self.failure})
+
+        def state(self) -> str:
+            raise AssertionError("Failure polling must not snapshot devices")
+
+    native_board = Native()
+    board = Board.__new__(Board)
+    board._native = cast(native.Board, native_board)
+    board._closed = False
+    assert board.failure is None
+    native_board.failure = {"error": "unmapped access", "address": 0x1000}
+    assert board.failure == native_board.failure
+    board._closed = True
+    with pytest.raises(RuntimeError, match="runtime is closed"):
+        _ = board.failure
+
+
+def test_session_facade_validates_inputs_and_returns_typed_observations() -> None:
+    contacts: list[tuple[str, str | None, bool]] = []
+
+    class Native:
+        def contact_input(
+            self, control_id: str, stage: str | None, release: bool
+        ) -> None:
+            contacts.append((control_id, stage, release))
+
         def adc_samples(self, node: str) -> list[int]:
             assert node == "adc0"
             return [0, 1023]
@@ -390,6 +422,23 @@ def test_session_facade_validates_inputs_and_returns_typed_observations() -> Non
     session.gpio_input("gpio0", 2, 7, True)
     session.input_level("key", False)
     session.rotate("dial", -2)
+    session.press("shutter", stage="half")
+    session.press("shutter", stage="full")
+    session.release("shutter")
+    session.press("menu")
+    assert contacts == [
+        ("shutter", "half", False),
+        ("shutter", "full", False),
+        ("shutter", None, True),
+        ("menu", None, False),
+    ]
+    with pytest.raises(ValueError):
+        session.press("", stage="half")
+    with pytest.raises(ValueError):
+        session.press("shutter", stage="")
+    with pytest.raises(ValueError):
+        session.release("")
+    assert len(contacts) == 4
     frame = session.scanout("display0", 1)
     assert frame is not None
     assert (frame.raw, frame.rgb, frame.width, frame.height) == (
@@ -420,3 +469,7 @@ def test_session_facade_validates_inputs_and_returns_typed_observations() -> Non
     board.close()
     with pytest.raises(RuntimeError, match="runtime is closed"):
         session.adc_samples("adc0")
+    with pytest.raises(RuntimeError, match="runtime is closed"):
+        session.press("menu")
+    with pytest.raises(RuntimeError, match="runtime is closed"):
+        session.release("menu")

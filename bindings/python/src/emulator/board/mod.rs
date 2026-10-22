@@ -698,6 +698,12 @@ impl Board {
             .set_position(id, position)
             .map_err(error)
     }
+    #[pyo3(signature = (id, stage, release))]
+    fn contact_input(&mut self, id: &str, stage: Option<&str>, release: bool) -> PyResult<()> {
+        self.session_mut()?
+            .contact_input(id, stage, release)
+            .map_err(error)
+    }
     fn control_state(&self) -> PyResult<String> {
         serde_json::to_string(&self.session()?.control_state().map_err(error)?)
             .map_err(|e| error(e.to_string()))
@@ -1232,7 +1238,13 @@ impl Board {
         let id = self.session()?.node(name).map_err(error)?;
         self.board_mut()?.inputs_changed(id).map_err(error)
     }
-    fn observation(&self) -> PyResult<String> {
+    fn observation(&self, py: Python<'_>) -> PyResult<String> {
+        if let Some(Backend::Xp4(session)) = &self.backend {
+            return py
+                .import("json")?
+                .call_method1("dumps", (session.state(py, false)?,))?
+                .extract();
+        }
         serde_json::to_string(&self.board()?.observation().map_err(error)?)
             .map_err(|e| error(e.to_string()))
     }
