@@ -96,7 +96,7 @@ struct State {
     invalidations: Vec<Invalidation>,
     dirty_pages: Vec<usize>,
     active: HashSet<usize>,
-    run_policies: HashMap<usize, ExecutionPolicy>,
+    run_policies: HashMap<usize, (ExecutionPolicy, bool)>,
     parked: HashMap<usize, usize>,
     owner_barrier: Option<usize>,
 }
@@ -250,6 +250,7 @@ impl Memory {
         &self,
         core: usize,
         policy: ExecutionPolicy,
+        parallel_tcg: bool,
     ) -> Result<RunReservation<'_>, String> {
         let mut state = self.state();
         if state.owner_barrier.is_some_and(|owner| owner != core) {
@@ -259,17 +260,18 @@ impl Memory {
             return Err("R-profile processor is already running".into());
         }
         if !state.run_policies.is_empty()
-            && (policy == ExecutionPolicy::Exact
+            && (policy != ExecutionPolicy::Interactive
+                || !parallel_tcg
                 || state
                     .run_policies
                     .values()
-                    .any(|active| *active != ExecutionPolicy::Interactive))
+                    .any(|(active, parallel)| *active != ExecutionPolicy::Interactive || !parallel))
         {
             return Err(
-                "concurrent R-profile processor runs require interactive execution policy".into(),
+                "concurrent R-profile processor runs require interactive execution policy and parallel TCG on every processor".into(),
             );
         }
-        state.run_policies.insert(core, policy);
+        state.run_policies.insert(core, (policy, parallel_tcg));
         Ok(RunReservation { memory: self, core })
     }
     pub(super) fn run_reserved(&self, core: usize) -> bool {
@@ -818,8 +820,12 @@ mod tests {
         let shared = SharedMemory::default();
         let a = shared.processor();
         let b = shared.processor();
-        let _a_run = a.reserve_run(1, ExecutionPolicy::Interactive).unwrap();
-        let _b_run = b.reserve_run(2, ExecutionPolicy::Interactive).unwrap();
+        let _a_run = a
+            .reserve_run(1, ExecutionPolicy::Interactive, true)
+            .unwrap();
+        let _b_run = b
+            .reserve_run(2, ExecutionPolicy::Interactive, true)
+            .unwrap();
         a.start(1).unwrap();
         b.start(2).unwrap();
 
@@ -844,8 +850,12 @@ mod tests {
         let shared = SharedMemory::default();
         let a = shared.processor();
         let b = shared.processor();
-        let _a_run = a.reserve_run(1, ExecutionPolicy::Interactive).unwrap();
-        let _b_run = b.reserve_run(2, ExecutionPolicy::Interactive).unwrap();
+        let _a_run = a
+            .reserve_run(1, ExecutionPolicy::Interactive, true)
+            .unwrap();
+        let _b_run = b
+            .reserve_run(2, ExecutionPolicy::Interactive, true)
+            .unwrap();
         a.start(1).unwrap();
         b.start(2).unwrap();
 
@@ -865,8 +875,12 @@ mod tests {
         let shared = SharedMemory::default();
         let a = shared.processor();
         let b = shared.processor();
-        let _a_run = a.reserve_run(1, ExecutionPolicy::Interactive).unwrap();
-        let _b_run = b.reserve_run(2, ExecutionPolicy::Interactive).unwrap();
+        let _a_run = a
+            .reserve_run(1, ExecutionPolicy::Interactive, true)
+            .unwrap();
+        let _b_run = b
+            .reserve_run(2, ExecutionPolicy::Interactive, true)
+            .unwrap();
         a.start(1).unwrap();
         b.start(2).unwrap();
         a.set_parked(1, true).unwrap();
@@ -881,7 +895,7 @@ mod tests {
             .acquire_owner_barrier(1)
             .expect("all processors are parked");
         assert!(
-            b.reserve_run(3, ExecutionPolicy::Interactive)
+            b.reserve_run(3, ExecutionPolicy::Interactive, true)
                 .err()
                 .unwrap()
                 .contains("owner synchronization barrier")
@@ -898,7 +912,7 @@ mod tests {
         assert_eq!(shared.state.lock().unwrap().parked.get(&2), None);
         drop(_b_run);
         let next_b_run = b
-            .reserve_run(2, ExecutionPolicy::Interactive)
+            .reserve_run(2, ExecutionPolicy::Interactive, true)
             .expect("a released barrier permits a new peer run");
         drop(next_b_run);
         drop(_a_run);
@@ -910,23 +924,27 @@ mod tests {
         let a = shared.processor();
         let b = shared.processor();
 
-        let a_exact = a.reserve_run(1, ExecutionPolicy::Exact).unwrap();
+        let a_exact = a.reserve_run(1, ExecutionPolicy::Exact, true).unwrap();
         assert!(
-            b.reserve_run(2, ExecutionPolicy::Exact)
+            b.reserve_run(2, ExecutionPolicy::Exact, true)
                 .err()
                 .unwrap()
                 .contains("require interactive execution policy")
         );
         drop(a_exact);
 
-        let a_interactive = a.reserve_run(1, ExecutionPolicy::Interactive).unwrap();
+        let a_interactive = a
+            .reserve_run(1, ExecutionPolicy::Interactive, true)
+            .unwrap();
         assert!(
-            b.reserve_run(2, ExecutionPolicy::Exact)
+            b.reserve_run(2, ExecutionPolicy::Exact, true)
                 .err()
                 .unwrap()
                 .contains("require interactive execution policy")
         );
-        let b_interactive = b.reserve_run(2, ExecutionPolicy::Interactive).unwrap();
+        let b_interactive = b
+            .reserve_run(2, ExecutionPolicy::Interactive, true)
+            .unwrap();
         a.start(1).unwrap();
         b.start(2).unwrap();
         assert!(a.require_stopped().is_err());
@@ -935,5 +953,38 @@ mod tests {
         assert!(a.require_stopped().is_ok());
         drop(b_interactive);
         drop(a_interactive);
+    }
+
+    #[test]
+    fn overlapping_interactive_runs_require_parallel_tcg_on_every_core() {
+        let shared = SharedMemory::default();
+        let memory = shared.processor();
+
+        let serialized = memory
+            .reserve_run(1, ExecutionPolicy::Interactive, false)
+            .unwrap();
+        assert!(matches!(
+            memory.reserve_run(2, ExecutionPolicy::Interactive, true),
+            Err(error) if error.contains("parallel TCG on every processor")
+        ));
+        drop(serialized);
+
+        let parallel = memory
+            .reserve_run(1, ExecutionPolicy::Interactive, true)
+            .unwrap();
+        assert!(matches!(
+            memory.reserve_run(2, ExecutionPolicy::Interactive, false),
+            Err(error) if error.contains("parallel TCG on every processor")
+        ));
+        drop(parallel);
+
+        let first = memory
+            .reserve_run(1, ExecutionPolicy::Interactive, true)
+            .unwrap();
+        let second = memory
+            .reserve_run(2, ExecutionPolicy::Interactive, true)
+            .unwrap();
+        drop(second);
+        drop(first);
     }
 }

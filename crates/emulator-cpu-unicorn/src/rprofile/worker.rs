@@ -844,7 +844,7 @@ fn serve(
             return;
         }
     };
-    let cpu = match core::Core::new(
+    let cpu = match core::Core::new_parallel_worker(
         engine,
         config.options,
         core::Wiring {

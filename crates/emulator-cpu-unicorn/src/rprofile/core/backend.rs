@@ -369,7 +369,9 @@ impl Cpu for Core {
                     .into(),
             );
         }
-        let _run = e.memory.reserve_run(e.id.get(), e.policy.get())?;
+        let _run = e
+            .memory
+            .reserve_run(e.id.get(), e.policy.get(), e.parallel_tcg)?;
         e.memory.flush()?;
         e.cap.set(
             request

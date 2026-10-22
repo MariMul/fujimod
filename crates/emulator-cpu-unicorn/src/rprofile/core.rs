@@ -61,6 +61,7 @@ pub(super) struct Execution {
     clock: Cell<Option<Clock>>,
     clock_overshoot: Cell<u64>,
     policy: Cell<ExecutionPolicy>,
+    parallel_tcg: bool,
     pmu: Cell<pmu::Counter>,
     tcm: [super::tcm::Bank; 2],
     tcm_pending: Cell<Option<(usize, u32)>>,
@@ -113,9 +114,26 @@ impl Drop for OwnerBarrierRunGuard<'_> {
     }
 }
 impl Core {
-    /// A raw engine has no other owner: translation and accounting hooks are
-    /// private to this backend for its entire lifetime.
+    /// Constructs a serialized engine. Its run reservations reject overlap
+    /// with another R-profile processor sharing guest memory.
     pub fn new(cpu: UnicornCore, options: Options, wiring: Wiring) -> Result<Self, String> {
+        Self::new_with_parallel_tcg(cpu, options, wiring, false)
+    }
+    /// Construct an engine used by the native worker backend, where multiple
+    /// processors may execute concurrently over shared guest memory.
+    pub(super) fn new_parallel_worker(
+        cpu: UnicornCore,
+        options: Options,
+        wiring: Wiring,
+    ) -> Result<Self, String> {
+        Self::new_with_parallel_tcg(cpu, options, wiring, true)
+    }
+    fn new_with_parallel_tcg(
+        cpu: UnicornCore,
+        options: Options,
+        wiring: Wiring,
+        parallel_tcg: bool,
+    ) -> Result<Self, String> {
         let features = cpu.features();
         if cpu.model() != Model::CortexR5F
             || !features.translation_filter
@@ -146,6 +164,7 @@ impl Core {
             clock: Cell::new(None),
             clock_overshoot: Cell::new(0),
             policy: Cell::new(ExecutionPolicy::Exact),
+            parallel_tcg,
             pmu: Cell::new(pmu::Counter::default()),
             tcm,
             tcm_pending: Cell::new(None),
@@ -272,8 +291,9 @@ impl Execution {
             // including targets where parallel TCG stays disabled.
             self.cpu.invalidate_code(None)?;
         }
-        self.cpu
-            .set_parallel_cpus(cfg!(not(target_os = "emscripten")) && enabled)?;
+        self.cpu.set_parallel_cpus(
+            self.parallel_tcg && cfg!(not(target_os = "emscripten")) && enabled,
+        )?;
         self.policy.set(policy);
         for read in self.fast_reads.borrow().iter() {
             read.set_enabled(enabled);

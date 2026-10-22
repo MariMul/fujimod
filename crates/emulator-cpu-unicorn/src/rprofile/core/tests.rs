@@ -101,7 +101,11 @@ fn sticky_pause_stops_instead_of_retrying_a_pending_restart() {
     execution.pause_requested.store(1, Ordering::Release);
     let _run = execution
         .memory
-        .reserve_run(execution.id.get(), execution.policy.get())
+        .reserve_run(
+            execution.id.get(),
+            execution.policy.get(),
+            execution.parallel_tcg,
+        )
         .unwrap();
 
     let exit = cpu
@@ -129,7 +133,11 @@ fn execution_policy_cannot_change_during_a_run_reservation() {
     let execution = &cpu.execution;
     let run = execution
         .memory
-        .reserve_run(execution.id.get(), ExecutionPolicy::Exact)
+        .reserve_run(
+            execution.id.get(),
+            ExecutionPolicy::Exact,
+            execution.parallel_tcg,
+        )
         .unwrap();
     assert!(
         cpu.set_execution_policy(ExecutionPolicy::Interactive)
@@ -138,6 +146,72 @@ fn execution_policy_cannot_change_during_a_run_reservation() {
     );
     drop(run);
     cpu.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+}
+
+#[test]
+fn only_parallel_worker_construction_opts_into_parallel_tcg() {
+    let memory = Memory::default();
+    let serialized = processor(&memory);
+    serialized
+        .set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
+    assert!(!serialized.execution.parallel_tcg);
+
+    let worker = parallel_worker_processor(&memory);
+    worker
+        .set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
+    assert!(worker.execution.parallel_tcg);
+    worker.set_execution_policy(ExecutionPolicy::Exact).unwrap();
+    assert!(worker.execution.parallel_tcg);
+}
+
+#[test]
+fn parallel_worker_policy_is_restored_with_its_snapshot() {
+    let worker = parallel_worker_processor(&Memory::default());
+    worker
+        .set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
+    let snapshot = worker.snapshot(None).unwrap();
+
+    worker.set_execution_policy(ExecutionPolicy::Exact).unwrap();
+    assert_eq!(worker.execution.policy.get(), ExecutionPolicy::Exact);
+    worker.restore(snapshot.as_ref()).unwrap();
+    assert_eq!(worker.execution.policy.get(), ExecutionPolicy::Interactive);
+    assert!(worker.execution.parallel_tcg);
+}
+
+#[test]
+fn serialized_core_rejects_an_overlapping_interactive_run_before_execution() {
+    let memory = Memory::default();
+    let first = processor(&memory);
+    let second = processor(&memory);
+    for cpu in [&first, &second] {
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        cpu.map_zeroed(0, 0x4000, 7).unwrap();
+        words(cpu, 0x1000, &[0xe320f003]);
+        set(cpu, arm::CPSR, 0xd3);
+        set(cpu, arm::PC, 0x1000);
+    }
+
+    let reservation = first
+        .execution
+        .memory
+        .reserve_run(
+            first.execution.id.get(),
+            first.execution.policy.get(),
+            first.execution.parallel_tcg,
+        )
+        .unwrap();
+    let error = run(&second, 0x1000, 1).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("parallel TCG on every processor")
+    );
+    assert_eq!(get(&second, arm::PC), 0x1000);
+    drop(reservation);
 }
 
 struct StopBeforeProgress {
@@ -194,6 +268,18 @@ fn processor(memory: &Memory) -> Core {
             ..Options::default()
         },
     )
+}
+fn parallel_worker_processor(memory: &Memory) -> Core {
+    Core::new_parallel_worker(
+        crate::test_support::library()
+            .open(Model::CortexR5F, 1024 * 1024)
+            .unwrap(),
+        Options::default(),
+        Wiring {
+            memory: memory.clone(),
+        },
+    )
+    .unwrap()
 }
 #[test]
 fn disabled_vfp_enters_the_guest_undefined_vector_and_retries() {
