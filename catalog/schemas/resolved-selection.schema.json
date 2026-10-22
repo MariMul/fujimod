@@ -12255,11 +12255,146 @@
           },
           "required": [
             "kind",
-            "ticks_per_quantum"
+            "distributor_block_id",
+            "redistributor_block_id",
+            "redistributor_stride",
+            "lines"
           ],
           "type": "object"
         }
       ]
+    },
+    "InterruptRoute": {
+      "additionalProperties": false,
+      "description": "A routed interrupt line.",
+      "properties": {
+        "core": {
+          "description": "Processor core receiving the interrupt.",
+          "type": "string"
+        },
+        "line": {
+          "description": "Interrupt line number on the processor core.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output_id": {
+          "description": "Named output or channel within the source block, when known.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_block": {
+          "description": "SoC block producing the interrupt.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "core",
+        "line",
+        "source_block"
+      ],
+      "type": "object"
+    },
+    "IrisOptics": {
+      "additionalProperties": false,
+      "description": "Aperture positions and their optical output.",
+      "properties": {
+        "output": {
+          "$ref": "#/$defs/OpticalQuantity",
+          "description": "Named optical quantity produced by the aperture."
+        },
+        "positions": {
+          "description": "Aperture positions and their f-number values.",
+          "items": {
+            "$ref": "#/$defs/AperturePosition"
+          },
+          "type": "array"
+        },
+        "travel_limits": {
+          "description": "Minimum and maximum mechanical positions.",
+          "items": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "output",
+        "positions",
+        "travel_limits"
+      ],
+      "type": "object"
+    },
+    "LensAssembly": {
+      "additionalProperties": false,
+      "description": "A body lens assembly.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection identity carrying lens control signals.",
+          "type": "string"
+        },
+        "encoder_connection_id": {
+          "description": "Body connection wired to the optional rotary encoder.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "focus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FocusAxis"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Documented focus-axis response."
+        },
+        "home_connections": {
+          "description": "Body connections wired to motor home switches.",
+          "items": {
+            "$ref": "#/$defs/LensHomeConnection"
+          },
+          "type": "array"
+        },
+        "iris": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IrisOptics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Documented aperture positions and their optical output."
+        },
+        "part_id": {
+          "description": "Reusable lens part identity.",
+          "type": "string"
+        },
+        "pulse": {
+          "$ref": "#/$defs/PulseInterface",
+          "description": "Body-specific pulse-controller wiring for this lens."
+        },
+        "route": {
+          "$ref": "#/$defs/SerialRoute",
+          "description": "Body-specific serial route to the lens controller."
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id",
+        "route",
+        "pulse",
+        "home_connections"
+      ],
+      "type": "object"
     },
     "LensClockMode": {
       "description": "A clocking mode declared by a lens protocol.",

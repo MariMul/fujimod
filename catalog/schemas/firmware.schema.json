@@ -774,27 +774,6 @@
       ],
       "type": "object"
     },
-    "DebugKey": {
-      "additionalProperties": false,
-      "description": "A name accepted by the stock debug key command.",
-      "properties": {
-        "event": {
-          "description": "Native event number.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "name": {
-          "description": "Native name.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "name",
-        "event"
-      ],
-      "type": "object"
-    },
     "FirmwareBootLayout": {
       "additionalProperties": false,
       "description": "Declared boot layout facts.",
@@ -1397,24 +1376,6 @@
           "$ref": "#/$defs/ConfigurationLocation",
           "description": "Settings block location."
         },
-        "control_names": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "description": "User-facing control aliases mapped to physical identities.",
-          "type": "object"
-        },
-        "controls": {
-          "$ref": "#/$defs/FirmwareControls",
-          "description": "Electrical control mappings and native key events."
-        },
-        "debug_keys": {
-          "description": "Names accepted by the firmware debug key command.",
-          "items": {
-            "$ref": "#/$defs/DebugKey"
-          },
-          "type": "array"
-        },
         "firmware_id": {
           "description": "Firmware identity.",
           "type": "string"
@@ -1429,13 +1390,6 @@
             "$ref": "#/$defs/AddressIdentity"
           },
           "type": "array"
-        },
-        "input_bindings": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "description": "Navigation roles mapped to debug key names.",
-          "type": "object"
         },
         "menus": {
           "$ref": "#/$defs/MenuTables",
@@ -1472,10 +1426,6 @@
         "firmware_id",
         "firmware_sha256",
         "body_id",
-        "controls",
-        "debug_keys",
-        "input_bindings",
-        "control_names",
         "uncached_alias",
         "identity_checks",
         "configuration",
