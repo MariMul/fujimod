@@ -94,7 +94,7 @@ run = "cargo run --locked -p fujimod-bindgen -- --check-catalog-types catalog/sc
 
 [tasks.python-build-test]
 run = [
-  "uv run --locked maturin develop --release --manifest-path bindings/python/Cargo.toml --features testing --locked",
+  "uv run --locked python scripts/python_extension.py",
   "uv run --locked python -c 'from fujimod.usb import testing'",
 ]
 
