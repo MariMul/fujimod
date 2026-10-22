@@ -14,6 +14,25 @@ pub(super) struct Cache {
     )>,
 }
 impl Cache {
+    /// The last computed measurement, which may still be pending or canceled.
+    /// This derived cache observation does not assert DMA publication.
+    pub fn source(&self) -> Option<serde_json::Value> {
+        self.previous.as_ref().map(|(frame, grid, words, spans)| {
+            let maxima: Vec<_> = spans
+                .iter()
+                .filter(|s| s.destination == 2)
+                .map(|s| {
+                    s.bytes
+                        .chunks_exact(4)
+                        .map(|v| u32::from_le_bytes(v.try_into().unwrap()))
+                        .max()
+                        .unwrap_or(0)
+                })
+                .collect();
+            serde_json::json!({"exposure":frame.physical_state(),"grid":grid,
+                "contrast_geometry":words[0],"color_geometry":words[1],"color_sum_maxima":maxima})
+        })
+    }
     pub fn clear(&mut self) {
         self.previous = None;
     }

@@ -826,6 +826,7 @@ impl Device for Block18000 {
         serde_json::json!({"registers":self.registers.as_slice(),"global":self.global.as_slice(),
             "seen_frame":self.seen_frame,"stop_due":self.stop_due,"pending_due":self.pending.map(|p|p.due),
             "ack_channel":self.ack_channel,"ack_due":self.ack_due,
+            "computed_source":self.pixel_cache.source(),
             "histogram_destination":self.pending.filter(|p|p.histogram).map(|p|p.destinations[9])})
     }
     fn name(&self) -> &'static str {
