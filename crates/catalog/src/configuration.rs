@@ -9,6 +9,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+mod options;
+pub use options::*;
+
 pub const RUN_CONFIGURATION_SCHEMA_URI: &str =
     "https://fujimod.com/schemas/emulator-run-configuration.schema.json";
 pub const RUN_OVERLAY_SCHEMA_URI: &str =
@@ -61,6 +64,9 @@ pub struct RunConfiguration {
     #[schemars(default)]
     #[cfg_attr(feature = "typescript", tsify(type = "RunBrowserCamera | null"))]
     pub browser_camera: Option<RunBrowserCamera>,
+    /// Explicit device policy and startup selections for this run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preset: Option<RunPreset>,
 }
 
 impl RunConfiguration {
@@ -84,6 +90,9 @@ impl RunConfiguration {
             || self.id != selected_id
         {
             return Err("run configuration schema or identity differs".into());
+        }
+        if let Some(preset) = &self.preset {
+            preset.validate()?;
         }
         crate::emulator::validate_id(&self.id)?;
         crate::emulator::validate_id(&self.body_id)?;
@@ -438,6 +447,62 @@ impl ResolvedConfiguration {
             let overlay = RunOverlay::bundled(overlay_id)?;
             overlay.validate(overlay_id, &configuration.id)?;
             match overlay.change {
+                RunOverlayChange::Preset { mut preset } => {
+                    if !changed.insert("preset") {
+                        return Err("run overlays select a device preset more than once".into());
+                    }
+                    preset.validate()?;
+                    if let Some(base) = &configuration.preset {
+                        if preset.execution_scope.is_none() {
+                            preset.execution_scope = base.execution_scope.clone();
+                        }
+                    }
+                    if let Some(purpose) = preset.purpose {
+                        if !changed.insert("purpose") {
+                            return Err("run overlays change purpose more than once".into());
+                        }
+                        configuration.purpose = purpose;
+                    }
+                    if let Some(start) = preset.start {
+                        if !changed.insert("start") {
+                            return Err("run overlays change the start entry more than once".into());
+                        }
+                        configuration.start = start;
+                    }
+                    if let Some(connected) = preset.usb_connected {
+                        if !changed.insert("usb") {
+                            return Err("run overlays change USB connection more than once".into());
+                        }
+                        if let Some(RunInputs::Exr2(inputs)) = &mut configuration.inputs {
+                            inputs.usb.connected = connected;
+                        }
+                    }
+                    if let Some(entry) = &preset.factory_options.entry {
+                        if !changed.insert("start") {
+                            return Err("run overlays change the start entry more than once".into());
+                        }
+                        configuration.start = match entry {
+                            RunEntry::Loader => RunStart::Loader,
+                        };
+                    }
+                    if let Some(camera) = &preset.browser_camera {
+                        if !changed.insert("browser_camera") {
+                            return Err(
+                                "run overlays declare the browser camera more than once".into()
+                            );
+                        }
+                        configuration.browser_camera = Some(camera.clone());
+                    }
+                    if let Some(execution) = preset.execution {
+                        if !changed.insert("execution") {
+                            return Err(
+                                "run overlays change the execution policy more than once".into()
+                            );
+                        }
+                        configuration.execution = Some(execution);
+                    }
+                    configuration.preset = Some(preset);
+                }
                 RunOverlayChange::UsbConnection { connected } => {
                     if !changed.insert("usb") {
                         return Err("run overlays change USB connection more than once".into());
@@ -1186,7 +1251,18 @@ impl RunOverlay {
             return Err("run overlay schema or identity differs".into());
         }
         crate::emulator::validate_id(&self.id)?;
-        crate::emulator::validate_id(&self.configuration_id)
+        crate::emulator::validate_id(&self.configuration_id)?;
+        match &self.change {
+            RunOverlayChange::Preset { preset } => preset.validate(),
+            RunOverlayChange::Execution { execution } => {
+                if execution.quantum == 0 {
+                    return Err("run quantum must be positive".into());
+                }
+                execution.instructions_per_tick.validate()
+            }
+            RunOverlayChange::BrowserCamera { browser_camera } => browser_camera.validate(),
+            _ => Ok(()),
+        }
     }
 }
 
@@ -1200,6 +1276,8 @@ impl RunOverlay {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub enum RunOverlayChange {
+    /// Select a closed set of startup inputs and device policies.
+    Preset { preset: RunPreset },
     /// Connect or disconnect the declared USB cable.
     UsbConnection { connected: bool },
     /// Select another named firmware entry.
@@ -1210,6 +1288,124 @@ pub enum RunOverlayChange {
     Execution { execution: RunExecution },
     /// Attach a virtual card, still-capture policy and preview cadence.
     BrowserCamera { browser_camera: RunBrowserCamera },
+}
+
+/// Startup policy and synthetic external inputs selected together.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct RunPreset {
+    /// Closed device policy selections; omitted fields retain factory defaults.
+    pub factory_options: RunFactoryOptions,
+    /// Inherited policy inputs to clear before applying this preset.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub clear_options: Vec<RunClearedOption>,
+    /// Intended operation for this input selection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub purpose: Option<RunPurpose>,
+    /// Boot entry when it differs from the base run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start: Option<RunStart>,
+    /// Initial cable state, including for runs with no complete reset input set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usb_connected: Option<bool>,
+    /// Virtual card declaration without a preview or capture pipeline.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub virtual_card: Option<RunVirtualCard>,
+    /// Complete execution policy when selecting timing or batch options.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution: Option<RunExecution>,
+    /// Restriction on the execution this configuration represents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_scope: Option<RunExecutionScope>,
+    /// Declared electrical startup levels, applied after the body reset inputs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub initial_gpio: Vec<RunPadLevel>,
+    /// Optional virtual card and preview inputs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub browser_camera: Option<RunBrowserCamera>,
+    /// Explicit limits on this synthetic input selection.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub limits: Vec<String>,
+}
+
+impl RunPreset {
+    fn validate(&self) -> Result<(), String> {
+        self.factory_options.validate()?;
+        if let Some(card) = &self.virtual_card {
+            card.validate()?;
+        }
+        if self.start.is_some() && self.factory_options.entry.is_some() {
+            return Err("run preset repeats its start entry".into());
+        }
+        if let Some(execution) = &self.execution {
+            if execution.quantum == 0 {
+                return Err("run quantum must be positive".into());
+            }
+            execution.instructions_per_tick.validate()?;
+            if self
+                .factory_options
+                .quantum
+                .is_some_and(|value| value != execution.quantum as u64)
+                || self
+                    .factory_options
+                    .instructions_per_tick
+                    .is_some_and(|value| {
+                        u128::from(value) * u128::from(execution.instructions_per_tick.denominator)
+                            != u128::from(execution.instructions_per_tick.numerator)
+                    })
+            {
+                return Err("run factory timing differs from execution policy".into());
+            }
+        } else if self.factory_options.quantum.is_some()
+            || self.factory_options.instructions_per_tick.is_some()
+        {
+            return Err("run factory timing requires an explicit execution policy".into());
+        }
+        if let Some(camera) = &self.browser_camera {
+            camera.validate()?;
+        }
+        let mut pads = BTreeSet::new();
+        for pad in &self.initial_gpio {
+            if pad.port > 5 || pad.pin > 15 || !pads.insert((pad.port, pad.pin)) {
+                return Err("run GPIO input is outside the EXR2 pad range or repeated".into());
+            }
+        }
+        Ok(())
+    }
+}
+
+/// A declared electrical startup input.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct RunPadLevel {
+    pub port: u8,
+    pub pin: u8,
+    pub level: bool,
+    pub basis: String,
+}
+
+/// Execution eligibility carried by a run selection.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
+pub enum RunExecutionScope {
+    #[serde(rename = "emulator-only")]
+    EmulatorOnly,
+    #[serde(rename = "isolated-driver")]
+    IsolatedDriver,
+    #[serde(rename = "offline-boot-development")]
+    OfflineBootDevelopment,
 }
 
 /// Execution policy selected by the run configuration.
@@ -1468,6 +1664,69 @@ pub struct RunStatisticsSpan {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_run_document_validates_without_hardware_resolution() {
+        for (id, _) in BUNDLED_RUN_CONFIGURATIONS {
+            RunConfiguration::bundled(id).unwrap_or_else(|error| panic!("{id}: {error}"));
+        }
+        for (id, _) in BUNDLED_RUN_OVERLAYS {
+            RunOverlay::bundled(id).unwrap_or_else(|error| panic!("{id}: {error}"));
+        }
+    }
+
+    #[test]
+    fn preset_options_are_closed_and_preserve_explicit_disconnection() {
+        let overlay = RunOverlay::bundled("x70-110-browser-usb").unwrap();
+        let RunOverlayChange::Preset { preset } = overlay.change else {
+            panic!("expected preset");
+        };
+        assert_eq!(preset.usb_connected, Some(true));
+        assert_eq!(
+            preset.factory_options.secondary_bus_profile,
+            Some(RunSecondaryBusProfile::Disabled)
+        );
+        assert!(
+            serde_json::from_str::<RunFactoryOptions>(r#"{"storage_profile":"unknown"}"#).is_err()
+        );
+        assert!(serde_json::from_str::<RunFactoryOptions>(r#"{"unmodeled_input":true}"#).is_err());
+        assert!(
+            serde_json::from_str::<RunFactoryOptions>(r#"{"secondary_bus_profile":null}"#)
+                .unwrap()
+                .secondary_bus_profile
+                .is_none()
+        );
+        let mut overlay = RunOverlay::bundled("x70-110-browser-camera").unwrap();
+        let RunOverlayChange::Preset { preset } = &mut overlay.change else {
+            panic!("expected preset");
+        };
+        preset.factory_options.quantum = Some(0);
+        assert!(
+            overlay
+                .validate(&overlay.id, &overlay.configuration_id)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn sd_boot_presets_keep_storage_and_cleared_journals() {
+        let overlay = RunOverlay::bundled("xm1-150-sd-boot-rec").unwrap();
+        let RunOverlayChange::Preset { preset } = overlay.change else {
+            panic!("expected preset");
+        };
+        assert_eq!(preset.start, Some(RunStart::SdCard));
+        assert_eq!(
+            preset.factory_options.storage_profile,
+            Some(RunStorageProfile::Erased)
+        );
+        assert_eq!(preset.factory_options.settings, Some(RunSettings::Default));
+        assert!(
+            preset
+                .clear_options
+                .contains(&RunClearedOption::UserJournals)
+        );
+        assert_eq!(preset.factory_options.sd_card_present, Some(true));
+    }
 
     #[test]
     fn bundled_configuration_is_identity_checked_and_has_explicit_reset_inputs() {

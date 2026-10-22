@@ -4,7 +4,11 @@
   "id": "xe2s-111-service-session",
   "configuration_id": "xe2s-111",
   "change": {
-    "kind": "purpose",
-    "purpose": "service_session"
+    "kind": "preset",
+    "preset": {
+      "factory_options": {},
+      "execution_scope": "offline-boot-development",
+      "purpose": "service_session"
+    }
   }
 }

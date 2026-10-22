@@ -11,5 +11,9 @@
   "execution": null,
   "inputs": null,
   "scene": null,
-  "overlays": []
+  "overlays": [],
+  "preset": {
+    "factory_options": {},
+    "execution_scope": "offline-boot-development"
+  }
 }
