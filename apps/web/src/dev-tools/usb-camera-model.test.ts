@@ -164,6 +164,7 @@ class CameraDevice implements ModelDevice {
         this.emit(0xd1);
         return Uint8Array.of(1, 2, 3, 4);
       },
+      readBulk: async () => ({ data: Uint8Array.of(1, 2, 3, 4), overwritten: null }),
       readConfiguration: async (...args) => {
         this.configurationReads(...args);
         if (this.failDebugRead) throw Error('configuration read failed');

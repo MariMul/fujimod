@@ -506,6 +506,7 @@ impl Session {
 }
 pub(crate) enum Operation {
     Workflow(crate::workflows::Workflow),
+    Bulk(crate::workflows::BulkRead),
     UploadOwned(
         fujimod_workflows::install::OwnedUpload,
         fujimod_workflows::install::UploadDestination,
@@ -570,6 +571,7 @@ impl Operation {
         };
         match self {
             Self::Workflow(workflow) => return workflow.run(s).await,
+            Self::Bulk(read) => return read.run(s).await,
             Self::UploadOwned(image, destination, limits) => image
                 .upload(s, destination, limits)
                 .await

@@ -20,6 +20,9 @@ import { DebugModeWizard, WizardConnection } from './debug-mode/Wizard';
 import { LeaveDebugMode } from './debug-mode/LeaveDebugMode';
 import { debugModeOperations } from './debug-mode/operations';
 import { createOwnerCountdown, type Countdown } from './owner-countdown';
+import { StateCaptures } from './captures/StateCaptures';
+import { MapControls } from './captures/MapControls';
+import type { CaptureSet } from './captures/capture';
 import './workbench.css';
 
 /** Dev Tools: the splash until a camera is known, then the workbench. */
@@ -33,6 +36,7 @@ export function Workbench(props: {
   const [connecting, setConnecting] = createSignal(false);
   const [connectError, setConnectError] = createSignal('');
   const [readings, setReadings] = createSignal<ReadonlyMap<string, Readings>>(new Map());
+  const [captures, setCaptures] = createSignal<ReadonlyMap<string, CaptureSet>>(new Map());
   const [countdown, setCountdown] = createSignal<Countdown>();
   const owner = createOwnerCountdown(setCountdown);
   onCleanup(
@@ -115,6 +119,11 @@ export function Workbench(props: {
     setReadings((map) => new Map(map).set(id, update(map.get(id) ?? emptyReadings())));
   }
   const closeWizard = () => setWizard(undefined);
+  const cameraCaptures = () => captures().get(selected() ?? '');
+  function updateCaptures(set: CaptureSet) {
+    const id = selected();
+    if (id) setCaptures((map) => new Map(map).set(id, set));
+  }
 
   return (
     <div class="wb">
@@ -187,6 +196,26 @@ export function Workbench(props: {
                 <LeaveDebugMode
                   connected={wizardConnection() === WizardConnection.Connected}
                   operation={operations()}
+                  onClose={closeWizard}
+                />
+              </Match>
+              <Match when={wizard() === Wizard.StateCaptures}>
+                <StateCaptures
+                  camera={camera()}
+                  model={props.model}
+                  set={cameraCaptures()}
+                  onSet={updateCaptures}
+                  onConnect={() => void connect()}
+                  onClose={closeWizard}
+                />
+              </Match>
+              <Match when={wizard() === Wizard.MapControls}>
+                <MapControls
+                  camera={camera()}
+                  model={props.model}
+                  set={cameraCaptures()}
+                  onSet={updateCaptures}
+                  onConnect={() => void connect()}
                   onClose={closeWizard}
                 />
               </Match>

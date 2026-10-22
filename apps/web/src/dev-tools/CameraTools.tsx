@@ -15,6 +15,8 @@ export enum Wizard {
   Enable = 'enable',
   Disable = 'disable',
   Service = 'service',
+  StateCaptures = 'state-captures',
+  MapControls = 'map-controls',
 }
 
 function message(error: unknown) {
@@ -178,6 +180,14 @@ export function CameraTools(props: {
         <button class="wb-btn" disabled={!available()} onClick={dumpConfiguration}>
           {running() === 'Dump configuration' ? 'Dumping configuration…' : 'Dump configuration'}
         </button>
+        <div class="wb-pair wb-flush">
+          <button class="wb-btn" onClick={() => props.onWizard(Wizard.StateCaptures)}>
+            State captures
+          </button>
+          <button class="wb-btn" onClick={() => props.onWizard(Wizard.MapControls)}>
+            Map controls
+          </button>
+        </div>
         <form class="wb-tool" onSubmit={readMemory} aria-labelledby="wb-memory">
           <div id="wb-memory" class="wb-tool-head">
             Read memory

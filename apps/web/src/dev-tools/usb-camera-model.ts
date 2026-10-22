@@ -38,6 +38,7 @@ export interface ModelSession extends Pick<
   | 'abandon'
   | 'state'
   | 'readMemory'
+  | 'readBulk'
   | 'readConfiguration'
   | 'submitConsole'
   | 'armResetGuard'
@@ -198,6 +199,7 @@ function toolSession(session: ModelSession, pause: UsbCameraServices['pause']): 
     readConfiguration: (offset, length) =>
       session.readConfiguration(usb.ConfigurationView.Ram, 0, offset, length),
     readMemory: (address, length) => session.readMemory(address, length),
+    readBulk: (firmwareId, address, length) => session.readBulk(firmwareId, address, length),
     async submitConsole(data) {
       await session.submitConsole(data);
     },

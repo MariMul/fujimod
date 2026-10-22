@@ -90,6 +90,15 @@ export interface ToolSession {
   configurationGeometry(): Promise<{ capacity: number; pageBytes: number }>;
   readConfiguration(offset: number, length: number): Promise<Uint8Array>;
   readMemory(address: number, length: number): Promise<Uint8Array>;
+  /**
+   * Qualify the firmware's stock bulk path and read a range through it. The
+   * result names diagnostic scratch the stock setup overwrote.
+   */
+  readBulk(
+    firmwareId: string,
+    address: number,
+    length: number,
+  ): Promise<{ data: Uint8Array; overwritten: { address: number; size: number } | null }>;
   submitConsole(data: Uint8Array): Promise<void>;
   pollConsole(): Promise<{ complete: boolean; status: number; output: Uint8Array }>;
   /** The debug-mode workflows, run by the Enter and Leave debug mode tools. */

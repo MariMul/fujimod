@@ -437,6 +437,9 @@
 .wb-pair.wb-single {
   grid-template-columns: 1fr;
 }
+.wb-pair.wb-flush {
+  padding: 0;
+}
 .wb-foot {
   display: flex;
   gap: 12px;

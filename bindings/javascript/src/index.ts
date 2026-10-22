@@ -111,6 +111,8 @@ function isServiceCommandError(error: unknown): error is ServiceCommandError {
 }
 /** Caller-selected data shared by USB and future emulator/SDK consumers. */
 export const catalog = Object.freeze({
+  /** Every bundled catalog firmware with its body, SoC, parts and generated facts. */
+  selections: native.catalogSelections,
   FirmwareIdentity: native.FirmwareIdentity,
   DefinitionFailureKind: native.DefinitionFailureKind,
   isError: isDefinitionError,
