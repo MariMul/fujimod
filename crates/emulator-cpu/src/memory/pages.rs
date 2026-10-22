@@ -2,6 +2,7 @@
 //! Keyframes never alias mutable guest backing. Only flagged pages are read
 //! after an initial capture; equal or zero candidates retain shared pages.
 use crate::BackingObserver;
+mod checkpoint;
 use std::{
     cell::RefCell,
     ptr::NonNull,

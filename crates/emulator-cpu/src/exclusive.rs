@@ -1,4 +1,5 @@
 //! Logical exclusive monitors: native debug exits clear the host reservation.
+mod checkpoint;
 use std::collections::BTreeMap;
 use std::sync::{
     Arc, Mutex,
