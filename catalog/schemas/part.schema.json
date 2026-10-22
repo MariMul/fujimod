@@ -44,26 +44,6 @@
         }
       ]
     },
-    "Edge": {
-      "description": "Electrical transition recognized by an interrupt route.",
-      "oneOf": [
-        {
-          "const": "rising",
-          "description": "Low-to-high transition.",
-          "type": "string"
-        },
-        {
-          "const": "falling",
-          "description": "High-to-low transition.",
-          "type": "string"
-        },
-        {
-          "const": "both",
-          "description": "Either transition.",
-          "type": "string"
-        }
-      ]
-    },
     "HomeSwitch": {
       "additionalProperties": false,
       "description": "A lens home-switch input.",
@@ -104,30 +84,6 @@
           "type": "string"
         }
       ]
-    },
-    "Interrupt": {
-      "additionalProperties": false,
-      "description": "A processor interrupt input.",
-      "properties": {
-        "core": {
-          "description": "Processor index.",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "line": {
-          "description": "Interrupt line on that processor.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "core",
-        "line"
-      ],
-      "type": "object"
     },
     "LensClockMode": {
       "description": "A clocking mode declared by a lens protocol.",
@@ -340,6 +296,299 @@
         }
       ]
     },
+    "PartAssemblyEdge": {
+      "description": "Electrical transition recognized by an interrupt route.",
+      "oneOf": [
+        {
+          "const": "rising",
+          "description": "Low-to-high transition.",
+          "type": "string"
+        },
+        {
+          "const": "falling",
+          "description": "High-to-low transition.",
+          "type": "string"
+        },
+        {
+          "const": "both",
+          "description": "Either transition.",
+          "type": "string"
+        }
+      ]
+    },
+    "PartAssemblyInterrupt": {
+      "additionalProperties": false,
+      "description": "A processor interrupt input.",
+      "properties": {
+        "core": {
+          "description": "Processor index.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "line": {
+          "description": "Interrupt line on that processor.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "core",
+        "line"
+      ],
+      "type": "object"
+    },
+    "PartAssemblyPin": {
+      "additionalProperties": false,
+      "description": "A GPIO pad on a body.",
+      "properties": {
+        "pin": {
+          "description": "Pin number within its port.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "description": "GPIO port number.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "pin"
+      ],
+      "type": "object"
+    },
+    "PartAssemblyPinInterrupt": {
+      "additionalProperties": false,
+      "description": "A pad edge connected to interrupt inputs.",
+      "properties": {
+        "edge": {
+          "$ref": "#/$defs/PartAssemblyEdge",
+          "description": "Edge that raises the interrupt."
+        },
+        "outputs": {
+          "description": "Receiving processor inputs.",
+          "items": {
+            "$ref": "#/$defs/PartAssemblyInterrupt"
+          },
+          "type": "array"
+        },
+        "pin": {
+          "$ref": "#/$defs/PartAssemblyPin",
+          "description": "GPIO input pad."
+        }
+      },
+      "required": [
+        "pin",
+        "edge",
+        "outputs"
+      ],
+      "type": "object"
+    },
+    "PartAssemblyPinLevel": {
+      "additionalProperties": false,
+      "description": "A GPIO pad level.",
+      "properties": {
+        "high": {
+          "description": "Required high level, or low when false.",
+          "type": "boolean"
+        },
+        "pin": {
+          "$ref": "#/$defs/PartAssemblyPin",
+          "description": "Selected GPIO pad."
+        }
+      },
+      "required": [
+        "pin",
+        "high"
+      ],
+      "type": "object"
+    },
+    "PartAssemblyPositionBridge": {
+      "additionalProperties": false,
+      "description": "A physical pulse feedback path.",
+      "properties": {
+        "clock_interrupt": {
+          "$ref": "#/$defs/PartAssemblyInterrupt",
+          "description": "Interrupt clocking feedback."
+        },
+        "initial_position": {
+          "description": "Position at reset.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "position_units_per_step": {
+          "description": "Position scale for one pulse step.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pulse_channel": {
+          "description": "Source pulse channel.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pulse_function": {
+          "description": "Pin multiplexer function.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pulse_pin": {
+          "$ref": "#/$defs/PartAssemblyPin",
+          "description": "Pad carrying the pulse output."
+        }
+      },
+      "required": [
+        "pulse_channel",
+        "initial_position",
+        "pulse_pin",
+        "pulse_function",
+        "position_units_per_step",
+        "clock_interrupt"
+      ],
+      "type": "object"
+    },
+    "PartAssemblyQueue": {
+      "description": "Supported serial queue behavior.",
+      "oneOf": [
+        {
+          "const": "single",
+          "description": "One outstanding transfer.",
+          "type": "string"
+        },
+        {
+          "const": "fifo",
+          "description": "Ordered transfer queue.",
+          "type": "string"
+        }
+      ]
+    },
+    "PartAssemblySerialAttachment": {
+      "additionalProperties": false,
+      "description": "Serial-controller route to an installed endpoint.",
+      "properties": {
+        "controller_address": {
+          "description": "Physical address of the serial controller.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "endpoint_part_id": {
+          "description": "Reusable endpoint model selected by identity.",
+          "type": "string"
+        },
+        "formats": {
+          "description": "Accepted serial register configurations.",
+          "items": {
+            "$ref": "#/$defs/PartAssemblySerialFormat"
+          },
+          "type": "array"
+        },
+        "queue": {
+          "$ref": "#/$defs/PartAssemblyQueue",
+          "description": "Controller queue behavior."
+        },
+        "selection": {
+          "description": "GPIO conditions selecting this endpoint.",
+          "items": {
+            "$ref": "#/$defs/PartAssemblyPinLevel"
+          },
+          "type": "array"
+        },
+        "transfer_ticks": {
+          "description": "Declared transfer latency in virtual ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "controller_address",
+        "formats",
+        "selection",
+        "transfer_ticks",
+        "queue",
+        "endpoint_part_id"
+      ],
+      "type": "object"
+    },
+    "PartAssemblySerialFormat": {
+      "additionalProperties": false,
+      "description": "SPI register values and transfer width.",
+      "properties": {
+        "bits": {
+          "description": "Word width in bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "configuration": {
+          "description": "Configuration register value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "control": {
+          "description": "Control register value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "receive": {
+          "description": "Whether this format receives data.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "control",
+        "configuration",
+        "bits",
+        "receive"
+      ],
+      "type": "object"
+    },
+    "PartAssemblyZoomAttachment": {
+      "additionalProperties": false,
+      "description": "Zoom motor signal routes.",
+      "properties": {
+        "counter_channel": {
+          "description": "Feedback counter channel.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "home_pin": {
+          "$ref": "#/$defs/PartAssemblyPin",
+          "description": "Pad carrying the home switch."
+        },
+        "pulse_channel": {
+          "description": "Pulse output channel.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pulse_channel",
+        "counter_channel",
+        "home_pin"
+      ],
+      "type": "object"
+    },
     "PartAttachment": {
       "additionalProperties": false,
       "description": "Electrical installation of a reusable part assembly.",
@@ -354,7 +603,7 @@
         "completion_interrupts": {
           "description": "Interrupts raised when each motor completes its movement.",
           "items": {
-            "$ref": "#/$defs/Interrupt"
+            "$ref": "#/$defs/PartAssemblyInterrupt"
           },
           "type": [
             "array",
@@ -364,7 +613,7 @@
         "contact_pins": {
           "description": "Actuator contact GPIO pins in contact order.",
           "items": {
-            "$ref": "#/$defs/Pin"
+            "$ref": "#/$defs/PartAssemblyPin"
           },
           "type": [
             "array",
@@ -374,7 +623,7 @@
         "drive_pins": {
           "description": "Actuator drive GPIO pins in bit order.",
           "items": {
-            "$ref": "#/$defs/Pin"
+            "$ref": "#/$defs/PartAssemblyPin"
           },
           "type": [
             "array",
@@ -384,7 +633,7 @@
         "encoder_pins": {
           "description": "Encoder GPIO pins in phase order.",
           "items": {
-            "$ref": "#/$defs/Pin"
+            "$ref": "#/$defs/PartAssemblyPin"
           },
           "type": [
             "array",
@@ -394,7 +643,7 @@
         "gpio_interrupts": {
           "description": "Pin edges routed to processor interrupt inputs.",
           "items": {
-            "$ref": "#/$defs/PinInterrupt"
+            "$ref": "#/$defs/PartAssemblyPinInterrupt"
           },
           "type": [
             "array",
@@ -412,7 +661,7 @@
         "interrupts": {
           "description": "Interrupt outputs for the pulse channels, in channel order.",
           "items": {
-            "$ref": "#/$defs/Interrupt"
+            "$ref": "#/$defs/PartAssemblyInterrupt"
           },
           "type": [
             "array",
@@ -438,7 +687,7 @@
           "items": {
             "anyOf": [
               {
-                "$ref": "#/$defs/Pin"
+                "$ref": "#/$defs/PartAssemblyPin"
               },
               {
                 "type": "null"
@@ -453,7 +702,7 @@
         "position_bridge": {
           "anyOf": [
             {
-              "$ref": "#/$defs/PositionBridge"
+              "$ref": "#/$defs/PartAssemblyPositionBridge"
             },
             {
               "type": "null"
@@ -475,7 +724,7 @@
         "serial_routes": {
           "description": "Serial routes and the selected reusable endpoints.",
           "items": {
-            "$ref": "#/$defs/SerialAttachment"
+            "$ref": "#/$defs/PartAssemblySerialAttachment"
           },
           "type": [
             "array",
@@ -485,7 +734,7 @@
         "zoom": {
           "anyOf": [
             {
-              "$ref": "#/$defs/ZoomAttachment"
+              "$ref": "#/$defs/PartAssemblyZoomAttachment"
             },
             {
               "type": "null"
@@ -1199,125 +1448,6 @@
         }
       ]
     },
-    "Pin": {
-      "additionalProperties": false,
-      "description": "A GPIO pad on a body.",
-      "properties": {
-        "pin": {
-          "description": "Pin number within its port.",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "port": {
-          "description": "GPIO port number.",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "port",
-        "pin"
-      ],
-      "type": "object"
-    },
-    "PinInterrupt": {
-      "additionalProperties": false,
-      "description": "A pad edge connected to interrupt inputs.",
-      "properties": {
-        "edge": {
-          "$ref": "#/$defs/Edge",
-          "description": "Edge that raises the interrupt."
-        },
-        "outputs": {
-          "description": "Receiving processor inputs.",
-          "items": {
-            "$ref": "#/$defs/Interrupt"
-          },
-          "type": "array"
-        },
-        "pin": {
-          "$ref": "#/$defs/Pin",
-          "description": "GPIO input pad."
-        }
-      },
-      "required": [
-        "pin",
-        "edge",
-        "outputs"
-      ],
-      "type": "object"
-    },
-    "PinLevel": {
-      "additionalProperties": false,
-      "description": "A GPIO pad level.",
-      "properties": {
-        "high": {
-          "description": "Required high level, or low when false.",
-          "type": "boolean"
-        },
-        "pin": {
-          "$ref": "#/$defs/Pin",
-          "description": "Selected GPIO pad."
-        }
-      },
-      "required": [
-        "pin",
-        "high"
-      ],
-      "type": "object"
-    },
-    "PositionBridge": {
-      "additionalProperties": false,
-      "description": "A physical pulse feedback path.",
-      "properties": {
-        "clock_interrupt": {
-          "$ref": "#/$defs/Interrupt",
-          "description": "Interrupt clocking feedback."
-        },
-        "initial_position": {
-          "description": "Position at reset.",
-          "format": "int32",
-          "type": "integer"
-        },
-        "position_units_per_step": {
-          "description": "Position scale for one pulse step.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "pulse_channel": {
-          "description": "Source pulse channel.",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "pulse_function": {
-          "description": "Pin multiplexer function.",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "pulse_pin": {
-          "$ref": "#/$defs/Pin",
-          "description": "Pad carrying the pulse output."
-        }
-      },
-      "required": [
-        "pulse_channel",
-        "initial_position",
-        "pulse_pin",
-        "pulse_function",
-        "position_units_per_step",
-        "clock_interrupt"
-      ],
-      "type": "object"
-    },
     "PulseInterface": {
       "additionalProperties": false,
       "description": "A pulse interface required by an optical mechanism.",
@@ -1370,21 +1500,6 @@
         "initial_phase"
       ],
       "type": "object"
-    },
-    "Queue": {
-      "description": "Supported serial queue behavior.",
-      "oneOf": [
-        {
-          "const": "single",
-          "description": "One outstanding transfer.",
-          "type": "string"
-        },
-        {
-          "const": "fifo",
-          "description": "Ordered transfer queue.",
-          "type": "string"
-        }
-      ]
     },
     "RegisterRange": {
       "additionalProperties": false,
@@ -1646,91 +1761,6 @@
       ],
       "type": "object"
     },
-    "SerialAttachment": {
-      "additionalProperties": false,
-      "description": "Serial-controller route to an installed endpoint.",
-      "properties": {
-        "controller_address": {
-          "description": "Physical address of the serial controller.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "endpoint_part_id": {
-          "description": "Reusable endpoint model selected by identity.",
-          "type": "string"
-        },
-        "formats": {
-          "description": "Accepted serial register configurations.",
-          "items": {
-            "$ref": "#/$defs/SerialFormat"
-          },
-          "type": "array"
-        },
-        "queue": {
-          "$ref": "#/$defs/Queue",
-          "description": "Controller queue behavior."
-        },
-        "selection": {
-          "description": "GPIO conditions selecting this endpoint.",
-          "items": {
-            "$ref": "#/$defs/PinLevel"
-          },
-          "type": "array"
-        },
-        "transfer_ticks": {
-          "description": "Declared transfer latency in virtual ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "controller_address",
-        "formats",
-        "selection",
-        "transfer_ticks",
-        "queue",
-        "endpoint_part_id"
-      ],
-      "type": "object"
-    },
-    "SerialFormat": {
-      "additionalProperties": false,
-      "description": "SPI register values and transfer width.",
-      "properties": {
-        "bits": {
-          "description": "Word width in bits.",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "configuration": {
-          "description": "Configuration register value.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "control": {
-          "description": "Control register value.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "receive": {
-          "description": "Whether this format receives data.",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "control",
-        "configuration",
-        "bits",
-        "receive"
-      ],
-      "type": "object"
-    },
     "SerialOutputKind": {
       "description": "Serial output endpoint categories.",
       "oneOf": [
@@ -1863,36 +1893,6 @@
       "required": [
         "address",
         "value"
-      ],
-      "type": "object"
-    },
-    "ZoomAttachment": {
-      "additionalProperties": false,
-      "description": "Zoom motor signal routes.",
-      "properties": {
-        "counter_channel": {
-          "description": "Feedback counter channel.",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "home_pin": {
-          "$ref": "#/$defs/Pin",
-          "description": "Pad carrying the home switch."
-        },
-        "pulse_channel": {
-          "description": "Pulse output channel.",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "pulse_channel",
-        "counter_channel",
-        "home_pin"
       ],
       "type": "object"
     },

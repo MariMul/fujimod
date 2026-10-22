@@ -318,7 +318,16 @@
           "contact_actuators": [
             "acquisition-contacts"
           ]
-        }
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6"
+        ]
       },
       "xm1-service-session": {
         "graph": {
@@ -589,7 +598,16 @@
           "serial_part": [
             "banked-lens"
           ]
-        }
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6"
+        ]
       },
       "xm1": {
         "graph": {
@@ -860,7 +878,16 @@
           "serial_part": [
             "banked-lens"
           ]
-        }
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6"
+        ]
       },
       "xm1-150-browser-usb": {
         "graph": {
@@ -1277,7 +1304,16 @@
           "serial_part": [
             "banked-lens"
           ]
-        }
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6"
+        ]
       }
     }
   },

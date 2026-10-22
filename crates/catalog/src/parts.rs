@@ -42,6 +42,7 @@ pub struct PartAttachment {
 /// A GPIO pad on a body.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "PartAssemblyPin")]
 pub struct Pin {
     /// GPIO port number.
     pub port: u8,
@@ -52,6 +53,7 @@ pub struct Pin {
 /// A processor interrupt input.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "PartAssemblyInterrupt")]
 pub struct Interrupt {
     /// Processor index.
     pub core: u8,
@@ -62,6 +64,7 @@ pub struct Interrupt {
 /// A pad edge connected to interrupt inputs.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "PartAssemblyPinInterrupt")]
 pub struct PinInterrupt {
     /// GPIO input pad.
     pub pin: Pin,
@@ -74,6 +77,7 @@ pub struct PinInterrupt {
 /// Electrical transition recognized by an interrupt route.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+#[schemars(rename = "PartAssemblyEdge")]
 pub enum Edge {
     /// Low-to-high transition.
     Rising,
@@ -86,6 +90,7 @@ pub enum Edge {
 /// Serial-controller route to an installed endpoint.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "PartAssemblySerialAttachment")]
 pub struct SerialAttachment {
     /// Physical address of the serial controller.
     pub controller_address: u64,
@@ -104,6 +109,7 @@ pub struct SerialAttachment {
 /// SPI register values and transfer width.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "PartAssemblySerialFormat")]
 pub struct SerialFormat {
     /// Control register value.
     pub control: u32,
@@ -118,6 +124,7 @@ pub struct SerialFormat {
 /// A GPIO pad level.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "PartAssemblyPinLevel")]
 pub struct PinLevel {
     /// Selected GPIO pad.
     pub pin: Pin,
@@ -128,6 +135,7 @@ pub struct PinLevel {
 /// Supported serial queue behavior.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+#[schemars(rename = "PartAssemblyQueue")]
 pub enum Queue {
     /// One outstanding transfer.
     Single,
@@ -138,6 +146,7 @@ pub enum Queue {
 /// A physical pulse feedback path.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "PartAssemblyPositionBridge")]
 pub struct PositionBridge {
     /// Source pulse channel.
     pub pulse_channel: u8,
@@ -156,6 +165,7 @@ pub struct PositionBridge {
 /// Zoom motor signal routes.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "PartAssemblyZoomAttachment")]
 pub struct ZoomAttachment {
     /// Pulse output channel.
     pub pulse_channel: u8,

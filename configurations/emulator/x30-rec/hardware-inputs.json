@@ -103,7 +103,8 @@
           "code_witnesses": [
             {
               "address": 18143856,
-              "sha256": "12aef778832186910cbcc09314fd6c3a344f21e51de379c73a9636a42b7ae641"
+              "sha256": "12aef778832186910cbcc09314fd6c3a344f21e51de379c73a9636a42b7ae641",
+              "bytes": 96
             }
           ],
           "sample_slots": [

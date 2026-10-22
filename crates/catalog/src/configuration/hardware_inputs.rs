@@ -7,11 +7,13 @@ use std::collections::BTreeMap;
 /// An explicitly empty device-reference set.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetEmpty")]
 pub struct Empty {}
 
 /// Declared adc input facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetAdcInput")]
 pub struct AdcInput {
     /// Declared ambient celsius.
     pub ambient_celsius: u64,
@@ -26,6 +28,7 @@ pub struct AdcInput {
 /// Declared adc facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetAdc")]
 pub struct Adc {
     /// Declared samples.
     pub samples: Vec<u64>,
@@ -34,6 +37,7 @@ pub struct Adc {
 /// Declared flash facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetFlash")]
 pub struct Flash {
     /// Declared jedec id.
     pub jedec_id: u64,
@@ -42,6 +46,7 @@ pub struct Flash {
 /// Declared seed facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetSeed")]
 pub struct Seed {
     /// Declared offset.
     pub offset: u64,
@@ -52,6 +57,7 @@ pub struct Seed {
 /// Declared flash aperture facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetFlashAperture")]
 pub struct FlashAperture {
     /// Declared erased tail.
     pub erased_tail: u64,
@@ -62,6 +68,7 @@ pub struct FlashAperture {
 /// Declared feedback facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetFeedback")]
 pub struct Feedback {
     /// Declared bit.
     pub bit: u64,
@@ -78,6 +85,7 @@ pub struct Feedback {
 /// Declared initial outputs facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetInitialOutputs")]
 pub struct InitialOutputs {
     /// Declared levels.
     pub levels: u64,
@@ -88,6 +96,7 @@ pub struct InitialOutputs {
 /// Declared input irqs facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetInputIrqs")]
 pub struct InputIrqs {
     /// Declared active high.
     pub active_high: bool,
@@ -102,6 +111,7 @@ pub struct InputIrqs {
 /// Declared gpio facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetGpio")]
 pub struct Gpio {
     /// Declared feedback.
     pub feedback: Vec<Feedback>,
@@ -114,6 +124,7 @@ pub struct Gpio {
 /// Declared movdc0 facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetMovdc0")]
 pub struct Movdc0 {
     /// Declared frame period us.
     pub frame_period_us: u64,
@@ -124,6 +135,7 @@ pub struct Movdc0 {
 /// Declared receiver0 facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetReceiver0")]
 pub struct Receiver0 {
     /// Declared frame active us.
     pub frame_active_us: u64,
@@ -134,6 +146,7 @@ pub struct Receiver0 {
 /// Declared receiver1 facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetReceiver1")]
 pub struct Receiver1 {
     /// Declared frame period us.
     pub frame_period_us: u64,
@@ -142,6 +155,7 @@ pub struct Receiver1 {
 /// Declared resize facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetResize")]
 pub struct Resize {
     /// Declared completion us.
     pub completion_us: u64,
@@ -150,6 +164,7 @@ pub struct Resize {
 /// Declared rifp facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetRifp")]
 pub struct Rifp {
     /// Declared completion us.
     pub completion_us: u64,
@@ -160,6 +175,7 @@ pub struct Rifp {
 /// Declared part facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetPart")]
 pub struct Part {
     /// Declared idle high.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -174,6 +190,7 @@ pub struct Part {
 /// Declared select facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetSelect")]
 pub struct Select {
     /// Declared active high.
     pub active_high: bool,
@@ -186,6 +203,7 @@ pub struct Select {
 /// Declared endpoints facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetEndpoints")]
 pub struct Endpoints {
     /// Declared part.
     pub part: Part,
@@ -196,6 +214,7 @@ pub struct Endpoints {
 /// Declared wire facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetWire")]
 pub struct Wire {
     /// Declared endpoints.
     pub endpoints: Vec<Endpoints>,
@@ -206,6 +225,7 @@ pub struct Wire {
 /// Declared serial facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetSerial")]
 pub struct Serial {
     /// Declared wire.
     pub wire: Wire,
@@ -214,6 +234,7 @@ pub struct Serial {
 /// Declared endpoints part facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetEndpointsPart")]
 pub struct EndpointsPart {
     /// Declared kind.
     pub kind: String,
@@ -231,6 +252,7 @@ pub struct EndpointsPart {
 /// Declared endpoints endpoints facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetEndpointsEndpoints")]
 pub struct EndpointsEndpoints {
     /// Declared part.
     pub part: EndpointsPart,
@@ -241,6 +263,7 @@ pub struct EndpointsEndpoints {
 /// Declared spi0 facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetSpi0")]
 pub struct Spi0 {
     /// Declared endpoints.
     pub endpoints: Vec<EndpointsEndpoints>,
@@ -249,6 +272,7 @@ pub struct Spi0 {
 /// Declared spi9 facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetSpi9")]
 pub struct Spi9 {
     /// Declared select pin.
     pub select_pin: u64,
@@ -259,6 +283,7 @@ pub struct Spi9 {
 /// Declared application inputs facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetApplicationInputs")]
 pub struct ApplicationInputs {
     /// Declared adc.
     pub adc: Adc,
@@ -295,6 +320,7 @@ pub struct ApplicationInputs {
 /// Declared sd card format facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetSdCardFormat")]
 pub struct SdCardFormat {
     /// Declared filesystem.
     pub filesystem: String,
@@ -309,6 +335,7 @@ pub struct SdCardFormat {
 /// Declared card facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetCard")]
 pub struct Card {
     /// Declared sd card format.
     pub sd_card_format: SdCardFormat,
@@ -323,6 +350,7 @@ pub struct Card {
 /// Declared interval facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetInterval")]
 pub struct Interval {
     /// Declared kind.
     pub kind: String,
@@ -335,7 +363,8 @@ pub struct Interval {
 /// Declared exe m facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct ExeM {
+#[schemars(rename = "ResetKeyOverride")]
+pub struct KeyOverride {
     /// Declared channel.
     pub channel: u64,
     /// Declared interval.
@@ -344,27 +373,20 @@ pub struct ExeM {
     pub kind: String,
 }
 
-/// Declared input facts.
+/// Explicit electrical predicates selected for a named control during a rehearsal.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct Input {
-    #[serde(rename = "EXE_M")]
-    /// Declared EXE M.
-    pub execute_menu: Vec<ExeM>,
-}
-
-/// Declared control overrides facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ControlOverrides {
-    /// Declared input.
-    pub input: Input,
+#[schemars(rename = "ResetControlOverride")]
+pub struct ControlOverride {
+    /// Logical key identities and their electrical predicates.
+    pub input: BTreeMap<String, Vec<KeyOverride>>,
 }
 
 /// Declared gpio gpio facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct GpioGpio {
+#[schemars(rename = "ResetPadLevel")]
+pub struct PadLevel {
     /// Declared level.
     pub level: u64,
     /// Declared pin.
@@ -376,15 +398,20 @@ pub struct GpioGpio {
 /// Declared external inputs facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetExternalInputs")]
 pub struct ExternalInputs {
     /// Declared gpio.
-    pub gpio: Vec<GpioGpio>,
+    pub gpio: Vec<PadLevel>,
 }
 
 /// Declared code witnesses facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct CodeWitnesses {
+#[schemars(rename = "ResetCodeWindow")]
+pub struct CodeWindow {
+    /// Extent of the hash-identified source window.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bytes: Option<u64>,
     /// Declared address.
     pub address: u64,
     /// Declared sha256.
@@ -394,7 +421,8 @@ pub struct CodeWitnesses {
 /// Declared diagnostics facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct Diagnostics {
+#[schemars(rename = "ResetDiagnostic")]
+pub struct Diagnostic {
     /// Declared address.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub address: Option<u64>,
@@ -413,6 +441,7 @@ pub struct Diagnostics {
 /// Declared result query facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetResultQuery")]
 pub struct ResultQuery {
     /// Declared address.
     pub address: u64,
@@ -427,15 +456,16 @@ pub struct ResultQuery {
 /// Declared firmwares facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct Firmwares {
+#[schemars(rename = "ResetAutofocusObservations")]
+pub struct AutofocusObservations {
     /// Declared code witnesses.
-    pub code_witnesses: Vec<CodeWitnesses>,
+    pub code_witnesses: Vec<CodeWindow>,
     /// Declared complete state.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub complete_state: Option<u64>,
     /// Declared diagnostics.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub diagnostics: Option<Vec<Diagnostics>>,
+    pub diagnostics: Option<Vec<Diagnostic>>,
     /// Declared primary states.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub primary_states: Option<u64>,
@@ -455,6 +485,7 @@ pub struct Firmwares {
 /// Declared shutter facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetShutter")]
 pub struct Shutter {
     /// Declared active level.
     pub active_level: u64,
@@ -467,6 +498,7 @@ pub struct Shutter {
 /// Declared autofocus gate facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetAutofocusGate")]
 pub struct AutofocusGate {
     /// Declared boot entry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -476,12 +508,12 @@ pub struct AutofocusGate {
     /// Declared completion hold ticks.
     pub completion_hold_ticks: u64,
     /// Declared control overrides.
-    pub control_overrides: BTreeMap<String, ControlOverrides>,
+    pub control_overrides: BTreeMap<String, ControlOverride>,
     /// Declared external inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub external_inputs: Option<ExternalInputs>,
     /// Declared firmwares.
-    pub firmwares: BTreeMap<String, Firmwares>,
+    pub firmwares: BTreeMap<String, AutofocusObservations>,
     /// Declared first boot instructions.
     pub first_boot_instructions: u64,
     /// Declared key hold ticks.
@@ -503,6 +535,7 @@ pub struct AutofocusGate {
 /// Declared gpio input facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetGpioInput")]
 pub struct GpioInput {
     /// Declared basis.
     pub basis: String,
@@ -513,6 +546,7 @@ pub struct GpioInput {
 /// Declared inputs gpio facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetInputsGpio")]
 pub struct InputsGpio {
     /// Declared boot source.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -526,6 +560,7 @@ pub struct InputsGpio {
 /// Declared power facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetPower")]
 pub struct Power {
     /// Declared adc samples.
     pub adc_samples: Vec<u64>,
@@ -536,7 +571,7 @@ pub struct Power {
     pub mcu_registers: Option<Vec<u64>>,
     /// Declared panel contract.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub panel_contract: Option<(Vec<u64>, Vec<u64>, Vec<Option<u64>>, u64)>,
+    pub panel_contract: Option<PanelContract>,
     /// Declared profile name.
     pub profile_name: String,
     /// Declared spi0 input profile.
@@ -544,7 +579,7 @@ pub struct Power {
     pub spi0_input_profile: Option<String>,
     /// Declared spi endpoints.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub spi_endpoints: Option<Vec<(u64, u64, Vec<u64>, bool, Vec<Vec<u64>>)>>,
+    pub spi_endpoints: Option<Vec<SerialEndpointInputs>>,
     /// Declared spi status registers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spi_status_registers: Option<Vec<Vec<u64>>>,
@@ -553,6 +588,7 @@ pub struct Power {
 /// Declared hardwarereset inputs facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetHardwareresetInputs")]
 pub struct HardwareresetInputs {
     /// Declared gpio.
     pub gpio: InputsGpio,
@@ -570,6 +606,7 @@ pub struct HardwareresetInputs {
 /// Declared words facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetWords")]
 pub struct Words {
     /// Declared name.
     pub name: String,
@@ -582,6 +619,7 @@ pub struct Words {
 /// Declared loader handoff facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetLoaderHandoff")]
 pub struct LoaderHandoff {
     /// Declared address.
     pub address: u64,
@@ -598,6 +636,7 @@ pub struct LoaderHandoff {
 /// Declared processed frame input facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetProcessedFrameInput")]
 pub struct ProcessedFrameInput {
     /// Declared basis.
     pub basis: String,
@@ -610,6 +649,7 @@ pub struct ProcessedFrameInput {
 /// Declared read gate facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetReadGate")]
 pub struct ReadGate {
     /// Declared mask.
     pub mask: u64,
@@ -620,6 +660,7 @@ pub struct ReadGate {
 /// Declared statistics scene facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetStatisticsScene")]
 pub struct StatisticsScene {
     /// Declared black level.
     pub black_level: u64,
@@ -636,6 +677,7 @@ pub struct StatisticsScene {
 /// Declared sensor input facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetSensorInput")]
 pub struct SensorInput {
     /// Declared basis.
     pub basis: String,
@@ -652,6 +694,7 @@ pub struct SensorInput {
 /// Declared serial flash geometry facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetSerialFlashGeometry")]
 pub struct SerialFlashGeometry {
     /// Declared basis.
     pub basis: String,
@@ -668,6 +711,7 @@ pub struct SerialFlashGeometry {
 /// Declared serial flash facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetSerialFlash")]
 pub struct SerialFlash {
     /// Declared basis.
     pub basis: String,
@@ -682,6 +726,7 @@ pub struct SerialFlash {
 /// Declared power registers facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetPowerRegisters")]
 pub struct PowerRegisters {
     /// Declared ambient celsius.
     pub ambient_celsius: u64,
@@ -700,6 +745,7 @@ pub struct PowerRegisters {
 /// Declared spi inputs facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetSpiInputs")]
 pub struct SpiInputs {
     /// Declared basis.
     pub basis: String,
@@ -713,6 +759,7 @@ pub struct SpiInputs {
 /// Declared temperature input facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetTemperatureInput")]
 pub struct TemperatureInput {
     /// Declared basis.
     pub basis: String,
@@ -785,3 +832,9 @@ pub struct HardwareInputs {
     /// Declared external and reset values.
     pub reset: HardwareReset,
 }
+
+/// Panel transport words, chip-selection conditions, framing and endpoint index.
+pub type PanelContract = (Vec<u64>, Vec<u64>, Vec<Option<u64>>, u64);
+
+/// Serial endpoint index, configuration, selection, read support and register inputs.
+pub type SerialEndpointInputs = (u64, u64, Vec<u64>, bool, Vec<Vec<u64>>);

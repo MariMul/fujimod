@@ -7,11 +7,13 @@ use std::collections::BTreeMap;
 /// An explicitly empty device-reference set.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionEmpty")]
 pub struct Empty {}
 
 /// Declared selections facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionSelections")]
 pub struct Selections {
     /// Declared choice.
     pub choice: u64,
@@ -22,6 +24,7 @@ pub struct Selections {
 /// Declared wiring facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionWiring")]
 pub struct Wiring {
     /// Declared decoder.
     pub decoder: u64,
@@ -32,6 +35,7 @@ pub struct Wiring {
 /// Declared software facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionSoftware")]
 pub struct Software {
     /// Declared line.
     pub line: u64,
@@ -42,6 +46,7 @@ pub struct Software {
 /// Declared core facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionCore")]
 pub struct Core {
     /// Declared core.
     pub core: u64,
@@ -52,6 +57,7 @@ pub struct Core {
 /// Declared irqs facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionIrqs")]
 pub struct Irqs {
     #[serde(rename = "Core")]
     /// Declared Core.
@@ -61,6 +67,7 @@ pub struct Irqs {
 /// Declared pin facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionPin")]
 pub struct Pin {
     /// Declared pin.
     pub pin: u64,
@@ -71,6 +78,7 @@ pub struct Pin {
 /// Declared selection facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionSelection")]
 pub struct Selection {
     /// Declared high.
     pub high: bool,
@@ -81,6 +89,7 @@ pub struct Selection {
 /// Declared activity facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionActivity")]
 pub struct Activity {
     /// Declared gpio.
     pub gpio: String,
@@ -91,6 +100,7 @@ pub struct Activity {
 /// Declared irqs irqs facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionIrqsIrqs")]
 pub struct IrqsIrqs {
     /// Declared edge.
     pub edge: String,
@@ -103,6 +113,7 @@ pub struct IrqsIrqs {
 /// Declared touch facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionTouch")]
 pub struct Touch {
     /// Declared core.
     pub core: u64,
@@ -117,6 +128,7 @@ pub struct Touch {
 /// Declared hardware facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionHardware")]
 pub struct Hardware {
     /// Declared base.
     pub base: u64,
@@ -129,6 +141,7 @@ pub struct Hardware {
 /// Declared module facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionModule")]
 pub struct Module {
     /// Declared firmware bytes.
     pub firmware_bytes: u64,
@@ -139,6 +152,7 @@ pub struct Module {
 /// Declared focus facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionFocus")]
 pub struct Focus {
     /// Declared infinity position.
     pub infinity_position: i64,
@@ -151,6 +165,7 @@ pub struct Focus {
 /// Declared optics facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionOptics")]
 pub struct Optics {
     /// Declared output.
     pub output: String,
@@ -161,6 +176,7 @@ pub struct Optics {
 /// Declared counters facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionCounters")]
 pub struct Counters {
     /// Declared channel.
     pub channel: u64,
@@ -171,6 +187,7 @@ pub struct Counters {
 /// Declared home facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionHome")]
 pub struct Home {
     /// Declared pin.
     pub pin: Pin,
@@ -183,6 +200,7 @@ pub struct Home {
 /// Declared motors facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionMotors")]
 pub struct Motors {
     /// Declared counters.
     pub counters: Vec<Counters>,
@@ -202,6 +220,7 @@ pub struct Motors {
 /// Declared lensunit options facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionLensunitOptions")]
 pub struct LensunitOptions {
     /// Declared encoder.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -218,6 +237,7 @@ pub struct LensunitOptions {
 /// Declared panel options facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionPanelOptions")]
 pub struct PanelOptions {
     /// Declared used mask.
     pub used_mask: u64,
@@ -226,6 +246,7 @@ pub struct PanelOptions {
 /// Declared options clock facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionOptionsClock")]
 pub struct OptionsClock {
     /// Declared initial seconds.
     pub initial_seconds: u64,
@@ -242,6 +263,7 @@ pub struct OptionsClock {
 /// Declared registers options facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionRegistersOptions")]
 pub struct RegistersOptions {
     /// Declared clock.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -257,6 +279,7 @@ pub struct RegistersOptions {
 /// Declared transports facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionTransports")]
 pub struct Transports {
     /// Declared bits.
     pub bits: u64,
@@ -271,6 +294,7 @@ pub struct Transports {
 /// Declared routes options facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionRoutesOptions")]
 pub struct RoutesOptions {
     /// Declared base.
     pub base: u64,
@@ -287,6 +311,7 @@ pub struct RoutesOptions {
 /// Declared routes facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionRoutes")]
 pub struct Routes {
     /// Declared endpoint.
     pub endpoint: Endpoint,
@@ -299,6 +324,7 @@ pub struct Routes {
 /// Declared windows facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionWindows")]
 pub struct Windows {
     /// Declared base.
     pub base: u64,
@@ -309,6 +335,7 @@ pub struct Windows {
 /// Declared nodes facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ConstructionNodes")]
 pub struct Nodes {
     /// Declared boot entries.
     pub boot_entries: Vec<String>,
@@ -337,6 +364,7 @@ pub struct ConstructionProfile {
 /// Closed Parts implementation and its hardware connections.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", deny_unknown_fields)]
+#[schemars(rename = "ConstructionParts")]
 pub enum Parts {
     /// primary hardware.
     #[serde(rename = "primary")]
@@ -393,6 +421,7 @@ pub enum Parts {
 /// Closed Clock implementation and its hardware connections.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", deny_unknown_fields)]
+#[schemars(rename = "ConstructionClock")]
 pub enum Clock {
     /// encoder_stages hardware.
     #[serde(rename = "encoder_stages")]
@@ -411,6 +440,7 @@ pub enum Clock {
 /// Closed Protocol implementation and its hardware connections.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", deny_unknown_fields)]
+#[schemars(rename = "ConstructionProtocol")]
 pub enum Protocol {
     /// banked hardware.
     #[serde(rename = "banked")]
@@ -427,6 +457,7 @@ pub enum Protocol {
 /// Closed Endpoint implementation and its hardware connections.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", deny_unknown_fields)]
+#[schemars(rename = "ConstructionEndpoint")]
 pub enum Endpoint {
     /// lens-unit hardware.
     #[serde(rename = "lens-unit")]
@@ -749,6 +780,7 @@ pub enum ConstructionModel {
 /// A named signal wire or its declared initial logic level.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
+#[schemars(rename = "ConstructionWire")]
 pub enum Wire {
     /// Named wire mechanism.
     Signal(WireKind),
@@ -761,6 +793,7 @@ pub enum Wire {
 /// Closed signal mechanisms used by device graphs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
+#[schemars(rename = "ConstructionWireKind")]
 pub enum WireKind {
     /// Software-triggered pulse.
     SoftwarePulse,

@@ -68,3 +68,16 @@ Profiles contain no input file locations. A device graph records closed device
 kinds, named references, alternatives, and separate construction and attachment
 orders; both orders must cover its declared nodes exactly once. Run presets own
 execution policy and reset/scene inputs independently of these profiles.
+
+`construction::ConstructionProfile` retains an exported native topology with
+closed model variants, ordered nodes, windows, dependencies, boot eligibility,
+and typed endpoint parameters. Run presets own each node's execution/reset
+options. Firmware `layouts` retain qualified boot plans, immutable table
+identities, and persistent record formats. Reusable persistent asset/placement
+types are shared rather than declaring types for individual named assets.
+
+`provenance::CatalogAnnotations` and `rehearsal::Rehearsal` describe explicit
+caller-supplied qualification records. They keep source citations, manifest and
+input-file locations, verified input identities, and synthetic record seeds
+separate from reference records. These are data schemas; loading them does not
+execute firmware, apply a guard, or authorize a camera operation.

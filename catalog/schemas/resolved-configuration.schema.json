@@ -1381,6 +1381,13 @@
           "description": "Named keypad positions and their declared analog sample levels.",
           "type": "object"
         },
+        "profiles": {
+          "additionalProperties": {
+            "$ref": "#/$defs/BodyProfile"
+          },
+          "description": "Named hardware profiles, selected explicitly by a run preset.",
+          "type": "object"
+        },
         "serial_attachments": {
           "description": "Serial endpoints and their processor-side connections.",
           "items": {
@@ -1401,6 +1408,200 @@
         "gpio_feedback",
         "keypad_samples",
         "thermal_connection_ids"
+      ],
+      "type": "object"
+    },
+    "BodyProfile": {
+      "additionalProperties": false,
+      "description": "Declared body profile facts.",
+      "properties": {
+        "attachments": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwarePartAssemblies"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared attachments."
+        },
+        "card_contacts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareCardContacts"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared card contacts."
+        },
+        "connections": {
+          "description": "Declared connections.",
+          "items": {
+            "$ref": "#/$defs/HardwareConnectionSupport"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "construction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConstructionProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Exported construction topology, including native node identities and hardware parameters."
+        },
+        "control_bus_notes": {
+          "description": "Declared control bus notes.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "control_bus_order": {
+          "description": "Firmware descriptor order of body devices; `sensor` refers to the installed sensor endpoint.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "controllers": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareControllerModels"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared controllers."
+        },
+        "counter_feedback": {
+          "description": "Declared counter feedback.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dram_basis": {
+          "description": "Declared dram basis.",
+          "type": "string"
+        },
+        "encoders": {
+          "description": "Declared encoders.",
+          "items": {
+            "$ref": "#/$defs/HardwareEncoder"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "face_register_mode": {
+          "description": "Declared face register mode.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "graph": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeviceGraph"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared graph."
+        },
+        "imaging": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareImaging"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared imaging."
+        },
+        "interrupt_notes": {
+          "description": "Declared interrupt notes.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lens_notes": {
+          "description": "Declared lens notes.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limits": {
+          "description": "Declared limits.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "panel_notes": {
+          "description": "Declared panel notes.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pin_interrupts": {
+          "description": "Declared pin interrupts.",
+          "items": {
+            "$ref": "#/$defs/HardwarePinInterrupt"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "preview_activity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwarePreviewActivity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared preview activity."
+        },
+        "touch": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareTouch"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared touch."
+        }
+      },
+      "required": [
+        "dram_basis"
       ],
       "type": "object"
     },
@@ -1981,268 +2182,440 @@
         }
       ]
     },
-    "ContactPosition": {
+    "ConstructionActivity": {
       "additionalProperties": false,
-      "description": "A pin drive position and its resulting contact states.",
+      "description": "Declared activity facts.",
       "properties": {
-        "contacts": {
-          "description": "Resulting contact states.",
-          "items": {
-            "type": "boolean"
-          },
-          "type": "array"
+        "gpio": {
+          "description": "Declared gpio.",
+          "type": "string"
         },
-        "drive": {
-          "description": "Drive value applied to the actuator.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+        "selection": {
+          "$ref": "#/$defs/ConstructionSelection",
+          "description": "Declared selection."
         }
       },
       "required": [
-        "drive",
-        "contacts"
+        "gpio",
+        "selection"
       ],
       "type": "object"
     },
-    "ContentIdentity": {
-      "additionalProperties": false,
-      "description": "A firmware content identity.",
-      "properties": {
-        "sha256": {
-          "description": "Lowercase SHA-256 digest.",
-          "type": "string"
+    "ConstructionClock": {
+      "description": "Closed Clock implementation and its hardware connections.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "encoder_stages hardware.",
+          "properties": {
+            "kind": {
+              "const": "encoder_stages",
+              "type": "string"
+            },
+            "ticks_per_quantum": {
+              "description": "ticks per quantum.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "ticks_per_quantum"
+          ],
+          "type": "object"
         },
-        "size": {
-          "description": "Content size in bytes.",
+        {
+          "additionalProperties": false,
+          "description": "microstep_stages hardware.",
+          "properties": {
+            "kind": {
+              "const": "microstep_stages",
+              "type": "string"
+            },
+            "ticks_per_quantum": {
+              "description": "ticks per quantum.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "ticks_per_quantum"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ConstructionCore": {
+      "additionalProperties": false,
+      "description": "Declared core facts.",
+      "properties": {
+        "core": {
+          "description": "Declared core.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "line": {
+          "description": "Declared line.",
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
         }
       },
       "required": [
-        "size",
-        "sha256"
+        "core",
+        "line"
       ],
       "type": "object"
     },
-    "ControlAction": {
+    "ConstructionCounters": {
       "additionalProperties": false,
-      "description": "A logical action expressed through named keys.",
+      "description": "Declared counters facts.",
       "properties": {
-        "keys": {
-          "description": "Logical keys selected by the action.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+        "channel": {
+          "description": "Declared channel.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "divider": {
+          "description": "Declared divider.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
-        "keys"
+        "channel",
+        "divider"
       ],
       "type": "object"
     },
-    "ControlBehavior": {
-      "description": "The actions offered by a physical control's mechanism.",
+    "ConstructionEmpty": {
+      "additionalProperties": false,
+      "description": "An explicitly empty device-reference set.",
+      "type": "object"
+    },
+    "ConstructionEndpoint": {
+      "description": "Closed Endpoint implementation and its hardware connections.",
       "oneOf": [
         {
           "additionalProperties": false,
-          "description": "A momentary button.",
+          "description": "lens-unit hardware.",
           "properties": {
-            "kind": {
-              "const": "button",
-              "type": "string"
-            },
-            "press": {
-              "$ref": "#/$defs/InputBinding",
-              "description": "Input asserted by a press and deasserted by release."
-            }
-          },
-          "required": [
-            "kind",
-            "press"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "description": "A shutter release with named stages.",
-          "properties": {
-            "kind": {
-              "const": "shutter",
-              "type": "string"
-            },
-            "stages": {
-              "additionalProperties": {
-                "items": {
-                  "$ref": "#/$defs/InputBinding"
-                },
-                "type": "array"
-              },
-              "description": "Inputs asserted at each named shutter stage.",
-              "type": "object"
-            }
-          },
-          "required": [
-            "kind",
-            "stages"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "description": "A directional pad with individually addressable direction identities.",
-          "properties": {
-            "directions": {
-              "additionalProperties": {
-                "$ref": "#/$defs/InputBinding"
-              },
-              "description": "Inputs asserted by the four directions.",
-              "type": "object"
-            },
-            "kind": {
-              "const": "pad",
-              "type": "string"
-            },
-            "press": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/InputBinding"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Center press input, when present."
-            }
-          },
-          "required": [
-            "kind",
-            "directions"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "description": "A dial with positions or relative steps.",
-          "properties": {
-            "endless": {
-              "description": "Whether the mechanism rotates without an end stop.",
-              "type": "boolean"
-            },
-            "kind": {
-              "const": "dial",
-              "type": "string"
-            },
-            "motion": {
-              "$ref": "#/$defs/ControlMotion",
-              "description": "Documented positions or relative step directions."
-            },
-            "press": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/InputBinding"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Press input, when the dial is pushable."
-            }
-          },
-          "required": [
-            "kind",
-            "motion",
-            "endless"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "description": "A ring with positions or relative steps.",
-          "properties": {
-            "endless": {
-              "description": "Whether the mechanism rotates without an end stop.",
-              "type": "boolean"
-            },
-            "kind": {
-              "const": "ring",
-              "type": "string"
-            },
-            "motion": {
-              "$ref": "#/$defs/ControlMotion",
-              "description": "Documented positions or relative step directions."
-            },
-            "press": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/InputBinding"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Press input, when the ring is pushable."
-            }
-          },
-          "required": [
-            "kind",
-            "motion",
-            "endless"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "description": "A switch with named positions.",
-          "properties": {
-            "kind": {
-              "const": "switch",
-              "type": "string"
-            },
-            "positions": {
-              "description": "Inputs selecting each documented position.",
+            "completion": {
+              "description": "completion.",
               "items": {
-                "$ref": "#/$defs/BoundPosition"
+                "$ref": "#/$defs/ConstructionIrqs"
               },
               "type": "array"
-            }
-          },
-          "required": [
-            "kind",
-            "positions"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "description": "A lever with named positions.",
-          "properties": {
-            "kind": {
-              "const": "lever",
+            },
+            "focus": {
+              "$ref": "#/$defs/ConstructionFocus",
+              "description": "focus."
+            },
+            "gpio": {
+              "description": "gpio.",
               "type": "string"
             },
-            "positions": {
-              "description": "Inputs selecting each documented position.",
-              "items": {
-                "$ref": "#/$defs/BoundPosition"
-              },
-              "type": "array"
+            "kind": {
+              "const": "lens-unit",
+              "type": "string"
+            },
+            "optics": {
+              "$ref": "#/$defs/ConstructionOptics",
+              "description": "optics."
+            },
+            "options": {
+              "$ref": "#/$defs/ConstructionLensunitOptions",
+              "description": "options."
+            },
+            "pulses": {
+              "description": "pulses.",
+              "type": "string"
             }
           },
           "required": [
             "kind",
-            "positions"
+            "completion",
+            "focus",
+            "gpio",
+            "optics",
+            "options",
+            "pulses"
           ],
           "type": "object"
         },
         {
           "additionalProperties": false,
-          "description": "A touch surface whose protocol is located in the firmware input document.",
+          "description": "panel hardware.",
           "properties": {
             "kind": {
-              "const": "touch",
+              "const": "panel",
+              "type": "string"
+            },
+            "options": {
+              "$ref": "#/$defs/ConstructionPanelOptions",
+              "description": "options."
+            }
+          },
+          "required": [
+            "kind",
+            "options"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "registers hardware.",
+          "properties": {
+            "kind": {
+              "const": "registers",
+              "type": "string"
+            },
+            "options": {
+              "$ref": "#/$defs/ConstructionRegistersOptions",
+              "description": "options."
+            }
+          },
+          "required": [
+            "kind",
+            "options"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ConstructionFocus": {
+      "additionalProperties": false,
+      "description": "Declared focus facts.",
+      "properties": {
+        "infinity_position": {
+          "description": "Declared infinity position.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "output": {
+          "description": "Declared output.",
+          "type": "string"
+        },
+        "steps_per_mm": {
+          "description": "Declared steps per mm.",
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "infinity_position",
+        "output",
+        "steps_per_mm"
+      ],
+      "type": "object"
+    },
+    "ConstructionHardware": {
+      "additionalProperties": false,
+      "description": "Declared hardware facts.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq": {
+          "description": "Declared irq.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parts": {
+          "$ref": "#/$defs/ConstructionParts",
+          "description": "Declared parts."
+        }
+      },
+      "required": [
+        "base",
+        "irq",
+        "parts"
+      ],
+      "type": "object"
+    },
+    "ConstructionHome": {
+      "additionalProperties": false,
+      "description": "Declared home facts.",
+      "properties": {
+        "pin": {
+          "$ref": "#/$defs/ConstructionPin",
+          "description": "Declared pin."
+        },
+        "side": {
+          "description": "Declared side.",
+          "type": "string"
+        },
+        "threshold": {
+          "description": "Declared threshold.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pin",
+        "side",
+        "threshold"
+      ],
+      "type": "object"
+    },
+    "ConstructionIrqs": {
+      "additionalProperties": false,
+      "description": "Declared irqs facts.",
+      "properties": {
+        "Core": {
+          "$ref": "#/$defs/ConstructionCore",
+          "description": "Declared Core."
+        }
+      },
+      "required": [
+        "Core"
+      ],
+      "type": "object"
+    },
+    "ConstructionIrqsIrqs": {
+      "additionalProperties": false,
+      "description": "Declared irqs irqs facts.",
+      "properties": {
+        "edge": {
+          "description": "Declared edge.",
+          "type": "string"
+        },
+        "outputs": {
+          "description": "Declared outputs.",
+          "items": {
+            "$ref": "#/$defs/ConstructionIrqs"
+          },
+          "type": "array"
+        },
+        "pin": {
+          "$ref": "#/$defs/ConstructionPin",
+          "description": "Declared pin."
+        }
+      },
+      "required": [
+        "edge",
+        "outputs",
+        "pin"
+      ],
+      "type": "object"
+    },
+    "ConstructionLensunitOptions": {
+      "additionalProperties": false,
+      "description": "Declared lensunit options facts.",
+      "properties": {
+        "encoder": {
+          "description": "Declared encoder.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "motors": {
+          "description": "Declared motors.",
+          "items": {
+            "$ref": "#/$defs/ConstructionMotors"
+          },
+          "type": "array"
+        },
+        "protocol": {
+          "$ref": "#/$defs/ConstructionProtocol",
+          "description": "Declared protocol."
+        },
+        "zoom": {
+          "description": "Declared zoom.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "motors",
+        "protocol"
+      ],
+      "type": "object"
+    },
+    "ConstructionModel": {
+      "description": "Closed ConstructionModel implementation and its hardware connections.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "adc hardware.",
+          "properties": {
+            "kind": {
+              "const": "adc",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "block-98000 hardware.",
+          "properties": {
+            "kind": {
+              "const": "block-98000",
+              "type": "string"
+            },
+            "wiring": {
+              "$ref": "#/$defs/ConstructionWiring",
+              "description": "wiring."
+            }
+          },
+          "required": [
+            "kind",
+            "wiring"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "block11000 hardware.",
+          "properties": {
+            "kind": {
+              "const": "block11000",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "block86000 hardware.",
+          "properties": {
+            "kind": {
+              "const": "block86000",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "clocks hardware.",
+          "properties": {
+            "kind": {
+              "const": "clocks",
               "type": "string"
             }
           },
@@ -12249,6 +12622,17 @@
       "additionalProperties": false,
       "description": "A lens home-switch input.",
       "properties": {
+        "side": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HomeSwitchSide"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Side of the position threshold that asserts home."
+        },
         "threshold": {
           "description": "Position threshold used to detect home.",
           "format": "int32",
@@ -12259,6 +12643,21 @@
         "threshold"
       ],
       "type": "object"
+    },
+    "HomeSwitchSide": {
+      "description": "Position comparison used by a lens home switch.",
+      "oneOf": [
+        {
+          "const": "above",
+          "description": "Home is asserted above the threshold.",
+          "type": "string"
+        },
+        {
+          "const": "below",
+          "description": "Home is asserted below the threshold.",
+          "type": "string"
+        }
+      ]
     },
     "InputBinding": {
       "description": "An explicit binding in one of two distinct firmware input vocabularies.",
@@ -12593,6 +12992,98 @@
       ],
       "type": "object"
     },
+    "LensClockMode": {
+      "description": "A clocking mode declared by a lens protocol.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Use a fixed clock selected by the body attachment.",
+          "properties": {
+            "kind": {
+              "const": "fixed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Clock phases advance through a divided frequency table.",
+          "properties": {
+            "kind": {
+              "const": "divided",
+              "type": "string"
+            },
+            "period_picoseconds": {
+              "description": "Clock periods in picoseconds.",
+              "items": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "ticks_per_second": {
+              "description": "Frequency used to derive the periods.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "ticks_per_second",
+            "period_picoseconds"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Clock is advanced for each microstep stage.",
+          "properties": {
+            "kind": {
+              "const": "microstep_stages",
+              "type": "string"
+            },
+            "ticks_per_quantum": {
+              "description": "Guest ticks per stage quantum.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "ticks_per_quantum"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Clock is advanced for each encoder stage.",
+          "properties": {
+            "kind": {
+              "const": "encoder_stages",
+              "type": "string"
+            },
+            "ticks_per_quantum": {
+              "description": "Guest ticks per stage quantum.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "ticks_per_quantum"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "LensHomeConnection": {
       "additionalProperties": false,
       "description": "A body connection attached to one lens motor's home-switch input.",
@@ -12666,6 +13157,39 @@
       ],
       "type": "object"
     },
+    "LensMotorCounter": {
+      "additionalProperties": false,
+      "description": "A motor's pulse-counter channel and divider.",
+      "properties": {
+        "channel": {
+          "description": "Counter channel.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "divider": {
+          "description": "Pulses per counter transition.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "motor": {
+          "description": "Motor index within the part.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "motor",
+        "channel",
+        "divider"
+      ],
+      "type": "object"
+    },
     "LensProtocol": {
       "description": "A supported lens serial protocol.",
       "oneOf": [
@@ -12687,6 +13211,16 @@
         {
           "const": "dc-zoom",
           "description": "Direct-current zoom lens protocol.",
+          "type": "string"
+        }
+      ]
+    },
+    "LensStopResponse": {
+      "description": "Lens command response after a stop request.",
+      "oneOf": [
+        {
+          "const": "settled",
+          "description": "Report stopped only after the current movement settles.",
           "type": "string"
         }
       ]
@@ -13858,6 +14392,17 @@
           "description": "Stable schema URI for this part record.",
           "type": "string"
         },
+        "attachment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PartAttachment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared board attachment for this reusable part assembly."
+        },
         "id": {
           "description": "Stable reusable part identity.",
           "type": "string"
@@ -13881,6 +14426,458 @@
       ],
       "type": "object"
     },
+    "PartAssemblyEdge": {
+      "description": "Electrical transition recognized by an interrupt route.",
+      "oneOf": [
+        {
+          "const": "rising",
+          "description": "Low-to-high transition.",
+          "type": "string"
+        },
+        {
+          "const": "falling",
+          "description": "High-to-low transition.",
+          "type": "string"
+        },
+        {
+          "const": "both",
+          "description": "Either transition.",
+          "type": "string"
+        }
+      ]
+    },
+    "PartAssemblyInterrupt": {
+      "additionalProperties": false,
+      "description": "A processor interrupt input.",
+      "properties": {
+        "core": {
+          "description": "Processor index.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "line": {
+          "description": "Interrupt line on that processor.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "core",
+        "line"
+      ],
+      "type": "object"
+    },
+    "PartAssemblyPin": {
+      "additionalProperties": false,
+      "description": "A GPIO pad on a body.",
+      "properties": {
+        "pin": {
+          "description": "Pin number within its port.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "description": "GPIO port number.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "pin"
+      ],
+      "type": "object"
+    },
+    "PartAssemblyPinInterrupt": {
+      "additionalProperties": false,
+      "description": "A pad edge connected to interrupt inputs.",
+      "properties": {
+        "edge": {
+          "$ref": "#/$defs/PartAssemblyEdge",
+          "description": "Edge that raises the interrupt."
+        },
+        "outputs": {
+          "description": "Receiving processor inputs.",
+          "items": {
+            "$ref": "#/$defs/PartAssemblyInterrupt"
+          },
+          "type": "array"
+        },
+        "pin": {
+          "$ref": "#/$defs/PartAssemblyPin",
+          "description": "GPIO input pad."
+        }
+      },
+      "required": [
+        "pin",
+        "edge",
+        "outputs"
+      ],
+      "type": "object"
+    },
+    "PartAssemblyPinLevel": {
+      "additionalProperties": false,
+      "description": "A GPIO pad level.",
+      "properties": {
+        "high": {
+          "description": "Required high level, or low when false.",
+          "type": "boolean"
+        },
+        "pin": {
+          "$ref": "#/$defs/PartAssemblyPin",
+          "description": "Selected GPIO pad."
+        }
+      },
+      "required": [
+        "pin",
+        "high"
+      ],
+      "type": "object"
+    },
+    "PartAssemblyPositionBridge": {
+      "additionalProperties": false,
+      "description": "A physical pulse feedback path.",
+      "properties": {
+        "clock_interrupt": {
+          "$ref": "#/$defs/PartAssemblyInterrupt",
+          "description": "Interrupt clocking feedback."
+        },
+        "initial_position": {
+          "description": "Position at reset.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "position_units_per_step": {
+          "description": "Position scale for one pulse step.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pulse_channel": {
+          "description": "Source pulse channel.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pulse_function": {
+          "description": "Pin multiplexer function.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pulse_pin": {
+          "$ref": "#/$defs/PartAssemblyPin",
+          "description": "Pad carrying the pulse output."
+        }
+      },
+      "required": [
+        "pulse_channel",
+        "initial_position",
+        "pulse_pin",
+        "pulse_function",
+        "position_units_per_step",
+        "clock_interrupt"
+      ],
+      "type": "object"
+    },
+    "PartAssemblyQueue": {
+      "description": "Supported serial queue behavior.",
+      "oneOf": [
+        {
+          "const": "single",
+          "description": "One outstanding transfer.",
+          "type": "string"
+        },
+        {
+          "const": "fifo",
+          "description": "Ordered transfer queue.",
+          "type": "string"
+        }
+      ]
+    },
+    "PartAssemblySerialAttachment": {
+      "additionalProperties": false,
+      "description": "Serial-controller route to an installed endpoint.",
+      "properties": {
+        "controller_address": {
+          "description": "Physical address of the serial controller.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "endpoint_part_id": {
+          "description": "Reusable endpoint model selected by identity.",
+          "type": "string"
+        },
+        "formats": {
+          "description": "Accepted serial register configurations.",
+          "items": {
+            "$ref": "#/$defs/PartAssemblySerialFormat"
+          },
+          "type": "array"
+        },
+        "queue": {
+          "$ref": "#/$defs/PartAssemblyQueue",
+          "description": "Controller queue behavior."
+        },
+        "selection": {
+          "description": "GPIO conditions selecting this endpoint.",
+          "items": {
+            "$ref": "#/$defs/PartAssemblyPinLevel"
+          },
+          "type": "array"
+        },
+        "transfer_ticks": {
+          "description": "Declared transfer latency in virtual ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "controller_address",
+        "formats",
+        "selection",
+        "transfer_ticks",
+        "queue",
+        "endpoint_part_id"
+      ],
+      "type": "object"
+    },
+    "PartAssemblySerialFormat": {
+      "additionalProperties": false,
+      "description": "SPI register values and transfer width.",
+      "properties": {
+        "bits": {
+          "description": "Word width in bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "configuration": {
+          "description": "Configuration register value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "control": {
+          "description": "Control register value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "receive": {
+          "description": "Whether this format receives data.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "control",
+        "configuration",
+        "bits",
+        "receive"
+      ],
+      "type": "object"
+    },
+    "PartAssemblyZoomAttachment": {
+      "additionalProperties": false,
+      "description": "Zoom motor signal routes.",
+      "properties": {
+        "counter_channel": {
+          "description": "Feedback counter channel.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "home_pin": {
+          "$ref": "#/$defs/PartAssemblyPin",
+          "description": "Pad carrying the home switch."
+        },
+        "pulse_channel": {
+          "description": "Pulse output channel.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pulse_channel",
+        "counter_channel",
+        "home_pin"
+      ],
+      "type": "object"
+    },
+    "PartAttachment": {
+      "additionalProperties": false,
+      "description": "Electrical installation of a reusable part assembly.",
+      "properties": {
+        "basis": {
+          "description": "Qualification of these declared attachment facts.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "completion_interrupts": {
+          "description": "Interrupts raised when each motor completes its movement.",
+          "items": {
+            "$ref": "#/$defs/PartAssemblyInterrupt"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "contact_pins": {
+          "description": "Actuator contact GPIO pins in contact order.",
+          "items": {
+            "$ref": "#/$defs/PartAssemblyPin"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "drive_pins": {
+          "description": "Actuator drive GPIO pins in bit order.",
+          "items": {
+            "$ref": "#/$defs/PartAssemblyPin"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "encoder_pins": {
+          "description": "Encoder GPIO pins in phase order.",
+          "items": {
+            "$ref": "#/$defs/PartAssemblyPin"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "gpio_interrupts": {
+          "description": "Pin edges routed to processor interrupt inputs.",
+          "items": {
+            "$ref": "#/$defs/PartAssemblyPinInterrupt"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "initial_position": {
+          "description": "Actuator position at reset.",
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "interrupts": {
+          "description": "Interrupt outputs for the pulse channels, in channel order.",
+          "items": {
+            "$ref": "#/$defs/PartAssemblyInterrupt"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "label": {
+          "description": "Assembly label used when constructing a device graph.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limits": {
+          "description": "Known limits of the assembly.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "motor_home_pins": {
+          "description": "Home-switch GPIO pins, indexed by motor.",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartAssemblyPin"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "position_bridge": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PartAssemblyPositionBridge"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Pulse-to-position feedback bridge, when installed."
+        },
+        "pulse": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PulseInterface"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Pulse-counter and timer channels consumed by the assembly."
+        },
+        "serial_routes": {
+          "description": "Serial routes and the selected reusable endpoints.",
+          "items": {
+            "$ref": "#/$defs/PartAssemblySerialAttachment"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "zoom": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PartAssemblyZoomAttachment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Zoom motor pulse and home routes."
+        }
+      },
+      "required": [
+        "limits"
+      ],
+      "type": "object"
+    },
     "PartEncoder": {
       "additionalProperties": false,
       "description": "An optional encoder attached to a physical part.",
@@ -13889,7 +14886,10 @@
           "description": "Guest ticks per encoder phase transition.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "rest_phase": {
           "description": "Initial encoder phase.",
@@ -13897,10 +14897,18 @@
           "maximum": 255,
           "minimum": 0,
           "type": "integer"
+        },
+        "steps_per_phase": {
+          "description": "Encoder edges per phase in the declared protocol, when specified.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         }
       },
       "required": [
-        "phase_ticks",
         "rest_phase"
       ],
       "type": "object"
@@ -13912,6 +14920,23 @@
           "additionalProperties": false,
           "description": "A serially controlled optical lens mechanism.",
           "properties": {
+            "clock_modes": {
+              "description": "Protocol-specific clock modes.",
+              "items": {
+                "$ref": "#/$defs/LensClockMode"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "direction_high": {
+              "description": "Protocol direction polarity, when declared.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
             "encoder": {
               "anyOf": [
                 {
@@ -13927,6 +14952,13 @@
               "const": "lens-mechanism",
               "type": "string"
             },
+            "motor_counters": {
+              "description": "Pulse-counter channels assigned to each lens motor by the part protocol.",
+              "items": {
+                "$ref": "#/$defs/LensMotorCounter"
+              },
+              "type": "array"
+            },
             "motors": {
               "description": "Lens motors and their travel/response mechanics.",
               "items": {
@@ -13934,9 +14966,29 @@
               },
               "type": "array"
             },
+            "period_ticks": {
+              "description": "Protocol period in guest ticks, when specified.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "protocol": {
               "$ref": "#/$defs/LensProtocol",
               "description": "Lens protocol and electrical timing."
+            },
+            "stop_response": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/LensStopResponse"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Protocol behavior when a command requests a stop."
             },
             "zoom": {
               "anyOf": [
@@ -14050,6 +15102,36 @@
             "packet_registers",
             "clock_registers",
             "initial_registers"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A byte-addressed register bank carried in sixteen-bit SPI words.",
+          "properties": {
+            "kind": {
+              "const": "serial-register-bank",
+              "type": "string"
+            },
+            "readable": {
+              "description": "Whether read commands are supported by this bank.",
+              "type": "boolean"
+            },
+            "registers": {
+              "description": "Register addresses admitted by this protocol bank.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "registers",
+            "readable"
           ],
           "type": "object"
         },
@@ -14417,6 +15499,79 @@
         },
         {
           "additionalProperties": false,
+          "description": "Lens image-stabilizer command and status protocol.",
+          "properties": {
+            "commands": {
+              "description": "Supported command encodings.",
+              "items": {
+                "$ref": "#/$defs/StabilizerCommand"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "stabilizer",
+              "type": "string"
+            },
+            "status": {
+              "description": "Status register value exposed by this endpoint.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "telemetry": {
+              "description": "Telemetry register address exposed by this endpoint.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "commands",
+            "status",
+            "telemetry"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Command/data serial output endpoint.",
+          "properties": {
+            "command_prefix": {
+              "description": "Prefix byte used for command transfers.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "data_prefix": {
+              "description": "Prefix byte used for data transfers.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "command-data-output",
+              "type": "string"
+            },
+            "payload_bytes": {
+              "description": "Maximum data payload size in bytes.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "command_prefix",
+            "data_prefix",
+            "payload_bytes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Serial NOR flash geometry and device identification, when declared.",
           "properties": {
             "erase_bytes": {
@@ -14457,6 +15612,241 @@
           "type": "object"
         }
       ]
+    },
+    "PersistentJournalAppend": {
+      "additionalProperties": false,
+      "description": "Explicit journal-record construction and destination.",
+      "properties": {
+        "checksum_offset": {
+          "description": "XOR checksum offset in the record.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parity_offset": {
+          "description": "Parity bitmap offset in the record.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "payload_asset": {
+          "description": "Source payload asset identity.",
+          "type": "string"
+        },
+        "payload_bytes": {
+          "description": "Payload length.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "payload_offset": {
+          "description": "Source payload offset.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "physical_offset": {
+          "description": "Destination offset in the NAND main area.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "record_asset": {
+          "description": "Source record asset identity.",
+          "type": "string"
+        },
+        "record_payload_offset": {
+          "description": "Payload destination offset in the record.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "record_asset",
+        "payload_asset",
+        "payload_offset",
+        "payload_bytes",
+        "record_payload_offset",
+        "parity_offset",
+        "checksum_offset",
+        "physical_offset"
+      ],
+      "type": "object"
+    },
+    "PersistentPacket": {
+      "description": "A complete packet or a bounded source window, never a file path.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Explicit packet bytes.",
+          "properties": {
+            "bytes": {
+              "description": "Packet content.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "bytes",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "bytes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Packet extracted from an identity-checked asset.",
+          "properties": {
+            "asset": {
+              "description": "Asset identity.",
+              "type": "string"
+            },
+            "bytes": {
+              "description": "Window length.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "window",
+              "type": "string"
+            },
+            "offset": {
+              "description": "Byte offset in that asset.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "asset",
+            "offset",
+            "bytes"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "PersistentPatch": {
+      "additionalProperties": false,
+      "description": "An explicit byte edit within a source window.",
+      "properties": {
+        "bytes": {
+          "description": "Replacement bytes.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "offset": {
+          "description": "Byte offset within the source window.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "bytes"
+      ],
+      "type": "object"
+    },
+    "PersistentPlacement": {
+      "additionalProperties": false,
+      "description": "Place a bounded source window into the selected body's NAND.",
+      "properties": {
+        "asset": {
+          "description": "Source asset identity.",
+          "type": "string"
+        },
+        "bytes": {
+          "description": "Number of main-area bytes.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "managed_index": {
+          "description": "First logical managed-block index, if synthetic tags are requested.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "physical_offset": {
+          "description": "Main-area offset within the selected NAND.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_offset": {
+          "description": "Starting byte within the source asset.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "asset",
+        "source_offset",
+        "bytes",
+        "physical_offset"
+      ],
+      "type": "object"
+    },
+    "PersistentSet": {
+      "additionalProperties": false,
+      "description": "External NAND and MCU state selected together by identity.",
+      "properties": {
+        "append": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PersistentJournalAppend"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit journal append, when selected."
+        },
+        "mcu_packet": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PersistentPacket"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional persistent MCU packet source."
+        },
+        "placements": {
+          "description": "NAND main-area windows and their optional managed block tags.",
+          "items": {
+            "$ref": "#/$defs/PersistentPlacement"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "placements"
+      ],
+      "type": "object"
     },
     "PhysicalControl": {
       "additionalProperties": false,
@@ -14778,6 +16168,16 @@
       "additionalProperties": false,
       "description": "A pulse interface required by an optical mechanism.",
       "properties": {
+        "capture_channel": {
+          "description": "Timer capture channel assigned to this lens, when documented.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "counter_channels": {
           "description": "Counter channels sampled by the mechanism.",
           "items": {
@@ -19604,11 +21004,174 @@
             "$ref": "#/$defs/ControllerInterruptInput"
           },
           "type": "array"
+        },
+        "profiles": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SocProfile"
+          },
+          "description": "Named hardware profiles, selected explicitly by a run preset.",
+          "type": "object"
         }
       },
       "required": [
         "interrupt_inputs",
         "blocks"
+      ],
+      "type": "object"
+    },
+    "SocProfile": {
+      "additionalProperties": false,
+      "description": "Declared soc profile facts.",
+      "properties": {
+        "board_ticks_per_second": {
+          "description": "Declared board ticks per second.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "boot_rom": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareBootRom"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared boot rom."
+        },
+        "cache_basis": {
+          "description": "Qualification of the declared processor cache capacities.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cpu_model": {
+          "description": "Declared cpu model.",
+          "type": "string"
+        },
+        "discovery_mmio": {
+          "description": "Declared discovery mmio.",
+          "items": {
+            "$ref": "#/$defs/HardwareDiscoveryWindow"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "engines": {
+          "description": "Declared engines.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "instructions_per_tick": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareInstructionRate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared instructions per tick."
+        },
+        "limits": {
+          "description": "Declared limits.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "mmu": {
+          "description": "Declared mmu.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "private_mmio": {
+          "description": "Declared private mmio.",
+          "items": {
+            "$ref": "#/$defs/HardwareCoreWindow"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "register_maps": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareRegisterLayouts"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared register maps."
+        },
+        "reset_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareResetRelease"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared reset release."
+        },
+        "runtime_abi": {
+          "description": "Declared runtime abi.",
+          "type": "string"
+        },
+        "tcm": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareTcm"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared tcm."
+        },
+        "update_boot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareUpdateBoot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared update boot."
+        },
+        "windows": {
+          "description": "Declared windows.",
+          "items": {
+            "$ref": "#/$defs/HardwareRegisterWindow"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "cpu_model",
+        "limits",
+        "runtime_abi"
       ],
       "type": "object"
     },
@@ -19639,6 +21202,91 @@
         "coprocessor_writes"
       ],
       "type": "object"
+    },
+    "StabilizerCommand": {
+      "additionalProperties": false,
+      "description": "A command accepted by a lens stabilizer endpoint.",
+      "properties": {
+        "bits": {
+          "description": "Payload width in bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "code": {
+          "description": "Command address.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "operation": {
+          "$ref": "#/$defs/StabilizerCommandOperation",
+          "description": "Command operation."
+        }
+      },
+      "required": [
+        "code",
+        "bits",
+        "operation"
+      ],
+      "type": "object"
+    },
+    "StabilizerCommandOperation": {
+      "description": "Operation performed by a lens stabilizer command.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Write a register value.",
+          "properties": {
+            "kind": {
+              "const": "write",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Select an endpoint bank.",
+          "properties": {
+            "kind": {
+              "const": "select",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Write a register in a named RAM bank.",
+          "properties": {
+            "bank": {
+              "description": "RAM bank selected by the command.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "ram_write",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "bank"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "StatusRegister": {
       "additionalProperties": false,
@@ -19797,6 +21445,31 @@
       "additionalProperties": false,
       "description": "A zoom mechanism's travel and pulse settings.",
       "properties": {
+        "edge_scale": {
+          "description": "Counter-to-position scale declared for the zoom mechanism.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "home": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HomeSwitch"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Zoom home-switch threshold and polarity, when specified."
+        },
+        "initial_position": {
+          "description": "Zoom mechanism's initial position.",
+          "format": "int32",
+          "type": "integer"
+        },
         "maximum_position": {
           "description": "Maximum zoom position.",
           "format": "int32",
@@ -19811,13 +21484,16 @@
           "description": "Guest ticks per zoom pulse.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         }
       },
       "required": [
+        "initial_position",
         "minimum_position",
-        "maximum_position",
-        "pulse_ticks"
+        "maximum_position"
       ],
       "type": "object"
     }

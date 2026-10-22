@@ -358,7 +358,18 @@
           "serial_part": [
             "banked-lens"
           ]
-        }
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6",
+          "device-7",
+          "device-8"
+        ]
       },
       "xe2s-service-session": {
         "graph": {
@@ -655,7 +666,18 @@
           "serial_part": [
             "banked-lens"
           ]
-        }
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6",
+          "device-7",
+          "device-8"
+        ]
       },
       "xe2s": {
         "graph": {
@@ -869,7 +891,18 @@
           "serial_part": [
             "banked-lens"
           ]
-        }
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6",
+          "device-7",
+          "device-8"
+        ]
       },
       "xe2s-111-browser-usb": {
         "graph": {
@@ -1387,7 +1420,18 @@
               }
             ]
           }
-        }
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6",
+          "device-7",
+          "device-8"
+        ]
       }
     }
   },

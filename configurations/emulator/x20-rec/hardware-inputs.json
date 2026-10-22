@@ -101,19 +101,23 @@
           "code_witnesses": [
             {
               "address": 19053940,
-              "sha256": "a9cd6e202f783d63620a9eb17ac857d757be6c4c4033dde837e18b7edc97af74"
+              "sha256": "a9cd6e202f783d63620a9eb17ac857d757be6c4c4033dde837e18b7edc97af74",
+              "bytes": 284
             },
             {
               "address": 19044888,
-              "sha256": "60371b443de4c4af7897ebad0236f780cfc4bc7e2ace27211fceb2909a0c89f3"
+              "sha256": "60371b443de4c4af7897ebad0236f780cfc4bc7e2ace27211fceb2909a0c89f3",
+              "bytes": 996
             },
             {
               "address": 7618052,
-              "sha256": "d1143545befeee9ed4c543a5f756787aaf9da0b036391002963d0f78129798c9"
+              "sha256": "d1143545befeee9ed4c543a5f756787aaf9da0b036391002963d0f78129798c9",
+              "bytes": 36
             },
             {
               "address": 7731284,
-              "sha256": "6519e22049da97ece37448d6d5917d0025d54ba618b59f551be7968ffc69116d"
+              "sha256": "6519e22049da97ece37448d6d5917d0025d54ba618b59f551be7968ffc69116d",
+              "bytes": 88
             }
           ],
           "diagnostics": [

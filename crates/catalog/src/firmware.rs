@@ -7,11 +7,13 @@ use std::collections::BTreeMap;
 /// An explicitly empty device-reference set.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareEmpty")]
 pub struct Empty {}
 
 /// Declared flash slices facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareFlashSlices")]
 pub struct FlashSlices {
     /// Declared address.
     pub address: u64,
@@ -28,6 +30,7 @@ pub struct FlashSlices {
 /// Declared units facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareUnits")]
 pub struct Units {
     /// Declared unit.
     pub unit: String,
@@ -36,6 +39,7 @@ pub struct Units {
 /// Declared boot layout facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareBootLayout")]
 pub struct BootLayout {
     /// Declared flash slices.
     pub flash_slices: Vec<FlashSlices>,
@@ -46,6 +50,7 @@ pub struct BootLayout {
 /// Declared regs facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareRegs")]
 pub struct Regs {
     /// Declared x19.
     pub x19: u64,
@@ -58,6 +63,7 @@ pub struct Regs {
 /// Declared sysregs facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareSysregs")]
 pub struct Sysregs {
     #[serde(rename = "CPACR_EL1")]
     /// Declared CPACR EL1.
@@ -88,6 +94,7 @@ pub struct Sysregs {
 /// Declared cpu facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareCpu")]
 pub struct Cpu {
     /// Declared cpsr.
     pub cpsr: u64,
@@ -106,6 +113,7 @@ pub struct Cpu {
 /// Declared descriptor facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareDescriptor")]
 pub struct Descriptor {
     /// Declared address.
     pub address: u64,
@@ -120,6 +128,7 @@ pub struct Descriptor {
 /// Declared fe80 programs facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareFe80Programs")]
 pub struct Fe80Programs {
     /// Declared basis.
     pub basis: String,
@@ -137,6 +146,7 @@ pub struct Fe80Programs {
 /// Declared fixture layouts facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareFixtureLayouts")]
 pub struct FixtureLayouts {
     /// Declared status.
     pub status: String,
@@ -145,6 +155,7 @@ pub struct FixtureLayouts {
 /// Declared flash image facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareFlashImage")]
 pub struct FlashImage {
     /// Declared dat origin.
     pub dat_origin: u64,
@@ -155,6 +166,7 @@ pub struct FlashImage {
 /// Declared gic redistributor initial facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareGicRedistributorInitial")]
 pub struct GicRedistributorInitial {
     /// Declared core.
     pub core: u64,
@@ -166,73 +178,10 @@ pub struct GicRedistributorInitial {
     pub value: u64,
 }
 
-/// Declared patches facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct Patches {
-    /// Declared bytes.
-    pub bytes: Vec<u64>,
-    /// Declared offset.
-    pub offset: u64,
-}
-
-/// Declared bank0 browser facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct Bank0Browser {
-    /// Declared bytes.
-    pub bytes: u64,
-    /// Declared file offset.
-    pub file_offset: u64,
-    /// Declared normalized sha256.
-    pub normalized_sha256: String,
-    /// Declared patches.
-    pub patches: Vec<Patches>,
-    /// Declared sha256.
-    pub sha256: String,
-}
-
-/// Declared bank0 captured facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct Bank0Captured {
-    /// Declared bytes.
-    pub bytes: u64,
-    /// Declared file offset.
-    pub file_offset: u64,
-    /// Declared normalized sha256.
-    pub normalized_sha256: String,
-    /// Declared patches.
-    pub patches: Vec<String>,
-    /// Declared sha256.
-    pub sha256: String,
-}
-
-/// Declared assets facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct Assets {
-    /// Declared bank0 browser.
-    pub bank0_browser: Bank0Browser,
-    /// Declared bank0 captured.
-    pub bank0_captured: Bank0Captured,
-    /// Declared bank1 browser.
-    pub bank1_browser: Bank0Captured,
-    /// Declared bank1 captured.
-    pub bank1_captured: Bank0Captured,
-    /// Declared custom browser.
-    pub custom_browser: Bank0Captured,
-    /// Declared custom captured.
-    pub custom_captured: Bank0Captured,
-    /// Declared main browser.
-    pub main_browser: Bank0Browser,
-    /// Declared main captured.
-    pub main_captured: Bank0Captured,
-}
-
 /// Declared persistent inputs geometry facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwarePersistentInputsGeometry")]
 pub struct PersistentInputsGeometry {
     /// Declared bytes.
     pub bytes: u64,
@@ -244,104 +193,23 @@ pub struct PersistentInputsGeometry {
     pub spare_bytes: u64,
 }
 
-/// Declared placements facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct Placements {
-    /// Declared asset.
-    pub asset: String,
-    /// Declared bytes.
-    pub bytes: u64,
-    /// Declared managed index.
-    pub managed_index: u64,
-    /// Declared physical offset.
-    pub physical_offset: u64,
-    /// Declared source offset.
-    pub source_offset: u64,
-}
-
-/// Declared browser facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct Browser {
-    /// Declared append.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub append: Option<String>,
-    /// Declared mcu packet.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub mcu_packet: Option<String>,
-    /// Declared placements.
-    pub placements: Vec<Placements>,
-}
-
-/// Declared mcu packet facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct McuPacket {
-    /// Declared bytes.
-    pub bytes: Vec<u64>,
-    /// Declared kind.
-    pub kind: String,
-}
-
-/// Declared browser restored facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct BrowserRestored {
-    /// Declared append.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub append: Option<String>,
-    /// Declared mcu packet.
-    pub mcu_packet: McuPacket,
-    /// Declared placements.
-    pub placements: Vec<Placements>,
-}
-
-/// Declared erased facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct Erased {
-    /// Declared append.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub append: Option<String>,
-    /// Declared mcu packet.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub mcu_packet: Option<String>,
-    /// Declared placements.
-    pub placements: Vec<String>,
-}
-
-/// Declared sets facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct Sets {
-    /// Declared browser.
-    pub browser: Browser,
-    /// Declared browser restored.
-    pub browser_restored: BrowserRestored,
-    /// Declared captured.
-    pub captured: Browser,
-    /// Declared captured restored.
-    pub captured_restored: BrowserRestored,
-    /// Declared erased.
-    pub erased: Erased,
-}
-
 /// Declared persistent inputs facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwarePersistentInputs")]
 pub struct PersistentInputs {
     /// Declared assets.
-    pub assets: Assets,
+    pub assets: BTreeMap<String, PersistentAssetLayout>,
     /// Declared geometry.
     pub geometry: PersistentInputsGeometry,
     /// Declared sets.
-    pub sets: Sets,
+    pub sets: BTreeMap<String, crate::persistent_inputs::PersistentSet>,
 }
 
 /// Declared preload facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwarePreload")]
 pub struct Preload {
     /// Declared address.
     pub address: u64,
@@ -371,6 +239,7 @@ pub struct Preload {
 /// Declared sdio inputs facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareSdioInputs")]
 pub struct SdioInputs {
     /// Declared firmware bytes.
     pub firmware_bytes: u64,
@@ -383,6 +252,7 @@ pub struct SdioInputs {
 /// Declared usb interrupt tables facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareUsbInterruptTables")]
 pub struct UsbInterruptTables {
     /// Declared address.
     pub address: u64,
@@ -468,6 +338,7 @@ pub struct FirmwareProfile {
 /// Declared final version bytes facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareFinalVersionBytes")]
 pub struct FinalVersionBytes {
     /// Declared offset.
     pub offset: u64,
@@ -478,6 +349,7 @@ pub struct FinalVersionBytes {
 /// Declared configurationdefaults output facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareConfigurationdefaultsOutput")]
 pub struct ConfigurationdefaultsOutput {
     /// Declared address.
     pub address: u64,
@@ -488,6 +360,7 @@ pub struct ConfigurationdefaultsOutput {
 /// Declared table facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareTable")]
 pub struct Table {
     /// Declared address.
     pub address: u64,
@@ -506,6 +379,7 @@ pub struct Table {
 /// Declared configuration defaults facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareConfigurationDefaults")]
 pub struct ConfigurationDefaults {
     /// Declared builder entry.
     pub builder_entry: u64,
@@ -534,6 +408,7 @@ pub struct ConfigurationDefaults {
 /// Declared descriptors facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareDescriptors")]
 pub struct Descriptors {
     /// Declared address.
     pub address: u64,
@@ -552,6 +427,7 @@ pub struct Descriptors {
 /// Declared control bus tables facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareControlBusTables")]
 pub struct ControlBusTables {
     /// Declared descriptors.
     pub descriptors: Descriptors,
@@ -564,6 +440,7 @@ pub struct ControlBusTables {
 /// Declared remapping facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareRemapping")]
 pub struct Remapping {
     /// Declared delta.
     pub delta: u64,
@@ -578,6 +455,7 @@ pub struct Remapping {
 /// Declared synthetic byte fields facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareSyntheticByteFields")]
 pub struct SyntheticByteFields {
     /// Declared basis.
     pub basis: String,
@@ -592,6 +470,7 @@ pub struct SyntheticByteFields {
 /// Declared synthetic scalar bytes facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareSyntheticScalarBytes")]
 pub struct SyntheticScalarBytes {
     /// Declared basis.
     pub basis: String,
@@ -606,6 +485,7 @@ pub struct SyntheticScalarBytes {
 /// Declared synthetic signature facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareSyntheticSignature")]
 pub struct SyntheticSignature {
     /// Declared offset.
     pub offset: u64,
@@ -614,6 +494,7 @@ pub struct SyntheticSignature {
 /// Declared cfgdata facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareCfgdata")]
 pub struct Cfgdata {
     /// Declared address.
     pub address: u64,
@@ -641,6 +522,7 @@ pub struct Cfgdata {
 /// Declared configuration banks facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareConfigurationBanks")]
 pub struct ConfigurationBanks {
     /// Declared cfg offset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -655,6 +537,7 @@ pub struct ConfigurationBanks {
 /// Declared custom defaults facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareCustomDefaults")]
 pub struct CustomDefaults {
     /// Declared entry view.
     pub entry_view: String,
@@ -671,6 +554,7 @@ pub struct CustomDefaults {
 /// Declared storagelayout geometry facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareStoragelayoutGeometry")]
 pub struct StoragelayoutGeometry {
     /// Declared blocks.
     pub blocks: u64,
@@ -685,6 +569,7 @@ pub struct StoragelayoutGeometry {
 /// Declared header facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareHeader")]
 pub struct Header {
     /// Declared checksum offset.
     pub checksum_offset: u64,
@@ -697,6 +582,7 @@ pub struct Header {
 /// Declared default copies facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareDefaultCopies")]
 pub struct DefaultCopies {
     /// Declared offset.
     pub offset: u64,
@@ -707,6 +593,7 @@ pub struct DefaultCopies {
 /// Declared nondefault edits facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareNondefaultEdits")]
 pub struct NondefaultEdits {
     /// Declared mask.
     pub mask: u64,
@@ -719,6 +606,7 @@ pub struct NondefaultEdits {
 /// Declared record facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareRecord")]
 pub struct Record {
     /// Declared protected bytes.
     pub protected_bytes: u64,
@@ -729,6 +617,7 @@ pub struct Record {
 /// Declared record copies facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareRecordCopies")]
 pub struct RecordCopies {
     /// Declared payload offset.
     pub payload_offset: u64,
@@ -741,6 +630,7 @@ pub struct RecordCopies {
 /// Declared journals facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareJournals")]
 pub struct Journals {
     /// Declared bank rows.
     pub bank_rows: Vec<u64>,
@@ -774,6 +664,7 @@ pub struct Journals {
 /// Declared managed facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareManaged")]
 pub struct Managed {
     /// Declared banks view.
     pub banks_view: String,
@@ -786,6 +677,7 @@ pub struct Managed {
 /// Declared raw records facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareRawRecords")]
 pub struct RawRecords {
     /// Declared bank rows.
     pub bank_rows: Vec<u64>,
@@ -806,6 +698,7 @@ pub struct RawRecords {
 /// Declared storagelayout record facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareStoragelayoutRecord")]
 pub struct StoragelayoutRecord {
     /// Declared empty fill.
     pub empty_fill: u64,
@@ -822,6 +715,7 @@ pub struct StoragelayoutRecord {
 /// Declared storage layout facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwareStorageLayout")]
 pub struct StorageLayout {
     /// Declared cfgdata.
     pub cfgdata: Cfgdata,
@@ -872,6 +766,7 @@ pub struct FirmwareLayouts {
     rename_all = "snake_case",
     deny_unknown_fields
 )]
+#[schemars(rename = "FirmwareFirmwareView")]
 pub enum FirmwareView {
     /// Firmware configuration-default builder and its source identities.
     ConfigurationDefaults(ConfigurationDefaults),
@@ -879,4 +774,21 @@ pub enum FirmwareView {
     ControlBusTables(ControlBusTables),
     /// Firmware-managed persistent records, journals and table identities.
     StorageLayout(StorageLayout),
+}
+
+/// Hash-qualified source asset before placement in persistent storage.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(rename = "FirmwarePersistentAssetLayout")]
+pub struct PersistentAssetLayout {
+    /// Offset of the source window within the supplied file.
+    pub file_offset: u64,
+    /// Source window extent in bytes.
+    pub bytes: u64,
+    /// SHA-256 before declared byte edits.
+    pub sha256: String,
+    /// SHA-256 after declared byte edits.
+    pub normalized_sha256: String,
+    /// Explicit small edits used to normalize the input.
+    pub patches: Vec<crate::persistent_inputs::PersistentPatch>,
 }

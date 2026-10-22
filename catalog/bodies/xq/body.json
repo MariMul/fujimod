@@ -642,7 +642,18 @@
           "contact_actuators": [
             "acquisition-contacts"
           ]
-        }
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6",
+          "device-7",
+          "device-8"
+        ]
       },
       "xq1-121-browser-usb": {
         "graph": {
@@ -1305,7 +1316,18 @@
           "contact_actuators": [
             "acquisition-contacts"
           ]
-        }
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6",
+          "device-7",
+          "device-8"
+        ]
       },
       "xq2-101-browser-usb": {
         "graph": {
@@ -1968,7 +1990,18 @@
           "contact_actuators": [
             "acquisition-contacts"
           ]
-        }
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6",
+          "device-7",
+          "device-8"
+        ]
       }
     }
   },

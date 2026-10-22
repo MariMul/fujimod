@@ -547,7 +547,18 @@
           "serial_part": [
             "mixed-width-dual-counter-lens"
           ]
-        }
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6",
+          "device-7",
+          "device-8"
+        ]
       }
     }
   },

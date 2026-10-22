@@ -435,7 +435,8 @@
           "code_witnesses": [
             {
               "address": 15144092,
-              "sha256": "2dc97fcd493f3f4f416ffea3f04403b4665e323e06ac5002159c5626cb8a6356"
+              "sha256": "2dc97fcd493f3f4f416ffea3f04403b4665e323e06ac5002159c5626cb8a6356",
+              "bytes": 96
             }
           ],
           "sample_slots": [
@@ -460,7 +461,8 @@
           "code_witnesses": [
             {
               "address": 15161584,
-              "sha256": "f80d90f41e1213def966e468127bd1cbc369d9ee56c43eda422d10c70924e70d"
+              "sha256": "f80d90f41e1213def966e468127bd1cbc369d9ee56c43eda422d10c70924e70d",
+              "bytes": 96
             }
           ],
           "sample_slots": [

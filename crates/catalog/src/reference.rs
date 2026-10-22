@@ -1001,6 +1001,9 @@ pub struct SensorAssembly {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct ControlBusAttachment {
+    /// Descriptor-table polarity selector, when established for the installed device.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub polarity_selector: Option<u32>,
     /// SoC control-bus block identity.
     pub controller_id: String,
     /// Controller channel index.
@@ -3111,9 +3114,6 @@ fn bundled_documents() -> impl Iterator<Item = (ReferenceKind, &'static str, &'s
     BUNDLED_CATALOG.iter().copied()
 }
 
-#[cfg(test)]
-mod tests;
-
 /// Explicit selection of SoC and body hardware profiles.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -3168,3 +3168,6 @@ impl HardwareSelection {
         Ok((soc, body))
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -29,3 +29,9 @@ pub mod firmware;
 
 /// Exported hardware construction profiles.
 pub mod construction;
+
+/// Supplemental source evidence and caller input identities.
+pub mod provenance;
+
+/// Explicit emulator rehearsal qualification records.
+pub mod rehearsal;

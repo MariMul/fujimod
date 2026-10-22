@@ -535,7 +535,16 @@
           "serial_outputs": [
             "spi1-word-output"
           ]
-        }
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6"
+        ]
       },
       "x100s-121-browser-usb": {
         "graph": {
@@ -1091,7 +1100,16 @@
           "serial_outputs": [
             "spi1-word-output"
           ]
-        }
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6"
+        ]
       }
     }
   },

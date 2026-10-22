@@ -606,7 +606,18 @@
           "serial_part": [
             "three-byte-stabilized-lens-programmed"
           ]
-        }
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6",
+          "device-7",
+          "device-8"
+        ]
       }
     }
   },
