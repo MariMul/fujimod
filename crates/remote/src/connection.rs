@@ -125,14 +125,6 @@ impl<B: Backend> Remote for Connection<B> {
                 return Err(format!("Control {} is unavailable", input.control.id()));
             }
             let mut resolved = input.clone();
-            resolved.control = Control::new(
-                self.facts
-                    .firmware
-                    .control_names
-                    .get(input.control.id())
-                    .map(String::as_str)
-                    .unwrap_or(input.control.id()),
-            );
             self.backend.input(&resolved, &self.facts).await?;
             loop {
                 let mut reads = ReadSet::default();

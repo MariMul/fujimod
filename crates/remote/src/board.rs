@@ -106,7 +106,7 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
     }
     fn input<'a>(&'a mut self, input: &'a Input, facts: &'a Facts) -> LocalFuture<'a, ()> {
         Box::pin(async move {
-            let id = physical(facts, input.control.id());
+            let id = input.control.id();
             self.owner.with_session(|s| match input.state {
                 InputState::Turn(steps) => {
                     let (node, cycles) = s.rotation(id, steps)?;
@@ -256,12 +256,4 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
                 .and_then(|p| p.positions().get(id).cloned()))
         })
     }
-}
-pub(crate) fn physical<'a>(facts: &'a Facts, id: &'a str) -> &'a str {
-    facts
-        .firmware
-        .control_names
-        .get(id)
-        .map(String::as_str)
-        .unwrap_or(id)
 }

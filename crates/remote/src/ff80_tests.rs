@@ -96,31 +96,14 @@ fn debug_names_are_explicit_and_failed_events_are_not_replayed() {
         let script = opened(exchanges(command(5, parameters, payload), reply));
         let session = script.begin_session(1024, None).await.unwrap();
         let mut facts = facts();
-        facts
-            .firmware
-            .debug_keys
-            .iter_mut()
-            .find(|k| k.name == "MENU")
-            .unwrap()
-            .name = "EXE_M".into();
-        facts
-            .firmware
-            .input_bindings
-            .insert("menu".into(), "EXE_M".into());
-        facts
-            .firmware
-            .controls
-            .controls
-            .get_mut("menu")
-            .unwrap()
-            .keys = vec!["KEY_OK".into()];
+        rename_menu_key(&mut facts, "EXE_M");
         let mut remote = Ff80Remote::new(session, facts.clone(), options()).unwrap();
         assert!(
             remote
                 .backend
                 .input(
                     &Input {
-                        control: control("menu"),
+                        control: control("menu_ok_button"),
                         state: InputState::Pressed
                     },
                     &facts
@@ -138,20 +121,48 @@ fn scanner_names_never_supply_missing_debug_bindings() {
         let script = opened([]);
         let session = script.begin_session(1024, None).await.unwrap();
         let mut facts = facts();
-        facts.firmware.input_bindings.remove("menu");
+        facts
+            .control_ids
+            .inputs
+            .iter_mut()
+            .find(|input| input.debug_key.as_deref() == Some("MENU"))
+            .unwrap()
+            .debug_key = None;
         let mut remote = Ff80Remote::new(session, facts.clone(), options()).unwrap();
         let error = remote
             .backend
             .input(
                 &Input {
-                    control: control("menu"),
+                    control: control("menu_ok_button"),
                     state: InputState::Pressed,
                 },
                 &facts,
             )
             .await
             .unwrap_err();
-        assert!(error.contains("explicit debug command binding"));
+        assert!(error.contains("does not declare debug key"), "{error}");
         assert_eq!(script.remaining(), 0);
+    });
+}
+
+fn rename_menu_key(facts: &mut Facts, name: &str) {
+    use fujimod_catalog::controls::{ControlBehavior, InputBinding};
+    for key in &mut facts.control_ids.debug_keys {
+        if key.name == "MENU" {
+            key.name = name.into();
+        }
+    }
+    for input in &mut facts.control_ids.inputs {
+        if input.debug_key.as_deref() == Some("MENU") {
+            input.debug_key = Some(name.into());
+        }
+    }
+    facts
+        .physical_controls
+        .controls
+        .get_mut("menu_ok_button")
+        .unwrap()
+        .behavior = Some(ControlBehavior::Button {
+        press: InputBinding::DebugKey { name: name.into() },
     });
 }

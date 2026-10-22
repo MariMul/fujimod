@@ -1,5 +1,6 @@
 //! ff80 range reads, stock debug key events and bounded polled waits.
 use crate::{backend::Backend, connection::Connection, *};
+use fujimod_catalog::controls::ControlOperation;
 use fujimod_usb::{
     ff80::{
         Session,
@@ -76,28 +77,25 @@ impl<S: BorrowMut<Session>> Backend for Ff80Backend<S> {
     fn input<'a>(&'a mut self, input: &'a Input, facts: &'a Facts) -> LocalFuture<'a, ()> {
         Box::pin(async move {
             let id = input.control.id();
-            let role = facts
-                .firmware
-                .control_names
-                .iter()
-                .find(|(role, physical)| {
-                    physical.as_str() == id && facts.firmware.input_bindings.contains_key(*role)
-                })
-                .map(|(role, _)| role.as_str())
-                .unwrap_or(id);
-            let binding = if let InputState::Turn(steps) = input.state {
-                format!("{role}.{}", if steps > 0 { "increase" } else { "decrease" })
-            } else {
-                role.to_owned()
+            if let InputState::Turn(steps) = input.state
+                && steps.unsigned_abs() > 4096
+            {
+                return Err("Rotation exceeds 4096 steps".into());
+            }
+            let operation = match input.state {
+                InputState::Pressed => ControlOperation::Press,
+                InputState::Released => ControlOperation::Release,
+                InputState::Turn(delta) => ControlOperation::Step { delta },
             };
-            let name = facts
-                .firmware
-                .input_bindings
-                .get(&binding)
-                .ok_or_else(|| {
-                    format!("Control {id} has no explicit debug command binding {binding}")
-                })?
-                .clone();
+            let action = facts
+                .physical_controls
+                .action(&facts.control_ids, id, operation)?;
+            let [located] = action.inputs.as_slice() else {
+                return Err(format!("Control {id} does not resolve to one debug key"));
+            };
+            let name = located.debug_key.clone().ok_or_else(|| {
+                format!("Control {id} is a native-only input; the debug transport cannot send it")
+            })?;
             let states = match input.state {
                 InputState::Pressed => vec![KeyState::On],
                 InputState::Released => vec![KeyState::Off],

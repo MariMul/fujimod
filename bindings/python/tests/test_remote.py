@@ -25,7 +25,7 @@ async def test_async_navigation_selection_readback_and_frame():
     assert (await remote.navigate(item, deadline=100)).value.selected
     await remote.select(option(item, "ON"), deadline=100)
     await remote.navigate(item, deadline=100)
-    await remote.press(control("right"), deadline=100)
+    await remote.press(control("selector.right"), deadline=100)
     snapshot = await remote.wait_until(lambda value: value.value.selected,
         option(item, "ON"), deadline=100)
     assert snapshot.value.value == "ON"
@@ -42,7 +42,7 @@ def test_blocking_uses_the_same_actions_and_snapshot_types():
     item = menu("shooting", key=20)
     blocking.select(option(item, "ON"), deadline=100)
     blocking.navigate(item, deadline=100)
-    blocking.press(control("right"), deadline=100)
+    blocking.press(control("selector.right"), deadline=100)
     value = blocking.wait_until(lambda value: value.value.selected, option(item, "ON"), deadline=100)
     assert value.value.value == "ON"
     before = remote.now
@@ -55,10 +55,10 @@ async def test_task_cancellation_returns_camera_ownership():
     remote = camera()
     task = remote._task("screenshot", None, 100)
     with pytest.raises(RuntimeError, match="busy"):
-        remote.blocking.read(control("down"))
+        remote.blocking.read(control("selector.down"))
     assert not task.poll(lambda: None)
     task.cancel()
-    assert (await remote.read(control("down"))).value.supported
+    assert (await remote.read(control("selector.down"))).value.supported
     remote.close()
 
 

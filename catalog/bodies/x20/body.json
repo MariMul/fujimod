@@ -100,6 +100,181 @@
           "active_level": true
         }
       ]
+    },
+    {
+      "id": "controls-adc-5",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 5,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-0-2",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 2,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-0-3",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 3,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-3-2",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 2,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-4-4",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 4,
+          "pin": 4,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-3-10",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 10,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-3-13",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 13,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-2-12",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 2,
+          "pin": 12,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-8",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 8,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-9",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 9,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-2-9",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 2,
+          "pin": 9,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-7",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 7,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-3",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 3,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-3-6",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 6,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-3-7",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 7,
+          "active_level": false
+        }
+      ]
     }
   ],
   "parts": [

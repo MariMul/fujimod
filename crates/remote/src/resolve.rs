@@ -1,4 +1,5 @@
 //! Resolve each reference anew against the live descriptor graph and cursor.
+use fujimod_catalog::controls::InputTarget;
 use crate::{
     ControlSnapshot, Menu, MenuSnapshot, Reference, Result, Snapshot, Value,
     backend::Backend,
@@ -344,27 +345,14 @@ impl<B: Backend> Memory<'_, B> {
     pub async fn snapshot(&mut self, reference: &Reference) -> Result<Snapshot> {
         let state = self.state().await?;
         if let Reference::Control(control) = reference {
-            let id = self
-                .facts
-                .firmware
-                .control_names
-                .get(control.id())
-                .map(String::as_str)
-                .unwrap_or(control.id());
-            let physical = self
-                .facts
-                .body_controls
-                .controls
-                .get(id)
-                .ok_or_else(|| format!("Unknown physical control {}", control.id()))?;
-            let supported = self
-                .facts
-                .firmware
-                .controls
-                .controls
-                .get(id)
-                .is_some_and(|c| c.unavailable_reason.is_none());
-            let _ = physical;
+            let id = control.id();
+            self.facts.physical_controls.control(id)?;
+            let supported = self.facts.control_ids.inputs.iter().any(|input| {
+                (input.electrical.is_some() || input.debug_key.is_some())
+                    && matches!(&input.target, InputTarget::Control { control_id }
+                        if control_id == id
+                            || control_id.strip_prefix(id).is_some_and(|rest| rest.starts_with('.')))
+            });
             return Ok(Snapshot {
                 state,
                 value: Value::Control(ControlSnapshot {

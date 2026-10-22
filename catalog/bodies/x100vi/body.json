@@ -171,6 +171,24 @@
           "active_level": true
         }
       ]
+    },
+    {
+      "id": "controls-encoder-1-0-1-1",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 1,
+          "pin": 0,
+          "active_level": true
+        },
+        {
+          "kind": "gpio",
+          "port": 1,
+          "pin": 1,
+          "active_level": true
+        }
+      ]
     }
   ],
   "parts": [

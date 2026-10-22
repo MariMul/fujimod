@@ -14,11 +14,12 @@ fn selected_firmware_supplies_complete_stock_remote_inputs() {
     assert_eq!(facts.firmware.menus.cursor.fields.cursor, 8);
     assert!(
         facts
-            .firmware
+            .control_ids
             .debug_keys
             .iter()
             .any(|key| key.name == "EXE_M")
     );
+    assert!(facts.physical_controls.control("menu_ok_button").is_ok());
     assert!(facts.menu_manifest.is_none());
     let roundtrip: Facts = serde_json::from_value(serde_json::to_value(&facts).unwrap()).unwrap();
     assert_eq!(roundtrip, facts);

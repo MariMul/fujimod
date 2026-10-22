@@ -229,99 +229,41 @@
       ],
       "type": "object"
     },
-    "BodyControl": {
+    "BoundPosition": {
       "additionalProperties": false,
-      "description": "A physical control's identity, positions, and body connections.",
+      "description": "A position's printed identity and explicit input selection.",
       "properties": {
-        "assignable": {
-          "description": "Whether firmware allows its function to be assigned.",
+        "asserted": {
+          "description": "Whether this position asserts that input.",
           "type": "boolean"
         },
-        "connection_ids": {
-          "description": "Physical body connections used by this control.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "default_function": {
-          "description": "Documented default function when available.",
+        "description": {
+          "description": "Meaning of an unlabeled position or icon.",
           "type": [
             "string",
             "null"
           ]
         },
-        "kind": {
-          "$ref": "#/$defs/ControlKind",
-          "description": "Mechanical control category."
-        },
-        "location": {
-          "$ref": "#/$defs/ControlLocation",
-          "description": "Physical position on the camera body."
-        },
-        "manual_page": {
-          "description": "Relevant manual page when available.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "name": {
-          "description": "Printed or documented control name.",
+        "id": {
+          "description": "Exact position identity accepted by the physical panel.",
           "type": "string"
         },
-        "positions": {
-          "description": "Documented mechanical positions.",
-          "items": {
-            "$ref": "#/$defs/ControlPosition"
-          },
-          "type": "array"
+        "key": {
+          "$ref": "#/$defs/InputBinding",
+          "description": "Explicit firmware input binding."
         },
-        "pushable": {
-          "description": "Whether the control can be pressed.",
-          "type": "boolean"
+        "label": {
+          "description": "Printed label, when present.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
-        "name",
-        "kind",
-        "location",
-        "positions",
-        "pushable",
-        "assignable",
-        "connection_ids"
-      ],
-      "type": "object"
-    },
-    "BodyControls": {
-      "additionalProperties": false,
-      "description": "Physical controls documented for a body.",
-      "properties": {
-        "analog_levels": {
-          "description": "Number of analog sample levels exposed by the controls.",
-          "format": "uint16",
-          "maximum": 65535,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "controls": {
-          "additionalProperties": {
-            "$ref": "#/$defs/BodyControl"
-          },
-          "description": "Physical controls keyed by stable control identity.",
-          "type": "object"
-        },
-        "manual": {
-          "$ref": "#/$defs/ManualReference",
-          "description": "Published manual identifying the physical controls."
-        }
-      },
-      "required": [
-        "manual",
-        "analog_levels",
-        "controls"
+        "id",
+        "key",
+        "asserted"
       ],
       "type": "object"
     },
@@ -643,203 +585,211 @@
         }
       ]
     },
-    "ControlAction": {
-      "additionalProperties": false,
-      "description": "A logical action expressed through named keys.",
-      "properties": {
-        "keys": {
-          "description": "Logical keys selected by the action.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "keys"
-      ],
-      "type": "object"
-    },
-    "ControlInput": {
-      "description": "An electrical predicate referencing physical body wiring by identity.",
+    "ControlBehavior": {
+      "description": "The actions offered by a physical control's mechanism.",
       "oneOf": [
         {
           "additionalProperties": false,
-          "description": "Analog input with bounds obtained from firmware configuration.",
+          "description": "A momentary button.",
           "properties": {
-            "callback": {
-              "description": "Firmware callback that evaluates this input, when present.",
-              "format": "uint64",
-              "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
-            },
-            "connection_id": {
-              "description": "Body connection carrying this analog input.",
-              "type": "string"
-            },
-            "event": {
-              "description": "Firmware key-event number associated with the record.",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "expected_result": {
-              "description": "Callback result accepted as active, when present.",
-              "format": "uint32",
-              "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
-            },
-            "intervals": {
-              "description": "Calibration-table intervals accepted by this predicate.",
-              "items": {
-                "$ref": "#/$defs/CalibrationInterval"
-              },
-              "type": "array"
-            },
             "kind": {
-              "const": "adc",
+              "const": "button",
               "type": "string"
             },
-            "scanner_index": {
-              "description": "Scanner record index within the firmware scanner table.",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
+            "press": {
+              "$ref": "#/$defs/InputBinding",
+              "description": "Input asserted by a press and deasserted by release."
             }
           },
           "required": [
             "kind",
-            "connection_id",
-            "intervals",
-            "scanner_index",
-            "event"
+            "press"
           ],
           "type": "object"
         },
         {
           "additionalProperties": false,
-          "description": "Digital input compared with a firmware-selected level.",
+          "description": "A shutter release with named stages.",
           "properties": {
-            "connection_id": {
-              "description": "Body connection carrying this digital input.",
+            "kind": {
+              "const": "shutter",
               "type": "string"
             },
-            "event": {
-              "description": "Firmware key-event number associated with the record.",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
+            "stages": {
+              "additionalProperties": {
+                "items": {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                "type": "array"
+              },
+              "description": "Inputs asserted at each named shutter stage.",
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "stages"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A directional pad with individually addressable direction identities.",
+          "properties": {
+            "directions": {
+              "additionalProperties": {
+                "$ref": "#/$defs/InputBinding"
+              },
+              "description": "Inputs asserted by the four directions.",
+              "type": "object"
             },
-            "expected_level": {
-              "description": "Logic level interpreted as the selected key.",
+            "kind": {
+              "const": "pad",
+              "type": "string"
+            },
+            "press": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Center press input, when present."
+            }
+          },
+          "required": [
+            "kind",
+            "directions"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A dial with positions or relative steps.",
+          "properties": {
+            "endless": {
+              "description": "Whether the mechanism rotates without an end stop.",
               "type": "boolean"
             },
             "kind": {
-              "const": "gpio",
+              "const": "dial",
               "type": "string"
             },
-            "scanner": {
-              "$ref": "#/$defs/GpioScanner",
-              "description": "Scanner predicate used to interpret the digital input."
+            "motion": {
+              "$ref": "#/$defs/ControlMotion",
+              "description": "Documented positions or relative step directions."
             },
-            "scanner_index": {
-              "description": "Scanner record index within the firmware scanner table.",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
+            "press": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Press input, when the dial is pushable."
             }
           },
           "required": [
             "kind",
-            "connection_id",
-            "expected_level",
-            "scanner",
-            "scanner_index",
-            "event"
+            "motion",
+            "endless"
           ],
           "type": "object"
         },
         {
           "additionalProperties": false,
-          "description": "Firmware quadrature decoder attached to a physical encoder.",
+          "description": "A ring with positions or relative steps.",
           "properties": {
-            "connection_id": {
-              "description": "Body connection carrying the encoder phases.",
-              "type": "string"
-            },
-            "event": {
-              "description": "Decoder event selected by this logical key.",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "guard": {
-              "description": "Firmware decoder guard address.",
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
+            "endless": {
+              "description": "Whether the mechanism rotates without an end stop.",
+              "type": "boolean"
             },
             "kind": {
-              "const": "gpio_quadrature",
+              "const": "ring",
               "type": "string"
             },
-            "phase_map": {
-              "description": "Decoder phase mapping.",
-              "items": {
-                "format": "uint8",
-                "maximum": 255,
-                "minimum": 0,
-                "type": "integer"
-              },
-              "maxItems": 4,
-              "minItems": 4,
-              "type": "array"
+            "motion": {
+              "$ref": "#/$defs/ControlMotion",
+              "description": "Documented positions or relative step directions."
             },
-            "reset": {
-              "description": "Decoder reset counters and phase state.",
-              "items": {
-                "format": "uint32",
-                "minimum": 0,
-                "type": "integer"
-              },
-              "maxItems": 4,
-              "minItems": 4,
-              "type": "array"
+            "press": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Press input, when the ring is pushable."
+            }
+          },
+          "required": [
+            "kind",
+            "motion",
+            "endless"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A switch with named positions.",
+          "properties": {
+            "kind": {
+              "const": "switch",
+              "type": "string"
             },
-            "threshold": {
-              "description": "Decoder activation threshold.",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "transitions": {
-              "description": "Decoder transition values.",
+            "positions": {
+              "description": "Inputs selecting each documented position.",
               "items": {
-                "format": "uint8",
-                "maximum": 255,
-                "minimum": 0,
-                "type": "integer"
+                "$ref": "#/$defs/BoundPosition"
               },
-              "maxItems": 16,
-              "minItems": 16,
               "type": "array"
             }
           },
           "required": [
             "kind",
-            "connection_id",
-            "phase_map",
-            "transitions",
-            "reset",
-            "event",
-            "guard",
-            "threshold"
+            "positions"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A lever with named positions.",
+          "properties": {
+            "kind": {
+              "const": "lever",
+              "type": "string"
+            },
+            "positions": {
+              "description": "Inputs selecting each documented position.",
+              "items": {
+                "$ref": "#/$defs/BoundPosition"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "positions"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A touch surface whose protocol is located in the firmware input document.",
+          "properties": {
+            "kind": {
+              "const": "touch",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
           ],
           "type": "object"
         }
@@ -1012,113 +962,56 @@
         }
       ]
     },
-    "ControlKind": {
-      "description": "Physical control categories.",
+    "ControlMotion": {
+      "description": "A rotary mechanism's mutually exclusive position or step declarations.",
       "oneOf": [
         {
-          "const": "dial",
-          "description": "Rotary dial with named positions.",
-          "type": "string"
+          "additionalProperties": false,
+          "description": "Finite, named mechanical detents.",
+          "properties": {
+            "kind": {
+              "const": "positions",
+              "type": "string"
+            },
+            "positions": {
+              "description": "Input and asserted level for each detent.",
+              "items": {
+                "$ref": "#/$defs/BoundPosition"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "positions"
+          ],
+          "type": "object"
         },
         {
-          "const": "button",
-          "description": "Momentary button.",
-          "type": "string"
-        },
-        {
-          "const": "lever",
-          "description": "Mechanical lever.",
-          "type": "string"
-        },
-        {
-          "const": "switch",
-          "description": "Selector switch.",
-          "type": "string"
-        },
-        {
-          "const": "ring",
-          "description": "Lens or body ring.",
-          "type": "string"
-        },
-        {
-          "const": "shutter",
-          "description": "Two-stage shutter release.",
-          "type": "string"
-        },
-        {
-          "const": "wheel",
-          "description": "Relative command wheel.",
-          "type": "string"
-        },
-        {
-          "const": "joystick",
-          "description": "Directional selector.",
-          "type": "string"
-        },
-        {
-          "const": "touchscreen",
-          "description": "Touch-sensitive display.",
-          "type": "string"
+          "additionalProperties": false,
+          "description": "Relative movement in either direction.",
+          "properties": {
+            "decrease": {
+              "$ref": "#/$defs/InputBinding",
+              "description": "Input generated by one decreasing step."
+            },
+            "increase": {
+              "$ref": "#/$defs/InputBinding",
+              "description": "Input generated by one increasing step."
+            },
+            "kind": {
+              "const": "steps",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "decrease",
+            "increase"
+          ],
+          "type": "object"
         }
       ]
-    },
-    "ControlLocation": {
-      "description": "Locations used to identify physical controls.",
-      "oneOf": [
-        {
-          "const": "top",
-          "description": "Top surface.",
-          "type": "string"
-        },
-        {
-          "const": "front",
-          "description": "Front surface.",
-          "type": "string"
-        },
-        {
-          "const": "rear",
-          "description": "Rear surface.",
-          "type": "string"
-        },
-        {
-          "const": "lens",
-          "description": "Lens assembly.",
-          "type": "string"
-        },
-        {
-          "const": "bottom",
-          "description": "Bottom surface.",
-          "type": "string"
-        }
-      ]
-    },
-    "ControlPosition": {
-      "additionalProperties": false,
-      "description": "A named mechanical position of a physical control.",
-      "properties": {
-        "description": {
-          "description": "Meaning of an icon or otherwise unlabeled position.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "id": {
-          "description": "Stable position identity or printed value.",
-          "type": "string"
-        },
-        "label": {
-          "description": "Printed label when available.",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "id"
-      ],
-      "type": "object"
     },
     "ControlReaders": {
       "additionalProperties": false,
@@ -1140,6 +1033,41 @@
         "scanner"
       ],
       "type": "object"
+    },
+    "ControlRole": {
+      "description": "Physical roles that an operation may require from a body.",
+      "oneOf": [
+        {
+          "const": "command_control",
+          "description": "Relative command dial used to change the selected value.",
+          "type": "string"
+        }
+      ]
+    },
+    "ControlSurface": {
+      "description": "Body surfaces used to locate a physical control in a manual.",
+      "oneOf": [
+        {
+          "const": "top",
+          "description": "Upper body surface.",
+          "type": "string"
+        },
+        {
+          "const": "rear",
+          "description": "Rear body surface.",
+          "type": "string"
+        },
+        {
+          "const": "front",
+          "description": "Front surface, including controls on the lens.",
+          "type": "string"
+        },
+        {
+          "const": "bottom",
+          "description": "Lower body surface.",
+          "type": "string"
+        }
+      ]
     },
     "CursorFields": {
       "additionalProperties": false,
@@ -1243,16 +1171,16 @@
     },
     "DebugKey": {
       "additionalProperties": false,
-      "description": "A name accepted by the stock debug key command.",
+      "description": "One explicitly located command in the firmware's debug transport vocabulary.",
       "properties": {
         "event": {
-          "description": "Native event number.",
+          "description": "UI event identity delivered by the command.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
         },
         "name": {
-          "description": "Native name.",
+          "description": "Exact command token accepted by that transport.",
           "type": "string"
         }
       },
@@ -1390,133 +1318,230 @@
       ],
       "type": "object"
     },
-    "FirmwareControl": {
-      "additionalProperties": false,
-      "description": "A firmware mapping for one physical control.",
-      "properties": {
-        "actions": {
-          "additionalProperties": {
-            "$ref": "#/$defs/ControlAction"
-          },
-          "description": "Named logical actions and their required keys.",
-          "type": "object"
-        },
-        "input": {
-          "additionalProperties": {
-            "items": {
-              "$ref": "#/$defs/ControlInput"
+    "ElectricalInput": {
+      "description": "Located electrical meaning, separate from scanner table operands.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Analog input interpreted using located calibration intervals.",
+          "properties": {
+            "callback": {
+              "description": "Firmware callback evaluating the input, when present.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
             },
-            "type": "array"
-          },
-          "description": "Electrical predicates keyed by logical key identity.",
-          "type": [
-            "object",
-            "null"
-          ]
-        },
-        "interface": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ControlInterface"
+            "connection_id": {
+              "description": "Body connection carrying this analog input.",
+              "type": "string"
             },
-            {
-              "type": "null"
+            "expected_result": {
+              "description": "Callback result interpreted as active, when present.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "intervals": {
+              "description": "Configuration offsets for the accepted analog intervals.",
+              "items": {
+                "$ref": "#/$defs/CalibrationInterval"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "adc",
+              "type": "string"
             }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "intervals"
           ],
-          "description": "Firmware protocol interface for controls outside the key scanner."
-        },
-        "keys": {
-          "description": "Logical key identities emitted by this control.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "positions": {
-          "description": "Firmware key combinations for named positions.",
-          "items": {
-            "$ref": "#/$defs/FirmwareControlPosition"
-          },
-          "type": "array"
-        },
-        "unavailable_reason": {
-          "description": "Reason no electronic mapping is established, when applicable.",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "keys",
-        "actions",
-        "positions"
-      ],
-      "type": "object"
-    },
-    "FirmwareControlPosition": {
-      "additionalProperties": false,
-      "description": "Firmware key selection for a named control position.",
-      "properties": {
-        "active": {
-          "description": "Whether this position asserts the associated binary control.",
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
-        "keys": {
-          "description": "Logical keys selecting this position.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "position": {
-          "description": "Position identity or printed value.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "position",
-        "keys"
-      ],
-      "type": "object"
-    },
-    "FirmwareControls": {
-      "additionalProperties": false,
-      "description": "Firmware key scanning and logical control mappings.",
-      "properties": {
-        "controls": {
-          "additionalProperties": {
-            "$ref": "#/$defs/FirmwareControl"
-          },
-          "description": "Logical behavior keyed by physical body control identity.",
           "type": "object"
         },
-        "debug_keys_available": {
-          "description": "Whether named debug key events are available.",
-          "type": "boolean"
+        {
+          "additionalProperties": false,
+          "description": "Digital contact interpreted by a located scanner predicate.",
+          "properties": {
+            "connection_id": {
+              "description": "Body connection carrying this digital input.",
+              "type": "string"
+            },
+            "expected_level": {
+              "description": "Logic level interpreted as active.",
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "gpio",
+              "type": "string"
+            },
+            "scanner": {
+              "$ref": "#/$defs/GpioScanner",
+              "description": "Firmware interpretation of the contact."
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "expected_level",
+            "scanner"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Physical encoder interpreted by a located quadrature decoder.",
+          "properties": {
+            "connection_id": {
+              "description": "Body connection carrying the encoder phases.",
+              "type": "string"
+            },
+            "decoder_event": {
+              "description": "Decoder-local direction event, distinct from the UI event.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "guard": {
+              "description": "Located decoder guard address.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "gpio_quadrature",
+              "type": "string"
+            },
+            "phase_map": {
+              "description": "Decoder phase mapping.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 4,
+              "minItems": 4,
+              "type": "array"
+            },
+            "reset": {
+              "description": "Decoder reset counters and phase state.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 4,
+              "minItems": 4,
+              "type": "array"
+            },
+            "threshold": {
+              "description": "Located decoder activation threshold.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "transitions": {
+              "description": "Decoder transition values.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 16,
+              "minItems": 16,
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "phase_map",
+            "transitions",
+            "reset",
+            "decoder_event",
+            "guard",
+            "threshold"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "FirmwareControlIds": {
+      "additionalProperties": false,
+      "description": "Generated firmware input facts, separate from the body's declarations.",
+      "properties": {
+        "$schema": {
+          "description": "Schema identifying the generated document's closed Rust type.",
+          "type": "string"
+        },
+        "debug_keys": {
+          "description": "Exact debug command vocabulary, independent of the native names.",
+          "items": {
+            "$ref": "#/$defs/DebugKey"
+          },
+          "type": "array"
+        },
+        "firmware_id": {
+          "description": "Firmware from which these inputs were located.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Stable document identity referenced by the firmware.",
+          "type": "string"
         },
         "input_readers": {
           "$ref": "#/$defs/ControlReaders",
-          "description": "Firmware calibration and scanner readers."
+          "description": "Calibration and stable-state readers located in that firmware."
+        },
+        "inputs": {
+          "description": "Every located scanner or protocol input, including unclaimed connections.",
+          "items": {
+            "$ref": "#/$defs/LocatedInput"
+          },
+          "type": "array"
+        },
+        "interfaces": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ControlInterface"
+          },
+          "description": "Protocols outside the key scanner, keyed by physical body connection ID.",
+          "type": "object"
         },
         "native_key_names": {
           "$ref": "#/$defs/NativeKeyNames",
-          "description": "Firmware native event names and their table identity."
+          "description": "Native names and their source table identity."
         },
         "scanner": {
           "$ref": "#/$defs/ScannerTable",
-          "description": "Firmware scanner table identity and extent."
+          "description": "Scanner table identity and extent."
+        },
+        "schema": {
+          "description": "Document format version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
-        "controls",
-        "debug_keys_available",
-        "input_readers",
+        "$schema",
+        "schema",
+        "id",
+        "firmware_id",
         "scanner",
-        "native_key_names"
+        "input_readers",
+        "native_key_names",
+        "debug_keys",
+        "inputs",
+        "interfaces"
       ],
       "type": "object"
     },
@@ -1536,24 +1561,6 @@
           "$ref": "#/$defs/ConfigurationLocation",
           "description": "Settings block location."
         },
-        "control_names": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "description": "User-facing control aliases mapped to physical identities.",
-          "type": "object"
-        },
-        "controls": {
-          "$ref": "#/$defs/FirmwareControls",
-          "description": "Electrical control mappings and native key events."
-        },
-        "debug_keys": {
-          "description": "Names accepted by the firmware debug key command.",
-          "items": {
-            "$ref": "#/$defs/DebugKey"
-          },
-          "type": "array"
-        },
         "firmware_id": {
           "description": "Firmware identity.",
           "type": "string"
@@ -1568,13 +1575,6 @@
             "$ref": "#/$defs/AddressIdentity"
           },
           "type": "array"
-        },
-        "input_bindings": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "description": "Navigation roles mapped to debug key names.",
-          "type": "object"
         },
         "menus": {
           "$ref": "#/$defs/MenuTables",
@@ -1611,10 +1611,6 @@
         "firmware_id",
         "firmware_sha256",
         "body_id",
-        "controls",
-        "debug_keys",
-        "input_bindings",
-        "control_names",
         "uncached_alias",
         "identity_checks",
         "configuration",
@@ -1899,6 +1895,106 @@
       ],
       "type": "object"
     },
+    "InputBinding": {
+      "description": "An explicit binding in one of two distinct firmware input vocabularies.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Command name accepted by the firmware's debug transport.",
+          "properties": {
+            "kind": {
+              "const": "debug_key",
+              "type": "string"
+            },
+            "name": {
+              "description": "Exact command token, without conversion from a native event name.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Scanned native input which need not have any debug transport command.",
+          "properties": {
+            "kind": {
+              "const": "native_input",
+              "type": "string"
+            },
+            "name": {
+              "description": "Exact name in the firmware's located native input vocabulary.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "InputTarget": {
+      "description": "Ownership of a generated input record without a control alias map.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Input claimed by a canonical physical control identity.",
+          "properties": {
+            "control_id": {
+              "description": "Exact control identity, including a pad direction where applicable.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "control",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "control_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Card, cable, door, or other connection detector.",
+          "properties": {
+            "connection_id": {
+              "description": "Exact connection identity declared by the body.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "connection",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Located firmware input which no documented physical control claims.",
+          "properties": {
+            "kind": {
+              "const": "unclaimed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "LinkedSymbol": {
       "additionalProperties": false,
       "description": "Linked symbol identity.",
@@ -1919,6 +2015,82 @@
       "required": [
         "address",
         "size"
+      ],
+      "type": "object"
+    },
+    "LocatedInput": {
+      "additionalProperties": false,
+      "description": "One located input's identity, ownership, and checked electrical predicates.",
+      "properties": {
+        "debug_key": {
+          "description": "Exact debug command token for this input, absent for native-only inputs.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "electrical": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElectricalInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Located electrical interpretation, absent when the hardware is not modeled."
+        },
+        "event": {
+          "description": "UI/native event identity established by the locator.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "description": "Stable identity of the located input record.",
+          "type": "string"
+        },
+        "scanner": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocatedScannerRecord"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Scanner row and its source witness, absent for inputs outside that table."
+        },
+        "target": {
+          "$ref": "#/$defs/InputTarget",
+          "description": "Physical control, connection detector, or unclaimed firmware input."
+        }
+      },
+      "required": [
+        "id",
+        "event",
+        "target"
+      ],
+      "type": "object"
+    },
+    "LocatedScannerRecord": {
+      "additionalProperties": false,
+      "description": "One scanner row's identity and located predicate operands.",
+      "properties": {
+        "index": {
+          "description": "Zero-based index within the identified scanner table.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "witness": {
+          "$ref": "#/$defs/ScannerRecordWitness",
+          "description": "Event identity, predicate kind, source selector, and bounds stored in the row."
+        }
+      },
+      "required": [
+        "index",
+        "witness"
       ],
       "type": "object"
     },
@@ -2658,6 +2830,147 @@
       ],
       "type": "object"
     },
+    "PhysicalControl": {
+      "additionalProperties": false,
+      "description": "A control's documented appearance and declared physical actions.",
+      "properties": {
+        "assignable": {
+          "description": "Whether the control's function can be assigned in the camera.",
+          "type": "boolean"
+        },
+        "behavior": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ControlBehavior"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Actions defined by this control's mechanism; absent for mechanical controls."
+        },
+        "connection_ids": {
+          "description": "Body connections carrying the control's electrical signals.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "default_function": {
+          "description": "Documented initial function, when available.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "face": {
+          "description": "Text printed on the control, when present.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon": {
+          "description": "Meaning of a printed icon, when present.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "$ref": "#/$defs/ControlSurface",
+          "description": "Surface on which the control is located."
+        },
+        "manual_page": {
+          "description": "Manual page identifying the control, when available.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "mechanical": {
+          "description": "Whether this control has no electronic action.",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "Manual name of the control.",
+          "type": "string"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ControlRole"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Physical role required by a declared cross-body operation."
+        }
+      },
+      "required": [
+        "name",
+        "location",
+        "connection_ids",
+        "assignable",
+        "mechanical"
+      ],
+      "type": "object"
+    },
+    "PhysicalControls": {
+      "additionalProperties": false,
+      "description": "Hand-maintained physical controls for one body.",
+      "properties": {
+        "$schema": {
+          "description": "Schema identifying this document's closed Rust type.",
+          "type": "string"
+        },
+        "analog_levels": {
+          "description": "Analog sample resolution used by this body's contacts.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "body_id": {
+          "description": "Body owning the documented controls.",
+          "type": "string"
+        },
+        "controls": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PhysicalControl"
+          },
+          "description": "Controls keyed by their canonical physical identities.",
+          "type": "object"
+        },
+        "id": {
+          "description": "Stable document identity referenced by the body.",
+          "type": "string"
+        },
+        "manual": {
+          "$ref": "#/$defs/ManualReference",
+          "description": "Published manual identifying the controls."
+        },
+        "schema": {
+          "description": "Document format version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "id",
+        "body_id",
+        "manual",
+        "analog_levels",
+        "controls"
+      ],
+      "type": "object"
+    },
     "PixelFormat": {
       "description": "Implemented scanout encodings.",
       "enum": [
@@ -3047,6 +3360,41 @@
       ],
       "type": "object"
     },
+    "ScannerInputKind": {
+      "description": "Closed firmware scanner predicate discriminator from the scanner row.",
+      "oneOf": [
+        {
+          "const": "kind_0",
+          "description": "Direct analog level predicate.",
+          "type": "string"
+        },
+        {
+          "const": "kind_1",
+          "description": "Calibrated analog interval predicate.",
+          "type": "string"
+        },
+        {
+          "const": "kind_2",
+          "description": "Direct GPIO predicate.",
+          "type": "string"
+        },
+        {
+          "const": "kind_3",
+          "description": "Callback or specialized digital predicate.",
+          "type": "string"
+        },
+        {
+          "const": "kind_4",
+          "description": "Combined-source predicate.",
+          "type": "string"
+        },
+        {
+          "const": "kind_5",
+          "description": "Callback-based scanner predicate.",
+          "type": "string"
+        }
+      ]
+    },
     "ScannerReader": {
       "additionalProperties": false,
       "description": "A firmware scanner state reader.",
@@ -3089,6 +3437,50 @@
         "pressed_value",
         "released_value",
         "routine"
+      ],
+      "type": "object"
+    },
+    "ScannerRecordWitness": {
+      "additionalProperties": false,
+      "description": "Checked identity and predicate operands stored in one scanner record.",
+      "properties": {
+        "input_kind": {
+          "$ref": "#/$defs/ScannerInputKind",
+          "description": "Closed predicate kind stored in the scanner record."
+        },
+        "lower": {
+          "description": "Lower comparison operand or calibration-table offset.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "physical_key": {
+          "description": "Physical key identity stored at byte offset zero.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "description": "Source selector stored at byte offset twelve.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "upper": {
+          "description": "Upper comparison operand or calibration-table offset.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "physical_key",
+        "input_kind",
+        "source",
+        "lower",
+        "upper"
       ],
       "type": "object"
     },
@@ -3370,9 +3762,9 @@
   "additionalProperties": false,
   "description": "All inputs required to resolve remote references.",
   "properties": {
-    "body_controls": {
-      "$ref": "#/$defs/BodyControls",
-      "description": "Physical control identities."
+    "control_ids": {
+      "$ref": "#/$defs/FirmwareControlIds",
+      "description": "Located inputs of the selected firmware."
     },
     "firmware": {
       "$ref": "#/$defs/FirmwareFacts",
@@ -3388,10 +3780,15 @@
         }
       ],
       "description": "Installed build declarations, absent for stock firmware."
+    },
+    "physical_controls": {
+      "$ref": "#/$defs/PhysicalControls",
+      "description": "Physical control identities."
     }
   },
   "required": [
-    "body_controls",
+    "physical_controls",
+    "control_ids",
     "firmware"
   ],
   "title": "Facts",

@@ -6,19 +6,40 @@ use serde_json::json;
 
 pub fn facts() -> Facts {
     let hash = "00".repeat(32);
-    let ids = ["menu", "ok", "back", "left", "right", "up", "down"];
-    let physical: serde_json::Map<_, _> = ids.iter().map(|id| (id.to_string(), json!({"name":id,"kind":"button","location":"rear","positions":[],"pushable":true,"default_function":null,"assignable":false,"manual_page":null,"connection_ids":[]}))).collect();
-    let logical: serde_json::Map<_, _> = ids.iter().map(|id| (id.to_string(), json!({"keys":[id.to_uppercase()],"input":null,"actions":{},"positions":[],"interface":null,"unavailable_reason":null}))).collect();
-    let bindings: serde_json::Map<_, _> = ids
-        .iter()
-        .map(|id| (id.to_string(), json!(id.to_uppercase())))
-        .collect();
+    let keys = [
+        ("menu_ok_button", "MENU"),
+        ("disp_back_button", "BACK"),
+        ("selector.up", "UP"),
+        ("selector.down", "DOWN"),
+        ("selector.left", "LEFT"),
+        ("selector.right", "RIGHT"),
+    ];
+    let button = |name: &str, key: &str| json!({"name":name,"location":"rear","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"default_function":null,"role":null,"mechanical":false,"behavior":{"kind":"button","press":{"kind":"debug_key","name":key}}});
+    let physical_controls = json!({
+        "$schema":fujimod_catalog::controls::PHYSICAL_CONTROLS_SCHEMA_URI,"schema":1,"id":"synthetic-controls","body_id":"synthetic",
+        "manual":{"url":"https://example.test/manual","title":"Synthetic controls","pages":[]},"analog_levels":1,
+        "controls":{
+            "menu_ok_button":button("MENU/OK button","MENU"),
+            "disp_back_button":button("DISP/BACK button","BACK"),
+            "selector":{"name":"Selector","location":"rear","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"default_function":null,"role":null,"mechanical":false,
+                "behavior":{"kind":"pad","press":null,"directions":{"up":{"kind":"debug_key","name":"UP"},"down":{"kind":"debug_key","name":"DOWN"},"left":{"kind":"debug_key","name":"LEFT"},"right":{"kind":"debug_key","name":"RIGHT"}}}}
+        }
+    });
+    let control_ids = json!({
+        "$schema":fujimod_catalog::controls::CONTROL_IDS_SCHEMA_URI,"schema":1,"id":"synthetic-1-control-ids","firmware_id":"synthetic-1",
+        "scanner":{"base":16,"count":1,"stride":4,"lookup":16,"sha256":hash},
+        "input_readers":{"calibration":16,"scanner":{"stable_offset":0,"stable_width":1,"pressed_value":1,"released_value":0,"routine":{"address":16,"size":4,"sha256":hash}}},
+        "native_key_names":{"rows":[],"reader":16,"size":4,"sha256":hash},
+        "debug_keys":keys.iter().enumerate().map(|(n,(_,key))|json!({"name":key,"event":n})).collect::<Vec<_>>(),
+        "inputs":keys.iter().enumerate().map(|(n,(id,key))|json!({"id":format!("input-{n}"),"event":n,"debug_key":key,"target":{"kind":"control","control_id":id},"scanner":null,"electrical":null})).collect::<Vec<_>>(),
+        "interfaces":{}
+    });
     serde_json::from_value(json!({
-        "body_controls":{"manual":{"url":"https://example.test/manual","title":"Synthetic controls","pages":[]},"analog_levels":1,"controls":physical},
+        "physical_controls":physical_controls,
+        "control_ids":control_ids,
         "firmware":{
             "$schema":fujimod_catalog::remote::FIRMWARE_FACTS_SCHEMA_URI,"schema":1,"firmware_id":"synthetic-1","firmware_sha256":hash,"body_id":"synthetic",
-            "controls":{"controls":logical,"debug_keys_available":true,"input_readers":{"calibration":16,"scanner":{"stable_offset":0,"routine":{"address":16,"size":4,"sha256":hash}}},"scanner":{"base":16,"count":1,"stride":4,"lookup":16,"sha256":hash},"native_key_names":{"rows":[],"reader":16,"size":4,"sha256":hash}},
-            "debug_keys":ids.iter().enumerate().map(|(n,id)|json!({"name":id.to_uppercase(),"event":n})).collect::<Vec<_>>(),"input_bindings":bindings,"control_names":{},"uncached_alias":0,
+            "uncached_alias":0,
             "identity_checks":[{"address":16,"size":4,"sha256":hash}],"configuration":{"kind":"direct","address":1024},
             "state":{"ui_mode":768,"system_mode":772,"menu_active":776,"pending_mode":780,"menu_node":784,"rec_mode":3,"setup_mode":5,"readiness":{"category_one":800,"category_two":808,"input_pending":816,"excluded_mask":0,"operation_alert_timer":820,"override_address":824}},
             "menus":{"roots_address":256,"root_count":2,"roles":{"shooting":0},"root_titles":{},"root_routes":{"0":{"entry":"shooting_menu","tab":null}},"page_tabs":{},"navigation":{"shooting_first_tab":0,"shooting_last_tab":0,"setup_first_tab":1},
@@ -124,21 +145,21 @@ impl Backend for Synthetic {
                 return Ok(());
             }
             match input.control.id() {
-                "menu" => self.active(4096, 0),
-                "right" => self.active(4352, self.value),
-                "down" => {
+                "menu_ok_button" if self.get(776) == 0 => self.active(4096, 0),
+                "menu_ok_button" => {
+                    self.value = self.get(520);
+                    self.active(4096, 1);
+                }
+                "selector.right" => self.active(4352, self.value),
+                "selector.down" => {
                     self.word(520, 1);
                     if self.reorder_on_down {
                         self.bytes[8192..8208].rotate_left(8);
                         self.reorder_on_down = false;
                     }
                 }
-                "up" => self.word(520, 0),
-                "ok" => {
-                    self.value = self.get(520);
-                    self.active(4096, 1);
-                }
-                "back" => self.word(776, 0),
+                "selector.up" => self.word(520, 0),
+                "disp_back_button" => self.word(776, 0),
                 _ => {}
             }
             Ok(())
@@ -185,7 +206,7 @@ fn navigate_select_reopen_and_capture() {
         assert!(v.menu().unwrap().selected);
         r.select(&option(item.clone(), "ON"), 100).await.unwrap();
         r.navigate(&item, 100).await.unwrap();
-        operations::press(&mut r, &control("right"), 100)
+        operations::press(&mut r, &control("selector.right"), 100)
             .await
             .unwrap();
         let v = r.read(&option(item, "ON").into()).await.unwrap();
@@ -271,7 +292,7 @@ fn predicate_tracks_only_its_reads() {
             &mut r,
             |view| {
                 Box::pin(async move {
-                    let _ = view.read(&control("down").into()).await?;
+                    let _ = view.read(&control("selector.down").into()).await?;
                     Ok(view.now() > 0)
                 })
             },
@@ -297,7 +318,7 @@ fn navigation_resolves_again_after_each_edge() {
             .unwrap();
         assert!(value.menu().unwrap().selected);
         assert_eq!(value.menu().unwrap().index, Some(0));
-        assert!(remote.backend.edges.iter().any(|i| i.control.id() == "up"));
+        assert!(remote.backend.edges.iter().any(|i| i.control.id() == "selector.up"));
     });
 }
 #[test]
@@ -308,7 +329,7 @@ fn predicate_timeout_reports_last_snapshot() {
             &mut remote,
             |view| {
                 Box::pin(async move {
-                    view.read(&control("down").into()).await?;
+                    view.read(&control("selector.down").into()).await?;
                     Ok(false)
                 })
             },

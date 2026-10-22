@@ -2,7 +2,8 @@
 //!
 //! Addresses describe live memory. Menu rows, captions, glyphs and cursor values
 //! are read from the device; a build manifest supplies declaration identities.
-use crate::facts::{AddressIdentity, BodyControls, ConfigurationLocation, FirmwareControls};
+use crate::controls::{FirmwareControlIds, PhysicalControls};
+use crate::facts::{AddressIdentity, ConfigurationLocation};
 use crate::reference::FirmwareObservation;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -18,7 +19,9 @@ pub const MENU_MANIFEST_SCHEMA_URI: &str =
 #[serde(deny_unknown_fields)]
 pub struct Facts {
     /// Physical control identities.
-    pub body_controls: BodyControls,
+    pub physical_controls: PhysicalControls,
+    /// Located inputs of the selected firmware.
+    pub control_ids: FirmwareControlIds,
     /// Selected firmware layouts and inputs.
     pub firmware: FirmwareFacts,
     /// Installed build declarations, absent for stock firmware.
@@ -40,14 +43,6 @@ pub struct FirmwareFacts {
     pub firmware_sha256: String,
     /// Physical body identity.
     pub body_id: String,
-    /// Electrical control mappings and native key events.
-    pub controls: FirmwareControls,
-    /// Names accepted by the firmware debug key command.
-    pub debug_keys: Vec<DebugKey>,
-    /// Navigation roles mapped to debug key names.
-    pub input_bindings: BTreeMap<String, String>,
-    /// User-facing control aliases mapped to physical identities.
-    pub control_names: BTreeMap<String, String>,
     /// Alias applied to physical RAM reads.
     pub uncached_alias: u64,
     /// Firmware content checks.
@@ -887,20 +882,6 @@ impl FirmwareFacts {
         {
             return Err("invalid remote scanout extent".into());
         }
-        let names: BTreeSet<_> = self
-            .debug_keys
-            .iter()
-            .map(|key| key.name.as_str())
-            .collect();
-        if names.len() != self.debug_keys.len()
-            || names.contains("")
-            || self
-                .input_bindings
-                .values()
-                .any(|name| !names.contains(name.as_str()))
-        {
-            return Err("invalid remote debug key names or input bindings".into());
-        }
         Ok(())
     }
 }
@@ -1007,12 +988,14 @@ impl Facts {
             .and_then(|facts| facts.remote.as_ref())
             .ok_or("selected firmware has no remote facts")?
             .clone();
-        let body_controls = selection
-            .body
-            .controls
-            .as_ref()
-            .ok_or("selected body has no physical control catalog")?
-            .clone();
+        let physical_controls = selection
+            .physical_controls
+            .clone()
+            .ok_or("selected body has no physical controls")?;
+        let control_ids = selection
+            .control_ids
+            .clone()
+            .ok_or("selected firmware has no control IDs")?;
         if firmware.firmware_id != selection.firmware.id
             || firmware.body_id != selection.body.id
             || selection
@@ -1024,9 +1007,9 @@ impl Facts {
         {
             return Err("remote facts differ from selected firmware/body".into());
         }
-        firmware.controls.validate(&selection.body)?;
         let facts = Self {
-            body_controls,
+            physical_controls,
+            control_ids,
             firmware,
             menu_manifest,
         };

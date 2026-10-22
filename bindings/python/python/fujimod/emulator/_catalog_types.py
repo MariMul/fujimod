@@ -698,11 +698,6 @@ class DebugKey(TypedDict, total=False):
     name: Required[str]
 
 
-class DebugKey2(TypedDict, total=False):
-    event: Required[int]
-    name: Required[str]
-
-
 class DecoderChoice(TypedDict, total=False):
     id: Required[str]
     selection: Required[DecoderSelection]
@@ -793,7 +788,7 @@ FirmwareControlIds = TypedDict(
     "FirmwareControlIds",
     {
         "$schema": Required["str"],
-        "debug_keys": Required["list[DebugKey2]"],
+        "debug_keys": Required["list[DebugKey]"],
         "firmware_id": Required["str"],
         "id": Required["str"],
         "input_readers": Required["ControlReaders"],
@@ -827,13 +822,9 @@ FirmwareFacts = TypedDict(
         "$schema": Required["str"],
         "body_id": Required["str"],
         "configuration": Required["ConfigurationLocation"],
-        "control_names": Required["dict[str, str]"],
-        "controls": Required["FirmwareControls"],
-        "debug_keys": Required["list[DebugKey]"],
         "firmware_id": Required["str"],
         "firmware_sha256": Required["str"],
         "identity_checks": Required["list[AddressIdentity]"],
-        "input_bindings": Required["dict[str, str]"],
         "menus": Required["MenuTables"],
         "resources": Required["Resources"],
         "scanout": Required["Scanout"],

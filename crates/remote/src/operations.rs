@@ -86,14 +86,31 @@ pub async fn wait_until<R: Remote + ?Sized>(
         r.wait(&reads, deadline).await?;
     }
 }
+/// The physical control for one navigation step, by the body's canonical IDs.
+///
+/// MENU/OK opens menus and confirms; bodies without a separate MENU/OK button
+/// press the selector's center. Directions are the selector's members.
+fn navigation_control(facts: &Facts, step: &str) -> Result<Control> {
+    let controls = &facts.physical_controls;
+    let id = match step {
+        "menu" | "ok" if controls.controls.contains_key("menu_ok_button") => "menu_ok_button".into(),
+        "menu" | "ok" => "selector".into(),
+        "back" => "disp_back_button".into(),
+        "up" | "down" | "left" | "right" => format!("selector.{step}"),
+        other => return Err(format!("Unknown navigation step {other}")),
+    };
+    controls.control(&id)?;
+    Ok(control(id))
+}
 async fn step<R: Remote + ?Sized>(
     r: &mut R,
+    facts: &Facts,
     reference: &Reference,
     role: &str,
     deadline: u64,
 ) -> Result<Snapshot> {
     let before = r.read(reference).await?;
-    press(r, &control(role), deadline).await?;
+    press(r, &navigation_control(facts, role)?, deadline).await?;
     loop {
         let value = r.read(reference).await?;
         if value.state.ready && value.state != before.state {
@@ -137,16 +154,16 @@ async fn root<R: Remote + ?Sized>(
         if !r.read(&reference).await?.state.menu_active {
             break;
         }
-        step(r, &reference, "back", deadline).await?;
+        step(r, facts, &reference, "back", deadline).await?;
     }
     if r.read(&reference).await?.state.menu_active {
         return Err(format!("Could not close menus while entering {name}"));
     }
-    step(r, &reference, "menu", deadline).await?;
+    step(r, facts, &reference, "menu", deadline).await?;
     match route.entry.as_str() {
         "shooting_menu" => {}
         "setup_menu" => {
-            step(r, &reference, "left", deadline).await?;
+            step(r, facts, &reference, "left", deadline).await?;
             let tab = route.tab.ok_or("Setup entry route lacks a tab key")?;
             for _ in 0..64 {
                 let value = r.read(&reference).await?;
@@ -157,9 +174,7 @@ async fn root<R: Remote + ?Sized>(
                     .state
                     .current_key
                     .ok_or("Tab rail has no selected row")?;
-                step(
-                    r,
-                    &reference,
+                step(r, facts, &reference,
                     if current < tab { "down" } else { "up" },
                     deadline,
                 )
@@ -168,7 +183,7 @@ async fn root<R: Remote + ?Sized>(
             if r.read(&reference).await?.state.current_key != Some(tab) {
                 return Err(format!("Could not reach tab {tab}"));
             }
-            step(r, &reference, "right", deadline).await?;
+            step(r, facts, &reference, "right", deadline).await?;
         }
         other => return Err(format!("Unsupported root entry strategy {other}")),
     }
@@ -180,6 +195,7 @@ async fn root<R: Remote + ?Sized>(
 }
 async fn focus<R: Remote + ?Sized>(
     r: &mut R,
+    facts: &Facts,
     reference: &Reference,
     deadline: u64,
 ) -> Result<Snapshot> {
@@ -216,9 +232,7 @@ async fn focus<R: Remote + ?Sized>(
             ));
         }
         let index = target.index.ok_or("Page has no focusable row")?;
-        step(
-            r,
-            reference,
+        step(r, facts, reference,
             if value.state.cursor < index {
                 "down"
             } else {
@@ -239,13 +253,13 @@ pub async fn navigate<R: Remote + ?Sized>(
     let reference = Reference::Menu(item.clone());
     let initial = r.read(&reference).await?;
     if initial.state.menu_active && initial.state.node == initial.menu()?.node {
-        return focus(r, &reference, deadline).await;
+        return focus(r, facts, &reference, deadline).await;
     }
     root(r, facts, &initial.menu()?.root, deadline).await?;
     for depth in 0..64 {
         let value = r.read(&reference).await?;
         if value.state.menu_active && value.state.node == value.menu()?.node {
-            return focus(r, &reference, deadline).await;
+            return focus(r, facts, &reference, deadline).await;
         }
         let ancestor = value
             .menu()?
@@ -253,8 +267,8 @@ pub async fn navigate<R: Remote + ?Sized>(
             .get(depth)
             .ok_or_else(|| format!("Menu {item:?} has no opening row at depth {depth}"))?
             .clone();
-        focus(r, &Reference::Menu(ancestor.clone()), deadline).await?;
-        step(r, &Reference::Menu(ancestor), "right", deadline).await?;
+        focus(r, facts, &Reference::Menu(ancestor.clone()), deadline).await?;
+        step(r, facts, &Reference::Menu(ancestor), "right", deadline).await?;
     }
     Err(format!("Navigation exceeded ancestor bound for {item:?}"))
 }
@@ -270,11 +284,11 @@ pub async fn select<R: Remote + ?Sized>(
         navigate(r, facts, choice.item(), deadline).await?;
         let parent = r.read(&Reference::Menu(choice.item().clone())).await?;
         if parent.menu()?.key.is_some() {
-            step(r, &reference, "right", deadline).await?;
+            step(r, facts, &reference, "right", deadline).await?;
         }
     }
-    focus(r, &reference, deadline).await?;
-    press(r, &control("ok"), deadline).await
+    focus(r, facts, &reference, deadline).await?;
+    press(r, &navigation_control(facts, "ok")?, deadline).await
 }
 pub async fn screenshot<R: Remote + ?Sized>(r: &mut R, deadline: u64) -> Result<Capture> {
     let before = r.frame().await?;

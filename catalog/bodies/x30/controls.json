@@ -1,0 +1,633 @@
+{
+  "$schema": "https://fujimod.com/schemas/physical-controls.schema.json",
+  "schema": 1,
+  "id": "x30-controls",
+  "body_id": "x30",
+  "manual": {
+    "url": "https://fujifilm-dsc.com/en/manual/x30/x30_om-full_en_01.pdf",
+    "title": "FUJIFILM X30 Owner's Manual",
+    "pages": [
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      22,
+      24,
+      25,
+      26,
+      27,
+      28,
+      47,
+      64,
+      68,
+      75,
+      98,
+      101,
+      112,
+      118,
+      119,
+      120,
+      121,
+      124,
+      125,
+      168,
+      183,
+      218,
+      219,
+      224,
+      225,
+      236
+    ]
+  },
+  "analog_levels": 1024,
+  "controls": {
+    "af_ae_lock_button": {
+      "name": "[AEL/AFL] (autoexposure/autofocus lock) button",
+      "location": "rear",
+      "manual_page": 225,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-8"
+      ],
+      "assignable": true,
+      "default_function": "Locks exposure, focus, or both according to the configurable [AE/AF-LOCK BUTTON] setting.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "AEAF_LOCK"
+        }
+      }
+    },
+    "battery_chamber_cover_latch": {
+      "name": "Battery-chamber cover latch",
+      "location": "bottom",
+      "manual_page": 13,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Slide to open or close the battery-chamber cover.",
+      "role": null,
+      "mechanical": true,
+      "behavior": null
+    },
+    "battery_latch": {
+      "name": "Battery latch",
+      "location": "bottom",
+      "manual_page": 13,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Press to the side to release the battery.",
+      "role": null,
+      "mechanical": true,
+      "behavior": null
+    },
+    "command_dial": {
+      "name": "Command dial",
+      "location": "rear",
+      "manual_page": 16,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Navigates menus, views pictures, and selects quick-menu options; pressing its center zooms in on the active focus area.",
+      "role": null,
+      "mechanical": false,
+      "behavior": null
+    },
+    "control_ring": {
+      "name": "Control ring",
+      "location": "front",
+      "manual_page": 17,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": true,
+      "default_function": "At [DEFAULT], adjusts program shift ([P]), shutter speed ([S]), aperture ([A]), shutter speed/aperture ([M]), filter selection ([Filter]), advanced mode selection ([Adv.]), or scene selection ([SP1]/[SP2]); it provides manual focus in the applicable modes. Other assignments are ISO, white balance, film simulation, and continuous shooting.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "ring",
+        "motion": {
+          "kind": "steps",
+          "decrease": {
+            "kind": "debug_key",
+            "name": "CRING-"
+          },
+          "increase": {
+            "kind": "debug_key",
+            "name": "CRING+"
+          }
+        },
+        "press": null,
+        "endless": true
+      }
+    },
+    "control_ring_options_button": {
+      "name": "Control ring options button",
+      "location": "top",
+      "manual_page": 17,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Selects the control-ring function from [DEFAULT], [ISO], [WHITE BALANCE], [FILM SIMULATION], or [CONTINUOUS]; in [M] mode it switches between shutter-speed and aperture selection.",
+      "role": null,
+      "mechanical": false,
+      "behavior": null
+    },
+    "delete_button": {
+      "name": "(delete) button (playback mode)",
+      "location": "rear",
+      "manual_page": 64,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Deletes pictures in playback; the manual describes frame, selected-frame, and all-frame deletion.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "DELETE"
+        }
+      }
+    },
+    "diopter_adjustment_control": {
+      "name": "Diopter adjustment control",
+      "location": "rear",
+      "manual_page": 22,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Adjusts the viewfinder display until it is in sharp focus.",
+      "role": null,
+      "mechanical": true,
+      "behavior": null
+    },
+    "disp_back_button": {
+      "name": "[DISP] (display)/[BACK] button",
+      "location": "rear",
+      "manual_page": 24,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-8"
+      ],
+      "assignable": false,
+      "default_function": "Controls indicators in the viewfinder and LCD monitor and serves as [BACK] in menus.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "DISP_B"
+        }
+      }
+    },
+    "drive_button": {
+      "name": "[DRIVE] button",
+      "location": "rear",
+      "manual_page": 28,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-gpio-2-11"
+      ],
+      "assignable": false,
+      "default_function": "Chooses the drive mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "DRIVE"
+        }
+      }
+    },
+    "exposure_compensation_dial": {
+      "name": "Exposure compensation dial",
+      "location": "top",
+      "manual_page": 118,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Adjusts exposure; positive values increase exposure and negative values reduce it.",
+      "role": null,
+      "mechanical": false,
+      "behavior": null
+    },
+    "flash_pop_up_switch": {
+      "name": "(flash pop-up) switch",
+      "location": "rear",
+      "manual_page": 112,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Raises the built-in flash.",
+      "role": null,
+      "mechanical": false,
+      "behavior": null
+    },
+    "focus_mode_selector": {
+      "name": "Focus mode selector",
+      "location": "front",
+      "manual_page": 124,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Selects single AF, continuous AF, or manual focus.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "switch",
+        "positions": [
+          {
+            "id": "S",
+            "label": "S",
+            "description": null,
+            "key": {
+              "kind": "debug_key",
+              "name": "MF_AF_A"
+            },
+            "asserted": true
+          },
+          {
+            "id": "C",
+            "label": "C",
+            "description": null,
+            "key": {
+              "kind": "debug_key",
+              "name": "MF_AF_C"
+            },
+            "asserted": true
+          },
+          {
+            "id": "M",
+            "label": "M",
+            "description": null,
+            "key": {
+              "kind": "debug_key",
+              "name": "MF_AF_M"
+            },
+            "asserted": true
+          }
+        ]
+      }
+    },
+    "mode_dial": {
+      "name": "Mode dial",
+      "location": "top",
+      "manual_page": 75,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-3"
+      ],
+      "assignable": false,
+      "default_function": "Selects the shooting mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "P",
+              "label": "P",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "PROGRAM"
+              },
+              "asserted": true
+            },
+            {
+              "id": "S",
+              "label": "S",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "SHUTTER"
+              },
+              "asserted": true
+            },
+            {
+              "id": "A",
+              "label": "A",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "APERTURE"
+              },
+              "asserted": true
+            },
+            {
+              "id": "M",
+              "label": "M",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "MANUAL"
+              },
+              "asserted": true
+            },
+            {
+              "id": "ADVANCED SR AUTO",
+              "label": "ADVANCED SR AUTO",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "SR"
+              },
+              "asserted": true
+            },
+            {
+              "id": "AUTO",
+              "label": "AUTO",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "AUTO"
+              },
+              "asserted": true
+            },
+            {
+              "id": "Filter",
+              "label": "Filter",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "FILTER"
+              },
+              "asserted": true
+            },
+            {
+              "id": "Adv.",
+              "label": "Adv.",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "ADVANCE"
+              },
+              "asserted": true
+            },
+            {
+              "id": "SP1",
+              "label": "SP1",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "SP"
+              },
+              "asserted": true
+            },
+            {
+              "id": "SP2",
+              "label": "SP2",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "SP2"
+              },
+              "asserted": true
+            },
+            {
+              "id": "MOTION PANORAMA 360",
+              "label": "MOTION PANORAMA 360",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "PANORAMA"
+              },
+              "asserted": true
+            }
+          ]
+        },
+        "press": null,
+        "endless": false
+      }
+    },
+    "movie_record_button": {
+      "name": "Movie-record button (function button 1)",
+      "location": "top",
+      "manual_page": 68,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": true,
+      "default_function": "Starts and stops movie recording by default; its function-button role is assignable.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "MOVIE_REC"
+        }
+      }
+    },
+    "playback_button": {
+      "name": "(playback) button",
+      "location": "rear",
+      "manual_page": 47,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-gpio-2-9"
+      ],
+      "assignable": false,
+      "default_function": "Starts playback; holding it for about a second turns the camera on in playback mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "K_PLAY"
+        }
+      }
+    },
+    "quick_menu_button": {
+      "name": "[Q] (quick menu) button; RAW conversion button (playback mode)",
+      "location": "rear",
+      "manual_page": 98,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-8"
+      ],
+      "assignable": false,
+      "default_function": "Opens the quick menu during shooting and displays RAW conversion options during playback.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "K_Q"
+        }
+      }
+    },
+    "selector": {
+      "name": "Selector/function buttons",
+      "location": "rear",
+      "manual_page": 15,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-8"
+      ],
+      "assignable": true,
+      "default_function": "The up, left, right, and down buttons highlight items and act as function buttons 2 through 5; pressing the center [MENU/OK] selects an item. Selector directions can be assigned as function buttons or used to position the focus area.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "pad",
+        "directions": {
+          "up": {
+            "kind": "debug_key",
+            "name": "UP"
+          },
+          "down": {
+            "kind": "debug_key",
+            "name": "DOWN"
+          },
+          "left": {
+            "kind": "debug_key",
+            "name": "LEFT"
+          },
+          "right": {
+            "kind": "debug_key",
+            "name": "RIGHT"
+          }
+        },
+        "press": {
+          "kind": "debug_key",
+          "name": "EXE_M"
+        }
+      }
+    },
+    "shutter_button": {
+      "name": "Shutter button",
+      "location": "top",
+      "manual_page": 120,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-gpio-0-2",
+        "controls-gpio-0-3"
+      ],
+      "assignable": false,
+      "default_function": "Half-press sets focus and exposure and keeps them locked while held; press fully to take a picture.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "shutter",
+        "stages": {
+          "half_press": [
+            {
+              "kind": "debug_key",
+              "name": "S1"
+            }
+          ],
+          "full_press": [
+            {
+              "kind": "debug_key",
+              "name": "S1"
+            },
+            {
+              "kind": "debug_key",
+              "name": "S2"
+            }
+          ]
+        }
+      }
+    },
+    "view_mode_button": {
+      "name": "[VIEW MODE] button",
+      "location": "rear",
+      "manual_page": 19,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Cycles through the viewfinder and monitor display modes.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "EVF_LCD"
+        }
+      }
+    },
+    "wifi_button": {
+      "name": "[Fn] button (function button 6); [Wi-Fi] button (playback mode)",
+      "location": "rear",
+      "manual_page": 236,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": true,
+      "default_function": "Function button 6 is assignable; wireless communication is assigned to it by default and the button is used for Wi-Fi in playback mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "WLAN"
+        }
+      }
+    },
+    "zoom_power_ring": {
+      "name": "Zoom ring; [ON/OFF] switch",
+      "location": "front",
+      "manual_page": 47,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Frames and zooms the picture; rotating it away from [OFF] turns the camera on, and rotating it to [OFF] turns the camera off.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "ring",
+        "motion": {
+          "kind": "steps",
+          "decrease": {
+            "kind": "debug_key",
+            "name": "WIDE"
+          },
+          "increase": {
+            "kind": "debug_key",
+            "name": "TELE"
+          }
+        },
+        "press": null,
+        "endless": false
+      }
+    }
+  }
+}
