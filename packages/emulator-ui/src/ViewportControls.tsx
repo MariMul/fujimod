@@ -37,10 +37,10 @@ export function ViewportControls(props: {
     };
     const changed = () =>
       setFullscreen(
-        !!document.fullscreenElement || !!viewer()?.classList.contains('viewer-fullscreen'),
+        !!document.fullscreenElement || !!stage()?.classList.contains('stage-fullscreen'),
       );
     const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && viewer()?.classList.contains('viewer-fullscreen'))
+      if (event.key === 'Escape' && stage()?.classList.contains('stage-fullscreen'))
         toggleFullscreen();
     };
     document.addEventListener('pointerdown', outside);
@@ -52,19 +52,20 @@ export function ViewportControls(props: {
       document.removeEventListener('keydown', escape);
     };
   });
-  const viewer = () => bar?.closest<HTMLElement>('.viewer') ?? undefined;
-  /** The Fullscreen API where the browser offers it for elements; iPhone Safari gets a page-filling viewer. */
+  const stage = () => bar?.closest<HTMLElement>('.stage') ?? undefined;
+  /** Full screen holds the display and its controls. The Fullscreen API is used where the browser
+   * offers it for elements; iPhone Safari gets a page-filling stage. */
   function toggleFullscreen() {
-    const element = viewer();
+    const element = stage();
     if (!element) return;
     if (document.fullscreenElement) void document.exitFullscreen();
-    else if (element.classList.contains('viewer-fullscreen')) {
-      element.classList.remove('viewer-fullscreen');
+    else if (element.classList.contains('stage-fullscreen')) {
+      element.classList.remove('stage-fullscreen');
       setFullscreen(false);
     } else if (document.fullscreenEnabled && element.requestFullscreen)
       void element.requestFullscreen();
     else {
-      element.classList.add('viewer-fullscreen');
+      element.classList.add('stage-fullscreen');
       setFullscreen(true);
     }
   }

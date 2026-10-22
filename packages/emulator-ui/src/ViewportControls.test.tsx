@@ -183,19 +183,19 @@ test('webcam support, pending permission, disabled state and errors follow the s
   expect(t.host.querySelector('#webcam-toggle')).toBeNull();
 });
 
-test('full screen fills the page with the viewer where elements cannot use the Fullscreen API', () => {
+test('full screen fills the page with the display and controls where elements cannot use the Fullscreen API', () => {
   const viewer = document.createElement('div');
-  viewer.className = 'viewer';
+  viewer.className = 'stage';
   document.body.append(viewer);
   const t = mount();
   viewer.append(t.host);
   const button = t.host.querySelector<HTMLButtonElement>('#fullscreen-toggle')!;
   button.click();
   flush();
-  expect(viewer.classList.contains('viewer-fullscreen')).toBe(true);
+  expect(viewer.classList.contains('stage-fullscreen')).toBe(true);
   expect(button.getAttribute('aria-label')).toBe('Exit full screen');
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
   flush();
-  expect(viewer.classList.contains('viewer-fullscreen')).toBe(false);
+  expect(viewer.classList.contains('stage-fullscreen')).toBe(false);
   expect(button.getAttribute('aria-label')).toBe('Full screen');
 });

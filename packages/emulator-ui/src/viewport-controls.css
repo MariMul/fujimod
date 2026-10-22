@@ -133,26 +133,66 @@
   min-width: 36px;
   justify-content: center;
 }
-/* Full screen: the Fullscreen API, or a page-filling viewer where elements cannot go full screen. */
-.viewer:fullscreen,
-.viewer.viewer-fullscreen {
+/* Full screen holds the display and its controls: side by side in landscape, stacked in portrait. */
+.stage:fullscreen,
+.stage.stage-fullscreen {
   position: fixed;
   inset: 0;
   z-index: 1000;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 44%);
   width: 100vw;
   height: 100dvh;
-  min-height: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
   background: #000;
 }
-.viewer:is(:fullscreen, .viewer-fullscreen) #lcd-source.flat {
+.stage:is(:fullscreen, .stage-fullscreen) .viewer {
+  position: relative;
+  top: auto;
+  height: 100%;
+  min-height: 0;
+}
+.stage:is(:fullscreen, .stage-fullscreen) #lcd-source.flat {
   position: absolute;
-  top: env(safe-area-inset-top);
-  left: env(safe-area-inset-left);
-  width: calc(100% - env(safe-area-inset-left) - env(safe-area-inset-right));
-  height: calc(100% - 28px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  inset: 0 0 28px;
+  width: 100%;
+  height: calc(100% - 28px);
   object-fit: contain;
 }
-.viewer:is(:fullscreen, .viewer-fullscreen) .viewport-bar {
+.stage:is(:fullscreen, .stage-fullscreen) .viewport-bar {
   position: absolute;
-  bottom: env(safe-area-inset-bottom);
+}
+.stage:is(:fullscreen, .stage-fullscreen) .panel {
+  min-height: 0;
+  overflow-y: auto;
+  border-top: 0;
+  border-left: 0.5px solid rgb(84 84 88 / 65%);
+}
+.fullscreen-hint {
+  display: none;
+}
+@media (orientation: portrait) {
+  .stage:is(:fullscreen, .stage-fullscreen) {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .stage:is(:fullscreen, .stage-fullscreen) .viewer {
+    height: auto;
+    aspect-ratio: 3 / 2.2;
+  }
+  .stage:is(:fullscreen, .stage-fullscreen) .panel {
+    border-left: 0;
+    border-top: 0.5px solid rgb(84 84 88 / 65%);
+  }
+  .stage:is(:fullscreen, .stage-fullscreen) .fullscreen-hint {
+    display: block;
+    padding: 8px 14px;
+    color: rgb(235 235 245 / 60%);
+    font-size: 12px;
+    text-align: center;
+  }
 }

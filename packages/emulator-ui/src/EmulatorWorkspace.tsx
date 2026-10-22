@@ -82,6 +82,7 @@ export function EmulatorWorkspace(props: {
         aria-label="Camera controls"
         hidden={!props.state.panelVisible}
       >
+        <p class="fullscreen-hint">Turn your phone sideways for controls beside the screen.</p>
         <div id="controls">
           <Controls session={props.runtime?.panel} onLayoutChange={props.onLayoutChange} />
         </div>
