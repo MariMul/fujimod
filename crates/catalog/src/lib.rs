@@ -3,6 +3,7 @@ pub mod assembly;
 pub mod application_inputs;
 pub mod camera;
 pub mod configuration;
+pub mod controls;
 pub mod emulator;
 pub mod facts;
 pub mod persistent_inputs;

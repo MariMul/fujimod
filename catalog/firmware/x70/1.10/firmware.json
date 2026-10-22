@@ -2429,7 +2429,10 @@
             "address": 9698088,
             "size": 64,
             "sha256": "75a54a914b5952e3003b08377ff0c0a20990f521f8749e2da1b6b9cd40437084"
-          }
+          },
+          "stable_width": 1,
+          "pressed_value": 1,
+          "released_value": 0
         }
       },
       "scanner": {
@@ -5206,7 +5209,10 @@
               "address": 9698088,
               "size": 64,
               "sha256": "75a54a914b5952e3003b08377ff0c0a20990f521f8749e2da1b6b9cd40437084"
-            }
+            },
+            "stable_width": 1,
+            "pressed_value": 1,
+            "released_value": 0
           }
         },
         "scanner": {

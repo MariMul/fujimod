@@ -95,6 +95,14 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
             "https://fujimod.com/schemas/remote-debug-keys.generated.schema.json",
         ),
     );
+    documents.insert(
+        "physical-controls.schema.json",
+        schema::<crate::controls::PhysicalControls>(crate::controls::PHYSICAL_CONTROLS_SCHEMA_URI),
+    );
+    documents.insert(
+        "control-ids.schema.json",
+        schema::<crate::controls::FirmwareControlIds>(crate::controls::CONTROL_IDS_SCHEMA_URI),
+    );
     documents
 }
 

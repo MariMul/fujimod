@@ -658,6 +658,20 @@
       "additionalProperties": false,
       "description": "A firmware scanner state reader.",
       "properties": {
+        "pressed_value": {
+          "description": "Stored value interpreted as a pressed key.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "released_value": {
+          "description": "Stored value interpreted as a released key.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
         "routine": {
           "$ref": "#/$defs/AddressIdentity",
           "description": "Reader routine identity."
@@ -667,10 +681,20 @@
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "stable_width": {
+          "description": "Width of the stable-state field in bytes.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
         "stable_offset",
+        "stable_width",
+        "pressed_value",
+        "released_value",
         "routine"
       ],
       "type": "object"

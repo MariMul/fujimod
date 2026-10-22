@@ -1503,7 +1503,7 @@ impl ContentIdentity {
     }
 }
 
-fn validate_sha256(digest: &str) -> Result<(), String> {
+pub(crate) fn validate_sha256(digest: &str) -> Result<(), String> {
     if digest.len() != 64
         || !digest
             .bytes()

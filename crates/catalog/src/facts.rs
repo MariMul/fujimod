@@ -296,12 +296,70 @@ pub struct ControlReaders {
     pub scanner: ScannerReader,
 }
 
+/// Closed firmware scanner predicate discriminator from the scanner row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub enum ScannerInputKind {
+    /// Direct analog level predicate.
+    #[serde(rename = "kind_0")]
+    Kind0,
+    /// Calibrated analog interval predicate.
+    #[serde(rename = "kind_1")]
+    Kind1,
+    /// Direct GPIO predicate.
+    #[serde(rename = "kind_2")]
+    Kind2,
+    /// Callback or specialized digital predicate.
+    #[serde(rename = "kind_3")]
+    Kind3,
+    /// Combined-source predicate.
+    #[serde(rename = "kind_4")]
+    Kind4,
+    /// Callback-based scanner predicate.
+    #[serde(rename = "kind_5")]
+    Kind5,
+}
+impl ScannerInputKind {
+    /// Numeric value stored in the firmware scanner row.
+    pub const fn raw(self) -> u8 {
+        match self {
+            Self::Kind0 => 0,
+            Self::Kind1 => 1,
+            Self::Kind2 => 2,
+            Self::Kind3 => 3,
+            Self::Kind4 => 4,
+            Self::Kind5 => 5,
+        }
+    }
+}
+
+/// Checked identity and predicate operands stored in one scanner record.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScannerRecordWitness {
+    /// Physical key identity stored at byte offset zero.
+    pub physical_key: u32,
+    /// Closed predicate kind stored in the scanner record.
+    pub input_kind: ScannerInputKind,
+    /// Source selector stored at byte offset twelve.
+    pub source: u32,
+    /// Lower comparison operand or calibration-table offset.
+    pub lower: u16,
+    /// Upper comparison operand or calibration-table offset.
+    pub upper: u16,
+}
+
 /// A firmware scanner state reader.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ScannerReader {
     /// Stable-state field offset within a scanner record.
     pub stable_offset: u32,
+    /// Width of the stable-state field in bytes.
+    pub stable_width: u8,
+    /// Stored value interpreted as a pressed key.
+    pub pressed_value: u8,
+    /// Stored value interpreted as a released key.
+    pub released_value: u8,
     /// Reader routine identity.
     pub routine: AddressIdentity,
 }
