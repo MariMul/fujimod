@@ -362,10 +362,49 @@ class BoundPosition(TypedDict, total=False):
     label: NotRequired[str | None]
 
 
+class BulkRange(TypedDict, total=False):
+    address: Required[int]
+    size: Required[int]
+
+
+type BulkSource = BulkSourceVariant0 | BulkSourceVariant1 | BulkSourceVariant2
+
+
+class BulkSourceVariant0(TypedDict, total=False):
+    base: Required[int]
+    callback: Required[int]
+    capacities: Required[list[int]]
+    mechanism: Required[Literal["query"]]
+    source_state: Required[int]
+    stock_callback: Required[int]
+    tag: Required[int]
+    wrapping: Required[bool]
+
+
+class BulkSourceVariant1(TypedDict, total=False):
+    capacity: Required[int]
+    mechanism: Required[Literal["pattern"]]
+    registered_buffer: Required[int]
+    source_state: Required[int]
+
+
+class BulkSourceVariant2(TypedDict, total=False):
+    capacity: Required[int]
+    mechanism: Required[Literal["pattern_zero_base"]]
+    registered_buffer: Required[int]
+    source_state: Required[int]
+
+
 class CacheGeometry(TypedDict, total=False):
     l1_data_bytes: Required[int]
     l1_instruction_bytes: Required[int]
     l2_bytes: Required[int]
+
+
+class CaptureScope(TypedDict, total=False):
+    basis: Required[str]
+    name: Required[str]
+    ranges: Required[list[NamedRange]]
 
 
 class CardSlotAssembly(TypedDict, total=False):
@@ -380,6 +419,13 @@ class ClockDomain(TypedDict, total=False):
     frequency_hz: NotRequired[int | None]
     id: Required[str]
     parent_id: NotRequired[str | None]
+
+
+class CodeCheck(TypedDict, total=False):
+    address: Required[int]
+    name: Required[str]
+    sha256: Required[str]
+    size: Required[int]
 
 
 class CompanionHardware(TypedDict, total=False):
@@ -1361,6 +1407,27 @@ Firmware = TypedDict(
 class FirmwareBootLayout(TypedDict, total=False):
     flash_slices: Required[list[FirmwareFlashSlices]]
     units: Required[list[FirmwareUnits]]
+
+
+FirmwareBulk = TypedDict(
+    "FirmwareBulk",
+    {
+        "$schema": Required["str"],
+        "code_alias": Required["int"],
+        "code_checks": Required["list[CodeCheck]"],
+        "firmware_id": Required["str"],
+        "id": Required["str"],
+        "internal_version": Required["str"],
+        "mapped_probe": NotRequired["CodeCheck | None"],
+        "probes": Required["list[BulkRange]"],
+        "product": Required["str"],
+        "schema": Required["int"],
+        "scopes": Required["list[CaptureScope]"],
+        "source": Required["BulkSource"],
+        "window": Required["BulkRange"],
+    },
+    total=False,
+)
 
 
 class FirmwareCfgdata(TypedDict, total=False):
@@ -2726,6 +2793,12 @@ class MicrocontrollerAssembly(TypedDict, total=False):
     word_bits: Required[int]
 
 
+class NamedRange(TypedDict, total=False):
+    address: Required[int]
+    name: Required[str]
+    size: Required[int]
+
+
 class NandGeometry(TypedDict, total=False):
     bytes: Required[int]
     page_bytes: Required[int]
@@ -3339,6 +3412,7 @@ class ResolvedConfiguration(TypedDict, total=False):
 
 class ResolvedSelection(TypedDict, total=False):
     body: Required[Body]
+    bulk: NotRequired[FirmwareBulk | None]
     control_ids: NotRequired[FirmwareControlIds | None]
     firmware: Required[Firmware]
     first_start: NotRequired[FirstStartMenu | None]

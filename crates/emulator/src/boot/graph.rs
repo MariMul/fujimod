@@ -677,6 +677,7 @@ mod tests {
             physical_controls: None,
             control_ids: None,
             first_start: None,
+            bulk: None,
         };
         let graph = assemble(
             &selection,

@@ -2392,6 +2392,9 @@ pub struct ResolvedSelection {
     /// Stock first-start menus, when located for this firmware.
     #[cfg_attr(feature = "typescript", serde(default))]
     pub first_start: Option<crate::first_start::FirstStartMenu>,
+    /// Stock diagnostic bulk reads, when located for this firmware.
+    #[cfg_attr(feature = "typescript", serde(default))]
+    pub bulk: Option<crate::bulk::FirmwareBulk>,
 }
 
 /// A checked, ID-indexed catalog of processor, part, body and firmware facts.
@@ -2406,6 +2409,7 @@ pub struct ReferenceCatalog {
     /// Generated located inputs, keyed by firmware identity.
     control_ids: BTreeMap<String, crate::controls::FirmwareControlIds>,
     first_start: BTreeMap<String, crate::first_start::FirstStartMenu>,
+    bulk: BTreeMap<String, crate::bulk::FirmwareBulk>,
 }
 
 impl ReferenceCatalog {
@@ -2492,6 +2496,7 @@ impl ReferenceCatalog {
             physical_controls: self.physical_controls.get(&body.id).cloned(),
             control_ids: self.control_ids.get(&firmware.id).cloned(),
             first_start: self.first_start.get(&firmware.id).cloned(),
+            bulk: self.bulk.get(&firmware.id).cloned(),
             soc,
             body,
             firmware,
@@ -2528,6 +2533,11 @@ impl ReferenceCatalog {
         self.physical_controls.get(body_id)
     }
 
+    /// Every firmware identity, in identity order.
+    pub fn firmware_ids(&self) -> impl Iterator<Item = &str> {
+        self.firmwares.keys().map(String::as_str)
+    }
+
     /// Return a firmware's generated located inputs.
     pub fn control_ids(&self, firmware_id: &str) -> Option<&crate::controls::FirmwareControlIds> {
         self.control_ids.get(firmware_id)
@@ -2549,6 +2559,11 @@ impl ReferenceCatalog {
                     value,
                     path,
                 )
+            }
+            ReferenceKind::Bulk => {
+                let value: crate::bulk::FirmwareBulk = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(&mut self.bulk, value.firmware_id.clone(), value, path)
             }
             ReferenceKind::Body => {
                 let value: Body = decode(bytes, path)?;
@@ -2591,6 +2606,13 @@ impl ReferenceCatalog {
             if !self.firmwares.contains_key(firmware_id) {
                 return Err(format!(
                     "first-start menu refers to missing firmware {firmware_id}"
+                ));
+            }
+        }
+        for firmware_id in self.bulk.keys() {
+            if !self.firmwares.contains_key(firmware_id) {
+                return Err(format!(
+                    "bulk facts refer to missing firmware {firmware_id}"
                 ));
             }
         }
@@ -3068,6 +3090,7 @@ enum ReferenceKind {
     PhysicalControls,
     ControlIds,
     FirstStart,
+    Bulk,
 }
 
 impl ReferenceKind {
@@ -3084,6 +3107,7 @@ impl ReferenceKind {
             Some("firmware.json") => Ok(Self::Firmware),
             Some("control-ids.generated.json") => Ok(Self::ControlIds),
             Some("first-start.generated.json") => Ok(Self::FirstStart),
+            Some("bulk.generated.json") => Ok(Self::Bulk),
             _ => Err(format!("{} is not a firmware document", path.display())),
         }
     }

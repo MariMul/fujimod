@@ -57,6 +57,7 @@ fn main() {
             ("Body", "controls.json") => "PhysicalControls",
             ("Firmware", "control-ids.generated.json") => "ControlIds",
             ("Firmware", "first-start.generated.json") => "FirstStart",
+            ("Firmware", "bulk.generated.json") => "Bulk",
             ("Body", "body.json") | ("Firmware", "firmware.json") => kind,
             ("Body" | "Firmware", _) => panic!("unknown catalog document {}", path.display()),
             _ => kind,
@@ -132,5 +133,5 @@ fn main() {
         &output,
         configuration_source + &overlay_source + &hardware_input_source,
     )
-        .expect("write embedded run-configuration index");
+    .expect("write embedded run-configuration index");
 }

@@ -7,6 +7,7 @@
 #![doc = include_str!("../README.md")]
 
 mod access;
+pub mod bulk;
 pub mod debug_mode;
 pub mod install;
 #[cfg(feature = "service-capture")]
