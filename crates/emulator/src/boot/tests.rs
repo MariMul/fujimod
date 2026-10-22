@@ -645,3 +645,70 @@ fn capture_chain_uses_catalog_windows_interrupts_and_sensor_phase() {
         }
     }
 }
+
+#[test]
+fn serial_spi1_refuses_a_shift_with_both_chip_selects_low() {
+    use fujimod_emulator_devices::{Cx, Host, Record};
+    struct Clock(u64);
+    impl Host for Clock {
+        fn now(&self) -> u64 {
+            self.0
+        }
+        fn schedule(&mut self, _: usize, _: u64, _: u64) {}
+        fn set_irq(&mut self, _: u32, _: bool) {}
+        fn raise_irq(&mut self, _: usize, _: u32) -> Result<(), String> {
+            Ok(())
+        }
+        fn ram_read(&self, _: u64, _: &mut [u8]) -> Result<(), String> {
+            Err("no RAM".into())
+        }
+        fn ram_write(&mut self, _: u64, _: &[u8]) -> Result<(), String> {
+            Err("no RAM".into())
+        }
+        fn record(&mut self, _: Record) {}
+    }
+    const GPIO: u64 = 0xfff89000;
+    const SPI1: u64 = 0xfff84040;
+    let spec = prepare("x70-110-rec", &[]).unwrap();
+    // Drive the panel select (GPIO11/3) and the shared register-endpoint
+    // select (GPIO12/3), then shift a word in one endpoint's transport.
+    let shift = |panel_high: bool, configuration: u64, word: u64| {
+        let mut document = spec.devices_value.clone();
+        document["nodes"].as_array_mut().unwrap().retain(|n| {
+            ["irq0", "irq1", "serial_gpio", "serial_spi1"].contains(&n["name"].as_str().unwrap())
+        });
+        let mut assembly = Plan::parse(&serde_json::to_vec(&document).unwrap())
+            .unwrap()
+            .build(Resources::default(), 0, &mut RefuseAdapters)
+            .unwrap();
+        let (gpio, spi) = (
+            assembly.node_ids["serial_gpio"],
+            assembly.node_ids["serial_spi1"],
+        );
+        let mut host = Clock(0);
+        let mut access = |id: usize, address: u64, value: u64| {
+            let mut cx = Cx::new(&mut host, 0, 0, id);
+            assembly.graph.nodes[id]
+                .device
+                .write(&mut cx, address, 4, value);
+            cx.take_refusal()
+        };
+        assert_eq!(
+            access(gpio, GPIO + 11 * 0x40, 1 << 19 | u64::from(panel_high) << 3),
+            None
+        );
+        assert_eq!(access(gpio, GPIO + 12 * 0x40, 1 << 19), None);
+        assert_eq!(access(spi, SPI1, 0xe0), None);
+        assert_eq!(access(spi, SPI1 + 4, configuration), None);
+        access(spi, SPI1 + 0x1c, word)
+    };
+    // Calibrated-register write and MCU register read.
+    for (configuration, word) in [(0x30004, 0x8000), (6, 0x4100)] {
+        assert_eq!(shift(true, configuration, word), None);
+        assert!(
+            shift(false, configuration, word)
+                .unwrap()
+                .contains("no attached SPI route")
+        );
+    }
+}

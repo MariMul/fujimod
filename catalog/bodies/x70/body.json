@@ -16,7 +16,8 @@
     "control_bus": {
       "controller_id": "control-bus0",
       "channel": 0,
-      "address": 28
+      "address": 28,
+      "polarity_selector": 1
     }
   },
   "lens": {
@@ -790,6 +791,13 @@
       "address": 10,
       "polarity_selector": 1,
       "id": "secondary-register-endpoint"
+    },
+    {
+      "id": "control-bus-device-9",
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 85,
+      "polarity_selector": 1
     }
   ],
   "connections": [
@@ -1219,6 +1227,12 @@
           "port": 12,
           "pin": 3,
           "active_level": false
+        },
+        {
+          "kind": "gpio",
+          "port": 11,
+          "pin": 3,
+          "active_level": true
         }
       ]
     },
@@ -2170,7 +2184,19 @@
           "serial_part": [
             "banked-programmed-lens"
           ]
-        }
+        },
+        "control_bus_order": [
+          "secondary-pwic",
+          "primary-device-0",
+          "primary-device-1",
+          "primary-device-2",
+          "secondary-sink",
+          "primary-device-3",
+          "primary-device-4",
+          "sensor",
+          "secondary-register-endpoint",
+          "control-bus-device-9"
+        ]
       },
       "x70": {
         "graph": {
@@ -3051,7 +3077,19 @@
           "serial_part": [
             "banked-programmed-lens"
           ]
-        }
+        },
+        "control_bus_order": [
+          "secondary-pwic",
+          "primary-device-0",
+          "primary-device-1",
+          "primary-device-2",
+          "secondary-sink",
+          "primary-device-3",
+          "primary-device-4",
+          "sensor",
+          "secondary-register-endpoint",
+          "control-bus-device-9"
+        ]
       },
       "x70-runtime": {
         "dram_basis": "Declared runtime memory map.",
