@@ -33,6 +33,17 @@ function isolationHeaders(): Plugin {
   };
 }
 
+// Workspace packages are imported through node_modules links, which Vite's watcher skips;
+// watch their sources so edits reach the dev server without a restart.
+function watchWorkspacePackages(): Plugin {
+  return {
+    name: 'watch-workspace-packages',
+    configureServer: (server) => {
+      server.watcher.add(resolve('../../packages'));
+    },
+  };
+}
+
 // Opt-in local artifact mounts are served by the local server, never copied into dist.
 function localArtifacts(env: Record<string, string>): Plugin {
   const configure = (middlewares: Connect.Server) => {
@@ -226,6 +237,7 @@ export default defineConfig(({ mode, command }) => ({
   },
   plugins: [
     isolationHeaders(),
+    watchWorkspacePackages(),
     solid({ start: { middleware: './src/middleware.ts' }, ssr: true }),
     bugReportRoute(),
     wasmProofRoute(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
