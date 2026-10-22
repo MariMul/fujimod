@@ -881,13 +881,34 @@ pub struct RunBrowserCamera {
     pub still_capture: RunStillCapture,
     /// LCD preview statistics cadence.
     pub preview: RunPreview,
+    /// The image sensor's scene input.
+    pub sensor: RunBrowserSensor,
 }
 
 impl RunBrowserCamera {
     /// Check every declared attachment before a run is prepared.
     pub fn validate(&self) -> Result<(), String> {
         self.virtual_card.validate()?;
-        self.preview.validate()
+        self.preview.validate()?;
+        self.sensor.validate()
+    }
+}
+
+/// The browser's external scene input for the image sensor.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub struct RunBrowserSensor {
+    /// Identity of the run's scene asset that supplies the sensor's exposure input.
+    pub frames: String,
+}
+
+impl RunBrowserSensor {
+    fn validate(&self) -> Result<(), String> {
+        if self.frames.is_empty() {
+            return Err("browser sensor scene input has no frames identity".into());
+        }
+        Ok(())
     }
 }
 

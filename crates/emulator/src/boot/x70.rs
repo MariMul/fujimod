@@ -10,7 +10,7 @@ use fujimod_catalog::{
     },
     reference::{
         ConnectionSignal, ControlBusChip, LensProtocol, Part, PartModel, ResolvedSelection,
-        SocBlock, SocBlockKind,
+        SensorRadiometry, SocBlock, SocBlockKind,
     },
 };
 use fujimod_emulator_devices::{
@@ -1288,6 +1288,150 @@ fn apply_body_facts(
     Ok(())
 }
 
+/// The sensor part's exposure calibration, as the xtrans16 and live-view models read it.
+fn sensor_calibration(selection: &ResolvedSelection) -> Result<(Value, &SensorRadiometry), String> {
+    let sensor = selection
+        .body
+        .sensor
+        .as_ref()
+        .ok_or("X70 body has no sensor attachment")?;
+    let PartModel::ImageSensor {
+        color_filter,
+        full_scale,
+        reference_white,
+        radiometry,
+        ..
+    } = &part(selection, &sensor.part_id)?.model
+    else {
+        return Err("X70 sensor attachment is not an image-sensor part".into());
+    };
+    let radiometry = radiometry
+        .as_ref()
+        .ok_or("X70 image sensor declares no radiometry")?;
+    let reference_white: [u16; 3] = reference_white
+        .iter()
+        .map(|v| u16::try_from(*v).map_err(|_| "X70 sensor reference white exceeds u16".to_owned()))
+        .collect::<Result<Vec<_>, _>>()?
+        .try_into()
+        .map_err(|_| "X70 sensor reference white has no three channels".to_owned())?;
+    let full_scale = u16::try_from(*full_scale).map_err(|_| "X70 sensor full scale exceeds u16")?;
+    let mut color_sample_weights = [0u8; 3];
+    for &color in color_filter {
+        let channel = color_sample_weights
+            .get_mut(usize::from(color))
+            .ok_or("X70 sensor color filter has an unknown channel")?;
+        *channel = channel
+            .checked_add(1)
+            .ok_or("X70 sensor color filter weight overflow")?;
+    }
+    let calibration = json!({
+        "full_scale": full_scale,
+        "reference_white": reference_white,
+        "saturation_lux_seconds": radiometry.saturation_lux_seconds,
+        "color_sample_weights": color_sample_weights,
+    });
+    Ok((calibration, radiometry))
+}
+
+/// The lens projection of the sensor, with its focus wire.
+fn sensor_projection(radiometry: &SensorRadiometry) -> Result<Value, String> {
+    let mut projection = serde_json::to_value(&radiometry.projection).map_err(|e| e.to_string())?;
+    projection["focus"] = json!("lens_focus");
+    Ok(projection)
+}
+
+/// The browser's image sensor: an xtrans16 exposure model fed by the declared scene
+/// input, with phase acknowledgment enabled and its shutter, frame clock and statistics
+/// wired. Every value comes from the sensor part's catalog facts.
+fn apply_image_sensor(
+    recipe: &mut Value,
+    selection: &ResolvedSelection,
+    browser: &RunBrowserCamera,
+) -> Result<(), String> {
+    let sensor = selection
+        .body
+        .sensor
+        .as_ref()
+        .ok_or("X70 body has no sensor attachment")?;
+    let PartModel::ImageSensor {
+        raster,
+        color_filter,
+        black_level,
+        full_scale,
+        reference_white,
+        ..
+    } = &part(selection, &sensor.part_id)?.model
+    else {
+        return Err("X70 sensor attachment is not an image-sensor part".into());
+    };
+    let (calibration, radiometry) = sensor_calibration(selection)?;
+    let pixel_clock_hz = raster
+        .pixel_clock_hz
+        .ok_or("X70 image sensor declares no pixel clock")?;
+    let black = u16::try_from(*black_level).map_err(|_| "X70 sensor black level exceeds u16")?;
+    let full_scale = u16::try_from(*full_scale).map_err(|_| "X70 sensor full scale exceeds u16")?;
+    let reference_white: Vec<u16> = reference_white
+        .iter()
+        .map(|v| u16::try_from(*v).map_err(|_| "X70 sensor reference white exceeds u16".to_owned()))
+        .collect::<Result<_, _>>()?;
+    recipe["options"]["phase_ack"] = json!("enabled");
+    recipe["options"]["clock"]["source"] = json!({"kind": "sensor"});
+    recipe["options"]["sensor_period_ticks"] = json!(radiometry.period_ticks);
+    recipe["shutter_output"] = json!(radiometry.shutter_output);
+    recipe["frame_period"] = json!("sensor_frame_period");
+    recipe["statistics_grid"] = json!("sensor_statistics_grid");
+    recipe["sensor"] = json!({
+        "frames": browser.sensor.frames,
+        "options": {
+            "width": raster.width,
+            "height": raster.height,
+            "image_area": raster.image_area,
+            "cfa": color_filter,
+            "black": black,
+            "full_scale": full_scale,
+            "reference_white": reference_white,
+        },
+        "controls": {
+            "kind": "xtrans16",
+            "options": {
+                "pixel_clock_hz": pixel_clock_hz,
+                "shutter": {"closing_delay_seconds": radiometry.shutter_closing_delay_seconds},
+                "rolling_references": radiometry.rolling_references,
+            },
+            "calibration": calibration,
+            "exposure": "sensor_exposure",
+            "aperture": "lens_aperture",
+            "projection": sensor_projection(radiometry)?,
+            "frame_clock": {
+                "output": "sensor_frame_period",
+                "ticks_per_second": radiometry.ticks_per_second,
+            },
+        },
+    });
+    Ok(())
+}
+
+/// The live view reads the same sensor: its frames, exposure and parameters are the
+/// sensor's radiometric inputs, so the preview follows the sensor's exposure.
+fn apply_live_sensor(
+    recipe: &mut Value,
+    selection: &ResolvedSelection,
+    browser: &RunBrowserCamera,
+) -> Result<(), String> {
+    let (calibration, radiometry) = sensor_calibration(selection)?;
+    recipe["sensor_clock"] = json!(browser.sensor.frames);
+    recipe["frame_period"] = Value::Null;
+    recipe["radiometric"] = json!({
+        "frames": browser.sensor.frames,
+        "exposure": "sensor_exposure",
+        "aperture": "lens_aperture",
+        "parameters": "parameters",
+        "calibration": calibration,
+        "projection": sensor_projection(radiometry)?,
+    });
+    Ok(())
+}
+
 fn gpio_signals(
     selection: &ResolvedSelection,
     connection_id: &str,
@@ -1620,7 +1764,7 @@ fn apply_run_inputs(
         "live_frames" => {
             recipe["options"]["period_ticks"] = json!(frame_period);
         }
-        "image_input" => {
+        "image_input" if recipe["options"]["clock"]["source"]["kind"] == "periodic" => {
             recipe["options"]["clock"]["source"]["period_ticks"] = json!(frame_period);
         }
         "display_timing" => {
@@ -1790,6 +1934,12 @@ pub(super) fn assemble(
         };
         apply_soc_blocks(&mut recipe, rule, selection)?;
         apply_body_facts(&mut recipe, rule.name, selection)?;
+        if let ("image_input", Some(browser)) = (rule.name, browser) {
+            apply_image_sensor(&mut recipe, selection, browser)?;
+        }
+        if let ("live_frames", Some(browser)) = (rule.name, browser) {
+            apply_live_sensor(&mut recipe, selection, browser)?;
+        }
         apply_interrupts(&mut recipe, rule.name, selection)?;
         apply_run_inputs(
             &mut recipe,
@@ -1839,6 +1989,11 @@ pub(super) fn assemble(
         "usb_cable".into(),
         WireKind::LogicLevel(inputs.usb.connected),
     );
+    if browser.is_some() {
+        wires.insert("sensor_exposure".into(), WireKind::Exposure);
+        wires.insert("sensor_frame_period".into(), WireKind::FramePeriod);
+        wires.insert("sensor_statistics_grid".into(), WireKind::ImageGrid);
+    }
     let plan = Plan {
         schema: 1,
         boot_entry: BootEntry::Rom,
@@ -1846,7 +2001,7 @@ pub(super) fn assemble(
         nodes,
     };
     plan.validate()?;
-    let plan_value = json!({
+    let mut plan_value = json!({
         "schema":1,
         "boot_entry":"rom",
         "wires": {
@@ -1862,9 +2017,16 @@ pub(super) fn assemble(
         },
         "nodes":serialized_nodes,
     });
-    let mut scene_value = scene(selection, scene_input)?;
     if browser.is_some() {
+        plan_value["wires"]["sensor_exposure"] = json!("exposure");
+        plan_value["wires"]["sensor_frame_period"] = json!("frame-period");
+        plan_value["wires"]["sensor_statistics_grid"] = json!("image-grid");
+    }
+    let mut scene_value = scene(selection, scene_input)?;
+    if let Some(browser) = browser {
         scene_value["files"] = json!({"virtual_card_files": {}});
+        let frames = &browser.sensor.frames;
+        scene_value["sensors"] = json!({frames: {"width": 1, "height": 1, "pixels": "rgb24", "asset": frames}});
     }
     Ok((plan, plan_value, scene_value))
 }

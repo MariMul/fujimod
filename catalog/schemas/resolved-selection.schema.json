@@ -4314,6 +4314,17 @@
               "const": "image-sensor",
               "type": "string"
             },
+            "radiometry": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SensorRadiometry"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Radiometric, timing and projection facts; absent for a sensor without a declared exposure model."
+            },
             "raster": {
               "$ref": "#/$defs/SensorRaster",
               "description": "Sensor raster geometry."
@@ -5432,6 +5443,128 @@
       ],
       "type": "object"
     },
+    "SensorIllumination": {
+      "description": "Image-circle illumination model of a sensor projection.",
+      "oneOf": [
+        {
+          "const": "uniform",
+          "description": "No falloff across the image.",
+          "type": "string"
+        },
+        {
+          "const": "cosine-fourth",
+          "description": "Cosine-fourth falloff across the image.",
+          "type": "string"
+        }
+      ]
+    },
+    "SensorProjection": {
+      "additionalProperties": false,
+      "description": "Lens projection onto an image sensor, as an ideal thin-lens approximation.",
+      "properties": {
+        "focal_length_mm": {
+          "description": "Focal length in millimetres.",
+          "format": "double",
+          "type": "number"
+        },
+        "relative_illumination": {
+          "$ref": "#/$defs/SensorIllumination",
+          "description": "Illumination falloff across the image."
+        },
+        "sensor_width_mm": {
+          "description": "Sensor width in millimetres.",
+          "format": "double",
+          "type": "number"
+        },
+        "subject_distance_mm": {
+          "description": "Subject distance in millimetres.",
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "focal_length_mm",
+        "subject_distance_mm",
+        "sensor_width_mm",
+        "relative_illumination"
+      ],
+      "type": "object"
+    },
+    "SensorRadiometry": {
+      "additionalProperties": false,
+      "description": "Radiometric, timing and projection facts of an image sensor. Each value is a\ndeclared catalog input; its basis is recorded in the part document.",
+      "properties": {
+        "period_ticks": {
+          "description": "Sensor scan period in ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "projection": {
+          "$ref": "#/$defs/SensorProjection",
+          "description": "Lens projection onto the sensor."
+        },
+        "rolling_references": {
+          "description": "Rolling readout references, one per readout mode.",
+          "items": {
+            "$ref": "#/$defs/SensorRollingReference"
+          },
+          "type": "array"
+        },
+        "saturation_lux_seconds": {
+          "description": "Unity-gain ADC saturation in lux-seconds.",
+          "format": "double",
+          "type": "number"
+        },
+        "shutter_closing_delay_seconds": {
+          "description": "Leaf-shutter closing delay as `(aperture coordinate, seconds)` pairs.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "double",
+                "type": "number"
+              },
+              {
+                "format": "double",
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "shutter_output": {
+          "description": "Output index of the sensor's shutter signal.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ticks_per_second": {
+          "description": "Ticks per second of the sensor frame clock.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "white_luminance": {
+          "description": "Declared white-pixel luminance in candela per square metre for scene input.",
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "saturation_lux_seconds",
+        "white_luminance",
+        "ticks_per_second",
+        "period_ticks",
+        "shutter_output",
+        "shutter_closing_delay_seconds",
+        "rolling_references",
+        "projection"
+      ],
+      "type": "object"
+    },
     "SensorRaster": {
       "additionalProperties": false,
       "description": "Sensor image and timing geometry.",
@@ -5473,6 +5606,44 @@
         "width",
         "height",
         "image_area"
+      ],
+      "type": "object"
+    },
+    "SensorRollingReference": {
+      "additionalProperties": false,
+      "description": "One rolling-readout reference of an image sensor.",
+      "properties": {
+        "horizontal": {
+          "description": "Horizontal timing word.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "lines": {
+          "description": "Readout line count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode": {
+          "description": "Readout mode register value.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "vertical": {
+          "description": "Vertical timing word.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mode",
+        "horizontal",
+        "vertical",
+        "lines"
       ],
       "type": "object"
     },

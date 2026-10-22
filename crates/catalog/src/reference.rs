@@ -845,6 +845,70 @@ pub struct SensorRaster {
     pub pixel_clock_hz: Option<u64>,
 }
 
+/// Radiometric, timing and projection facts of an image sensor. Each value is a
+/// declared catalog input; its basis is recorded in the part document.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub struct SensorRadiometry {
+    /// Unity-gain ADC saturation in lux-seconds.
+    pub saturation_lux_seconds: f64,
+    /// Declared white-pixel luminance in candela per square metre for scene input.
+    pub white_luminance: f64,
+    /// Ticks per second of the sensor frame clock.
+    pub ticks_per_second: u64,
+    /// Sensor scan period in ticks.
+    pub period_ticks: u64,
+    /// Output index of the sensor's shutter signal.
+    pub shutter_output: u32,
+    /// Leaf-shutter closing delay as `(aperture coordinate, seconds)` pairs.
+    pub shutter_closing_delay_seconds: Vec<(f64, f64)>,
+    /// Rolling readout references, one per readout mode.
+    pub rolling_references: Vec<SensorRollingReference>,
+    /// Lens projection onto the sensor.
+    pub projection: SensorProjection,
+}
+
+/// One rolling-readout reference of an image sensor.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub struct SensorRollingReference {
+    /// Readout mode register value.
+    pub mode: u8,
+    /// Horizontal timing word.
+    pub horizontal: u32,
+    /// Vertical timing word.
+    pub vertical: u32,
+    /// Readout line count.
+    pub lines: u32,
+}
+
+/// Lens projection onto an image sensor, as an ideal thin-lens approximation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(deny_unknown_fields)]
+pub struct SensorProjection {
+    /// Focal length in millimetres.
+    pub focal_length_mm: f64,
+    /// Subject distance in millimetres.
+    pub subject_distance_mm: f64,
+    /// Sensor width in millimetres.
+    pub sensor_width_mm: f64,
+    /// Illumination falloff across the image.
+    pub relative_illumination: SensorIllumination,
+}
+
+/// Image-circle illumination model of a sensor projection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum SensorIllumination {
+    /// No falloff across the image.
+    Uniform,
+    /// Cosine-fourth falloff across the image.
+    CosineFourth,
+}
+
 /// A sensor's physical control-bus connection.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -1314,6 +1378,9 @@ pub enum PartModel {
         full_scale: u32,
         /// Per-channel reference-white values.
         reference_white: Vec<u32>,
+        /// Radiometric, timing and projection facts; absent for a sensor without a declared exposure model.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        radiometry: Option<SensorRadiometry>,
     },
     /// A display panel endpoint.
     DisplayPanel {

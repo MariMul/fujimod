@@ -662,6 +662,10 @@
           "$ref": "#/$defs/RunPreview",
           "description": "LCD preview statistics cadence."
         },
+        "sensor": {
+          "$ref": "#/$defs/RunBrowserSensor",
+          "description": "The image sensor's scene input."
+        },
         "still_capture": {
           "$ref": "#/$defs/RunStillCapture",
           "description": "Still-capture policy identity."
@@ -674,7 +678,22 @@
       "required": [
         "virtual_card",
         "still_capture",
-        "preview"
+        "preview",
+        "sensor"
+      ],
+      "type": "object"
+    },
+    "RunBrowserSensor": {
+      "additionalProperties": false,
+      "description": "The browser's external scene input for the image sensor.",
+      "properties": {
+        "frames": {
+          "description": "Identity of the run's scene asset that supplies the sensor's exposure input.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "frames"
       ],
       "type": "object"
     },

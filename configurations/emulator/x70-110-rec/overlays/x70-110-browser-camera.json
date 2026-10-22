@@ -20,6 +20,9 @@
         "active_statistics_every_frames": 1,
         "statistics_profile": "declared-x70-external-s1-statistics-divider-unmeasured",
         "basis": "Declared catalog input."
+      },
+      "sensor": {
+        "frames": "x70-110-rec.capture-sensor"
       }
     }
   }

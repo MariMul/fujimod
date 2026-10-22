@@ -246,6 +246,15 @@
           0
         ],
         "size": 1024
+      },
+      {
+        "id": "x70-110-rec.capture-sensor",
+        "pattern": [
+          128,
+          128,
+          128
+        ],
+        "size": 3
       }
     ],
     "images": {
