@@ -72,7 +72,7 @@ export async function openPreparedCamera(
   moduleOptions: ModuleOptions = {},
 ) {
   const module = await loadNodeModule(modulePath, moduleOptions);
-  const document: unknown = JSON.parse(await readFile(documentPath, 'utf8'));
+  const document = await readFile(documentPath, 'utf8');
   const update = await readFile(updatePath);
   const bootRom = await readFile(bootRomPath);
   return attachCamera(module, (session) =>

@@ -273,6 +273,7 @@ export class EmulatorSession {
   ) {
     if (this.handle) throw Error('Session already created.');
     if (construction === 'prepared') {
+      if (typeof config !== 'string') throw Error('Prepared document must be JSON text.');
       this.createPrepared(config, dat, inputs);
       return;
     }
@@ -286,13 +287,15 @@ export class EmulatorSession {
     if (!this.handle) throw Error(this.error(0));
   }
   /** Construct from a native prepared run; the boot ROM is required, NAND and settings are optional. */
-  private createPrepared(document: unknown, update: Uint8Array, inputs: PreparedInputs | undefined) {
+  private createPrepared(document: string, update: Uint8Array, inputs: PreparedInputs | undefined) {
     const create = this.module._camera_prepared_session_create;
     if (!create)
       throw new UnsupportedEmulatorOperation('Missing C ABI export: camera_prepared_session_create.');
     if (!inputs || inputs.bootRom.length === 0) throw Error('Prepared session requires a boot ROM.');
     const empty = new Uint8Array();
-    this.handle = this.json(document, (p, n) =>
+    // The document is shipped as its exact text: re-serializing parsed JSON would
+    // turn integral floats into integers, which the native identity check rejects.
+    this.handle = this.upload(new TextEncoder().encode(document), (p, n) =>
       this.upload(update, (u, ul) =>
         this.upload(inputs.bootRom, (r, rl) =>
           this.upload(inputs.nand ?? empty, (m, ml) =>
