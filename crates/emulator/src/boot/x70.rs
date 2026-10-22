@@ -34,6 +34,14 @@ fn model_recipe(name: &str) -> Result<Value, String> {
         "reset_control" => serde_json::from_str::<Value>("{\"kind\":\"reset\",\"options\":{}}").map_err(|e| e.to_string())?,
         "clocks" => serde_json::from_str::<Value>("{\"kind\":\"clocks\",\"options\":{\"output_settle_ticks\":2,\"reset_ready\":true}}").map_err(|e| e.to_string())?,
         "block98000" => serde_json::from_str::<Value>("{\"kind\":\"block-98000\",\"options\":{\"boot_source\":1,\"selection_reset\":0},\"wiring\":{\"decoder\":0,\"selections\":[{\"word\":0,\"choice\":0},{\"word\":1,\"choice\":1},{\"word\":2,\"choice\":1}]}}").map_err(|e| e.to_string())?,
+        "image_scaler" => serde_json::from_str::<Value>("{\"kind\":\"scaler\",\"options\":{\"completion_ticks\":2},\"irq\":{\"core\":0,\"line\":0}}").map_err(|e| e.to_string())?,
+        "raw_conversion" => serde_json::from_str::<Value>("{\"kind\":\"raw-conversion\",\"options\":{}}").map_err(|e| e.to_string())?,
+        "prefilter" => serde_json::from_str::<Value>("{\"kind\":\"prefilter\",\"options\":{\"completion_ticks\":1000,\"reset_ticks\":16},\"irq\":{\"core\":0,\"line\":0}}").map_err(|e| e.to_string())?,
+        "raw_statistics" => serde_json::from_str::<Value>("{\"kind\":\"raw-statistics\",\"options\":{\"completion_ticks\":1000,\"reset_ticks\":16},\"irq\":{\"core\":0,\"line\":0}}").map_err(|e| e.to_string())?,
+        "still_processor" => serde_json::from_str::<Value>("{\"kind\":\"still-processor\",\"options\":{\"completion_ticks\":1000,\"cfa\":[]},\"irq\":{\"core\":0,\"line\":0}}").map_err(|e| e.to_string())?,
+        "warp" => serde_json::from_str::<Value>("{\"kind\":\"warp\",\"options\":{\"completion_ticks\":1000,\"stop_ticks\":16},\"irq\":{\"core\":0,\"line\":0},\"stream\":\"still_stream\"}").map_err(|e| e.to_string())?,
+        "jpeg_encoder" => serde_json::from_str::<Value>("{\"kind\":\"jpeg-encoder\",\"options\":{\"completion_ticks\":1000,\"reset_ticks\":2},\"irq\":{\"core\":0,\"line\":0},\"stream\":\"still_stream\"}").map_err(|e| e.to_string())?,
+        "jpeg_decoder" => serde_json::from_str::<Value>("{\"kind\":\"jpeg-decoder\",\"options\":{\"completion_ticks\":1000,\"reset_ticks\":2},\"irq\":{\"core\":0,\"line\":0}}").map_err(|e| e.to_string())?,
         "sd_clocks" => serde_json::from_str::<Value>("{\"kind\":\"sdhci-clocks\",\"words\":[[4294246444,2]]}").map_err(|e| e.to_string())?,
         "adc" => serde_json::from_str::<Value>("{\"kind\":\"adc\",\"options\":{\"conversion_ticks\":4,\"samples\":[0,0,1023,63,534,640,0,825,1023,60,0,0]}}").map_err(|e| e.to_string())?,
         "statistics" => serde_json::from_str::<Value>("{\"kind\":\"statistics\",\"options\":{\"clock\":{\"kind\":\"fixed\",\"ticks\":400000},\"ack_ticks\":2,\"stop_ticks\":2,\"histogram\":true,\"external_statistics\":false},\"routes\":\"imaging_routes\",\"frames\":\"live_statistics\",\"images\":\"live_image\"}").map_err(|e| e.to_string())?,
@@ -133,6 +141,55 @@ const NODE_RULES: &[NodeRule] = &[
     NodeRule {
         name: "block98000",
         blocks: &["block-98000"],
+        dependencies: &[],
+    },
+    NodeRule {
+        name: "image_scaler",
+        blocks: &["image-scaler"],
+        dependencies: &["irq0", "irq1"],
+    },
+    NodeRule {
+        name: "raw_conversion",
+        blocks: &["raw-conversion"],
+        dependencies: &[],
+    },
+    NodeRule {
+        name: "prefilter",
+        blocks: &["prefilter"],
+        dependencies: &[],
+    },
+    NodeRule {
+        name: "raw_statistics",
+        blocks: &["raw-statistics"],
+        dependencies: &[],
+    },
+    NodeRule {
+        name: "still_processor",
+        blocks: &[
+            "still-processor-0",
+            "still-processor-1",
+            "still-processor-2",
+            "still-processor-3",
+            "still-processor-4",
+            "still-processor-5",
+            "still-processor-6",
+            "still-processor-7",
+        ],
+        dependencies: &[],
+    },
+    NodeRule {
+        name: "warp",
+        blocks: &["warp"],
+        dependencies: &[],
+    },
+    NodeRule {
+        name: "jpeg_encoder",
+        blocks: &["jpeg-encoder"],
+        dependencies: &[],
+    },
+    NodeRule {
+        name: "jpeg_decoder",
+        blocks: &["jpeg-decoder"],
         dependencies: &[],
     },
     NodeRule {
@@ -395,6 +452,7 @@ fn implementation_wires() -> BTreeMap<String, WireKind> {
         ("memory_outputs".into(), WireKind::MemoryOutputs),
         ("parameters".into(), WireKind::Parameters),
         ("phase_edges".into(), WireKind::PhaseEdges),
+        ("still_stream".into(), WireKind::Stream),
     ])
 }
 
@@ -604,6 +662,21 @@ fn apply_interrupts(
             ]);
             recipe["raw_irq"] = json!({"core":core(selection,"core0")?,"line":irq(selection,"image-input","raw")?["Core"]["line"]});
             recipe["readback_irq"] = json!({"core":core(selection,"core0")?,"line":irq(selection,"image-input","readback")?["Core"]["line"]});
+        }
+        "prefilter" | "raw_statistics" | "still_processor" | "image_scaler" | "warp"
+        | "jpeg_encoder" | "jpeg_decoder" => {
+            let source = match name {
+                "prefilter" => "prefilter",
+                "raw_statistics" => "raw-statistics",
+                "still_processor" => "still-processor-0",
+                "image_scaler" => "image-scaler",
+                "warp" => "warp",
+                "jpeg_encoder" => "jpeg-encoder",
+                "jpeg_decoder" => "jpeg-decoder",
+                _ => unreachable!(),
+            };
+            let route = irq(selection, source, "complete")?;
+            recipe["irq"] = json!({"core":route["Core"]["core"],"line":route["Core"]["line"]});
         }
         "image_combination" => {
             let route = irq(selection, "image-combination", "complete")?;
@@ -1241,7 +1314,7 @@ fn apply_body_facts(
                 }
             }
         }
-        "image_input" => {
+        "image_input" | "still_processor" => {
             let sensor = selection
                 .body
                 .sensor
@@ -2013,7 +2086,8 @@ pub(super) fn assemble(
             "image_outputs":"output-channels",
             "memory_outputs":"memory-outputs",
             "parameters":"parameters",
-            "phase_edges":"phase-edges"
+            "phase_edges":"phase-edges",
+            "still_stream":"stream"
         },
         "nodes":serialized_nodes,
     });
@@ -2026,7 +2100,8 @@ pub(super) fn assemble(
     if let Some(browser) = browser {
         scene_value["files"] = json!({"virtual_card_files": {}});
         let frames = &browser.sensor.frames;
-        scene_value["sensors"] = json!({frames: {"width": 1, "height": 1, "pixels": "rgb24", "asset": frames}});
+        scene_value["sensors"] =
+            json!({frames: {"width": 1, "height": 1, "pixels": "rgb24", "asset": frames}});
     }
     Ok((plan, plan_value, scene_value))
 }

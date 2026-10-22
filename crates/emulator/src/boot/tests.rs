@@ -501,9 +501,7 @@ fn shipped_preparation_opens_the_same_board_as_selected_files() {
         settings: None,
         clock_seconds_2000: None,
     };
-    let shipped = snapshot(
-        open_prepared(restored, inputs, Some(PathBuf::from(&unicorn))).unwrap(),
-    );
+    let shipped = snapshot(open_prepared(restored, inputs, Some(PathBuf::from(&unicorn))).unwrap());
     assert_eq!(shipped, direct);
 }
 
@@ -567,8 +565,48 @@ fn browser_camera_overlay_declares_a_virtual_card_host_on_the_native_plan() {
     assert_eq!(sd["present"], true);
     assert_eq!(sd["protected"], false);
     assert_eq!(sd["irq"]["Core"]["line"], 78);
+    assert_eq!(prepared.scene["files"], json!({"virtual_card_files": {}}));
+}
+
+#[test]
+fn capture_chain_uses_catalog_windows_interrupts_and_sensor_phase() {
+    let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
+    let route = resolved
+        .reference
+        .soc
+        .interrupts
+        .iter_mut()
+        .find(|route| route.source_block == "jpeg-encoder")
+        .unwrap();
+    route.line = 78;
+    let prepared = prepared(resolved).unwrap();
+    assert_eq!(model(&prepared, "jpeg_encoder")["irq"]["line"], 78);
     assert_eq!(
-        prepared.scene["files"],
-        json!({"virtual_card_files": {}})
+        model(&prepared, "still_processor")["options"]["cfa"],
+        model(&prepared, "image_input")["options"]["cfa"]
     );
+    assert_eq!(
+        model(&prepared, "jpeg_encoder")["stream"],
+        model(&prepared, "warp")["stream"]
+    );
+    let nodes = prepared.devices_value["nodes"].as_array().unwrap();
+    let still = nodes
+        .iter()
+        .find(|node| node["name"] == "still_processor")
+        .unwrap();
+    let windows = still["windows"].as_array().unwrap();
+    assert_eq!(windows.len(), 8);
+    assert!(
+        windows
+            .iter()
+            .any(|window| window["base"] == 0xfff44000u64 && window["size"] == 0x2080)
+    );
+    for node in nodes {
+        for window in node["windows"].as_array().unwrap() {
+            let base = window["base"].as_u64().unwrap();
+            let end = base + window["size"].as_u64().unwrap();
+            // The capture chain must not claim the unmapped gap after the prefilter.
+            assert!(!(base <= 0xfff1a230 && end > 0xfff1a230));
+        }
+    }
 }

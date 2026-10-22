@@ -704,6 +704,111 @@
       "size": 12288,
       "kind": "address-window",
       "clock_id": null
+    },
+    {
+      "id": "prefilter",
+      "base": 4294025216,
+      "size": 560,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "raw-statistics",
+      "base": 4294033408,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "raw-conversion",
+      "base": 4294189056,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "image-scaler",
+      "base": 4294209536,
+      "size": 132,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "warp",
+      "base": 4294332416,
+      "size": 332,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "jpeg-encoder",
+      "base": 4294320128,
+      "size": 300,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "jpeg-decoder",
+      "base": 4294324224,
+      "size": 300,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "still-processor-0",
+      "base": 4294115328,
+      "size": 4,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "still-processor-1",
+      "base": 4294115508,
+      "size": 72,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "still-processor-2",
+      "base": 4294120448,
+      "size": 14336,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "still-processor-3",
+      "base": 4294148096,
+      "size": 96,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "still-processor-4",
+      "base": 4294180864,
+      "size": 256,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "still-processor-5",
+      "base": 4294184960,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "still-processor-6",
+      "base": 4294197248,
+      "size": 8320,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "still-processor-7",
+      "base": 4294205584,
+      "size": 112,
+      "kind": "address-window",
+      "clock_id": null
     }
   ],
   "interrupts": [
@@ -898,6 +1003,48 @@
       "line": 120,
       "source_block": "interrupt-core1",
       "output_id": "software-release"
+    },
+    {
+      "core": "core0",
+      "line": 49,
+      "source_block": "prefilter",
+      "output_id": "complete"
+    },
+    {
+      "core": "core0",
+      "line": 50,
+      "source_block": "raw-statistics",
+      "output_id": "complete"
+    },
+    {
+      "core": "core0",
+      "line": 61,
+      "source_block": "still-processor-0",
+      "output_id": "complete"
+    },
+    {
+      "core": "core0",
+      "line": 67,
+      "source_block": "image-scaler",
+      "output_id": "complete"
+    },
+    {
+      "core": "core0",
+      "line": 74,
+      "source_block": "warp",
+      "output_id": "complete"
+    },
+    {
+      "core": "core0",
+      "line": 77,
+      "source_block": "jpeg-encoder",
+      "output_id": "complete"
+    },
+    {
+      "core": "core0",
+      "line": 76,
+      "source_block": "jpeg-decoder",
+      "output_id": "complete"
     }
   ],
   "clocks": [],
@@ -1299,8 +1446,8 @@
     },
     {
       "core": "core0",
-      "block_id": "peripheral-window-fff46000",
-      "address": 4294205440,
+      "block_id": "power-registers-1",
+      "address": 4294205568,
       "offset": null
     },
     {
@@ -1431,8 +1578,8 @@
     },
     {
       "core": "core1",
-      "block_id": "peripheral-window-fff46000",
-      "address": 4294205440,
+      "block_id": "power-registers-1",
+      "address": 4294205568,
       "offset": null
     },
     {
@@ -1505,6 +1652,186 @@
       "core": "core1",
       "block_id": "peripheral-window-fffb2000",
       "address": 4294647808,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "prefilter",
+      "address": 4294025216,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "prefilter",
+      "address": 4294025216,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "raw-statistics",
+      "address": 4294033408,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "raw-statistics",
+      "address": 4294033408,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "raw-conversion",
+      "address": 4294189056,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "raw-conversion",
+      "address": 4294189056,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "image-scaler",
+      "address": 4294209536,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "image-scaler",
+      "address": 4294209536,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "warp",
+      "address": 4294332416,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "warp",
+      "address": 4294332416,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "jpeg-encoder",
+      "address": 4294320128,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "jpeg-encoder",
+      "address": 4294320128,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "jpeg-decoder",
+      "address": 4294324224,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "jpeg-decoder",
+      "address": 4294324224,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "still-processor-0",
+      "address": 4294115328,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "still-processor-0",
+      "address": 4294115328,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "still-processor-1",
+      "address": 4294115508,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "still-processor-1",
+      "address": 4294115508,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "still-processor-2",
+      "address": 4294120448,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "still-processor-2",
+      "address": 4294120448,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "still-processor-3",
+      "address": 4294148096,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "still-processor-3",
+      "address": 4294148096,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "still-processor-4",
+      "address": 4294180864,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "still-processor-4",
+      "address": 4294180864,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "still-processor-5",
+      "address": 4294184960,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "still-processor-5",
+      "address": 4294184960,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "still-processor-6",
+      "address": 4294197248,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "still-processor-6",
+      "address": 4294197248,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "still-processor-7",
+      "address": 4294205584,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "still-processor-7",
+      "address": 4294205584,
       "offset": null
     }
   ],
