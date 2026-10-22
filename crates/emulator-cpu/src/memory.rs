@@ -50,7 +50,11 @@ impl Backing {
     /// to an insufficiently aligned buffer.
     #[cfg(not(target_os = "emscripten"))]
     pub fn aligned_zeros(size: usize, alignment: usize) -> Result<Self, String> {
-        if size == 0 || !alignment.is_power_of_two() || alignment < 0x1000 || size % 0x1000 != 0 {
+        if size == 0
+            || !alignment.is_power_of_two()
+            || alignment < 0x1000
+            || !size.is_multiple_of(0x1000)
+        {
             return Err("invalid aligned guest backing size/alignment".into());
         }
         let allocation_size = size
@@ -84,7 +88,7 @@ impl Backing {
         if size == 0
             || !alignment.is_power_of_two()
             || !(0x1000..=0x10000).contains(&alignment)
-            || size % 0x1000 != 0
+            || !size.is_multiple_of(0x1000)
         {
             return Err("invalid aligned guest backing size/alignment".into());
         }
@@ -153,6 +157,9 @@ impl Backing {
             #[cfg(target_os = "emscripten")]
             Storage::Wasm(_, size) => *size,
         }
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 impl Drop for Backing {
