@@ -120,7 +120,7 @@ impl Board {
             None => Err(PyRuntimeError::new_err("runtime is closed")),
         }
     }
-    fn session_mut(&mut self) -> PyResult<&mut fujimod_emulator::session::Session> {
+    pub(crate) fn session_mut(&mut self) -> PyResult<&mut fujimod_emulator::session::Session> {
         match self.backend.as_mut() {
             Some(Backend::Graph(session)) => Ok(session),
             Some(Backend::Xp4(_)) => Err(PyRuntimeError::new_err(

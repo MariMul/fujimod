@@ -1,6 +1,6 @@
 //! Native bindings for the shared execution runtime and host algorithms.
 #[cfg(not(target_os = "emscripten"))]
-mod board;
+pub(crate) mod board;
 mod discovery;
 mod display_pixels;
 mod film;

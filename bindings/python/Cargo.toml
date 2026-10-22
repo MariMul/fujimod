@@ -22,11 +22,13 @@ emulator = [
     "dep:pkg-config",
     "dep:sha2",
     "fujimod-emulator/serde",
+    "fujimod-remote/board",
 ]
 host-profile = ["emulator", "fujimod-emulator/host-profile"]
-testing = ["fujimod-usb/testing"]
+testing = ["fujimod-usb/testing", "fujimod-remote/testing"]
 
 [dependencies]
+fujimod-remote = { workspace = true, default-features = false, features = ["ff80"] }
 fujimod-recording.workspace = true
 fujimod-firmware = { path = "../../crates/firmware" }
 pyo3 = { workspace = true, features = ["experimental-async", "experimental-inspect", "multiple-pymethods"] }

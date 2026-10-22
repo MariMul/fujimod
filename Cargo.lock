@@ -3531,6 +3531,7 @@ dependencies = [
  "fujimod-emulator-devices",
  "fujimod-firmware",
  "fujimod-recording",
+ "fujimod-remote",
  "fujimod-usb",
  "fujimod-workflows",
  "futures-channel",

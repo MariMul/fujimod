@@ -73,7 +73,7 @@ impl Slot {
 }
 #[pyclass(name = "Session", frozen, from_py_object, module = "fujimod.usb")]
 #[derive(Clone)]
-pub(super) struct AsyncSession {
+pub(crate) struct AsyncSession {
     inner: Arc<Mutex<Slot>>,
     limits: FirmwareLimits,
     token: u16,
@@ -116,7 +116,7 @@ enum Resource {
     Closing,
     Closed,
 }
-struct Lease {
+pub(crate) struct Lease {
     owner: Arc<Mutex<Slot>>,
     resource: Resource,
 }
@@ -189,4 +189,35 @@ pub(super) fn register(
     module.add_function(wrap_pyfunction!(self::discover_proxy, module)?)?;
     module.add_function(wrap_pyfunction!(self::interfaces, module)?)?;
     operations::register(py, module, app80)
+}
+
+impl AsyncSession {
+    pub(crate) fn remote_lease(&self) -> PyResult<Lease> {
+        Lease::new(self).map(|(lease, _)| lease)
+    }
+}
+impl std::borrow::Borrow<ff80::Session> for Lease {
+    fn borrow(&self) -> &ff80::Session {
+        match &self.resource {
+            Resource::Open(session) => session,
+            _ => unreachable!("Remote lease retains an open session"),
+        }
+    }
+}
+impl std::borrow::BorrowMut<ff80::Session> for Lease {
+    fn borrow_mut(&mut self) -> &mut ff80::Session {
+        let available = self
+            .owner
+            .lock()
+            .is_ok_and(|slot| matches!(*slot, Slot::InFlight(_)));
+        match &mut self.resource {
+            Resource::Open(session) => {
+                if !available {
+                    session.invalidate_completion();
+                }
+                session
+            }
+            _ => unreachable!("Remote lease retains an open session"),
+        }
+    }
 }

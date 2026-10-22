@@ -7,11 +7,13 @@ mod emulator;
 mod firmware;
 mod usb;
 mod recording;
+mod remote;
 
 #[pymodule]
 fn _native(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     firmware::register(py, module, "fujimod.firmware")?;
     recording::register(py, module)?;
+    remote::register(py, module)?;
     corpus::register(py, module)?;
     catalog::register(py, module)?;
     usb::register(py, module)?;

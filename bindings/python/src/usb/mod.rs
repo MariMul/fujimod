@@ -536,7 +536,7 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
 }
 
 mod app80;
-mod asynchronous;
+pub(crate) mod asynchronous;
 mod data;
 mod research;
 mod tracing;
