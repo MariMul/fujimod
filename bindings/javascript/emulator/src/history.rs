@@ -130,17 +130,23 @@ impl Session {
         );
         Ok(result)
     }
-    pub(super) fn mark_input(&mut self) -> Result<(), String> {
-        if self.history.is_some() {
-            let presentation = self.presentation();
-            let history = self.history.as_mut().expect("active history");
-            history.core.mark(&self.core)?;
-            history.marks.push_back(presentation);
-            while history.marks.len() > history.core.retained_marks() {
-                history.marks.pop_front();
+    pub(super) fn mark_input(&mut self, input: &Input) -> Result<(), String> {
+        if let Some(history) = self.history.as_mut() {
+            if history.core.mark_automatic(&self.core, input)? {
+                history.marks.push_back(Presentation {
+                    boundary: Boundary::capture(&self.core),
+                    frames: self.frames.clone(),
+                });
+                while history.marks.len() > history.core.retained_marks() {
+                    history.marks.pop_front();
+                }
             }
         }
         Ok(())
+    }
+    pub(super) fn apply_marked_input(&mut self, input: Input) -> Result<(), String> {
+        self.mark_input(&input)?;
+        self.apply_input(input)
     }
     pub(super) fn apply_input(&mut self, input: Input) -> Result<(), String> {
         match &mut self.history {
@@ -239,5 +245,95 @@ impl Session {
         )
         .map_err(|e| format!("input log encode: {e}"))?;
         Ok(json!({"format":"session-input-log-cbor","schema":1,"entries":entries.len()}))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fujimod_emulator_cpu::ExecutionPolicy;
+
+    fn session(policy: ExecutionPolicy) -> Session {
+        let code = 0xeafffffeu32.to_le_bytes();
+        let config = json!({"schema":1,"firmwareId":"loop","bootSource":"internal","graph":{
+            "schema":1,"firmwareId":"loop","bootSource":"internal","quantum":17,"translationCacheBytes":1048576,
+            "execution":{"processors":[{"model":"cortex-r5f","registers":[["Pc",65536],["Pstate",211]],"released":true,"mprofile":null,"rprofile":{"cp14_identity":16387,"tcm":{"atcm":{"bytes":0,"reset":0},"btcm":{"bytes":0,"reset":0}}}}],
+                "ram":[{"base":65536,"size":4096}],"dma_mappings":[{"address":65536,"physical":65536,"size":4096,"permissions":3}],
+                "mappings":[{"core":0,"address":65536,"physical":65536,"size":4096,"permissions":7}],
+                "peripherals":[{"core":0,"address":0xfffb3000u64,"physical":0xfffb3000u64,"size":4096}],"decoders":[],"instructions_per_tick":[24,1]},
+            "devices":{"schema":1,"boot_entry":"loader","wires":{},"nodes":[{"name":"irq","boot_entries":["loader"],"windows":[{"base":0xfffb3000u64,"size":4096}],"dependencies":[],"model":{"kind":"exr2-interrupt-controller","options":{"arbitration":"unique"},"core":0,"base":0xfffb3000u64,"routes":null,"software":[]}}]},
+            "firmware":{"size":4,"sha256":fujimod_firmware::sha256(&code),"format":"raw",
+                "mappings":[{"name":"loop","offset":0,"size":4,"base":65536,"encoding":"raw","executable":true}]}
+        }});
+        Session::create_camera(&serde_json::to_vec(&config).unwrap(), &code, policy).unwrap()
+    }
+    fn frame(session: &mut Session, sequence: u64) {
+        session.frames.insert(
+            0,
+            Arc::new(Frame {
+                output: 0,
+                sequence,
+                width: 1,
+                height: 1,
+                rgba: vec![sequence as u8, 0, 0, 255],
+            }),
+        );
+    }
+    #[test]
+    fn coalesced_marks_keep_frames_aligned_through_eviction_undo_and_restore() {
+        let mut session = session(ExecutionPolicy::Interactive);
+        frame(&mut session, 1);
+        let checkpoint = session.checkpoint(1).unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let first_tick = session.core.board.now();
+        for i in 0..36 {
+            session.run(first_tick + (i + 1) * 10).unwrap();
+            frame(&mut session, i + 2);
+        }
+        let history = session.history.as_ref().unwrap();
+        assert_eq!(history.core.retained_marks(), 3);
+        assert_eq!(history.marks.len(), 3);
+        session.rollback(first_tick + 325).unwrap();
+        assert!(session.core.board.now() <= first_tick + 325);
+        assert_eq!(session.frames[&0].sequence, 33);
+        session.undo().unwrap();
+        assert_eq!(session.frames[&0].sequence, 33);
+        session.undo().unwrap();
+        assert_eq!(session.frames[&0].sequence, 17);
+        session.undo().unwrap();
+        assert_eq!(session.frames[&0].sequence, 1);
+        session.restore_checkpoint(&checkpoint).unwrap();
+        assert_eq!(session.core.board.now(), first_tick);
+        assert_eq!(session.frames[&0].sequence, 1);
+        assert!(session.history.as_ref().unwrap().marks.is_empty());
+        // Force core retention to evict old automatic marks while the frame
+        // queue follows the same surviving machine states.
+        session.history.as_mut().unwrap().core = CoreHistory::new(1, usize::MAX).unwrap();
+        for i in 0..20 {
+            session.run(first_tick + (i + 1) * 10).unwrap();
+            frame(&mut session, i + 2);
+        }
+        let history = session.history.as_ref().unwrap();
+        assert_eq!(history.core.retained_marks(), 1);
+        assert_eq!(history.marks.len(), 1);
+        session.undo().unwrap();
+        assert_eq!(session.frames[&0].sequence, 17);
+    }
+    #[test]
+    fn exact_automatic_marks_keep_each_presented_boundary() {
+        let mut session = session(ExecutionPolicy::Exact);
+        frame(&mut session, 1);
+        session.checkpoint(1).unwrap();
+        for i in 0..3 {
+            session.run((i + 1) * 10).unwrap();
+            frame(&mut session, i + 2);
+        }
+        assert_eq!(session.history.as_ref().unwrap().marks.len(), 3);
+        for sequence in (1..=3).rev() {
+            session.undo().unwrap();
+            assert_eq!(session.frames[&0].sequence, sequence);
+        }
     }
 }

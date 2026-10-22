@@ -2,7 +2,7 @@
 //! Instruction counts disambiguate inputs within one guest tick at high ratios.
 use super::{checkpoint::Snapshot, Session};
 use fujimod_emulator_cpu::ExecutionPolicy;
-use fujimod_emulator_devices::scene::StatisticsCadence;
+use fujimod_emulator_devices::{parts::touch_controller::ContactInput, scene::StatisticsCadence};
 use std::{collections::VecDeque, sync::Arc};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -59,7 +59,7 @@ pub enum Input {
     },
     Touch {
         node: String,
-        script: Vec<fujimod_emulator_devices::parts::touch_controller::ContactInput>,
+        script: Vec<ContactInput>,
     },
     Logic {
         wire: String,
@@ -110,6 +110,53 @@ pub enum Input {
     },
 }
 impl Input {
+    fn retained_bytes(&self) -> usize {
+        use std::mem::size_of;
+        match self {
+            Self::Run { .. } => 0,
+            Self::Position { control, position } => control.capacity() + position.capacity(),
+            Self::Press { control, stage } => {
+                control.capacity() + stage.as_ref().map_or(0, String::capacity)
+            }
+            Self::Release { control } => control.capacity(),
+            Self::Gpio { node, .. }
+            | Self::Frames { node, .. }
+            | Self::Wake { node }
+            | Self::Rotate { node, .. }
+            | Self::CardContacts { node, .. } => node.capacity(),
+            Self::Adc { node, samples } => node.capacity() + samples.capacity() * size_of::<u16>(),
+            Self::Touch { node, script } => {
+                node.capacity() + script.capacity() * size_of::<ContactInput>()
+            }
+            Self::Logic { wire, .. } => wire.capacity(),
+            Self::Rgb { source, bytes, .. } | Self::SensorRgb { source, bytes, .. } => {
+                source.capacity() + bytes.capacity()
+            }
+            Self::SensorImage { source } | Self::Analytic { source } => source.capacity(),
+            Self::CardFormat {
+                node,
+                options,
+                files,
+            } => files.iter().fold(
+                options.read_only_files.iter().fold(
+                    node.capacity()
+                        + options.label.capacity()
+                        + options.read_only_files.capacity() * size_of::<String>()
+                        + files.capacity() * size_of::<(String, Vec<u8>)>(),
+                    |total, path| total.saturating_add(path.capacity()),
+                ),
+                |total, (path, bytes)| {
+                    total
+                        .saturating_add(path.capacity())
+                        .saturating_add(bytes.capacity())
+                },
+            ),
+            // Include sparse sector data plus conservative map-node overhead.
+            Self::CardInsert { node, medium, .. } => node
+                .capacity()
+                .saturating_add(medium.dirty_sectors().saturating_mul(512 + 128)),
+        }
+    }
     fn apply(&self, session: &mut Session) -> Result<(), String> {
         match self {
             Self::Run {
@@ -183,6 +230,21 @@ pub struct Entry {
     pub after: Boundary,
     pub failure: Option<String>,
 }
+impl Entry {
+    fn retained_bytes(&self) -> usize {
+        std::mem::size_of::<Self>()
+            .saturating_add(self.input.retained_bytes())
+            .saturating_add(
+                (self.before.instructions.capacity() + self.after.instructions.capacity())
+                    * std::mem::size_of::<u64>(),
+            )
+            .saturating_add(self.failure.as_ref().map_or(0, String::capacity))
+    }
+}
+
+// Host Undo cadence, independent of the board clock and guest scheduling.
+const AUTOMATIC_INPUT_INTERVAL: usize = 16;
+
 struct Mark {
     saved: Arc<Snapshot>,
     cursor: usize,
@@ -213,6 +275,55 @@ impl History {
     pub fn entries(&self) -> &[Entry] {
         &self.log
     }
+    /// Retain an automatic Undo boundary before an external transaction.
+    /// Exact keeps every boundary. Interactive groups ordered inputs and trims
+    /// their retained payloads to the device-byte budget. One oversized input,
+    /// like one oversized keyframe, may exceed that budget until the next mark.
+    /// Call once per transaction; explicit `mark` always captures immediately.
+    /// Returns true only when captured. Presentation caches append on true and
+    /// trim their oldest entries to `retained_marks()` after eviction.
+    pub fn mark_automatic(&mut self, session: &Session, input: &Input) -> Result<bool, String> {
+        if session.board.execution_policy() == ExecutionPolicy::Exact {
+            self.mark(session)?;
+            return Ok(true);
+        }
+        let next_bytes = std::mem::size_of::<Entry>()
+            .saturating_add(input.retained_bytes())
+            .saturating_add(
+                session.board.instruction_counts().len() * 2 * std::mem::size_of::<u64>(),
+            );
+        let due = self
+            .marks
+            .back()
+            .is_none_or(|mark| self.log.len() - mark.cursor >= AUTOMATIC_INPUT_INTERVAL);
+        if !due && self.retained_input_bytes().saturating_add(next_bytes) <= self.device_byte_limit
+        {
+            return Ok(false);
+        }
+        self.mark(session)?;
+        while self.marks.len() > 1
+            && self.retained_input_bytes().saturating_add(next_bytes) > self.device_byte_limit
+        {
+            self.marks.pop_front();
+            self.discard_obsolete_inputs();
+        }
+        Ok(true)
+    }
+    fn retained_input_bytes(&self) -> usize {
+        self.log
+            .iter()
+            .map(Entry::retained_bytes)
+            .fold(0usize, usize::saturating_add)
+    }
+    fn discard_obsolete_inputs(&mut self) {
+        let obsolete = self.marks.front().map_or(0, |m| m.cursor);
+        if obsolete != 0 {
+            self.log.drain(..obsolete);
+            for m in &mut self.marks {
+                m.cursor -= obsolete;
+            }
+        }
+    }
     /// Capture before an external transaction, not from a host read or getter.
     pub fn mark(&mut self, session: &Session) -> Result<(), String> {
         let previous = self.marks.back().map(|m| m.saved.as_ref());
@@ -233,13 +344,7 @@ impl History {
             self.marks.pop_front();
         }
         // Drop inputs older than the oldest retained machine state.
-        let obsolete = self.marks.front().map_or(0, |m| m.cursor);
-        if obsolete != 0 {
-            self.log.drain(..obsolete);
-            for m in &mut self.marks {
-                m.cursor -= obsolete;
-            }
-        }
+        self.discard_obsolete_inputs();
         Ok(())
     }
     pub fn apply(&mut self, session: &mut Session, input: Input) -> Result<(), String> {

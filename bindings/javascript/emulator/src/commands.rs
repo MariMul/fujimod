@@ -230,8 +230,7 @@ impl Session {
             "card_insert" => {
                 let o: Insert = options(c.options)?;
                 let name = self.card_node()?.to_owned();
-                self.mark_input()?;
-                self.apply_input(Input::CardContacts {
+                self.apply_marked_input(Input::CardContacts {
                     node: name,
                     present: o.present,
                     protected: false,
@@ -246,8 +245,7 @@ impl Session {
                     .and_then(|m| m.card.as_ref())
                     .ok_or("session has no declared SD card")?;
                 let (node, format) = (card.node.clone(), card.format.clone());
-                self.mark_input()?;
-                self.apply_input(Input::CardFormat {
+                self.apply_marked_input(Input::CardFormat {
                     node,
                     options: format,
                     files: vec![],
@@ -258,8 +256,7 @@ impl Session {
                 let o: Position = options(c.options)?;
                 // Validate the complete contact network before taking an Undo mark.
                 self.core.admit_position(&o.id, &o.position)?;
-                self.mark_input()?;
-                self.apply_input(Input::Position {
+                self.apply_marked_input(Input::Position {
                     control: o.id,
                     position: o.position,
                 })?;
@@ -269,8 +266,7 @@ impl Session {
                 let o: Press = options(c.options)?;
                 self.core
                     .admit_contact_input(&o.id, o.stage.as_deref(), false)?;
-                self.mark_input()?;
-                self.apply_input(Input::Press {
+                self.apply_marked_input(Input::Press {
                     control: o.id,
                     stage: o.stage,
                 })?;
@@ -279,22 +275,19 @@ impl Session {
             "release" => {
                 let o: Release = options(c.options)?;
                 self.core.admit_contact_input(&o.id, None, true)?;
-                self.mark_input()?;
-                self.apply_input(Input::Release { control: o.id })?;
+                self.apply_marked_input(Input::Release { control: o.id })?;
                 self.session_state()?
             }
             "rotate" => {
                 let o: Rotate = options(c.options)?;
                 let (node, cycles) = self.core.rotation(&o.id, o.steps)?;
-                self.mark_input()?;
-                self.apply_input(Input::Rotate { node, cycles })?;
+                self.apply_marked_input(Input::Rotate { node, cycles })?;
                 self.session_state()?
             }
             "touch" => {
                 let o: Touch = options(c.options)?;
                 let (node, script) = self.core.touch_input(&o.id, &o.phase, o.x, o.y)?;
-                self.mark_input()?;
-                self.apply_input(Input::Touch { node, script })?;
+                self.apply_marked_input(Input::Touch { node, script })?;
                 self.session_state()?
             }
             "preview" | "preview_state" => {
@@ -305,8 +298,7 @@ impl Session {
                     .and_then(|m| m.preview.clone())
                     .ok_or("session has no declared preview policy")?;
                 if c.action == "preview" {
-                    self.mark_input()?;
-                    self.apply_input(Input::Frames {
+                    self.apply_marked_input(Input::Frames {
                         node: preview.node.clone(),
                         period: preview.period_ticks,
                         cadence: preview.cadence,
@@ -483,16 +475,14 @@ impl Session {
                         "analytic sensor reset is not yet available in the Rust session".into(),
                     );
                 }
-                self.mark_input()?;
-                self.apply_input(Input::Analytic { source: images })?;
+                self.apply_marked_input(Input::Analytic { source: images })?;
             }
             1 => {
                 let (width, height) = self
                     .scene_dimensions
                     .ok_or("no scene RGB upload is reserved")?;
-                self.mark_input()?;
                 if let Some(sensor) = sensor {
-                    self.apply_input(Input::SensorRgb {
+                    self.apply_marked_input(Input::SensorRgb {
                         source: sensor,
                         width,
                         height,
@@ -502,7 +492,7 @@ impl Session {
                     })?;
                     self.apply_input(Input::SensorImage { source: images })?;
                 } else {
-                    self.apply_input(Input::Rgb {
+                    self.apply_marked_input(Input::Rgb {
                         source: images,
                         width,
                         height,

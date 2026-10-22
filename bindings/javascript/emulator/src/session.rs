@@ -363,13 +363,14 @@ impl Session {
             .into_iter()
             .try_fold(0u64, |sum, n| sum.checked_add(n))
             .ok_or("board instruction count overflow")?;
-        self.mark_input()?;
-        let result = self.apply_input(fujimod_emulator::session::history::Input::Run {
+        let input = fujimod_emulator::session::history::Input::Run {
             instructions: u64::MAX - count,
             quantum: self.quantum,
             pause_after: None,
             until: Some(until),
-        });
+        };
+        self.mark_input(&input)?;
+        let result = self.apply_input(input);
         if result.is_err() {
             self.failed = true;
         }

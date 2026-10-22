@@ -665,3 +665,153 @@ fn history_device_budget_expires_old_marks_without_losing_latest_undo() {
     history.undo(&mut session).unwrap();
     assert_eq!(session.board.now(), expected);
 }
+
+#[test]
+fn automatic_history_coalesces_interactive_inputs_and_keeps_exact_boundaries() {
+    use super::history::{Boundary, History, Input};
+    use fujimod_emulator_cpu::{ExecutionPolicy, Register};
+    for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+        let mut session = card_session();
+        session.board.set_execution_policy(policy).unwrap();
+        session
+            .board
+            .write_register(0, Register::Pstate, 0xd3)
+            .unwrap();
+        session.board.write_register(0, Register::Pc, 0).unwrap();
+        session
+            .board
+            .write_physical(0, &[0xfe, 0xff, 0xff, 0xea])
+            .unwrap();
+        let mut history = History::new(8, usize::MAX).unwrap();
+        let mut captured = Vec::new();
+        for index in 0..40 {
+            let input = if index % 2 == 0 {
+                Input::Run {
+                    instructions: 120,
+                    quantum: 17,
+                    pause_after: None,
+                    until: None,
+                }
+            } else {
+                Input::Adc {
+                    node: "adc".into(),
+                    samples: vec![index; 12],
+                }
+            };
+            if history.mark_automatic(&session, &input).unwrap() {
+                captured.push(Boundary::capture(&session));
+            }
+            history.apply(&mut session, input).unwrap();
+        }
+        if policy == ExecutionPolicy::Exact {
+            assert_eq!(captured.len(), 40);
+            assert_eq!(history.retained_marks(), 8);
+        } else {
+            assert_eq!(captured.len(), 3);
+            assert_eq!(history.entries().len(), 40);
+            let entries = history.entries().to_vec();
+            let final_state = session.fingerprint().unwrap();
+            assert_eq!(history.undo(&mut session).unwrap(), captured[2]);
+            History::replay(&mut session, &entries[32..]).unwrap();
+            assert_eq!(session.fingerprint().unwrap(), final_state);
+            // An explicit mark remains immediate even inside an automatic group.
+            let explicit = Boundary::capture(&session);
+            history.mark(&session).unwrap();
+            assert_eq!(history.retained_marks(), 3);
+            history
+                .apply(
+                    &mut session,
+                    Input::Run {
+                        instructions: 120,
+                        quantum: 17,
+                        pause_after: None,
+                        until: None,
+                    },
+                )
+                .unwrap();
+            assert_eq!(history.undo(&mut session).unwrap(), explicit);
+        }
+    }
+}
+
+#[test]
+fn automatic_history_bounds_interactive_log_payloads_and_retains_failures() {
+    use super::history::{History, Input};
+    use fujimod_emulator_cpu::ExecutionPolicy;
+    let mut session = card_session();
+    session
+        .board
+        .set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
+    let budget = session
+        .checkpoint(None)
+        .unwrap()
+        .encoded_device_bytes()
+        .max(4096)
+        * 4;
+    let mut history = History::new(32, budget).unwrap();
+    let mut captures = 0;
+    for _ in 0..12 {
+        // Invalid external data is still logged with its actual failure. It
+        // must not evade retention limits or trigger guest execution.
+        let input = Input::Adc {
+            node: "adc".into(),
+            samples: vec![100; budget / 4],
+        };
+        captures += usize::from(history.mark_automatic(&session, &input).unwrap());
+        assert!(history.apply(&mut session, input).is_err());
+    }
+    assert!(captures > 1);
+    assert!(history.entries().len() <= 2);
+    assert!(
+        history
+            .entries()
+            .iter()
+            .all(|entry| entry.failure.is_some())
+    );
+    assert_eq!(session.board.instruction_counts(), vec![0]);
+    history.undo(&mut session).unwrap();
+    assert!(history.entries().is_empty());
+}
+
+#[test]
+fn automatic_history_admits_one_oversized_input_and_expires_its_old_prefix() {
+    use super::history::{History, Input};
+    use fujimod_emulator_cpu::ExecutionPolicy;
+    use fujimod_emulator_devices::scene::{Frame, FramePixels, SensorFrames};
+    use std::sync::{Arc, Mutex};
+    let mut session = card_session();
+    session
+        .board
+        .set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
+    let sensor = Arc::new(Mutex::new(SensorFrames::new(
+        Frame::new(1, 1, FramePixels::Rgb24(vec![1, 2, 3].into())).unwrap(),
+    )));
+    session
+        .resources
+        .inputs
+        .sensors
+        .insert("sensor".into(), sensor.clone());
+    // A tiny retention budget cannot reject a supported external input. As
+    // with keyframes, retain one oversized item and expire it on the next mark.
+    let mut history = History::new(8, 1).unwrap();
+    for luminance in [250., 500.] {
+        let input = Input::SensorRgb {
+            source: "sensor".into(),
+            width: 1,
+            height: 1,
+            bytes: vec![4, 5, 6],
+            white_luminance: luminance,
+        };
+        assert!(history.mark_automatic(&session, &input).unwrap());
+        history.apply(&mut session, input).unwrap();
+        assert_eq!(history.retained_marks(), 1);
+        assert_eq!(history.entries().len(), 1);
+        assert!(history.entries()[0].failure.is_none());
+        assert_eq!(sensor.lock().unwrap().current.white_luminance, luminance);
+    }
+    history.undo(&mut session).unwrap();
+    assert!(history.entries().is_empty());
+    assert_eq!(sensor.lock().unwrap().current.white_luminance, 250.);
+}
