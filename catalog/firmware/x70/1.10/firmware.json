@@ -553,7 +553,7 @@
               "active": null
             },
             {
-              "position": "\u22121",
+              "position": "−1",
               "keys": [
                 "KEY_EXP_DIAL_M1"
               ],
@@ -574,7 +574,7 @@
               "active": null
             },
             {
-              "position": "\u22122",
+              "position": "−2",
               "keys": [
                 "KEY_EXP_DIAL_M2"
               ],
@@ -595,7 +595,7 @@
               "active": null
             },
             {
-              "position": "\u22123",
+              "position": "−3",
               "keys": [
                 "KEY_EXP_DIAL_M3"
               ],
@@ -3330,7 +3330,7 @@
                 "active": null
               },
               {
-                "position": "\u22121",
+                "position": "−1",
                 "keys": [
                   "KEY_EXP_DIAL_M1"
                 ],
@@ -3351,7 +3351,7 @@
                 "active": null
               },
               {
-                "position": "\u22122",
+                "position": "−2",
                 "keys": [
                   "KEY_EXP_DIAL_M2"
                 ],
@@ -3372,7 +3372,7 @@
                 "active": null
               },
               {
-                "position": "\u22123",
+                "position": "−3",
                 "keys": [
                   "KEY_EXP_DIAL_M3"
                 ],
@@ -6814,6 +6814,13 @@
           },
           "stride": 12,
           "table": 2341648
+        },
+        "glyphs": {
+          "registry_address": 28616060,
+          "record_size": 24,
+          "icon_index": 7,
+          "data_address_offset": 8,
+          "data_size_offset": 12
         }
       }
     }

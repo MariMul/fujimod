@@ -291,6 +291,24 @@ pub struct Resources {
     pub supplementary_max_units: u32,
     /// Bitmaps.
     pub bitmaps: BitmapResources,
+    /// Registry layout locating the icon font in live memory.
+    pub glyphs: GlyphResources,
+}
+
+/// Registry layout locating the native icon font resource.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GlyphResources {
+    /// Resource registry base address.
+    pub registry_address: u64,
+    /// Registry record size in bytes.
+    pub record_size: u32,
+    /// Icon font record index.
+    pub icon_index: u32,
+    /// Byte offset of the font data pointer.
+    pub data_address_offset: u32,
+    /// Byte offset of the font byte length.
+    pub data_size_offset: u32,
 }
 
 /// Native bitmap descriptor table layout.
@@ -794,6 +812,73 @@ impl FirmwareFacts {
         {
             return Err("invalid remote menu layout or roots".into());
         }
+        let node = &m.layout.fields;
+        let cursor = &m.cursor.fields;
+        for (width, offsets) in [
+            (
+                m.layout.size,
+                vec![
+                    node.menu_id,
+                    node.type_code,
+                    node.setting_id,
+                    node.rows_per_page,
+                    node.flags_word,
+                    node.parent_pointer,
+                    node.item_array,
+                    node.handlers_pointer,
+                ],
+            ),
+            (
+                m.cursor.size,
+                vec![
+                    cursor.pointer,
+                    cursor.cursor,
+                    cursor.subcursor,
+                    cursor.visible_count,
+                    cursor.value_cursor,
+                    cursor.raw_count,
+                    cursor.filtered_count,
+                ],
+            ),
+            (
+                m.layout.row_size,
+                vec![m.layout.row_key, m.layout.row_child],
+            ),
+        ] {
+            let unique: BTreeSet<_> = offsets.iter().copied().collect();
+            if width < 4
+                || unique.len() != offsets.len()
+                || offsets
+                    .iter()
+                    .any(|offset| offset % 4 != 0 || *offset > width - 4)
+            {
+                return Err("remote menu field offset exceeds its record or overlaps".into());
+            }
+        }
+        if m.cursor.status_width != 4
+            || m.cursor.status_stride < m.cursor.status_width
+            || m.cursor.status_offset < m.cursor.size
+        {
+            return Err("invalid remote cursor status layout".into());
+        }
+        let r = &self.resources;
+        let glyphs = &r.glyphs;
+        if r.text_unit_bytes != 2
+            || r.text_record_size < 8
+            || r.text_variants_offset >= r.text_record_size
+            || r.text_metrics_offset > r.text_record_size - 4
+            || r.text_max_units == 0
+            || r.supplementary_max_units == 0
+            || r.supplementary_first > r.last_caption
+            || r.private_text_first > r.private_text_last
+            || r.glyph_first > r.glyph_last
+            || glyphs.registry_address == 0
+            || glyphs.record_size < 4
+            || glyphs.data_address_offset > glyphs.record_size - 4
+            || glyphs.data_size_offset > glyphs.record_size - 4
+        {
+            return Err("invalid remote resource layout".into());
+        }
         let s = &self.scanout;
         if s.width == 0
             || s.height == 0
@@ -887,6 +972,24 @@ impl BuildMenuManifest {
                 return Err("empty or repeated stable option name".into());
             }
         }
+        if self
+            .walkthrough
+            .requirements
+            .iter()
+            .any(|(_, id)| !ids.contains(id))
+            || self
+                .walkthrough
+                .option_requirements
+                .iter()
+                .any(|(id, _)| !ids.contains(id))
+            || self
+                .walkthrough
+                .screen_requirements
+                .iter()
+                .any(|(_, id, _)| !ids.contains(id))
+        {
+            return Err("coverage refers to an unknown menu identity".into());
+        }
         Ok(())
     }
 }
@@ -921,6 +1024,7 @@ impl Facts {
         {
             return Err("remote facts differ from selected firmware/body".into());
         }
+        firmware.controls.validate(&selection.body)?;
         let facts = Self {
             body_controls,
             firmware,

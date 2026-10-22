@@ -1303,6 +1303,50 @@
       ],
       "type": "object"
     },
+    "GlyphResources": {
+      "additionalProperties": false,
+      "description": "Registry layout locating the native icon font resource.",
+      "properties": {
+        "data_address_offset": {
+          "description": "Byte offset of the font data pointer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "data_size_offset": {
+          "description": "Byte offset of the font byte length.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "icon_index": {
+          "description": "Icon font record index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "record_size": {
+          "description": "Registry record size in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "registry_address": {
+          "description": "Resource registry base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "registry_address",
+        "record_size",
+        "icon_index",
+        "data_address_offset",
+        "data_size_offset"
+      ],
+      "type": "object"
+    },
     "GpioScanner": {
       "description": "Firmware scanner predicates used for digital keys.",
       "oneOf": [
@@ -1822,6 +1866,10 @@
           "minimum": 0,
           "type": "integer"
         },
+        "glyphs": {
+          "$ref": "#/$defs/GlyphResources",
+          "description": "Registry layout locating the icon font in live memory."
+        },
         "language": {
           "$ref": "#/$defs/ConfigurationLocation",
           "description": "Language."
@@ -1929,7 +1977,8 @@
         "last_caption",
         "supplementary_stride",
         "supplementary_max_units",
-        "bitmaps"
+        "bitmaps",
+        "glyphs"
       ],
       "type": "object"
     },
