@@ -9,17 +9,16 @@ export const PIECE_BYTES = 16 << 20;
 export const MIB = 1 << 20;
 
 /** The catalog firmware whose located bulk path matches the camera's reported identity. */
-export function bulkSelection(
-  identity: CameraIdentity | undefined,
-  selections: readonly ResolvedSelection[] = catalog.selections(),
-): ResolvedSelection | undefined {
+export function bulkSelection(identity: CameraIdentity | undefined): ResolvedSelection | undefined {
   const product = identity?.product?.trim();
   const version = identity?.internalVersion?.trim();
   if (!product || !version) return undefined;
-  return selections.find(
-    (selection) =>
-      selection.bulk?.product === product && selection.bulk.internal_version === version,
-  );
+  return catalog
+    .selections()
+    .find(
+      (selection) =>
+        selection.bulk?.product === product && selection.bulk.internal_version === version,
+    );
 }
 
 export function scopeBytes(scope: CaptureScope) {
