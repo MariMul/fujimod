@@ -164,6 +164,18 @@ impl Endpoint for RegisterFile {
         if shift.word & 0x8000 != 0 {
             if !self.status[address] {
                 self.values[address] = shift.word as u8;
+                if let Some(clock) = &mut self.clock {
+                    if let Some(byte) = clock.registers.iter().position(|&r| r as usize == address)
+                    {
+                        let seconds = (u64::from(clock.initial_seconds)
+                            + at.saturating_sub(clock.started) / clock.ticks_per_second)
+                            .min(u64::from(u32::MAX)) as u32;
+                        let shift_bits = byte * 8;
+                        clock.initial_seconds = (seconds & !(255 << shift_bits))
+                            | (u32::from(shift.word as u8) << shift_bits);
+                        clock.started = at;
+                    }
+                }
             }
             return Ok(0);
         }
@@ -272,6 +284,72 @@ impl Endpoint for FixedInput {
 mod input_tests {
     use super::*;
     use crate::exr2::isp::tests::support::TestHost;
+
+    #[test]
+    fn clock_register_writes_set_the_running_counter_and_restore_exactly() {
+        let mut part = RegisterFile::new(RegisterOptions {
+            registers: (0x41..=0x44).map(|register| (register, 0)).collect(),
+            readable: true,
+            status_registers: vec![],
+            clock: Some(ClockOptions {
+                registers: [0x41, 0x42, 0x43, 0x44],
+                initial_seconds: 0x0012_3456,
+                ticks_per_second: 100,
+                maximum_seconds: u32::MAX,
+                started: 0,
+            }),
+        })
+        .unwrap();
+        let mut host = TestHost::new();
+        let read = |part: &mut RegisterFile, host: &mut TestHost, at| {
+            (0..4).fold(0, |seconds, byte| {
+                let value = part
+                    .transfer(
+                        &mut host.cx(),
+                        Shift {
+                            word: (0x41 + byte) << 8,
+                            bits: 16,
+                            receive: true,
+                        },
+                        at,
+                    )
+                    .unwrap();
+                seconds | (u32::from(value) << (byte * 8))
+            })
+        };
+        assert_eq!(read(&mut part, &mut host, 250), 0x0012_3458);
+        let wanted = 0x0034_12fe_u32;
+        for (byte, value) in wanted.to_le_bytes().into_iter().enumerate() {
+            part.transfer(
+                &mut host.cx(),
+                Shift {
+                    word: 0x8000 | ((0x41 + byte as u16) << 8) | u16::from(value),
+                    bits: 16,
+                    receive: false,
+                },
+                250,
+            )
+            .unwrap();
+            if byte == 0 {
+                assert_eq!(read(&mut part, &mut host, 250), 0x0012_34fe);
+            }
+        }
+        let saved = part.checkpoint().unwrap();
+        assert_eq!(read(&mut part, &mut host, 550), wanted + 3);
+        part.transfer(
+            &mut host.cx(),
+            Shift {
+                word: 0xc100,
+                bits: 16,
+                receive: false,
+            },
+            550,
+        )
+        .unwrap();
+        assert_ne!(read(&mut part, &mut host, 550), wanted + 3);
+        part.restore_checkpoint(&saved).unwrap();
+        assert_eq!(read(&mut part, &mut host, 550), wanted + 3);
+    }
 
     #[test]
     fn external_status_is_not_a_command_or_clock_write_and_restores_exactly() {
