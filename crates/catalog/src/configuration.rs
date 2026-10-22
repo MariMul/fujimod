@@ -476,6 +476,26 @@ impl ResolvedConfiguration {
         Self::resolve_and_apply(configuration, &selected)
     }
 
+    /// Resolve the selected caller-neutral body reset inputs, if the run names one.
+    pub fn hardware_inputs(&self) -> Result<Option<HardwareInputs>, String> {
+        let Some(id) = self
+            .configuration
+            .preset
+            .as_ref()
+            .and_then(|preset| preset.hardware_inputs_id.as_deref())
+        else {
+            return Ok(None);
+        };
+        let inputs = HardwareInputs::bundled(id)?;
+        if inputs.body_id != self.configuration.body_id {
+            return Err(format!(
+                "hardware-input profile {id} belongs to body {}, not {}",
+                inputs.body_id, self.configuration.body_id
+            ));
+        }
+        Ok(Some(inputs))
+    }
+
     fn resolve_and_apply(
         mut configuration: RunConfiguration,
         overlay_ids: &[String],
