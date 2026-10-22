@@ -4,6 +4,12 @@
 //! outside this block. FFF8941C retains the pad-timing RMW fields; zero
 //! power-on state is an unmeasured input default. Analog edge timing and
 //! frequency changes are not modeled.
+//!
+//! FFF88084 bit 0 holds the supply on. The boot ROM sets it at reset, then
+//! copies boot-header bit 0 of +0x10 into it before loading stage 0; NAND
+//! headers clear it and the stock loader sets it again once running. While it
+//! stays clear past the release limit the supply drops and execution stops,
+//! which is how a slow card load fails on the camera.
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use std::sync::{
@@ -17,6 +23,11 @@ pub const SD_TIMING: u64 = 0xfff8941c;
 const OUTPUT: usize = 0x48 / 4;
 const REQUEST: u32 = 1 << 28;
 const READY: u32 = 1 << 24;
+const POWER_HOLD: usize = 0x84 / 4;
+/// Ticks the supply survives with the hold released. Unmeasured: above every
+/// observed stock release (at most 13,430 ticks from ROM release to loader
+/// re-hold) and well below a multi-megabyte card load (5,370,052 ticks).
+pub const POWER_HOLD_RELEASE_LIMIT_TICKS: u64 = 100_000;
 /// Register-derived output pins; observing them never settles the clock.
 #[derive(Clone, Default)]
 pub struct Output(Arc<AtomicU32>);
@@ -37,6 +48,7 @@ struct State {
     registers: Vec<u32>,
     output_due: Option<u64>,
     sd_timing: u32,
+    power_off_due: Option<u64>,
 }
 pub struct Clocks {
     options: Options,
@@ -57,6 +69,7 @@ impl Clocks {
                 registers,
                 output_due: None,
                 sd_timing: 0,
+                power_off_due: None,
             },
         })
     }
@@ -91,6 +104,7 @@ impl Clocks {
             || state.registers[OUTPUT] & READY != 0 && state.registers[OUTPUT] & REQUEST == 0
             || state.output_due.is_some()
                 != (state.registers[OUTPUT] & (REQUEST | READY) == REQUEST)
+            || state.power_off_due.is_some() && state.registers[POWER_HOLD] & 1 != 0
         {
             return Err("invalid clock control state".into());
         }
@@ -182,6 +196,17 @@ impl Device for Clocks {
         if index <= 0x20 / 4 {
             value &= !REQUEST;
         }
+        if index == POWER_HOLD {
+            if value & 1 != 0 {
+                self.state.power_off_due = None;
+            } else if self.state.power_off_due.is_none() {
+                let Some(due) = cx.now().checked_add(POWER_HOLD_RELEASE_LIMIT_TICKS) else {
+                    cx.fail("power hold deadline overflow");
+                    return;
+                };
+                self.state.power_off_due = Some(due);
+            }
+        }
         self.state.registers[index] = value;
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
@@ -190,9 +215,17 @@ impl Device for Clocks {
             self.state.output_due = None;
             self.publish();
         }
+        if self.state.power_off_due.is_some_and(|at| at <= cx.now()) {
+            cx.fail(format!(
+                "supply off: power hold FFF88084 bit 0 released for {POWER_HOLD_RELEASE_LIMIT_TICKS} ticks"
+            ));
+        }
     }
     fn next_deadline(&self, _: u64) -> Option<u64> {
-        self.state.output_due
+        [self.state.output_due, self.state.power_off_due]
+            .into_iter()
+            .flatten()
+            .min()
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
         Self::index(address, size).is_some() || address == SD_TIMING && size == 4
@@ -221,6 +254,28 @@ mod tests {
             (),
         )
         .unwrap()
+    }
+    #[test]
+    fn released_power_hold_cuts_the_supply_unless_held_again() {
+        let hold = BASE + 0x84;
+        let mut clock = clock();
+        let mut host = TestHost::new();
+        write(&mut clock, &mut host, hold, 1);
+        write(&mut clock, &mut host, hold, 0);
+        assert_eq!(clock.next_deadline(0), Some(POWER_HOLD_RELEASE_LIMIT_TICKS));
+        advance(&mut clock, &mut host, 13_430);
+        write(&mut clock, &mut host, hold, 1);
+        assert_eq!(clock.next_deadline(host.now), None);
+        write(&mut clock, &mut host, hold, 0);
+        let due = host.now + POWER_HOLD_RELEASE_LIMIT_TICKS;
+        let saved = clock.save();
+        let mut restored = self::clock();
+        restored.restore(&saved).unwrap();
+        assert_eq!(restored.next_deadline(host.now), Some(due));
+        host.now = due;
+        let mut cx = host.cx();
+        restored.advance(&mut cx);
+        assert!(cx.refusal().is_some_and(|reason| reason.contains("supply off")));
     }
     #[test]
     fn sd_timing_rmw_preserves_other_fields_and_restores_without_a_deadline() {
