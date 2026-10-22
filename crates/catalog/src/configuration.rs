@@ -11,6 +11,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub mod hardware_inputs;
 pub use hardware_inputs::{HARDWARE_INPUTS_SCHEMA_URI, HardwareInputs, HardwareReset};
+mod firmware_inputs;
+pub use firmware_inputs::*;
+mod native_inputs;
+pub use native_inputs::*;
 mod options;
 pub use options::*;
 
@@ -135,6 +139,48 @@ impl RunConfiguration {
             || selection.firmware.body_id != self.body_id
         {
             return Err("run configuration identities differ from resolved hardware".into());
+        }
+
+        if let Some(hardware) = self
+            .preset
+            .as_ref()
+            .and_then(|preset| preset.hardware_selection.as_ref())
+        {
+            hardware.resolve(selection)?;
+        }
+
+        if let Some(preset) = &self.preset {
+            if let Some(id) = &preset.firmware_profile_id {
+                if !selection
+                    .firmware
+                    .layouts
+                    .as_ref()
+                    .is_some_and(|layouts| layouts.profiles.contains_key(id))
+                {
+                    return Err(format!(
+                        "firmware {} has no layout profile {id}",
+                        selection.firmware.id
+                    ));
+                }
+            }
+            if !preset.native_device_inputs.is_empty() && selection.soc.id != "exr2" {
+                return Err("native EXR2 input policies require an EXR2 SoC".into());
+            }
+            for medium in preset.nand_inputs.values() {
+                let RunNandSceneInput::Raw { options, .. } = medium;
+                let geometry = selection
+                    .body
+                    .nand
+                    .as_ref()
+                    .ok_or("run NAND input has no selected medium")?;
+                if options.bytes != geometry.bytes
+                    || options.page_bytes != geometry.page_bytes
+                    || options.pages_per_block != geometry.pages_per_block
+                    || options.spare_bytes != geometry.spare_bytes
+                {
+                    return Err("run NAND input geometry differs from the selected body".into());
+                }
+            }
         }
 
         let input_model_matches = match &self.inputs {
@@ -457,6 +503,15 @@ impl ResolvedConfiguration {
                     if let Some(base) = &configuration.preset {
                         if preset.execution_scope.is_none() {
                             preset.execution_scope = base.execution_scope.clone();
+                        }
+                        if preset.hardware_selection.is_none() {
+                            preset.hardware_selection = base.hardware_selection.clone();
+                        }
+                        if preset.hardware_inputs_id.is_none() {
+                            preset.hardware_inputs_id = base.hardware_inputs_id.clone();
+                        }
+                        if preset.firmware_profile_id.is_none() {
+                            preset.firmware_profile_id = base.firmware_profile_id.clone();
                         }
                     }
                     if let Some(purpose) = preset.purpose {
@@ -1304,6 +1359,33 @@ pub enum RunOverlayChange {
 pub struct RunPreset {
     /// Closed device policy selections; omitted fields retain factory defaults.
     pub factory_options: RunFactoryOptions,
+    /// Boot and device layout selected within the chosen firmware identity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub firmware_profile_id: Option<String>,
+    /// Named reset-input document for the selected body hardware profile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hardware_inputs_id: Option<String>,
+    /// Provenance for caller-supplied hardware inputs, keyed by source field path.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub hardware_notes: BTreeMap<String, String>,
+    /// Named scanout selected by firmware observation without firmware addresses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observer: Option<RunObserver>,
+    /// Startup values and scheduling limits keyed by native device identity.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub native_device_inputs: BTreeMap<String, RunNativeDeviceInputs>,
+    /// Caller-supplied persistent scene inputs keyed by medium identity.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub nand_inputs: BTreeMap<String, RunNandSceneInput>,
+    /// Card file paths and their external asset identities, grouped by medium.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub files: BTreeMap<String, BTreeMap<String, String>>,
+    /// Named SoC and body implementations selected through the hardware graph.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hardware_selection: Option<crate::reference::HardwareSelection>,
+    /// Caller-supplied, firmware-qualified input recipe selected by identity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub firmware_inputs_id: Option<String>,
     /// Inherited policy inputs to clear before applying this preset.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clear_options: Vec<RunClearedOption>,
@@ -1339,6 +1421,38 @@ pub struct RunPreset {
 impl RunPreset {
     fn validate(&self) -> Result<(), String> {
         self.factory_options.validate()?;
+        if let Some(id) = &self.firmware_profile_id {
+            crate::emulator::validate_id(id)?;
+        }
+        if self
+            .clear_options
+            .iter()
+            .enumerate()
+            .any(|(index, option)| self.clear_options[..index].contains(option))
+        {
+            return Err("run preset repeats a cleared option".into());
+        }
+        if let Some(id) = &self.hardware_inputs_id {
+            crate::emulator::validate_id(id)?;
+        }
+        for (id, inputs) in &self.native_device_inputs {
+            crate::emulator::validate_id(id)?;
+            inputs.validate()?;
+        }
+        for (id, medium) in &self.nand_inputs {
+            crate::emulator::validate_id(id)?;
+            medium.validate()?;
+        }
+        if let Some(observer) = &self.observer {
+            crate::emulator::validate_id(&observer.scanout)?;
+        }
+        if let Some(hardware) = &self.hardware_selection {
+            crate::emulator::validate_id(&hardware.soc_profile_id)?;
+            crate::emulator::validate_id(&hardware.body_profile_id)?;
+        }
+        if let Some(id) = &self.firmware_inputs_id {
+            crate::emulator::validate_id(id)?;
+        }
         if let Some(card) = &self.virtual_card {
             card.validate()?;
         }
@@ -1380,6 +1494,19 @@ impl RunPreset {
         }
         Ok(())
     }
+}
+
+/// Named device observed by a firmware readiness monitor.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct RunObserver {
+    pub scanout: String,
+    pub instance: u8,
 }
 
 /// A declared electrical startup input.
@@ -1666,6 +1793,27 @@ pub struct RunStatisticsSpan {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn runtime_native_inputs_refuse_invalid_reset_values() {
+        let mut config = RunConfiguration::bundled("x70-110-runtime").unwrap();
+        let preset = config.preset.as_mut().unwrap();
+        let Some(RunNativeDeviceInputs::Adc(adc)) = preset.native_device_inputs.get_mut("adc")
+        else {
+            panic!("ADC input");
+        };
+        adc.samples[0] = 1024;
+        assert!(config.validate("x70-110-runtime").is_err());
+        let mut config = RunConfiguration::bundled("x70-110-runtime").unwrap();
+        let preset = config.preset.as_mut().unwrap();
+        let Some(RunNativeDeviceInputs::ImageInput(input)) =
+            preset.native_device_inputs.get_mut("image_input")
+        else {
+            panic!("image input");
+        };
+        input.cfa.pop();
+        assert!(config.validate("x70-110-runtime").is_err());
+    }
 
     #[test]
     fn every_run_document_validates_without_hardware_resolution() {

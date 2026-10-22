@@ -2,7 +2,7 @@
   "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
   "schema": 1,
   "id": "xm1-rec-ui",
-  "configuration_id": "xm1-150",
+  "configuration_id": "xm1-150-rec",
   "change": {
     "kind": "preset",
     "preset": {

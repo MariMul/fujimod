@@ -14,6 +14,12 @@
   "overlays": [],
   "preset": {
     "factory_options": {},
-    "execution_scope": "offline-boot-development"
+    "execution_scope": "offline-boot-development",
+    "hardware_selection": {
+      "soc_profile_id": "exr2-service-transports",
+      "body_profile_id": "xm1"
+    },
+    "hardware_inputs_id": "xm1",
+    "firmware_profile_id": "xm1-150"
   }
 }

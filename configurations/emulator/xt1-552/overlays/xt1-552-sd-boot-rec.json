@@ -20,7 +20,13 @@
       "clear_options": [
         "mcu_profile",
         "user_journals"
-      ]
+      ],
+      "hardware_selection": {
+        "soc_profile_id": "exr2-service-transports",
+        "body_profile_id": "xt1-rec"
+      },
+      "hardware_inputs_id": "xt1-rec",
+      "firmware_profile_id": "xt1-552"
     }
   }
 }

@@ -25,7 +25,13 @@
         "lens_response_profile",
         "lens_response_ticks",
         "lens_continuation_profile"
-      ]
+      ],
+      "hardware_selection": {
+        "soc_profile_id": "exr2-service-transports",
+        "body_profile_id": "x70"
+      },
+      "hardware_inputs_id": "x70",
+      "firmware_profile_id": "x70-110"
     }
   }
 }
