@@ -32,9 +32,16 @@ interface Photo {
   bytes: number;
   sha256: string;
 }
+interface Expectations {
+  boundaries: number;
+  frames: number;
+  photos: number;
+  minimumSpeed: number;
+}
 interface Fixture {
   schema: 1;
   ticksPerSecond: number;
+  expected: Expectations;
   module: string;
   wasm: string;
   dat: string;
@@ -65,7 +72,8 @@ export interface CompleteWorkerReceipt {
   boundaries: number;
   frames: number;
   photos: Photo[];
-  realTimePassed: boolean;
+  expected: Expectations;
+  speedTargetPassed: boolean;
   photographicQualification: 'separate';
   jit: unknown;
   error?: string;
@@ -91,7 +99,7 @@ export type WorkerMessage =
   | { type: 'phase'; phase: WorkerPhase }
   | { type: 'result'; result: WorkerReceipt };
 interface OwnerPort {
-  onmessage: ((event: MessageEvent<{ workers: 0 | 2 }>) => void) | null;
+  onmessage: ((event: MessageEvent<{ workers: 0 | 2; plan: string }>) => void) | null;
   postMessage(message: WorkerMessage, transfer?: Transferable[]): void;
 }
 const owner = self as unknown as OwnerPort;
@@ -120,20 +128,36 @@ async function bytes(url: string) {
   check(response.ok, `Artifact unavailable: ${url}`);
   return new Uint8Array(await response.arrayBuffer());
 }
-owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2 }>) => {
+owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2; plan: string }>) => {
   let session: EmulatorSession | undefined;
   const phases: WorkerPhase[] = [];
   let lastEntry: EntryMemory | null = null;
   let trapped = false;
   try {
     check(event.data.workers === 0 || event.data.workers === 2, 'Worker preference must be 0 or 2');
-    const response = await fetch('/__wasm-workers/plan.json');
+    const plan = new URL(event.data.plan, location.href);
+    check(plan.origin === location.origin, 'Replay plan must have the same origin');
+    const response = await fetch(plan);
     check(response.ok, 'Replay plan unavailable');
     const fixture = (await response.json()) as Fixture;
     check(fixture.schema === 1, 'Unsupported replay fixture');
     check(
       Number.isSafeInteger(fixture.ticksPerSecond) && fixture.ticksPerSecond > 0,
       'Invalid guest clock',
+    );
+    for (const count of [
+      fixture.expected.boundaries,
+      fixture.expected.frames,
+      fixture.expected.photos,
+    ])
+      check(Number.isSafeInteger(count) && count >= 0, 'Invalid replay expectations');
+    check(
+      fixture.expected.boundaries > 0 && fixture.expected.frames > 0,
+      'Replay needs complete machine and LCD observations',
+    );
+    check(
+      Number.isFinite(fixture.expected.minimumSpeed) && fixture.expected.minimumSpeed > 0,
+      'Invalid speed target',
     );
     let actualWasmSha256 = '';
     const [dat, module] = await Promise.all([
@@ -263,6 +287,13 @@ owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2 }>) => {
           break;
       }
     }
+    same(boundaries, fixture.expected.boundaries, 'Complete boundary count');
+    same(frames, fixture.expected.frames, 'LCD observation count');
+    same(fixture.photos.length, fixture.expected.photos, 'Card photo count');
+    check(
+      phases.some((p) => p.stage === 'warm'),
+      'Replay needs a warmed phase',
+    );
     const fingerprint = session.command('fingerprint', {}).result;
     for (const photo of fixture.photos) {
       const data = session.command('card_read', { path: photo.path, maxBytes: 32 << 20 }).bytes;
@@ -286,7 +317,10 @@ owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2 }>) => {
         boundaries,
         frames,
         photos: fixture.photos,
-        realTimePassed: phases.filter((p) => p.stage === 'warm').every((p) => p.speed >= 1),
+        expected: fixture.expected,
+        speedTargetPassed: phases
+          .filter((p) => p.stage === 'warm')
+          .every((p) => p.speed >= fixture.expected.minimumSpeed),
         photographicQualification: 'separate',
         jit: module.tcgJitStats(),
       },

@@ -1,5 +1,7 @@
 import type { WorkerMessage, WorkerReceipt } from './wasm-workers-worker';
-const requested = new URL(location.href).searchParams.get('workers');
+const query = new URL(location.href).searchParams;
+const requested = query.get('workers');
+const plan = query.get('plan') || '/__wasm-workers/plan.json';
 if (requested !== '0' && requested !== '2') throw Error('Select ?workers=0 or ?workers=2');
 const canvas = document.createElement('canvas'),
   output = document.createElement('pre');
@@ -42,4 +44,4 @@ worker.onerror = (error) => {
   document.body.dataset.proof = 'complete';
   worker.terminate();
 };
-worker.postMessage({ workers: Number(requested) });
+worker.postMessage({ workers: Number(requested), plan });
