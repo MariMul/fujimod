@@ -51,9 +51,12 @@ declare global {
         .filter(
           (entry): entry is PerformanceResourceTiming => entry instanceof PerformanceResourceTiming,
         )
-        .filter((entry) => /\.(wasm|glb)(\?|$)/.test(entry.name))
+        // Prebundled libraries keep their version query so duplicate copies show up.
+        .filter((entry) => /\.(wasm|glb)(\?|$)|\/\.vite\/deps\//.test(entry.name))
         .map((entry) => ({
-          path: new URL(entry.name).pathname,
+          path:
+            new URL(entry.name).pathname +
+            (/\/\.vite\/deps\//.test(entry.name) ? new URL(entry.name).search : ''),
           duration: Math.round(entry.duration),
           bytes: entry.decodedBodySize,
           transferred: entry.transferSize,

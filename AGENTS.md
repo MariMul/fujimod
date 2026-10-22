@@ -17,6 +17,10 @@ Checked-in generated files carry `.generated` before their extension
 generator and regenerate. Their checks fail when the checked-in copy differs
 from a fresh generation.
 
+Never put binary data larger than 128 bytes in JSON, whether as base64, hex or
+number arrays. Write it to a separate binary file and reference that file (path,
+size and hash) from the JSON.
+
 ## Checkouts and commits
 
 Work, test and commit in the existing checkout on `main`. Do not create Git
