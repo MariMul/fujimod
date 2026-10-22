@@ -22,9 +22,17 @@ type Entry =
       fingerprint: SessionCommands['fingerprint']['result'];
     }
   | {
-      kind: 'command' | 'observe';
+      kind: 'command';
       action: keyof SessionCommands;
       options: SessionCommands[keyof SessionCommands]['request'];
+    }
+  | {
+      kind: 'observe';
+      action: keyof SessionCommands;
+      options: SessionCommands[keyof SessionCommands]['request'];
+      name?: string;
+      result?: unknown;
+      bytesSha256?: string;
     }
   | { kind: 'scene'; width: number; height: number; file: string; sha256: string };
 interface Photo {
@@ -239,9 +247,16 @@ owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2; plan: string }>) 
           session.run(BigInt(entry.tick));
           break;
         case 'command':
-        case 'observe':
           session.command(entry.action, entry.options);
           break;
+        case 'observe': {
+          const observed = session.command(entry.action, entry.options);
+          const label = entry.name || entry.action;
+          if (Object.hasOwn(entry, 'result')) same(observed.result, entry.result, label);
+          if (entry.bytesSha256)
+            same(await digest(observed.bytes), entry.bytesSha256, `${label} bytes`);
+          break;
+        }
         case 'scene':
           session.scene({ width: entry.width, height: entry.height, rgb: scenes.get(entry.file)! });
           break;
