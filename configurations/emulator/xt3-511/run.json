@@ -315,5 +315,13 @@
     ],
     "command_images": []
   },
-  "overlays": []
+  "overlays": [],
+  "preset": {
+    "factory_options": {},
+    "hardware_selection": {
+      "soc_profile_id": "xp4",
+      "body_profile_id": "xt3-discovery"
+    },
+    "hardware_inputs_id": "xt3-discovery"
+  }
 }
