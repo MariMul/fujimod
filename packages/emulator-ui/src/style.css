@@ -1463,3 +1463,9 @@ a:focus-visible,
     overflow-y: auto;
   }
 }
+
+/* Rapid taps on keys must not trigger iOS double-tap zoom. */
+.control-surface,
+.control-surface * {
+  touch-action: manipulation;
+}
