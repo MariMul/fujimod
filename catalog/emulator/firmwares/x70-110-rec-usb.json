@@ -57,8 +57,7 @@
   "soc_id": "exr2",
   "board_id": "x70",
   "control_bus_views": {
-    "path": "emulator/firmware_views/control-bus-x70-110.json",
-    "sha256": "ba738bb612a00106d9b237b9b8730b4e41b93913c637cb61bbea5614f1232452"
+    "path": "emulator/firmware_views/control-bus-x70-110.json"
   },
   "usb_irq_wiring": {
     "views": [

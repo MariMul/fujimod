@@ -54,8 +54,7 @@
     ]
   },
   "control_bus_views": {
-    "path": "emulator/firmware_views/control-bus-xm1-150.json",
-    "sha256": "3a4eaf38005382a198eb51950be971e0127973ee35fc5a90085b8f61a05f249d"
+    "path": "emulator/firmware_views/control-bus-xm1-150.json"
   },
   "usb_irq_wiring": {
     "views": [
@@ -173,8 +172,7 @@
     }
   ],
   "browser_camera": {
-    "path": "emulator/scenarios/xm1-150-browser-camera.json",
-    "sha256": "3a57eff54bd79984b89864fa6ff810cb246083a68bc457e77ed7970d23df471d"
+    "path": "emulator/scenarios/xm1-150-browser-camera.json"
   },
   "$schema": "../../schemas/emulator-document.schema.json"
 }

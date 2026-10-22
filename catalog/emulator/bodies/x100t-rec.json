@@ -580,8 +580,7 @@
     "basis": "Declared catalog input."
   },
   "serial_part": {
-    "path": "emulator/parts/mixed-width-dual-counter-lens.json",
-    "sha256": "f32e529561faf023d39ceea6135d6b023769fcfe8b81bbe0f516309b03dbdd1f"
+    "path": "emulator/parts/mixed-width-dual-counter-lens.json"
   },
   "fe80_processing": {
     "arithmetic": "thresholded-horizontal-energy-unmeasured",

@@ -2,19 +2,13 @@
   "schema": 1,
   "firmware_id": "x70-110",
   "soc": {
-    "path": "emulator/soc/exr2.json",
-    "sha256": "5e881abaa247aef85e04b103e00dddcac8f9657f11d258e0fe3796d5e00ab3c2",
-    "size": 3525
+    "path": "emulator/soc/exr2.json"
   },
   "board": {
-    "path": "emulator/bodies/x70.json",
-    "sha256": "43c262756b5c52abdc47dc079180a91b53aceeda6114ccaaa4b05770b4be9b7b",
-    "size": 18812
+    "path": "emulator/bodies/x70.json"
   },
   "firmware": {
-    "path": "emulator/firmwares/x70-110.json",
-    "sha256": "1a9325d59d106f0c4d33978e2f7946275e14d323e95364fe479db59a0be39302",
-    "size": 21334
+    "path": "emulator/firmwares/x70-110.json"
   },
   "$schema": "../../../schemas/emulator-profile.schema.json"
 }

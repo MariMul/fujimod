@@ -1016,13 +1016,11 @@
   },
   "counter_input_profile": "declared-lens-step-feedback-unmeasured",
   "serial_part": {
-    "path": "emulator/parts/dc-zoom-lens-programmed.json",
-    "sha256": "908c510100337fe7a94896f199c0fe6d6cf11739a39c0b2924f67b9f50562e20"
+    "path": "emulator/parts/dc-zoom-lens-programmed.json"
   },
   "contact_actuators": [
     {
-      "path": "emulator/parts/acquisition-contacts.json",
-      "sha256": "d52d2153eae3e6053d8c3dbe7dfe8dc49b2e7a292b51d2f579ec401a9ff57af1"
+      "path": "emulator/parts/acquisition-contacts.json"
     }
   ],
   "focus_imaging": {

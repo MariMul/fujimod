@@ -57,8 +57,7 @@
   "soc_id": "exr2",
   "board_id": "x70",
   "browser_camera": {
-    "path": "emulator/scenarios/x70-110-browser-camera.json",
-    "sha256": "595cb28a4d4ee815f2920ed6df485c7eed32f021dde82d848ce3953bdc3fef50"
+    "path": "emulator/scenarios/x70-110-browser-camera.json"
   },
   "sdio_inputs": {
     "firmware_bytes": 136640,
@@ -73,8 +72,7 @@
     "ssid": "FUJIFILM-X70-CAFE"
   },
   "connected_hdmi_camera": {
-    "path": "emulator/scenarios/x70-110-connected-hdmi.json",
-    "sha256": "fb84d7b35c04738be5d67c8309b6e03b988fba8f205faf3639e656c0a1681484"
+    "path": "emulator/scenarios/x70-110-connected-hdmi.json"
   },
   "$schema": "../../schemas/emulator-document.schema.json",
   "persistent_inputs": {

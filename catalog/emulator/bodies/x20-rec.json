@@ -539,13 +539,11 @@
     "basis": "Declared catalog input."
   },
   "serial_part": {
-    "path": "emulator/parts/three-byte-stabilized-lens-programmed.json",
-    "sha256": "13e3141325c322d0233cec106e13298a85f71c495d379d7c95562f9b14487172"
+    "path": "emulator/parts/three-byte-stabilized-lens-programmed.json"
   },
   "serial_outputs": [
     {
-      "path": "emulator/parts/command-data-serial-output.json",
-      "sha256": "f353382ca7c5e7ee2acb63b8433e21ffe50087139b281c7b226eec5be4aebf9e"
+      "path": "emulator/parts/command-data-serial-output.json"
     }
   ],
   "focus_imaging": {

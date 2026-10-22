@@ -487,8 +487,7 @@
     "basis": "Declared catalog input."
   },
   "serial_part": {
-    "path": "emulator/parts/banked-lens.json",
-    "sha256": "fed513379d58833b4d86d07e7d411dba52151047dcb0432aefa85a19eae800f8"
+    "path": "emulator/parts/banked-lens.json"
   },
   "gpio_irqs": [
     {

@@ -3,19 +3,13 @@
   "firmware_id": "xe2s-111",
   "execution_scope": "isolated-driver",
   "soc": {
-    "path": "emulator/soc/exr2.json",
-    "sha256": "5e881abaa247aef85e04b103e00dddcac8f9657f11d258e0fe3796d5e00ab3c2",
-    "size": 3525
+    "path": "emulator/soc/exr2.json"
   },
   "board": {
-    "path": "emulator/bodies/xe2s.json",
-    "sha256": "dd25ea2231abd8d6db86890ae78c4607868b91373edcd48f7ca344beb83383c1",
-    "size": 6049
+    "path": "emulator/bodies/xe2s.json"
   },
   "firmware": {
-    "path": "emulator/firmwares/xe2s-111.json",
-    "sha256": "5f464b3ebf0b97a8b940e283445867da63d722a8e79bad702ee71ead873ccf6b",
-    "size": 1562
+    "path": "emulator/firmwares/xe2s-111.json"
   },
   "$schema": "../../../schemas/emulator-profile.schema.json"
 }

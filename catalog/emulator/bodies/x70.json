@@ -815,8 +815,7 @@
     ]
   },
   "serial_part": {
-    "path": "emulator/parts/banked-programmed-lens.json",
-    "sha256": "42fe3d393783cd516c29b6cd0fb3330327efccd9b70281a4180a70c034025f3b"
+    "path": "emulator/parts/banked-programmed-lens.json"
   },
   "encoders": [
     {

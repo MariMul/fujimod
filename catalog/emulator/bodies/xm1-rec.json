@@ -356,13 +356,11 @@
     "basis": "Declared catalog input."
   },
   "serial_part": {
-    "path": "emulator/parts/banked-lens.json",
-    "sha256": "fed513379d58833b4d86d07e7d411dba52151047dcb0432aefa85a19eae800f8"
+    "path": "emulator/parts/banked-lens.json"
   },
   "contact_actuators": [
     {
-      "path": "emulator/parts/acquisition-contacts.json",
-      "sha256": "d52d2153eae3e6053d8c3dbe7dfe8dc49b2e7a292b51d2f579ec401a9ff57af1"
+      "path": "emulator/parts/acquisition-contacts.json"
     }
   ],
   "gpio_irqs": [

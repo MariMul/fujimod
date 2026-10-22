@@ -35,8 +35,7 @@
   },
   "limits": [],
   "storage_fixture": {
-    "path": "emulator/firmware_views/storage-fixtures-xe2s-111.json",
-    "sha256": "644d855ee9dbd0a107af725d6d48a61b64a837a49c980ea011c231b1ab000d3c"
+    "path": "emulator/firmware_views/storage-fixtures-xe2s-111.json"
   },
   "boot_layout": {
     "units": [

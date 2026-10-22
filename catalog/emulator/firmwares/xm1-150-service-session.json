@@ -53,8 +53,7 @@
     ]
   },
   "control_bus_views": {
-    "path": "emulator/firmware_views/control-bus-xm1-150.json",
-    "sha256": "3a4eaf38005382a198eb51950be971e0127973ee35fc5a90085b8f61a05f249d"
+    "path": "emulator/firmware_views/control-bus-xm1-150.json"
   },
   "usb_irq_wiring": {
     "views": [
@@ -172,8 +171,7 @@
     }
   ],
   "storage_fixture": {
-    "path": "emulator/firmware_views/storage-fixtures-xm1-150.json",
-    "sha256": "4f46e1c313fa0c824941e085dfba0797bfb05c894f41fae864876a0b0aff9cf7"
+    "path": "emulator/firmware_views/storage-fixtures-xm1-150.json"
   },
   "$schema": "../../schemas/emulator-document.schema.json"
 }

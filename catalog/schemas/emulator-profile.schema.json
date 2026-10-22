@@ -32,29 +32,17 @@
   },
   "$defs": {
     "documentReference": {
+      "description": "A catalog document in this repository; Git versions it, so it carries no hash.",
       "type": "object",
       "required": [
-        "path",
-        "sha256",
-        "size"
+        "path"
       ],
       "properties": {
         "path": {
           "type": "string"
-        },
-        "sha256": {
-          "$ref": "#/$defs/sha256"
-        },
-        "size": {
-          "type": "integer",
-          "minimum": 1
         }
       },
-      "additionalProperties": true
-    },
-    "sha256": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{64}$"
+      "additionalProperties": false
     }
   },
   "additionalProperties": true

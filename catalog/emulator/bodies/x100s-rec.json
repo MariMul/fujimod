@@ -594,13 +594,11 @@
     "basis": "Declared catalog input."
   },
   "serial_part": {
-    "path": "emulator/parts/mixed-width-dual-counter-lens.json",
-    "sha256": "f32e529561faf023d39ceea6135d6b023769fcfe8b81bbe0f516309b03dbdd1f"
+    "path": "emulator/parts/mixed-width-dual-counter-lens.json"
   },
   "serial_outputs": [
     {
-      "path": "emulator/parts/spi1-word-output.json",
-      "sha256": "3a4bbeeb1528d4e25fd4e99b0a633e82821594ef3d9a95df281e9f6ed74e8748"
+      "path": "emulator/parts/spi1-word-output.json"
     }
   ],
   "gpio_irqs": [

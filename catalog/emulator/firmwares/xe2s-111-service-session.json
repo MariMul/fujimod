@@ -35,8 +35,7 @@
   },
   "limits": [],
   "storage_fixture": {
-    "path": "emulator/firmware_views/storage-fixtures-xe2s-111-service.json",
-    "sha256": "8c00b0c93630266f68ef020ab4fdebcba9364c134dad35af4efe303820727b87"
+    "path": "emulator/firmware_views/storage-fixtures-xe2s-111-service.json"
   },
   "boot_layout": {
     "units": [
@@ -58,8 +57,7 @@
     ]
   },
   "control_bus_views": {
-    "path": "emulator/firmware_views/control-bus-xe2s-111.json",
-    "sha256": "705e8ecc980e8ecbca56e9e1270a6a16401c83e7a5cd3bcbf21ebf7ff7dec0a1"
+    "path": "emulator/firmware_views/control-bus-xe2s-111.json"
   },
   "usb_irq_wiring": {
     "views": [
