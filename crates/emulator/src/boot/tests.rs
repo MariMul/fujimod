@@ -387,6 +387,11 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
         model(&scene, "phase_detection")["options"]["data_ticks"],
         1_800
     );
+    // RAW channel DMA latency is the measured transfer time, not a frame period.
+    assert_eq!(
+        model(&scene, "image_input")["options"]["raw_dma_ticks"],
+        153_600
+    );
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
     exr2_inputs(&mut resolved)
