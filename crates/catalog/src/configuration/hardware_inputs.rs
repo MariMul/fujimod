@@ -742,6 +742,81 @@ pub struct PowerRegisters {
     pub rtc_ticks_per_second: u64,
 }
 
+/// Declared disable writes facts.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetDisableWrites")]
+pub struct DisableWrites {
+    /// Declared register.
+    pub register: u64,
+    /// Declared value.
+    pub value: u64,
+}
+
+/// Declared strobe facts.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetStrobe")]
+pub struct Strobe {
+    /// Declared clear from ticks.
+    pub clear_from_ticks: u64,
+    /// Declared mask.
+    pub mask: u64,
+    /// Declared set through ticks.
+    pub set_through_ticks: u64,
+}
+
+/// Declared rtc facts.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetRtc")]
+pub struct Rtc {
+    /// Declared commit value.
+    pub commit_value: u64,
+    /// Declared control.
+    pub control: u64,
+    /// Declared initial control.
+    pub initial_control: u64,
+    /// Declared initial seconds.
+    pub initial_seconds: u64,
+    /// Declared read high.
+    pub read_high: u64,
+    /// Declared read low.
+    pub read_low: u64,
+    /// Declared retained valid mask.
+    pub retained_valid_mask: u64,
+    /// Declared stage high.
+    pub stage_high: u64,
+    /// Declared stage low.
+    pub stage_low: u64,
+    /// Declared strobe.
+    pub strobe: Strobe,
+    /// Declared ticks per second.
+    pub ticks_per_second: u64,
+    /// Declared valid mask.
+    pub valid_mask: u64,
+}
+
+/// Declared power checksum registers facts.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(rename = "ResetPowerChecksumRegisters")]
+pub struct PowerChecksumRegisters {
+    /// Declared basis.
+    pub basis: String,
+    /// Declared chip select.
+    pub chip_select: Select,
+    /// Declared disable writes.
+    pub disable_writes: Vec<DisableWrites>,
+    /// Declared inputs.
+    pub inputs: BTreeMap<String, u64>,
+    /// Declared retained registers.
+    pub retained_registers: Vec<u64>,
+    /// Declared rtc.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rtc: Option<Rtc>,
+}
+
 /// Declared spi inputs facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -751,6 +826,9 @@ pub struct SpiInputs {
     pub basis: String,
     /// Declared level.
     pub level: String,
+    /// Declared power checksum registers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power_checksum_registers: Option<PowerChecksumRegisters>,
     /// Declared power registers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub power_registers: Option<PowerRegisters>,

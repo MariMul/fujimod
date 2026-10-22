@@ -611,6 +611,29 @@
       ],
       "type": "object"
     },
+    "ResetDisableWrites": {
+      "additionalProperties": false,
+      "description": "Declared disable writes facts.",
+      "properties": {
+        "register": {
+          "description": "Declared register.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Declared value.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "register",
+        "value"
+      ],
+      "type": "object"
+    },
     "ResetEndpoints": {
       "additionalProperties": false,
       "description": "Declared endpoints facts.",
@@ -1308,6 +1331,64 @@
       ],
       "type": "object"
     },
+    "ResetPowerChecksumRegisters": {
+      "additionalProperties": false,
+      "description": "Declared power checksum registers facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "chip_select": {
+          "$ref": "#/$defs/ResetSelect",
+          "description": "Declared chip select."
+        },
+        "disable_writes": {
+          "description": "Declared disable writes.",
+          "items": {
+            "$ref": "#/$defs/ResetDisableWrites"
+          },
+          "type": "array"
+        },
+        "inputs": {
+          "additionalProperties": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Declared inputs.",
+          "type": "object"
+        },
+        "retained_registers": {
+          "description": "Declared retained registers.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "rtc": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetRtc"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared rtc."
+        }
+      },
+      "required": [
+        "basis",
+        "chip_select",
+        "disable_writes",
+        "inputs",
+        "retained_registers"
+      ],
+      "type": "object"
+    },
     "ResetPowerRegisters": {
       "additionalProperties": false,
       "description": "Declared power registers facts.",
@@ -1519,6 +1600,97 @@
       "required": [
         "completion_us",
         "source_luma"
+      ],
+      "type": "object"
+    },
+    "ResetRtc": {
+      "additionalProperties": false,
+      "description": "Declared rtc facts.",
+      "properties": {
+        "commit_value": {
+          "description": "Declared commit value.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "control": {
+          "description": "Declared control.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "initial_control": {
+          "description": "Declared initial control.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "initial_seconds": {
+          "description": "Declared initial seconds.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "read_high": {
+          "description": "Declared read high.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "read_low": {
+          "description": "Declared read low.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "retained_valid_mask": {
+          "description": "Declared retained valid mask.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stage_high": {
+          "description": "Declared stage high.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stage_low": {
+          "description": "Declared stage low.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "strobe": {
+          "$ref": "#/$defs/ResetStrobe",
+          "description": "Declared strobe."
+        },
+        "ticks_per_second": {
+          "description": "Declared ticks per second.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "valid_mask": {
+          "description": "Declared valid mask.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "commit_value",
+        "control",
+        "initial_control",
+        "initial_seconds",
+        "read_high",
+        "read_low",
+        "retained_valid_mask",
+        "stage_high",
+        "stage_low",
+        "strobe",
+        "ticks_per_second",
+        "valid_mask"
       ],
       "type": "object"
     },
@@ -1813,6 +1985,17 @@
           "description": "Declared level.",
           "type": "string"
         },
+        "power_checksum_registers": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetPowerChecksumRegisters"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared power checksum registers."
+        },
         "power_registers": {
           "anyOf": [
             {
@@ -1870,6 +2053,36 @@
         "name",
         "samples_per_cell",
         "signal_shift"
+      ],
+      "type": "object"
+    },
+    "ResetStrobe": {
+      "additionalProperties": false,
+      "description": "Declared strobe facts.",
+      "properties": {
+        "clear_from_ticks": {
+          "description": "Declared clear from ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mask": {
+          "description": "Declared mask.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "set_through_ticks": {
+          "description": "Declared set through ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "clear_from_ticks",
+        "mask",
+        "set_through_ticks"
       ],
       "type": "object"
     },
