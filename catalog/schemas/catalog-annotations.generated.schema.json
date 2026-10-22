@@ -32,11 +32,6 @@
           "const": "firmware_facts",
           "description": "Located firmware observations and their source evidence.",
           "type": "string"
-        },
-        {
-          "const": "body_controls",
-          "description": "Physical control inventory evidence.",
-          "type": "string"
         }
       ]
     },
@@ -647,11 +642,6 @@
         {
           "const": "located-facts-v2",
           "description": "Located observations and their proof spans.",
-          "type": "string"
-        },
-        {
-          "const": "control-inventory",
-          "description": "Physical control inventory and manual citations.",
           "type": "string"
         }
       ]

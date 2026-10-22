@@ -79,8 +79,6 @@ pub struct SourceDocument {
 pub enum SourceDocumentFormat {
     /// Located observations and their proof spans.
     LocatedFactsV2,
-    /// Physical control inventory and manual citations.
-    ControlInventory,
 }
 
 /// Recorded prose or a list of prose citations.
@@ -165,6 +163,4 @@ pub enum AnnotationKind {
     FirmwareView,
     /// Located firmware observations and their source evidence.
     FirmwareFacts,
-    /// Physical control inventory evidence.
-    BodyControls,
 }
