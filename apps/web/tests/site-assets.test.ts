@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { stageSite } from '../scripts/stage-site.ts';
+import { stageSite, runtimeBundleFiles } from '../scripts/stage-site.ts';
 import type { Catalog } from '../src/catalog';
 
 test('a failed local asset preparation preserves the installed website assets', async () => {
@@ -57,12 +57,52 @@ test('a failed local asset preparation preserves the installed website assets', 
       join(runtime, 'test-100/browser-qualification.json'),
       JSON.stringify({ sha256: '1'.repeat(64), passed: true }),
     );
+    await writeFile(
+      join(runtime, 'test-100/wasm.json'),
+      JSON.stringify({ construction: 'session' }),
+    );
     await assert.rejects(stageSite(inputs, destination), /camera.wasm/);
     for (const name of ['camera.wasm', 'camera.mjs', 'wasm.json', 'runtime-NOTICES.txt'])
-      await writeFile(join(runtime, 'test-100', name), 'test');
+      if (name !== 'wasm.json') await writeFile(join(runtime, 'test-100', name), 'test');
+    await assert.rejects(stageSite(inputs, destination), /patches.json/);
+    const prepared = {
+      document: 'document.json',
+      bootRom: 'boot-rom.bin',
+      nand: 'browser-nand.bin.gz',
+      settings: 'mcu-settings.bin',
+    };
+    await writeFile(
+      join(runtime, 'test-100/wasm.json'),
+      JSON.stringify({ construction: 'prepared', prepared }),
+    );
+    await assert.rejects(stageSite(inputs, destination), /document.json/);
+    for (const name of Object.values(prepared))
+      await writeFile(join(runtime, 'test-100', name), 'input');
     await assert.rejects(stageSite(inputs, destination), /patches.json/);
     assert.equal(await readFile(join(destination, 'runtime/catalog.json'), 'utf8'), 'installed');
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('prepared runtime staging follows declared cold input filenames and refuses traversal', () => {
+  const prepared = {
+    document: 'document.json',
+    bootRom: 'boot-rom.bin',
+    nand: 'nand.gz',
+    settings: 'mcu.bin',
+  };
+  assert.deepEqual(
+    runtimeBundleFiles({ construction: 'prepared', prepared }).slice(4),
+    Object.values(prepared),
+  );
+  assert.throws(
+    () =>
+      runtimeBundleFiles({
+        construction: 'prepared',
+        prepared: { ...prepared, nand: '../nand.gz' },
+      }),
+    /invalid nand filename/,
+  );
+  assert.throws(() => runtimeBundleFiles({ construction: 'prepared' }), /no bundle files/);
 });

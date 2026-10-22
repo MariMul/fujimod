@@ -24,6 +24,27 @@ export function featureMediaFiles(media: FeatureMedia, featureSource: string) {
   return new Set(cards.flatMap((card) => [media.cards[card].video, media.cards[card].still]));
 }
 
+/** Cold inputs named by prepared manifests accompany the ordinary runtime files. */
+export function runtimeBundleFiles(manifest: unknown) {
+  const files = ['camera.wasm', 'camera.mjs', 'wasm.json', 'runtime-NOTICES.txt'];
+  if (manifest === null || typeof manifest !== 'object' || !('construction' in manifest))
+    throw Error('Runtime manifest has no construction kind.');
+  if (manifest.construction !== 'prepared') return files;
+  if (
+    !('prepared' in manifest) ||
+    manifest.prepared === null ||
+    typeof manifest.prepared !== 'object'
+  )
+    throw Error('Prepared runtime has no bundle files.');
+  for (const key of ['document', 'bootRom', 'nand', 'settings']) {
+    const name: unknown = Reflect.get(manifest.prepared, key);
+    if (typeof name !== 'string' || !/^[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$/.test(name))
+      throw Error(`Prepared runtime has an invalid ${key} filename.`);
+    files.push(name);
+  }
+  return [...new Set(files)];
+}
+
 export async function stageSite(inputs: SiteInputs, destination = 'public') {
   const catalog = validateCatalog(
     JSON.parse(await readFile(join(inputs.runtime, 'catalog.json'), 'utf8')) as Catalog,
@@ -75,15 +96,16 @@ export async function stageSite(inputs: SiteInputs, destination = 'public') {
         browser.passed !== true
       )
         throw Error(`Emulator qualification failed: ${firmware.id}`);
-      for (const name of ['camera.wasm', 'camera.mjs', 'wasm.json', 'runtime-NOTICES.txt'])
+      const manifest: unknown = JSON.parse(await readFile(join(directory, 'wasm.json'), 'utf8'));
+      for (const name of runtimeBundleFiles(manifest))
         await copy(join(directory, name), config.bundle + name);
       if (config.usb) {
         const bundle = config.usb.bundle;
         if (bundle !== `runtime/${firmware.id}-usb/`)
           throw Error(`Unexpected USB runtime location: ${firmware.id}`);
         const usb = join(inputs.runtime, `${firmware.id}-usb`);
-        for (const name of ['camera.wasm', 'camera.mjs', 'wasm.json', 'runtime-NOTICES.txt'])
-          await copy(join(usb, name), bundle + name);
+        const manifest: unknown = JSON.parse(await readFile(join(usb, 'wasm.json'), 'utf8'));
+        for (const name of runtimeBundleFiles(manifest)) await copy(join(usb, name), bundle + name);
       }
     }
     const catalogBytes = Buffer.from(JSON.stringify(catalog));

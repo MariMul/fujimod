@@ -21,6 +21,21 @@ const scenarios: Record<string, ReplayScenario> = {
       { action: 'advance', ticks: 120000000 },
     ],
   },
+  'x70-photo': {
+    firmwareId: 'x70-110',
+    firmwarePath: '/local/firmware.dat',
+    clockSeconds2000: 845000000,
+    interactive: false,
+    steps: [
+      { action: 'set_position', id: 'lcd_tilt_switch', position: 'normal' },
+      { action: 'press', id: 'shutter_button', stage: 'half' },
+      { action: 'advance', ticks: 130000000 },
+      { action: 'press', id: 'shutter_button', stage: 'full' },
+      { action: 'advance', ticks: 80000000 },
+      { action: 'release', id: 'shutter_button' },
+      { action: 'advance', ticks: 1200000 },
+    ],
+  },
   'x70-lcd': {
     firmwareId: 'x70-110',
     firmwarePath: '/local/firmware.dat',
