@@ -61,11 +61,14 @@ fn run(
         )?;
     }
     board.write_register(options.core, Register::X(30), options.return_address)?;
-    if let Some(stack_pointer) = options.stack_pointer {
-        board.write_register(options.core, Register::Sp, stack_pointer)?;
-    }
     if let Some(pstate) = options.pstate {
         board.write_register(options.core, Register::Pstate, pstate)?;
+    }
+    // SP is banked by PSTATE's EL0/EL1 stack selector. Select the caller's
+    // exception level before writing SP so the requested value lands in the
+    // bank the routine will actually use.
+    if let Some(stack_pointer) = options.stack_pointer {
+        board.write_register(options.core, Register::Sp, stack_pointer)?;
     }
     board.write_register(options.core, Register::Pc, options.entry)?;
 
