@@ -1479,10 +1479,20 @@ fn apply_run_inputs(
                 );
             }
         }
-        "control_bus0" | "control_bus1" => {
+        "control_bus0" => {
             // The body control-bus chip inventory is validated by the catalog
             // resolver. Their modeled transaction contracts are an explicit
             // X70 implementation policy in this module.
+        }
+        "control_bus1" => {
+            // The secondary charge state and the USB cable wire come from the
+            // same run input, so a connected cable selects the declared
+            // connected secondary profile. The disconnected stock profile stays
+            // in place otherwise.
+            if inputs.usb.connected {
+                recipe["options"]["profile"] = json!("declared-bus1-register-replies-unmeasured");
+                recipe["options"]["parts"]["connected"] = json!(true);
+            }
         }
         "live_frames" => {
             let s1 = inputs
