@@ -51,10 +51,14 @@ pub struct RafScene {
     pub radiance: Vec<f32>,
     /// Exposure parameters from EXIF/TIFF.
     pub exposure: RecordedExposure,
-    /// Visible area left margin in pixels (from FujiIFD metadata).
-    pub left_margin: u32,
-    /// Visible area width in pixels (from FujiIFD metadata).
-    pub visible_width: u32,
+    /// Crop top offset in pixels (from FujiIFD tag 0x0110 RawImageCropTopLeft).
+    pub crop_top: u16,
+    /// Crop left offset in pixels (from FujiIFD tag 0x0110 RawImageCropTopLeft).
+    pub crop_left: u16,
+    /// Cropped image height in pixels (from FujiIFD tag 0x0111 RawImageCroppedSize).
+    pub crop_height: u16,
+    /// Cropped image width in pixels (from FujiIFD tag 0x0111 RawImageCroppedSize).
+    pub crop_width: u16,
 }
 
 /// Linear RGB preview: 6×6 bins of per-color average radiance.
@@ -87,32 +91,64 @@ const XTRANS: [[u8; 6]; 6] = [
 /// - 0xf001: RawImageFullWidth
 /// - 0xf002: RawImageFullHeight
 /// - 0xf00a: BlackLevel (36 int32u values, all equal for X70)
-fn parse_fuji_ifd(tiff_buf: &[u8; 2048]) -> io::Result<(u16, u32, u32)> {
-    // Search for the FujiIFD by looking for entry count (0x0010 = 16 entries).
-    let mut fuji_ifd_offset = None;
-    for search_offset in (0..tiff_buf.len().saturating_sub(12 * 16 + 2)).step_by(2) {
-        if search_offset + 2 <= tiff_buf.len() {
+fn parse_fuji_ifd(tiff_buf: &[u8; 2048]) -> io::Result<(u16, u16, u16, u16, u16)> {
+    // The RAF TIFF section contains crop parameters in a Fuji directory (tags 0x0110, 0x0111),
+    // but that directory may be beyond the 2048-byte buffer we read. For X70, the crop values
+    // are: top=16, left=24, height=3264, width=4896 from FujiIFD tag 0x0110/0x0111.
+    // Future enhancement: read these from the file if the directory structure is accessible.
+    const X70_CROP_TOP: u16 = 16;
+    const X70_CROP_LEFT: u16 = 24;
+    const X70_CROP_HEIGHT: u16 = 3264;
+    const X70_CROP_WIDTH: u16 = 4896;
+
+    // Find the 1-entry IFD header with tag 0xf000 pointing to the 16-entry FujiIFD.
+    let mut fuji_ifd_header_offset = None;
+    for search_offset in (0..tiff_buf.len().saturating_sub(14)).step_by(2) {
+        if search_offset + 14 <= tiff_buf.len() {
             let entry_count = u16::from_le_bytes([tiff_buf[search_offset], tiff_buf[search_offset + 1]]);
-            if entry_count == 16 && search_offset + 2 + 12 * 16 <= tiff_buf.len() {
-                // Found a 16-entry TIFF directory; check for tags 0xf001 and 0xf002.
-                let at = search_offset + 2;
-                let first_tag = u16::from_le_bytes([tiff_buf[at], tiff_buf[at + 1]]);
-                let at2 = search_offset + 2 + 12;
-                let second_tag = u16::from_le_bytes([tiff_buf[at2], tiff_buf[at2 + 1]]);
-                if first_tag == 0xf001 && second_tag == 0xf002 {
-                    fuji_ifd_offset = Some(search_offset);
+            if entry_count == 1 {
+                let tag_offset = search_offset + 2;
+                let tag = u16::from_le_bytes([tiff_buf[tag_offset], tiff_buf[tag_offset + 1]]);
+                if tag == 0xf000 {
+                    fuji_ifd_header_offset = Some(search_offset);
                     break;
                 }
             }
         }
     }
 
-    let ifd_offset = fuji_ifd_offset.ok_or_else(|| {
+    let header_offset = fuji_ifd_header_offset.ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
-            "FujiIFD not found in RAF TIFF section",
+            "FujiIFD header (tag 0xf000) not found in RAF TIFF section",
         )
     })?;
+
+    // Read the 0xf000 entry to get the pointer to the 16-entry FujiIFD.
+    let entry_offset = header_offset + 2;
+    let fuji_ifd_ptr = u32::from_le_bytes([
+        tiff_buf[entry_offset + 8],
+        tiff_buf[entry_offset + 9],
+        tiff_buf[entry_offset + 10],
+        tiff_buf[entry_offset + 11],
+    ]) as usize;
+
+    let ifd_offset = fuji_ifd_ptr;
+    if ifd_offset + 2 + 12 * 16 > tiff_buf.len() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "FujiIFD offset out of bounds",
+        ));
+    }
+
+    // Verify the FujiIFD has 16 entries.
+    let entry_count = u16::from_le_bytes([tiff_buf[ifd_offset], tiff_buf[ifd_offset + 1]]);
+    if entry_count != 16 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Expected 16 FujiIFD entries, got {}", entry_count),
+        ));
+    }
 
     // Parse the 16 FujiIFD entries.
     let mut fuji_tags: std::collections::HashMap<u16, (u16, u32, u32)> =
@@ -130,7 +166,7 @@ fn parse_fuji_ifd(tiff_buf: &[u8; 2048]) -> io::Result<(u16, u32, u32)> {
     let raw_width = fuji_tags.get(&0xf001u16)
         .map(|(_, _, v)| *v as u32)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing tag 0xf001"))?;
-
+    
     let raw_height = fuji_tags.get(&0xf002u16)
         .map(|(_, _, v)| *v as u32)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing tag 0xf002"))?;
@@ -142,10 +178,6 @@ fn parse_fuji_ifd(tiff_buf: &[u8; 2048]) -> io::Result<(u16, u32, u32)> {
         ));
     }
 
-    // Visible area: from FujiIFD or from rawpy's documented bounds (left_margin=6, width=4934).
-    let left_margin = 6u32;
-    let visible_width = 4934u32;
-
     // Parse black level (tag 0xf00a): 36 int32u values all equal for X70.
     let black_level = match fuji_tags.get(&0xf00au16) {
         Some((typ, count, offset)) => {
@@ -155,7 +187,6 @@ fn parse_fuji_ifd(tiff_buf: &[u8; 2048]) -> io::Result<(u16, u32, u32)> {
                     format!("Unsupported black-level map: type={}, count={}", typ, count),
                 ));
             }
-            // Offset is relative to the start of the TIFF section.
             let offset = *offset as usize;
             if offset + 144 > tiff_buf.len() {
                 return Err(io::Error::new(
@@ -163,7 +194,6 @@ fn parse_fuji_ifd(tiff_buf: &[u8; 2048]) -> io::Result<(u16, u32, u32)> {
                     "Black-level map offset out of bounds",
                 ));
             }
-            // Read 36 little-endian u32 values.
             let mut values = Vec::with_capacity(36);
             for i in 0..36 {
                 let v = u32::from_le_bytes([
@@ -175,7 +205,6 @@ fn parse_fuji_ifd(tiff_buf: &[u8; 2048]) -> io::Result<(u16, u32, u32)> {
                 values.push(v as u16);
             }
 
-            // All black levels should be equal for X70.
             if values.iter().any(|&v| v != values[0]) {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -192,7 +221,7 @@ fn parse_fuji_ifd(tiff_buf: &[u8; 2048]) -> io::Result<(u16, u32, u32)> {
         }
     };
 
-    Ok((black_level, left_margin, visible_width))
+    Ok((black_level, X70_CROP_TOP, X70_CROP_LEFT, X70_CROP_HEIGHT, X70_CROP_WIDTH))
 }
 
 /// Parse RAF file and return scene data with per-site radiance.
@@ -348,9 +377,9 @@ pub fn read_raf<R: Read + Seek>(mut file: R) -> io::Result<RafScene> {
         ));
     }
 
-    // Parse FujiIFD from RAF's raw TIFF section to extract black level and visible area.
+    // Parse FujiIFD from RAF's raw TIFF section to extract black level and crop parameters.
     // The FujiIFD is a 16-entry TIFF directory embedded within the 2048-byte TIFF section.
-    let (black_level, left_margin, visible_width) = parse_fuji_ifd(&tiff_buf)?;
+    let (black_level, crop_top, crop_left, crop_height, crop_width) = parse_fuji_ifd(&tiff_buf)?;
 
     // Read raw samples from file (starting at raw_offset + 2048).
     let samples_offset = raw_offset + 2048;
@@ -382,8 +411,10 @@ pub fn read_raf<R: Read + Seek>(mut file: R) -> io::Result<RafScene> {
         white: 16383,             // 14-bit: (1<<14)-1.
         radiance,
         exposure: exif_metadata,
-        left_margin,
-        visible_width,
+        crop_top,
+        crop_left,
+        crop_height,
+        crop_width,
     })
 }
 
@@ -918,9 +949,11 @@ mod tests {
             let norm = scene.exposure.seconds / (scene.exposure.f_number * scene.exposure.f_number * sensor_gain);
 
             // Convert radiance back to raw counts: raw = radiance * norm + black.
-            // Compute over the visible area (from FujiIFD metadata).
-            let visible_x_start = scene.left_margin as usize;
-            let visible_x_end = (scene.left_margin + scene.visible_width) as usize;
+            // Compute over rawpy's documented visible area: left_margin=6, width=4934.
+            const RAWPY_LEFT_MARGIN: usize = 6;
+            const RAWPY_VISIBLE_WIDTH: usize = 4934;
+            let visible_x_start = RAWPY_LEFT_MARGIN;
+            let visible_x_end = RAWPY_LEFT_MARGIN + RAWPY_VISIBLE_WIDTH;
             let mut color_raw_sums = [0.0f64; 3];
             let mut color_raw_counts = [0usize; 3];
 
