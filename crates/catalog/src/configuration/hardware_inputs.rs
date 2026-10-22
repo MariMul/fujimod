@@ -833,6 +833,27 @@ pub struct HardwareInputs {
     pub reset: HardwareReset,
 }
 
+impl HardwareInputs {
+    /// Resolve a bundled body reset-input document by its stable identity.
+    pub fn bundled(id: &str) -> Result<Self, String> {
+        crate::emulator::validate_id(id)?;
+        let document = super::BUNDLED_HARDWARE_INPUTS
+            .iter()
+            .find_map(|(candidate, document)| (*candidate == id).then_some(*document))
+            .ok_or_else(|| format!("unsupported hardware-input profile: {id}"))?;
+        let inputs: Self = serde_json::from_str(document)
+            .map_err(|error| format!("hardware-input profile {id}: {error}"))?;
+        if inputs.schema != 1
+            || inputs.schema_uri != HARDWARE_INPUTS_SCHEMA_URI
+            || inputs.id != id
+        {
+            return Err(format!("hardware-input profile {id} schema or identity differs"));
+        }
+        crate::emulator::validate_id(&inputs.body_id)?;
+        Ok(inputs)
+    }
+}
+
 /// Panel transport words, chip-selection conditions, framing and endpoint index.
 pub type PanelContract = (Vec<u64>, Vec<u64>, Vec<Option<u64>>, u64);
 
