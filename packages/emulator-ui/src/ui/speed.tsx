@@ -15,17 +15,18 @@ function speedColor(speed: number) {
   }
 }
 export function SpeedGauge(props: { speed: number }) {
+  // Nearest 5% keeps the reading steady while menus and live view alternate; color follows the shown value.
+  const shown = () => Math.round(Math.max(0, props.speed) * 20) / 20;
   return (
     <span
       id="camera-speed"
       style={{
         'white-space': 'nowrap',
         'font-variant-numeric': 'tabular-nums',
-        color: speedColor(props.speed),
+        color: speedColor(shown()),
       }}
     >
-      {/* Nearest 5% keeps the reading steady while menus and live view alternate. */}
-      {Math.round(Math.max(0, props.speed) * 20) * 5}% speed
+      {Math.round(shown() * 100)}% speed
     </span>
   );
 }

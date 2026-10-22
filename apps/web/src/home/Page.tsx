@@ -111,9 +111,7 @@ export default function Home() {
                 {(actions) => (
                   <ViewportControls
                     active={state.toolbarVisible}
-                    title={
-                      state.firmware ? `${state.firmware.model} · ${state.firmware.version}` : ''
-                    }
+                    title={state.firmware?.model ?? ''}
                     speed={state.speed}
                     webcamSupported={!!state.firmware?.emulate?.sceneInput}
                     webcamActive={state.webcamActive}

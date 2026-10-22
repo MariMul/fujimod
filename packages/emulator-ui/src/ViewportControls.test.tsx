@@ -137,7 +137,7 @@ test('the firmware picker offers both builds, dispatches a change and closes', (
 test('feedback and saved reports sit in the bar, which an idle viewer hides unless a report is saved', () => {
   const t = mount(),
     bar = t.host.querySelector<HTMLElement>('#viewer-tools')!;
-  t.click('Feedback');
+  t.click('Bug / Idea');
   expect(t.open).toHaveBeenCalledOnce();
   t.click('Saved report');
   expect(t.recover).toHaveBeenCalledOnce();

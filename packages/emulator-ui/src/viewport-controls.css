@@ -7,18 +7,16 @@
   z-index: 6;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0;
   height: 28px;
-  padding: 0 6px 0 12px;
+  padding: 0 0 0 12px;
   border-top: 0.5px solid rgb(84 84 88 / 65%);
   background: #0b0b0c;
   color: rgb(235 235 245 / 60%);
   font:
-    400 11px/1 ui-monospace,
-    'SF Mono',
-    Menlo,
-    monospace;
-  letter-spacing: -0.02em;
+    400 12px/1 system-ui,
+    sans-serif;
+  font-variant-numeric: tabular-nums;
 }
 .viewport-bar[hidden] {
   display: none;
@@ -27,7 +25,7 @@
   white-space: nowrap;
   color: #fff;
   font-weight: 500;
-  margin-right: 6px;
+  margin-right: 12px;
 }
 .viewport-bar-spacer {
   flex: 1;
@@ -35,11 +33,13 @@
 .viewport-bar button {
   display: inline-flex;
   align-items: center;
+  /* Bar controls are full-height square sections divided by hairlines. */
   gap: 5px;
-  height: 24px;
-  padding: 0 7px;
+  height: 28px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 6px;
+  border-left: 0.5px solid rgb(84 84 88 / 65%);
+  border-radius: 0;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -63,10 +63,12 @@
 }
 .firmware-picker {
   position: relative;
+  margin-right: 12px;
 }
 .firmware-picker > button {
+  border-right: 0.5px solid rgb(84 84 88 / 65%);
   color: #fff;
-  background: rgb(118 118 128 / 24%);
+  background: rgb(118 118 128 / 16%);
 }
 .firmware-menu {
   position: absolute;
@@ -89,6 +91,7 @@
   display: flex;
   width: 100%;
   height: 32px;
+  border: 0;
   border-radius: 7px;
   color: #fff;
 }
@@ -119,17 +122,5 @@
   }
   .stage:not(.idle) #lcd-source.flat {
     height: auto;
-  }
-}
-@media (max-width: 480px) {
-  .viewport-bar {
-    padding-left: 10px;
-  }
-  /* Narrow bars keep icons; the buttons keep their accessible names. */
-  .viewport-bar-label {
-    display: none;
-  }
-  .viewport-bar button {
-    padding: 0 6px;
   }
 }
