@@ -228,14 +228,14 @@ fn content_identity_uses_standard_sha256_and_exact_byte_counts() {
 #[test]
 fn published_x70_connection_limits_are_nonempty_strings() {
     let bodies =
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../catalog/emulator/bodies");
-    for name in ["x70.json", "x70-rec-usb.json"] {
-        let path = bodies.join(name);
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../catalog/bodies/x70");
+    for name in ["x70", "x70-rec-usb"] {
+        let path = bodies.join("body.json");
         let bytes =
             std::fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
         let document: serde_json::Value = serde_json::from_slice(&bytes)
             .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
-        let connections = document
+        let connections = document["hardware"]["profiles"][name]
             .get("connections")
             .and_then(serde_json::Value::as_array)
             .unwrap_or_else(|| panic!("{}: missing connections", path.display()));
