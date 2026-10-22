@@ -130,6 +130,7 @@ pub fn assemble_devices(
     windows: Vec<DeviceWindow>,
     controls_options: ResistorKeysOptions,
     mut resources: xp5_board::Resources,
+    mode: Mode,
 ) -> Result<DeviceAssembly, String> {
     let input_driver: Arc<dyn DriveInput> = resources.pins.clone();
     let controls = Arc::new(ResistorKeys::new(input_driver, controls_options)?);
@@ -177,7 +178,7 @@ pub fn assemble_devices(
         causes.push(control_source);
         graph.depend_on(device, causes)?;
     }
-    let bus = Bus::from_graph(Mode::Strict, graph)?;
+    let bus = Bus::from_graph(mode, graph)?;
     Ok(DeviceAssembly {
         bus,
         inputs: super::super::session::xp5::State::new(
@@ -202,6 +203,8 @@ pub struct MemoryImage {
 /// does not compare them with a bundled firmware identity or apply patches.
 pub struct OpenOptions {
     pub definition: Value,
+    /// Refuse unsupported accesses, or continue with the board's discovery ledger.
+    pub mode: Mode,
     pub processors: factory::Graph,
     pub windows: Vec<DeviceWindow>,
     pub controls: ResistorKeysOptions,
@@ -251,7 +254,12 @@ fn validate_images(graph: &factory::Graph, images: &[MemoryImage]) -> Result<(),
 pub fn open(options: OpenOptions) -> Result<super::super::session::Session, String> {
     validate_images(&options.processors, &options.images)?;
     options.processors.validate()?;
-    let assembly = assemble_devices(options.windows, options.controls, options.resources)?;
+    let assembly = assemble_devices(
+        options.windows,
+        options.controls,
+        options.resources,
+        options.mode,
+    )?;
     let mut board = options.processors.build(
         factory::Options {
             engine: options.engine,
