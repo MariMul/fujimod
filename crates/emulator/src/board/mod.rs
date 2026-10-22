@@ -53,9 +53,6 @@ struct CoreInterruptMap {
     device: usize,
     inputs: Box<dyn fujimod_emulator_devices::bus::CoreInterrupts>,
 }
-fn default_device_workers() -> usize {
-    if cfg!(target_os = "emscripten") { 2 } else { 0 }
-}
 fn device_workers(policy: ExecutionPolicy, preference: usize) -> usize {
     match policy {
         ExecutionPolicy::Exact => 0,
@@ -144,7 +141,8 @@ pub struct Board {
     entries: Rc<RefCell<observe::Entries>>,
 }
 impl Board {
-    /// Host parallelism used for Interactive device computations. Exact stays inline.
+    /// Host parallelism used for Interactive device computations. Defaults to
+    /// zero on every target; Exact stays inline for any preference.
     pub fn device_worker_preference(&self) -> usize {
         self.state.borrow().device_workers
     }
@@ -292,7 +290,7 @@ impl Board {
         let state = Rc::new(RefCell::new(State {
             continuation,
             execution_policy: ExecutionPolicy::Exact,
-            device_workers: default_device_workers(),
+            device_workers: 0,
             clock_limit: None,
             memory: memory.clone(),
             bus,

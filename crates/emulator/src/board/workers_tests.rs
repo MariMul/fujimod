@@ -29,6 +29,8 @@ fn board() -> Board {
 #[test]
 fn worker_preference_is_host_only_and_exact_stays_inline() {
     let mut board = board();
+    assert_eq!(board.device_worker_preference(), 0);
+    assert_eq!(board.device_worker_count(), 0);
     let before = board.fingerprint().unwrap();
     board.set_device_workers(2).unwrap();
     assert_eq!(board.device_worker_preference(), 2);
@@ -39,6 +41,8 @@ fn worker_preference_is_host_only_and_exact_stays_inline() {
     board
         .set_execution_policy(ExecutionPolicy::Interactive)
         .unwrap();
+    assert_eq!(board.device_worker_count(), 2);
+    assert_eq!(fujimod_emulator_devices::work::worker_count(), 2);
     let before = board.fingerprint().unwrap();
     let saved = board.checkpoint(None).unwrap();
     board.set_device_workers(0).unwrap();
@@ -51,11 +55,12 @@ fn worker_preference_is_host_only_and_exact_stays_inline() {
 fn alternating_boards_apply_their_preference_before_each_run() {
     let mut inline = board();
     let mut threaded = board();
-    inline.set_device_workers(0).unwrap();
+    assert_eq!(inline.device_worker_preference(), 0);
     threaded.set_device_workers(2).unwrap();
     inline
         .set_execution_policy(ExecutionPolicy::Interactive)
         .unwrap();
+    assert_eq!(inline.device_worker_count(), 0);
     threaded
         .set_execution_policy(ExecutionPolicy::Interactive)
         .unwrap();

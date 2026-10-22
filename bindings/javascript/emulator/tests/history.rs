@@ -550,6 +550,10 @@ fn raw_usb_commands_preserve_opaque_packets_and_never_run_the_guest() {
 #[test]
 fn device_workers_are_host_preferences_without_history_or_fingerprint_effects() {
     let handle = create(false);
+    assert_eq!(
+        command(handle, "device_workers", json!({}), &[]).unwrap().0,
+        json!({"count":0,"effective":0})
+    );
     let before = command(handle, "fingerprint", json!({}), &[]).unwrap();
     assert_eq!(
         command(handle, "device_workers", json!({"count":2}), &[])
@@ -569,4 +573,46 @@ fn device_workers_are_host_preferences_without_history_or_fingerprint_effects() 
         before
     );
     assert_eq!(camera_destroy(handle), 0);
+}
+
+#[test]
+fn interactive_device_workers_default_inline_and_allow_explicit_stopped_selection() {
+    let policy = b"interactive";
+    assert_eq!(
+        unsafe { camera_policy_setup(policy.as_ptr(), policy.len() as u32) },
+        0
+    );
+    let handle = create(false);
+    assert_eq!(
+        command(handle, "device_workers", json!({}), &[]).unwrap().0,
+        json!({"count":0,"effective":0})
+    );
+    let before = command(handle, "fingerprint", json!({}), &[]).unwrap();
+    assert_eq!(
+        command(handle, "device_workers", json!({"count":2}), &[])
+            .unwrap()
+            .0,
+        json!({"count":2,"effective":2})
+    );
+    assert_eq!(
+        command(handle, "fingerprint", json!({}), &[]).unwrap(),
+        before
+    );
+    assert_eq!(camera_run_until(handle, 5), 0, "{}", error(handle));
+    assert_eq!(
+        command(handle, "device_workers", json!({}), &[]).unwrap().0,
+        json!({"count":2,"effective":2})
+    );
+    assert_eq!(
+        command(handle, "device_workers", json!({"count":0}), &[])
+            .unwrap()
+            .0,
+        json!({"count":0,"effective":0})
+    );
+    assert_eq!(camera_destroy(handle), 0);
+    let policy = b"exact";
+    assert_eq!(
+        unsafe { camera_policy_setup(policy.as_ptr(), policy.len() as u32) },
+        0
+    );
 }

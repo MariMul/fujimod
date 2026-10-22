@@ -134,6 +134,7 @@ export interface SessionCommands {
     request: Record<string, never>;
     result: { ticksPerSecond: string; state: { frames: number } };
   };
+  /** Stopped host preference, default zero; Exact always computes inline. */
   device_workers: {
     request: { count?: 0 | 2 };
     result: { count: 0 | 2; effective: 0 | 2 };
