@@ -81,6 +81,8 @@ pub struct Cfa {
     nearest: Vec<[(i8, i8); 3]>,
 }
 
+// RawView caps width at 8192: x <= 8191, so horizontal byte offsets top out
+// at 16382 for U16 and 12286 for Packed12; both values fit these u16 fields.
 #[derive(Clone, Copy)]
 struct CfaColumnSample {
     x: u16,
@@ -551,6 +553,118 @@ mod tests {
                 assert!(x_phases.into_iter().all(|seen| seen));
                 assert!(y_phases.into_iter().all(|seen| seen));
             }
+        }
+    }
+    #[test]
+    fn near_maximum_raw_x_matches_scalar_for_both_packings() {
+        let cfa = Cfa::new((0..36).map(|i| [0, 1, 2, 2, 2, 2][i % 6]).collect()).unwrap();
+        let words = super::super::film::color_tests::words();
+        let mut film = Film::default();
+        film.update(|o| words[o / 4]).unwrap();
+
+        for packing in [Packing::U16, Packing::Packed12] {
+            let width = 8192;
+            let height = 12;
+            let pitch = packing.row_bytes(width) + 8;
+            let mut bytes = vec![0; pitch * height];
+            for y in 0..height {
+                for x in 0..width {
+                    let value = ((x * 17 + y * 97 + 23) % 4096) as u16;
+                    if packing == Packing::U16 {
+                        bytes[y * pitch + x * 2..y * pitch + x * 2 + 2]
+                            .copy_from_slice(&value.to_le_bytes());
+                    } else {
+                        let i = y * pitch + x * 3 / 2;
+                        if x % 2 == 0 {
+                            bytes[i] = value as u8;
+                            bytes[i + 1] = (value >> 8) as u8;
+                        } else {
+                            bytes[i] |= (value << 4) as u8;
+                            bytes[i + 1] = (value >> 4) as u8;
+                        }
+                    }
+                }
+            }
+            let raw = RawView {
+                bytes: &bytes,
+                width,
+                height,
+                pitch,
+                packing,
+            };
+            raw.validate().unwrap();
+
+            assert_eq!(RawView::byte_offset::<false>(width - 1), 16382);
+            assert_eq!(RawView::byte_offset::<true>(width - 1), 12286);
+            assert_eq!(
+                u16::try_from(RawView::byte_offset::<false>(width - 1)),
+                Ok(16382)
+            );
+            assert_eq!(
+                u16::try_from(RawView::byte_offset::<true>(width - 1)),
+                Ok(12286)
+            );
+            assert_eq!(
+                raw.sample(width - 1, 5),
+                (((width - 1) * 17 + 5 * 97 + 23) % 4096) as u16
+            );
+
+            let crop = [8171, 3, 18, 6];
+            let (out_width, out_height) = (18, 8);
+            let spatial_gain = |x, y| 768 + ((x * 7 + y * 11) % 5) as u16 * 256;
+            let actual_gain_calls = RefCell::new(Vec::new());
+            let mut actual = vec![0; out_width * out_height * 2];
+            cfa.render(
+                &raw,
+                &film,
+                127,
+                [311, 257, 493],
+                193,
+                |x, y| {
+                    actual_gain_calls.borrow_mut().push((x, y));
+                    spatial_gain(x, y)
+                },
+                crop,
+                out_width,
+                out_height,
+                &mut actual,
+            )
+            .unwrap();
+
+            let expected_gain_calls = RefCell::new(Vec::new());
+            let pixel = |x, y| {
+                let positions = cfa.sample_positions(
+                    &raw,
+                    crop[0] + x * crop[2] / out_width,
+                    crop[1] + y * crop[3] / out_height,
+                );
+                let rgb = positions.map(|(x, y)| raw.sample(x, y));
+                film.develop(std::array::from_fn(|c| {
+                    let (sx, sy) = positions[c];
+                    expected_gain_calls.borrow_mut().push((sx, sy));
+                    let value =
+                        (u64::from(rgb[c].saturating_sub(127)) * [311u64, 257, 493][c] * 193) >> 16;
+                    ((value * u64::from(spatial_gain(sx, sy))) >> 11).min(16383) as u16
+                }))
+            };
+            let mut expected = Vec::new();
+            for y in 0..out_height {
+                for x in (0..out_width).step_by(2) {
+                    expected.extend_from_slice(&Film::pack(pixel(x, y), pixel(x + 1, y)));
+                }
+            }
+            assert_eq!(actual, expected);
+            assert_eq!(
+                actual_gain_calls.borrow().as_slice(),
+                expected_gain_calls.borrow().as_slice()
+            );
+            assert_eq!(actual_gain_calls.borrow().len(), out_width * out_height * 3);
+            assert!(
+                actual_gain_calls
+                    .borrow()
+                    .iter()
+                    .any(|&(x, _)| x == width - 2)
+            );
         }
     }
     #[test]
