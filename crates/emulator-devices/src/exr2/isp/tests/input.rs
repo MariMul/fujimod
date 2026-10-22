@@ -451,6 +451,9 @@ fn raw_dma_uses_the_programmed_window_and_freezes_its_span_until_ack() {
         write(&mut d, &mut h, 0xfff10014, 1);
         write(&mut d, &mut h, 0xfff10018, 0);
         write(&mut d, &mut h, 0xfff10024, 2);
+        let checkpoint = d.checkpoint().unwrap();
+        assert!(h.effects.is_empty());
+        assert!(h.ram[0x7ff0..0x8400].iter().all(|b| *b == 0xa5));
         let saved = d.save();
         assert_eq!(
             saved[0]["dma"]["raster"],
@@ -479,6 +482,11 @@ fn raw_dma_uses_the_programmed_window_and_freezes_its_span_until_ack() {
         advance(&mut d, &mut h, 15);
         assert_eq!(d.save(), continued);
         assert_eq!(&h.ram[0x7ff0..0x8400], first);
+        d.restore_checkpoint(&checkpoint).unwrap();
+        h.ram[0x7ff0..0x8400].fill(0xa5);
+        advance(&mut d, &mut h, 15);
+        assert_eq!(d.save(), continued);
+        assert_eq!(&h.ram[0x7ff0..0x8400], first);
         advance(&mut d, &mut h, 20);
         assert_eq!(d.next_deadline(20), Some(30));
         write(&mut d, &mut h, 0xfff10350, 1);
@@ -491,6 +499,14 @@ fn raw_dma_uses_the_programmed_window_and_freezes_its_span_until_ack() {
             vec![0; if packed { 3 } else { 4 }]
         );
     }
+}
+#[test]
+fn worker_raw_readout_retains_latched_frames_padding_deadline_ack_and_restore() {
+    crate::work::configure(2).unwrap();
+    raw_sensor_freezes_frame_packs12_preserves_padding_and_waits_for_ack();
+    raw_dma_uses_the_programmed_window_and_freezes_its_span_until_ack();
+    raw_dma_refuses_out_of_raster_windows_and_unmodeled_transport_selections();
+    crate::work::configure(0).unwrap();
 }
 #[test]
 fn raw_dma_refuses_out_of_raster_windows_and_unmodeled_transport_selections() {

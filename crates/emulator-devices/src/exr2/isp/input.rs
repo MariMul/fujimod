@@ -677,12 +677,18 @@ impl ImageInput {
                 .ok_or("RAW channel2 pitch overflow")?,
         };
         s.dma
-            .prepare(cx.now(), self.options.raw_dma_ticks, dst, row)?;
+            .prepare_deferred(cx.now(), self.options.raw_dma_ticks, dst, row)?;
         s.raw_exposure = sensor.physical_exposure();
-        if let Err(e) = sensor.encode(packing, [left, top, width, height], &mut s.dma.pixels) {
-            s.dma.cancel();
-            return Err(e);
-        }
+        let readout = match sensor.freeze_readout(packing, [left, top, width, height]) {
+            Ok(readout) => readout,
+            Err(error) => {
+                s.dma.cancel();
+                return Err(error);
+            }
+        };
+        s.dma
+            .pixels
+            .defer_rows(row, height, move |rows, out| readout.write_rows(rows, out));
         Ok(())
     }
     fn tick(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {

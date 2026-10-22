@@ -4,8 +4,9 @@
 //! RGB light maps to the active image area; explicit RAW spans the clock raster.
 use crate::imaging::exposure::{ApertureHandle, Calibration, ExposedFrame, ExposureHandle};
 use crate::imaging::raw::{Cfa, Packing};
-use crate::scene::{FrameEdge, FramePixels, SensorFramesHandle};
+use crate::scene::{Frame, FrameEdge, FramePixels, SensorFramesHandle};
 use serde::{Deserialize, Serialize};
+use std::{ops::Range, sync::Arc};
 pub trait Controls: Send {
     fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String>;
     fn validate_checkpoint(&self, saved: &crate::checkpoint::Checkpoint) -> Result<(), String>;
@@ -160,6 +161,7 @@ mod tests {
         sensor
             .encode(Packing::U16, [0, 0, 6, 6], &mut first)
             .unwrap();
+        let frozen = sensor.freeze_readout(Packing::U16, [0, 0, 6, 6]).unwrap();
         let saved = sensor.checkpoint().unwrap();
         let saved_frames = frames.lock().unwrap().clone();
         let saved_exposure = *wire.lock().unwrap();
@@ -183,6 +185,9 @@ mod tests {
             .encode(Packing::U16, [0, 0, 6, 6], &mut actual)
             .unwrap();
         assert_ne!(actual, first);
+        let mut frozen_pixels = vec![0; 72];
+        frozen.encode(&mut frozen_pixels).unwrap();
+        assert_eq!(frozen_pixels, first);
         let changed_exposure = *wire.lock().unwrap();
         sensor.restore_checkpoint(&saved).unwrap();
         assert_eq!(*wire.lock().unwrap(), changed_exposure);
@@ -194,6 +199,52 @@ mod tests {
             .encode(Packing::U16, [0, 0, 6, 6], &mut actual)
             .unwrap();
         assert_eq!(actual, first);
+    }
+
+    #[test]
+    fn owned_raw_row_jobs_keep_the_accepted_frame_and_full_raster_coordinates() {
+        crate::work::configure(2).unwrap();
+        for packing in [Packing::U16, Packing::Packed12] {
+            let frames = Arc::new(Mutex::new(SensorFrames::new(
+                Frame::new(
+                    256,
+                    256,
+                    FramePixels::Raw16((0..256 * 256).map(|i| (i % 4096) as u16).collect()),
+                )
+                .unwrap(),
+            )));
+            let mut sensor = Sensor::new(
+                Options {
+                    width: 256,
+                    height: 256,
+                    image_area: [0, 0, 256, 256],
+                    cfa: vec![0, 1, 2].repeat(12),
+                    black: 0,
+                    full_scale: 4095,
+                    reference_white: [256; 3],
+                },
+                frames.clone(),
+            )
+            .unwrap();
+            sensor.latch(1).unwrap();
+            let window = [1, 1, 254, 254];
+            let row = packing.row_bytes(window[2]);
+            let mut expected = vec![0; row * window[3]];
+            sensor.encode(packing, window, &mut expected).unwrap();
+            let frozen = sensor.freeze_readout(packing, window).unwrap();
+            assert!(frozen.encode(&mut []).is_err());
+            let mut actual = crate::work::Buffer::default();
+            actual.defer_rows(row, window[3], move |rows, bytes| {
+                frozen.write_rows(rows, bytes)
+            });
+            frames
+                .lock()
+                .unwrap()
+                .set_frame(Frame::new(1, 1, FramePixels::Raw16(vec![0])).unwrap());
+            sensor.latch(2).unwrap();
+            assert_eq!(actual.as_slice(), expected);
+        }
+        crate::work::configure(0).unwrap();
     }
 
     #[test]
@@ -303,6 +354,21 @@ pub struct Sensor {
     radiometry: Option<(Calibration, ExposureHandle, ApertureHandle)>,
     exposed: Option<ExposedFrame>,
     projection: Option<crate::imaging::optics::Projection>,
+}
+/// A validated readout from one accepted exposure. It retains immutable image
+/// inputs, never the live sensor, controller, frame clock, or exposure handles.
+pub(crate) struct FrozenReadout {
+    width: usize,
+    height: usize,
+    image_area: [usize; 4],
+    cfa: Cfa,
+    black: u16,
+    linear: [[u16; 256]; 3],
+    frame: Arc<Frame>,
+    exposed: Option<ExposedFrame>,
+    radiometric: bool,
+    packing: Packing,
+    window: [usize; 4],
 }
 impl Sensor {
     pub fn new(options: Options, frames: SensorFramesHandle) -> Result<Self, String> {
@@ -514,12 +580,11 @@ impl Sensor {
         }
         self.frames.lock().unwrap().latch(tick)
     }
-    pub fn encode(
+    pub(crate) fn freeze_readout(
         &mut self,
         packing: Packing,
         [left, top, width, height]: [usize; 4],
-        out: &mut [u8],
-    ) -> Result<(), String> {
+    ) -> Result<FrozenReadout, String> {
         if width == 0
             || width % 2 != 0
             || height == 0
@@ -546,11 +611,49 @@ impl Sensor {
         if self.radiometry.is_some() && self.exposed.is_none() {
             return Err("RAW capture has no completed physical exposure".into());
         }
-        let frames = self.frames.lock().unwrap();
-        let f = &frames.latched;
+        let frame = self.frames.lock().unwrap().latched.clone();
+        Ok(FrozenReadout {
+            width: self.width,
+            height: self.height,
+            image_area: self.image_area,
+            cfa: self.cfa.clone(),
+            black: self.black,
+            linear: self.linear,
+            frame,
+            exposed: self.exposed.clone(),
+            radiometric: self.radiometry.is_some(),
+            packing,
+            window: [left, top, width, height],
+        })
+    }
+    pub fn encode(
+        &mut self,
+        packing: Packing,
+        window: [usize; 4],
+        out: &mut [u8],
+    ) -> Result<(), String> {
+        self.freeze_readout(packing, window)?.encode(out)
+    }
+}
+impl FrozenReadout {
+    fn encode(&self, out: &mut [u8]) -> Result<(), String> {
+        let [_, _, width, height] = self.window;
+        let packing = self.packing;
         if out.len() != packing.row_bytes(width) * height {
             return Err("sensor output buffer size".into());
         }
+        self.write_rows(0..height, out);
+        Ok(())
+    }
+    /// Buffer row jobs supply a bounded partition and its exact staging span.
+    /// All modeled geometry, projection, and exposure errors were checked on
+    /// the owner before freezing; row arithmetic has no fallible live inputs.
+    pub(crate) fn write_rows(&self, rows: Range<usize>, out: &mut [u8]) {
+        let [left, top, width, height] = self.window;
+        let packing = self.packing;
+        debug_assert!(rows.start <= rows.end && rows.end <= height);
+        debug_assert_eq!(out.len(), packing.row_bytes(width) * rows.len());
+        let f = &self.frame;
         let sample = |x: usize, y: usize| {
             let sx = ((2 * x + 1) * f.width / (2 * self.width)).min(f.width - 1);
             let sy = ((2 * y + 1) * f.height / (2 * self.height)).min(f.height - 1);
@@ -565,7 +668,7 @@ impl Sensor {
                     let sx = ((2 * image_x + 1) * f.width / (2 * width)).min(f.width - 1);
                     let sy = ((2 * image_y + 1) * f.height / (2 * height)).min(f.height - 1);
                     let c = self.cfa.color(x, y);
-                    if self.radiometry.is_some() {
+                    if self.radiometric {
                         return self.black.saturating_add(
                             self.exposed
                                 .as_ref()
@@ -577,19 +680,19 @@ impl Sensor {
                 }
             }
         };
-        for y in 0..height {
+        for (local_y, y) in rows.enumerate() {
             for x in (0..width).step_by(2) {
                 let a = sample(left + x, top + y);
                 let b = sample(left + x + 1, top + y);
                 match packing {
                     Packing::U16 => {
-                        let i = (y * width + x) * 2;
+                        let i = (local_y * width + x) * 2;
                         out[i..i + 2].copy_from_slice(&a.to_le_bytes());
                         out[i + 2..i + 4].copy_from_slice(&b.to_le_bytes());
                     }
                     Packing::Packed12 => {
                         let (a, b) = (a.min(4095), b.min(4095));
-                        let i = (y * width + x) * 3 / 2;
+                        let i = (local_y * width + x) * 3 / 2;
                         out[i..i + 3].copy_from_slice(&[
                             a as u8,
                             ((a >> 8) | (b << 4)) as u8,
@@ -599,6 +702,5 @@ impl Sensor {
                 }
             }
         }
-        Ok(())
     }
 }
