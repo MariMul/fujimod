@@ -13,7 +13,13 @@ export function wasmProofRoute(env: Record<string, string> = {}): Plugin {
             ? env.FUJIMOD_WASM_CAMERA
             : path === '/__wasm-camera/firmware.dat'
               ? env.FUJIMOD_WASM_DAT
-              : undefined;
+              : path === '/__wasm-workers/plan.json'
+                ? env.FUJIMOD_WASM_WORKERS_PLAN
+                : path === '/__wasm-workers/scene.rgb'
+                  ? env.FUJIMOD_WASM_WORKERS_SCENE
+                  : path === '/__wasm-workers/playback.rgb'
+                    ? env.FUJIMOD_WASM_WORKERS_PLAYBACK
+                    : undefined;
         if (artifact) {
           if (!['GET', 'HEAD'].includes(request.method || 'GET')) {
             response.statusCode = 405;
@@ -45,7 +51,15 @@ export function wasmProofRoute(env: Record<string, string> = {}): Plugin {
           }
           return;
         }
-        if (path === '/__wasm-camera/wasm.json' || path === '/__wasm-camera/firmware.dat') {
+        if (
+          [
+            '/__wasm-camera/wasm.json',
+            '/__wasm-camera/firmware.dat',
+            '/__wasm-workers/plan.json',
+            '/__wasm-workers/scene.rgb',
+            '/__wasm-workers/playback.rgb',
+          ].includes(path)
+        ) {
           response.statusCode = 404;
           response.end('Artifact unavailable.');
           return;
@@ -54,17 +68,20 @@ export function wasmProofRoute(env: Record<string, string> = {}): Plugin {
           path !== '/__wasm-proof' &&
           path !== '/__wasm-camera' &&
           path !== '/__wasm-lifecycle' &&
-          path !== '/__wasm-phases'
+          path !== '/__wasm-phases' &&
+          path !== '/__wasm-workers'
         )
           return next();
         const script =
-          path === '/__wasm-phases'
-            ? 'wasm-phases-proof'
-            : path === '/__wasm-lifecycle'
-              ? 'wasm-lifecycle-proof'
-              : path === '/__wasm-camera'
-                ? 'wasm-camera-proof'
-                : 'wasm-proof';
+          path === '/__wasm-workers'
+            ? 'wasm-workers-proof'
+            : path === '/__wasm-phases'
+              ? 'wasm-phases-proof'
+              : path === '/__wasm-lifecycle'
+                ? 'wasm-lifecycle-proof'
+                : path === '/__wasm-camera'
+                  ? 'wasm-camera-proof'
+                  : 'wasm-proof';
         response.setHeader('Content-Type', 'text/html');
         response.end(
           `<!doctype html><html lang="en"><meta charset="utf-8"><title>Wasm execution proof</title><body><script type="module" src="/tests/${script}.ts"></script></body></html>`,
