@@ -442,7 +442,7 @@ impl LensUnit {
                 .counter_edges(z.options.counter_channel, 1)?;
         }
         z.level = !z.level;
-        self.mechanics.pulses.capture_level(z.level)?;
+        self.mechanics.pulses.capture_level(cx, z.level, due)?;
         z.due = Some(
             due.checked_add(Self::zoom_period(z, z.clock.unwrap())?)
                 .ok_or("DC zoom deadline overflow")?,

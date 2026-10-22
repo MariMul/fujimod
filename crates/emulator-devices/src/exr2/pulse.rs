@@ -1,8 +1,9 @@
 //! FFFA9000 pulse unit: twelve 0x100-byte channels at FFFA9100. The shared
 //! enable and routing bank selects output, interval, counter, and capture
 //! modes. Clock divisors are declared
-//! virtual-clock laws, not measured oscillator timing. Capture configuration
-//! and pin levels are supported; active period measurement remains unsupported.
+//! virtual-clock laws, not measured oscillator timing. The capture channel
+//! counts virtual ticks from its arm or last input edge; each input edge after
+//! the first latches the elapsed count and drives the channel's IRQ output.
 //! External edges never come from elapsed guest time or program inspection.
 pub mod block86000;
 pub use block86000::Block86000;
@@ -15,6 +16,9 @@ use std::sync::{Arc, Mutex};
 pub const BASE: u64 = 0xfffa9000;
 pub const CHANNEL_BASE: u64 = BASE + 0x100;
 const DIVISORS: [u64; 4] = [1, 8, 32, 128];
+/// Declared capture clock: one count per virtual tick (unmeasured scale).
+const CAPTURE_TICKS_PER_COUNT: u64 = 1;
+const CAPTURE_MODE: u32 = 0x438b;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -48,6 +52,10 @@ struct State {
     anchor: i64,
     preload: u16,
     capture_level: bool,
+    /// Tick the running capture count starts from: the arm or the last edge.
+    capture_anchor: u64,
+    /// Tick of the last input edge since the capture was armed.
+    capture_edge: Option<u64>,
 }
 
 /// The lens and dial receive this explicit pin connection, not access to a
@@ -183,11 +191,40 @@ impl PulsePins {
         Ok(())
     }
 
-    pub fn capture_level(&self, level: bool) -> Result<(), String> {
-        if self.capture.is_none() {
+    /// Input level change at virtual tick `at`. While the capture mode is
+    /// armed, every edge after the first latches the ticks since the previous
+    /// edge into +10 and drives the channel IRQ output; +08 restarts at zero.
+    pub fn capture_level(&self, cx: &mut Cx<'_>, level: bool, at: u64) -> Result<(), String> {
+        let Some(channel) = self.capture else {
             return Err("capture input is not wired".into());
+        };
+        let ch = channel as usize;
+        let mut s = self.state.lock().unwrap();
+        if s.capture_level == level {
+            return Ok(());
         }
-        self.state.lock().unwrap().capture_level = level;
+        if s.capture_edge.is_some_and(|edge| at < edge) {
+            return Err("capture input edge precedes the previous capture event".into());
+        }
+        s.capture_level = level;
+        if s.enabled & (1 << ch) == 0 || s.channels[ch].words[0] != CAPTURE_MODE {
+            return Ok(());
+        }
+        if let Some(edge) = s.capture_edge {
+            let elapsed = at - edge;
+            if elapsed < CAPTURE_TICKS_PER_COUNT {
+                return Err("capture edge is faster than the declared capture clock".into());
+            }
+            s.channels[ch].words[4] = (elapsed / CAPTURE_TICKS_PER_COUNT) as u32 & 0xffff;
+            if let Some(line) = self.irqs[ch] {
+                match line {
+                    InterruptLine::Core { core, line } => cx.raise_irq(core, line)?,
+                    InterruptLine::Shared(line) => cx.set_irq(line, true),
+                }
+            }
+        }
+        s.capture_edge = Some(at);
+        s.capture_anchor = at;
         Ok(())
     }
 }
@@ -284,7 +321,7 @@ impl PulseUnit {
             if config != 0 {
                 return Err("unsupported quadrature edge clock".into());
             }
-        } else if self.pins.capture == Some(channel as u8) && control == 0x438b {
+        } else if self.pins.capture == Some(channel as u8) && control == CAPTURE_MODE {
             if config != 0 || period != 0 || reload != 0 || duty != 0 || s.route & 0xf0 != 0x10 {
                 return Err("incomplete capture configuration".into());
             }
@@ -338,6 +375,13 @@ impl PulseUnit {
                     s.anchor = s.phase_position;
                     s.preload = s.channels[0].words[2] as u16;
                 }
+                if let Some(ch) = self.pins.capture
+                    && starting & (1 << ch) != 0
+                    && s.channels[ch as usize].words[0] == CAPTURE_MODE
+                {
+                    s.capture_anchor = cx.now();
+                    s.capture_edge = None;
+                }
                 s.enabled = enabled;
             }
             a if a == BASE + 0x10 => {
@@ -375,7 +419,7 @@ impl PulseUnit {
                         && !counter
                         && !quad
                         && !(0x8800..=0x8803).contains(&value)
-                        && !(self.pins.capture == Some(ch as u8) && value == 0x438b)
+                        && !(self.pins.capture == Some(ch as u8) && value == CAPTURE_MODE)
                     {
                         return Err("unsupported pulse control mode".into());
                     }
@@ -389,7 +433,13 @@ impl PulseUnit {
                 {
                     let reset =
                         word == 2 && value == 0 && matches!(c.words[0], 0x2089..=0x208b | 0x870c);
-                    if !reset {
+                    // Quadrature channels take count, latch and terminal
+                    // updates while they run; channel 0 re-anchors its preload.
+                    let quadrature = self.pins.quadrature
+                        && (2..=4).contains(&word)
+                        && (ch == 0 && c.words[0] == 0x870c
+                            || ch == 1 && matches!(c.words[0], 0x2089 | 0x208a));
+                    if !reset && !quadrature {
                         return Err("changing an armed pulse configuration requires disable".into());
                     }
                 }
@@ -449,9 +499,12 @@ impl Device for PulseUnit {
             _ => match Self::locate(address, size) {
                 Some((ch, word)) => {
                     if s.enabled & (1 << ch) != 0 && (word == 2 || word == 3) {
-                        if s.channels[ch].words[0] == 0x438b {
-                            cx.fail("active pulse period measurement is unsupported");
-                            return 0;
+                        if s.channels[ch].words[0] == CAPTURE_MODE {
+                            if word == 3 {
+                                return u64::from(s.channels[ch].words[3]);
+                            }
+                            let elapsed = cx.now().saturating_sub(s.capture_anchor);
+                            return (elapsed / CAPTURE_TICKS_PER_COUNT) & 0xffff;
                         }
                         if word == 3
                             && !(self.pins.quadrature && ch == 1)
@@ -523,6 +576,9 @@ impl Device for PulseUnit {
     }
 }
 
+#[cfg(test)]
+#[path = "pulse/input_tests.rs"]
+mod input_tests;
 #[cfg(test)]
 #[path = "pulse/interval_tests.rs"]
 mod interval_tests;
