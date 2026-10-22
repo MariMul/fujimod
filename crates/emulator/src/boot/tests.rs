@@ -538,3 +538,37 @@ fn input_bytes_are_refused_before_any_board_when_they_differ_from_the_prepared_i
     let error = open_prepared(prepared, inputs, None).err().unwrap();
     assert!(error.starts_with("update:"), "{error}");
 }
+
+#[test]
+fn browser_camera_overlay_declares_a_virtual_card_host_on_the_native_plan() {
+    let base = prepare("x70-110-rec", &[]).unwrap();
+    assert!(
+        base.devices_value["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|node| node["name"] != "sd"),
+        "the base run has no card host"
+    );
+
+    let prepared = prepare("x70-110-rec", &["x70-110-browser-camera".into()]).unwrap();
+    let sd = model(&prepared, "sd");
+    assert_eq!(sd["kind"], "sd-host");
+    assert_eq!(sd["options"]["protocol"], "sdhc");
+    assert_eq!(sd["card"]["kind"], "formatted");
+    assert_eq!(sd["card"]["options"]["sectors"], 16777216);
+    assert_eq!(sd["card"]["options"]["label"], "CAMERA");
+    assert_eq!(sd["card"]["options"]["partition_start"], 8192);
+    assert_eq!(sd["card"]["options"]["sectors_per_cluster"], 64);
+    assert_eq!(sd["card"]["options"]["max_dirty_sectors"], 81920);
+    assert_eq!(sd["card"]["files"], "virtual_card_files");
+    assert_eq!(sd["pins"]["detect"], json!({"port": 12, "pin": 7}));
+    assert_eq!(sd["pins"]["protect"], json!({"port": 12, "pin": 6}));
+    assert_eq!(sd["present"], true);
+    assert_eq!(sd["protected"], false);
+    assert_eq!(sd["irq"]["Core"]["line"], 78);
+    assert_eq!(
+        prepared.scene["files"],
+        json!({"virtual_card_files": {}})
+    );
+}

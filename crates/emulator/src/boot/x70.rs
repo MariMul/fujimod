@@ -5,7 +5,9 @@
 //! policy; physical addresses, links, and starting inputs are resolved below.
 
 use fujimod_catalog::{
-    configuration::{Exr2RunInputs, Exr2RunScene, RunConfiguration, RunPurpose, RunStart},
+    configuration::{
+        Exr2RunInputs, Exr2RunScene, RunBrowserCamera, RunConfiguration, RunPurpose, RunStart,
+    },
     reference::{
         ConnectionSignal, ControlBusChip, LensProtocol, Part, PartModel, ResolvedSelection,
         SocBlock, SocBlockKind,
@@ -310,6 +312,69 @@ const NODE_RULES: &[NodeRule] = &[
     },
 ];
 
+/// The SDHC card host: present only when a browser camera declares its virtual card.
+const CARD_NODE_RULE: NodeRule = NodeRule {
+    name: "sd",
+    // The SDHCI clock register at 0xfff5002c belongs to the sd_clocks device.
+    blocks: &["sdhci-card-0", "sdhci-card-2", "sdhci-card-1"],
+    dependencies: &["serial_gpio"],
+};
+
+/// The one GPIO signal of a card contact, with its active level.
+fn card_contact(selection: &ResolvedSelection, connection_id: &str) -> Result<(Pin, bool), String> {
+    match gpio_signals(selection, connection_id)?.as_slice() {
+        [(pin, active)] => Ok((*pin, *active)),
+        _ => Err(format!(
+            "X70 card contact {connection_id} must declare exactly one GPIO signal"
+        )),
+    }
+}
+
+/// The SDHC host with its virtual card: formatted to the declared geometry and
+/// inserted through the body's detect and write-protect contacts.
+fn card_recipe(selection: &ResolvedSelection, browser: &RunBrowserCamera) -> Result<Value, String> {
+    let slot = selection
+        .body
+        .card_slot
+        .as_ref()
+        .ok_or("X70 body declares no card slot")?;
+    let (detect, present_high) = card_contact(selection, &slot.detect_connection_id)?;
+    let (protect, protected_high) = card_contact(selection, &slot.write_protect_connection_id)?;
+    let card = &browser.virtual_card;
+    // Legacy budget for a card without preloaded files: 65536 + 16384 dirty sectors.
+    let max_dirty_sectors: u32 = 65536 + 16384;
+    Ok(json!({
+        "kind": "sd-host",
+        "options": {
+            "protocol": "sdhc",
+            "transfer_ticks": 100,
+            "clock_ticks": 2,
+            "rca": 4660,
+            "ram_bytes": selection.body.dram_bytes,
+        },
+        "card": {
+            "kind": "formatted",
+            "options": {
+                "sectors": card.sectors,
+                "max_dirty_sectors": max_dirty_sectors,
+                "label": card.label,
+                "partition_start": card.partition_start,
+                "sectors_per_cluster": card.sectors_per_cluster,
+            },
+            "files": "virtual_card_files",
+        },
+        "pins": {
+            "gpio": "serial_gpio",
+            "detect": {"port": detect.port, "pin": detect.pin},
+            "present_high": present_high,
+            "protect": {"port": protect.port, "pin": protect.pin},
+            "protected_high": protected_high,
+        },
+        "present": true,
+        "protected": false,
+    }))
+}
+
 pub(super) fn node_for_block(block_id: &str) -> Result<String, String> {
     NODE_RULES
         .iter()
@@ -526,6 +591,7 @@ fn apply_interrupts(
             recipe["irq"] = json!(irq(selection, "image-output-1", "output")?["Core"]["line"]);
         }
         "sdio" => recipe["irq"] = irq(selection, "sdio-host", "host")?,
+        "sd" => recipe["irq"] = irq(selection, "sdhci-card-0", "host")?,
         "companion" => {
             recipe["options"]["irq"] =
                 json!(irq(selection, "companion-fe80", "processing")?["Core"]["line"]);
@@ -1278,9 +1344,11 @@ fn input_level(
     Ok(())
 }
 
+/// `card_present` is the presence of the declared virtual card, which drives its detect contact.
 fn gpio_levels(
     selection: &ResolvedSelection,
     inputs: &Exr2RunInputs,
+    card_present: bool,
 ) -> Result<([u32; 16], Vec<Value>), String> {
     let unassigned = inputs.gpio.unassigned_input_level;
     let mut levels = [if unassigned { u32::MAX } else { 0 }; 16];
@@ -1341,7 +1409,7 @@ fn gpio_levels(
         return Err("X70 has no removable-card controller".into());
     }
     for (id, asserted) in [
-        (card.detect_connection_id.as_str(), inputs.card.present),
+        (card.detect_connection_id.as_str(), card_present),
         (
             card.write_protect_connection_id.as_str(),
             inputs.card.write_protected,
@@ -1447,10 +1515,11 @@ fn apply_run_inputs(
     selection: &ResolvedSelection,
     inputs: &Exr2RunInputs,
     scene: &Exr2RunScene,
+    card_present: bool,
 ) -> Result<(), String> {
     match name {
         "serial_gpio" => {
-            let (levels, outputs) = gpio_levels(selection, inputs)?;
+            let (levels, outputs) = gpio_levels(selection, inputs, card_present)?;
             recipe["options"]["input_levels"] = json!(levels);
             recipe["options"]["output_levels"] = json!(outputs);
         }
@@ -1706,14 +1775,28 @@ pub(super) fn assemble(
             "X70 native boot implementation does not support this selected identity".into(),
         );
     }
-    let mut nodes = Vec::with_capacity(NODE_RULES.len());
-    let mut serialized_nodes = Vec::with_capacity(NODE_RULES.len());
-    for rule in NODE_RULES {
-        let mut recipe = model_recipe(rule.name)?;
+    let browser = configuration.browser_camera.as_ref();
+    let rules = NODE_RULES
+        .iter()
+        .chain(browser.map(|_| &CARD_NODE_RULE));
+    let mut nodes = Vec::with_capacity(NODE_RULES.len() + 1);
+    let mut serialized_nodes = Vec::with_capacity(NODE_RULES.len() + 1);
+    for rule in rules {
+        let mut recipe = match (rule.name, browser) {
+            ("sd", Some(browser)) => card_recipe(selection, browser)?,
+            _ => model_recipe(rule.name)?,
+        };
         apply_soc_blocks(&mut recipe, rule, selection)?;
         apply_body_facts(&mut recipe, rule.name, selection)?;
         apply_interrupts(&mut recipe, rule.name, selection)?;
-        apply_run_inputs(&mut recipe, rule.name, selection, inputs, scene_input)?;
+        apply_run_inputs(
+            &mut recipe,
+            rule.name,
+            selection,
+            inputs,
+            scene_input,
+            browser.is_some(),
+        )?;
         let model: Model = serde_json::from_value(recipe.clone())
             .map_err(|error| format!("X70 node {}: {error}", rule.name))?;
         let windows = rule
@@ -1777,6 +1860,9 @@ pub(super) fn assemble(
         },
         "nodes":serialized_nodes,
     });
-    let scene_value = scene(selection, scene_input)?;
+    let mut scene_value = scene(selection, scene_input)?;
+    if browser.is_some() {
+        scene_value["files"] = json!({"virtual_card_files": {}});
+    }
     Ok((plan, plan_value, scene_value))
 }

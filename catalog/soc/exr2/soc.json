@@ -265,6 +265,27 @@
       "clock_id": null
     },
     {
+      "id": "sdhci-card-0",
+      "base": 4294246400,
+      "size": 44,
+      "kind": "sd-card-controller",
+      "clock_id": null
+    },
+    {
+      "id": "sdhci-card-2",
+      "base": 4294246448,
+      "size": 16,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "sdhci-card-1",
+      "base": 4294246656,
+      "size": 8,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
       "id": "sdio-host",
       "base": 4294250496,
       "size": 64,
@@ -853,6 +874,12 @@
       "line": 68,
       "source_block": "image-combination",
       "output_id": "complete"
+    },
+    {
+      "core": "core0",
+      "line": 78,
+      "source_block": "sdhci-card-0",
+      "output_id": "host"
     },
     {
       "core": "core0",

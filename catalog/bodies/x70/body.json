@@ -732,7 +732,7 @@
     "connection_id": "sd-card",
     "detect_connection_id": "sd-card-detect",
     "write_protect_connection_id": "sd-card-write-protect",
-    "controller_id": null
+    "controller_id": "sdhci-card-0"
   },
   "control_bus_chips": [
     {
