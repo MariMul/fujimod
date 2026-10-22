@@ -39,6 +39,7 @@ fn parse(
             "--screenshot",
             "--instruction-limit",
             "--execution-policy",
+            "--clock-seconds-2000",
         ]
         .contains(&key.as_str())
         {
@@ -66,6 +67,15 @@ fn parse(
             .remove(key)
             .ok_or_else(|| format!("required option: {key}"))
     };
+    let clock_seconds_2000 = values
+        .remove("--clock-seconds-2000")
+        .map(|v| {
+            v.to_str()
+                .ok_or("clock seconds must be UTF-8")?
+                .parse::<u32>()
+                .map_err(|_| "clock seconds must be an unsigned 32-bit integer")
+        })
+        .transpose()?;
     let options = Options {
         configuration_id: take("--configuration")?
             .into_string()
@@ -76,10 +86,12 @@ fn parse(
         unicorn: take("--unicorn")?.into(),
         nand: None,
         settings: None,
+        clock_seconds_2000: None,
     };
     let options = Options {
         nand: values.remove("--nand").map(PathBuf::from),
         settings: values.remove("--settings").map(PathBuf::from),
+        clock_seconds_2000,
         ..options
     };
     let screenshot = values.remove("--screenshot").map(PathBuf::from);

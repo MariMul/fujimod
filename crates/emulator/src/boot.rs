@@ -44,6 +44,8 @@ pub struct Options {
     pub nand: Option<PathBuf>,
     /// Sixteen-byte checksum-protected MCU persistent settings packet.
     pub settings: Option<PathBuf>,
+    /// Real-time clock in seconds since 2000-01-01, or the configuration's default.
+    pub clock_seconds_2000: Option<u32>,
 }
 
 #[derive(Clone)]
@@ -542,6 +544,35 @@ fn packet(bytes: &[u8]) -> Result<(), String> {
     }
     Ok(())
 }
+
+fn set_clock_recursive(value: &mut Value, clock_seconds: u32, count: &mut usize) -> Result<(), String> {
+    match value {
+        Value::Object(map) => {
+            // Check if this object has a "clock" key with "initial_seconds"
+            if let Some(clock_obj) = map.get_mut("clock") {
+                if let Value::Object(clock_map) = clock_obj {
+                    if clock_map.contains_key("initial_seconds") {
+                        clock_map.insert("initial_seconds".to_string(), json!(clock_seconds));
+                        *count += 1;
+                    }
+                }
+            }
+            // Recurse into all values
+            for v in map.values_mut() {
+                set_clock_recursive(v, clock_seconds, count)?;
+            }
+            Ok(())
+        }
+        Value::Array(arr) => {
+            for v in arr.iter_mut() {
+                set_clock_recursive(v, clock_seconds, count)?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
 fn settings(plan: &mut Value, mcu: &Mcu, bytes: &[u8]) -> Result<(), String> {
     packet(bytes)?;
     let nodes = plan["nodes"]
@@ -598,6 +629,16 @@ pub fn open(options: Options) -> Result<Session, String> {
     }
     let mut devices = prepared.devices_value.clone();
     let mut scene = prepared.scene.clone();
+
+    // Set real-time clock if provided
+    if let Some(clock_seconds) = options.clock_seconds_2000 {
+        let mut clock_count = 0;
+        set_clock_recursive(&mut devices, clock_seconds, &mut clock_count)?;
+        if clock_count != 1 {
+            return Err("selected configuration has no single real-time clock".into());
+        }
+    }
+
     if let Some(path) = &options.settings {
         settings(&mut devices, &prepared.mcu, &read(path, 16)?)?;
     }
