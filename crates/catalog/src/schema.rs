@@ -45,6 +45,56 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
             "https://fujimod.com/schemas/resolved-configuration.schema.json",
         ),
     );
+    documents.insert(
+        "remote-firmware.generated.schema.json",
+        schema::<crate::remote::FirmwareFacts>(crate::remote::FIRMWARE_FACTS_SCHEMA_URI),
+    );
+    documents.insert(
+        "build-menu.generated.schema.json",
+        schema::<crate::remote::BuildMenuManifest>(crate::remote::MENU_MANIFEST_SCHEMA_URI),
+    );
+    documents.insert(
+        "remote-facts.generated.schema.json",
+        schema::<crate::remote::Facts>(
+            "https://fujimod.com/schemas/remote-facts.generated.schema.json",
+        ),
+    );
+    documents.insert(
+        "remote-menus.generated.schema.json",
+        schema::<crate::remote::MenuTables>(
+            "https://fujimod.com/schemas/remote-menus.generated.schema.json",
+        ),
+    );
+    documents.insert(
+        "remote-resources.generated.schema.json",
+        schema::<crate::remote::Resources>(
+            "https://fujimod.com/schemas/remote-resources.generated.schema.json",
+        ),
+    );
+    documents.insert(
+        "remote-scanout.generated.schema.json",
+        schema::<crate::remote::Scanout>(
+            "https://fujimod.com/schemas/remote-scanout.generated.schema.json",
+        ),
+    );
+    documents.insert(
+        "remote-controls.generated.schema.json",
+        schema::<crate::facts::FirmwareControls>(
+            "https://fujimod.com/schemas/remote-controls.generated.schema.json",
+        ),
+    );
+    documents.insert(
+        "remote-state.generated.schema.json",
+        schema::<crate::reference::FirmwareObservation>(
+            "https://fujimod.com/schemas/remote-state.generated.schema.json",
+        ),
+    );
+    documents.insert(
+        "remote-debug-keys.generated.schema.json",
+        schema::<Vec<crate::remote::DebugKey>>(
+            "https://fujimod.com/schemas/remote-debug-keys.generated.schema.json",
+        ),
+    );
     documents
 }
 

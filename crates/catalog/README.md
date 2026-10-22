@@ -39,3 +39,22 @@ unreviewed rule. The public API represents those cases with `ModeAvailability`.
 are unsigned quantities. No body, command number, mailbox or firmware is chosen
 by default. Callers supply definitions in this schema to USB tooling, emulators
 and SDK generation.
+
+Remote control consumes `remote::Facts`: physical `BodyControls`, one
+`remote::FirmwareFacts`, and an optional `remote::BuildMenuManifest` for the
+installed build. `Facts::from_selection` assembles and validates these against a
+`ResolvedSelection`. Firmware records expose remote inputs through
+`generated_facts.remote`; stock operation requires no build manifest.
+
+`remote::FirmwareFacts` declares debug key names, control mappings, readiness
+addresses, menu node/row/cursor layouts and root routes, scanout, and text/glyph
+resource layouts. Each section has a generated JSON Schema. These are layouts
+and roots: consumers read menu rows, captions and cursor values from live RAM.
+`remote::BuildMenuManifest` binds owner identities, labels, placement, native
+keys, surfaces, stable named options, and compiler-derived observation metadata
+to hashed build artifacts. Open catalogs can leave options unnamed; consumers
+must refuse an unresolved named option instead of inventing a name.
+
+Schemas are generated from these Rust types with
+`cargo run -p fujimod-catalog --bin catalog-schemas -- --write`. New remote
+schema filenames include `.generated`; `--check` verifies committed copies.

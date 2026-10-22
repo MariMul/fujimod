@@ -7,6 +7,7 @@ pub mod emulator;
 pub mod facts;
 pub mod persistent_inputs;
 pub mod reference;
+pub mod remote;
 pub mod schema;
 pub mod service;
 pub mod soc;

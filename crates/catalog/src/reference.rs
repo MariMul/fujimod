@@ -1594,6 +1594,16 @@ impl Firmware {
             }
         }
         if let Some(facts) = &self.generated_facts {
+            if let Some(remote) = &facts.remote {
+                remote.validate()?;
+                if remote.firmware_id != self.id
+                    || remote.body_id != self.body_id
+                    || self.update.as_ref().map(|content| content.sha256.as_str())
+                        != Some(remote.firmware_sha256.as_str())
+                {
+                    return Err("remote facts differ from firmware identity".into());
+                }
+            }
             for identity in &facts.identity_checks {
                 identity.validate()?;
             }
@@ -1661,6 +1671,8 @@ pub struct FirmwareImageSection {
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
 pub struct FirmwareGeneratedFacts {
+    /// Layouts and declarations used by remote camera control.
+    pub remote: Option<crate::remote::FirmwareFacts>,
     /// Firmware control-event tables and electrical input predicates.
     pub controls: Option<crate::facts::FirmwareControls>,
     /// Firmware configuration-block location.
