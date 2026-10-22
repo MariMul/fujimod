@@ -77,6 +77,9 @@ GIC initialization, and A-profile timer configuration. It consumes declared
 register and hardware facts only; the caller still selects the profile and
 provides all firmware memory images.
 
+`xp5_apply_run_scene` maps a resolved application scene's frame timing and
+command-image values onto caller-owned XP5 device windows before assembly.
+
 Initial memory images must fit declared physical RAM and cannot overlap. The
 XP5 open function accepts those bytes without comparing them to a bundled
 firmware hash. The caller selects the firmware inputs and loading layout.

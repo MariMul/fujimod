@@ -10,6 +10,7 @@ use crate::board::{
     factory,
 };
 use fujimod_catalog::{
+    application_inputs::ApplicationRunScene,
     configuration::ResolvedConfiguration,
     firmware::FirmwareProfile,
     profiles::RegisterWindow,
@@ -265,6 +266,116 @@ pub fn startup_from_profile(
         interrupts,
         aprofile,
     })
+}
+
+fn ticks_as_microseconds(ticks: u64, ticks_per_second: u64) -> Result<i64, String> {
+    let scaled = u128::from(ticks)
+        .checked_mul(1_000_000)
+        .ok_or("scene duration overflows microseconds")?;
+    let rate = u128::from(ticks_per_second);
+    if rate == 0 || scaled % rate != 0 {
+        return Err("XP5 scene duration is not a whole number of microseconds".into());
+    }
+    i64::try_from(scaled / rate).map_err(|_| "scene duration exceeds device option range".into())
+}
+
+fn scene_window<'a>(
+    resolved: &ResolvedConfiguration,
+    windows: &'a mut [DeviceWindow],
+    block_id: &str,
+) -> Result<&'a mut DeviceWindow, String> {
+    let block = resolved
+        .reference
+        .soc
+        .blocks
+        .iter()
+        .find(|block| block.id == block_id)
+        .ok_or_else(|| format!("XP5 scene names absent SoC block {block_id}"))?;
+    windows
+        .iter_mut()
+        .find(|window| window.base == block.base)
+        .ok_or_else(|| format!("XP5 scene block {block_id} has no caller device window"))
+}
+
+/// Apply catalog-declared frame and command-image inputs to caller-owned XP5
+/// device windows. This maps scene facts to device options without inspecting
+/// guest code or loading firmware bytes.
+pub fn apply_run_scene(
+    resolved: &ResolvedConfiguration,
+    windows: &mut [DeviceWindow],
+    scene: &ApplicationRunScene,
+    ticks_per_second: u64,
+) -> Result<(), String> {
+    for frame in &scene.frames {
+        let period =
+            toml::Value::Integer(ticks_as_microseconds(frame.period_ticks, ticks_per_second)?);
+        let active = frame
+            .active_ticks
+            .map(|ticks| ticks_as_microseconds(ticks, ticks_per_second))
+            .transpose()?
+            .map(toml::Value::Integer);
+        for block_id in &frame.block_ids {
+            let window = scene_window(resolved, windows, block_id)?;
+            match window.kind.as_str() {
+                "imaging-receiver" => {
+                    if frame.luma.is_some() {
+                        return Err(format!(
+                            "XP5 scene luma is unsupported for receiver {block_id}"
+                        ));
+                    }
+                    window
+                        .options
+                        .insert("frame_period_us".into(), period.clone());
+                    match &active {
+                        Some(active) => {
+                            window
+                                .options
+                                .insert("frame_active_us".into(), active.clone());
+                        }
+                        None => {
+                            window.options.remove("frame_active_us");
+                        }
+                    }
+                }
+                "movdc" | "imaging-preview" => {
+                    window
+                        .options
+                        .insert("frame_period_us".into(), period.clone());
+                    if let Some(luma) = frame.luma {
+                        window
+                            .options
+                            .insert("source_luma".into(), toml::Value::Integer(i64::from(luma)));
+                    }
+                }
+                _ => {
+                    return Err(format!(
+                        "XP5 frame scene is unsupported for {} at {:#x}",
+                        window.kind, window.base
+                    ));
+                }
+            }
+        }
+    }
+    if !scene.statistics.is_empty() {
+        return Err("XP5 statistics scenes are not supported by the selected devices".into());
+    }
+    for command in &scene.command_images {
+        for block_id in &command.block_ids {
+            let window = scene_window(resolved, windows, block_id)?;
+            if !matches!(window.kind.as_str(), "imaging-rifp" | "imaging-rifp-io") {
+                return Err(format!(
+                    "XP5 command image is unsupported for {} at {:#x}",
+                    window.kind, window.base
+                ));
+            }
+            let luma = u8::try_from(command.luma)
+                .map_err(|_| "XP5 command image luma exceeds the device's 8-bit input")?;
+            window
+                .options
+                .insert("source_luma".into(), toml::Value::Integer(i64::from(luma)));
+        }
+    }
+    Ok(())
 }
 
 fn attachment_kind(
