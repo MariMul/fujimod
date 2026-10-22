@@ -55,7 +55,6 @@ pub struct Options {
     pub overlays: Vec<String>,
     pub update: PathBuf,
     pub boot_rom: PathBuf,
-    pub unicorn: PathBuf,
     /// Committed NAND image, or a main-area image: exactly the geometry's main bytes,
     /// optionally followed by a managed-spare trailer (`FJNANDS1`, a big-endian count,
     /// then big-endian page row and 16-byte tag entries) for the spare areas it declares.
@@ -763,18 +762,13 @@ pub fn open(options: Options) -> Result<Session, String> {
         clock_seconds_2000: options.clock_seconds_2000,
         preferred_languages: options.preferred_languages,
     };
-    open_prepared(prepared, inputs, Some(options.unicorn))
+    open_prepared(prepared, inputs)
 }
 
 /// Construct an unexecuted strict board from a prepared run and byte inputs.
-/// `unicorn` selects the Unicorn library file; `None` selects the statically
-/// linked engine, which only emscripten builds provide. A prepared run opens
-/// one board; prepare again for another.
-pub fn open_prepared(
-    prepared: Prepared,
-    inputs: InputBytes,
-    unicorn: Option<PathBuf>,
-) -> Result<Session, String> {
+/// The engine is linked into the crate. A prepared run opens one board; prepare
+/// again for another.
+pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, String> {
     prepared
         .update
         .check(&inputs.update)
@@ -904,7 +898,6 @@ pub fn open_prepared(
     let mut board = graph.build(
         factory::Options {
             engine,
-            unicorn,
             translation_cache_bytes: 16 << 20,
         },
         bus,

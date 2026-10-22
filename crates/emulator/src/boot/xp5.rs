@@ -24,7 +24,7 @@ use fujimod_emulator_devices::{
 };
 use serde_json::Value;
 use std::time::Duration;
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 
 fn attachment_kind(
     selection: &ResolvedSelection,
@@ -210,7 +210,6 @@ pub struct OpenOptions {
     pub controls: ResistorKeysOptions,
     pub resources: xp5_board::Resources,
     pub engine: factory::Engine,
-    pub unicorn: Option<PathBuf>,
     pub interrupts: Option<InterruptMap>,
     pub aprofile: Vec<(usize, aprofile::Config)>,
     pub images: Vec<MemoryImage>,
@@ -263,7 +262,6 @@ pub fn open(options: OpenOptions) -> Result<super::super::session::Session, Stri
     let mut board = options.processors.build(
         factory::Options {
             engine: options.engine,
-            unicorn: options.unicorn,
             translation_cache_bytes: 16 << 20,
         },
         assembly.bus,

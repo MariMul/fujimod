@@ -6,8 +6,6 @@ runs the real boot ROM, NAND loader and firmware with strict native device
 models. Unsupported hardware stops execution and remains visible in the JSON
 report.
 
-Build the [Unicorn backend](../emulator-cpu-unicorn/README.md), then:
-
 ```sh
 cargo build --locked --release -p fujimod-emulator --features serde \
   --bin fujimod-emulator
@@ -15,7 +13,6 @@ target/release/fujimod-emulator boot \
   --configuration x70-110-rec \
   --update /path/to/FPUPDATE.DAT \
   --boot-rom /path/to/bootrom.bin \
-  --unicorn "$PWD/target/unicorn-native/libunicorn.2.dylib" \
   --screenshot /path/to/lcd.png
 ```
 
@@ -25,7 +22,7 @@ selected pair must have a supported native runtime. Use `--overlay ID` to apply
 a named variant; repeated overlays are applied in command-line order. Unsupported
 start entries or physical inputs are refused during preparation.
 
-Use the shared library filename produced on your platform. Firmware and ROM
+Firmware and ROM
 size and SHA-256 must match the selected catalog entry. Supplying your own
 16 KiB boot ROM dump is required; the command never fetches one. Binary input
 paths may be absolute or relative to the current directory.

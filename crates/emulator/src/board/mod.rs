@@ -24,8 +24,6 @@ mod schedule;
 #[cfg(test)]
 mod schedule_tests;
 #[cfg(test)]
-pub(crate) mod test_support;
-#[cfg(test)]
 mod tests;
 #[cfg(all(test, feature = "serde"))]
 mod workers_tests;
