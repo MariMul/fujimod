@@ -50,6 +50,7 @@ export interface WorkerPhase {
   guestSeconds: number;
   wallSeconds: number;
   speed: number;
+  heapBytes: number;
 }
 export interface CompleteWorkerReceipt {
   complete: true;
@@ -71,7 +72,19 @@ export interface CompleteWorkerReceipt {
 }
 export type WorkerReceipt =
   | CompleteWorkerReceipt
-  | { complete: false; identityPassed: false; phases: WorkerPhase[]; error: string };
+  | {
+      complete: false;
+      identityPassed: false;
+      phases: WorkerPhase[];
+      error: string;
+      lastEntry: EntryMemory | null;
+    };
+interface EntryMemory {
+  index: number;
+  kind: Entry['kind'];
+  heapBytes: number;
+  action?: keyof SessionCommands;
+}
 export type WorkerMessage =
   | { type: 'frame'; width: number; height: number; rgba: ArrayBuffer }
   | { type: 'photo'; path: string; bytes: ArrayBuffer }
@@ -110,6 +123,8 @@ async function bytes(url: string) {
 owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2 }>) => {
   let session: EmulatorSession | undefined;
   const phases: WorkerPhase[] = [];
+  let lastEntry: EntryMemory | null = null;
+  let trapped = false;
   try {
     check(event.data.workers === 0 || event.data.workers === 2, 'Worker preference must be 0 or 2');
     const response = await fetch('/__wasm-workers/plan.json');
@@ -164,7 +179,14 @@ owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2 }>) => {
       prior!: Status,
       boundaries = 0,
       frames = 0;
-    for (const entry of fixture.plan) {
+    for (const [index, entry] of fixture.plan.entries()) {
+      lastEntry = {
+        index,
+        kind: entry.kind,
+        heapBytes: module.HEAPU8.byteLength,
+        ...('action' in entry ? { action: entry.action } : {}),
+      };
+      if (['scene', 'boundary'].includes(entry.kind)) console.log(JSON.stringify(lastEntry));
       switch (entry.kind) {
         case 'phase-start':
           same(status(), entry.status, `${entry.name} start`);
@@ -183,6 +205,7 @@ owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2 }>) => {
             guestSeconds,
             wallSeconds,
             speed: guestSeconds / wallSeconds,
+            heapBytes: module.HEAPU8.byteLength,
           };
           phases.push(phase);
           owner.postMessage({ type: 'phase', phase } satisfies WorkerMessage);
@@ -269,11 +292,14 @@ owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2 }>) => {
       },
     } satisfies WorkerMessage);
   } catch (error) {
+    trapped = error instanceof WebAssembly.RuntimeError;
     owner.postMessage({
       type: 'result',
-      result: { complete: false, identityPassed: false, phases, error: String(error) },
+      result: { complete: false, identityPassed: false, phases, error: String(error), lastEntry },
     } satisfies WorkerMessage);
   } finally {
-    session?.dispose();
+    // A trapped Wasm call may leave an owner borrow live; terminate its worker
+    // instead of reentering the failed instance during cleanup.
+    if (!trapped) session?.dispose();
   }
 };
