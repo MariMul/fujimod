@@ -41,6 +41,10 @@ const captions: Record<string, string> = {
   control_ring_options_button: 'SIDE',
   shutter_button: 'SHUTTER',
   command_control: 'CMD',
+  main_command_dial: 'MAIN',
+  sub_command_dial: 'SUB',
+  front_command_dial: 'FRONT',
+  rear_command_dial: 'REAR',
   command_dial: 'DIAL',
   zoom_control: 'ZOOM',
 };
