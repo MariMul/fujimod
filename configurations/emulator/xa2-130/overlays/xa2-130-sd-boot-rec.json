@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xa2-130-sd-boot-rec",
+  "configuration_id": "xa2-130",
+  "change": {
+    "kind": "start",
+    "start": {
+      "kind": "sd_card"
+    }
+  }
+}
