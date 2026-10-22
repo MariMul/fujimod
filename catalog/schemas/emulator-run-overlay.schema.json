@@ -705,6 +705,11 @@
           "const": "unicorn",
           "description": "Run the configured processors through the Unicorn backend.",
           "type": "string"
+        },
+        {
+          "const": "hypervisor",
+          "description": "Run AArch64 processors through Hypervisor.framework; M-profile companions use Unicorn.",
+          "type": "string"
         }
       ]
     },

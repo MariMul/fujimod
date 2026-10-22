@@ -1587,6 +1587,8 @@ pub enum RunExecutionMode {
 pub enum RunEngine {
     /// Run the configured processors through the Unicorn backend.
     Unicorn,
+    /// Run AArch64 processors through Hypervisor.framework; M-profile companions use Unicorn.
+    Hypervisor,
 }
 
 /// Model-specific scene inputs and the devices that consume them.

@@ -3475,7 +3475,7 @@ class RunEncoderInput(TypedDict, total=False):
     phase: Required[int]
 
 
-type RunEngine = Literal["unicorn"]
+type RunEngine = Literal["unicorn", "hypervisor"]
 
 
 type RunEntry = Literal["loader"]

@@ -8,7 +8,15 @@
   "start": {
     "kind": "loader"
   },
-  "execution": null,
+  "execution": {
+    "mode": "strict",
+    "engine": "hypervisor",
+    "quantum": 1000,
+    "instructions_per_tick": {
+      "numerator": 1,
+      "denominator": 1
+    }
+  },
   "inputs": {
     "kind": "xp5",
     "ticks_per_second": 1000000000,

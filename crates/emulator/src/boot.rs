@@ -15,8 +15,8 @@ use crate::{
 };
 use fujimod_catalog::{
     configuration::{
-        Exr2RunInputs, Exr2RunScene, ResolvedConfiguration, RunEngine, RunExecution,
-        RunExecutionMode, RunInputs, RunPurpose, RunScene, RunStart,
+        Exr2RunInputs, ResolvedConfiguration, RunEngine, RunExecution, RunExecutionMode, RunInputs,
+        RunPurpose, RunScene, RunStart,
     },
     controls::{AdcInterval, ElectricalInput, InputTarget},
     emulator::Content,
@@ -310,7 +310,18 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
         .and_then(|facts| facts.observation.as_ref())
         .ok_or("selected firmware has no observation facts")?;
     let quantum = execution_policy.quantum;
-    let execution = graph::assemble(&resolved.reference, execution_policy.instructions_per_tick)?;
+    let board_ticks_per_second = configuration
+        .inputs
+        .as_ref()
+        .and_then(|inputs| match inputs {
+            RunInputs::Xp5(inputs) => Some(inputs.ticks_per_second),
+            RunInputs::Exr2(_) | RunInputs::Xp4(_) => None,
+        });
+    let execution = graph::assemble(
+        &resolved.reference,
+        execution_policy.instructions_per_tick,
+        board_ticks_per_second,
+    )?;
     let execution_value = graph::value(
         &resolved.reference,
         &execution,
@@ -873,6 +884,7 @@ pub fn open_prepared(
     };
     let engine = match prepared.execution_policy.engine {
         RunEngine::Unicorn => factory::Engine::Unicorn,
+        RunEngine::Hypervisor => factory::Engine::Hypervisor,
     };
     let bus = Bus::from_graph(bus_mode, assembly.graph)?;
     let mut board = graph.build(

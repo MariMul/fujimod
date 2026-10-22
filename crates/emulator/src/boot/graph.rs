@@ -47,6 +47,7 @@ fn build_processor(
     model: ProcessorModel,
     registers: &[(ProcessorRegister, u64)],
     released: bool,
+    mprofile: Option<crate::board::mprofile::Config>,
     rprofile: Option<&fujimod_catalog::reference::RProfileState>,
     architecture: ProcessorArchitecture,
 ) -> Result<factory::Processor, String> {
@@ -54,6 +55,7 @@ fn build_processor(
         (ProcessorArchitecture::Arm32, ProcessorModel::CortexR5f) => Model::CortexR5F,
         (ProcessorArchitecture::Arm32, ProcessorModel::CortexA7) => Model::CortexA7,
         (ProcessorArchitecture::Aarch64, ProcessorModel::CortexA53) => Model::ArmV8A,
+        (ProcessorArchitecture::Aarch64, ProcessorModel::CortexM4) => Model::CortexM4,
         _ => return Err("processor model does not match its SoC architecture".into()),
     };
     let rprofile = rprofile
@@ -86,7 +88,7 @@ fn build_processor(
             .map(|(identifier, value)| (register(*identifier), *value))
             .collect(),
         released,
-        mprofile: None,
+        mprofile,
         rprofile,
     })
 }
@@ -156,6 +158,7 @@ fn decoder_selection(
 pub(super) fn assemble(
     selection: &ResolvedSelection,
     rate: RunInstructionRate,
+    board_ticks_per_second: Option<u64>,
 ) -> Result<factory::Graph, String> {
     let soc = &selection.soc;
     let body = &selection.body;
@@ -163,6 +166,10 @@ pub(super) fn assemble(
         return Err("resolved body and SoC identities differ".into());
     }
     let cores = core_index(soc)?;
+    let companion = soc
+        .hardware
+        .as_ref()
+        .and_then(|hardware| hardware.companion.as_ref());
     let processors = soc
         .processors
         .iter()
@@ -172,6 +179,36 @@ pub(super) fn assemble(
                 .iter()
                 .map(|item| (item.register, item.value))
                 .collect::<Vec<_>>();
+            let mprofile = if processor.model == ProcessorModel::CortexM4 {
+                let companion = companion
+                    .filter(|companion| companion.processor_id == processor.id)
+                    .ok_or_else(|| {
+                        format!(
+                            "SoC {} has no companion facts for core {}",
+                            soc.id, processor.id
+                        )
+                    })?;
+                let clock_hz = soc
+                    .clocks
+                    .iter()
+                    .find(|clock| clock.id == companion.clock_id)
+                    .and_then(|clock| clock.frequency_hz)
+                    .ok_or_else(|| {
+                        format!(
+                            "SoC {} has no frequency for companion clock {}",
+                            soc.id, companion.clock_id
+                        )
+                    })?;
+                Some(crate::board::mprofile::Config {
+                    clock_hz,
+                    board_ticks_per_second: board_ticks_per_second
+                        .ok_or("M-profile companion requires a run timebase")?,
+                    vector_base: u32::try_from(companion.vector_base)
+                        .map_err(|_| "M-profile vector base exceeds 32 bits")?,
+                })
+            } else {
+                None
+            };
             build_processor(
                 processor.model,
                 &registers,
@@ -181,6 +218,7 @@ pub(super) fn assemble(
                         soc.id, processor.id
                     )
                 })?,
+                mprofile,
                 processor.rprofile.as_ref(),
                 soc.architecture.clone(),
             )
@@ -409,7 +447,11 @@ pub(super) fn value(
                 "registers": processor.registers.iter().map(|(register, value)| {
                     json!([processor_register(*register), value])
                 }).collect::<Vec<_>>(),
-                "mprofile": null,
+                "mprofile": processor.mprofile.map(|profile| json!({
+                    "clock_hz": profile.clock_hz,
+                    "board_ticks_per_second": profile.board_ticks_per_second,
+                    "vector_base": profile.vector_base,
+                })),
                 "rprofile": rprofile,
             })
         })
