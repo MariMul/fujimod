@@ -16,8 +16,10 @@ pub use graph::assemble_with_starts as xp5_execution_graph;
 pub use xp5::windows as xp5_device_windows;
 /// An XP5 device bus assembled from the selected SoC hardware profile.
 pub use xp5::{
-    DeviceAssembly as Xp5DeviceAssembly, MemoryImage as Xp5MemoryImage,
-    OpenOptions as Xp5OpenOptions, assemble_devices as assemble_xp5_devices, open as open_xp5,
+    DeviceAssembly as Xp5DeviceAssembly, FirmwareStartup as Xp5FirmwareStartup,
+    MemoryImage as Xp5MemoryImage, OpenOptions as Xp5OpenOptions,
+    assemble_devices as assemble_xp5_devices, open as open_xp5,
+    startup_from_profile as xp5_startup_from_profile,
 };
 
 use crate::{

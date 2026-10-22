@@ -71,6 +71,12 @@ the rest of the emulator. `xp5_device_windows` converts a selected SoC
 hardware profile to device windows; callers supply any run-specific device
 options and firmware bytes.
 
+For catalog-backed startup facts, `xp5_startup_from_profile` converts a
+caller-selected firmware profile and resolved SoC into processor reset state,
+GIC initialization, and A-profile timer configuration. It consumes declared
+register and hardware facts only; the caller still selects the profile and
+provides all firmware memory images.
+
 Initial memory images must fit declared physical RAM and cannot overlap. The
 XP5 open function accepts those bytes without comparing them to a bundled
 firmware hash. The caller selects the firmware inputs and loading layout.

@@ -10,11 +10,16 @@ use crate::board::{
     factory,
 };
 use fujimod_catalog::{
+    configuration::ResolvedConfiguration,
+    firmware::FirmwareProfile,
     profiles::RegisterWindow,
-    reference::{ResolvedSelection, SocBlockKind},
+    reference::{ProcessorModel, ResolvedSelection, SocBlockKind},
+    soc::{ApplicationHardware, InterruptControllerHardware},
 };
+use fujimod_emulator_cpu::{Register, arm64};
 use fujimod_emulator_devices::{
     graph::{DeviceGraph, DeviceWindow},
+    ip::arm::{generic_timer, gicv3::Gic},
     parts::{
         controls::{Controls, Source},
         pins::DriveInput,
@@ -25,6 +30,242 @@ use fujimod_emulator_devices::{
 use serde_json::Value;
 use std::time::Duration;
 use std::{collections::BTreeMap, sync::Arc};
+
+/// Generic CPU and interrupt-controller state declared by a caller-selected
+/// firmware startup profile. The profile is data; opening the board does not
+/// inspect firmware instructions or select a profile by firmware identity.
+pub struct FirmwareStartup {
+    pub processors: Vec<super::graph::ProcessorStart>,
+    pub interrupts: Option<InterruptMap>,
+    pub aprofile: Vec<(usize, aprofile::Config)>,
+}
+
+fn insert_start_register(
+    registers: &mut Vec<(Register, u64)>,
+    name: &str,
+    value: u64,
+) -> Result<(), String> {
+    let register = match name {
+        "PC" => Register::Pc,
+        "PSTATE" => Register::Pstate,
+        "SP" => Register::Sp,
+        _ if name.starts_with('x') => {
+            let index = name[1..]
+                .parse::<u8>()
+                .map_err(|error| format!("invalid AArch64 register {name}: {error}"))?;
+            if index > 30 {
+                return Err(format!("invalid AArch64 register {name}"));
+            }
+            Register::X(index)
+        }
+        _ => Register::Arm64System(arm64::system_register(name)?),
+    };
+    registers.push((register, value));
+    Ok(())
+}
+
+fn is_gic_system_register(register: u16) -> bool {
+    register == 0xc230
+        || (register >> 14 == 3
+            && (register >> 11) & 7 == 0
+            && (register >> 7) & 15 == 12
+            && (8..=15).contains(&((register >> 3) & 15)))
+}
+
+/// Translate caller-supplied catalog startup facts into generic XP5 runtime
+/// processor, GIC, and architectural timer configuration.
+pub fn startup_from_profile(
+    resolved: &ResolvedConfiguration,
+    profile: &FirmwareProfile,
+    ticks_per_second: u64,
+) -> Result<FirmwareStartup, String> {
+    let soc = &resolved.reference.soc;
+    let hardware = soc
+        .hardware
+        .as_ref()
+        .ok_or("selected SoC has no hardware description")?;
+    let ApplicationHardware::Armv8a { affinities, .. } = hardware
+        .application
+        .as_ref()
+        .ok_or("XP5 SoC has no A-profile processor wiring")?
+    else {
+        return Err("XP5 SoC application processors are not ARMv8-A".into());
+    };
+    let cpus = profile
+        .cpu
+        .as_ref()
+        .ok_or("selected firmware profile has no CPU startup state")?;
+    let processors = cpus
+        .iter()
+        .map(|cpu| {
+            let index = usize::try_from(cpu.id).map_err(|_| "CPU id exceeds host address space")?;
+            let processor = soc.processors.get(index).ok_or_else(|| {
+                format!("firmware CPU {} is absent from the selected SoC", cpu.id)
+            })?;
+            let affinity = affinities
+                .get(&processor.id)
+                .ok_or_else(|| format!("processor {} has no MPIDR affinity", processor.id))?;
+            let mut registers = vec![(Register::Pc, cpu.pc), (Register::Pstate, cpu.cpsr)];
+            for (name, value) in [
+                ("x19", cpu.regs.x19),
+                ("x20", cpu.regs.x20),
+                ("x21", cpu.regs.x21),
+            ] {
+                insert_start_register(&mut registers, name, value)?;
+            }
+            for (name, value) in serde_json::to_value(&cpu.sysregs)
+                .map_err(|error| error.to_string())?
+                .as_object()
+                .ok_or("firmware sysreg record is not an object")?
+            {
+                let register = arm64::system_register(name)?.encoding()?;
+                if !is_gic_system_register(register) {
+                    insert_start_register(
+                        &mut registers,
+                        name,
+                        value
+                            .as_u64()
+                            .ok_or("firmware sysreg value is not an integer")?,
+                    )?;
+                }
+            }
+            insert_start_register(&mut registers, "MPIDR_EL1", *affinity)?;
+            Ok(super::graph::ProcessorStart {
+                processor_id: processor.id.clone(),
+                released: cpu.running,
+                registers,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    let interrupts = match hardware.interrupt_controller.as_ref() {
+        Some(InterruptControllerHardware::GicV3 {
+            distributor_block_id,
+            redistributor_block_id,
+            redistributor_stride,
+            lines,
+        }) => {
+            let block_base = |id: &str| {
+                soc.blocks
+                    .iter()
+                    .find(|block| block.id == id)
+                    .map(|block| block.base)
+                    .ok_or_else(|| format!("GIC names absent SoC block {id}"))
+            };
+            let affinity_values = soc
+                .processors
+                .iter()
+                .filter(|processor| processor.model == ProcessorModel::CortexA53)
+                .map(|processor| {
+                    affinities
+                        .get(&processor.id)
+                        .ok_or_else(|| format!("processor {} has no MPIDR affinity", processor.id))
+                        .and_then(|value| {
+                            u32::try_from(*value)
+                                .map_err(|_| "GIC affinity exceeds 32 bits".to_string())
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut gic = Gic::new(affinity_values.clone(), *lines as usize)?;
+            if let Some(cpus) = &profile.cpu {
+                for cpu in cpus {
+                    let core =
+                        usize::try_from(cpu.id).map_err(|_| "CPU id exceeds host address space")?;
+                    for (name, value) in serde_json::to_value(&cpu.sysregs)
+                        .map_err(|error| error.to_string())?
+                        .as_object()
+                        .ok_or("firmware sysreg record is not an object")?
+                    {
+                        let register = arm64::system_register(name)?.encoding()?;
+                        if is_gic_system_register(register) {
+                            gic.system(
+                                core,
+                                register,
+                                Some(
+                                    value
+                                        .as_u64()
+                                        .ok_or("firmware sysreg value is not an integer")?,
+                                ),
+                            )?;
+                        }
+                    }
+                }
+            }
+            if let Some(initial) = &profile.gic_initial {
+                for (offset, value) in initial {
+                    let offset = u64::from_str_radix(offset.trim_start_matches("0x"), 16).map_err(
+                        |error| format!("invalid GIC distributor offset {offset}: {error}"),
+                    )?;
+                    gic.distributor(offset, 4, Some(*value))?;
+                }
+            }
+            if let Some(initial) = &profile.gic_redistributor_initial {
+                for register in initial {
+                    let core = usize::try_from(register.core)
+                        .map_err(|_| "GIC redistributor core exceeds host address space")?;
+                    let size = u8::try_from(register.size)
+                        .map_err(|_| "GIC register width exceeds 8 bits")?;
+                    gic.redistributor(core, register.offset, size, Some(register.value))?;
+                }
+            }
+            Some(InterruptMap {
+                gic,
+                distributor: block_base(distributor_block_id)?,
+                redistributor: block_base(redistributor_block_id)?,
+                stride: *redistributor_stride,
+                cores: affinity_values.len(),
+            })
+        }
+        _ => None,
+    };
+
+    let ApplicationHardware::Armv8a {
+        counter_clock_id,
+        pmu_clock_id,
+        physical_timer_irq,
+        virtual_timer_irq,
+        ..
+    } = hardware
+        .application
+        .as_ref()
+        .ok_or("XP5 SoC has no A-profile timer wiring")?
+    else {
+        return Err("XP5 SoC application processors are not ARMv8-A".into());
+    };
+    let clock_frequency = |id: &str| {
+        soc.clocks
+            .iter()
+            .find(|clock| clock.id == id)
+            .and_then(|clock| clock.frequency_hz)
+            .ok_or_else(|| format!("SoC clock {id} has no declared frequency"))
+    };
+    let distributor = interrupts.as_ref().map(|gic| gic.distributor).unwrap_or(0);
+    let timer_config = aprofile::Config {
+        clock: generic_timer::Clock {
+            counter_hz: clock_frequency(counter_clock_id)?,
+            ticks_per_second,
+        },
+        physical_irq: *physical_timer_irq,
+        virtual_irq: *virtual_timer_irq,
+        pmu_hz: clock_frequency(pmu_clock_id)?,
+        implementation: Some(aprofile::CortexA53 {
+            cores: affinities.len(),
+            peripheral_base: distributor,
+        }),
+    };
+    let aprofile = soc
+        .processors
+        .iter()
+        .enumerate()
+        .filter(|(_, processor)| processor.model == ProcessorModel::CortexA53)
+        .map(|(core, _)| (core, timer_config))
+        .collect();
+    Ok(FirmwareStartup {
+        processors,
+        interrupts,
+        aprofile,
+    })
+}
 
 fn attachment_kind(
     selection: &ResolvedSelection,
