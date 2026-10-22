@@ -205,12 +205,213 @@
       "manual_page": 55,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-4"
+      ],
       "assignable": false,
       "default_function": "Adjusts exposure compensation.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "+3",
+              "label": "+3",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+3.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "8/3",
+              "label": null,
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+2.7"
+              },
+              "asserted": true
+            },
+            {
+              "id": "7/3",
+              "label": null,
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+2.3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "+2",
+              "label": "+2",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+2.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "5/3",
+              "label": null,
+              "description": null,
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P5_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "4/3",
+              "label": null,
+              "description": null,
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P4_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "+1",
+              "label": "+1",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+1.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "2/3",
+              "label": null,
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+0.7"
+              },
+              "asserted": true
+            },
+            {
+              "id": "1/3",
+              "label": null,
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+0.3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "0",
+              "label": "0",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D=0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-1/3",
+              "label": null,
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-0.3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-2/3",
+              "label": null,
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-0.7"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−1",
+              "label": "−1",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-1.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-4/3",
+              "label": null,
+              "description": null,
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M4_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-5/3",
+              "label": null,
+              "description": null,
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M5_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−2",
+              "label": "−2",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-2.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-7/3",
+              "label": null,
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-2.3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-8/3",
+              "label": null,
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-2.7"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−3",
+              "label": "−3",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-3.0"
+              },
+              "asserted": true
+            }
+          ]
+        },
+        "press": null,
+        "endless": false
+      }
     },
     "flash_pop_up_button": {
       "name": "N (flash pop-up) button",
@@ -504,12 +705,173 @@
       "manual_page": 48,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "default_function": "Selects shutter speed; A selects automatic shutter speed, T selects a timed exposure, and B keeps the shutter open while the shutter button is held.",
       "role": null,
       "mechanical": false,
-      "behavior": null
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "A",
+              "label": "A",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "S-A"
+              },
+              "asserted": true
+            },
+            {
+              "id": "4000",
+              "label": "4000",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/4000"
+              },
+              "asserted": true
+            },
+            {
+              "id": "2000",
+              "label": "2000",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/2000"
+              },
+              "asserted": true
+            },
+            {
+              "id": "1000",
+              "label": "1000",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/1000"
+              },
+              "asserted": true
+            },
+            {
+              "id": "500",
+              "label": "500",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/500"
+              },
+              "asserted": true
+            },
+            {
+              "id": "250",
+              "label": "250",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/250"
+              },
+              "asserted": true
+            },
+            {
+              "id": "180",
+              "label": "180",
+              "description": null,
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_SHUTTER_DIAL_1_180"
+              },
+              "asserted": true
+            },
+            {
+              "id": "125",
+              "label": "125",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/125"
+              },
+              "asserted": true
+            },
+            {
+              "id": "60",
+              "label": "60",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/60"
+              },
+              "asserted": true
+            },
+            {
+              "id": "30",
+              "label": "30",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/30"
+              },
+              "asserted": true
+            },
+            {
+              "id": "15",
+              "label": "15",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/15"
+              },
+              "asserted": true
+            },
+            {
+              "id": "8",
+              "label": "8",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/8"
+              },
+              "asserted": true
+            },
+            {
+              "id": "4",
+              "label": "4",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/4"
+              },
+              "asserted": true
+            },
+            {
+              "id": "T",
+              "label": "T",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "S-T"
+              },
+              "asserted": true
+            },
+            {
+              "id": "B",
+              "label": "B",
+              "description": null,
+              "key": {
+                "kind": "debug_key",
+                "name": "S-B"
+              },
+              "asserted": true
+            }
+          ]
+        },
+        "press": null,
+        "endless": false
+      }
     }
   }
 }
