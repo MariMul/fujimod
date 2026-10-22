@@ -27,6 +27,8 @@ mod schedule_tests;
 pub(crate) mod test_support;
 #[cfg(test)]
 mod tests;
+#[cfg(all(test, feature = "serde"))]
+mod workers_tests;
 pub mod xp4;
 use bus::Bus;
 use fujimod_emulator_cpu::timeline::{Ratio, Target, Timeline};
@@ -51,31 +53,28 @@ struct CoreInterruptMap {
     device: usize,
     inputs: Box<dyn fujimod_emulator_devices::bus::CoreInterrupts>,
 }
-fn device_workers(policy: ExecutionPolicy) -> usize {
+fn default_device_workers() -> usize {
+    if cfg!(target_os = "emscripten") { 2 } else { 0 }
+}
+fn device_workers(policy: ExecutionPolicy, preference: usize) -> usize {
     match policy {
         ExecutionPolicy::Exact => 0,
-        ExecutionPolicy::Interactive => {
-            #[cfg(target_os = "emscripten")]
-            {
-                2
-            }
-            #[cfg(not(target_os = "emscripten"))]
-            {
-                0
-            }
-        }
+        ExecutionPolicy::Interactive => preference,
     }
 }
-fn prepare_device_workers(policy: ExecutionPolicy) -> Result<(), String> {
-    let count = device_workers(policy);
+fn prepare_device_workers(policy: ExecutionPolicy, preference: usize) -> Result<(), String> {
+    let count = device_workers(policy, preference);
     if fujimod_emulator_devices::work::worker_count() != count {
         fujimod_emulator_devices::work::configure(count)?;
     }
     Ok(())
 }
+
 struct State {
     continuation: Rc<RefCell<continuation::Stops>>,
     execution_policy: ExecutionPolicy,
+    // Host computation preference; absent from fingerprints and keyframes.
+    device_workers: usize,
     // Host run boundary, not a device deadline or persistent modeled state.
     clock_limit: Option<u64>,
     memory: Rc<memory::Memory>,
@@ -145,6 +144,30 @@ pub struct Board {
     entries: Rc<RefCell<observe::Entries>>,
 }
 impl Board {
+    /// Host parallelism used for Interactive device computations. Exact stays inline.
+    pub fn device_worker_preference(&self) -> usize {
+        self.state.borrow().device_workers
+    }
+    pub fn device_worker_count(&self) -> usize {
+        device_workers(self.execution_policy(), self.device_worker_preference())
+    }
+    /// Drain derived work before changing a stopped owner's executor. Joining
+    /// computation never publishes its DMA payload or interrupts.
+    pub fn set_device_workers(&mut self, count: usize) -> Result<(), String> {
+        if !matches!(count, 0 | 2) {
+            return Err("device workers must be 0 or 2".into());
+        }
+        let mut state = self
+            .state
+            .try_borrow_mut()
+            .map_err(|_| "device workers require a stopped board")?;
+        if state.active_slice.is_some() || state.parallel.is_some() || state.memory_access {
+            return Err("device workers require a stopped board".into());
+        }
+        prepare_device_workers(state.execution_policy, count)?;
+        state.device_workers = count;
+        Ok(())
+    }
     pub fn execution_policy(&self) -> ExecutionPolicy {
         self.state.borrow().execution_policy
     }
@@ -160,7 +183,7 @@ impl Board {
         }
         let previous = state.execution_policy;
         if previous == policy {
-            return prepare_device_workers(policy);
+            return prepare_device_workers(policy, state.device_workers);
         }
         for (index, cpu) in self.cpus.iter().enumerate() {
             if let Err(error) = cpu.set_execution_policy(policy) {
@@ -170,7 +193,7 @@ impl Board {
                 return Err(error);
             }
         }
-        if let Err(error) = prepare_device_workers(policy) {
+        if let Err(error) = prepare_device_workers(policy, state.device_workers) {
             for cpu in self.cpus.iter() {
                 cpu.set_execution_policy(previous)?;
             }
@@ -270,6 +293,7 @@ impl Board {
         let state = Rc::new(RefCell::new(State {
             continuation,
             execution_policy: ExecutionPolicy::Exact,
+            device_workers: default_device_workers(),
             clock_limit: None,
             memory: memory.clone(),
             bus,
@@ -653,7 +677,7 @@ impl Board {
         pause_after: Option<u64>,
         quantum: usize,
     ) -> Result<(), String> {
-        prepare_device_workers(self.execution_policy())?;
+        prepare_device_workers(self.execution_policy(), self.device_worker_preference())?;
         if quantum == 0 {
             return Err("zero processor quantum".into());
         }
@@ -1161,6 +1185,7 @@ impl State {
     ) -> Result<T, String> {
         let Self {
             execution_policy,
+            device_workers,
             bus,
             memory,
             timeline,
@@ -1185,6 +1210,7 @@ impl State {
         } = self;
         let mut host = Services {
             execution_policy: *execution_policy,
+            device_workers: *device_workers,
             memory,
             timeline,
             interrupts,
@@ -1421,6 +1447,7 @@ impl State {
 }
 struct Services<'a> {
     execution_policy: ExecutionPolicy,
+    device_workers: usize,
     memory: &'a memory::Memory,
     timeline: &'a mut Timeline,
     interrupts: &'a mut Option<InterruptMap>,
@@ -1456,7 +1483,7 @@ impl Services<'_> {
 }
 impl Host for Services<'_> {
     fn compute_workers(&self) -> usize {
-        device_workers(self.execution_policy)
+        device_workers(self.execution_policy, self.device_workers)
     }
     fn select_memory(&mut self, decoder: usize, choice: usize) -> Result<(), String> {
         self.decoders.select(

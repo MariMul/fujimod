@@ -134,6 +134,10 @@ export interface SessionCommands {
     request: Record<string, never>;
     result: { ticksPerSecond: string; state: { frames: number } };
   };
+  device_workers: {
+    request: { count?: 0 | 2 };
+    result: { count: 0 | 2; effective: 0 | 2 };
+  };
   device_states: {
     request: { kind: string };
     result: { states: unknown[] };

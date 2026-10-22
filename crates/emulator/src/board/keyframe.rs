@@ -74,6 +74,7 @@ impl State {
         // decision. Wiring/allocations are retained by this exact Board owner.
         let Self {
             execution_policy,
+            device_workers: _,
             clock_limit: _,
             memory: _,
             bus: _,

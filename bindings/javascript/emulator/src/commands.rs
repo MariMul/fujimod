@@ -55,6 +55,11 @@ struct WatchPcs {
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct DeviceWorkers {
+    count: Option<usize>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct DeviceStates {
     kind: String,
 }
@@ -308,6 +313,13 @@ impl Session {
                     })?;
                 }
                 json!({"ticksPerSecond":preview.tick_hz.to_string(),"state":self.core.frame_state(&preview.node)?})
+            }
+            "device_workers" => {
+                let o: DeviceWorkers = options(c.options)?;
+                if let Some(count) = o.count {
+                    self.core.board.set_device_workers(count)?;
+                }
+                json!({"count":self.core.board.device_worker_preference(),"effective":self.core.board.device_worker_count()})
             }
             "device_states" => {
                 let o: DeviceStates = options(c.options)?;

@@ -546,3 +546,27 @@ fn raw_usb_commands_preserve_opaque_packets_and_never_run_the_guest() {
     assert_eq!(state.failed, 0);
     assert_eq!(camera_destroy(handle), 0);
 }
+
+#[test]
+fn device_workers_are_host_preferences_without_history_or_fingerprint_effects() {
+    let handle = create(false);
+    let before = command(handle, "fingerprint", json!({}), &[]).unwrap();
+    assert_eq!(
+        command(handle, "device_workers", json!({"count":2}), &[])
+            .unwrap()
+            .0,
+        json!({"count":2,"effective":0})
+    );
+    assert!(command(handle, "device_workers", json!({"count":1}), &[]).is_err());
+    assert_eq!(
+        command(handle, "device_workers", json!({"count":0}), &[])
+            .unwrap()
+            .0,
+        json!({"count":0,"effective":0})
+    );
+    assert_eq!(
+        command(handle, "fingerprint", json!({}), &[]).unwrap(),
+        before
+    );
+    assert_eq!(camera_destroy(handle), 0);
+}
