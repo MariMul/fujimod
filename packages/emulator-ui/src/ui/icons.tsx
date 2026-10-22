@@ -21,6 +21,7 @@ const paths: Record<string, string> = {
   forward: '<path d="m9 18 6-6-6-6"/>',
   plus: '<path d="M5 12h14M12 5v14"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  flash: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>',
   power: '<path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.77.04"/>',
   alert:
     '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3M12 9v4M12 17h.01"/>',

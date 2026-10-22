@@ -447,6 +447,23 @@ svg.i {
   justify-content: space-between;
   gap: 10px;
 }
+.clusters {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.clusters .cmd {
+  align-self: stretch;
+}
+.key-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  justify-items: center;
+  align-items: end;
+  gap: 14px 8px;
+}
 .pair {
   display: flex;
   justify-content: space-between;

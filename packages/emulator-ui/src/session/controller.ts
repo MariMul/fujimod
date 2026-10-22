@@ -1,7 +1,7 @@
 import { createSignal, reconcile } from 'solid-js';
 import type { AssetProgress } from '../engine/download-progress';
 import { WebcamInput } from './webcam';
-import { inputPanel } from '../ui/input-panel';
+import { defaultLayout } from '../ui/default-layout';
 import { LocalReports } from '../ui/local-reports';
 import { EngineError, FAULT_UNDO_SECONDS, faultFrom, type EngineFault } from '../engine/fault';
 import type { Engine, EngineConfig, BootMedia, ReplayStep } from '../engine/api';
@@ -292,7 +292,7 @@ export function startSession(
     panel.render(
       inputs,
       active,
-      layout.layout.length ? layout : inputPanel(inputs, layout.body),
+      layout.layout.length ? layout : defaultLayout(inputs, layout.body),
       positions,
     );
     viewer.configureTouch(inputs, active, (error) => {
