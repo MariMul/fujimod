@@ -397,5 +397,25 @@
       ]
     }
   ],
+  "encoders": [
+    {
+      "name": "command_dial",
+      "options": {
+        "pins": [
+          {
+            "port": 3,
+            "pin": 8
+          },
+          {
+            "port": 3,
+            "pin": 9
+          }
+        ],
+        "phase_ticks": 120000,
+        "rest_phase": 3
+      },
+      "counter": null
+    }
+  ],
   "$schema": "../../schemas/emulator-document.schema.json"
 }
