@@ -489,6 +489,13 @@ impl ImageInput {
         // additional transport modes. Keep the implemented register bit only.
         let v = if matches!(o, 0x35c | 0x378) { v & 1 } else { v };
         let old = self.state.r[o / 4];
+        if o == 0x94 && v == 0 && self.state.command_due.is_some() {
+            // Clearing START stops the transmitter. The receiver gets no
+            // completed command, and the channel can be disarmed and reused.
+            self.state.command_due = None;
+            self.state.command_armed = false;
+            self.state.command_done = true;
+        }
         if self.state.command_due.is_some() && o != 0x388 {
             return Err("input reconfiguration during command transfer".into());
         }

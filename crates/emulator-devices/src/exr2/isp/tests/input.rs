@@ -72,6 +72,38 @@ fn input_reset_phase_and_arbitrary_relocated_command() {
 }
 
 #[test]
+fn clearing_command_start_stops_the_transmitter_and_allows_rearm() {
+    let mut h = TestHost::new();
+    let mut d = ImageInput::new(input_options(), input_wiring()).unwrap();
+    h.ram[0x8a00..0x8a08].copy_from_slice(&[0xe7, 0x12, 0x34, 0, 0, 0, 0, 0]);
+    for (o, v) in [
+        (0x170, 0x101000),
+        (0x174, 0x8a00),
+        (0x15c, 7),
+        (0x9c, 2),
+        (0x154, 0x10001),
+        (0x94, 1),
+    ] {
+        write(&mut d, &mut h, 0xfff10000 + o, v);
+    }
+    assert_eq!(d.next_deadline(0), Some(3));
+    advance(&mut d, &mut h, 1);
+    write(&mut d, &mut h, 0xfff10094, 0);
+    assert_eq!(read(&mut d, &mut h, 0xfff10094), 0);
+    assert_eq!(d.next_deadline(1), None);
+    // The stopped channel disarms and reports its idle DMA status.
+    write(&mut d, &mut h, 0xfff10154, 0);
+    assert_eq!(read(&mut d, &mut h, 0xfff10160), 0);
+    for (o, v) in [(0x154, 0x10001), (0x94, 1)] {
+        write(&mut d, &mut h, 0xfff10000 + o, v);
+    }
+    assert_eq!(d.next_deadline(1), Some(4));
+    advance(&mut d, &mut h, 4);
+    assert_eq!(read(&mut d, &mut h, 0xfff10094), 0);
+    assert!(h.irqs.is_empty());
+}
+
+#[test]
 fn packed_opcode_writes_still_refuse_nonzero_padding() {
     let mut h = TestHost::new();
     let mut options = input_options();
