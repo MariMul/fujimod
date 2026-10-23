@@ -1,16 +1,16 @@
 //! FFF12000/FFF13000 output banks. Packed Y0,Y1,Cb,Cr, nearest-pair
 //! resampling, and completion latency are declared input laws; silicon
 //! filtering is unresolved. Each instance owns one bank.
+use fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputHandle;
+use fujimod_emulator_devices::exr2::isp::options::output::{GeometryPolicy, Options};
+use fujimod_emulator_devices::exr2::isp::output_channels::{FrameTransfer, OutputChannels, Source};
 use fujimod_emulator_devices::exr2::isp::{
     dma::{self, IrqRoutes, Raster, Transfer},
     due,
 };
-use fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputHandle;
 use fujimod_emulator_devices::imaging::analysis::{ImageLayout, nearest_pairs};
 use fujimod_emulator_devices::scene::ImageFrames;
-use fujimod_emulator_devices::exr2::isp::output_channels::{FrameTransfer, OutputChannels, Source};
 use fujimod_emulator_devices::{Cx, Device};
-use fujimod_emulator_devices::exr2::isp::options::output::{Options, GeometryPolicy};
 
 #[cfg(test)]
 #[path = "tests/output_work.rs"]
@@ -336,6 +336,9 @@ impl OutputChannel {
         if self.stop_due.is_some_and(|t| cx.now() >= t) {
             self.registers[0] = 1;
             self.stop_due = None;
+            let mut channels = self.wiring.channels.0.lock().unwrap();
+            channels.armed[self.wiring.channel] = false;
+            channels.transfers[self.wiring.channel] = None;
         }
         if self.readback(cx)? {
             return Ok(());
@@ -430,6 +433,7 @@ impl Device for OutputChannel {
             let o = self.offset(address, size)?;
             let v = u32::try_from(value).map_err(|_| "output word exceeds 32 bits")?;
             if o == 0
+                && v != 0
                 && v != self.registers[o / 4]
                 && self.wiring.memory_outputs.as_ref().is_some_and(|w| {
                     let output = w.lock().unwrap();
@@ -441,7 +445,30 @@ impl Device for OutputChannel {
             match o {
                 0 => match v {
                     0 => {
-                        self.stop_due = Some(due(cx.now(), self.options.stop_ticks)?);
+                        // A stop withdraws future destinations immediately, but
+                        // the memory input owns the latched RAW transfer until
+                        // both payloads reach RAM. Acknowledge only after that
+                        // drain; otherwise the caller could reuse live DMA RAM.
+                        let drain = self
+                            .wiring
+                            .memory_outputs
+                            .as_ref()
+                            .and_then(|wire| {
+                                let outputs = wire.lock().unwrap();
+                                outputs
+                                    .active
+                                    .then(|| {
+                                        outputs
+                                            .transfers
+                                            .iter()
+                                            .filter_map(Transfer::deadline)
+                                            .max()
+                                    })
+                                    .flatten()
+                            })
+                            .unwrap_or(cx.now())
+                            .max(cx.now());
+                        self.stop_due = Some(due(drain, self.options.stop_ticks)?);
                         let mut channels = self.wiring.channels.0.lock().unwrap();
                         for i in 0..2 {
                             if channels.transfers[i].is_some_and(|p| !p.completed) {
@@ -472,8 +499,8 @@ impl Device for OutputChannel {
                 _ => return Err("unknown output register or unsupported bits".into()),
             }
             self.registers[o / 4] = v;
-            if o == 0 {
-                self.wiring.channels.0.lock().unwrap().armed[self.wiring.channel] = v == 0x10001;
+            if o == 0 && v == 0x10001 {
+                self.wiring.channels.0.lock().unwrap().armed[self.wiring.channel] = true;
             }
             // Config changes during DMA affect the next frame, never its bytes.
             if matches!(o, 0xb0 | 0xb4 | 0xc0 | 0xc4 | 0xd4) {

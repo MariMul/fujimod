@@ -1,8 +1,8 @@
 use super::*;
-use std::sync::{Arc, Mutex};
-use fujimod_emulator_devices::test_host::{TestHost, advance, write};
 use fujimod_emulator_devices::imaging::{exposure::Calibration, radiometric::Renderer};
 use fujimod_emulator_devices::scene::{Frame, FrameEdge, FramePixels, SensorFrames};
+use fujimod_emulator_devices::test_host::{TestHost, advance, write};
+use std::sync::{Arc, Mutex};
 
 fn pair() -> ([OutputChannel; 2], ImageFrames, OutputChannels) {
     let frames = ImageFrames::new(ImageLayout {
@@ -193,4 +193,65 @@ fn failed_worker_result_survives_checkpoint_and_prevents_either_bank_dma() {
             .all(|t| t.check_result().is_ok())
     );
     fujimod_emulator_devices::work::configure(0).unwrap();
+}
+
+#[test]
+fn stop_drains_latched_raw_dma_before_acknowledging_and_withdraws_the_next_destination() {
+    use fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputs;
+    use fujimod_emulator_devices::test_host::read;
+    for latch_routes_first in [false, true] {
+        let (mut outputs, _, channels) = pair();
+        let wire = Arc::new(Mutex::new(MemoryOutputs::default()));
+        for output in &mut outputs {
+            output.wiring.memory_outputs = Some(wire.clone());
+        }
+        let mut host = TestHost::new();
+        arm(&mut outputs, &mut host);
+        {
+            let mut memory = wire.lock().unwrap();
+            memory.raw_input = true;
+            memory.active_destinations = memory.destinations;
+            memory.active = true;
+            for i in 0..2 {
+                let target = memory.active_destinations[i].unwrap();
+                memory.transfers[i].prepare(0, 10, target, 16).unwrap();
+                memory.transfers[i].pixels.fill(64 + i as u8);
+            }
+        }
+        if latch_routes_first {
+            advance(&mut outputs[0], &mut host, 0);
+        }
+        host.now = 1;
+        write(&mut outputs[0], &mut host, 0xfff12000, 0);
+        assert_eq!(wire.lock().unwrap().destinations[0], None);
+        assert!(wire.lock().unwrap().active_destinations[0].is_some());
+        assert_eq!(read(&mut outputs[0], &mut host, 0xfff12000), 0);
+        advance(&mut outputs[0], &mut host, 1);
+        assert_eq!(outputs[0].next_deadline(1), Some(10));
+        let before = outputs[0].fingerprint().unwrap();
+        let mut cx = host.cx();
+        outputs[0].write(&mut cx, 0xfff12000, 4, 0x10001);
+        assert!(cx.refusal().unwrap().contains("during RAW readback"));
+        assert_eq!(before, outputs[0].fingerprint().unwrap());
+        let saved = outputs[0].checkpoint().unwrap();
+        advance(&mut outputs[0], &mut host, 9);
+        assert!(host.effects.is_empty());
+        advance(&mut outputs[0], &mut host, 10);
+        assert_eq!(&host.ram[0x4000..0x4020], &[64; 32]);
+        assert_eq!(&host.ram[0x8000..0x8020], &[65; 32]);
+        assert_eq!(host.effects, ["dma", "dma", "irq", "irq"]);
+        assert_eq!(read(&mut outputs[0], &mut host, 0xfff12000), 0);
+        assert_eq!(outputs[0].next_deadline(10), Some(12));
+        advance(&mut outputs[0], &mut host, 11);
+        assert_eq!(read(&mut outputs[0], &mut host, 0xfff12000), 0);
+        advance(&mut outputs[0], &mut host, 12);
+        assert_eq!(read(&mut outputs[0], &mut host, 0xfff12000), 1);
+        assert_eq!(channels.0.lock().unwrap().armed, [false, true]);
+        // The local stop deadline survives a checkpoint; completed shared DMA
+        // is not replayed by restoring the output register block.
+        outputs[0].restore_checkpoint(&saved).unwrap();
+        advance(&mut outputs[0], &mut host, 12);
+        assert_eq!(read(&mut outputs[0], &mut host, 0xfff12000), 1);
+        assert_eq!(host.effects, ["dma", "dma", "irq", "irq"]);
+    }
 }
