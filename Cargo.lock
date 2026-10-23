@@ -3461,6 +3461,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-emulator-cli"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-emulator",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-cpu-unicorn",
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "fujimod-emulator-cpu"
 version = "0.1.0"
 dependencies = [
@@ -3616,6 +3630,15 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "fujimod-python-module"
+version = "0.1.0"
+dependencies = [
+ "fujimod-python",
+ "fujimod-workspace-hack",
+ "pyo3",
 ]
 
 [[package]]

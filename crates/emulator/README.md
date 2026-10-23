@@ -7,7 +7,7 @@ models. Unsupported hardware stops execution and remains visible in the JSON
 report.
 
 ```sh
-cargo build --locked --release -p fujimod-emulator --bin fujimod-emulator
+cargo build --locked --release -p fujimod-emulator-cli --bin fujimod-emulator
 target/release/fujimod-emulator boot \
   --configuration x70-110-rec \
   --update /path/to/FPUPDATE.DAT \

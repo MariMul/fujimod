@@ -9,8 +9,9 @@ mod usb;
 mod recording;
 mod remote;
 
-#[pymodule]
-fn _native(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
+/// Register every submodule on `fujimod._native` (built by
+/// `fujimod-python-module`).
+pub fn register(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     firmware::register(py, module, "fujimod.firmware")?;
     recording::register(py, module)?;
     remote::register(py, module)?;

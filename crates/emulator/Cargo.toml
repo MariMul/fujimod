@@ -10,16 +10,6 @@ doctest = false
 name = "fujimod_emulator"
 crate-type = ["rlib"]
 
-[[bin]]
-name = "fujimod-emulator"
-path = "src/bin/fujimod-emulator.rs"
-
-[[bin]]
-name = "fujimod-emulator-worker"
-path = "src/bin/fujimod-emulator-worker.rs"
-# No unit tests; `cargo test` need not compile the worker.
-test = false
-
 [dependencies]
 fujimod-recording = { path = "../recording" }
 serde = { version = "1", features = ["derive"] }

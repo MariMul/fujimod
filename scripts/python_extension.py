@@ -43,7 +43,7 @@ def build() -> Path:
             "--release",
             "--locked",
             "--manifest-path",
-            "bindings/python/Cargo.toml",
+            "bindings/python/module/Cargo.toml",
             "--lib",
             "--features",
             "testing",
