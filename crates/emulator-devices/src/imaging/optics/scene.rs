@@ -65,47 +65,72 @@ impl Scene {
     pub fn binned(&self, dimensions: [usize; 2]) -> Self {
         let [width, height] = dimensions;
         let [sw, sh] = self.dimensions;
+        // Overlap weights of each readout column, shared by every row.
+        struct Column {
+            first: usize,
+            last: usize,
+            first_weight: u64,
+            last_weight: u64,
+        }
+        let columns: Vec<_> = (0..width)
+            .map(|x| {
+                let left = x * sw;
+                let right = (x + 1) * sw;
+                let first = left / width;
+                let last = (right - 1) / width;
+                Column {
+                    first,
+                    last,
+                    first_weight: ((first + 1) * width - left) as u64,
+                    last_weight: (right - last * width) as u64,
+                }
+            })
+            .collect();
         let mut prefix = vec![[0u32; 3]; (width + 1) * height];
-        let mut source_y = 0;
-        let mut source_row = self.row(source_y);
+        let (mut values, mut row_prefix) = (Vec::new(), Vec::new());
+        // Horizontal integrals of one source row, reused by each readout row
+        // the source row overlaps.
+        let mut horizontal = vec![[0u64; 3]; width];
+        let mut horizontal_y = None;
         let mut colors = vec![[0u64; 3]; width];
-        for y in 0..height {
+        let area = Divisor::new((sw * sh) as u64);
+        let half = (sw * sh) as u64 / 2;
+        for (y, out) in prefix.chunks_exact_mut(width + 1).enumerate() {
             let top = y * sh;
             let bottom = (y + 1) * sh;
             colors.fill([0; 3]);
             for sy in top / height..bottom.div_ceil(height) {
-                if sy != source_y {
-                    source_row = self.row(sy);
-                    source_y = sy;
+                if horizontal_y != Some(sy) {
+                    let row = self.row_prefix(sy, &mut values, &mut row_prefix);
+                    for (sums, column) in horizontal.iter_mut().zip(&columns) {
+                        let (first, last) = (column.first, column.last);
+                        for c in 0..3 {
+                            sums[c] = if first == last {
+                                u64::from(row[first + 1][c] - row[first][c]) * sw as u64
+                            } else {
+                                let a = u64::from(row[first + 1][c] - row[first][c]);
+                                let b = u64::from(row[last + 1][c] - row[last][c]);
+                                a * column.first_weight
+                                    + b * column.last_weight
+                                    + u64::from(row[last][c] - row[first + 1][c]) * width as u64
+                            };
+                        }
+                    }
+                    horizontal_y = Some(sy);
                 }
-                let row = &source_row.prefix;
-                let wy = bottom.min((sy + 1) * height) - top.max(sy * height);
-                for (x, color) in colors.iter_mut().enumerate() {
-                    let left = x * sw;
-                    let right = (x + 1) * sw;
-                    let first = left / width;
-                    let last = (right - 1) / width;
+                let wy = (bottom.min((sy + 1) * height) - top.max(sy * height)) as u64;
+                for (color, sums) in colors.iter_mut().zip(&horizontal) {
                     for c in 0..3 {
-                        let horizontal = if first == last {
-                            u64::from(row[first + 1][c] - row[first][c]) * sw as u64
-                        } else {
-                            let a = u64::from(row[first + 1][c] - row[first][c]);
-                            let b = u64::from(row[last + 1][c] - row[last][c]);
-                            a * ((first + 1) * width - left) as u64
-                                + b * (right - last * width) as u64
-                                + u64::from(row[last][c] - row[first + 1][c]) * width as u64
-                        };
-                        color[c] += horizontal * wy as u64;
+                        color[c] += sums[c] * wy;
                     }
                 }
             }
             let mut sum = [0u32; 3];
-            let area = (sw * sh) as u64;
-            for (x, color) in colors.iter().enumerate() {
+            for (out, color) in out[1..].iter_mut().zip(&colors) {
                 for c in 0..3 {
-                    sum[c] += ((color[c] + area / 2) / area) as u32;
+                    sum[c] += area.divide(color[c] + half) as u32;
                 }
-                prefix[y * (width + 1) + x + 1] = sum;
+                *out = sum;
             }
         }
         Self {
@@ -130,20 +155,45 @@ impl Scene {
     /// Borrow stored prefixes, or compute only this mosaic row.
     pub fn row(&self, y: usize) -> Row<'_> {
         let width = self.dimensions[0];
-        let prefix = if let Some(sites) = &self.sites {
-            let mut values = vec![[0; 3]; width];
-            sites.row(y, &mut values);
-            Cow::Owned(prefix_sums([width, 1], |x, _| values[x]))
+        let prefix = if self.sites.is_some() {
+            let mut prefix = Vec::new();
+            self.row_prefix(y, &mut Vec::new(), &mut prefix);
+            Cow::Owned(prefix)
         } else {
             Cow::Borrowed(&self.prefix[y * (width + 1)..(y + 1) * (width + 1)])
         };
         Row { prefix }
     }
+    /// Row `y`'s prefix sums: stored, or computed into `prefix` with `values`
+    /// as scratch for a mosaic scene.
+    fn row_prefix<'a>(
+        &'a self,
+        y: usize,
+        values: &mut Vec<[u16; 3]>,
+        prefix: &'a mut Vec<[u32; 3]>,
+    ) -> &'a [[u32; 3]] {
+        let width = self.dimensions[0];
+        let Some(sites) = &self.sites else {
+            return &self.prefix[y * (width + 1)..(y + 1) * (width + 1)];
+        };
+        values.resize(width, [0; 3]);
+        sites.row(y, values);
+        prefix.resize(width + 1, [0; 3]);
+        prefix[0] = [0; 3];
+        let mut sum = [0u32; 3];
+        for (out, value) in prefix[1..].iter_mut().zip(values.iter()) {
+            for c in 0..3 {
+                sum[c] += u32::from(value[c]);
+            }
+            *out = sum;
+        }
+        prefix
+    }
     pub fn horizontal(&self, x: usize, y: usize, radius: usize, fraction: u32) -> [u16; 3] {
         if radius == 0 && fraction == 0 {
             return self.linear(x, y);
         }
-        self.row(y).horizontal(x, radius, fraction)
+        self.row(y).horizontal(x, BoxFilter::new(radius, fraction))
     }
 }
 
@@ -152,16 +202,16 @@ pub(super) struct Row<'a> {
 }
 impl Row<'_> {
     #[inline(always)]
-    pub fn horizontal(&self, x: usize, radius: usize, fraction: u32) -> [u16; 3] {
+    pub fn horizontal(&self, x: usize, filter: BoxFilter) -> [u16; 3] {
         let row = &self.prefix;
         let width = row.len() - 1;
-        let inner = Span::new(x, width, radius);
-        let outer = Span::new(x, width, radius + 1);
+        let inner = Span::new(x, width, filter.radius, filter.inner);
+        let outer = Span::new(x, width, filter.radius + 1, filter.outer);
         let mut result = [0; 3];
         for c in 0..3 {
             let first = row[1][c] as u16;
             let last = (row[width][c] - row[width - 1][c]) as u16;
-            let a = if radius == 0 {
+            let a = if filter.radius == 0 {
                 u64::from(row[x + 1][c] - row[x][c])
             } else {
                 inner.mean(
@@ -171,7 +221,7 @@ impl Row<'_> {
                     last,
                 )
             };
-            let b = if fraction == 0 {
+            let b = if filter.fraction == 0 {
                 a
             } else {
                 outer.mean(
@@ -181,9 +231,45 @@ impl Row<'_> {
                     last,
                 )
             };
-            result[c] = blend(a, fraction, b);
+            result[c] = blend(a, filter.fraction, b);
         }
         result
+    }
+    /// `horizontal` at each of `xs`. Interior points, whose boxes need no
+    /// edge extension, read their prefix differences directly.
+    #[inline(always)]
+    pub fn horizontal_into(&self, xs: &[usize], filter: BoxFilter, out: &mut [[u16; 3]]) {
+        let row: &[[u32; 3]] = &self.prefix;
+        let width = row.len() - 1;
+        let radius = filter.radius;
+        for (&x, value) in xs.iter().zip(out) {
+            *value = if x > radius && x + radius + 2 <= width {
+                let inner = (&row[x - radius], &row[x + radius + 1]);
+                let mut result = [0; 3];
+                if filter.fraction == 0 {
+                    for c in 0..3 {
+                        result[c] = filter
+                            .inner
+                            .divide(u64::from(inner.1[c] - inner.0[c]) + radius as u64)
+                            as u16;
+                    }
+                } else {
+                    let outer = (&row[x - radius - 1], &row[x + radius + 2]);
+                    for c in 0..3 {
+                        let a = filter
+                            .inner
+                            .divide(u64::from(inner.1[c] - inner.0[c]) + radius as u64);
+                        let b = filter
+                            .outer
+                            .divide(u64::from(outer.1[c] - outer.0[c]) + radius as u64 + 1);
+                        result[c] = blend(a, filter.fraction, b);
+                    }
+                }
+                result
+            } else {
+                self.horizontal(x, filter)
+            };
+        }
     }
 }
 /// Row prefix sums of linear values; the first column of each row is zero.
@@ -202,6 +288,25 @@ fn prefix_sums(dimensions: [usize; 2], linear: impl Fn(usize, usize) -> [u16; 3]
     }
     prefix
 }
+/// A fractional box: the blend of the boxes of radius `radius` and
+/// `radius + 1`, with the divisors of their means.
+#[derive(Clone, Copy)]
+pub(super) struct BoxFilter {
+    pub radius: usize,
+    pub fraction: u32,
+    pub inner: Divisor,
+    pub outer: Divisor,
+}
+impl BoxFilter {
+    pub fn new(radius: usize, fraction: u32) -> Self {
+        Self {
+            radius,
+            fraction,
+            inner: Divisor::new(2 * radius as u64 + 1),
+            outer: Divisor::new(2 * radius as u64 + 3),
+        }
+    }
+}
 /// A clamped box interval, shared across channels and readout columns.
 #[derive(Clone, Copy)]
 pub(super) struct Span {
@@ -209,23 +314,67 @@ pub(super) struct Span {
     pub last: usize,
     before: u64,
     after: u64,
-    count: u64,
+    radius: u64,
+    count: Divisor,
 }
 impl Span {
+    /// `count` divides by the box size, `2 * radius + 1`.
     #[inline(always)]
-    pub fn new(point: usize, length: usize, radius: usize) -> Self {
+    pub fn new(point: usize, length: usize, radius: usize, count: Divisor) -> Self {
+        debug_assert_eq!(count.divisor(), 2 * radius as u64 + 1);
         Self {
             first: point.saturating_sub(radius),
             last: (point + radius + 1).min(length),
             before: radius.saturating_sub(point) as u64,
             after: (point + radius + 1).saturating_sub(length) as u64,
-            count: (2 * radius + 1) as u64,
+            radius: radius as u64,
+            count,
         }
     }
     #[inline(always)]
     pub fn mean(self, a: u64, b: u64, first: u16, last: u16) -> u64 {
-        (b - a + u64::from(first) * self.before + u64::from(last) * self.after + self.count / 2)
-            / self.count
+        // The rounding term is half the box size, `(2 * radius + 1) / 2`.
+        self.count.divide(
+            b - a + u64::from(first) * self.before + u64::from(last) * self.after + self.radius,
+        )
+    }
+}
+/// Exact quotients by one invariant divisor. A numerator `n` with
+/// `n * divisor < 2^64` multiplies by the rounded-up reciprocal
+/// `ceil(2^64 / divisor)` (Lemire, Kaser and Kurz, "Faster remainder by
+/// direct computation", 2019); larger numerators divide.
+#[derive(Clone, Copy)]
+pub(super) struct Divisor {
+    divisor: u64,
+    /// `ceil(2^64 / divisor)`, or zero for the divisor 1.
+    reciprocal: u64,
+    limit: u64,
+}
+impl Divisor {
+    pub fn new(divisor: u64) -> Self {
+        assert!(divisor > 0, "division by zero");
+        Self {
+            divisor,
+            reciprocal: (u64::MAX / divisor).wrapping_add(1),
+            limit: u64::MAX / divisor,
+        }
+    }
+    pub fn divisor(self) -> u64 {
+        self.divisor
+    }
+    /// `n / divisor`. With `reciprocal * divisor = 2^64 + r`, `0 <= r <
+    /// divisor`, and `n = q * divisor + s`, `n * reciprocal / 2^64 = q + (s +
+    /// n * r / 2^64) / divisor`, whose fraction stays below 1 when `n * r <
+    /// 2^64`.
+    #[inline(always)]
+    pub fn divide(self, n: u64) -> u64 {
+        if self.reciprocal == 0 {
+            n
+        } else if n <= self.limit {
+            ((u128::from(n) * u128::from(self.reciprocal)) >> 64) as u64
+        } else {
+            n / self.divisor
+        }
     }
 }
 

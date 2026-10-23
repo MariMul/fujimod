@@ -476,78 +476,74 @@ fn encode_response_coordinates(
     distance: Option<f64>,
     coordinates: &Coordinates,
 ) -> Arc<[u8]> {
-    let mut pixels = vec![0; linear.len() * 6];
-    if coordinates.xs.is_empty() {
-        return pixels.into();
+    let mut pixels: Arc<[u8]> = std::iter::repeat_n(0, linear.len() * 6).collect();
+    let width = coordinates.xs.len();
+    if width == 0 {
+        return pixels;
     }
-    let response = Response::new(scale, linear.len());
     // The normalized field axes do not depend on the other coordinate. Keep
     // their original operation order while sharing them across the readout.
+    let axis = |at: usize, length: usize, size: f64| {
+        let v = ((at as f64 + 0.5) / length as f64 - 0.5) * size;
+        distance.map_or(0., |d| {
+            let v = v / d;
+            v * v
+        })
+    };
     let xs: Vec<_> = coordinates
         .xs
         .iter()
-        .map(|&x| {
-            let x = ((x as f64 + 0.5) / dimensions[0] as f64 - 0.5) * sensor[0];
-            distance.map_or(0., |d| {
-                let x = x / d;
-                x * x
-            })
-        })
+        .map(|&x| axis(x, dimensions[0], sensor[0]))
         .collect();
-    let width = coordinates.xs.len();
-    for ((&y, linear), out) in coordinates
+    let rows = coordinates
         .ys
         .iter()
         .zip(linear.chunks_exact(width))
-        .zip(pixels.chunks_exact_mut(width * 6))
-    {
-        let y = ((y as f64 + 0.5) / dimensions[1] as f64 - 0.5) * sensor[1];
-        let yy = distance.map_or(0., |d| {
-            let y = y / d;
-            y * y
-        });
-        for ((&xx, &value), out) in xs.iter().zip(linear).zip(out.chunks_exact_mut(6)) {
-            let field = if distance.is_some() {
-                let v = 1. / (1. + xx + yy);
-                v * v
-            } else {
-                1.
-            };
-            let terms = response.terms(value);
-            for c in 0..3 {
-                out[c * 2..c * 2 + 2].copy_from_slice(
-                    &((terms[c] * field).round_ties_even().clamp(0., 16383.) as u16).to_le_bytes(),
-                );
-            }
-        }
+        .zip(
+            Arc::get_mut(&mut pixels)
+                .unwrap()
+                .chunks_exact_mut(width * 6),
+        )
+        .map(|((&y, linear), out)| (axis(y, dimensions[1], sensor[1]), linear, out));
+    if distance.is_some() {
+        encode_rows(rows, &xs, scale, field);
+    } else {
+        encode_rows(rows, &xs, scale, |_, _| 1.);
     }
-    pixels.into()
+    pixels
 }
-/// The exposure term `linear * scale / 65535` of the response, in its
-/// original operation order. A readout with more pixels than there are
-/// 16-bit linear values computes each value's term once.
-struct Response {
+#[inline(always)]
+fn field(xx: f64, yy: f64) -> f64 {
+    let v = 1. / (1. + xx + yy);
+    v * v
+}
+#[inline(always)]
+fn encode_rows<'a>(
+    rows: impl Iterator<Item = (f64, &'a [[u16; 3]], &'a mut [u8])>,
+    xs: &[f64],
     scale: [f64; 3],
-    table: Vec<[f64; 3]>,
-}
-impl Response {
-    fn new(scale: [f64; 3], pixels: usize) -> Self {
-        let term = |v: u16| std::array::from_fn(|c| f64::from(v) * scale[c] / 65535.);
-        Self {
-            scale,
-            table: if pixels > 1 << 16 {
-                (0..=u16::MAX).map(term).collect()
-            } else {
-                Vec::new()
-            },
-        }
-    }
-    #[inline(always)]
-    fn terms(&self, linear: [u16; 3]) -> [f64; 3] {
-        if self.table.is_empty() {
-            std::array::from_fn(|c| f64::from(linear[c]) * self.scale[c] / 65535.)
-        } else {
-            std::array::from_fn(|c| self.table[usize::from(linear[c])][c])
+    field: impl Fn(f64, f64) -> f64,
+) {
+    for (yy, linear, out) in rows {
+        for ((&xx, &[r, g, b]), out) in xs.iter().zip(linear).zip(out.chunks_exact_mut(6)) {
+            let field = field(xx, yy);
+            // Array maps are not inlined here; keep the channels explicit.
+            let encode = |v: u16, scale: f64| {
+                (f64::from(v) * scale / 65535. * field)
+                    .round_ties_even()
+                    .clamp(0., 16383.) as u16
+            };
+            let [r, g, b] = [
+                encode(r, scale[0]),
+                encode(g, scale[1]),
+                encode(b, scale[2]),
+            ];
+            out[0] = r as u8;
+            out[1] = (r >> 8) as u8;
+            out[2] = g as u8;
+            out[3] = (g >> 8) as u8;
+            out[4] = b as u8;
+            out[5] = (b >> 8) as u8;
         }
     }
 }

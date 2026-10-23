@@ -82,9 +82,12 @@ impl SampleOffsets {
     #[inline(always)]
     pub fn sample(&self, row: usize, column: usize) -> [u16; 3] {
         let at = row + column;
-        std::array::from_fn(|c| {
-            u16::from_le_bytes([self.pixels[at + c * 2], self.pixels[at + c * 2 + 1]])
-        })
+        let p = &self.pixels[at..at + 6];
+        [
+            u16::from_le_bytes([p[0], p[1]]),
+            u16::from_le_bytes([p[2], p[3]]),
+            u16::from_le_bytes([p[4], p[5]]),
+        ]
     }
     #[inline(always)]
     pub fn channel(&self, row: usize, column: usize, channel: usize) -> u16 {

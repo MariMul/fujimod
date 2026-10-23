@@ -122,15 +122,26 @@ impl Film {
         // Chroma is clamped before band gain. All pixel arithmetic fits i32;
         // the cubic LUT builder above still requires i64. Keep each arithmetic
         // shift before its sum, as measured by the integer film experiments.
-        let w = w.map(|v| i32::from(v.min(16383)));
+        // Array maps are not inlined in this crate's profile; per-pixel
+        // channel arithmetic stays explicit.
+        let w = [
+            i32::from(w[0].min(16383)),
+            i32::from(w[1].min(16383)),
+            i32::from(w[2].min(16383)),
+        ];
         let b = (3 * (w[0] >> 2) + 7 * (w[1] >> 2) + 6 * (w[2] >> 2)) >> 4;
-        let x = w.map(|v| ((v * i32::from(self.gain[b as usize])) >> 11).min(4095));
-        let color: [i32; 3] = std::array::from_fn(|i| {
-            let m = self.matrix[i];
+        let gain = i32::from(self.gain[b as usize]);
+        let x = [
+            ((w[0] * gain) >> 11).min(4095),
+            ((w[1] * gain) >> 11).min(4095),
+            ((w[2] * gain) >> 11).min(4095),
+        ];
+        let mut color = [0; 3];
+        for (color, m) in color.iter_mut().zip(&self.matrix) {
             let value =
                 (((m[0] * x[0]) >> 7) + ((m[1] * x[1]) >> 7) + ((m[2] * x[2]) >> 7) + 4) >> 3;
-            i32::from(self.curve[value.clamp(0, 4095) as usize] >> 6)
-        });
+            *color = i32::from(self.curve[value.clamp(0, 4095) as usize] >> 6);
+        }
         color
     }
     #[inline(always)]
@@ -150,7 +161,10 @@ impl Film {
         let [c0, c1, c2, c3] = self.chroma;
         let cb = (((((c2 * (b - y)) >> 8) + ((c3 * (r - y)) >> 8)) * 578) >> 10).clamp(-512, 511);
         let cr = (((((c0 * (r - y)) >> 8) + ((c1 * (b - y)) >> 8)) * 730) >> 10).clamp(-512, 511);
-        let band = self.bounds.iter().take_while(|&&v| v <= y).count();
+        let mut band = 0;
+        while band < self.bounds.len() && self.bounds[band] <= y {
+            band += 1;
+        }
         let (shift, gain) = self.bands[band];
         let f = gain + ((shift * y) >> 8);
         [
@@ -159,6 +173,7 @@ impl Film {
             (128 + ((cr * f + 512) >> 10)).clamp(0, 255) as u8,
         ]
     }
+    #[inline(always)]
     pub fn pack(a: [u8; 3], b: [u8; 3]) -> [u8; 4] {
         let mean = |a: u8, b: u8| {
             let n = u16::from(a) + u16::from(b);

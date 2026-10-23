@@ -150,6 +150,12 @@ impl Renderer {
         Ok(Some(image))
     }
 }
+/// Store one packed pixel pair; four-byte copies are not inlined here.
+#[inline(always)]
+fn store(pair: &mut [u8], value: [u8; 4]) {
+    let pair: &mut [u8; 4] = pair.try_into().unwrap();
+    *pair = value;
+}
 impl Image {
     pub fn freeze(self: &Arc<Self>, layout: ImageLayout) -> Result<FrozenReadout, String> {
         layout.bytes()?;
@@ -269,13 +275,15 @@ impl Image {
         }
         Ok(frame)
     }
+    #[inline(always)]
     fn color(&self, raw: [u16; 3], pixels: &mut FilmPixels<'_>) -> [u8; 3] {
         pixels.develop(self.white_balance(raw))
     }
+    #[inline(always)]
     fn white_balance(&self, raw: [u16; 3]) -> [u16; 3] {
-        std::array::from_fn(|c| {
-            ((u64::from(raw[c]) * u64::from(self.gain[c])) >> 8).min(16383) as u16
-        })
+        let balance =
+            |c: usize| ((u64::from(raw[c]) * u64::from(self.gain[c])) >> 8).min(16383) as u16;
+        [balance(0), balance(1), balance(2)]
     }
     pub fn render(&self, layout: ImageLayout, workers: usize) -> Result<Arc<[u8]>, String> {
         layout.bytes()?;
@@ -312,7 +320,7 @@ impl Image {
                                     readout.sample(source_row, readout.columns[x * 2 + 1]),
                                     &mut memo,
                                 );
-                                pair.copy_from_slice(&Film::pack(left, right));
+                                store(pair, Film::pack(left, right));
                             }
                         }
                     },
@@ -333,7 +341,7 @@ impl Image {
                                     self.color(frame.sample(x * 2, y, [width, height]), &mut memo);
                                 let right = self
                                     .color(frame.sample(x * 2 + 1, y, [width, height]), &mut memo);
-                                pair.copy_from_slice(&Film::pack(left, right));
+                                store(pair, Film::pack(left, right));
                             }
                         }
                     },
@@ -370,7 +378,7 @@ impl Image {
                         colors
                             [sy * width + ((2 * x + 1) * width / (2 * layout.width)).min(width - 1)]
                     };
-                    pair.copy_from_slice(&Film::pack(sample(x * 2), sample(x * 2 + 1)));
+                    store(pair, Film::pack(sample(x * 2), sample(x * 2 + 1)));
                 }
             }
         }

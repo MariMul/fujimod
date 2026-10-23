@@ -1,6 +1,6 @@
 use super::{
     encode_response,
-    scene::{Scene, Span, blend},
+    scene::{BoxFilter, Scene, Span, blend},
 };
 use std::sync::Arc;
 
@@ -397,9 +397,12 @@ pub(super) fn project(
                 }
             },
         ),
-        None => project_sampled(scene, coordinates, radius, fraction, |y, xs, _, out| {
-            horizontal_row(scene, y, xs, radius, fraction, out);
-        }),
+        None => {
+            let filter = BoxFilter::new(radius, fraction);
+            project_sampled(scene, coordinates, radius, fraction, |y, xs, _, out| {
+                horizontal_row(scene, y, xs, filter, out);
+            })
+        }
     }
 }
 pub(super) fn project_axes(
@@ -436,34 +439,25 @@ pub(super) fn project_prepared_axes(
                 }
             },
         ),
-        None => project_sampled(
-            scene,
-            coordinates,
-            radius[1],
-            fraction[1],
-            |y, xs, _, out| {
-                horizontal_row(scene, y, xs, radius[0], fraction[0], out);
-            },
-        ),
+        None => {
+            let filter = BoxFilter::new(radius[0], fraction[0]);
+            project_sampled(
+                scene,
+                coordinates,
+                radius[1],
+                fraction[1],
+                |y, xs, _, out| horizontal_row(scene, y, xs, filter, out),
+            )
+        }
     }
 }
-fn horizontal_row(
-    scene: &Scene,
-    y: usize,
-    xs: &[usize],
-    radius: usize,
-    fraction: u32,
-    out: &mut [[u16; 3]],
-) {
-    if radius == 0 && fraction == 0 {
+fn horizontal_row(scene: &Scene, y: usize, xs: &[usize], filter: BoxFilter, out: &mut [[u16; 3]]) {
+    if filter.radius == 0 && filter.fraction == 0 {
         for (&x, value) in xs.iter().zip(out) {
             *value = scene.linear(x, y);
         }
     } else {
-        let row = scene.row(y);
-        for (&x, value) in xs.iter().zip(out) {
-            *value = row.horizontal(x, radius, fraction);
-        }
+        scene.row(y).horizontal_into(xs, filter, out);
     }
 }
 fn project_sampled(
@@ -489,14 +483,18 @@ fn project_sampled(
     let begin = first_y.saturating_sub(radius + 1);
     let end = (last_y + radius + 2).min(height);
     let mut prefix = vec![[[0u64; 3]; LANES]; end - begin + 1];
+    let filter = BoxFilter::new(radius, fraction);
     for (block, xs) in coordinates.xs.chunks(LANES).enumerate() {
         prefix[0] = [[0; 3]; LANES];
         for y in begin..end {
             let mut values = [[0; 3]; LANES];
             sample(y, xs, block * LANES, &mut values);
-            for (lane, value) in values.iter().take(xs.len()).enumerate() {
-                prefix[y - begin + 1][lane] =
-                    std::array::from_fn(|c| prefix[y - begin][lane][c] + u64::from(value[c]));
+            let (above, below) = prefix.split_at_mut(y - begin + 1);
+            let (above, below) = (&above[y - begin], &mut below[0]);
+            for lane in 0..xs.len() {
+                for c in 0..3 {
+                    below[lane][c] = above[lane][c] + u64::from(values[lane][c]);
+                }
             }
         }
         let mut first = [[0; 3]; LANES];
@@ -504,8 +502,8 @@ fn project_sampled(
         sample(0, xs, block * LANES, &mut first);
         sample(height - 1, xs, block * LANES, &mut last);
         for (row, &y) in coordinates.ys.iter().enumerate() {
-            let inner = Span::new(y, height, radius);
-            let outer = Span::new(y, height, radius + 1);
+            let inner = Span::new(y, height, radius, filter.inner);
+            let outer = Span::new(y, height, radius + 1, filter.outer);
             for lane in 0..xs.len() {
                 let at = row * coordinates.xs.len() + block * LANES + lane;
                 for c in 0..3 {
@@ -560,9 +558,10 @@ fn project_rows(
     let mut scratch = vec![[0; 3]; width];
     let mut inner = MovingSum::new(width);
     let mut outer = MovingSum::new(width);
+    let filter = BoxFilter::new(radius, fraction);
     for (row, &y) in coordinates.ys.iter().enumerate() {
-        let a = Span::new(y, height, radius);
-        let b = Span::new(y, height, radius + 1);
+        let a = Span::new(y, height, radius, filter.inner);
+        let b = Span::new(y, height, radius + 1, filter.outer);
         let mut sample_row = |sy, values: &mut [[u16; 3]]| sample(sy, &coordinates.xs, 0, values);
         inner.advance(a, &mut scratch, &mut sample_row);
         if fraction != 0 {
