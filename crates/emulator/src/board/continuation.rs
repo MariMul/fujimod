@@ -80,6 +80,19 @@ unsafe fn written(_: Access, address: u64, size: i32, _: i64, data: *mut c_void)
         let _ = cpu.stop();
     }
 }
+/// Record a half-open span, joining it to the previous one when they overlap
+/// or touch: a predicate that reads memory in order keeps a single span.
+fn add_span(spans: &mut Vec<(u64, u64)>, (lo, hi): (u64, u64)) {
+    if let Some(last) = spans.last_mut()
+        && lo <= last.1
+        && last.0 <= hi
+    {
+        last.0 = last.0.min(lo);
+        last.1 = last.1.max(hi);
+    } else {
+        spans.push((lo, hi));
+    }
+}
 fn union(mut spans: Vec<(u64, u64)>) -> Vec<(u64, u64)> {
     spans.sort_unstable();
     let mut out: Vec<(u64, u64)> = vec![];
@@ -129,9 +142,9 @@ impl Board {
     }
     pub(super) fn track_physical_read(&self, address: u64, bytes: usize) -> Result<(), String> {
         if let Some(reads) = self.read_set.borrow_mut().as_mut() {
-            reads
-                .stores
-                .extend(self.physical_memory.physical_ranges(address, bytes)?);
+            for span in self.physical_memory.physical_ranges(address, bytes)? {
+                add_span(&mut reads.stores, span);
+            }
         }
         Ok(())
     }

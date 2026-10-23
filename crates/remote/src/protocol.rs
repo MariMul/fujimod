@@ -16,12 +16,27 @@ pub struct ReadSet {
     pub devices: BTreeSet<usize>,
 }
 impl ReadSet {
+    /// Add another read set. Store ranges stay sorted and disjoint: the two
+    /// sorted lists merge in one pass, joining ranges that overlap or touch.
     pub fn extend(&mut self, other: Self) {
-        self.stores.extend(other.stores);
         self.devices.extend(other.devices);
-        self.stores.sort_unstable();
-        let mut union: Vec<(u64, u64)> = Vec::new();
-        for (lo, hi) in self.stores.drain(..) {
+        let mut current = std::mem::take(&mut self.stores);
+        let mut incoming = other.stores;
+        for stores in [&mut current, &mut incoming] {
+            if !stores.is_sorted() {
+                stores.sort_unstable();
+            }
+        }
+        let mut union: Vec<(u64, u64)> = Vec::with_capacity(current.len() + incoming.len());
+        let (mut a, mut b) = (
+            current.into_iter().peekable(),
+            incoming.into_iter().peekable(),
+        );
+        while let Some((lo, hi)) = match (a.peek(), b.peek()) {
+            (Some(x), Some(y)) if y < x => b.next(),
+            (Some(_), _) => a.next(),
+            (None, _) => b.next(),
+        } {
             if let Some(last) = union.last_mut()
                 && lo <= last.1
             {
@@ -169,4 +184,30 @@ pub trait RemoteReader {
 pub trait Remote: RemoteReader {
     fn set_input<'a>(&'a mut self, input: &'a Input, deadline: u64) -> LocalFuture<'a, ()>;
     fn wait<'a>(&'a mut self, reads: &'a ReadSet, deadline: u64) -> LocalFuture<'a, ()>;
+}
+#[cfg(test)]
+mod tests {
+    use super::ReadSet;
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn extending_a_read_set_keeps_sorted_disjoint_ranges() {
+        let mut reads = ReadSet {
+            stores: vec![(0x10, 0x20), (0x40, 0x50)],
+            devices: BTreeSet::from([1]),
+        };
+        reads.extend(ReadSet {
+            stores: vec![(0x60, 0x70), (0x20, 0x28), (0x48, 0x58)],
+            devices: BTreeSet::from([2]),
+        });
+        assert_eq!(reads.stores, vec![(0x10, 0x28), (0x40, 0x58), (0x60, 0x70)]);
+        assert_eq!(reads.devices, BTreeSet::from([1, 2]));
+        reads.extend(ReadSet::default());
+        assert_eq!(reads.stores, vec![(0x10, 0x28), (0x40, 0x58), (0x60, 0x70)]);
+        reads.extend(ReadSet {
+            stores: vec![(0, 0x100)],
+            devices: BTreeSet::new(),
+        });
+        assert_eq!(reads.stores, vec![(0, 0x100)]);
+    }
 }

@@ -140,3 +140,19 @@ fn cached_read_watch_wakes_for_every_uncached_publication_store() {
     );
     assert_eq!(board.instruction_counts(), vec![7]);
 }
+
+#[test]
+fn reads_in_order_record_one_span_and_others_union_at_the_end() {
+    let mut spans = vec![];
+    for word in 0..1000u64 {
+        super::add_span(&mut spans, (0x1000 + word * 4, 0x1004 + word * 4));
+    }
+    assert_eq!(spans, vec![(0x1000, 0x1000 + 4000)]);
+    super::add_span(&mut spans, (0x100, 0x104));
+    super::add_span(&mut spans, (0x1008, 0x100c));
+    super::add_span(&mut spans, (0x104, 0x108));
+    assert_eq!(
+        super::union(spans),
+        vec![(0x100, 0x108), (0x1000, 0x1000 + 4000)]
+    );
+}
