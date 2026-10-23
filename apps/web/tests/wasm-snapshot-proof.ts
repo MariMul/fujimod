@@ -36,10 +36,10 @@ async function snapshotMember(report: Blob) {
       bytes.length === length && crc32(bytes) === view.getUint32(offset + 14, true),
       'Report member CRC/length differs.',
     );
-    if (name === 'snapshot.fujisnapshot') return bytes;
+    if (name === 'snapshot.emusnap') return bytes;
     offset = begin + length;
   }
-  throw Error('Report has no snapshot.fujisnapshot.');
+  throw Error('Report has no snapshot.emusnap.');
 }
 async function load(bytes: Uint8Array) {
   const engine = createEngine(() => {});
@@ -65,7 +65,7 @@ async function load(bytes: Uint8Array) {
 if (new URL(location.href).searchParams.has('load')) {
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = '.fujisnapshot';
+  input.accept = '.emusnap';
   input.ariaLabel = 'Load snapshot';
   document.body.prepend(input);
   input.addEventListener('change', () => {
@@ -101,7 +101,7 @@ if (new URL(location.href).searchParams.has('load')) {
     check(restored.restored.sha256 === before.sha256, 'Fresh worker restore fingerprint differs.');
     check(restored.continued.sha256 === expected.sha256, 'Fresh worker continuation differs.');
     const link = document.createElement('a');
-    link.download = 'snapshot.fujisnapshot';
+    link.download = 'snapshot.emusnap';
     link.textContent = 'Download snapshot';
     link.href = URL.createObjectURL(new Blob([bytes]));
     document.body.prepend(link);

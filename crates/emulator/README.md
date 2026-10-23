@@ -68,7 +68,7 @@ phase, pending device operations, shared resources, media and queued inputs.
 The receiving session is constructed with the matching graph and attachments:
 
 ```rust,ignore
-let saved = receiver.import_snapshot(&std::fs::read("snapshot.fujisnapshot")?)?;
+let saved = receiver.import_snapshot(&std::fs::read("snapshot.emusnap")?)?;
 receiver.restore(&saved)?;
 ```
 
@@ -85,7 +85,7 @@ HVF AArch64; other CPU models report unsupported export.
 The JavaScript transport additionally embeds exact constructor documents and
 their binary inputs, allowing `EmulatorSession.loadSnapshot(bytes)` to construct
 a fresh session directly. Browser reports include this complete
-`snapshot.fujisnapshot`.
+`snapshot.emusnap`.
 
 ## XP5 board and session API
 
