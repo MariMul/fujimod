@@ -30,7 +30,7 @@ testing = ["fujimod-usb/testing", "fujimod-remote/testing"]
 fujimod-remote = { workspace = true, default-features = false, features = ["ff80"] }
 fujimod-recording.workspace = true
 fujimod-firmware = { path = "../../crates/firmware" }
-pyo3 = { workspace = true, features = ["experimental-async", "experimental-inspect", "multiple-pymethods"] }
+pyo3 = { workspace = true, features = ["experimental-async", "multiple-pymethods"] }
 fujimod-usb.workspace = true
 fujimod-workflows.workspace = true
 fujimod-catalog.workspace = true
