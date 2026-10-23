@@ -131,7 +131,8 @@ return their native error. With no selected scene, the app supplies the bundled
 1536×1024 default scene PNG through the ordinary RGB scene interface: the
 Elogio del Horizonte in Gijón, photographed by the project's author with an
 X70 and rendered from the camera's own JPEG, with the deepest shadows lifted
-slightly. Its average brightness is close to where the camera's metering
+slightly. The original RAF is `src/engine/assets/default-scene.raf.zst`
+(Zstandard, lossless; Git LFS). Its average brightness is close to where the camera's metering
 settles, so a correct exposure looks like the original photograph. Scene input and
 preview timing are applied through the graph's declared native policies.
 
