@@ -1413,7 +1413,7 @@ fn hints_and_faults_have_entered_counts_and_unsupported_mechanisms_refuse() {
             .contains("not implemented")
     );
     assert_eq!(cpu.instruction_progress(), Some(1));
-    words(&cpu, 0x1000, &[0xee190f7c]);
+    words(&cpu, 0x1000, &[0xee190fbc]); // MRC PMSELR, an unmodeled PMU selector
     assert!(
         run(&cpu, 0x1000, 1)
             .unwrap_err()

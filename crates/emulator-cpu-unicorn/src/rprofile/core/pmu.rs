@@ -146,7 +146,8 @@ mod tests {
         c.access(13, 0, Some(u32::MAX), 1011).unwrap();
         assert_eq!(c.access(13, 0, None, 1013).unwrap(), 1);
         let before = c;
-        assert!(c.access(12, 3, Some(0), 1013).is_err());
+        // PMSELR (c12, 5) remains unmodeled; a refusal leaves no trace.
+        assert!(c.access(12, 5, Some(0), 1013).is_err());
         assert_eq!(c, before);
         c.access(13, 0, None, 1013).unwrap();
         assert_eq!(c, before);
