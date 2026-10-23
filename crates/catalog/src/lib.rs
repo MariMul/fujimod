@@ -2,6 +2,7 @@
 pub mod application_inputs;
 pub mod assembly;
 pub mod bulk;
+pub mod settings;
 pub mod camera;
 pub mod configuration;
 pub mod controls;

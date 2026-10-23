@@ -3468,6 +3468,7 @@ version = "0.1.0"
 dependencies = [
  "ciborium",
  "fujimod-catalog",
+ "fujimod-settings",
  "libm",
  "serde",
  "serde_json",
@@ -3571,6 +3572,14 @@ dependencies = [
  "futures-lite",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "fujimod-settings"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-firmware",
 ]
 
 [[package]]

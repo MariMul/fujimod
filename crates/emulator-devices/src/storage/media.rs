@@ -1,6 +1,6 @@
 //! Declarative external NAND inputs shared by native and browser frontends.
 //! Preparation verifies declared asset windows before constructing a medium.
-use super::inputs::PreparePersistentInputs;
+use super::inputs::{PreparePersistentInputs, tag_managed_blocks};
 use crate::parts::nand::{Nand, Options, Overlay};
 use serde::Deserialize;
 use std::{collections::BTreeMap, sync::Arc};
@@ -25,6 +25,16 @@ pub enum NandInput {
         set: String,
         base: String,
         assets: BTreeMap<String, String>,
+    },
+    /// A settings bank built from the update file, with the requested named
+    /// settings, placed in its stock flash blocks before cold boot.
+    Settings {
+        options: Options,
+        base: String,
+        update: String,
+        installation: fujimod_catalog::reference::FirmwareInstallation,
+        layout: fujimod_catalog::settings::FirmwareSettings,
+        requested: BTreeMap<String, String>,
     },
 }
 impl NandInput {
@@ -84,6 +94,44 @@ impl NandInput {
                     .map(|(name, source)| Ok((name, asset(&source)?.clone())))
                     .collect::<Result<_, String>>()?;
                 definition.prepare(options, &set, &windows, Arc::from(asset(&base)?.as_slice()))
+            }
+            Self::Settings {
+                options,
+                base,
+                update,
+                installation,
+                layout,
+                requested,
+            } => {
+                let mut source = fujimod_settings::Update::new(asset(&update)?, &installation);
+                let bank = fujimod_settings::build(&layout, &mut source, &requested)?;
+                let block_bytes = options.page_bytes as u64 * options.pages_per_block as u64;
+                let mut bytes = vec![0xff; (u64::from(bank.blocks) * block_bytes) as usize];
+                let content = bytes
+                    .get_mut(..bank.bytes.len())
+                    .ok_or("Settings bank exceeds its flash blocks")?;
+                content.copy_from_slice(&bank.bytes);
+                let offset = u64::from(bank.first_block) * block_bytes;
+                if offset + bytes.len() as u64 > options.bytes {
+                    return Err("Settings bank exceeds NAND geometry".into());
+                }
+                let mut spare = BTreeMap::new();
+                tag_managed_blocks(
+                    &options,
+                    offset,
+                    bytes.len() as u64,
+                    bank.logical_first,
+                    &mut spare,
+                )?;
+                Nand::new(
+                    options,
+                    Arc::from(asset(&base)?.as_slice()),
+                    vec![Overlay {
+                        offset,
+                        bytes: Arc::from(bytes),
+                    }],
+                    spare,
+                )
             }
         }
     }

@@ -34,6 +34,10 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
+        "settings.generated.schema.json",
+        schema::<crate::settings::FirmwareSettings>(crate::settings::SETTINGS_SCHEMA_URI),
+    );
+    documents.insert(
         "bulk.generated.schema.json",
         schema::<crate::bulk::FirmwareBulk>(crate::bulk::BULK_SCHEMA_URI),
     );

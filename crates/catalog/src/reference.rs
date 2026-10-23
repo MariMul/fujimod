@@ -2395,6 +2395,9 @@ pub struct ResolvedSelection {
     /// Stock diagnostic bulk reads, when located for this firmware.
     #[cfg_attr(feature = "typescript", serde(default))]
     pub bulk: Option<crate::bulk::FirmwareBulk>,
+    /// Settings-bank layout, when located for this firmware.
+    #[cfg_attr(feature = "typescript", serde(default))]
+    pub settings: Option<crate::settings::FirmwareSettings>,
 }
 
 /// A checked, ID-indexed catalog of processor, part, body and firmware facts.
@@ -2410,6 +2413,7 @@ pub struct ReferenceCatalog {
     control_ids: BTreeMap<String, crate::controls::FirmwareControlIds>,
     first_start: BTreeMap<String, crate::first_start::FirstStartMenu>,
     bulk: BTreeMap<String, crate::bulk::FirmwareBulk>,
+    settings: BTreeMap<String, crate::settings::FirmwareSettings>,
 }
 
 impl ReferenceCatalog {
@@ -2497,6 +2501,7 @@ impl ReferenceCatalog {
             control_ids: self.control_ids.get(&firmware.id).cloned(),
             first_start: self.first_start.get(&firmware.id).cloned(),
             bulk: self.bulk.get(&firmware.id).cloned(),
+            settings: self.settings.get(&firmware.id).cloned(),
             soc,
             body,
             firmware,
@@ -2560,6 +2565,11 @@ impl ReferenceCatalog {
                     path,
                 )
             }
+            ReferenceKind::Settings => {
+                let value: crate::settings::FirmwareSettings = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(&mut self.settings, value.firmware_id.clone(), value, path)
+            }
             ReferenceKind::Bulk => {
                 let value: crate::bulk::FirmwareBulk = decode(bytes, path)?;
                 value.validate()?;
@@ -2606,6 +2616,13 @@ impl ReferenceCatalog {
             if !self.firmwares.contains_key(firmware_id) {
                 return Err(format!(
                     "first-start menu refers to missing firmware {firmware_id}"
+                ));
+            }
+        }
+        for firmware_id in self.settings.keys() {
+            if !self.firmwares.contains_key(firmware_id) {
+                return Err(format!(
+                    "settings layout refers to missing firmware {firmware_id}"
                 ));
             }
         }
@@ -3097,6 +3114,7 @@ enum ReferenceKind {
     ControlIds,
     FirstStart,
     Bulk,
+    Settings,
 }
 
 impl ReferenceKind {
@@ -3114,6 +3132,7 @@ impl ReferenceKind {
             Some("control-ids.generated.json") => Ok(Self::ControlIds),
             Some("first-start.generated.json") => Ok(Self::FirstStart),
             Some("bulk.generated.json") => Ok(Self::Bulk),
+            Some("settings.generated.json") => Ok(Self::Settings),
             _ => Err(format!("{} is not a firmware document", path.display())),
         }
     }

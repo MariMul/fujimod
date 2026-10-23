@@ -1791,6 +1791,22 @@ class FirmwareSdioInputs(TypedDict, total=False):
     ssid: Required[str]
 
 
+FirmwareSettings = TypedDict(
+    "FirmwareSettings",
+    {
+        "$schema": Required["str"],
+        "bank": Required["SettingsBank"],
+        "defaults": NotRequired["UpdateRange | None"],
+        "fields": Required["list[SettingsField]"],
+        "firmware_id": Required["str"],
+        "id": Required["str"],
+        "schema": Required["int"],
+        "settings": Required["dict[str, NamedSetting]"],
+    },
+    total=False,
+)
+
+
 class FirmwareStorageLayout(TypedDict, total=False):
     cfgdata: Required[FirmwareCfgdata]
     configuration_banks: Required[list[FirmwareConfigurationBanks]]
@@ -2804,6 +2820,11 @@ class NamedRange(TypedDict, total=False):
     size: Required[int]
 
 
+class NamedSetting(TypedDict, total=False):
+    offset: Required[int]
+    values: Required[dict[str, list[int]]]
+
+
 class NandGeometry(TypedDict, total=False):
     bytes: Required[int]
     page_bytes: Required[int]
@@ -3425,6 +3446,7 @@ class ResolvedSelection(TypedDict, total=False):
     first_start: NotRequired[FirstStartMenu | None]
     parts: Required[list[Part]]
     physical_controls: NotRequired[PhysicalControls | None]
+    settings: NotRequired[FirmwareSettings | None]
     soc: Required[Soc]
 
 
@@ -4458,6 +4480,21 @@ class SerialRoute(TypedDict, total=False):
     word_bits: Required[int]
 
 
+class SettingsBank(TypedDict, total=False):
+    blocks: Required[int]
+    bytes: Required[int]
+    descriptor: Required[UpdateRange]
+    first_block: Required[int]
+    kind: Required[int]
+    logical_first: Required[int]
+
+
+class SettingsField(TypedDict, total=False):
+    basis: Required[str]
+    bytes: Required[list[int]]
+    offset: Required[int]
+
+
 Soc = TypedDict(
     "Soc",
     {
@@ -4592,6 +4629,12 @@ type TimingOperation = Literal[
 class TranslatedKey(TypedDict, total=False):
     event: Required[int]
     physical_key: Required[int]
+
+
+class UpdateRange(TypedDict, total=False):
+    address: Required[int]
+    sha256: Required[str]
+    size: Required[int]
 
 
 type VideoLayout = Literal["yycbcr422"]

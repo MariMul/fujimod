@@ -21,6 +21,31 @@ pub trait PreparePersistentInputs {
         base: Arc<[u8]>,
     ) -> Result<Nand, String>;
 }
+/// Tag each whole block of a managed placement with its logical index, in the
+/// spare area of the block's first and last pages.
+pub(crate) fn tag_managed_blocks(
+    geometry: &Geometry,
+    physical_offset: u64,
+    bytes: u64,
+    index: u16,
+    spare: &mut BTreeMap<u32, Vec<u8>>,
+) -> Result<(), String> {
+    let block_bytes = geometry.page_bytes as u64 * geometry.pages_per_block as u64;
+    if physical_offset % block_bytes != 0 || !bytes.is_multiple_of(block_bytes) {
+        return Err("Managed NAND input must cover whole blocks".into());
+    }
+    for n in 0..bytes / block_bytes {
+        let logical = index
+            .checked_add(n.try_into().map_err(|_| "Managed tag count overflow")?)
+            .ok_or("Managed tag index overflow")?;
+        let tag = managed_tag(logical)?.to_vec();
+        let first = ((physical_offset / block_bytes + n) * geometry.pages_per_block as u64) as u32;
+        spare.insert(first, tag.clone());
+        spare.insert(first + geometry.pages_per_block - 1, tag);
+    }
+    Ok(())
+}
+
 impl PreparePersistentInputs for PersistentInputs {
     fn mcu_packet(
         &self,
@@ -85,7 +110,6 @@ impl PreparePersistentInputs for PersistentInputs {
         }
         let mut overlays = Vec::new();
         let mut spare = BTreeMap::new();
-        let block_bytes = geometry.page_bytes as u64 * geometry.pages_per_block as u64;
         for p in &set.placements {
             if p.physical_offset
                 .checked_add(p.bytes as u64)
@@ -106,21 +130,7 @@ impl PreparePersistentInputs for PersistentInputs {
                 bytes: Arc::from(data),
             });
             if let Some(index) = p.managed_index {
-                if p.physical_offset % block_bytes != 0
-                    || !(p.bytes as u64).is_multiple_of(block_bytes)
-                {
-                    return Err("Managed NAND input must cover whole blocks".into());
-                }
-                for n in 0..p.bytes as u64 / block_bytes {
-                    let logical = index
-                        .checked_add(n.try_into().map_err(|_| "Managed tag count overflow")?)
-                        .ok_or("Managed tag index overflow")?;
-                    let tag = managed_tag(logical)?.to_vec();
-                    let first = ((p.physical_offset / block_bytes + n)
-                        * geometry.pages_per_block as u64) as u32;
-                    spare.insert(first, tag.clone());
-                    spare.insert(first + geometry.pages_per_block - 1, tag);
-                }
+                tag_managed_blocks(&geometry, p.physical_offset, p.bytes as u64, index, &mut spare)?;
             }
         }
         if let Some(a) = &set.append {

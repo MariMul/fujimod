@@ -8344,6 +8344,69 @@
       ],
       "type": "object"
     },
+    "FirmwareSettings": {
+      "additionalProperties": false,
+      "description": "Located settings bank and named settings for one firmware.",
+      "properties": {
+        "$schema": {
+          "description": "Schema identifying the generated document.",
+          "type": "string"
+        },
+        "bank": {
+          "$ref": "#/$defs/SettingsBank",
+          "description": "Where the bank lives in flash."
+        },
+        "defaults": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UpdateRange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Stock default values applied to an otherwise zero bank, when the\nfirmware has a defaults table."
+        },
+        "fields": {
+          "description": "Bytes every valid bank carries: signature, identity, body hardware values.",
+          "items": {
+            "$ref": "#/$defs/SettingsField"
+          },
+          "type": "array"
+        },
+        "firmware_id": {
+          "description": "Firmware whose stock loader reads this bank.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Stable document identity.",
+          "type": "string"
+        },
+        "schema": {
+          "description": "Document version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "settings": {
+          "additionalProperties": {
+            "$ref": "#/$defs/NamedSetting"
+          },
+          "description": "Settings a run may request by name, each with its named values.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "id",
+        "firmware_id",
+        "bank",
+        "fields",
+        "settings"
+      ],
+      "type": "object"
+    },
     "FirmwareStorageLayout": {
       "additionalProperties": false,
       "description": "Declared storage layout facts.",
@@ -13708,6 +13771,36 @@
       ],
       "type": "object"
     },
+    "NamedSetting": {
+      "additionalProperties": false,
+      "description": "A setting a run requests by name, such as `debug` or `language`.",
+      "properties": {
+        "offset": {
+          "description": "Byte offset in the bank.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "values": {
+          "additionalProperties": {
+            "items": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "description": "Encoded bytes for each value name; all the same length.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "offset",
+        "values"
+      ],
+      "type": "object"
+    },
     "NandGeometry": {
       "additionalProperties": false,
       "description": "NAND geometry installed in a camera body or storage part.",
@@ -16480,6 +16573,17 @@
             }
           ],
           "description": "The body's hand-authored physical controls, when documented."
+        },
+        "settings": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirmwareSettings"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Settings-bank layout, when located for this firmware."
         },
         "soc": {
           "$ref": "#/$defs/Soc",
@@ -20755,6 +20859,88 @@
       ],
       "type": "object"
     },
+    "SettingsBank": {
+      "additionalProperties": false,
+      "description": "The flash blocks holding the settings bank.",
+      "properties": {
+        "blocks": {
+          "description": "Number of flash blocks in the bank.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "bytes": {
+          "description": "Bank content length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "descriptor": {
+          "$ref": "#/$defs/UpdateRange",
+          "description": "The stock bank descriptor `(kind, blocks, first block)` in the update."
+        },
+        "first_block": {
+          "description": "First physical flash block.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "description": "Descriptor kind word.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "logical_first": {
+          "description": "Managed logical index of the first block.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "descriptor",
+        "kind",
+        "blocks",
+        "first_block",
+        "logical_first",
+        "bytes"
+      ],
+      "type": "object"
+    },
+    "SettingsField": {
+      "additionalProperties": false,
+      "description": "Bytes written at a bank offset.",
+      "properties": {
+        "basis": {
+          "description": "What the bytes are and where they come from.",
+          "type": "string"
+        },
+        "bytes": {
+          "description": "Bytes written there; at most 128.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "offset": {
+          "description": "Byte offset in the bank.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "bytes",
+        "basis"
+      ],
+      "type": "object"
+    },
     "Soc": {
       "additionalProperties": false,
       "description": "A named system-on-chip record.",
@@ -21443,6 +21629,34 @@
       "required": [
         "physical_key",
         "event"
+      ],
+      "type": "object"
+    },
+    "UpdateRange": {
+      "additionalProperties": false,
+      "description": "Bytes at a firmware address in the decoded update, identified by SHA-256.",
+      "properties": {
+        "address": {
+          "description": "Firmware address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "Lowercase hexadecimal SHA-256 of the stock bytes.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size",
+        "sha256"
       ],
       "type": "object"
     },
