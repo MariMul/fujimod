@@ -320,21 +320,25 @@ impl Transfer {
 }
 
 use std::sync::{Arc, Mutex};
-/// The interrupt controller publishes its register-derived owner. None
-/// means disabled, ambiguous or unsupported routing. Graph wiring must wake
-/// consumers when a route changes, as well as when their source edge changes.
+/// The interrupt controllers publish their register-derived enables. A unique
+/// enable establishes a DMA bank, retained while both controllers mask the
+/// line. Ambiguous enables and a bank that was never selected remain unsupported.
+/// Graph wiring wakes consumers on route changes and source edges.
 #[derive(Clone)]
 pub struct IrqRoutes(Arc<Mutex<Routing>>);
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Routing {
     #[serde(with = "crate::checkpoint::array")]
     owners: [Option<usize>; 128],
+    #[serde(with = "crate::checkpoint::array")]
+    banks: [Option<usize>; 128],
     enabled: [[u32; 4]; 2],
 }
 impl Default for IrqRoutes {
     fn default() -> Self {
         let result = Self(Arc::new(Mutex::new(Routing {
             owners: [None; 128],
+            banks: [None; 128],
             enabled: [[0; 4]; 2],
         })));
         drop(result.0.lock().unwrap());
@@ -360,7 +364,7 @@ impl IrqRoutes {
 
     pub fn fingerprint(&self) -> serde_json::Value {
         let state = self.0.lock().unwrap();
-        serde_json::json!({"owners":state.owners.as_slice(),"enabled":state.enabled})
+        serde_json::json!({"owners":state.owners.as_slice(),"banks":state.banks.as_slice(),"enabled":state.enabled})
     }
     pub fn set(&self, line: u32, owner: Option<usize>) -> Result<(), String> {
         if line >= 128 || owner.is_some_and(|v| v > 1) {
@@ -368,6 +372,9 @@ impl IrqRoutes {
         }
         let mut routes = self.0.lock().unwrap();
         routes.owners[line as usize] = owner;
+        if let Some(core) = owner {
+            routes.banks[line as usize] = Some(core);
+        }
         for core in 0..2 {
             let word = &mut routes.enabled[core][line as usize / 32];
             *word = (*word & !(1 << (line % 32))) | (u32::from(owner == Some(core)) << (line % 32));
@@ -384,12 +391,19 @@ impl IrqRoutes {
             .flatten()
     }
     pub fn latch(&self, line: u32) -> Result<Irq, String> {
-        Ok(Irq {
-            line,
-            core: self
-                .owner(line)
-                .ok_or("image DMA needs one programmed IRQ owner")?,
-        })
+        let routes = self.0.lock().map_err(|_| "image-irq-routes poisoned")?;
+        let index = line as usize;
+        if index >= 128 {
+            return Err("invalid image IRQ line".into());
+        }
+        let masked = routes
+            .enabled
+            .iter()
+            .all(|words| words[index / 32] & (1 << (line % 32)) == 0);
+        let core = routes.owners[index]
+            .or_else(|| masked.then_some(routes.banks[index]).flatten())
+            .ok_or_else(|| format!("image DMA IRQ {line:#x} needs one programmed owner"))?;
+        Ok(Irq { line, core })
     }
     /// Validate a bank selected at START. Masking both controllers does not
     /// cancel the transfer or change that bank; delivery is gated by the
@@ -414,7 +428,7 @@ impl IrqRoutes {
 }
 
 /// One controller's physical enable-state output, joined with its peer's
-/// output. Ambiguous or disabled source ownership remains unavailable.
+/// output. A mask preserves the established bank; ambiguous ownership refuses.
 pub struct RouteOutput {
     routes: IrqRoutes,
     core: usize,
@@ -444,6 +458,9 @@ impl crate::exr2::irq::EnableOutput for RouteOutput {
                 (false, true) => Some(1),
                 _ => None,
             };
+            if let Some(core) = routes.owners[line] {
+                routes.banks[line] = Some(core);
+            }
         }
     }
 }
@@ -463,6 +480,51 @@ pub fn write(cx: &mut Cx<'_>, address: u64, bytes: &[u8]) -> Result<(), String> 
 #[cfg(test)]
 mod fingerprint_tests {
     use super::*;
+    #[test]
+    fn masked_rearm_preserves_the_established_bank_through_checkpoint() {
+        use crate::exr2::irq::EnableOutput;
+        for core in 0..2 {
+            let routes = IrqRoutes::default();
+            let output = RouteOutput::new(routes.clone(), core).unwrap();
+            let mut enabled = [0; 4];
+            enabled[2] = 1 << (0x5c % 32);
+            assert!(routes.latch(0x5c).is_err());
+            output.publish(enabled);
+            assert_eq!(routes.latch(0x5c).unwrap().core, core);
+            output.publish([0; 4]);
+            assert_eq!(routes.owner(0x5c), None);
+            let saved = routes.checkpoint().unwrap();
+            let identity = routes.fingerprint();
+            let restored = IrqRoutes::default();
+            restored.restore_checkpoint(&saved).unwrap();
+            assert_eq!(restored.fingerprint(), identity);
+            let irq = restored.latch(0x5c).unwrap();
+            assert_eq!(irq.core, core);
+            restored.validate(irq).unwrap();
+            restored.set(0x5c, Some(1 - core)).unwrap();
+            assert!(restored.validate(irq).is_err());
+            assert_eq!(restored.latch(0x5c).unwrap().core, 1 - core);
+        }
+    }
+    #[test]
+    fn ambiguous_enables_refuse_rearm_even_with_an_established_bank() {
+        use crate::exr2::irq::EnableOutput;
+        let routes = IrqRoutes::default();
+        let outputs = [
+            RouteOutput::new(routes.clone(), 0).unwrap(),
+            RouteOutput::new(routes.clone(), 1).unwrap(),
+        ];
+        let mut enabled = [0; 4];
+        enabled[1] = 1 << 12;
+        outputs[0].publish(enabled);
+        let irq = routes.latch(44).unwrap();
+        outputs[1].publish(enabled);
+        assert!(routes.latch(44).is_err());
+        assert!(routes.validate(irq).is_err());
+        outputs[0].publish([0; 4]);
+        assert_eq!(routes.latch(44).unwrap().core, 1);
+        assert!(routes.latch(128).is_err());
+    }
     #[test]
     fn active_row_aliases_distinguish_interleaved_padding_and_later_row_collisions() {
         let source = Raster {

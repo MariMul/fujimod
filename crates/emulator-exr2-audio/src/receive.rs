@@ -378,6 +378,24 @@ mod tests {
         assert_eq!(d.next_deadline(2000), None);
     }
     #[test]
+    fn repeat_rearms_while_its_irq_bank_is_masked() {
+        let (mut d, mut h) = setup();
+        start(&mut d, &mut h, true);
+        write(&mut d, &mut h, 0xfffa0008, 0x10002);
+        advance(&mut d, &mut h, 0);
+        advance(&mut d, &mut h, 500);
+        d.routes.set(0x5c, None).unwrap();
+        advance(&mut d, &mut h, 500);
+        assert_eq!(d.next_deadline(500), Some(1000));
+        advance(&mut d, &mut h, 1000);
+        assert_eq!(&h.ram[0x1010..0x1018], &(-1234i16).to_le_bytes().repeat(4));
+        assert_eq!(h.effects, ["dma", "irq", "dma", "irq"]);
+        assert_eq!(h.irqs, [(0, 0x5c), (0, 0x5c)]);
+        write(&mut d, &mut h, BASE + 0x28, 0x101);
+        advance(&mut d, &mut h, 2000);
+        assert_eq!(h.irqs.len(), 2);
+    }
+    #[test]
     fn unsupported_packing_refuses_and_bad_descriptors_never_store_or_interrupt() {
         let (mut d, mut h) = setup();
         start(&mut d, &mut h, false);
