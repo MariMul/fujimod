@@ -545,6 +545,20 @@
       "clock_id": null
     },
     {
+      "id": "video-encoder-input",
+      "base": 4294312960,
+      "size": 256,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "video-encoder-control",
+      "base": 4294314752,
+      "size": 1024,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
       "id": "image-combination",
       "base": 4294213632,
       "size": 1280,
@@ -1169,6 +1183,12 @@
       "core": "core0",
       "line": 76,
       "source_block": "jpeg-decoder",
+      "output_id": "complete"
+    },
+    {
+      "core": "core0",
+      "line": 75,
+      "source_block": "video-encoder-control",
       "output_id": "complete"
     }
   ],

@@ -706,3 +706,47 @@ fn serial_spi1_refuses_a_shift_with_both_chip_selects_low() {
         );
     }
 }
+
+#[test]
+fn video_encoder_backend_is_selected_in_the_prepared_graph() {
+    use fujimod_catalog::construction::VideoEncoderBackend;
+    let base = prepare("x70-110-rec", &[]).unwrap();
+    let expected = if cfg!(target_os = "macos") {
+        "videotoolbox"
+    } else {
+        "software"
+    };
+    assert_eq!(
+        model(&base, "video_encoder")["options"]["backend"],
+        expected
+    );
+    for (backend, name) in [
+        (VideoEncoderBackend::Software, "software"),
+        (VideoEncoderBackend::Videotoolbox, "videotoolbox"),
+    ] {
+        let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
+        resolved
+            .configuration
+            .preset
+            .as_mut()
+            .unwrap()
+            .factory_options
+            .video_encoder_backend = Some(backend);
+        let run = prepared(resolved).unwrap();
+        assert_eq!(model(&run, "video_encoder")["options"]["backend"], name);
+        assert_eq!(
+            model(&run, "video_encoder")["irq"],
+            json!({"core":0,"line":75})
+        );
+        assert_eq!(
+            run.plan
+                .nodes
+                .iter()
+                .find(|n| n.name == "video_encoder")
+                .unwrap()
+                .windows
+                .len(),
+            2
+        );
+    }
+}
