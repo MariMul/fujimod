@@ -11,6 +11,8 @@ use std::{any::Any, ffi::c_void, ptr::NonNull};
 mod architecture;
 mod durable;
 mod ffi;
+#[cfg(test)]
+mod hook_tlb_flush_tests;
 pub mod jit;
 use std::cell::{Cell, Ref, RefCell};
 use std::collections::BTreeMap;

@@ -81,7 +81,6 @@ jobs:
       # show-env and cargo llvm-cov otherwise choose different default directories.
       CARGO_TARGET_DIR: ${{ github.workspace }}/target/llvm-cov-target
       CARGO_LLVM_COV_TARGET_DIR: ${{ github.workspace }}/target/llvm-cov-target
-      CAMERA_UNICORN_LIBRARY: ${{ github.workspace }}/target/unicorn-native/libunicorn.so.2
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
