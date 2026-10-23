@@ -34,6 +34,15 @@ pub enum NandInput {
         layout: fujimod_catalog::settings::FirmwareSettings,
         requested: BTreeMap<String, String>,
     },
+    /// The stock user profile's journal records built from the installed flash
+    /// image (`base`) with the requested named settings; the settings bank stays
+    /// as the flash image holds it. Requested bank settings are refused.
+    Profile {
+        options: Options,
+        base: String,
+        layout: fujimod_catalog::settings::FirmwareSettings,
+        requested: BTreeMap<String, String>,
+    },
 }
 impl NandInput {
     pub fn build(self, loaded: &BTreeMap<String, Vec<u8>>) -> Result<Nand, String> {
@@ -98,48 +107,75 @@ impl NandInput {
                 base,
                 layout,
                 requested,
+            } => settings_medium(options, asset(&base)?, &layout, &requested, true),
+            Self::Profile {
+                options,
+                base,
+                layout,
+                requested,
             } => {
-                let flash = asset(&base)?;
-                let settings = fujimod_settings::build(&layout, flash, &requested)?;
-                let bank = settings.bank;
-                let block_bytes = options.page_bytes as u64 * options.pages_per_block as u64;
-                let mut bytes = vec![0xff; (u64::from(bank.blocks) * block_bytes) as usize];
-                let content = bytes
-                    .get_mut(..bank.bytes.len())
-                    .ok_or("Settings bank exceeds its flash blocks")?;
-                content.copy_from_slice(&bank.bytes);
-                let mut placements = vec![(u64::from(bank.first_block), bytes, bank.logical_first)];
-                for record in settings.profile.into_iter().flat_map(|p| p.records) {
-                    let mut block = vec![0xff; block_bytes as usize];
-                    block
-                        .get_mut(..record.bytes.len())
-                        .ok_or("Profile record exceeds its flash block")?
-                        .copy_from_slice(&record.bytes);
-                    placements.push((u64::from(record.block), block, record.managed_index));
+                if let Some(name) = requested
+                    .keys()
+                    .find(|name| layout.settings.get(*name).is_some_and(|s| s.store == "bank"))
+                {
+                    return Err(format!("Profile input cannot hold bank setting {name}"));
                 }
-                let mut overlays = Vec::new();
-                let mut spare = BTreeMap::new();
-                for (first_block, bytes, logical) in placements {
-                    let offset = first_block * block_bytes;
-                    if offset + bytes.len() as u64 > options.bytes {
-                        return Err("Settings exceed NAND geometry".into());
-                    }
-                    if overlays.iter().any(|o: &Overlay| {
-                        offset < o.offset + o.bytes.len() as u64
-                            && o.offset < offset + bytes.len() as u64
-                    }) {
-                        return Err("Settings placements overlap".into());
-                    }
-                    tag_managed_blocks(&options, offset, bytes.len() as u64, logical, &mut spare)?;
-                    overlays.push(Overlay {
-                        offset,
-                        bytes: Arc::from(bytes),
-                    });
+                if layout.profile.is_none() {
+                    return Err(format!("{} has no located user profile", layout.firmware_id));
                 }
-                Nand::new(options, Arc::from(flash.as_slice()), overlays, spare)
+                settings_medium(options, asset(&base)?, &layout, &requested, false)
             }
         }
     }
+}
+
+/// Place the built settings, with or without the bank, in their managed blocks.
+fn settings_medium(
+    options: Options,
+    flash: &[u8],
+    layout: &fujimod_catalog::settings::FirmwareSettings,
+    requested: &BTreeMap<String, String>,
+    with_bank: bool,
+) -> Result<Nand, String> {
+    let settings = fujimod_settings::build(layout, flash, requested)?;
+    let block_bytes = options.page_bytes as u64 * options.pages_per_block as u64;
+    let mut placements = Vec::new();
+    if with_bank {
+        let bank = settings.bank;
+        let mut bytes = vec![0xff; (u64::from(bank.blocks) * block_bytes) as usize];
+        bytes
+            .get_mut(..bank.bytes.len())
+            .ok_or("Settings bank exceeds its flash blocks")?
+            .copy_from_slice(&bank.bytes);
+        placements.push((u64::from(bank.first_block), bytes, bank.logical_first));
+    }
+    for record in settings.profile.into_iter().flat_map(|p| p.records) {
+        let mut block = vec![0xff; block_bytes as usize];
+        block
+            .get_mut(..record.bytes.len())
+            .ok_or("Profile record exceeds its flash block")?
+            .copy_from_slice(&record.bytes);
+        placements.push((u64::from(record.block), block, record.managed_index));
+    }
+    let mut overlays: Vec<Overlay> = Vec::new();
+    let mut spare = BTreeMap::new();
+    for (first_block, bytes, logical) in placements {
+        let offset = first_block * block_bytes;
+        if offset + bytes.len() as u64 > options.bytes {
+            return Err("Settings exceed NAND geometry".into());
+        }
+        if overlays.iter().any(|o| {
+            offset < o.offset + o.bytes.len() as u64 && o.offset < offset + bytes.len() as u64
+        }) {
+            return Err("Settings placements overlap".into());
+        }
+        tag_managed_blocks(&options, offset, bytes.len() as u64, logical, &mut spare)?;
+        overlays.push(Overlay {
+            offset,
+            bytes: Arc::from(bytes),
+        });
+    }
+    Nand::new(options, Arc::from(flash), overlays, spare)
 }
 
 #[cfg(test)]
