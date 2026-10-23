@@ -31,7 +31,8 @@
       "fujimod-emulator-xp5-display",
       "fujimod-emulator-xp5-imaging",
       "fujimod-emulator-xp5-io",
-      "fujimod-emulator-xp5-storage"
+      "fujimod-emulator-xp5-storage",
+      "fujimod-emulator-xppro"
     ],
     "plan": [
       "fujimod-emulator-exr2-plan"
@@ -83,7 +84,8 @@
         "fujimod-emulator-storage",
         "fujimod-emulator-xp4-display",
         "fujimod-emulator-xp4-io",
-        "fujimod-emulator-xp4-storage"
+        "fujimod-emulator-xp4-storage",
+        "fujimod-emulator-xppro"
       ],
       "fujimod-emulator-exr2-board": [
         "fujimod-emulator-exr2-audio",

@@ -5,3 +5,4 @@ pub mod gicv2;
 pub mod gicv3;
 pub mod nvic;
 pub mod pl022;
+pub mod pl330;

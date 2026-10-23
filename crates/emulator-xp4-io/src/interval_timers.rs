@@ -2,11 +2,49 @@
 /// Decrementing interval counters with guest-programmed reloads.
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Counter {
-    value: u32,
-    reload: u32,
-    enabled: bool,
-    next: Option<u64>,
+pub struct Counter {
+    pub value: u32,
+    pub reload: u32,
+    pub enabled: bool,
+    pub next: Option<u64>,
+}
+impl Counter {
+    /// Count at `now`: the remaining ticks before the next expiry while
+    /// running, then the reload phase; the stored value while stopped.
+    pub fn value(&self, now: u64) -> u32 {
+        if let Some(at) = self.next {
+            if now < at {
+                (at - now - 1) as u32
+            } else {
+                self.reload
+                    .wrapping_sub(((now - at) % (u64::from(self.reload) + 1)) as u32)
+            }
+        } else {
+            self.value
+        }
+    }
+    /// Start or stop from the current count.
+    pub fn enable(&mut self, now: u64, enabled: bool) {
+        self.value = self.value(now);
+        self.enabled = enabled;
+        self.next = enabled.then_some(now + u64::from(self.value) + 1);
+    }
+    /// Load a new count; a running counter restarts from it.
+    pub fn load(&mut self, now: u64, value: u32) {
+        self.value = value;
+        self.next = self.enabled.then_some(now + u64::from(value) + 1);
+    }
+    /// Whether an expiry is due by `now`; the next one follows the reload period.
+    pub fn expire(&mut self, now: u64) -> bool {
+        match self.next {
+            Some(at) if at <= now => {
+                let period = u64::from(self.reload) + 1;
+                self.next = Some(at + ((now - at) / period + 1) * period);
+                true
+            }
+            _ => false,
+        }
+    }
 }
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -49,29 +87,13 @@ impl IntervalTimers {
     pub fn tick(&mut self, now: u64) -> Vec<usize> {
         let mut fired = Vec::new();
         for (channel, c) in self.counters.iter_mut().enumerate() {
-            if let Some(at) = c.next
-                && at <= now
+            if c.expire(now)
+                && let Some(irq) = self.irqs[channel]
             {
-                let period = u64::from(c.reload) + 1;
-                c.next = Some(at + ((now - at) / period + 1) * period);
-                if let Some(irq) = self.irqs[channel] {
-                    fired.push(irq);
-                }
+                fired.push(irq);
             }
         }
         fired
-    }
-    fn value(c: &Counter, now: u64) -> u32 {
-        if let Some(at) = c.next {
-            if now < at {
-                (at - now - 1) as u32
-            } else {
-                c.reload
-                    .wrapping_sub(((now - at) % (u64::from(c.reload) + 1)) as u32)
-            }
-        } else {
-            c.value
-        }
     }
     pub fn access(
         &mut self,
@@ -91,10 +113,7 @@ impl IntervalTimers {
                 }
                 for (channel, c) in self.counters.iter_mut().enumerate() {
                     if value & (1 << (channel + 16)) != 0 {
-                        let enabled = value & (1 << channel) != 0;
-                        c.value = Self::value(c, now);
-                        c.enabled = enabled;
-                        c.next = enabled.then_some(now + u64::from(c.value) + 1);
+                        c.enable(now, value & (1 << channel) != 0);
                     }
                 }
             }
@@ -109,10 +128,9 @@ impl IntervalTimers {
             let c = &mut self.counters[channel];
             if offset & 4 == 0 {
                 if write {
-                    c.value = value;
-                    c.next = c.enabled.then_some(now + u64::from(value) + 1);
+                    c.load(now, value);
                 }
-                return Ok(Self::value(c, now));
+                return Ok(c.value(now));
             }
             if write {
                 c.reload = value;

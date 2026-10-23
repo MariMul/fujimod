@@ -820,6 +820,7 @@
               }
             ],
             "clock": "one 54 MHz timer cycle per aggregate CPU instruction; synthetic ratio",
+            "layout": "xp4",
             "basis": "Declared catalog input."
           }
         },

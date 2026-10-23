@@ -19,6 +19,8 @@ pub struct Definition {
     #[serde(default)]
     pub timer_base: Option<u32>,
     #[serde(default)]
+    pub timer_layout: Option<TimerLayout>,
+    #[serde(default)]
     pub timer_routes: Vec<(usize, usize)>,
     #[serde(default)]
     pub storage_jedec: Option<u32>,
@@ -32,6 +34,10 @@ pub struct Definition {
     pub storage_geometry: Option<(usize, usize, u64, u64)>,
     #[serde(default)]
     pub storage_irq: Option<u32>,
+    #[serde(default)]
+    pub xppro_storage: Option<XpproStorage>,
+    #[serde(default)]
+    pub xppro_serial: Vec<u64>,
     #[serde(default)]
     pub cache_sizes: Option<(u32, u32, u32)>,
     #[serde(default)]
@@ -79,4 +85,27 @@ pub struct Definition {
     pub usb: Option<(u64, u32, u64, u64, u8)>,
     #[serde(default)]
     pub usb_phy: Option<(u64, [u8; 32], u32)>,
+}
+
+/// Register layout of the interval timer at `timer_base`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimerLayout {
+    /// Eight channels; select bits set in the control word.
+    Xp4,
+    /// Sixteen channels; select bits clear in the control word.
+    Xppro,
+}
+
+/// X-Processor Pro flash controller, read aperture and PL330 wiring.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XpproStorage {
+    pub flash_controller: u64,
+    pub aperture: u64,
+    pub aperture_size: u64,
+    pub dma: u64,
+    pub dma_irq_routes: Vec<u32>,
+    pub dma_setup_ticks: u64,
+    pub dma_bytes_per_tick: u64,
 }

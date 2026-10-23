@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "gfx50r-311",
+  "body_id": "gfx50r",
+  "version": "3.11",
+  "update": {
+    "size": 53544208,
+    "sha256": "fdee77287b64f789da8e1b552caa3ccb45f8f2409adafc9e05811932d0871296"
+  },
+  "boot_rom": null,
+  "installation": null,
+  "generated_facts": null
+}

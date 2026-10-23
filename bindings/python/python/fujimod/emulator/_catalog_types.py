@@ -2208,6 +2208,13 @@ class HardwareFe80ProcessingOptions(TypedDict, total=False):
     pixels_per_tick: Required[int]
 
 
+class HardwareFlashController(TypedDict, total=False):
+    aperture: Required[int]
+    base: Required[int]
+    basis: Required[str]
+    size: Required[int]
+
+
 class HardwareFocusAxis(TypedDict, total=False):
     infinity_position: Required[int]
     output: Required[str]
@@ -2303,6 +2310,7 @@ class HardwareIntervalTimer(TypedDict, total=False):
     base: Required[int]
     basis: Required[str]
     clock: Required[str]
+    layout: Required[HardwareTimerLayout]
     routes: Required[list[HardwareTimerRoute]]
 
 
@@ -2365,6 +2373,15 @@ class HardwarePinInterrupt(TypedDict, total=False):
     pin: Required[PartAssemblyPin]
 
 
+class HardwarePl330(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    bytes_per_tick: Required[int]
+    irq_routes: Required[list[int]]
+    setup_ticks: Required[int]
+    timing: Required[str]
+
+
 class HardwarePreviewActivity(TypedDict, total=False):
     high: Required[bool]
     pin: Required[PartAssemblyPin]
@@ -2416,9 +2433,10 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     control_bus0: NotRequired[HardwarePrimaryBusRegisters | None]
     control_bus1: NotRequired[HardwareSecondaryBusRegistersAddress | None]
     control_requests: NotRequired[HardwareControlRequests | None]
-    decompressor: Required[HardwareDecompressor]
+    decompressor: NotRequired[HardwareDecompressor | None]
     dma: NotRequired[HardwareDma | None]
     dmp: NotRequired[HardwareDmp | None]
+    flash_controller: NotRequired[HardwareFlashController | None]
     gic: NotRequired[HardwareGic | None]
     gpio: NotRequired[HardwareGpio | None]
     imaging: NotRequired[HardwareImagingRegisters | None]
@@ -2429,8 +2447,10 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     loader_dma: NotRequired[HardwareLoaderDma | None]
     movdc: NotRequired[list[HardwareMovdc] | None]
     nand: NotRequired[HardwareLoaderDma | None]
+    pl330: NotRequired[HardwarePl330 | None]
     sd_host_clocks: NotRequired[HardwareSdHostClocks | None]
     serial_flash: NotRequired[HardwareSerialFlash | None]
+    serial_ports: NotRequired[HardwareSerialPorts | None]
     spi: NotRequired[dict[str, HardwareSpi] | None]
     temperature: NotRequired[HardwareAdc | None]
     usb: NotRequired[HardwareUsbRegisters | None]
@@ -2520,6 +2540,11 @@ class HardwareSerialFlash(TypedDict, total=False):
     timing: Required[str]
 
 
+class HardwareSerialPorts(TypedDict, total=False):
+    bases: Required[list[int]]
+    basis: Required[str]
+
+
 class HardwareShutter(TypedDict, total=False):
     closing_delay_seconds: Required[list[list[int]]]
 
@@ -2554,6 +2579,9 @@ class HardwareStatusTarget(TypedDict, total=False):
 class HardwareTcm(TypedDict, total=False):
     atcm: Required[HardwareAtcm]
     btcm: Required[HardwareAtcm]
+
+
+type HardwareTimerLayout = Literal["xp4", "xppro"]
 
 
 class HardwareTimerRoute(TypedDict, total=False):

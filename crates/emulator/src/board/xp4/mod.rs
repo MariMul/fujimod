@@ -7,6 +7,7 @@ pub use definition::Definition;
 pub mod observation;
 use observation::Call;
 mod devices;
+mod timer;
 use crate::board::discovery::Discovery;
 use crate::board::harness::arm32 as driver_guard;
 use crate::board::observation::calls as observe;
@@ -16,7 +17,6 @@ use fujimod_emulator_cpu::{
 };
 use fujimod_emulator_cpu_unicorn::Library;
 use fujimod_emulator_ip_arm::gicv2::Gic;
-use fujimod_emulator_xp4_io::interval_timers::IntervalTimers;
 use std::{
     cell::{Cell, RefCell, UnsafeCell},
     collections::{BTreeMap, BTreeSet, VecDeque},
@@ -66,7 +66,7 @@ struct RunState {
     pages: BTreeMap<u64, Vec<Box<MmioHook>>>,
     cbar_reads: u64,
     gic: Gic,
-    timer: Option<IntervalTimers>,
+    timer: Option<timer::Timer>,
     irq_entries: Vec<u64>,
     undefined_entries: Vec<u64>,
     prefetch_aborts: Vec<u64>,
@@ -837,7 +837,7 @@ fn access(offset: u64, size: u32, write: bool, value: u64, data: *mut c_void) ->
         let mut owned = device.is_some();
         if let (Some(base), Some(timer)) = (c.timer_base, &mut state.timer) {
             let relative = address.wrapping_sub(base as u64);
-            if relative < 0x50 {
+            if relative < timer.window() {
                 owned = true;
                 match timer.access(state.ticks, relative as u32, size, write, value as u32) {
                     Ok(value) => return Ok(value as u64),
@@ -917,6 +917,7 @@ impl Session {
             labels,
             cbar,
             timer_base,
+            timer_layout,
             timer_routes,
             storage_jedec,
             storage_dma_routes,
@@ -924,6 +925,8 @@ impl Session {
             control_requests,
             storage_geometry,
             storage_irq,
+            xppro_storage,
+            xppro_serial,
             cache_sizes,
             io_group_base,
             decompressor,
@@ -978,9 +981,10 @@ impl Session {
             .transpose()?;
         if cbar.is_some_and(|base| base & 0x7fff != 0 || u64::from(base) < ram_size as u64)
             || timer_base.is_some_and(|base| base & 3 != 0 || u64::from(base) < ram_size as u64)
+            || timer_base.is_some() != timer_layout.is_some()
             || timer_routes
                 .iter()
-                .any(|&(channel, irq)| channel >= 8 || !(32..512).contains(&irq))
+                .any(|&(_, irq)| !(32..512).contains(&irq))
         {
             return Err("Invalid ARMv7-A peripheral reset inputs".to_owned());
         }
@@ -994,6 +998,9 @@ impl Session {
             .collect::<Result<Vec<_>, _>>()?;
         let mut ledger = Discovery::default();
         ledger.enabled = discovery;
+        if storage_jedec.is_some() && xppro_storage.is_some() {
+            return Err("XP4 and X-Processor Pro storage cannot be selected together".to_owned());
+        }
         let mut devices = if let Some(jedec) = storage_jedec {
             Some(devices::Devices::storage(
                 jedec,
@@ -1004,6 +1011,16 @@ impl Session {
                 storage_irq
                     .ok_or_else(|| "Serial flash requires an explicit IRQ route".to_owned())?,
             )?)
+        } else if let Some(storage) = xppro_storage {
+            if !storage_dma_routes.is_empty() || storage_geometry.is_some() || storage_irq.is_some()
+            {
+                return Err("XP4 storage routes require the XP4 controller".to_owned());
+            }
+            let image = storage_image
+                .ok_or_else(|| "X-Processor Pro flash requires explicit contents".to_owned())?;
+            let mut devices = devices::Devices::empty();
+            devices.xppro_storage(storage, image)?;
+            Some(devices)
         } else {
             if !storage_dma_routes.is_empty()
                 || storage_image.is_some()
@@ -1016,6 +1033,11 @@ impl Session {
             }
             None
         };
+        for base in xppro_serial {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xppro_serial(base)?;
+        }
         if let Some((inputs, sample_ticks)) = adc {
             devices
                 .get_or_insert_with(devices::Devices::empty)
@@ -1153,6 +1175,9 @@ impl Session {
                 .get_or_insert_with(devices::Devices::empty)
                 .decompressor(base, irq);
         }
+        let timer = timer_layout
+            .map(|layout| timer::Timer::new(layout, &timer_routes))
+            .transpose()?;
         let mut inner = Box::new(Cluster {
             cpus,
             ram: Backing::zeros(ram_size),
@@ -1179,7 +1204,7 @@ impl Session {
                 pages: BTreeMap::new(),
                 cbar_reads: 0,
                 gic: Gic::new(cores, 512),
-                timer: timer_base.map(|_| IntervalTimers::new(&timer_routes)),
+                timer,
                 irq_entries: vec![0; cores],
                 undefined_entries: vec![0; cores],
                 prefetch_aborts: vec![0; cores],

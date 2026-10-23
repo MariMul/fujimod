@@ -44,6 +44,17 @@
             "null"
           ]
         },
+        "flash_aperture": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetFlashApertureContents"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared flash aperture contents."
+        },
         "gpio_input": {
           "anyOf": [
             {
@@ -807,6 +818,25 @@
       "required": [
         "erased_tail",
         "seed"
+      ],
+      "type": "object"
+    },
+    "ResetFlashApertureContents": {
+      "additionalProperties": false,
+      "description": "Contents behind a memory-mapped flash read aperture.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "contents": {
+          "description": "Declared contents.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "basis",
+        "contents"
       ],
       "type": "object"
     },

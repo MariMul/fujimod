@@ -3473,6 +3473,7 @@ dependencies = [
  "fujimod-emulator-xp4-io",
  "fujimod-emulator-xp4-storage",
  "fujimod-emulator-xp5-board",
+ "fujimod-emulator-xppro",
  "fujimod-recording",
  "fujimod-settings",
  "fujimod-workspace-hack",
@@ -3968,6 +3969,17 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-ip",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-xppro"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-xp4-io",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",

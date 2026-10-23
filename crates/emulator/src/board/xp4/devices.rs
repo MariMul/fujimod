@@ -666,6 +666,76 @@ impl Devices {
             ],
         })
     }
+    /// X-Processor Pro flash controller, its read aperture and the PL330 that
+    /// copies from it. The flash contents are an explicit board input.
+    pub fn xppro_storage(
+        &mut self,
+        storage: super::definition::XpproStorage,
+        image: Vec<u8>,
+    ) -> Result<(), String> {
+        use fujimod_emulator_xppro::flash::{self, Aperture, FlashController};
+        struct ApertureSource(Arc<Aperture>);
+        impl fujimod_emulator_ip_arm::pl330::Source for ApertureSource {
+            fn contains(&self, address: u64, len: usize) -> bool {
+                self.0.contains(address, len)
+            }
+            fn read(&self, address: u64, len: usize) -> Result<Vec<u8>, String> {
+                self.0.read(address, len)
+            }
+        }
+        let aperture = Arc::new(Aperture::new(
+            storage.aperture,
+            storage.aperture_size,
+            image,
+        )?);
+        let controller = FlashController::new(storage.flash_controller, aperture.clone())?;
+        let dma = fujimod_emulator_ip_arm::pl330::Pl330::new(
+            storage.dma,
+            storage.dma_irq_routes,
+            vec![Arc::new(ApertureSource(aperture.clone()))],
+            fujimod_emulator_ip_arm::pl330::Throughput {
+                setup_ticks: storage.dma_setup_ticks,
+                bytes_per_tick: storage.dma_bytes_per_tick,
+            },
+        )?;
+        let ranges = [
+            (
+                storage.flash_controller,
+                storage.flash_controller + flash::REGISTERS,
+            ),
+            (aperture.base(), aperture.base() + aperture.size()),
+            (storage.dma, storage.dma + 0x1000),
+        ];
+        if ranges
+            .iter()
+            .any(|&(a, b)| self.windows.iter().any(|&(lo, hi, _)| a < hi && lo < b))
+        {
+            return Err("Overlapping X-Processor Pro storage window".into());
+        }
+        let id = self.models.len();
+        self.models.push(Some(Box::new(controller)));
+        self.models.push(Some(Box::new(dma)));
+        self.windows.push((ranges[0].0, ranges[0].1, id));
+        self.windows.push((ranges[1].0, ranges[1].1, id));
+        self.windows.push((ranges[2].0, ranges[2].1, id + 1));
+        Ok(())
+    }
+    /// One X-Processor Pro serial port without a peer.
+    pub fn xppro_serial(&mut self, base: u64) -> Result<(), String> {
+        use fujimod_emulator_xppro::serial::{REGISTERS, SerialPort};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base + REGISTERS)
+        {
+            return Err("Overlapping X-Processor Pro serial port".into());
+        }
+        let model = SerialPort::new(base)?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + REGISTERS, id));
+        Ok(())
+    }
     fn owner(&self, address: u64, size: u32) -> Option<usize> {
         self.windows
             .iter()

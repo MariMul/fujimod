@@ -738,6 +738,18 @@ pub struct SensorInput {
     pub statistics_scene: StatisticsScene,
 }
 
+/// Contents behind a memory-mapped flash read aperture.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetFlashApertureContents"))]
+pub struct FlashApertureContents {
+    /// Declared basis.
+    pub basis: String,
+    /// Declared contents.
+    pub contents: String,
+}
+
 /// Declared serial flash geometry facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -918,6 +930,9 @@ pub struct HardwareReset {
     /// Declared execution scope.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution_scope: Option<String>,
+    /// Declared flash aperture contents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flash_aperture: Option<FlashApertureContents>,
     /// Declared gpio input.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gpio_input: Option<GpioInput>,

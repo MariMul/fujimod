@@ -1191,8 +1191,70 @@ pub struct IntervalTimer {
     pub basis: String,
     /// Declared clock.
     pub clock: String,
+    /// Register layout, which selects the timer implementation.
+    pub layout: TimerLayout,
     /// Declared routes.
     pub routes: Vec<TimerRoute>,
+}
+
+/// Interval-timer register layouts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareTimerLayout"))]
+pub enum TimerLayout {
+    /// Eight channels at +0x10 + n*8; control select bits set.
+    Xp4,
+    /// Sixteen channels at +0x100 + n*0x10; control select bits clear.
+    Xppro,
+}
+
+/// Declared memory-mapped flash controller facts.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareFlashController"))]
+pub struct FlashController {
+    /// Controller register base.
+    pub base: u64,
+    /// Read aperture base.
+    pub aperture: u64,
+    /// Read aperture size in bytes.
+    pub size: u64,
+    /// Declared basis.
+    pub basis: String,
+}
+
+/// Declared PL330 DMA controller facts.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwarePl330"))]
+pub struct Pl330 {
+    /// Register base.
+    pub base: u64,
+    /// Interrupt line for each event, by event number.
+    pub irq_routes: Vec<u64>,
+    /// Guest ticks before a program's first byte moves.
+    pub setup_ticks: u64,
+    /// Bytes moved per guest tick.
+    pub bytes_per_tick: u64,
+    /// Declared timing qualification.
+    pub timing: String,
+    /// Declared basis.
+    pub basis: String,
+}
+
+/// Declared serial port facts.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareSerialPorts"))]
+pub struct SerialPorts {
+    /// Register base of each port.
+    pub bases: Vec<u64>,
+    /// Declared basis.
+    pub basis: String,
 }
 
 /// Declared io groups facts.
@@ -1341,13 +1403,17 @@ pub struct RegisterLayouts {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub control_requests: Option<ControlRequests>,
     /// Declared decompressor.
-    pub decompressor: Decompressor,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decompressor: Option<Decompressor>,
     /// Declared dma.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dma: Option<Dma>,
     /// Declared dmp.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dmp: Option<Dmp>,
+    /// Declared flash controller.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flash_controller: Option<FlashController>,
     /// Declared gic.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gic: Option<Gic>,
@@ -1378,12 +1444,18 @@ pub struct RegisterLayouts {
     /// Declared nand.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nand: Option<LoaderDma>,
+    /// Declared PL330 DMA controller.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pl330: Option<Pl330>,
     /// Declared sd host clocks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sd_host_clocks: Option<SdHostClocks>,
     /// Declared serial flash.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub serial_flash: Option<SerialFlash>,
+    /// Declared serial ports.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub serial_ports: Option<SerialPorts>,
     /// Declared spi.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spi: Option<BTreeMap<String, Spi>>,
