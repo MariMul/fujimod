@@ -20,8 +20,7 @@ file: a generator writes whole files, and hand-authored facts live in separate
 files that generators only read.
 
 Never put binary data larger than 128 bytes in JSON, whether as base64, hex or
-number arrays. Write it to a separate binary file and reference that file (path,
-size and hash) from the JSON.
+number arrays. Write it to a separate binary file and reference that file by path from the JSON.
 
 ## Checkouts and commits
 
