@@ -97,7 +97,9 @@ class CorpusBinding(unittest.TestCase):
             self.assertEqual(restored.subset(["a"]).stats()["firmwares"], {"a": 1})
             self.assertEqual(restored.pairs("a", "b"), i.pairs("a", "b"))
             restored.add_name(f["id"], "restored", "test")
-            self.assertEqual(restored.find("restored")[0]["id"], f["id"])
+            self.assertEqual(
+                restored.find("restored", firmware="b")[0]["names"], ["restored"]
+            )
         finally:
             output.unlink(missing_ok=True)
 
