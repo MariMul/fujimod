@@ -343,9 +343,13 @@ impl Cluster {
     fn disabled_vfp_exception(&self, core: usize) -> Result<bool, String> {
         let pc = self.reg(core, arm::PC)?;
         let word = self.word(core, u64::from(pc))?;
-        // Conditional ARM coprocessor-10/11 instructions (including VPUSH).
-        // Other invalid/unsupported instructions retain the engine refusal.
-        if word >> 28 == 15 || word & 0x0c000e00 != 0x0c000a00 {
+        // Conditional ARM coprocessor-10/11 instructions (including VPUSH),
+        // and the unconditional Advanced SIMD data-processing (0xf2/0xf3) and
+        // element/structure load/store (0xf4 with bit 20 clear) encodings,
+        // which share the CPACR/FPEXC gate. Other invalid/unsupported
+        // instructions retain the engine refusal.
+        let simd = word & 0xfe00_0000 == 0xf200_0000 || word & 0xff10_0000 == 0xf400_0000;
+        if !simd && (word >> 28 == 15 || word & 0x0c000e00 != 0x0c000a00) {
             return Ok(false);
         }
         let cpsr = self.reg(core, arm::CPSR)?;
