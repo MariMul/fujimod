@@ -3442,6 +3442,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-crate-graph"
+version = "0.1.0"
+dependencies = [
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "fujimod-emulator"
 version = "0.1.0"
 dependencies = [

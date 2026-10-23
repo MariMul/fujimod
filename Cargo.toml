@@ -7,6 +7,7 @@ members = [
   "crates/usb-proxy",
   "crates/simulation",
   "crates/catalog",
+  "crates/crate-graph",
   "crates/emulator",
   "crates/emulator-cli",
   "crates/emulator-cpu",
