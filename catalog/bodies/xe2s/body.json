@@ -267,7 +267,99 @@
               "address": 28,
               "reply_model": "stationary-z-plus-1g",
               "basis": "Declared catalog input."
-            }
+            },
+            "command_targets": [
+              {
+                "address": 57,
+                "prefix_mask": 224,
+                "prefix_value": 160,
+                "register_mask": 31,
+                "write_masks": [
+                  [
+                    0,
+                    255
+                  ],
+                  [
+                    1,
+                    255
+                  ],
+                  [
+                    2,
+                    255
+                  ],
+                  [
+                    3,
+                    255
+                  ],
+                  [
+                    4,
+                    255
+                  ],
+                  [
+                    5,
+                    255
+                  ],
+                  [
+                    6,
+                    255
+                  ],
+                  [
+                    7,
+                    255
+                  ],
+                  [
+                    8,
+                    255
+                  ],
+                  [
+                    9,
+                    255
+                  ],
+                  [
+                    10,
+                    255
+                  ],
+                  [
+                    11,
+                    255
+                  ],
+                  [
+                    12,
+                    255
+                  ],
+                  [
+                    13,
+                    255
+                  ],
+                  [
+                    14,
+                    255
+                  ],
+                  [
+                    15,
+                    255
+                  ],
+                  [
+                    30,
+                    255
+                  ]
+                ],
+                "read_frames": [
+                  [
+                    19,
+                    "00"
+                  ],
+                  [
+                    24,
+                    "0000"
+                  ]
+                ],
+                "commands": [
+                  229
+                ],
+                "basis": "Declared catalog input."
+              }
+            ]
           },
           "fe80": {
             "basis": "Declared catalog input.",
