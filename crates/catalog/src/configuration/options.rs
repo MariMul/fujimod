@@ -651,6 +651,10 @@ pub enum RunStorageProfile {
     /// A settings bank built from stock defaults and requested camera settings.
     #[serde(rename = "settings")]
     Settings,
+    /// The stock user profile built from requested camera settings, over an
+    /// erased settings bank.
+    #[serde(rename = "profile")]
+    Profile,
     #[serde(rename = "captured")]
     Captured,
     #[serde(rename = "browser")]

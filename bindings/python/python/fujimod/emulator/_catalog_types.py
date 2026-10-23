@@ -4374,7 +4374,11 @@ class RunStatisticsSpan(TypedDict, total=False):
 type RunStillCapture = Literal["register-capture-readonly-card-observation"]
 
 
-type RunStorageProfile = Literal["captured", "browser", "erased"] | Literal["settings"]
+type RunStorageProfile = Literal[
+    "captured",
+    "browser",
+    "erased"] | Literal["settings"] | Literal["profile",
+]
 
 
 class RunUsbInput(TypedDict, total=False):

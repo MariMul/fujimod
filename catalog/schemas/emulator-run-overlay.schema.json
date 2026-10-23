@@ -3270,6 +3270,11 @@
           "const": "settings",
           "description": "A settings bank built from stock defaults and requested camera settings.",
           "type": "string"
+        },
+        {
+          "const": "profile",
+          "description": "The stock user profile built from requested camera settings, over an\nerased settings bank.",
+          "type": "string"
         }
       ]
     },
