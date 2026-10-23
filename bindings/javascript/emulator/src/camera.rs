@@ -197,6 +197,32 @@ struct PreparedRequest {
     clock_seconds2000: Option<u32>,
     #[serde(default)]
     preferred_languages: Vec<String>,
+    /// The camera's zstd-compressed NAND sections, in the order their bytes are
+    /// packed in the camera span: section name and compressed length.
+    #[serde(default)]
+    camera: Vec<(String, usize)>,
+}
+
+/// Split the packed camera span into its sections by the request's lengths.
+fn camera_sections(
+    sections: &[(String, usize)],
+    packed: &[u8],
+) -> Result<BTreeMap<String, Vec<u8>>, String> {
+    let mut camera = BTreeMap::new();
+    let mut rest = packed;
+    for (name, length) in sections {
+        let (bytes, tail) = rest
+            .split_at_checked(*length)
+            .ok_or("camera sections exceed the camera span")?;
+        if camera.insert(name.clone(), bytes.to_vec()).is_some() {
+            return Err("camera sections repeat".into());
+        }
+        rest = tail;
+    }
+    if !rest.is_empty() {
+        return Err("camera span holds bytes no section declares".into());
+    }
+    Ok(camera)
 }
 
 /// Everything a constructed camera needs beyond its boot-time core session.
@@ -270,6 +296,7 @@ impl Session {
         boot_rom: Vec<u8>,
         nand: Option<Vec<u8>>,
         settings: Option<Vec<u8>>,
+        camera: &[u8],
         policy: fujimod_emulator_cpu::ExecutionPolicy,
     ) -> Result<Self, String> {
         let construction = super::snapshot::Construction::prepared(
@@ -278,9 +305,11 @@ impl Session {
             &boot_rom,
             nand.as_deref(),
             settings.as_deref(),
+            camera,
         );
         let request: PreparedRequest =
             serde_json::from_slice(document).map_err(|e| e.to_string())?;
+        let camera = camera_sections(&request.camera, camera)?;
         let config: PreparedConfig =
             serde_json::from_str(&request.document).map_err(|e| e.to_string())?;
         if config.schema != 1 {
@@ -314,9 +343,7 @@ impl Session {
                 settings,
                 clock_seconds_2000: request.clock_seconds2000,
                 preferred_languages: request.preferred_languages,
-                // Camera sections are not part of a browser request; a run
-                // that declares a camera refuses to open without them.
-                camera: BTreeMap::new(),
+                camera,
             },
         )?;
         core.board.set_execution_policy(policy)?;

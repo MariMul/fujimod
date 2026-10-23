@@ -39,6 +39,7 @@ impl Construction {
         rom: &[u8],
         nand: Option<&[u8]>,
         settings: Option<&[u8]>,
+        camera: &[u8],
     ) -> Self {
         Self {
             kind: Kind::Prepared,
@@ -48,6 +49,7 @@ impl Construction {
                 rom.into(),
                 nand.unwrap_or_default().into(),
                 settings.unwrap_or_default().into(),
+                camera.into(),
             ],
         }
     }
@@ -59,7 +61,7 @@ impl Construction {
         if !encoded.children().is_empty()
             || encoded.blobs().len()
                 != match kind {
-                    Kind::Prepared => 5,
+                    Kind::Prepared => 6,
                     _ => 2,
                 }
         {
@@ -75,6 +77,7 @@ impl Construction {
                 b[2].to_vec(),
                 (!b[3].is_empty()).then(|| b[3].to_vec()),
                 (!b[4].is_empty()).then(|| b[4].to_vec()),
+                &b[5],
                 policy,
             ),
         }?;

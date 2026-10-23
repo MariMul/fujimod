@@ -366,9 +366,11 @@ unsafe fn optional_bytes(data: *const u8, len: u32) -> Result<Option<Vec<u8>>, S
 }
 
 /// Create a camera from a native prepared run. `document` is
-/// `{document, clockSeconds2000?, preferredLanguages?}`; `document` is the exact
-/// JSON text of `{schema, prepared, browser}`. The boot ROM is the static
-/// engine's companion input, and NAND and settings are optional spans.
+/// `{document, clockSeconds2000?, preferredLanguages?, camera?}`; `document` is
+/// the exact JSON text of `{schema, prepared, browser}`. The boot ROM is the
+/// static engine's companion input, and NAND and settings are optional spans.
+/// `camera` lists `[section, length]` pairs of the camera's zstd-compressed NAND
+/// sections, packed in that order in the camera span.
 ///
 /// # Safety
 /// Input spans must remain valid and immutable during construction.
@@ -384,6 +386,8 @@ pub unsafe extern "C" fn camera_prepared_session_create(
     nand_len: u32,
     settings: *const u8,
     settings_len: u32,
+    camera: *const u8,
+    camera_len: u32,
 ) -> u32 {
     OWNER.with(|owner| {
         let mut owner = owner.borrow_mut();
@@ -398,6 +402,9 @@ pub unsafe extern "C" fn camera_prepared_session_create(
                 unsafe { bytes(boot_rom, boot_rom_len)? }.to_vec(),
                 unsafe { optional_bytes(nand, nand_len)? },
                 unsafe { optional_bytes(settings, settings_len)? },
+                unsafe { optional_bytes(camera, camera_len)? }
+                    .as_deref()
+                    .unwrap_or_default(),
                 owner.execution_policy,
             )?;
             owner.sessions.insert(handle, session);
