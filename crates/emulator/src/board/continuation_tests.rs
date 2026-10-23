@@ -156,3 +156,24 @@ fn reads_in_order_record_one_span_and_others_union_at_the_end() {
         vec![(0x100, 0x108), (0x1000, 0x1000 + 4000)]
     );
 }
+
+#[test]
+fn stores_that_keep_watched_bytes_leave_the_wait_running() {
+    let mut stops = super::Stops {
+        stores: vec![(0x100, 0x108), (0x200, 0x30_0000)],
+        values: vec![vec![1, 2, 3, 4, 5, 6, 7, 8], vec![]],
+        ..Default::default()
+    };
+    stops.store(0x102, &[3, 4]);
+    stops.store(0xfe, &[9, 9, 1]);
+    assert!(!stops.fired);
+    stops.store(0x107, &[0]);
+    assert!(stops.fired);
+    let mut large = super::Stops {
+        stores: vec![(0x200, 0x30_0000)],
+        values: vec![vec![]],
+        ..Default::default()
+    };
+    large.store(0x200, &[0]);
+    assert!(large.fired);
+}

@@ -16,15 +16,33 @@ pub struct ReadSet {
 #[derive(Default)]
 pub(super) struct Stops {
     pub stores: Vec<(u64, u64)>,
+    /// Each watched range's bytes when the watch began; empty for a range too
+    /// large to keep, which any store fires.
+    pub values: Vec<Vec<u8>>,
     pub devices: BTreeSet<usize>,
     pub fired: bool,
 }
+/// Largest watched range whose bytes are kept to compare stores against.
+const COMPARED_RANGE_BYTES: u64 = 1 << 20;
 impl Stops {
-    pub fn store(&mut self, address: u64, bytes: u64) {
+    /// A store fires the watch only when it changes a watched byte: firmware
+    /// that rewrites a status word with its current value does not end a wait.
+    /// `written` holds the bytes at `address` after the store.
+    pub fn store(&mut self, address: u64, written: &[u8]) {
+        let end = address.saturating_add(written.len() as u64);
         self.fired |= self
             .stores
             .iter()
-            .any(|&(lo, hi)| address < hi && lo < address.saturating_add(bytes));
+            .zip(&self.values)
+            .any(|(&(lo, hi), before)| {
+                if address >= hi || lo >= end {
+                    return false;
+                }
+                let (from, to) = (address.max(lo), end.min(hi));
+                before.is_empty()
+                    || written[(from - address) as usize..(to - address) as usize]
+                        != before[(from - lo) as usize..(to - lo) as usize]
+            });
     }
 }
 pub(super) fn fired(stops: &RefCell<Stops>) -> bool {
@@ -68,7 +86,9 @@ unsafe fn written(_: Access, address: u64, size: i32, _: i64, data: *mut c_void)
                     .map(|m| m.physical + address - m.address)
             });
         if let Some(physical) = physical {
-            state.continuation.borrow_mut().store(physical, size);
+            let mut written = vec![0; size as usize];
+            cpu.read_memory(address, &mut written)?;
+            state.continuation.borrow_mut().store(physical, &written);
             if fired(&state.continuation) {
                 finish_instruction(&*cpu)?;
             }
@@ -198,8 +218,20 @@ impl Board {
             }
         }
         let stops = self.state.borrow().continuation.clone();
+        let values = stores
+            .iter()
+            .map(|&(lo, hi)| {
+                if hi - lo > COMPARED_RANGE_BYTES {
+                    return Ok(vec![]);
+                }
+                let mut bytes = vec![0; (hi - lo) as usize];
+                self.physical_memory.read_host(lo, &mut bytes)?;
+                Ok(bytes)
+            })
+            .collect::<Result<Vec<_>, String>>()?;
         *stops.borrow_mut() = Stops {
             stores: stores.clone(),
+            values,
             devices,
             fired: false,
         };

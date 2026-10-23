@@ -1039,6 +1039,23 @@ impl Board {
             self.board()?.read_physical(address, out).map_err(error)
         })
     }
+    /// Read physical memory that an active wait observes but does not depend on.
+    fn physical_inspect<'py>(
+        &self,
+        py: Python<'py>,
+        address: u64,
+        size: usize,
+    ) -> PyResult<Bound<'py, PyBytes>> {
+        self.check_read(size)?;
+        if let Some(Backend::Xp4(session)) = &self.backend {
+            let address = usize::try_from(address)
+                .map_err(|_| PyValueError::new_err("Physical address exceeds host size"))?;
+            return session.read(py, address, size);
+        }
+        PyBytes::new_with(py, size, |out| {
+            self.board()?.inspect_physical(address, out).map_err(error)
+        })
+    }
     /// Batch passive physical reads at one stopped execution boundary.
     fn physical_read_many<'py>(
         &self,

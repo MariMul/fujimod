@@ -434,6 +434,13 @@ class Board:
         self._validate_range(address, size)
         return self._native.physical_read(address, size)
 
+    def inspect_physical(self, address: int, size: int) -> bytes:
+        """Read canonical physical memory that an active wait observes but does
+        not depend on: stores to it do not end the wait."""
+        self._ensure_open()
+        self._validate_range(address, size)
+        return self._native.physical_inspect(address, size)
+
     def read_physical_many(
         self, ranges: Sequence[tuple[int, int]]
     ) -> tuple[bytes, ...]:

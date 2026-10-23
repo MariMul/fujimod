@@ -460,6 +460,11 @@ impl Board {
         self.track_physical_read(address, bytes.len())?;
         self.physical_memory.read_host(address, bytes)
     }
+    /// Read physical memory without adding it to an active predicate's read
+    /// set: the bytes are observed, but stores to them do not end a wait.
+    pub fn inspect_physical(&self, address: u64, bytes: &mut [u8]) -> Result<(), String> {
+        self.physical_memory.read_host(address, bytes)
+    }
     pub fn write_physical(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
         let mut state = self.state.borrow_mut();
         state.code_run = None;

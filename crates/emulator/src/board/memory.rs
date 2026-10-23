@@ -362,8 +362,12 @@ impl Memory {
             .as_ref()
             .and_then(std::rc::Weak::upgrade)
         {
+            let mut offset = 0;
             for (physical, _, len) in self.chunks(address, bytes.len(), Access::Host)?.flatten() {
-                stops.borrow_mut().store(physical, len as u64);
+                stops
+                    .borrow_mut()
+                    .store(physical, &bytes[offset..offset + len]);
+                offset += len;
             }
         }
         Ok(())
