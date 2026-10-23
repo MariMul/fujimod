@@ -422,18 +422,26 @@ test('prepared cameras expose controls, card storage, preview and replay through
   f.manifest.construction = 'prepared';
   f.manifest.prepared = Object.assign(
     { document: 'document.json', bootRom: 'boot.bin' },
-    { nand: 'nand.gz', settings: 'settings.bin' },
+    { nand: 'nand.gz', settings: 'settings.bin', camera: { configuration: 'camera.zst' } },
   );
   let creates = 0;
-  f.module._camera_prepared_session_create = (p, n) => {
+  f.module._camera_prepared_session_create = (p, n, ...spans) => {
     const request = JSON.parse(new TextDecoder().decode(f.module.HEAPU8.subarray(p, p + n))) as {
       document: string;
       clockSeconds2000: number;
       preferredLanguages: string[];
+      camera: [string, number][];
     };
     assert.equal(request.document, '{"number":1.0}');
     assert.equal(request.clockSeconds2000, 0);
     assert.deepEqual(request.preferredLanguages, []);
+    // Camera sections arrive unchanged, packed in the last span in request order.
+    assert.deepEqual(request.camera, [['configuration', 14]]);
+    const [camera, cameraLength] = spans.slice(-2);
+    assert.equal(
+      new TextDecoder().decode(f.module.HEAPU8.subarray(camera, camera! + cameraLength!)),
+      '{"number":1.0}',
+    );
     creates++;
     return 1;
   };

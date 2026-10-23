@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { basename, dirname, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { EmulatorSession, type SessionCommands } from './abi.ts';
 import { copyBuffer } from './buffers.ts';
@@ -63,20 +63,52 @@ export async function openCamera(
   return attachCamera(module, (session) => session.create(config, datBytes, 'session'));
 }
 
-/** Open a native prepared run: its document, update container and boot ROM files. */
+/**
+ * Read a native prepared bundle directory: its manifest names the document,
+ * boot ROM and the camera's compressed NAND sections beside it.
+ */
+export async function readPreparedBundle(directory: string) {
+  const manifest: unknown = JSON.parse(await readFile(join(directory, 'wasm.json'), 'utf8'));
+  const prepared: unknown =
+    manifest !== null && typeof manifest === 'object' ? Reflect.get(manifest, 'prepared') : null;
+  if (prepared === null || typeof prepared !== 'object')
+    throw new Error('Prepared bundle has no prepared inputs.');
+  const file = (name: unknown) => {
+    if (typeof name !== 'string' || name !== basename(name))
+      throw new Error('Prepared bundle names an invalid input file.');
+    return join(directory, name);
+  };
+  const camera: unknown = Reflect.get(prepared, 'camera') ?? {};
+  if (camera === null || typeof camera !== 'object')
+    throw new Error('Prepared bundle has an invalid camera input.');
+  return {
+    document: await readFile(file(Reflect.get(prepared, 'document')), 'utf8'),
+    inputs: {
+      bootRom: await readFile(file(Reflect.get(prepared, 'bootRom'))),
+      camera: Object.fromEntries(
+        await Promise.all(
+          Object.entries(camera).map(
+            async ([section, name]: [string, unknown]) =>
+              [section, await readFile(file(name))] as const,
+          ),
+        ),
+      ),
+    },
+  };
+}
+
+/** Open a native prepared run from its bundle directory and the update container. */
 export async function openPreparedCamera(
   modulePath: string,
-  documentPath: string,
+  bundlePath: string,
   updatePath: string,
-  bootRomPath: string,
   moduleOptions: ModuleOptions = {},
 ) {
   const module = await loadNodeModule(modulePath, moduleOptions);
-  const document = await readFile(documentPath, 'utf8');
+  const { document, inputs } = await readPreparedBundle(bundlePath);
   const update = await readFile(updatePath);
-  const bootRom = await readFile(bootRomPath);
   return attachCamera(module, (session) =>
-    session.create(document, update, 'prepared', { bootRom }),
+    session.create(JSON.stringify({ document }), update, 'prepared', inputs),
   );
 }
 

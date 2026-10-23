@@ -43,6 +43,16 @@ export function runtimeBundleFiles(manifest: unknown) {
       throw Error(`Prepared runtime has an invalid ${key} filename.`);
     files.push(name);
   }
+  const camera: unknown = Reflect.get(manifest.prepared, 'camera');
+  if (camera !== undefined) {
+    if (camera === null || typeof camera !== 'object')
+      throw Error('Prepared runtime has an invalid camera input.');
+    for (const [section, name] of Object.entries(camera)) {
+      if (typeof name !== 'string' || !/^[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$/.test(name))
+        throw Error(`Prepared runtime has an invalid camera ${section} filename.`);
+      files.push(name);
+    }
+  }
   return [...new Set(files)];
 }
 

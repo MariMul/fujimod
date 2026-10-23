@@ -23,6 +23,7 @@ test('fresh cameras need only the prepared document and boot ROM', async () => {
     );
     assert.equal(loaded.inputs.nand, undefined);
     assert.equal(loaded.inputs.settings, undefined);
+    assert.equal(loaded.inputs.camera, undefined);
     assert.deepEqual(loaded.inputs.bootRom, Uint8Array.of(7, 8));
   } finally {
     vi.unstubAllGlobals();
@@ -51,6 +52,50 @@ test('prepared bundle inflates NAND and preserves boot ROM and MCU bytes', async
     assert.deepEqual(loaded.inputs.settings, Uint8Array.of(9, 10));
     assert.equal(urls.length, 4);
     assert.ok(urls.every((url) => url.startsWith('https://example.invalid/runtime/')));
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+test('prepared bundle passes camera sections through compressed', async () => {
+  const files = new Map<string, string | Uint8Array>([
+    ['document.json', '{"schema":1}'],
+    ['boot.bin', Uint8Array.of(7, 8)],
+    ['nand-configuration.bin.zst', Uint8Array.of(0x28, 0xb5, 0x2f, 0xfd, 1)],
+    ['nand-tone-curves.bin.zst', Uint8Array.of(0x28, 0xb5, 0x2f, 0xfd, 2)],
+  ]);
+  vi.stubGlobal('fetch', async (url: URL) => {
+    const body = files.get(url.pathname.split('/').at(-1)!);
+    return body === undefined
+      ? new Response(null, { status: 404 })
+      : new Response(typeof body === 'string' ? body : new Uint8Array(body));
+  });
+  try {
+    const camera = {
+      configuration: 'nand-configuration.bin.zst',
+      'tone-curves': 'nand-tone-curves.bin.zst',
+    };
+    const loaded = await loadPreparedBundle(
+      { document: 'document.json', bootRom: 'boot.bin', camera },
+      base,
+    );
+    assert.deepEqual(loaded.inputs.camera, {
+      configuration: Uint8Array.of(0x28, 0xb5, 0x2f, 0xfd, 1),
+      'tone-curves': Uint8Array.of(0x28, 0xb5, 0x2f, 0xfd, 2),
+    });
+    await assert.rejects(
+      loadPreparedBundle(
+        { document: 'document.json', bootRom: 'boot.bin', camera: { configuration: 'absent.zst' } },
+        base,
+      ),
+      /input is unavailable/,
+    );
+    await assert.rejects(
+      loadPreparedBundle(
+        { document: 'document.json', bootRom: 'boot.bin', camera: { configuration: 1 } },
+        base,
+      ),
+      /invalid camera configuration input/,
+    );
   } finally {
     vi.unstubAllGlobals();
   }

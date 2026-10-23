@@ -42,7 +42,7 @@ export interface EmulatorModule {
   _camera_session_create?: EmulatorModule['_camera_create'];
   /** Reconstruct a session using the constructor and inputs inside an archive. */
   _camera_snapshot_create?: (data: number, length: number) => number;
-  /** Native prepared run: document, update, boot ROM, optional NAND and settings spans. */
+  /** Native prepared run: document, update, boot ROM, optional NAND, settings and camera spans. */
   _camera_prepared_session_create?: (
     document: number,
     documentLength: number,
@@ -54,6 +54,8 @@ export interface EmulatorModule {
     nandLength: number,
     settings: number,
     settingsLength: number,
+    camera: number,
+    cameraLength: number,
   ) => number;
   _camera_command?: (
     handle: number,
@@ -71,6 +73,8 @@ export interface PreparedInputs {
   bootRom: Uint8Array;
   nand?: Uint8Array;
   settings?: Uint8Array;
+  /** The camera's zstd-compressed NAND sections by section name, passed through unchanged. */
+  camera?: Record<string, Uint8Array>;
 }
 
 export interface UsbStatus {
@@ -320,12 +324,30 @@ export class EmulatorSession {
     const empty = new Uint8Array();
     // The document is shipped as its exact text: re-serializing parsed JSON would
     // turn integral floats into integers, which the native identity check rejects.
-    this.handle = this.upload(new TextEncoder().encode(document), (p, n) =>
+    // Camera sections travel packed in one span, listed in the request in order.
+    const sections = Object.entries(inputs.camera ?? {});
+    const camera = new Uint8Array(sections.reduce((sum, [, bytes]) => sum + bytes.length, 0));
+    sections.reduce((offset, [, bytes]) => {
+      camera.set(bytes, offset);
+      return offset + bytes.length;
+    }, 0);
+    const request: unknown = JSON.parse(document);
+    if (request === null || typeof request !== 'object')
+      throw Error('Prepared request must be a JSON object.');
+    const text = sections.length
+      ? JSON.stringify({
+          ...request,
+          camera: sections.map(([name, bytes]) => [name, bytes.length]),
+        })
+      : document;
+    this.handle = this.upload(new TextEncoder().encode(text), (p, n) =>
       this.upload(update, (u, ul) =>
         this.upload(inputs.bootRom, (r, rl) =>
           this.upload(inputs.nand ?? empty, (m, ml) =>
             this.upload(inputs.settings ?? empty, (s, sl) =>
-              this.call(() => create(p, n, u, ul, r, rl, m, ml, s, sl)),
+              this.upload(camera, (c, cl) =>
+                this.call(() => create(p, n, u, ul, r, rl, m, ml, s, sl, c, cl)),
+              ),
             ),
           ),
         ),

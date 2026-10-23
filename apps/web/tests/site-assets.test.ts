@@ -104,6 +104,21 @@ test('prepared runtime staging follows declared cold input filenames and refuses
       }),
     /invalid nand filename/,
   );
+  assert.deepEqual(
+    runtimeBundleFiles({
+      construction: 'prepared',
+      prepared: { ...prepared, camera: { configuration: 'nand-configuration.bin.zst' } },
+    }).slice(8),
+    ['nand-configuration.bin.zst'],
+  );
+  assert.throws(
+    () =>
+      runtimeBundleFiles({
+        construction: 'prepared',
+        prepared: { ...prepared, camera: { configuration: '../bank.zst' } },
+      }),
+    /invalid camera configuration filename/,
+  );
   assert.throws(() => runtimeBundleFiles({ construction: 'prepared' }), /no bundle files/);
   assert.deepEqual(
     runtimeBundleFiles({
