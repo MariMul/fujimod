@@ -20,7 +20,7 @@ def main() -> int:
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         parser.error("HVF CPU checks require macOS ARM64")
     crate = Path(__file__).resolve().parent
-    target = Path(os.environ.get("CARGO_TARGET_DIR", crate / "target"))
+    target = Path(os.environ.get("CARGO_TARGET_DIR", crate.parents[1] / "target"))
     out = (args.out or target / "hvf-check").resolve()
     out.mkdir(parents=True, exist_ok=True)
     log = out / "build.log"
@@ -34,11 +34,9 @@ def main() -> int:
                 "--locked",
                 "--example",
                 "check",
-                "-j1",
                 "--message-format=json-render-diagnostics",
             ],
             cwd=crate,
-            env={**os.environ, "CARGO_BUILD_JOBS": "1"},
             stdout=stream,
             stderr=subprocess.STDOUT,
         )
