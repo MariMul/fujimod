@@ -18,15 +18,9 @@ pub fn words16(words: &[u16]) -> serde_json::Value {
     serde_json::json!({"words":words.len(),"sha256":format!("{:x}",hash.finalize())})
 }
 
-/// Hash 32-bit floats by their little-endian bit patterns with bounded scratch.
-pub fn float32s(values: &[f32]) -> serde_json::Value {
+/// Hash little-endian 32-bit floats by their stored bytes.
+pub fn float32s(bytes: &[u8]) -> serde_json::Value {
     let mut hash = Sha256::new();
-    let mut bytes = [0u8; 4096];
-    for chunk in values.chunks(bytes.len() / 4) {
-        for (value, quad) in chunk.iter().zip(bytes.chunks_exact_mut(4)) {
-            quad.copy_from_slice(&value.to_bits().to_le_bytes());
-        }
-        hash.update(&bytes[..chunk.len() * 4]);
-    }
-    serde_json::json!({"floats":values.len(),"sha256":format!("{:x}",hash.finalize())})
+    hash.update(bytes);
+    serde_json::json!({"floats":bytes.len()/4,"sha256":format!("{:x}",hash.finalize())})
 }

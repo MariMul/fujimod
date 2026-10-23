@@ -100,7 +100,10 @@ impl Projection {
         }
         Ok(value)
     }
-    /// The frame's full-resolution linear scene, retained when it fits the cache.
+    /// The frame's full-resolution linear scene. The scene of the current
+    /// sensor frame is always retained, whatever its size: frames are immutable
+    /// and rarely replaced, and rebuilding a RAF-sized scene per readout costs
+    /// far more than holding it (about 12 bytes per pixel).
     fn full_scene(&self, frame: &Arc<Frame>) -> Result<Arc<Scene>, String> {
         let mut cache = self
             .scene
@@ -110,7 +113,7 @@ impl Projection {
             return Ok(old.clone());
         }
         let scene = Arc::new(Scene::new(frame.clone())?);
-        *cache = (frame.width * frame.height <= CACHE_PIXELS).then(|| scene.clone());
+        *cache = Some(scene.clone());
         Ok(scene)
     }
     pub(crate) fn prepare_binned_windows(

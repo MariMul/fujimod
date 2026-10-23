@@ -139,7 +139,7 @@ pub mod bytes {
     }
 }
 
-mod shared_bytes {
+pub(crate) mod shared_bytes {
     use super::*;
     pub fn serialize<S: serde::Serializer>(bytes: &Arc<[u8]>, s: S) -> Result<S::Ok, S::Error> {
         s.serialize_bytes(bytes)

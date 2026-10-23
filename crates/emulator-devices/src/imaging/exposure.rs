@@ -464,14 +464,16 @@ mod mosaic_tests {
     /// using the RAF normalization: radiance = counts / (seconds × gain / f²).
     fn recorded_frame(width: usize, height: usize, raw: &[u16], recorded: Exposure) -> Arc<Frame> {
         let norm = recorded.seconds * recorded.analog_gain / 81.;
-        let radiance: Vec<f32> = raw.iter().map(|&r| (f64::from(r) / norm) as f32).collect();
+        let radiance = crate::scene::mosaic::Radiance::from_values(
+            raw.iter().map(|&r| (f64::from(r) / norm) as f32),
+        );
         Arc::new(
             Frame::new(
                 width,
                 height,
                 FramePixels::Mosaic {
                     cfa: XTRANS,
-                    radiance: radiance.into(),
+                    radiance,
                 },
             )
             .unwrap(),
