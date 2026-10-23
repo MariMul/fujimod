@@ -805,6 +805,8 @@ class emulator:
     @staticmethod
     def verify_input_assets(manifest: str, assets: dict[str, bytes]) -> None: ...
     @staticmethod
+    def raf_radiance_rgb(raf: bytes) -> tuple[int, int, bytes]: ...
+    @staticmethod
     def virtual_scene_histogram(
         source_width: int,
         source_height: int,

@@ -164,6 +164,7 @@ export interface SessionCommands {
     result: SessionState;
   };
   save: { request: Record<string, never>; result: SaveResult };
+  scene_raf: { request: Record<string, never>; result: Record<string, never> };
   restore_durable: { request: Record<string, never>; result: SessionState };
   checkpoint: { request: Record<string, never>; result: Checkpoint & { retainedIds: string[] } };
   restore: { request: { id: string }; result: { tick: string; instructions: string[] } };
@@ -407,7 +408,11 @@ export class EmulatorSession {
       }),
     );
   }
-  scene(scene: { width: number; height: number; rgb: Uint8Array } | null) {
+  scene(scene: { width: number; height: number; rgb: Uint8Array } | { raf: Uint8Array } | null) {
+    if (scene && 'raf' in scene) {
+      this.command('scene_raf', {}, scene.raf);
+      return;
+    }
     const { _camera_scene_buffer: reserve, _camera_scene_commit: commit } = this.module;
     if (!reserve || !commit)
       throw new UnsupportedEmulatorOperation(

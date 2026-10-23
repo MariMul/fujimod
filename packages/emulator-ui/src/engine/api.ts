@@ -21,11 +21,7 @@ export type Frame = {
   height: number;
   sequence: number;
 } & ({ rgb: Uint8Array } | { rgba: Uint8ClampedArray } | { bitmap: ImageBitmap });
-export interface Scene {
-  rgb: Uint8Array;
-  width: number;
-  height: number;
-}
+export type Scene = { rgb: Uint8Array; width: number; height: number } | { raf: Uint8Array };
 export interface CardFile {
   path: string;
   bytes: Uint8Array;

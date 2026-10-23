@@ -94,6 +94,7 @@ test('worker routes physical inputs, scene, card operations, restart, power, pro
       y: 200,
     })),
     { action: 'scene', scene: { width: 1, height: 1, rgb: new Uint8Array([2, 3, 4]) } },
+    { action: 'scene', scene: { raf: new Uint8Array([82, 65, 70]) } },
     { action: 'power', on: false },
     { action: 'power_cycle', inputs: [{ id: 'menu' }] },
     { action: 'card_state' },
@@ -121,6 +122,7 @@ test('worker routes physical inputs, scene, card operations, restart, power, pro
   ];
   for (const request of requests)
     assert.equal((await f.send(request)).type, 'reply', request.action);
+  assert.deepEqual(f.calls.find((c) => c.action === 'scene_raf')!.bytes, [82, 65, 70]);
   assert.equal(f.calls.find((c) => c.action === 'press')!.options.stage, 'half');
   const restart = f.calls.find((c) => c.action === 'restart_card')!;
   assert.deepEqual(restart.options.files, [

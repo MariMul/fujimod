@@ -81,6 +81,10 @@ pub enum Input {
         bytes: Vec<u8>,
         white_luminance: f64,
     },
+    SensorRaf {
+        source: String,
+        bytes: Vec<u8>,
+    },
     SensorRaw16 {
         source: String,
         width: usize,
@@ -132,6 +136,7 @@ impl Input {
             Self::Logic { wire, .. } => wire.capacity(),
             Self::Rgb { source, bytes, .. }
             | Self::SensorRgb { source, bytes, .. }
+            | Self::SensorRaf { source, bytes }
             | Self::SensorRaw16 { source, bytes, .. } => source.capacity() + bytes.capacity(),
             Self::SensorImage { source } | Self::Analytic { source } => source.capacity(),
             Self::CardFormat {
@@ -206,6 +211,7 @@ impl Input {
                 height,
                 bytes,
             } => session.sensor_raw16(source, *width, *height, bytes),
+            Self::SensorRaf { source, bytes } => session.sensor_raf(source, bytes),
             Self::SensorImage { source } => session.sensor_image(source),
             Self::Analytic { source } => session.analytic(source),
             Self::CardFormat {

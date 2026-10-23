@@ -10,6 +10,7 @@ mod mono_raster;
 mod python_graphics;
 mod python_observation;
 mod python_values;
+mod raf;
 mod raster;
 mod scanout_observation;
 mod scene;
@@ -176,6 +177,8 @@ mod binding {
     };
     #[pymodule_export]
     use super::python_values::DeviceRefusal;
+    #[pymodule_export]
+    use super::raf::raf_radiance_rgb;
     #[pymodule_export]
     use super::raster::{ui_composite, ui_composite_tiled, ui_fill_counts};
     #[pymodule_export]

@@ -21,7 +21,7 @@ import type {
   ReplayStep,
   Scene,
 } from '@fujimod/emulator-ui/engine/api';
-import { loadImageScene } from './image-scene';
+import { loadImageScene, loadRafScene } from './image-scene';
 import { EngineError, faultFrom, type EngineFault } from '@fujimod/emulator-ui/engine/fault';
 import type { CameraPerformance } from '@fujimod/emulator-ui/engine/performance';
 import type { ReportSubmission } from '@fujimod/emulator-ui/engine/report';
@@ -61,6 +61,7 @@ export class WasmEngine implements Engine {
       });
       this.booted = true;
       this.sceneInput = config.sceneInput;
+      this.firmwareId = config.firmwareId;
       return inputs;
     } finally {
       this.progress = undefined;
@@ -86,6 +87,13 @@ export class WasmEngine implements Engine {
   private selectedScene: Scene | null = null;
   private defaultScene?: Promise<Scene>;
   private sceneInput = false;
+  private firmwareId?: string;
+  private loadDefaultScene(): Promise<Scene> {
+    return (this.defaultScene ??=
+      this.firmwareId === 'x70-110'
+        ? loadRafScene()
+        : loadImageScene(new URL('./assets/default-scene.png', import.meta.url)));
+  }
   private booted = false;
   private presentedFrames = 0;
   private powerListeners = new Listeners<boolean>();
@@ -249,16 +257,14 @@ export class WasmEngine implements Engine {
   ): Promise<Input[]> {
     this.progress = progress;
     this.sceneInput = config.sceneInput;
+    this.firmwareId = config.firmwareId;
     progress('Loading Wasm runtime…');
     const [files, seedIdentity] = await Promise.all([
       media?.load() ?? Promise.resolve([]),
       media?.identities ?? Promise.resolve([]),
     ]);
     const scene = this.sceneInput
-      ? (this.selectedScene ??
-        (await (this.defaultScene ??= loadImageScene(
-          new URL('./assets/default-scene.png', import.meta.url),
-        ))))
+      ? (this.selectedScene ?? (await this.loadDefaultScene()))
       : undefined;
     const inputs = await this.rpc<Input[]>(
       { action: 'boot', dat, config: this.absolute(config), files, scene, seedIdentity },
@@ -368,11 +374,7 @@ export class WasmEngine implements Engine {
   async setScene(scene: Scene | null) {
     this.selectedScene = scene;
     if (!this.booted) return;
-    const image =
-      scene ??
-      (await (this.defaultScene ??= loadImageScene(
-        new URL('./assets/default-scene.png', import.meta.url),
-      )));
+    const image = scene ?? (await this.loadDefaultScene());
     if (this.selectedScene !== scene) return;
     await this.rpc({ action: 'scene', scene: image });
   }

@@ -175,13 +175,39 @@ impl Session {
         if !bytes.is_empty()
             && !matches!(
                 c.action.as_str(),
-                "replay" | "restore_durable" | "restart_card" | "usb_setup" | "usb_out"
+                "scene_raf"
+                    | "replay"
+                    | "restore_durable"
+                    | "restart_card"
+                    | "usb_setup"
+                    | "usb_out"
             )
         {
             return Err(format!("binary upload is not supported for {}", c.action));
         }
         self.result_bytes.clear();
         let result = match c.action.as_str() {
+            "scene_raf" => {
+                options::<Empty>(c.options)?;
+                let scene = self
+                    .camera
+                    .as_ref()
+                    .and_then(|m| m.scene.as_ref())
+                    .ok_or("session has no declared scene input")?;
+                let sensor = scene
+                    .sensor
+                    .clone()
+                    .ok_or("session has no declared sensor input")?;
+                let images = scene.images.clone();
+                let node = scene.node.clone();
+                self.apply_marked_input(Input::SensorRaf {
+                    source: sensor,
+                    bytes: bytes.to_vec(),
+                })?;
+                self.apply_input(Input::SensorImage { source: images })?;
+                self.apply_input(Input::Wake { node })?;
+                json!({})
+            }
             "usb_status" => {
                 let o: UsbNode = options(c.options)?;
                 self.core.usb_status(&o.node)?

@@ -179,3 +179,39 @@ test('portable snapshot loading resolves a relative runtime bundle before dispat
   assert.deepEqual([...(await exported)], [4, 5]);
   f.engine.dispose();
 });
+
+test('the X70 boots and restores its default with original RAF bytes', async () => {
+  const f = setup();
+  const bytes = new Uint8Array([82, 65, 70]);
+  const original = globalThis.fetch;
+  const urls: string[] = [];
+  globalThis.fetch = async (input) => {
+    urls.push(String(input));
+    return new Response(bytes);
+  };
+  try {
+    const boot = f.engine.boot(
+      new ArrayBuffer(1),
+      { ...testConfig(), firmwareId: 'x70-110' },
+      () => {},
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const request = f.sent.at(-1)!;
+    assert(request.type === 'rpc' && request.request.action === 'boot');
+    assert.deepEqual(request.request.scene, { raf: bytes });
+    assert.match(urls[0], /build\/assets\/default-scene\.raf/);
+    f.resolve([]);
+    await boot;
+    const restore = f.engine.setScene(null);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const message = f.sent.at(-1)!;
+    assert(message.type === 'rpc');
+    assert.deepEqual(message.request, { action: 'scene', scene: { raf: bytes } });
+    f.resolve();
+    await restore;
+    assert.equal(urls.length, 1);
+  } finally {
+    globalThis.fetch = original;
+    f.engine.dispose();
+  }
+});

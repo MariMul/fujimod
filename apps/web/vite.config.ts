@@ -1,3 +1,5 @@
+import { prepareDefaultScene } from '../../scripts/assets/default-scene.ts';
+
 import { uiLint } from '../../packages/emulator-ui/lint';
 import { runtimeHeaders } from './src/security';
 import { defineConfig } from 'vite-plus';
@@ -12,6 +14,8 @@ import { createReadStream, existsSync, readFileSync } from 'node:fs';
 import { createGzip } from 'node:zlib';
 import { stat } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
+
+await prepareDefaultScene();
 
 // Set these before custom routes can finish a response, including proof pages
 // and runtime mounts that bypass Vite's static-response headers.

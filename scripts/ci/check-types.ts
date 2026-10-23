@@ -15,6 +15,7 @@ function check(config: string): void {
 for (const config of [
   'tsconfig.json',
   'scripts/ci/tsconfig.json',
+  'scripts/assets/tsconfig.json',
   'crates/usb-proxy/web/tsconfig.json',
   'apps/usb-sharing/tsconfig.json',
   'crates/simulation/tsconfig.json',
