@@ -175,7 +175,7 @@ impl MemoryDma {
         let count = pending.count as usize;
         if let Some(irq) = pending.irq {
             self.routes
-                .validate(irq)
+                .validate_latched(irq)
                 .map_err(|_| "memory DMA IRQ bank changed during transfer")?;
         }
         match pending.operation {
@@ -251,14 +251,20 @@ impl Device for MemoryDma {
             },
         )
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let saved: Saved = saved.decode(self.name())?;
         if saved.base != self.base || !Self::valid_state(&saved.state) {
             return Err("invalid memory DMA checkpoint or wiring".into());
         }
         Ok(())
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         let saved: Saved = saved.decode(self.name())?;
         self.state = saved.state;
@@ -317,7 +323,11 @@ impl Device for MemoryDma {
         }
         self.publish_status();
     }
-    fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<fujimod_emulator_devices::bus::FastReadWord> {
+    fn fast_reads(
+        &self,
+        window_base: u64,
+        window_size: u64,
+    ) -> Vec<fujimod_emulator_devices::bus::FastReadWord> {
         let status = self.base + 0x24;
         if status >= window_base && status + 4 <= window_base.saturating_add(window_size) {
             vec![fujimod_emulator_devices::bus::FastReadWord::atomic_u32(
@@ -679,6 +689,42 @@ mod tests {
                 .unwrap_err()
                 .contains("alternate")
         );
+    }
+    #[test]
+    fn masking_the_selected_bank_preserves_completion_and_data_before_irq() {
+        let mut d = model();
+        let mut h = Memory::default();
+        d.routes.set(IRQ, Some(0)).unwrap();
+        h.bytes[0x1000..0x1040].fill(0x71);
+        configure(&mut d, &mut h, 0x400400, 0x1000, 0x2000, 64);
+        write(&mut d, &mut h, 0x28, 1).unwrap();
+        d.routes.set(IRQ, None).unwrap();
+        h.now = 2;
+        advance(&mut d, &mut h).unwrap();
+        assert_eq!(&h.bytes[0x2000..0x2040], &[0x71; 64]);
+        assert_eq!(&h.irq_bytes[0x2000..0x2040], &[0x71; 64]);
+        assert_eq!(d.state.registers[STATUS], 0x40);
+        assert_eq!(h.irqs, [(0, IRQ)]);
+        advance(&mut d, &mut h).unwrap();
+        assert_eq!(h.irqs.len(), 1);
+    }
+    #[test]
+    fn ambiguous_enables_still_refuse_a_latched_memory_completion() {
+        use fujimod_emulator_devices::exr2::irq::EnableOutput;
+        use fujimod_emulator_devices::exr2::isp::dma::RouteOutput;
+        let mut d = model();
+        let mut h = Memory::default();
+        d.routes.set(IRQ, Some(0)).unwrap();
+        configure(&mut d, &mut h, 0x400400, 0x1000, 0x2000, 64);
+        write(&mut d, &mut h, 0x28, 1).unwrap();
+        let peer = RouteOutput::new(d.routes.clone(), 1).unwrap();
+        let mut enabled = [0; 4];
+        enabled[IRQ as usize / 32] = 1 << (IRQ % 32);
+        peer.publish(enabled);
+        h.now = 2;
+        assert!(advance(&mut d, &mut h).is_err());
+        assert_eq!(&h.bytes[0x2000..0x2040], &[0; 64]);
+        assert!(h.irqs.is_empty());
     }
     #[test]
     fn changed_irq_owner_or_unmapped_ram_refuses_before_completion_or_irq() {

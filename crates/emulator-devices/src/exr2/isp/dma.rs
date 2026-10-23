@@ -391,6 +391,26 @@ impl IrqRoutes {
                 .ok_or("image DMA needs one programmed IRQ owner")?,
         })
     }
+    /// Validate a bank selected at START. Masking both controllers does not
+    /// cancel the transfer or change that bank; delivery is gated by the
+    /// receiving controller. Migration and ambiguous enables still refuse.
+    pub fn validate_latched(&self, route: Irq) -> Result<(), String> {
+        let routes = self.0.lock().map_err(|_| "image-irq-routes poisoned")?;
+        let line = route.line as usize;
+        if line >= 128 || route.core >= 2 {
+            return Err("invalid latched DMA IRQ".into());
+        }
+        let mask = 1u32 << (line % 32);
+        let masked = routes
+            .enabled
+            .iter()
+            .all(|words| words[line / 32] & mask == 0);
+        if routes.owners[line] == Some(route.core) || masked {
+            Ok(())
+        } else {
+            Err("latched DMA IRQ bank changed during transfer".into())
+        }
+    }
     pub fn validate(&self, route: Irq) -> Result<(), String> {
         if self.owner(route.line) != Some(route.core) {
             return Err("image DMA IRQ owner changed during transfer".into());
