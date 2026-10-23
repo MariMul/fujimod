@@ -322,6 +322,20 @@ impl Mechanics {
         }
         Ok(())
     }
+    pub(super) fn complete_without_motion(
+        &self,
+        cx: &mut Cx<'_>,
+        axis: usize,
+    ) -> Result<(), String> {
+        if self.motors[axis].pending.is_some() || !self.motors[axis].queue.is_empty() {
+            return Err("zero-quantity lens request overlaps pending motion".into());
+        }
+        match self.irqs[axis] {
+            InterruptLine::Core { core, line } => cx.raise_irq(core, line)?,
+            InterruptLine::Shared(line) => cx.set_irq(line, true),
+        }
+        Ok(())
+    }
     pub fn profile(&mut self, axis: usize, ramp: Ramp) -> Result<(), String> {
         let Some(p) = &mut self.motors[axis].pending else {
             return Ok(());

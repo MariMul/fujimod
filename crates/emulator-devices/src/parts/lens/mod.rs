@@ -231,7 +231,7 @@ impl LensUnit {
         u32::from(self.registers[base + 1] & 0x3ff)
             | u32::from(self.registers[base + 2] & 0x3ff) << 10
     }
-    fn banked(&mut self, word: u16, now: u64) -> Result<(), String> {
+    fn banked(&mut self, cx: &mut Cx<'_>, word: u16, now: u64) -> Result<(), String> {
         let Protocol::Banked {
             positive_direction_high,
             stop_response,
@@ -261,19 +261,27 @@ impl LensUnit {
             } else {
                 -1
             };
-            match clock[bank].profile(&self.registers[bank * 16..bank * 16 + 16])? {
-                Some(banked_clock::Profile::Encoder(profile)) => {
-                    self.mechanics
-                        .begin(bank, quantity / 32, sign, None, now, false)?;
-                    self.mechanics.profile(bank, profile)?;
+            let profile = clock[bank].profile(&self.registers[bank * 16..bank * 16 + 16])?;
+            if quantity == 0 {
+                // The completed SPI frame is the only modeled delay for a
+                // no-motion request. Do not hold the motor busy for its
+                // configured motion-settle approximation.
+                self.mechanics.complete_without_motion(cx, bank)?;
+            } else {
+                match profile {
+                    Some(banked_clock::Profile::Encoder(profile)) => {
+                        self.mechanics
+                            .begin(bank, quantity / 32, sign, None, now, false)?;
+                        self.mechanics.profile(bank, profile)?;
+                    }
+                    Some(banked_clock::Profile::Microstep(clock)) => {
+                        self.mechanics
+                            .begin_clocked(bank, quantity / 32, sign, clock, now)?;
+                    }
+                    None => self
+                        .mechanics
+                        .begin(bank, quantity / 32, sign, None, now, false)?,
                 }
-                Some(banked_clock::Profile::Microstep(clock)) => {
-                    self.mechanics
-                        .begin_clocked(bank, quantity / 32, sign, clock, now)?;
-                }
-                None => self
-                    .mechanics
-                    .begin(bank, quantity / 32, sign, None, now, false)?,
             }
         }
         self.registers[address] = data;
@@ -592,7 +600,7 @@ impl Endpoint for LensUnit {
         self.validate(shift)?;
         self.advance_to(cx, at)?;
         match self.protocol {
-            Protocol::Banked { .. } => self.banked(shift.word, at)?,
+            Protocol::Banked { .. } => self.banked(cx, shift.word, at)?,
             Protocol::MixedWidth { .. } => self.mixed(shift.word, at)?,
             Protocol::ThreeByte { .. } => self.three_byte(shift.word as u8, at)?,
         }
@@ -617,3 +625,6 @@ impl Endpoint for LensUnit {
         .min()
     }
 }
+
+#[cfg(test)]
+mod tests;
