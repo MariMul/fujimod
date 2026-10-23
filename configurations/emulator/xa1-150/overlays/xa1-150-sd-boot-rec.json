@@ -29,7 +29,6 @@
         "movrsz_ticks": 50000,
         "producer_data_profile": "xm1-150-declared-continuous-statistics-scene-unmeasured",
         "settings": "default",
-        "clock_seconds_2000": 820540800,
         "sd_card_profile": "declared-blank-sdhc-default-speed-unmeasured",
         "sd_card_present": true,
         "sd_card_format": {

@@ -28,8 +28,7 @@
         "movrsz_ticks": 50000,
         "producer_data_profile": "xm1-150-declared-continuous-statistics-scene-unmeasured",
         "rectangle_profile": "xm1-150-declared-luma-rectangle-overlay-unmeasured",
-        "settings": "default",
-        "clock_seconds_2000": 0
+        "settings": "default"
       },
       "execution_scope": "emulator-only",
       "purpose": "rom_boot",

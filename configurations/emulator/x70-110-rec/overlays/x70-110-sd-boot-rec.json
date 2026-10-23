@@ -42,7 +42,6 @@
         "instructions_per_tick": 24,
         "face_register_mode": "retained_words",
         "settings": "default",
-        "clock_seconds_2000": 0,
         "rectangle_profile": "exr2-signed-ycbcr-rectangle-overlay-unmeasured"
       },
       "execution_scope": "emulator-only",
