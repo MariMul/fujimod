@@ -63,7 +63,8 @@ pub struct Options {
     pub nand: Option<PathBuf>,
     /// Sixteen-byte checksum-protected MCU persistent settings packet.
     pub settings: Option<PathBuf>,
-    /// Real-time clock in seconds since 2000-01-01, or the configuration's default.
+    /// Real-time clock in seconds since 2000-01-01, or
+    /// `DEFAULT_CLOCK_SECONDS_2000`.
     pub clock_seconds_2000: Option<u32>,
     /// Preferred BCP 47 language tags, in caller order.
     pub preferred_languages: Vec<String>,
@@ -706,7 +707,8 @@ pub struct InputBytes {
     pub nand: Option<Vec<u8>>,
     /// Sixteen-byte checksum-protected MCU persistent settings packet.
     pub settings: Option<Vec<u8>>,
-    /// Real-time clock in seconds since 2000-01-01, or the configuration's default.
+    /// Real-time clock in seconds since 2000-01-01, or
+    /// `DEFAULT_CLOCK_SECONDS_2000`.
     pub clock_seconds_2000: Option<u32>,
     /// Preferred BCP 47 language tags, in caller order.
     pub preferred_languages: Vec<String>,
@@ -1138,7 +1140,7 @@ fn setup_calendar(
         .map(u32::try_from)
         .transpose()
         .map_err(|_| "local clock exceeds u32")?
-        .unwrap_or(inputs.mcu.rtc.initial_seconds);
+        .unwrap_or(fujimod_catalog::configuration::DEFAULT_CLOCK_SECONDS_2000);
     let target = first_start::calendar(seconds);
     let read = |session: &Session| -> Result<([u16; 5], u8), String> {
         let mut bytes = [0; 8];

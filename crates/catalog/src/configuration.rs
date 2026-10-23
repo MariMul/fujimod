@@ -1037,7 +1037,13 @@ pub struct RunMcuInput {
     pub rtc: RunRtcInput,
 }
 
-/// RTC values supplied at the start of a run.
+/// Local wall time every run's real-time clock shows at power-on unless the run
+/// requests another, in seconds since 2000-01-01: 2026-10-11 02:13:20. The
+/// clock runs from power-on, as a camera's battery-backed clock does.
+pub const DEFAULT_CLOCK_SECONDS_2000: u32 = 845_000_000;
+
+/// RTC hardware of a run. It starts at the run's requested clock or
+/// `DEFAULT_CLOCK_SECONDS_2000`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -1048,8 +1054,6 @@ pub struct RunMcuInput {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct RunRtcInput {
-    /// Initial seconds in the device clock's declared epoch.
-    pub initial_seconds: u32,
     /// Virtual ticks per RTC second.
     pub ticks_per_second: u64,
     /// Maximum supported seconds in the device clock's epoch.
@@ -1060,7 +1064,7 @@ pub struct RunRtcInput {
 
 impl RunRtcInput {
     fn validate(&self) -> Result<(), String> {
-        if self.ticks_per_second == 0 || self.initial_seconds > self.maximum_seconds {
+        if self.ticks_per_second == 0 || DEFAULT_CLOCK_SECONDS_2000 > self.maximum_seconds {
             return Err("run RTC input has an invalid rate or range".into());
         }
         Ok(())

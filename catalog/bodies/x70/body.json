@@ -3142,7 +3142,6 @@
                             67,
                             68
                           ],
-                          "initial_seconds": 0,
                           "ticks_per_second": 12000000,
                           "maximum_seconds": 1609459199,
                           "started": 0

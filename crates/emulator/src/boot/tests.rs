@@ -296,9 +296,8 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
     assert_eq!(packet_value, 1);
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    exr2_inputs(&mut resolved).mcu.rtc.initial_seconds = 7;
     exr2_inputs(&mut resolved).mcu.rtc.ticks_per_second = 24_000_000;
-    exr2_inputs(&mut resolved).mcu.rtc.maximum_seconds = 9_999;
+    exr2_inputs(&mut resolved).mcu.rtc.maximum_seconds = 999_999_999;
     exr2_inputs(&mut resolved).mcu.rtc.started = 17;
     let rtc = prepared(resolved).unwrap();
     let rtc_route = usize::from(
@@ -311,9 +310,12 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
             .channel,
     );
     let clock = &model(&rtc, "serial_spi1")["routes"][rtc_route]["endpoint"]["options"]["clock"];
-    assert_eq!(clock["initial_seconds"], 7);
+    assert_eq!(
+        clock["initial_seconds"],
+        fujimod_catalog::configuration::DEFAULT_CLOCK_SECONDS_2000
+    );
     assert_eq!(clock["ticks_per_second"], 24_000_000);
-    assert_eq!(clock["maximum_seconds"], 9_999);
+    assert_eq!(clock["maximum_seconds"], 999_999_999);
     assert_eq!(clock["started"], 17);
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();

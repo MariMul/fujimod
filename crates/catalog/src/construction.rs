@@ -268,8 +268,6 @@ pub struct PanelOptions {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ConstructionOptionsClock"))]
 pub struct OptionsClock {
-    /// Declared initial seconds.
-    pub initial_seconds: u64,
     /// Declared maximum seconds.
     pub maximum_seconds: u64,
     /// Declared registers.

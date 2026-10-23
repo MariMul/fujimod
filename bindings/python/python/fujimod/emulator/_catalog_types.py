@@ -911,7 +911,6 @@ class ConstructionOptics(TypedDict, total=False):
 
 
 class ConstructionOptionsClock(TypedDict, total=False):
-    initial_seconds: Required[int]
     maximum_seconds: Required[int]
     registers: Required[list[int]]
     started: Required[int]
@@ -4296,7 +4295,6 @@ class RunRegisterValue(TypedDict, total=False):
 
 
 class RunRtcInput(TypedDict, total=False):
-    initial_seconds: Required[int]
     maximum_seconds: Required[int]
     started: Required[int]
     ticks_per_second: Required[int]

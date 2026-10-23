@@ -2119,12 +2119,6 @@
       "additionalProperties": false,
       "description": "Declared options clock facts.",
       "properties": {
-        "initial_seconds": {
-          "description": "Declared initial seconds.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
         "maximum_seconds": {
           "description": "Declared maximum seconds.",
           "format": "uint64",
@@ -2154,7 +2148,6 @@
         }
       },
       "required": [
-        "initial_seconds",
         "maximum_seconds",
         "registers",
         "started",

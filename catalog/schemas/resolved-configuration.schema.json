@@ -3833,12 +3833,6 @@
       "additionalProperties": false,
       "description": "Declared options clock facts.",
       "properties": {
-        "initial_seconds": {
-          "description": "Declared initial seconds.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
         "maximum_seconds": {
           "description": "Declared maximum seconds.",
           "format": "uint64",
@@ -3868,7 +3862,6 @@
         }
       },
       "required": [
-        "initial_seconds",
         "maximum_seconds",
         "registers",
         "started",
@@ -20022,14 +20015,8 @@
     },
     "RunRtcInput": {
       "additionalProperties": false,
-      "description": "RTC values supplied at the start of a run.",
+      "description": "RTC hardware of a run. It starts at the run's requested clock or\n`DEFAULT_CLOCK_SECONDS_2000`.",
       "properties": {
-        "initial_seconds": {
-          "description": "Initial seconds in the device clock's declared epoch.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
         "maximum_seconds": {
           "description": "Maximum supported seconds in the device clock's epoch.",
           "format": "uint32",
@@ -20050,7 +20037,6 @@
         }
       },
       "required": [
-        "initial_seconds",
         "ticks_per_second",
         "maximum_seconds",
         "started"
