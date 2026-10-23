@@ -33,11 +33,12 @@ development scenarios through `?scenario=x70-lcd` with a configured local DAT.
 
 Downloadable reports identify large buffers by hash and a bounded preview while
 retaining small register arrays and scalar diagnostics. They also include a
-`snapshot.bin` archive: the complete stopped machine, shared device resources,
-media, queued inputs, power state, presentation frames, and exact constructor
-document and binary inputs. After a fault the exporter chooses the newest healthy
-retained point, falling back to its reset point; `report.snapshot` records the
-chosen boundary and rejected candidates. Export does not rewind the live session.
+`snapshot.fujisnapshot` archive: the complete stopped machine, shared device
+resources, media, queued inputs, power state, presentation frames, and exact
+constructor document and binary inputs. After a fault the exporter chooses the
+newest healthy retained point, falling back to its reset point; `report.snapshot`
+records the chosen boundary and rejected candidates. Export does not rewind the
+live session.
 
 `Engine.exportSnapshot()` exports the current point. A fresh engine loads the
 bytes with `loadSnapshot(bytes, config, progress)`. The configuration supplies the

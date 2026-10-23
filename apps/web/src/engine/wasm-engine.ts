@@ -319,7 +319,7 @@ export class WasmEngine implements Engine {
         ),
       ],
     ];
-    if (exported.snapshot) files.push(['snapshot.bin', new Uint8Array(exported.snapshot)]);
+    if (exported.snapshot) files.push(['snapshot.fujisnapshot', new Uint8Array(exported.snapshot)]);
     return zipFiles(files);
   }
 

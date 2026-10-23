@@ -24,7 +24,8 @@ for (const type of [chromium, webkit]) {
     const waiting = page.waitForEvent('download');
     await page.getByRole('link', { name: 'Download snapshot' }).click();
     const download = await waiting;
-    const path = new URL(`${type.name()}.bin`, output).pathname;
+    assert.equal(download.suggestedFilename(), 'snapshot.fujisnapshot');
+    const path = new URL(`${type.name()}.fujisnapshot`, output).pathname;
     await download.saveAs(path);
     await page.close();
     const fresh = await context.newPage(),
@@ -32,6 +33,7 @@ for (const type of [chromium, webkit]) {
     fresh.on('request', (request) => requests.push(request.url()));
     fresh.on('pageerror', (error) => errors.push(error.message));
     await fresh.goto(new URL('/__wasm-snapshot?load', base).href);
+    assert.equal(await fresh.getByLabel('Load snapshot').getAttribute('accept'), '.fujisnapshot');
     await fresh.getByLabel('Load snapshot').setInputFiles(path);
     await fresh.waitForFunction(() => document.body?.dataset.proof, undefined, { timeout: 180000 });
     const resumedText = await fresh.locator('pre').innerText();
