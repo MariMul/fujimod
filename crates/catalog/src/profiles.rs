@@ -1530,6 +1530,8 @@ pub enum DeviceKind {
     AFExtractionControl,
     /// Approximate J P E G Encode Control.
     ApproximateJPEGEncodeControl,
+    /// H.264 initialization and sequence-start controller.
+    MovieEncoderControl,
     /// Banked Lens Controller.
     BankedLensController,
     /// Boot Controls.

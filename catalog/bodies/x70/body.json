@@ -972,6 +972,14 @@
               "refs": {}
             },
             {
+              "name": "movieencoder",
+              "kind": "MovieEncoderControl",
+              "boot_entries": [
+                "loader"
+              ],
+              "refs": {}
+            },
+            {
               "name": "jpegencoder",
               "kind": "ApproximateJPEGEncodeControl",
               "boot_entries": [
@@ -1041,6 +1049,7 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
+            "movieencoder",
             "jpegencoder",
             "rawreadback",
             "imagecombination"
@@ -1083,6 +1092,7 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
+            "movieencoder",
             "jpegencoder",
             "rawreadback",
             "imagecombination"
@@ -1870,6 +1880,14 @@
               "refs": {}
             },
             {
+              "name": "movieencoder",
+              "kind": "MovieEncoderControl",
+              "boot_entries": [
+                "loader"
+              ],
+              "refs": {}
+            },
+            {
               "name": "jpegencoder",
               "kind": "ApproximateJPEGEncodeControl",
               "boot_entries": [
@@ -1939,6 +1957,7 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
+            "movieencoder",
             "jpegencoder",
             "rawreadback",
             "imagecombination"
@@ -1981,6 +2000,7 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
+            "movieencoder",
             "jpegencoder",
             "rawreadback",
             "imagecombination"
@@ -4663,6 +4683,14 @@
               "refs": {}
             },
             {
+              "name": "movieencoder",
+              "kind": "MovieEncoderControl",
+              "boot_entries": [
+                "loader"
+              ],
+              "refs": {}
+            },
+            {
               "name": "jpegencoder",
               "kind": "ApproximateJPEGEncodeControl",
               "boot_entries": [
@@ -4732,6 +4760,7 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
+            "movieencoder",
             "jpegencoder",
             "rawreadback",
             "imagecombination"
@@ -4774,6 +4803,7 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
+            "movieencoder",
             "jpegencoder",
             "rawreadback",
             "imagecombination"

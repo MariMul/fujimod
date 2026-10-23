@@ -2863,6 +2863,25 @@
         },
         {
           "additionalProperties": false,
+          "description": "H.264 configuration and sequence-start controller.",
+          "properties": {
+            "irq": {
+              "$ref": "#/$defs/ConstructionCore",
+              "description": "Sequence notice interrupt."
+            },
+            "kind": {
+              "const": "video-encoder",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "irq"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "parameters hardware.",
           "properties": {
             "bank": {
@@ -5087,6 +5106,11 @@
         {
           "const": "ApproximateJPEGEncodeControl",
           "description": "Approximate J P E G Encode Control.",
+          "type": "string"
+        },
+        {
+          "const": "MovieEncoderControl",
+          "description": "H.264 initialization and sequence-start controller.",
           "type": "string"
         },
         {

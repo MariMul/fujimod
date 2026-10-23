@@ -650,6 +650,7 @@ type ConstructionModel = (
     | ConstructionModelVariant37
     | ConstructionModelVariant38
     | ConstructionModelVariant39
+    | ConstructionModelVariant40
 )
 
 
@@ -777,18 +778,18 @@ class ConstructionModelVariant26(TypedDict, total=False):
 
 
 class ConstructionModelVariant27(TypedDict, total=False):
+    irq: Required[ConstructionCore]
+    kind: Required[Literal["video-encoder"]]
+
+
+class ConstructionModelVariant28(TypedDict, total=False):
     bank: Required[str]
     kind: Required[Literal["parameters"]]
 
 
-class ConstructionModelVariant28(TypedDict, total=False):
+class ConstructionModelVariant29(TypedDict, total=False):
     kind: Required[Literal["phase-detection"]]
     routes: Required[str]
-
-
-class ConstructionModelVariant29(TypedDict, total=False):
-    gpio: Required[str]
-    kind: Required[Literal["power"]]
 
 
 class ConstructionModelVariant3(TypedDict, total=False):
@@ -796,58 +797,63 @@ class ConstructionModelVariant3(TypedDict, total=False):
 
 
 class ConstructionModelVariant30(TypedDict, total=False):
-    kind: Required[Literal["reset"]]
+    gpio: Required[str]
+    kind: Required[Literal["power"]]
 
 
 class ConstructionModelVariant31(TypedDict, total=False):
-    kind: Required[Literal["scanout"]]
+    kind: Required[Literal["reset"]]
 
 
 class ConstructionModelVariant32(TypedDict, total=False):
+    kind: Required[Literal["scanout"]]
+
+
+class ConstructionModelVariant33(TypedDict, total=False):
     kind: Required[Literal["sdhci-clocks"]]
     words: Required[list[list[int]]]
 
 
-class ConstructionModelVariant33(TypedDict, total=False):
+class ConstructionModelVariant34(TypedDict, total=False):
     irq: Required[ConstructionIrqs]
     kind: Required[Literal["sdio-host"]]
     module: Required[ConstructionModule]
 
 
-class ConstructionModelVariant34(TypedDict, total=False):
+class ConstructionModelVariant35(TypedDict, total=False):
     kind: Required[Literal["serial-audio"]]
     sinks: Required[list[ConstructionEmpty]]
 
 
-class ConstructionModelVariant35(TypedDict, total=False):
+class ConstructionModelVariant36(TypedDict, total=False):
     kind: Required[Literal["serial-dma"]]
 
 
-class ConstructionModelVariant36(TypedDict, total=False):
+class ConstructionModelVariant37(TypedDict, total=False):
     kind: Required[Literal["spi-controller"]]
     routes: Required[list[ConstructionRoutes]]
 
 
-class ConstructionModelVariant37(TypedDict, total=False):
+class ConstructionModelVariant38(TypedDict, total=False):
     frames: Required[str]
     images: Required[str]
     kind: Required[Literal["statistics"]]
     routes: Required[str]
 
 
-class ConstructionModelVariant38(TypedDict, total=False):
+class ConstructionModelVariant39(TypedDict, total=False):
     cable: Required[str]
     endpoints: NotRequired[str | None]
     kind: Required[Literal["usb"]]
 
 
-class ConstructionModelVariant39(TypedDict, total=False):
-    controllers: Required[list[str]]
-    kind: Required[Literal["vector-gpu"]]
-
-
 class ConstructionModelVariant4(TypedDict, total=False):
     kind: Required[Literal["clocks"]]
+
+
+class ConstructionModelVariant40(TypedDict, total=False):
+    controllers: Required[list[str]]
+    kind: Required[Literal["vector-gpu"]]
 
 
 class ConstructionModelVariant5(TypedDict, total=False):
@@ -1263,6 +1269,7 @@ type DeviceKind = Literal[
     "LensHomingFixture",
     "AFExtractionControl",
     "ApproximateJPEGEncodeControl",
+    "MovieEncoderControl",
     "BankedLensController",
     "BootControls",
     "ControlBus",

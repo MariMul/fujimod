@@ -697,6 +697,12 @@ pub enum ConstructionModel {
         /// routes.
         routes: String,
     },
+    /// H.264 configuration and sequence-start controller.
+    #[serde(rename = "video-encoder")]
+    VideoEncoder {
+        /// Sequence notice interrupt.
+        irq: Core,
+    },
     /// parameters hardware.
     #[serde(rename = "parameters")]
     Parameters {
