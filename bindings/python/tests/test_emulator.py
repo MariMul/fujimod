@@ -77,11 +77,12 @@ NATIVE_EXPORTS = frozenset({
     "PYO3_VERSION",
     "VIRTUAL_SCENE_PROFILE",
     "STATISTICS_PROFILE",
+    "settings_header",
 })
 
 
 def test_emulator_is_a_nested_native_module_with_complete_exports() -> None:
-    assert len(NATIVE_EXPORTS) == 54
+    assert len(NATIVE_EXPORTS) == 55
     importlib.import_module("fujimod")
     assert importlib.import_module("fujimod.catalog") is catalog
     assert importlib.import_module("fujimod.usb") is usb
@@ -248,6 +249,8 @@ def test_board_from_inputs_forwards_ordered_overlay_ids(monkeypatch: pytest.Monk
             "boot_rom": "boot.rom",
             "nand": None,
             "settings": None,
+            "clock_seconds_2000": None,
+            "preferred_languages": [],
         }
     ]
     board.close()
@@ -343,7 +346,9 @@ def test_failure_poll_does_not_materialize_device_snapshots() -> None:
         _ = board.failure
 
 
-def test_session_facade_validates_inputs_and_returns_typed_observations() -> None:
+def test_session_facade_validates_inputs_and_returns_typed_observations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     contacts: list[tuple[str, str | None, bool]] = []
 
     class Native:
@@ -404,6 +409,7 @@ def test_session_facade_validates_inputs_and_returns_typed_observations() -> Non
     board._boot_capable = False
     board.quantum = 1
     board.cpus = ()
+    monkeypatch.setattr(board_module, "_native", SimpleNamespace(Board=Native))
     session = Session(board)
 
     assert session.adc_samples("adc0") == (0, 1023)
