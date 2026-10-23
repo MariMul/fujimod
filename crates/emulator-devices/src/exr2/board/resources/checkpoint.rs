@@ -1,4 +1,5 @@
 //! The graph owns shared wire identities. Restore their values in place.
+mod portable;
 use super::*;
 use crate::checkpoint::Checkpoint;
 
@@ -258,6 +259,9 @@ impl Resources {
         ) = saved.media.decode("resource-media")?;
         same_keys(&self.inputs.cards, &cards)?;
         same_keys(&self.inputs.files, &files)?;
+        for card in cards.values() {
+            card.validate()?;
+        }
         for v in saved.nands.values() {
             crate::parts::nand::Nand::from_checkpoint(v)?;
         }
