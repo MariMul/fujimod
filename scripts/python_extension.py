@@ -46,7 +46,8 @@ def main() -> None:
             [
                 maturin,
                 "build",
-                "--release",
+                "--profile",
+                "iterate",
                 "--manifest-path",
                 "bindings/python/Cargo.toml",
                 "--features",

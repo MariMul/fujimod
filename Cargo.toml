@@ -78,6 +78,20 @@ lto = "thin"
 codegen-units = 16
 incremental = true
 
+# Optimized development builds: FujiMod crates at opt-level 2 without LTO and
+# with incremental compilation, dependencies at opt-level 3. A device edit
+# rebuilds the X70 boot binary in about 9 CPU seconds instead of 260 for
+# release; the boot runs about 5% slower. Use release for timings and wheels.
+[profile.iterate]
+inherits = "release"
+opt-level = 2
+lto = "off"
+codegen-units = 256
+incremental = true
+
+[profile.iterate.package."*"]
+opt-level = 3
+
 # Optimized native profiling without selecting Cargo's release profile.
 # Tests retain the default development assertions and overflow checks.
 [profile.performance]
