@@ -148,6 +148,7 @@ struct Load {
 
 pub struct Session {
     pub(super) construction: Option<super::snapshot::Construction>,
+    pub(super) capture_order: std::cell::Cell<u64>,
     pub core: fujimod_emulator::session::Session,
     pub(super) reset_image: Option<Arc<fujimod_emulator::session::checkpoint::Snapshot>>,
     pub(super) powered_on: bool,
@@ -325,6 +326,7 @@ impl Session {
         board.set_execution_policy(policy)?;
         let mut session = Self {
             construction: Some(construction),
+            capture_order: std::cell::Cell::new(1),
             core: fujimod_emulator::session::Session {
                 xp5: None,
                 definition,

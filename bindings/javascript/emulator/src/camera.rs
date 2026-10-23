@@ -524,6 +524,7 @@ impl Session {
         }
         let mut session = Self {
             construction: None,
+            capture_order: std::cell::Cell::new(1),
             core,
             reset_image: None,
             powered_on: true,

@@ -37,6 +37,7 @@ fn boundary(value: Boundary) -> Value {
 
 #[derive(Clone)]
 pub(super) struct Presentation {
+    pub order: u64,
     pub boundary: Boundary,
     pub frames: BTreeMap<usize, Arc<Frame>>,
     pub powered_on: bool,
@@ -105,14 +106,13 @@ impl Session {
                     },
                     frames: Default::default(),
                     powered_on: true,
+                    order: 0,
                 },
             ));
         }
-        candidates.sort_by(|a, b| {
-            b.1.now()
-                .cmp(&a.1.now())
-                .then_with(|| b.1.instruction_counts().cmp(a.1.instruction_counts()))
-        });
+        // Capture order also distinguishes input-only points within one tick,
+        // and a new branch after rewinding past a retained explicit checkpoint.
+        candidates.sort_by_key(|(_, _, presentation)| std::cmp::Reverse(presentation.order));
         for (source, saved, presentation) in candidates {
             let encoded = match saved.failure() {
                 Some(error) => Err(format!("saved execution failed: {error}")),
@@ -134,11 +134,18 @@ impl Session {
         Ok(json!({"report":report}))
     }
     pub(super) fn presentation(&self) -> Presentation {
+        let order = self.next_capture_order();
         Presentation {
+            order,
             boundary: Boundary::capture(&self.core),
             frames: self.frames.clone(),
             powered_on: self.powered_on,
         }
+    }
+    fn next_capture_order(&self) -> u64 {
+        let order = self.capture_order.get();
+        self.capture_order.set(order.saturating_add(1));
+        order
     }
     pub(super) fn collect_frames(&mut self) {
         for frame in self.core.board.take_frames() {
@@ -198,9 +205,11 @@ impl Session {
         Ok(result)
     }
     pub(super) fn mark_input(&mut self, input: &Input) -> Result<(), String> {
+        let order = self.next_capture_order();
         if let Some(history) = self.history.as_mut() {
             if history.core.mark_automatic(&self.core, input)? {
                 history.marks.push_back(Presentation {
+                    order,
                     boundary: Boundary::capture(&self.core),
                     frames: self.frames.clone(),
                     powered_on: self.powered_on,
@@ -406,5 +415,42 @@ mod tests {
             session.undo().unwrap();
             assert_eq!(session.frames[&0].sequence, sequence);
         }
+    }
+    #[test]
+    fn report_selects_the_latest_capture_when_inputs_do_not_advance_the_guest() {
+        let mut session = session(ExecutionPolicy::Interactive);
+        frame(&mut session, 1);
+        session.checkpoint(1).unwrap();
+        session
+            .mark_input(&Input::Run {
+                instructions: 0,
+                quantum: 17,
+                pause_after: None,
+                until: None,
+            })
+            .unwrap();
+        frame(&mut session, 2);
+        session.checkpoint(1).unwrap();
+        session.failed = true;
+        let report = session.error_report().unwrap();
+        assert_eq!(report["report"]["snapshot"]["source"], "checkpoint");
+        let restored = Session::load_snapshot(&session.result_bytes).unwrap();
+        assert_eq!(restored.frames[&0].sequence, 2);
+    }
+    #[test]
+    fn report_selection_follows_the_current_branch_after_rewind() {
+        let mut session = session(ExecutionPolicy::Interactive);
+        let cold = session.checkpoint(1).unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        session.run(20).unwrap();
+        session.checkpoint(1).unwrap();
+        session.restore_checkpoint(&cold).unwrap();
+        session.run(10).unwrap();
+        session.failed = true;
+        let report = session.error_report().unwrap();
+        assert_eq!(report["report"]["snapshot"]["source"], "history");
+        assert_eq!(report["report"]["snapshot"]["tick"], "0");
     }
 }
