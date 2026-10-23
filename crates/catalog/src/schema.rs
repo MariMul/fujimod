@@ -42,6 +42,10 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         schema::<crate::bulk::FirmwareBulk>(crate::bulk::BULK_SCHEMA_URI),
     );
     documents.insert(
+        "progress.generated.schema.json",
+        schema::<crate::progress::FirmwareProgress>(crate::progress::PROGRESS_SCHEMA_URI),
+    );
+    documents.insert(
         "first-start.generated.schema.json",
         schema::<crate::first_start::FirstStartMenu>(crate::first_start::FIRST_START_SCHEMA_URI),
     );

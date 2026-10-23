@@ -1,185 +1,143 @@
-import { For } from 'solid-js';
-import type { Firmware } from '../catalog';
-import { Icon } from '@fujimod/emulator-ui/ui/icons';
+import { For, Show } from 'solid-js';
+import { phases, started, status, type FirmwareProgress, type Phase } from './camera-progress';
+import './cameras.css';
 export interface Generation {
   name: string;
   years: string;
   models: string[];
 }
-export interface CameraSupport {
-  firmware: Firmware;
-  mod: boolean;
-  emu: boolean;
+/** Placeholder until each camera has its own page. */
+const CONTRIBUTE = 'dev-tools/';
+/** Letters whose names start with a vowel sound take "an": an X-E2, an F… */
+const AN = /^[AEFHILMNORSX]/;
+function help(model: string, phase: Phase) {
+  if (phase.id !== 'camera' || phase.fraction === 1) return undefined;
+  if (phase.fraction) return `Help test on your ${model}`;
+  return `Have ${AN.test(model) ? 'an' : 'a'} ${model}? Help test it`;
 }
-function Chips(props: { camera: CameraSupport }) {
+function Segment(props: { model: string; phase: Phase }) {
   return (
-    <>
-      <For each={props.camera.mod ? [true] : []}>
-        {() => (
-          <span class="chip mod">
-            <img src="brand.png" alt="Fujimod" />
-          </span>
-        )}
-      </For>
-      <For each={props.camera.emu ? [true] : []}>
-        {() => (
-          <span
-            class={['chip emu', { early: props.camera.firmware.emulate?.maturity === 'early' }]}
-            aria-label={
-              props.camera.firmware.emulate?.maturity === 'early'
-                ? 'Early emulation support'
-                : 'Emulation supported'
-            }
-            title={
-              props.camera.firmware.emulate?.maturity === 'early'
-                ? 'Early emulation support'
-                : 'Emulation supported'
-            }
-          >
-            EMU
-          </span>
-        )}
-      </For>
-    </>
-  );
-}
-function FirmwareLink(props: { camera: CameraSupport }) {
-  return (
-    <a
-      class="getfw"
-      href={props.camera.firmware.download_url}
-      target="_blank"
-      rel="noopener noreferrer"
+    <li
+      class="phase"
+      tabindex="0"
+      style={{
+        '--w': String(props.phase.weight),
+        '--p': `${props.phase.fraction * 100}%`,
+        '--c': `var(--phase-${props.phase.id})`,
+      }}
+      aria-label={`${props.phase.label}: ${props.phase.value}`}
     >
-      Firmware
-      <Icon name="external" size={11} />
-    </a>
+      <div class="track">
+        <div class="fill" />
+      </div>
+      <div class="tip">
+        <div class="tip-label">{props.phase.label}</div>
+        <div class="tip-value">
+          {props.phase.id === 'camera' && !props.phase.fraction
+            ? 'Needs an owner'
+            : props.phase.value}
+        </div>
+        <ul>
+          <For each={props.phase.steps}>
+            {(step) => <li class={{ todo: !step.done }}>{step.label}</li>}
+          </For>
+        </ul>
+        <Show when={help(props.model, props.phase)}>
+          {(text) => (
+            <a class="help" href={CONTRIBUTE}>
+              {text()}
+            </a>
+          )}
+        </Show>
+      </div>
+    </li>
   );
 }
-function EmulateButton(props: { camera: CameraSupport; emulate: (firmware: Firmware) => void }) {
+function ProgressRow(props: { progress: FirmwareProgress }) {
+  const list = () => phases(props.progress);
   return (
-    <For each={props.camera.emu ? [true] : []}>
-      {() => (
-        <button
-          class="getfw"
-          type="button"
-          aria-label={`Try ${props.camera.firmware.model} emulator`}
-          onClick={() => props.emulate(props.camera.firmware)}
-        >
-          Try emulator
-        </button>
-      )}
-    </For>
-  );
-}
-export function CameraCard(props: {
-  camera: CameraSupport;
-  emulate: (firmware: Firmware) => void;
-}) {
-  return (
-    <div class="body">
-      <span class="nm">{props.camera.firmware.model}</span>
-      <Chips camera={props.camera} />
-      <FirmwareLink camera={props.camera} />
-      <EmulateButton camera={props.camera} emulate={props.emulate} />
+    <div class="progress-row">
+      <div class="progress-heading">
+        <span class="name">{props.progress.model}</span>
+        <span class="version">{props.progress.version}</span>
+        <span class="detail">{status(list())}</span>
+      </div>
+      <ul class="bar" aria-label={`${props.progress.model} progress`}>
+        <For each={list()}>{(phase) => <Segment model={props.progress.model} phase={phase} />}</For>
+      </ul>
     </div>
   );
 }
-function GenerationGroup(props: {
-  group: Generation;
-  cameras: CameraSupport[];
-  emulate: (firmware: Firmware) => void;
-}) {
-  const supported = () =>
-    props.cameras.filter(
-      (camera) =>
-        props.group.models.includes(camera.firmware.model) ||
-        camera.firmware.processor === props.group.name,
-    );
-  const remaining = () =>
-    props.group.models.filter(
-      (name) => !supported().some((camera) => camera.firmware.model === name),
-    );
+function GenerationGroup(props: { group: Generation; progress: Record<string, FirmwareProgress> }) {
+  const rows = () =>
+    props.group.models.flatMap((model) => {
+      const progress = props.progress[model];
+      return progress && started(progress) ? [progress] : [];
+    });
+  const rest = () =>
+    props.group.models.filter((model) => !rows().some((row) => row.model === model));
   return (
     <div class="gen">
       <h4>
         {props.group.name}
         <span>{props.group.years}</span>
       </h4>
-      <For each={supported()}>
-        {(camera) => (
-          <div class="cam">
-            <div class="n">
-              <span>{camera.firmware.model}</span>
-              <Chips camera={camera} />
-              <FirmwareLink camera={camera} />
-              <EmulateButton camera={camera} emulate={props.emulate} />
-            </div>
-          </div>
-        )}
-      </For>
-      <For each={remaining().length ? [true] : []}>
-        {() => (
-          <div class="rest">
-            <b>NOT SUPPORTED YET</b>
-            {remaining().join(' · ')}
-          </div>
-        )}
-      </For>
+      <For each={rows()}>{(progress) => <ProgressRow progress={progress} />}</For>
+      <Show when={rest().length}>
+        <div class="rest">
+          <b>Not started</b>
+          {rest().join(' · ')}
+        </div>
+      </Show>
     </div>
   );
 }
+const LEGEND: Phase['id'][] = ['emulator', 'camera', 'mods', 'sd-card'];
+const LEGEND_LABELS: Record<Phase['id'], string> = {
+  emulator: 'Emulator',
+  camera: 'Camera',
+  mods: 'Mods',
+  'sd-card': 'SD card',
+};
 export function CameraTable(props: {
   columns: Generation[][];
-  cameras: CameraSupport[];
-  emulate: (firmware: Firmware) => void;
+  progress: Record<string, FirmwareProgress>;
 }) {
+  const listed = () => new Set(props.columns.flat().flatMap((group) => group.models));
   const unlisted = () =>
-    props.cameras.filter(
-      (camera) =>
-        !props.columns
-          .flat()
-          .some(
-            (group) =>
-              group.models.includes(camera.firmware.model) ||
-              camera.firmware.processor === group.name,
-          ),
-    );
+    Object.values(props.progress)
+      .filter((progress) => !listed().has(progress.model) && started(progress))
+      .map((progress) => progress.model)
+      .sort();
   return (
     <section class="gens" id="camera-table" aria-labelledby="cameras-heading">
-      <h2 class="section-heading" id="cameras-heading">Cameras</h2>
+      <div class="cameras-head">
+        <h2 class="section-heading" id="cameras-heading">
+          Cameras
+        </h2>
+        <ul class="legend" aria-label="Phases">
+          <For each={LEGEND}>
+            {(id) => <li style={{ '--c': `var(--phase-${id})` }}>{LEGEND_LABELS[id]}</li>}
+          </For>
+        </ul>
+      </div>
       <For each={props.columns}>
         {(groups) => (
           <div class="col">
             <For each={groups}>
-              {(group) => (
-                <GenerationGroup group={group} cameras={props.cameras} emulate={props.emulate} />
-              )}
+              {(group) => <GenerationGroup group={group} progress={props.progress} />}
             </For>
           </div>
         )}
       </For>
-      <For
-        each={[
-          ...new Set(unlisted().map((camera) => camera.firmware.processor || 'Other cameras')),
-        ]}
-      >
-        {(processor) => (
-          <div class="col">
-            <GenerationGroup
-              group={{
-                name: processor,
-                years: '',
-                models: unlisted()
-                  .filter((camera) => (camera.firmware.processor || 'Other cameras') === processor)
-                  .map((camera) => camera.firmware.model),
-              }}
-              cameras={unlisted()}
-              emulate={props.emulate}
-            />
-          </div>
-        )}
-      </For>
+      <Show when={unlisted().length}>
+        <div class="col">
+          <GenerationGroup
+            group={{ name: 'Other cameras', years: '', models: unlisted() }}
+            progress={props.progress}
+          />
+        </div>
+      </Show>
     </section>
   );
 }

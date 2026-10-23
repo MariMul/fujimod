@@ -1,6 +1,6 @@
 import { For, Show, createSignal } from 'solid-js';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
-import type { CameraSupport } from '../ui/cameras';
+import type { CameraSupport } from '../home/state';
 import bodies from '../../data/cameras.json';
 import type { CameraRecord } from './store';
 import './launcher.css';

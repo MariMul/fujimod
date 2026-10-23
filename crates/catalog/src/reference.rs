@@ -2414,6 +2414,7 @@ pub struct ReferenceCatalog {
     first_start: BTreeMap<String, crate::first_start::FirstStartMenu>,
     bulk: BTreeMap<String, crate::bulk::FirmwareBulk>,
     settings: BTreeMap<String, crate::settings::FirmwareSettings>,
+    progress: BTreeMap<String, crate::progress::FirmwareProgress>,
 }
 
 impl ReferenceCatalog {
@@ -2533,6 +2534,11 @@ impl ReferenceCatalog {
         self.firmwares.get(id)
     }
 
+    /// Return a firmware's recorded bring-up progress.
+    pub fn progress(&self, firmware_id: &str) -> Option<&crate::progress::FirmwareProgress> {
+        self.progress.get(firmware_id)
+    }
+
     /// Return a body's hand-authored physical controls.
     pub fn physical_controls(&self, body_id: &str) -> Option<&crate::controls::PhysicalControls> {
         self.physical_controls.get(body_id)
@@ -2569,6 +2575,10 @@ impl ReferenceCatalog {
                 let value: crate::settings::FirmwareSettings = decode(bytes, path)?;
                 value.validate()?;
                 insert_unique(&mut self.settings, value.firmware_id.clone(), value, path)
+            }
+            ReferenceKind::Progress => {
+                let value: crate::progress::FirmwareProgress = decode(bytes, path)?;
+                insert_unique(&mut self.progress, value.firmware_id.clone(), value, path)
             }
             ReferenceKind::Bulk => {
                 let value: crate::bulk::FirmwareBulk = decode(bytes, path)?;
@@ -2623,6 +2633,13 @@ impl ReferenceCatalog {
             if !self.firmwares.contains_key(firmware_id) {
                 return Err(format!(
                     "settings layout refers to missing firmware {firmware_id}"
+                ));
+            }
+        }
+        for firmware_id in self.progress.keys() {
+            if !self.firmwares.contains_key(firmware_id) {
+                return Err(format!(
+                    "progress refers to missing firmware {firmware_id}"
                 ));
             }
         }
@@ -3115,6 +3132,7 @@ enum ReferenceKind {
     FirstStart,
     Bulk,
     Settings,
+    Progress,
 }
 
 impl ReferenceKind {
@@ -3133,6 +3151,7 @@ impl ReferenceKind {
             Some("first-start.generated.json") => Ok(Self::FirstStart),
             Some("bulk.generated.json") => Ok(Self::Bulk),
             Some("settings.generated.json") => Ok(Self::Settings),
+            Some("progress.generated.json") => Ok(Self::Progress),
             _ => Err(format!("{} is not a firmware document", path.display())),
         }
     }

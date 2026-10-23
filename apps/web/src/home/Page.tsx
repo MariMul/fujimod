@@ -5,6 +5,7 @@ import { createHomeState } from './state';
 import { startHome, type HomeController } from './controller';
 import { FaultPanel } from '@fujimod/emulator-ui/ui/fault';
 import { CameraTable } from '../ui/cameras';
+import { byModel, type FirmwareProgress } from '../ui/camera-progress';
 import { PersonalNote } from '../ui/personal-note';
 import { FeatureCatalog } from './Features';
 import { FirmwareChoice, createFirmwareChoice } from '../ui/firmware-actions';
@@ -14,6 +15,16 @@ import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import generations from '../../devices/generations.json';
 import '../home/site.css';
 import '../navigation.css';
+
+/** Latest recorded bring-up progress, assembled from the catalog at build time. */
+const cameraProgress = byModel(
+  Object.values(
+    import.meta.glob<FirmwareProgress>('../../../../catalog/firmware/*/*/progress.generated.json', {
+      eager: true,
+      import: 'default',
+    }),
+  ),
+);
 
 export default function Home() {
   const [state, setState] = createHomeState();
@@ -155,11 +166,7 @@ export default function Home() {
               }}
             />
           </EmulatorWorkspace>
-          <CameraTable
-            columns={generations}
-            cameras={state.cameras}
-            emulate={(firmware) => runtime()?.selectFirmware(firmware)}
-          />
+          <CameraTable columns={generations} progress={cameraProgress} />
         </main>
         <footer id="preview-credit" hidden={!state.idle}>
           <Show when={state.previewCredit}>

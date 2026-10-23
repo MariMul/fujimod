@@ -74,12 +74,9 @@ try {
     try {
       console.log(`${firmware.id}: opening website`);
       await page.goto(url);
-      console.log(`${firmware.id}: selecting firmware`);
-      const chooser = page.waitForEvent('filechooser');
-      await page
-        .getByRole('button', { name: `Try ${firmware.model} emulator`, exact: true })
-        .click();
       console.log(`${firmware.id}: choosing DAT`);
+      const chooser = page.waitForEvent('filechooser');
+      await page.locator('#firmware-prompt').click();
       await (await chooser).setFiles(files[firmware.id]);
       console.log(`${firmware.id}: waiting for cold boot`);
       await page.waitForFunction(

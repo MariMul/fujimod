@@ -1,39 +1,45 @@
-/** Check the served catalog's badges and launch actions in the camera table. */
+/** Check the camera progress table against the catalog's generated progress documents. */
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
-import type { Catalog } from '../src/catalog';
+import { glob, mkdir, readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { byModel, phases, started, type FirmwareProgress } from '../src/ui/camera-progress.ts';
 
 const url = process.env.FUJIMOD_WEB_URL;
 const output = process.env.FUJIMOD_TEST_OUTPUT;
 if (!url || !output) throw Error('Set the web URL and screenshot output directory.');
+const catalog = fileURLToPath(new URL('../../../catalog/firmware/', import.meta.url));
+const documents: FirmwareProgress[] = [];
+for await (const path of glob('*/*/progress.generated.json', { cwd: catalog }))
+  documents.push(JSON.parse(await readFile(catalog + path, 'utf8')));
+const expected = Object.values(byModel(documents)).filter(started);
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1500, height: 1100 } });
   await page.context().routeWebSocket('**/*', () => {});
-  const response = await page.request.get(new URL('runtime/catalog.json', url).href);
-  assert.equal(response.status(), 200);
-  const catalog: Catalog = await response.json();
   await page.goto(new URL('#camera-table', url).href);
-  await page.waitForFunction(() => performance.getEntriesByName('camera-catalog-ready').length);
-  const expected = catalog.firmwares.filter((firmware) => firmware.emulate);
-  for (const firmware of expected) {
-    const row = page.locator('.cam').filter({
-      has: page.getByRole('button', { name: `Try ${firmware.model} emulator`, exact: true }),
-    });
-    assert.equal(await row.count(), 1, firmware.id);
-    assert.equal(await row.locator('.chip.emu').count(), 1, firmware.id);
-    assert.equal(
-      await row.locator('.chip.emu.early').count(),
-      Number(firmware.emulate?.maturity === 'early'),
-      firmware.id,
-    );
-    assert.equal(await row.getByRole('button').isEnabled(), true, firmware.id);
+  const rows = page.locator('#camera-table .progress-row');
+  assert.equal(await rows.count(), expected.length);
+  for (const progress of expected) {
+    const row = rows.filter({ has: page.getByText(progress.model, { exact: true }) });
+    assert.equal(await row.count(), 1, progress.model);
+    const list = phases(progress);
+    for (const [index, phase] of list.entries()) {
+      const segment = row.locator('.phase').nth(index);
+      await segment.hover();
+      const tip = segment.locator('.tip');
+      await tip.waitFor({ state: 'visible' });
+      assert.equal(await tip.locator('.tip-label').innerText(), phase.label, progress.model);
+      assert.equal(
+        await tip.locator('li:not(.todo)').count(),
+        phase.steps.filter((step) => step.done).length,
+        `${progress.model} ${phase.label}`,
+      );
+    }
   }
-  assert.equal(await page.locator('.chip.emu').count(), expected.length);
-  await page.locator('#camera-table').screenshot({ path: `${output}/catalog.png` });
-  console.log(`${expected.length} catalog cameras: badges and launch actions verified at ${url}`);
+  await page.locator('#camera-table').screenshot({ path: `${output}/camera-progress.png` });
+  console.log(`${expected.length} started cameras: progress rows and popovers verified at ${url}`);
 } finally {
   await browser.close();
 }

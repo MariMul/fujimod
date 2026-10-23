@@ -419,27 +419,6 @@ export function startHome(
       if (current === generation && !(error instanceof EngineError)) showFault(faultFrom(error));
     }
   }
-  async function tryFirmware(firmware: Firmware) {
-    manualSelection = true;
-    if (__FUJIMOD_LOCAL_DAT__) {
-      const reload = async () => {
-        const response = await cachedFetch(`/local/firmware/${firmware.id}.dat`);
-        if (!response.ok) return undefined;
-        return new File([await response.arrayBuffer()], `${firmware.id}.DAT`);
-      };
-      const file = await reload();
-      if (file) {
-        await processFile(file, false, undefined, async () => {
-          const file = await reload();
-          if (!file) throw Error('The local firmware could not be read.');
-          return file;
-        });
-        return;
-      }
-    }
-    status(`Choose the ${firmware.model} firmware DAT`);
-    refs.file.click();
-  }
   function storageStatus(message: string, error = false) {
     setState((s) => {
       s.storageMessage = message;
@@ -628,9 +607,6 @@ export function startHome(
     openCamera,
     newCamera,
     closeCamera,
-    selectFirmware: (firmware: Firmware) => {
-      void tryFirmware(firmware).catch((error) => showFault(faultFrom(error)));
-    },
     selectFile: (file?: File) => {
       manualSelection = true;
       void processFile(file);

@@ -1,0 +1,238 @@
+#camera-table {
+  /* Dark categorical slots 1–4, validated for color-vision deficiency on black. */
+  --phase-emulator: #3987e5;
+  --phase-camera: #d95926;
+  --phase-mods: #199e70;
+  --phase-sd-card: #c98500;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
+  gap: 32px 40px;
+}
+#camera-table .cameras-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: -12px;
+}
+#camera-table .legend {
+  display: flex;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  color: var(--dim);
+}
+#camera-table .legend li::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+  background: var(--c);
+}
+#camera-table .gen h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+#camera-table .gen h4 span {
+  color: var(--dim);
+  font-weight: 400;
+  margin-left: 6px;
+}
+#camera-table .col .gen + .gen {
+  margin-top: 28px;
+}
+.progress-row {
+  padding-top: 6px;
+}
+.progress-row .progress-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.progress-row .name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.progress-row .version {
+  font-size: 11px;
+  color: var(--faint);
+}
+.progress-row .detail {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The same 4px track as the emulator's loading bar. */
+.progress-row .bar {
+  display: flex;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.progress-row .phase {
+  position: relative;
+  flex: var(--w) 1 0;
+  padding: 7px 0 9px; /* hit target taller than the mark */
+  outline: none;
+}
+.progress-row .track {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  background: rgb(118 118 128 / 24%);
+  overflow: hidden;
+  transition: opacity 120ms;
+}
+.progress-row .fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--p);
+  background: var(--c);
+  transition: filter 120ms;
+}
+.progress-row .bar:hover .track,
+.progress-row .bar:focus-within .track {
+  opacity: 0.45;
+}
+.progress-row .phase:hover .track,
+.progress-row .phase:focus-within .track {
+  opacity: 1;
+}
+.progress-row .phase:hover .fill,
+.progress-row .phase:focus-within .fill {
+  filter: brightness(1.2);
+}
+.progress-row .phase:focus-visible .track {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.progress-row .tip {
+  position: absolute;
+  z-index: 2;
+  bottom: calc(100% - 4px);
+  left: 50%;
+  width: 220px;
+  translate: -50% 0;
+  padding: 10px 12px 11px;
+  border-radius: 12px;
+  background: rgb(44 44 46 / 92%);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow:
+    0 0 0 0.5px rgb(255 255 255 / 12%) inset,
+    0 10px 30px rgb(0 0 0 / 55%);
+  font-size: 12px;
+  line-height: 1.45;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  transition:
+    opacity 140ms,
+    transform 140ms,
+    visibility 0s 140ms;
+}
+.progress-row .phase:first-child .tip {
+  left: 0;
+  translate: 0 0;
+}
+.progress-row .phase:last-child .tip {
+  left: auto;
+  right: 0;
+  translate: 0 0;
+}
+.progress-row .phase:hover .tip,
+.progress-row .phase:focus-within .tip {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    opacity 140ms,
+    transform 140ms;
+}
+.progress-row .tip .tip-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dim);
+  font-size: 11px;
+}
+.progress-row .tip .tip-label::before {
+  content: '';
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--c);
+}
+.progress-row .tip .tip-value {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 1px 0 6px;
+  font-variant-numeric: tabular-nums;
+}
+.progress-row .tip ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.progress-row .tip li {
+  display: flex;
+  gap: 7px;
+  color: #d1d1d6;
+}
+.progress-row .tip li::before {
+  content: '✓';
+  width: 10px;
+  font-weight: 700;
+  color: var(--c);
+}
+.progress-row .tip li.todo {
+  color: var(--dim);
+}
+.progress-row .tip li.todo::before {
+  content: '○';
+  font-weight: 400;
+  color: var(--faint);
+}
+.progress-row .tip .help {
+  display: block;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 0.5px solid rgb(255 255 255 / 14%);
+  color: #64a8ff;
+  text-decoration: none;
+  font-weight: 500;
+}
+.progress-row .tip .help::after {
+  content: ' ›';
+}
+
+#camera-table .rest {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #6e6e73;
+}
+#camera-table .rest b {
+  display: block;
+  font-weight: 600;
+  color: var(--faint);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+@media (max-width: 820px) {
+  #camera-table {
+    grid-template-columns: 1fr;
+  }
+}

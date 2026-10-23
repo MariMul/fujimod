@@ -71,44 +71,6 @@ header .meta a:first-child {
 .feature-icon.ratio {
   width: 1.65em;
 }
-.cams {
-  position: relative;
-  text-align: center;
-}
-.cams h5 {
-  margin: 0 0 10px;
-  font-size: 10.5px;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--dim);
-  font-weight: 600;
-}
-.cams .c {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 14px;
-  flex-wrap: wrap;
-}
-.chip.mod {
-  background: var(--blue);
-}
-.chip.mod img {
-  height: 12px;
-  image-rendering: pixelated;
-}
-.chip.emu {
-  background: #1f8a3d;
-}
-.chip.emu.early {
-  background: #f3cb46;
-  color: #493800;
-}
-.chip:after {
-  content: '✓';
-  font-weight: 800;
-}
 .section-heading {
   font-size: 13px;
   font-weight: 600;
@@ -116,87 +78,6 @@ header .meta a:first-child {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   margin: 0 0 4px;
-}
-.gens > .section-heading {
-  grid-column: 1 / -1;
-  margin-bottom: -20px;
-}
-.gens {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
-  gap: 24px;
-}
-.gen h4 {
-  margin: 0 0 6px;
-  font-size: 12px;
-  font-weight: 600;
-}
-.gen h4 span {
-  color: var(--dim);
-  font-weight: 400;
-  margin-left: 6px;
-}
-.col .gen + .gen {
-  margin-top: 24px;
-}
-.cam .n {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-.cam .pill {
-  margin-top: 8px;
-}
-.rest {
-  border-top: 1px solid var(--line);
-  padding-top: 7px;
-  font-size: 12px;
-  line-height: 1.8;
-  color: #6e6e73;
-}
-.rest b {
-  display: block;
-  font-weight: 600;
-  color: var(--faint);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.cams .body {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px 8px 14px;
-  border: 1px solid #3a3a3c;
-  border-radius: 14px;
-  background: rgba(28, 28, 30, 0.7);
-  flex-wrap: wrap;
-  justify-content: center;
-}
-.cams .body .nm {
-  font-size: 15px;
-  font-weight: 600;
-  margin-right: 2px;
-}
-.getfw {
-  border: 0;
-  font-family: inherit;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  height: 20px;
-  padding: 0 7px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  text-decoration: none;
-  color: #e5e5ea;
-  background: linear-gradient(#4a4a4e, #38383b);
-  box-shadow:
-    0 1px 0 #5c5c60 inset,
-    0 1px 3px rgba(0, 0, 0, 0.6);
 }
 footer {
   margin-top: 40px;
@@ -212,24 +93,15 @@ footer {
   .shell {
     padding: 0 14px 36px;
   }
-  .gens {
-    grid-template-columns: 1fr;
-  }
 }
 #idle-cameras {
   z-index: 2;
-}
-.getfw {
-  white-space: nowrap;
 }
 .build-info a {
   white-space: nowrap;
 }
 footer a {
   text-decoration: none;
-}
-#camera-table {
-  margin-top: 0;
 }
 header > a {
   display: flex;

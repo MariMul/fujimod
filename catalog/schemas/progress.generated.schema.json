@@ -1,0 +1,150 @@
+{
+  "$defs": {
+    "ModProgress": {
+      "description": "Latest walkthrough result of one mod.",
+      "oneOf": [
+        {
+          "enum": [
+            "pass",
+            "fail",
+            "not-run"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "unavailable",
+          "description": "The mod cannot be built for this firmware.",
+          "type": "string"
+        },
+        {
+          "const": "stale",
+          "description": "Recorded, but its inputs changed since.",
+          "type": "string"
+        }
+      ]
+    },
+    "ProgressStages": {
+      "additionalProperties": false,
+      "description": "Bring-up stages, grouped as emulator, camera, mods and SD card.",
+      "properties": {
+        "analysis": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "Firmware unpacked, analyzed and its static facts located."
+        },
+        "camera-identity": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "A camera was identified over USB."
+        },
+        "camera-menu": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "A camera's menus were driven over USB."
+        },
+        "camera-snapshot": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "A camera's memory was captured over USB."
+        },
+        "menu": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "The emulator's menus respond to remote control."
+        },
+        "mod-build": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "Every shipped mod was built for the firmware."
+        },
+        "mod-target": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "The mod target was generated from the firmware's facts."
+        },
+        "rec": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "The emulator boots to the shooting screen."
+        },
+        "sd-image": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "The dual-boot SD card image was built."
+        }
+      },
+      "required": [
+        "analysis",
+        "rec",
+        "menu",
+        "camera-identity",
+        "camera-snapshot",
+        "camera-menu",
+        "mod-target",
+        "mod-build",
+        "sd-image"
+      ],
+      "type": "object"
+    },
+    "StageProgress": {
+      "description": "Latest result of one stage.",
+      "oneOf": [
+        {
+          "enum": [
+            "pass",
+            "fail",
+            "not-run"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "stale",
+          "description": "Recorded, but its inputs changed since.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$id": "https://fujimod.com/schemas/progress.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Bring-up progress toward FujiMod on one firmware.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/progress.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "firmware_id": {
+      "description": "Firmware the progress belongs to.",
+      "type": "string"
+    },
+    "model": {
+      "description": "Camera model name, as the camera reports it.",
+      "type": "string"
+    },
+    "mods": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ModProgress"
+      },
+      "description": "Walkthrough result of every shipped mod, by mod name.",
+      "type": "object"
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "stages": {
+      "$ref": "#/$defs/ProgressStages",
+      "description": "Bring-up stages, in order."
+    },
+    "version": {
+      "description": "Firmware version.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "firmware_id",
+    "model",
+    "version",
+    "stages",
+    "mods"
+  ],
+  "title": "FirmwareProgress",
+  "type": "object"
+}

@@ -2,7 +2,7 @@ import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
 import type { Firmware } from '../catalog';
-import type { CameraSupport } from '../ui/cameras';
+import type { CameraSupport } from '../home/state';
 import { CameraLauncher, usedLabel } from './Launcher';
 import type { CameraRecord } from './store';
 let dispose: (() => void) | undefined;

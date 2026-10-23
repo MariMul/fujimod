@@ -3,7 +3,6 @@ import type { CameraRecord } from '../cameras/store';
 import { createStore } from 'solid-js';
 import { validateCatalog, type Catalog, type Firmware } from '../catalog';
 import { validateIndex } from '../patch/catalog';
-import type { CameraSupport } from '../ui/cameras';
 export interface PreviewCredit {
   title: string;
   author: string;
@@ -12,6 +11,11 @@ export interface PreviewCredit {
   license: string;
 }
 export type Release = ReturnType<typeof validateIndex>;
+export interface CameraSupport {
+  firmware: Firmware;
+  mod: boolean;
+  emu: boolean;
+}
 declare const __FUJIMOD_INITIAL_CATALOG__: Catalog;
 declare const __FUJIMOD_INITIAL_RELEASE__: unknown;
 export function supportedCameras(catalog: Catalog, release?: Release): CameraSupport[] {
