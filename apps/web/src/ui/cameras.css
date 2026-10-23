@@ -1,9 +1,13 @@
 #camera-table {
-  /* Dark categorical slots 1–4, validated for color-vision deficiency on black. */
+  /* Dark categorical slots 5 and 1–4, in bar order, validated for color-vision deficiency on black. */
+  --phase-research: #d55181;
   --phase-emulator: #3987e5;
   --phase-camera: #d95926;
   --phase-mods: #199e70;
   --phase-sd-card: #c98500;
+  /* Opacity of the outline around bodies a contributor owns. */
+  --owned-outline-opacity: 55%;
+  --owned-outline: rgb(255 255 255 / var(--owned-outline-opacity));
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
   gap: 32px 40px;
@@ -33,6 +37,13 @@
   border-radius: 50%;
   margin-right: 5px;
   background: var(--c);
+}
+#camera-table .legend li.owned::before {
+  width: 12px;
+  height: 6px;
+  border-radius: 3px;
+  background: none;
+  box-shadow: 0 0 0 1px var(--owned-outline) inset;
 }
 #camera-table .gen h4 {
   margin: 0 0 4px;
@@ -79,6 +90,20 @@
   padding: 0;
   list-style: none;
 }
+/* Bodies a contributor owns: a 1px outline 1px outside the track, following its rounded ends. */
+.progress-row.owned .bar {
+  position: relative;
+}
+.progress-row.owned .bar::after {
+  content: '';
+  position: absolute;
+  inset: 5px -2px auto;
+  height: 8px;
+  border: 1px solid var(--owned-outline);
+  border-radius: 4px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
 .progress-row .phase {
   position: relative;
   flex: var(--w) 1 0;
@@ -100,6 +125,25 @@
   background: var(--c);
   transition: filter 120ms;
 }
+/* The research dot: as tall as the track, filled when done and a ring when partly done. */
+.progress-row .phase.research {
+  flex: 0 0 4px;
+  margin-right: 2px;
+}
+.progress-row .research .track {
+  border-radius: 50%;
+}
+.progress-row .research .fill {
+  border-radius: 50%;
+}
+.progress-row .research.partial .fill {
+  width: 100%;
+  background: none;
+  box-shadow: 0 0 0 1px var(--c) inset;
+}
+.progress-row .research.partial .track {
+  background: none;
+}
 .progress-row .bar:hover .track,
 .progress-row .bar:focus-within .track {
   opacity: 0.45;
@@ -120,13 +164,13 @@
 .progress-row .tip {
   position: absolute;
   z-index: 2;
-  bottom: calc(100% - 4px);
+  bottom: calc(100% + 22px); /* clears this row's name and status */
   left: 50%;
   width: 220px;
   translate: -50% 0;
   padding: 10px 12px 11px;
   border-radius: 12px;
-  background: rgb(44 44 46 / 92%);
+  background: rgb(44 44 46 / 97%);
   -webkit-backdrop-filter: blur(20px) saturate(1.6);
   backdrop-filter: blur(20px) saturate(1.6);
   box-shadow:
@@ -141,6 +185,13 @@
     opacity 140ms,
     transform 140ms,
     visibility 0s 140ms;
+}
+.progress-row .tip::after {
+  /* keeps the hover alive while the pointer crosses to the tip's links */
+  content: '';
+  position: absolute;
+  inset: 100% 0 auto;
+  height: 26px;
 }
 .progress-row .phase:first-child .tip {
   left: 0;
@@ -204,6 +255,13 @@
   font-weight: 400;
   color: var(--faint);
 }
+.progress-row .tip .owners {
+  margin-top: 8px;
+  color: var(--dim);
+}
+.progress-row .tip .owners a {
+  color: #d1d1d6;
+}
 .progress-row .tip .help {
   display: block;
   margin-top: 8px;
@@ -222,6 +280,12 @@
   font-size: 12px;
   line-height: 1.8;
   color: #6e6e73;
+}
+#camera-table .rest .owned {
+  padding: 0 3px;
+  border-radius: 4px;
+  outline: 1px solid var(--owned-outline);
+  outline-offset: 1px;
 }
 #camera-table .rest b {
   display: block;

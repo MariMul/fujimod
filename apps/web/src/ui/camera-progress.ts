@@ -2,6 +2,7 @@
 export type StageProgress = 'pass' | 'fail' | 'stale' | 'not-run';
 export type ModProgress = StageProgress | 'unavailable';
 export const STAGES = [
+  'research',
   'analysis',
   'rec',
   'menu',
@@ -26,9 +27,9 @@ export interface Step {
   done: boolean;
 }
 export interface Phase {
-  id: 'emulator' | 'camera' | 'mods' | 'sd-card';
+  id: 'research' | 'emulator' | 'camera' | 'mods' | 'sd-card';
   label: string;
-  /** Share of the bar's width. */
+  /** Share of the bar's width; the research dot has a fixed size. */
   weight: number;
   /** Completed share of this phase, 0–1. */
   fraction: number;
@@ -37,8 +38,8 @@ export interface Phase {
   steps: Step[];
 }
 
-const STEP_LABELS: Record<Stage, string> = {
-  analysis: 'Firmware analyzed',
+const STEP_LABELS: Record<Exclude<Stage, 'research'>, string> = {
+  analysis: 'Boot facts located',
   rec: 'Reaches the shooting screen',
   menu: 'Menus respond',
   'camera-identity': 'Identified over USB',
@@ -48,27 +49,48 @@ const STEP_LABELS: Record<Stage, string> = {
   'mod-build': 'Built for this firmware',
   'sd-image': 'Dual-boot SD card image',
 };
-function steps(progress: FirmwareProgress, stages: readonly Stage[]): Step[] {
+function steps(progress: FirmwareProgress, stages: readonly Exclude<Stage, 'research'>[]): Step[] {
   return stages.map((stage) => ({
     label: STEP_LABELS[stage],
     done: progress.stages[stage] === 'pass',
   }));
+}
+function stepValue(list: Step[]) {
+  const done = list.filter((step) => step.done).length;
+  return done === list.length ? 'Done' : done ? `${done} of ${list.length}` : 'Not yet';
 }
 function stepPhase(
   id: Phase['id'],
   label: string,
   weight: number,
   progress: FirmwareProgress,
-  stages: readonly Stage[],
+  stages: readonly Exclude<Stage, 'research'>[],
 ): Phase {
-  const list = steps(progress, stages),
-    done = list.filter((step) => step.done).length;
+  const list = steps(progress, stages);
   return {
     id,
     label,
     weight,
-    fraction: done / list.length,
-    value: done === list.length ? 'Done' : done ? `${done} of ${list.length}` : 'Not yet',
+    fraction: list.filter((step) => step.done).length / list.length,
+    value: stepValue(list),
+    steps: list,
+  };
+}
+/** Research: the `research` stage unpacks and exports the firmware; `analysis` locates its boot facts. */
+function researchPhase(progress: FirmwareProgress): Phase {
+  const exported = progress.stages.research === 'pass',
+    located = progress.stages.analysis === 'pass',
+    list = [
+      { label: 'Firmware unpacked', done: exported },
+      { label: 'Code exported', done: exported },
+      { label: 'Boot facts located', done: located },
+    ];
+  return {
+    id: 'research',
+    label: 'Research',
+    weight: 0,
+    fraction: (Number(exported) + Number(located)) / 2,
+    value: stepValue(list),
     steps: list,
   };
 }
@@ -77,7 +99,8 @@ export function phases(progress: FirmwareProgress): Phase[] {
   const mods = Object.values(progress.mods),
     working = mods.filter((result) => result === 'pass').length;
   return [
-    stepPhase('emulator', 'Emulator', 35, progress, ['analysis', 'rec', 'menu']),
+    researchPhase(progress),
+    stepPhase('emulator', 'Emulator', 35, progress, ['rec', 'menu']),
     stepPhase('camera', 'Camera', 20, progress, [
       'camera-identity',
       'camera-snapshot',
@@ -96,17 +119,19 @@ export function phases(progress: FirmwareProgress): Phase[] {
 }
 
 /** The first unfinished phase, as the row's status. */
+/** The first unfinished phase; research counts only until later work has progress. */
 export function status(list: Phase[]): string {
-  const next = list.find((phase) => phase.fraction < 1);
+  const underway = list.some((phase) => phase.id !== 'research' && phase.fraction > 0);
+  const next = list.find((phase) => phase.fraction < 1 && !(underway && phase.id === 'research'));
   if (!next) return 'Ready';
   if (next.id === 'mods') return next.value === 'Not yet' ? 'Mods' : `${next.value} mods`;
   return next.label;
 }
 
-/** Whether anything beyond static analysis works; otherwise the model is listed as not started. */
+/** Whether any stage or mod passes; otherwise the model is listed as not started. */
 export function started(progress: FirmwareProgress): boolean {
   return (
-    STAGES.some((stage) => stage !== 'analysis' && progress.stages[stage] === 'pass') ||
+    STAGES.some((stage) => progress.stages[stage] === 'pass') ||
     Object.values(progress.mods).includes('pass')
   );
 }

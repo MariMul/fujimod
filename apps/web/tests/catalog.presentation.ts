@@ -25,6 +25,13 @@ try {
     const row = rows.filter({ has: page.getByText(progress.model, { exact: true }) });
     assert.equal(await row.count(), 1, progress.model);
     const list = phases(progress);
+    const dot = row.locator('.phase.research');
+    assert.equal(await dot.count(), 1, progress.model);
+    assert.equal(
+      await dot.evaluate((element) => element.classList.contains('partial')),
+      list[0]?.fraction === 1 / 2,
+      `${progress.model} research dot`,
+    );
     for (const [index, phase] of list.entries()) {
       const segment = row.locator('.phase').nth(index);
       await segment.hover();

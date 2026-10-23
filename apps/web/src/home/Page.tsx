@@ -13,6 +13,7 @@ import { EmulatorFeedback } from '@fujimod/emulator-ui/Feedback';
 import { ViewportControls } from '@fujimod/emulator-ui/ViewportControls';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import generations from '../../devices/generations.json';
+import owners from '../../devices/owners.json';
 import '../home/site.css';
 import '../navigation.css';
 
@@ -166,7 +167,7 @@ export default function Home() {
               }}
             />
           </EmulatorWorkspace>
-          <CameraTable columns={generations} progress={cameraProgress} />
+          <CameraTable columns={generations} progress={cameraProgress} owners={owners} />
         </main>
         <footer id="preview-credit" hidden={!state.idle}>
           <Show when={state.previewCredit}>
