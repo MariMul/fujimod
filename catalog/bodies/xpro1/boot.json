@@ -37,9 +37,7 @@
         "firmware_write",
         "card_program_defined"
       ],
-      "notes": [
-        "The command control position is unspecified."
-      ]
+      "notes": []
     }
   },
   "notes": []

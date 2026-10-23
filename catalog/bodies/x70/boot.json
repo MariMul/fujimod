@@ -103,7 +103,7 @@
         "settings_reset_on_exit"
       ],
       "notes": [
-        "On X70 1.10, the unguarded service shutdown path resets settings. Its reset guard is firmware-specific."
+        "X70 1.10 resets settings on unguarded service shutdown."
       ]
     }
   },

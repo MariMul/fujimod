@@ -37,7 +37,6 @@
         "card_program_defined"
       ],
       "notes": [
-        "The card program determines the operation. A firmware-download card can write firmware.",
         "Finder-pattern cards are for physical alignment. Limit that program to 10 minutes to avoid finder burn; remove the battery to stop it because the power lever does not work."
       ]
     }
