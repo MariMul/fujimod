@@ -5,6 +5,10 @@
 mod tables;
 use tables::*;
 
+/// Entropy output reached the destination capacity. Owners decide how the
+/// hardware reports it; it is not a refusal of the request.
+pub const OUTPUT_OVERFLOW: &str = "JPEG output exceeds capacity";
+
 fn round(v: i32, s: u32) -> i32 {
     (v + (1 << (s - 1))) >> s
 }
@@ -106,10 +110,7 @@ struct Writer<'a> {
 }
 impl Writer<'_> {
     fn byte(&mut self, b: u8) -> Result<(), String> {
-        let dst = self
-            .out
-            .get_mut(self.at)
-            .ok_or("JPEG output exceeds capacity")?;
+        let dst = self.out.get_mut(self.at).ok_or(OUTPUT_OVERFLOW)?;
         *dst = b;
         self.at += 1;
         Ok(())

@@ -327,7 +327,7 @@ fn stream_encode_start_retains_pending_warp_without_joining_or_publishing() {
 }
 
 #[test]
-fn deferred_entropy_failure_survives_checkpoint_without_dma_or_irq() {
+fn deferred_entropy_overflow_survives_checkpoint_and_completes_without_ready_or_ram() {
     crate::work::configure(2).unwrap();
     let stream: StreamHandle = Default::default();
     {
@@ -350,12 +350,17 @@ fn deferred_entropy_failure_survives_checkpoint_without_dma_or_irq() {
     e.restore_checkpoint(&saved).unwrap();
     assert!(h.effects.is_empty());
     h.now = 10;
-    let mut cx = h.cx();
-    e.advance(&mut cx);
-    assert_eq!(cx.refusal(), Some("JPEG output exceeds capacity"));
-    assert_eq!(stream.lock().unwrap().state, State::Ready);
-    assert!(h.effects.is_empty());
+    {
+        let mut cx = h.cx();
+        e.advance(&mut cx);
+        assert_eq!(cx.refusal(), None);
+    }
+    // Stock channel8_complete: no READY bit means status 2, zero bytes.
+    assert_eq!(read(&mut e, &mut h, 0xfff62024) & 0x30, 0x20);
+    assert_eq!(read(&mut e, &mut h, 0xfff62094), 0);
+    assert_eq!(stream.lock().unwrap().state, State::Finished);
     assert!(h.ram[0x9000..0xa000].iter().all(|&v| v == 0xa5));
+    assert_eq!(h.irqs, [(0, 77)]);
     assert_eq!(e.next_deadline(10), None);
     crate::work::configure(0).unwrap();
 }

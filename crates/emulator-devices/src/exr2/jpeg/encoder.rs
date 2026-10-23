@@ -1,7 +1,8 @@
 //! FFF62000 register/FIFO and memory/warp-stream protocol. Full-MCU packed422
 //! input, uploaded nonzero byte quantizers and U16 DRI are supported. EXR II
 //! DCT arithmetic is modeled; only q<=3 is measured. Timing is declared.
-//! DMA bytes/count/status precede IRQ77.
+//! DMA bytes/count/status precede IRQ77. Entropy output beyond 0x110 completes
+//! with status 0x20 instead of READY (0x10), count 0 and no RAM write.
 use crate::exr2::isp::{
     Irq,
     dma::{Transfer, physical},
@@ -9,7 +10,7 @@ use crate::exr2::isp::{
     stream::{State, StreamHandle},
     word,
 };
-use crate::imaging::jpeg::Codec;
+use crate::imaging::jpeg::{Codec, OUTPUT_OVERFLOW};
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -160,7 +161,12 @@ impl Encoder {
                 };
                 codec.encode(pixels, w, h, restart, &mut out, capacity - 2)
             })();
-            (out, result)
+            match result {
+                // Overflow completes as a hardware error with no output;
+                // a successful stream is never empty.
+                Err(error) if error == OUTPUT_OVERFLOW => (Vec::new(), Ok(())),
+                result => (out, result),
+            }
         });
         if crate::work::worker_count() == 0
             && let Err(error) = self.dma.check_result()
@@ -293,6 +299,23 @@ impl Device for Encoder {
                         self.stream.lock().unwrap().state = State::Ready;
                     }
                     cx.fail(error);
+                    return;
+                }
+                if self.dma.pixels.len() == 0 {
+                    // Output overflow: stock channel8_complete takes a
+                    // completion without READY (0x10) as status 2 with no
+                    // bytes, and metadata_retry_compression_result retries at
+                    // a recomputed quality. No output reaches RAM.
+                    self.dma.cancel();
+                    self.r[0] &= !1;
+                    self.r[0x24 / 4] |= 0x20;
+                    self.r[0x94 / 4] = 0;
+                    if stream && let Err(e) = self.stream.lock().unwrap().finish() {
+                        cx.fail(e);
+                        return;
+                    }
+                    Transfer::interrupt(cx, self.irq);
+                    self.pending = None;
                     return;
                 }
                 let produced = (self.dma.pixels.len() + 2) as u32;
