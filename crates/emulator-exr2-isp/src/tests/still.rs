@@ -7,7 +7,7 @@ use fujimod_emulator_devices::Device;
 fn still_isp_reconstructs_addressed_pixels_and_refuses_unequal_black() {
     let mut h = TestHost::new();
     let mut d = StillProcessor::new(
-        still::Options {
+        fujimod_emulator_devices::exr2::isp::options::still::Options {
             completion_ticks: 4,
             cfa: cfa(),
         },
@@ -65,7 +65,7 @@ fn raw_writeback() -> (StillProcessor, TestHost) {
         }
     }
     let mut d = StillProcessor::new(
-        still::Options {
+        fujimod_emulator_devices::exr2::isp::options::still::Options {
             completion_ticks: 4,
             cfa: cfa(),
         },

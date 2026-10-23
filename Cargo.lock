@@ -3451,6 +3451,7 @@ dependencies = [
  "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-board",
+ "fujimod-emulator-exr2-plan",
  "fujimod-recording",
  "fujimod-workspace-hack",
  "libc",
@@ -3469,6 +3470,7 @@ dependencies = [
  "fujimod-emulator-cpu",
  "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-board",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -3535,8 +3537,10 @@ dependencies = [
 name = "fujimod-emulator-exr2-board"
 version = "0.1.0"
 dependencies = [
+ "fujimod-catalog",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-isp",
+ "fujimod-emulator-exr2-plan",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -3555,6 +3559,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-emulator-exr2-plan"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "fujimod-emulator-javascript"
 version = "0.1.0"
 dependencies = [
@@ -3564,6 +3579,7 @@ dependencies = [
  "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-board",
+ "fujimod-emulator-exr2-plan",
  "fujimod-firmware",
  "fujimod-workspace-hack",
  "serde",
@@ -3614,7 +3630,7 @@ dependencies = [
  "fujimod-emulator",
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
- "fujimod-emulator-exr2-board",
+ "fujimod-emulator-exr2-plan",
  "fujimod-firmware",
  "fujimod-recording",
  "fujimod-remote",
@@ -3636,6 +3652,7 @@ dependencies = [
 name = "fujimod-python-module"
 version = "0.1.0"
 dependencies = [
+ "fujimod-emulator-exr2-board",
  "fujimod-python",
  "fujimod-workspace-hack",
  "pyo3",

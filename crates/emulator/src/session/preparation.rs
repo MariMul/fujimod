@@ -1,5 +1,5 @@
 //! Bounded host input preparation, outside device execution.
-use fujimod_emulator_exr2_board::Inputs;
+use fujimod_emulator_exr2_plan::Inputs;
 use fujimod_emulator_devices::{
     imaging::analysis::ImageLayout,
     scene::{Frame, FramePixels, ImageFrames, SensorFrames, StatisticsFrames, StatisticsSpan},

@@ -3,12 +3,7 @@
 use fujimod_emulator_devices::exr2::isp::dma::{Raster, Transfer};
 use fujimod_emulator_devices::exr2::isp::{Irq, word};
 use fujimod_emulator_devices::{Cx, Device};
-use serde::Deserialize;
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Options {
-    pub completion_ticks: u64,
-}
+use fujimod_emulator_devices::exr2::isp::options::scaler::Options;
 pub struct Scaler {
     r: Vec<u32>,
     irq: Irq,

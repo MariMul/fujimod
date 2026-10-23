@@ -1,5 +1,4 @@
 use fujimod_emulator_devices::exr2::isp::*;
-use crate::*;
 #[test]
 fn dma_bounds_clock_and_options_are_strict() {
     assert_eq!(dma::span(0x40004000, 4).unwrap(), 0x4000..0x4004);
@@ -16,7 +15,7 @@ fn dma_bounds_clock_and_options_are_strict() {
     }
     assert!(due(u64::MAX, 1).is_err());
     assert!(
-        serde_json::from_str::<output::Options>(
+        serde_json::from_str::<fujimod_emulator_devices::exr2::isp::options::output::Options>(
             r#"{"stop_ticks":2,"clock":{"kind":"fixed","ticks":5},"geometry":"skip_incomplete","profile":"old"}"#
         )
         .is_err()

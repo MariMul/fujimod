@@ -4,7 +4,7 @@ use fujimod_emulator_devices::{
     exr2::{gpio::Pads, irq::Inputs, pulse::PulsePins},
     parts::pins::{Pin, Pins},
 };
-use fujimod_emulator_exr2_board::Resources;
+use fujimod_emulator_exr2_plan::Resources;
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,

@@ -4,7 +4,6 @@ use fujimod_emulator_devices::exr2::{
     dma, dram, gpio, gpu, hdmi, i2c, irq, isp, jpeg, lz, nand, pulse, reset, sdhc, sdio, spi,
     timer, usb,
 };
-use super::{AdapterFactory, Assembly, Card, CoreInterrupts, Model, Resources, SerialEndpoint, Wire};
 use fujimod_emulator_devices::{
     Device,
     bus::InterruptLine,
@@ -21,6 +20,9 @@ use fujimod_emulator_devices::{
         wifi_module::WifiModule,
     },
     storage::fat,
+};
+use fujimod_emulator_exr2_plan::{
+    AdapterFactory, BuiltBoard, Card, CoreInterrupts, Model, Resources, SerialEndpoint, Wire,
 };
 
 macro_rules! wire {
@@ -50,17 +52,17 @@ fn line(line: InterruptLine) -> Result<InterruptLine, String> {
     Ok(line)
 }
 fn controllers(
-    assembly: &Assembly,
+    built: &BuiltBoard,
     names: Vec<String>,
 ) -> Result<Vec<(usize, irq::Inputs)>, String> {
     names
         .into_iter()
         .map(|name| {
-            let node = assembly
+            let node = built
                 .node_ids
                 .get(&name)
                 .ok_or_else(|| format!("unknown interrupt controller {name}"))?;
-            let controller = assembly
+            let controller = built
                 .core_interrupts
                 .iter()
                 .find(|c| c.device == *node)
@@ -75,14 +77,14 @@ pub(super) struct Builder<'a> {
     pub id: usize,
     pub windows: &'a [Mapping],
     pub resources: &'a mut Resources,
-    pub assembly: &'a mut Assembly,
+    pub built: &'a mut BuiltBoard,
     pub start_tick: u64,
     pub adapter: &'a mut dyn AdapterFactory,
 }
 impl Builder<'_> {
     pub(super) fn serial_devices(
         self,
-        options: super::serial::Options,
+        options: fujimod_emulator_exr2_plan::serial::Options,
         gpio: String,
     ) -> Result<Vec<(Option<Mapping>, Box<dyn Device>)>, String> {
         let Self {
@@ -108,13 +110,13 @@ impl Builder<'_> {
                 "{name} requires its physical SPI0/UART/DMA/request-selector windows"
             ));
         }
-        super::serial::Assembly::new(
+        super::serial::BootSerialBlocks::new(
             options,
             super::serial::Wiring {
                 gpio: resources.pads(&gpio)?,
             },
         )
-        .map(super::serial::Assembly::devices)
+        .map(super::serial::BootSerialBlocks::devices)
     }
     fn endpoint(
         endpoint: SerialEndpoint,
@@ -175,7 +177,7 @@ impl Builder<'_> {
             id,
             windows,
             resources,
-            assembly,
+            built,
             start_tick,
             adapter,
         } = self;
@@ -206,7 +208,7 @@ impl Builder<'_> {
                     },
                 )?)
             }
-            Model::Power { .. } => return Err("boot serial blocks expand through Assembly".into()),
+            Model::Power { .. } => return Err("boot serial blocks expand through BootSerialBlocks".into()),
             Model::Lz {
                 options,
                 base,
@@ -219,7 +221,7 @@ impl Builder<'_> {
                     options,
                     lz::Wiring {
                         base,
-                        controllers: controllers(assembly, names)?,
+                        controllers: controllers(built, names)?,
                     },
                 )?)
             }
@@ -344,7 +346,7 @@ impl Builder<'_> {
                 )?)
             }
             Model::SerialDmaLink { .. } => {
-                return Err("serial/DMA link expands through board assembly".into());
+                return Err("serial/DMA link expands through serial_dma::Nodes".into());
             }
             Model::XMountLens {
                 transport,
@@ -360,7 +362,7 @@ impl Builder<'_> {
                     startup_ticks,
                     pins,
                     resources.pads(&gpio)?,
-                    controllers(assembly, names)?,
+                    controllers(built, names)?,
                 )?;
                 let expected: std::collections::BTreeSet<_> =
                     device.windows().iter().map(|&(a, b)| (a, b - a)).collect();
@@ -382,7 +384,7 @@ impl Builder<'_> {
             }
             Model::ImageCombination { options, irq } => {
                 if windows.len() != 1
-                    || windows[0].base != fujimod_emulator_exr2_isp::combination::BASE
+                    || windows[0].base != fujimod_emulator_devices::exr2::isp::options::combination::BASE
                     || windows[0].size != 0x500
                 {
                     return Err("image combination requires its register window".into());
@@ -410,7 +412,7 @@ impl Builder<'_> {
                 Box::new(i2c::I2cController::new(
                     options,
                     i2c::Wiring {
-                        controllers: controllers(assembly, names)?,
+                        controllers: controllers(built, names)?,
                         cable,
                         bridge,
                     },
@@ -431,7 +433,7 @@ impl Builder<'_> {
                 Box::new(gpu::VectorGpu::new(
                     options,
                     gpu::Wiring {
-                        controllers: controllers(assembly, names)?,
+                        controllers: controllers(built, names)?,
                     },
                 )?)
             }
@@ -522,7 +524,7 @@ impl Builder<'_> {
                 controllers,
             } => {
                 let clock = resources.clock(&clock)?;
-                let controllers = self::controllers(assembly, controllers)?;
+                let controllers = self::controllers(built, controllers)?;
                 Box::new(timing::DisplayTiming::new(
                     options,
                     timing::Wiring {
@@ -539,7 +541,7 @@ impl Builder<'_> {
                 options,
                 controllers,
             } => {
-                let controllers = self::controllers(assembly, controllers)?;
+                let controllers = self::controllers(built, controllers)?;
                 Box::new(timer::Timers::new(
                     options,
                     timer::Wiring {
@@ -574,7 +576,7 @@ impl Builder<'_> {
                 routes,
                 software,
             } => {
-                if core >= 2 || assembly.core_interrupts.iter().any(|c| c.core == core) {
+                if core >= 2 || built.core_interrupts.iter().any(|c| c.core == core) {
                     return Err("invalid or duplicate EXR II core interrupt controller".into());
                 }
                 let enables = routes
@@ -608,7 +610,7 @@ impl Builder<'_> {
                             .collect::<Result<_, String>>()?,
                     },
                 )?;
-                assembly.core_interrupts.push(CoreInterrupts {
+                built.core_interrupts.push(CoreInterrupts {
                     core,
                     device: id,
                     inputs,
@@ -780,8 +782,8 @@ impl Builder<'_> {
                     }
                     resources.card_pins.insert(
                         name.to_owned(),
-                        super::resources::CardPins {
-                            gpio: *assembly
+                        fujimod_emulator_exr2_plan::CardPins {
+                            gpio: *built
                                 .node_ids
                                 .get(&pins.gpio)
                                 .ok_or("SD GPIO has not been constructed")?,
@@ -802,7 +804,7 @@ impl Builder<'_> {
                         irq: line(irq)?,
                     },
                 )?;
-                assembly.contacts.insert(name.to_owned(), contacts);
+                built.contacts.insert(name.to_owned(), contacts);
                 Box::new(host)
             }
             Model::SdioHost {
@@ -853,7 +855,7 @@ impl Builder<'_> {
                                 .cloned()
                                 .ok_or_else(|| format!("missing sensor frames {}", s.frames))?,
                         )?;
-                        if let Some(super::spec::SensorControls::Xtrans16 {
+                        if let Some(fujimod_emulator_exr2_plan::SensorControls::Xtrans16 {
                             options,
                             calibration,
                             exposure,
@@ -1037,7 +1039,7 @@ impl Builder<'_> {
                 for name in &spec.wires {
                     resources.wire(name, id)?;
                 }
-                adapter.construct(name, &spec, windows, resources, &assembly.node_ids)?
+                adapter.construct(name, &spec, windows, resources, &built.node_ids)?
             }
         })
     }

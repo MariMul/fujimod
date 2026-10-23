@@ -5,7 +5,7 @@ use fujimod_emulator::board::{
     bus::{Bus, Mode},
     factory,
 };
-use fujimod_emulator_exr2_board::{MemoryChoices, Plan, RefuseAdapters, Resources};
+use fujimod_emulator_exr2_plan::{MemoryChoices, Plan, RefuseAdapters, Resources};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, sync::Arc};
@@ -223,7 +223,7 @@ fn device_roles(plan: &Plan) -> Result<(Option<String>, Vec<String>), String> {
         .iter()
         .filter(|n| {
             n.boot_entries.contains(&plan.boot_entry)
-                && matches!(n.model, fujimod_emulator_exr2_board::Model::Scanout { .. })
+                && matches!(n.model, fujimod_emulator_exr2_plan::Model::Scanout { .. })
         })
         .map(|n| n.name.clone())
         .collect::<Vec<_>>();
@@ -237,7 +237,7 @@ fn device_roles(plan: &Plan) -> Result<(Option<String>, Vec<String>), String> {
         .iter()
         .filter(|n| {
             n.boot_entries.contains(&plan.boot_entry)
-                && matches!(n.model, fujimod_emulator_exr2_board::Model::Nand { .. })
+                && matches!(n.model, fujimod_emulator_exr2_plan::Model::Nand { .. })
         })
         .map(|n| n.name.clone())
         .collect();
@@ -416,8 +416,9 @@ impl Session {
             nands,
         };
         let identity = camera_identity(&g.firmware_id, &g.firmware.sha256, &storage)?;
-        let assembly = g.devices.build(resources, 0, &mut RefuseAdapters)?;
-        let bus = Bus::from_graph(Mode::Strict, assembly.graph)?;
+        fujimod_emulator_exr2_board::register_board_builder();
+        let built = g.devices.build(resources, 0, &mut RefuseAdapters)?;
+        let bus = Bus::from_graph(Mode::Strict, built.graph)?;
         let mut board = g.execution.build(
             factory::Options {
                 engine: factory::Engine::Unicorn,
@@ -427,7 +428,7 @@ impl Session {
             None,
         )?;
         board.set_execution_policy(policy)?;
-        for irq in assembly.core_interrupts {
+        for irq in built.core_interrupts {
             board.configure_core_interrupts(irq.core, irq.device, Box::new(irq.inputs))?;
         }
         for image in images {
@@ -447,9 +448,9 @@ impl Session {
             controls: None,
             contact_driver: None,
             board,
-            nodes: assembly.node_ids,
-            resources: assembly.resources,
-            contacts: assembly.contacts,
+            nodes: built.node_ids,
+            resources: built.resources,
+            contacts: built.contacts,
             recording_frames: Default::default(),
         };
         let mut session = Self::start_camera(

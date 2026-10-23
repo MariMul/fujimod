@@ -13,26 +13,11 @@ use fujimod_emulator_devices::{
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use fujimod_emulator_devices::exr2::isp::options::producer::Options;
 
 const BASE: u64 = 0xfff18000;
 const GLOBAL: u64 = 0xfff28000;
 const IRQ: u32 = 0x2e;
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Options {
-    pub clock: dma::Clock,
-    pub pixels_per_tick: Option<u64>,
-    pub ack_ticks: u64,
-    pub stop_ticks: u64,
-    pub histogram: bool,
-    /// Preserve complete external statistics spans, including histogram data.
-    #[serde(default)]
-    pub external_statistics: bool,
-    pub contrast: Option<fujimod_emulator_devices::exr2::isp::contrast::Arithmetic>,
-    pub metering: Option<super::metering::Arithmetic>,
-    #[serde(default)]
-    pub diagnostic_reads: bool,
-}
 pub struct Wiring {
     pub grid: Option<fujimod_emulator_devices::imaging::analysis::GridHandle>,
     pub routes: IrqRoutes,

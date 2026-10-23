@@ -22,7 +22,6 @@ pub mod warp;
 pub use scaler::Scaler;
 pub use warp::Warp;
 pub mod input;
-pub mod readback;
 pub use input::ImageInput;
 
 // Output banks share their DMA batch and source/IRQ dependencies. The board

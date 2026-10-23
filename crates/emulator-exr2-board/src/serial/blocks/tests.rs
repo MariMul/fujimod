@@ -1,10 +1,12 @@
 use super::*;
+use fujimod_emulator_devices::parts::pins::Pin;
 use fujimod_emulator_devices::{
     Record,
     bus::{Cx, Host},
     exr2::gpio::{Gpio, InitialOutput},
     test_host::ram::Ram,
 };
+use fujimod_emulator_exr2_plan::serial::{FixedLowByteInput, PinLevel};
 fn model(connected: bool) -> (SerialState, Pads) {
     let mut levels = [0; 16];
     levels[11] = 0;
@@ -370,7 +372,7 @@ fn simultaneous_completions(spi_first: bool) -> (Vec<String>, u32, u32, u32, Vec
 }
 
 #[test]
-fn assembly_preserves_start_order_for_equal_tick_spi_and_dma_completions() {
+fn boot_serial_blocks_preserve_start_order_for_equal_tick_spi_and_dma_completions() {
     assert_eq!(
         simultaneous_completions(true),
         (
@@ -400,9 +402,9 @@ fn assembly_preserves_start_order_for_equal_tick_spi_and_dma_completions() {
 }
 
 #[test]
-fn serial_assembly_assigns_each_physical_aperture_to_one_block() {
+fn boot_serial_blocks_assign_each_physical_aperture_to_one_block() {
     let (_, pads) = model(true);
-    let devices = Assembly::new(
+    let devices = BootSerialBlocks::new(
         Options {
             transfer_ticks: 4,
             max_program_bytes: 0x10000,
@@ -470,11 +472,9 @@ fn checked_board_graph_expands_boot_serial_into_disjoint_register_owners() {
         ]
     });
     let plan = crate::Plan::parse(&serde_json::to_vec(&input).unwrap()).unwrap();
-    let mut adapters = crate::RefuseAdapters;
-    let assembly = plan
-        .build(crate::Resources::default(), 0, &mut adapters)
-        .unwrap();
-    let nodes = &assembly.graph.nodes;
+    let mut adapters = fujimod_emulator_exr2_plan::RefuseAdapters;
+    let built = crate::build(plan, crate::Resources::default(), 0, &mut adapters).unwrap();
+    let nodes = &built.graph.nodes;
     let names = nodes
         .iter()
         .map(|node| node.device.name())
@@ -490,7 +490,7 @@ fn checked_board_graph_expands_boot_serial_into_disjoint_register_owners() {
             "serial-event-coordinator",
         ]
     );
-    assert_eq!(assembly.node_ids["boot_serial"], 1);
+    assert_eq!(built.node_ids["boot_serial"], 1);
     assert_eq!(
         nodes[1..5]
             .iter()

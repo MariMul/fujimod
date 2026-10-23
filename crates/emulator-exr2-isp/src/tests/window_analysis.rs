@@ -6,8 +6,8 @@ use fujimod_emulator_devices::Device;
 fn window() -> (WindowAnalysis, Memory, IrqRoutes) {
     let routes = routes(0x46);
     let d = WindowAnalysis::new(
-        window_analysis::Options {
-            arithmetic: window_analysis::Arithmetic::Y16GradientsAndLocalTracking,
+        fujimod_emulator_devices::exr2::isp::options::window_analysis::Options {
+            arithmetic: fujimod_emulator_devices::exr2::isp::options::window_analysis::Arithmetic::Y16GradientsAndLocalTracking,
             ticks_per_window: 3,
         },
         window_analysis::Wiring {

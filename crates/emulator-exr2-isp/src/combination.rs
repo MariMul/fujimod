@@ -2,16 +2,16 @@
 //! The selected pixel laws are declared approximations; other operations refuse.
 use fujimod_emulator_devices::exr2::isp::{
     Irq,
-    dma::{Clock, Raster, Transfer, physical},
+    dma::{Raster, Transfer, physical},
 };
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+use fujimod_emulator_devices::exr2::isp::options::combination::{Options, Arithmetic, BASE};
 mod linear;
 mod masked;
 mod pyramid;
-pub const BASE: u64 = 0xfff48000;
 struct Prepared {
     pub destination: Raster,
     pub pixels: Vec<u8>,
@@ -30,19 +30,6 @@ fn read_rows(cx: &Cx<'_>, raster: Raster, row_bytes: usize) -> Result<Vec<u8>, S
     Ok(pixels)
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Arithmetic {
-    Unmodeled,
-    PackedImageUnmeasured,
-}
-#[derive(Clone, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Options {
-    pub reset_ticks: u64,
-    pub clock: Clock,
-    pub arithmetic: Arithmetic,
-}
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct State {
@@ -295,6 +282,7 @@ impl Device for Combination {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fujimod_emulator_devices::exr2::isp::dma::Clock;
     use fujimod_emulator_devices::test_host::{TestHost, advance, read, write};
     fn model(reset_ticks: u64) -> Combination {
         Combination::new(

@@ -1,5 +1,5 @@
 //! The JPEG encoder consuming a warp's pixel stream.
-use crate::{Warp, warp};
+use crate::Warp;
 use fujimod_emulator_devices::Device;
 use fujimod_emulator_devices::exr2::isp::Irq;
 use fujimod_emulator_devices::exr2::isp::stream::{State, StreamHandle};
@@ -48,7 +48,7 @@ fn warp_stream_requires_both_starts_and_releases_only_at_completion() {
     h.ram[0x8000..0x8100].fill(128);
     let stream: StreamHandle = Default::default();
     let mut w = Warp::new(
-        warp::Options {
+        fujimod_emulator_devices::exr2::isp::options::warp::Options {
             completion_ticks: 5,
             stop_ticks: 2,
         },

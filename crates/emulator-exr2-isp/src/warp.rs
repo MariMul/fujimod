@@ -5,15 +5,9 @@ use fujimod_emulator_devices::exr2::isp::dma::{Raster, Transfer};
 use fujimod_emulator_devices::exr2::isp::stream::{State, StreamHandle};
 use fujimod_emulator_devices::exr2::isp::{Irq, due, word};
 use fujimod_emulator_devices::{Cx, Device};
-use serde::Deserialize;
 use std::sync::Arc;
+use fujimod_emulator_devices::exr2::isp::options::warp::Options;
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Options {
-    pub completion_ticks: u64,
-    pub stop_ticks: u64,
-}
 pub struct Warp {
     r: Vec<u32>,
     options: Options,

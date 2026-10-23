@@ -18,7 +18,7 @@ emulator = [
     "dep:fujimod-emulator",
     "dep:fujimod-emulator-cpu",
     "dep:fujimod-emulator-devices",
-    "dep:fujimod-emulator-exr2-board",
+    "dep:fujimod-emulator-exr2-plan",
     "dep:pkg-config",
     "dep:sha2",
     "fujimod-remote/board",
@@ -38,7 +38,7 @@ fujimod-corpus = { path = "../../crates/corpus" }
 fujimod-emulator = { path = "../../crates/emulator", optional = true }
 fujimod-emulator-cpu = { path = "../../crates/emulator-cpu", optional = true }
 fujimod-emulator-devices = { path = "../../crates/emulator-devices", optional = true }
-fujimod-emulator-exr2-board = { path = "../../crates/emulator-exr2-board", optional = true }
+fujimod-emulator-exr2-plan = { path = "../../crates/emulator-exr2-plan", optional = true }
 serde.workspace = true
 serde_json.workspace = true
 futures-lite.workspace = true

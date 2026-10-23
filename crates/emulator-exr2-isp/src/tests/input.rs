@@ -5,14 +5,14 @@ use fujimod_emulator_devices::test_host::*;
 pub(super) fn cfa() -> Vec<u8> {
     (0..36).map(|i| (i % 3) as u8).collect()
 }
-fn input_options() -> input::Options {
-    input::Options {
+fn input_options() -> fujimod_emulator_devices::exr2::isp::options::input::Options {
+    fujimod_emulator_devices::exr2::isp::options::input::Options {
         reset_ticks: 2,
         command_ticks: 3,
         phase_ticks: 2,
-        command: Some(input::Command::PackedWords),
+        command: Some(fujimod_emulator_devices::exr2::isp::options::input::Command::PackedWords),
         command_controls: vec![0],
-        phase_ack: input::PhaseAck::Enabled,
+        phase_ack: fujimod_emulator_devices::exr2::isp::options::input::PhaseAck::Enabled,
         clock: None,
         sensor_period_ticks: None,
         raw_dma_ticks: 5,
@@ -108,7 +108,7 @@ fn clearing_command_start_stops_the_transmitter_and_allows_rearm() {
 fn packed_opcode_writes_still_refuse_nonzero_padding() {
     let mut h = TestHost::new();
     let mut options = input_options();
-    options.command = Some(input::Command::PackedWrites);
+    options.command = Some(fujimod_emulator_devices::exr2::isp::options::input::Command::PackedWrites);
     let mut d = ImageInput::new(options, input_wiring()).unwrap();
     h.ram[0x8a00..0x8a08].copy_from_slice(&[0x81, 0x12, 0x34, 0xa5, 0, 0, 0, 0]);
     for (o, v) in [(0x170, 0x101000), (0x174, 0x8a00), (0x15c, 7), (0x9c, 2)] {
@@ -127,9 +127,9 @@ fn packed_opcode_writes_still_refuse_nonzero_padding() {
 fn phase_clock_coalesces_irqs_but_preserves_physical_edges() {
     let mut h = TestHost::new();
     let mut o = input_options();
-    o.clock = Some(input::Clock {
-        mode: input::ClockMode::InputEnable,
-        source: input::ClockSource::Periodic {
+    o.clock = Some(fujimod_emulator_devices::exr2::isp::options::input::Clock {
+        mode: fujimod_emulator_devices::exr2::isp::options::input::ClockMode::InputEnable,
+        source: fujimod_emulator_devices::exr2::isp::options::input::ClockSource::Periodic {
             period_ticks: 10,
             first_delay_ticks: None,
         },
@@ -166,9 +166,9 @@ fn phase_clock_coalesces_irqs_but_preserves_physical_edges() {
 fn another_source_joins_the_scan_edge_and_command_dma_does_not_pause_it() {
     let mut o = input_options();
     o.command_ticks = 20;
-    o.clock = Some(input::Clock {
-        mode: input::ClockMode::InputEnable,
-        source: input::ClockSource::Periodic {
+    o.clock = Some(fujimod_emulator_devices::exr2::isp::options::input::Clock {
+        mode: fujimod_emulator_devices::exr2::isp::options::input::ClockMode::InputEnable,
+        source: fujimod_emulator_devices::exr2::isp::options::input::ClockSource::Periodic {
             period_ticks: 10,
             first_delay_ticks: None,
         },
@@ -233,9 +233,9 @@ fn physical_sensor_latch_and_both_input_sources_share_one_edge() {
     let edges = w.edges.clone();
     let mut o = input_options();
     o.sensor_period_ticks = Some(100);
-    o.clock = Some(input::Clock {
-        mode: input::ClockMode::InputEnable,
-        source: input::ClockSource::Sensor {},
+    o.clock = Some(fujimod_emulator_devices::exr2::isp::options::input::Clock {
+        mode: fujimod_emulator_devices::exr2::isp::options::input::ClockMode::InputEnable,
+        source: fujimod_emulator_devices::exr2::isp::options::input::ClockSource::Sensor {},
         secondary: true,
         companion_secondary: true,
     });
@@ -311,9 +311,9 @@ fn sensor_frames_after_a_drive_mode_change_raise_no_edge() {
     let edges = w.edges.clone();
     let mut o = input_options();
     o.sensor_period_ticks = Some(100);
-    o.clock = Some(input::Clock {
-        mode: input::ClockMode::InputEnable,
-        source: input::ClockSource::Sensor {},
+    o.clock = Some(fujimod_emulator_devices::exr2::isp::options::input::Clock {
+        mode: fujimod_emulator_devices::exr2::isp::options::input::ClockMode::InputEnable,
+        source: fujimod_emulator_devices::exr2::isp::options::input::ClockSource::Sensor {},
         secondary: false,
         companion_secondary: false,
     });
@@ -361,9 +361,9 @@ fn register_sources_can_explicitly_follow_a_synthetic_sensor_without_input_enabl
     let edges = w.edges.clone();
     let mut o = input_options();
     o.sensor_period_ticks = Some(10);
-    o.clock = Some(input::Clock {
-        mode: input::ClockMode::RegisterPeriods,
-        source: input::ClockSource::Sensor {},
+    o.clock = Some(fujimod_emulator_devices::exr2::isp::options::input::Clock {
+        mode: fujimod_emulator_devices::exr2::isp::options::input::ClockMode::RegisterPeriods,
+        source: fujimod_emulator_devices::exr2::isp::options::input::ClockSource::Sensor {},
         secondary: true,
         companion_secondary: false,
     });
@@ -413,15 +413,15 @@ fn register_sources_can_explicitly_follow_a_synthetic_sensor_without_input_enabl
 #[test]
 fn explicit_sensor_clock_refuses_missing_sources_and_unused_periodic_fields() {
     let mut options = input_options();
-    options.clock = Some(input::Clock {
-        mode: input::ClockMode::RegisterPeriods,
-        source: input::ClockSource::Sensor {},
+    options.clock = Some(fujimod_emulator_devices::exr2::isp::options::input::Clock {
+        mode: fujimod_emulator_devices::exr2::isp::options::input::ClockMode::RegisterPeriods,
+        source: fujimod_emulator_devices::exr2::isp::options::input::ClockSource::Sensor {},
         secondary: true,
         companion_secondary: false,
     });
     assert!(ImageInput::new(options, input_wiring()).is_err());
     assert!(
-        serde_json::from_value::<input::Clock>(serde_json::json!({
+        serde_json::from_value::<fujimod_emulator_devices::exr2::isp::options::input::Clock>(serde_json::json!({
             "mode":"register_periods", "source":{"kind":"sensor","period_ticks":4},
             "secondary":true, "companion_secondary":false,
         }))
@@ -747,7 +747,7 @@ fn packed_raw_readback_matches_u16_with_independent_row_padding() {
     use fujimod_emulator_devices::imaging::raw::Packing;
     fn render(packing: Packing, padding: usize, mutate_after_start: bool) -> Vec<Vec<u8>> {
         let mut h = TestHost::new();
-        let outputs: readback::MemoryOutputHandle = Default::default();
+        let outputs: fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputHandle = Default::default();
         for i in 0..2 {
             outputs
                 .lock()
@@ -878,7 +878,7 @@ fn packed_raw_readback_refuses_unknown_controls_and_short_pitch() {
 #[test]
 fn raw_readback_waits_for_both_outputs_then_eof() {
     let mut h = TestHost::new();
-    let outputs: readback::MemoryOutputHandle = Default::default();
+    let outputs: fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputHandle = Default::default();
     for i in 0..2 {
         outputs
             .lock()
@@ -944,23 +944,23 @@ fn raw_readback_flows_through_both_output_channels_before_eof() {
     let mut h = TestHost::new();
     h.ram[0x9000..0x9100].fill(0xa5);
     h.ram[0xa000..0xa100].fill(0xa5);
-    let memory: readback::MemoryOutputHandle = Default::default();
+    let memory: fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputHandle = Default::default();
     let frames = ImageFrames::new(ImageLayout {
         width: 8,
         height: 2,
         stride: 16,
     })
     .unwrap();
-    let channels = output::OutputChannels::default();
+    let channels = fujimod_emulator_devices::exr2::isp::output_channels::OutputChannels::default();
     let routes = dma::IrqRoutes::default();
     routes.set(44, Some(0)).unwrap();
     routes.set(45, Some(0)).unwrap();
     let make = |channel, base, irq| {
         OutputChannel::new(
-            output::Options {
+            fujimod_emulator_devices::exr2::isp::options::output::Options {
                 stop_ticks: 2,
                 clock: fujimod_emulator_devices::exr2::isp::dma::Clock::Fixed { ticks: 5 },
-                geometry: output::GeometryPolicy::RefuseIncomplete,
+                geometry: fujimod_emulator_devices::exr2::isp::options::output::GeometryPolicy::RefuseIncomplete,
                 diagnostic_reads: false,
             },
             output::Wiring {
@@ -1095,8 +1095,8 @@ fn raw_readback_only_uses_armed_output_banks_and_their_irq_routes() {
     for mask in 0..4 {
         let mut h = TestHost::new();
         h.ram[0x9000..0xb000].fill(0xa5);
-        let memory: readback::MemoryOutputHandle = Default::default();
-        let channels = output::OutputChannels::default();
+        let memory: fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputHandle = Default::default();
+        let channels = fujimod_emulator_devices::exr2::isp::output_channels::OutputChannels::default();
         let routes = dma::IrqRoutes::default();
         let frames = ImageFrames::new(ImageLayout {
             width: 6,
@@ -1111,10 +1111,10 @@ fn raw_readback_only_uses_armed_output_banks_and_their_irq_routes() {
             }
             let base = 0xfff12000 + i as u64 * 0x1000;
             let mut bank = OutputChannel::new(
-                output::Options {
+                fujimod_emulator_devices::exr2::isp::options::output::Options {
                     stop_ticks: 2,
                     clock: dma::Clock::Fixed { ticks: 5 },
-                    geometry: output::GeometryPolicy::RefuseIncomplete,
+                    geometry: fujimod_emulator_devices::exr2::isp::options::output::GeometryPolicy::RefuseIncomplete,
                     diagnostic_reads: false,
                 },
                 output::Wiring {
@@ -1198,9 +1198,9 @@ fn register_input_needs_no_color_layout_until_readback_is_connected() {
 #[test]
 fn source_mask_clock_keeps_line_geometry_out_of_the_frame_period() {
     let mut o = input_options();
-    o.clock = Some(input::Clock {
-        mode: input::ClockMode::SourceMask,
-        source: input::ClockSource::Periodic {
+    o.clock = Some(fujimod_emulator_devices::exr2::isp::options::input::Clock {
+        mode: fujimod_emulator_devices::exr2::isp::options::input::ClockMode::SourceMask,
+        source: fujimod_emulator_devices::exr2::isp::options::input::ClockSource::Periodic {
             period_ticks: 200000,
             first_delay_ticks: None,
         },
@@ -1248,9 +1248,9 @@ fn programmed_input_extent_is_a_shared_peer_value_and_restores_with_registers() 
 #[test]
 fn physical_scan_period_changes_phase_edges_without_host_observation_effects() {
     let mut o = input_options();
-    o.clock = Some(input::Clock {
-        mode: input::ClockMode::InputEnable,
-        source: input::ClockSource::Periodic {
+    o.clock = Some(fujimod_emulator_devices::exr2::isp::options::input::Clock {
+        mode: fujimod_emulator_devices::exr2::isp::options::input::ClockMode::InputEnable,
+        source: fujimod_emulator_devices::exr2::isp::options::input::ClockSource::Periodic {
             period_ticks: 100,
             first_delay_ticks: Some(90),
         },

@@ -22,6 +22,7 @@ fujimod-emulator = { path = "../emulator" }
 fujimod-emulator-cpu = { path = "../emulator-cpu" }
 fujimod-emulator-cpu-unicorn = { path = "../emulator-cpu-unicorn" }
 fujimod-emulator-devices = { path = "../emulator-devices" }
+fujimod-emulator-exr2-board = { path = "../emulator-exr2-board" }
 fujimod-catalog = { path = "../catalog" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

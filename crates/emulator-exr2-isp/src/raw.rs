@@ -6,26 +6,8 @@ use fujimod_emulator_devices::exr2::isp::{Irq, due, word};
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use fujimod_emulator_devices::exr2::isp::options::raw::{Options, RegisterOptions};
 
-#[derive(Clone, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct RegisterOptions {}
-
-#[derive(Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Options {
-    pub completion_ticks: u64,
-    pub reset_ticks: u64,
-}
-impl Options {
-    fn validate(&self) -> Result<(), String> {
-        if self.completion_ticks == 0 || self.reset_ticks == 0 {
-            Err("RAW timing must be positive".into())
-        } else {
-            Ok(())
-        }
-    }
-}
 #[derive(Serialize, Deserialize)]
 enum Pending {
     Reset(u64),

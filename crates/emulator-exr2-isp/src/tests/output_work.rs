@@ -1,4 +1,5 @@
 use super::*;
+use std::sync::{Arc, Mutex};
 use fujimod_emulator_devices::test_host::{TestHost, advance, write};
 use fujimod_emulator_devices::imaging::{exposure::Calibration, radiometric::Renderer};
 use fujimod_emulator_devices::scene::{Frame, FrameEdge, FramePixels, SensorFrames};

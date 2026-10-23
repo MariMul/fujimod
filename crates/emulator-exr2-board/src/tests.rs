@@ -1,5 +1,5 @@
-use super::*;
 use fujimod_emulator_devices::{Cx, test_host::ram::Ram};
+use fujimod_emulator_exr2_plan::*;
 use serde_json::{Value, json};
 
 fn node(name: &str, base: u64, size: u64, model: Value) -> Value {
@@ -76,17 +76,14 @@ fn xm1_contact_response_uses_scenario_gpio_phases_and_physical_irq_routes() {
             "software":[]
         }),
     );
-    let assembly = build(document(vec![gpio, response, interrupt_controller])).unwrap();
-    let response_id = assembly.node_ids["contact_response"];
+    let built = build(document(vec![gpio, response, interrupt_controller])).unwrap();
+    let response_id = built.node_ids["contact_response"];
     assert_eq!(
-        assembly.graph.nodes[response_id].device.name(),
+        built.graph.nodes[response_id].device.name(),
         "gpio-contact-response"
     );
-    assert_eq!(assembly.graph.nodes[response_id].native_dependencies, [0]);
-    let fingerprint = assembly.graph.nodes[response_id]
-        .device
-        .fingerprint()
-        .unwrap();
+    assert_eq!(built.graph.nodes[response_id].native_dependencies, [0]);
+    let fingerprint = built.graph.nodes[response_id].device.fingerprint().unwrap();
     assert_eq!(fingerprint["options"]["initial_phase"], 0);
     assert_eq!(
         fingerprint["options"]["phases"].as_array().unwrap().len(),
@@ -107,9 +104,9 @@ fn timer_constructor_uses_declared_controller_outputs() {
     ]);
     let mut value = value;
     value["wires"] = json!({"routing":"irq-routes"});
-    let assembly = build(value.clone()).unwrap();
-    assert_eq!(assembly.graph.nodes[2].device.name(), "exr2-system-timers");
-    assert_eq!(assembly.graph.nodes[2].native_dependencies, [0, 1]);
+    let built = build(value.clone()).unwrap();
+    assert_eq!(built.graph.nodes[2].device.name(), "exr2-system-timers");
+    assert_eq!(built.graph.nodes[2].native_dependencies, [0, 1]);
     value["nodes"][2]["model"]["controllers"] = json!(["irq0", "irq0"]);
     assert!(build(value).is_err());
 }
@@ -143,11 +140,11 @@ fn block98000_uses_a_declared_execution_port_and_its_real_constructor() {
     ] {
         assert!(plan.validate_memory_outputs(&ports).is_err());
     }
-    let mut assembly = build(value).unwrap();
-    assert_eq!(assembly.graph.nodes[0].device.name(), "block-98000");
+    let mut built = build(value).unwrap();
+    assert_eq!(built.graph.nodes[0].device.name(), "block-98000");
     let mut host = Ram::new(0);
-    assert_eq!(get(&mut assembly, &mut host, 0xfff98000, 4), 3);
-    assert_eq!(get(&mut assembly, &mut host, 0xfff98008, 4), 0);
+    assert_eq!(get(&mut built, &mut host, 0xfff98000, 4), 3);
+    assert_eq!(get(&mut built, &mut host, 0xfff98008, 4), 0);
 }
 #[test]
 fn core_release_has_checked_reset_state_one_signal_writer_and_a_causal_dependency() {
@@ -165,9 +162,9 @@ fn core_release_has_checked_reset_state_one_signal_writer_and_a_causal_dependenc
     for states in [vec![], vec![true], vec![true, true]] {
         assert!(plan.validate_reset_outputs(&states).is_err());
     }
-    let assembly = build(value.clone()).unwrap();
-    assert_eq!(assembly.graph.nodes[1].native_dependencies, [0]);
-    assert_eq!(assembly.graph.nodes[1].device.name(), "core-release");
+    let built = build(value.clone()).unwrap();
+    assert_eq!(built.graph.nodes[1].native_dependencies, [0]);
+    assert_eq!(built.graph.nodes[1].device.name(), "core-release");
     value["nodes"][0]["model"]["software"]
         .as_array_mut()
         .unwrap()
@@ -179,8 +176,8 @@ fn core_release_has_checked_reset_state_one_signal_writer_and_a_causal_dependenc
             .contains("one controller output")
     );
 }
-fn build(value: Value) -> Result<Assembly, String> {
-    parse(value)?.build(Resources::default(), 0, &mut RefuseAdapters)
+fn build(value: Value) -> Result<BuiltBoard, String> {
+    crate::build(parse(value)?, Resources::default(), 0, &mut RefuseAdapters)
 }
 
 #[test]
@@ -259,18 +256,18 @@ fn controller(name: &str, core: usize, base: u64) -> Value {
         json!({"kind":"exr2-interrupt-controller","options":{"arbitration":"unique"},"core":core,"base":base,"routes":"routing","software":[]}),
     )
 }
-fn put(assembly: &mut Assembly, host: &mut Ram, address: u64, size: u8, value: u64) {
-    let id = assembly.graph.at(address).unwrap();
+fn put(built: &mut BuiltBoard, host: &mut Ram, address: u64, size: u8, value: u64) {
+    let id = built.graph.at(address).unwrap();
     let mut cx = Cx::new(host, 0, 0, id);
-    assembly.graph.nodes[id]
+    built.graph.nodes[id]
         .device
         .write(&mut cx, address, size, value);
     assert_eq!(cx.refusal(), None, "{address:#x}");
 }
-fn get(assembly: &mut Assembly, host: &mut Ram, address: u64, size: u8) -> u64 {
-    let id = assembly.graph.at(address).unwrap();
+fn get(built: &mut BuiltBoard, host: &mut Ram, address: u64, size: u8) -> u64 {
+    let id = built.graph.at(address).unwrap();
     let mut cx = Cx::new(host, 0, 0, id);
-    let value = assembly.graph.nodes[id].device.read(&mut cx, address, size);
+    let value = built.graph.nodes[id].device.read(&mut cx, address, size);
     assert_eq!(cx.refusal(), None, "{address:#x}");
     value
 }
@@ -288,26 +285,26 @@ fn controller_registers_publish_unique_image_routes_and_causal_connections() {
         ),
     ]);
     doc["wires"] = json!({"routing":"irq-routes"});
-    let mut assembly = build(doc.clone()).unwrap();
-    assert_eq!(assembly.core_interrupts.len(), 2);
+    let mut built = build(doc.clone()).unwrap();
+    assert_eq!(built.core_interrupts.len(), 2);
     assert_eq!(
-        assembly.graph.nodes[assembly.node_ids["phase"]].native_dependencies,
+        built.graph.nodes[built.node_ids["phase"]].native_dependencies,
         vec![0, 1]
     );
-    let Wire::IrqRoutes(routes) = &assembly.resources.wires["routing"] else {
+    let Wire::IrqRoutes(routes) = &built.resources.wires["routing"] else {
         panic!()
     };
     let routes = routes.clone();
     assert_eq!(routes.owner(33), None);
     let mut host = Ram::new(0);
-    put(&mut assembly, &mut host, 0xfffb3084, 4, 2);
+    put(&mut built, &mut host, 0xfffb3084, 4, 2);
     assert_eq!(routes.owner(33), Some(0));
-    put(&mut assembly, &mut host, 0xfffb4084, 4, 2);
+    put(&mut built, &mut host, 0xfffb4084, 4, 2);
     assert_eq!(routes.owner(33), None);
     assert!(routes.latch(33).is_err());
-    put(&mut assembly, &mut host, 0xfffb30a4, 4, 2);
+    put(&mut built, &mut host, 0xfffb30a4, 4, 2);
     assert_eq!(routes.owner(33), Some(1));
-    put(&mut assembly, &mut host, 0xfffb40a4, 4, 2);
+    put(&mut built, &mut host, 0xfffb40a4, 4, 2);
     assert_eq!(routes.owner(33), None);
     doc["wires"]["routing"] = json!("parameters");
     assert!(build(doc).err().unwrap().contains("IrqRoutes"));
@@ -338,25 +335,25 @@ fn loader_engines_are_native_nodes_with_exact_apertures_and_irq_wiring() {
         lz,
     ]);
     doc["wires"] = json!({"routing":"irq-routes"});
-    let mut assembly = build(doc.clone()).unwrap();
+    let mut built = build(doc.clone()).unwrap();
     assert_eq!(
-        assembly.graph.nodes[assembly.node_ids["lz"]].device.name(),
+        built.graph.nodes[built.node_ids["lz"]].device.name(),
         "exr2-lz"
     );
     assert_eq!(
-        assembly.graph.nodes[assembly.node_ids["memory"]].native_dependencies,
+        built.graph.nodes[built.node_ids["memory"]].native_dependencies,
         vec![0, 1]
     );
-    assert!(assembly.graph.at(0xfff02040).is_err());
+    assert!(built.graph.at(0xfff02040).is_err());
     let mut host = Ram::new(0);
-    put(&mut assembly, &mut host, 0xfff43000, 4, 0);
-    let id = assembly.node_ids["lz"];
-    assert_eq!(assembly.graph.nodes[id].device.next_deadline(0), Some(2));
+    put(&mut built, &mut host, 0xfff43000, 4, 0);
+    let id = built.node_ids["lz"];
+    assert_eq!(built.graph.nodes[id].device.next_deadline(0), Some(2));
     host.now = 2;
-    assembly.graph.nodes[id]
+    built.graph.nodes[id]
         .device
         .advance(&mut Cx::new(&mut host, 0, 0, id));
-    assert_eq!(get(&mut assembly, &mut host, 0xfff43000, 4), 1);
+    assert_eq!(get(&mut built, &mut host, 0xfff43000, 4), 1);
     doc["nodes"][2]["windows"][0]["size"] = json!(0x80);
     assert!(build(doc.clone()).err().unwrap().contains("channel 0"));
     doc["nodes"][2]["windows"][0]["size"] = json!(0x40);
@@ -391,25 +388,25 @@ fn both_sd_hosts_own_their_clock_words_and_reject_a_competing_owner() {
         0x100,
         json!({"kind":"clocks","options":{"output_settle_ticks":7,"reset_ready":true}}),
     );
-    let mut assembly = build(document(vec![sd.clone(), sdio.clone(), clocks])).unwrap();
-    assert!(assembly.contacts["card"].present());
+    let mut built = build(document(vec![sd.clone(), sdio.clone(), clocks])).unwrap();
+    assert!(built.contacts["card"].present());
     let mut host = Ram::new(0);
-    put(&mut assembly, &mut host, 0xfff88048, 4, 1 << 28);
+    put(&mut built, &mut host, 0xfff88048, 4, 1 << 28);
     for address in [0xfff5002c, 0xfff5102c] {
-        put(&mut assembly, &mut host, address, 2, 1);
+        put(&mut built, &mut host, address, 2, 1);
     }
     host.now = 2;
-    assert_eq!(get(&mut assembly, &mut host, 0xfff5002c, 2), 1);
-    assert_eq!(get(&mut assembly, &mut host, 0xfff5102c, 2), 1);
+    assert_eq!(get(&mut built, &mut host, 0xfff5002c, 2), 1);
+    assert_eq!(get(&mut built, &mut host, 0xfff5102c, 2), 1);
     host.now = 3;
-    assert_eq!(get(&mut assembly, &mut host, 0xfff5002c, 2), 3);
-    assert_eq!(get(&mut assembly, &mut host, 0xfff5102c, 2), 1);
+    assert_eq!(get(&mut built, &mut host, 0xfff5002c, 2), 3);
+    assert_eq!(get(&mut built, &mut host, 0xfff5102c, 2), 1);
     host.now = 5;
-    assert_eq!(get(&mut assembly, &mut host, 0xfff5102c, 2), 3);
-    assert_eq!(get(&mut assembly, &mut host, 0xfff88048, 4), 1 << 28);
+    assert_eq!(get(&mut built, &mut host, 0xfff5102c, 2), 3);
+    assert_eq!(get(&mut built, &mut host, 0xfff88048, 4), 1 << 28);
     host.now = 7;
     assert_eq!(
-        get(&mut assembly, &mut host, 0xfff88048, 4),
+        get(&mut built, &mut host, 0xfff88048, 4),
         (1 << 28) | (1 << 24)
     );
     let competing = node(
@@ -464,17 +461,17 @@ fn serial_lens_owns_its_part_and_uses_native_gpio_selection_and_pulse_wiring() {
         "endpoint":{"kind":"lens-unit","options":{"protocol":{"kind":"banked","clock":[{"kind":"fixed"},{"kind":"fixed"}],"positive_direction_high":false,"stop_response":"settled"},"motors":[motor.clone(),motor],"encoder":null,"zoom":null},"gpio":"pads","pulses":"pulses","completion":[{"Core":{"core":0,"line":14}},{"Core":{"core":0,"line":12}}]}}),
     );
     assert!(parse(document(vec![serial.clone(), gpio.clone(), pulses.clone()])).is_err());
-    let mut assembly = build(document(vec![gpio, pulses, serial])).unwrap();
+    let mut built = build(document(vec![gpio, pulses, serial])).unwrap();
     assert_eq!(
-        assembly.graph.nodes[assembly.node_ids["lens"]].native_dependencies,
+        built.graph.nodes[built.node_ids["lens"]].native_dependencies,
         vec![0, 1]
     );
     let mut host = Ram::new(0);
-    put(&mut assembly, &mut host, 0xfff84080, 4, 0xe0);
-    put(&mut assembly, &mut host, 0xfff84084, 4, 4);
-    put(&mut assembly, &mut host, 0xfff8409c, 4, 0x0420);
-    let id = assembly.node_ids["lens"];
-    let fingerprint = assembly.graph.nodes[id].device.fingerprint().unwrap();
+    put(&mut built, &mut host, 0xfff84080, 4, 0xe0);
+    put(&mut built, &mut host, 0xfff84084, 4, 4);
+    put(&mut built, &mut host, 0xfff8409c, 4, 0x0420);
+    let id = built.node_ids["lens"];
+    let fingerprint = built.graph.nodes[id].device.fingerprint().unwrap();
     assert_eq!(fingerprint["part"]["mechanics"]["motors"][0]["position"], 3);
     assert_eq!(
         fingerprint["part"]["mechanics"]["motors"][0]["home_level"],
@@ -484,16 +481,16 @@ fn serial_lens_owns_its_part_and_uses_native_gpio_selection_and_pulse_wiring() {
         fingerprint["part"]["mechanics"]["motors"][0]["options"]["home"]["pin"],
         json!({"port":0,"pin":0})
     );
-    assert_eq!(assembly.graph.nodes[id].device.next_deadline(0), Some(4));
+    assert_eq!(built.graph.nodes[id].device.next_deadline(0), Some(4));
     host.now = 3;
-    assembly.graph.nodes[id].device.advance(&mut host.cx());
-    assert_eq!(get(&mut assembly, &mut host, 0xfff8408c, 4), 0);
+    built.graph.nodes[id].device.advance(&mut host.cx());
+    assert_eq!(get(&mut built, &mut host, 0xfff8408c, 4), 0);
     host.now = 4;
-    assembly.graph.nodes[id].device.advance(&mut host.cx());
-    assert_eq!(get(&mut assembly, &mut host, 0xfff8408c, 4), 0x300);
-    put(&mut assembly, &mut host, 0xfff89340, 4, 0x02000200);
+    built.graph.nodes[id].device.advance(&mut host.cx());
+    assert_eq!(get(&mut built, &mut host, 0xfff8408c, 4), 0x300);
+    put(&mut built, &mut host, 0xfff89340, 4, 0x02000200);
     let mut cx = host.cx();
-    assembly.graph.nodes[id]
+    built.graph.nodes[id]
         .device
         .write(&mut cx, 0xfff8409c, 4, 0x3e00);
     assert!(cx.refusal().is_some());
@@ -553,24 +550,21 @@ fn readback_and_jpeg_peers_share_real_constructor_handles() {
         })
         .unwrap(),
     );
-    let assembly = parse(doc)
-        .unwrap()
-        .build(resources, 123, &mut RefuseAdapters)
-        .unwrap();
+    let built = crate::build(parse(doc).unwrap(), resources, 123, &mut RefuseAdapters).unwrap();
     assert_eq!(
-        assembly.graph.nodes[assembly.node_ids["input"]].native_dependencies,
+        built.graph.nodes[built.node_ids["input"]].native_dependencies,
         vec![0, 2, 3]
     );
     assert_eq!(
-        assembly.graph.nodes[assembly.node_ids["warp"]].native_dependencies,
+        built.graph.nodes[built.node_ids["warp"]].native_dependencies,
         vec![5]
     );
     assert_eq!(
-        assembly.graph.nodes[assembly.node_ids["jpeg"]].native_dependencies,
+        built.graph.nodes[built.node_ids["jpeg"]].native_dependencies,
         vec![4]
     );
     assert_eq!(
-        assembly.graph.nodes[assembly.node_ids["input"]]
+        built.graph.nodes[built.node_ids["input"]]
             .device
             .next_deadline(123),
         None
@@ -594,9 +588,9 @@ fn graphics_uses_real_constructor_and_two_declared_controller_outputs() {
         ),
     ]);
     value["wires"] = json!({"routing":"irq-routes"});
-    let assembly = build(value.clone()).unwrap();
-    assert_eq!(assembly.graph.nodes[2].device.name(), "vector-gpu");
-    assert_eq!(assembly.graph.nodes[2].native_dependencies, [0, 1]);
+    let built = build(value.clone()).unwrap();
+    assert_eq!(built.graph.nodes[2].device.name(), "vector-gpu");
+    assert_eq!(built.graph.nodes[2].native_dependencies, [0, 1]);
     value["nodes"][2]["model"]["controllers"] = json!(["irq0", "irq0"]);
     assert!(build(value.clone()).is_err());
     value["nodes"][2]["model"]["controllers"] = json!(["irq0", "irq1"]);
@@ -635,27 +629,33 @@ fn external_image_inputs_record_the_frame_owners_that_must_be_woken() {
         }])
         .unwrap(),
     );
-    let assembly = parse(plan.clone())
-        .unwrap()
-        .build(resources, 0, &mut RefuseAdapters)
-        .unwrap();
+    let built = crate::build(
+        parse(plan.clone()).unwrap(),
+        resources,
+        0,
+        &mut RefuseAdapters,
+    )
+    .unwrap();
     assert_eq!(
-        assembly.resources.image_users("image").unwrap(),
-        [assembly.node_ids["frames"]]
+        built.resources.image_users("image").unwrap(),
+        [built.node_ids["frames"]]
     );
     assert!(
-        assembly
+        built
             .resources
             .image_users("unconnected")
             .unwrap()
             .is_empty()
     );
-    assert!(assembly.resources.image_users("absent").is_err());
+    assert!(built.resources.image_users("absent").is_err());
     assert!(
-        parse(plan)
-            .unwrap()
-            .build(assembly.resources, 0, &mut RefuseAdapters)
-            .is_err()
+        crate::build(
+            parse(plan).unwrap(),
+            built.resources,
+            0,
+            &mut RefuseAdapters
+        )
+        .is_err()
     );
 }
 
@@ -682,17 +682,17 @@ fn serial_register_access_wakes_the_coordinator_after_dma_consolidation() {
     serial["windows"] = json!([
         {"base":0xfff84000u64,"size":32},{"base":0xfff46080u64,"size":16},
         {"base":0xfff02080u64,"size":64},{"base":0xfff98500u64,"size":8}]);
-    let mut assembly = build(document(vec![gpio, serial])).unwrap();
-    let coordinator = assembly
+    let mut built = build(document(vec![gpio, serial])).unwrap();
+    let coordinator = built
         .graph
         .nodes
         .iter()
         .position(|node| node.device.name() == "serial-event-coordinator")
         .unwrap();
     for address in [0xfff84000, 0xfff46080, 0xfff02080, 0xfff98500] {
-        let source = assembly.graph.at(address).unwrap();
+        let source = built.graph.at(address).unwrap();
         assert!(
-            assembly.graph.nodes[coordinator]
+            built.graph.nodes[coordinator]
                 .native_dependencies
                 .contains(&source),
             "{address:#x}"
@@ -700,27 +700,24 @@ fn serial_register_access_wakes_the_coordinator_after_dma_consolidation() {
     }
     let mut host = Ram::new(65536);
     for (offset, value) in [(0, 192), (4, 48), (8, 0), (28, 0x23)] {
-        put(&mut assembly, &mut host, 0xfff84000 + offset, 4, value);
+        put(&mut built, &mut host, 0xfff84000 + offset, 4, value);
     }
     assert_eq!(
-        assembly.graph.nodes[coordinator].device.next_deadline(0),
+        built.graph.nodes[coordinator].device.next_deadline(0),
         Some(4)
     );
     host.now = 4;
-    assembly.graph.nodes[coordinator]
+    built.graph.nodes[coordinator]
         .device
         .advance(&mut Cx::new(&mut host, 0, 4, coordinator));
-    assert_eq!(get(&mut assembly, &mut host, 0xfff84010, 4), 1);
-    assert_eq!(get(&mut assembly, &mut host, 0xfff84018, 4), 0);
-    assert_eq!(
-        assembly.graph.nodes[coordinator].device.next_deadline(4),
-        None
-    );
+    assert_eq!(get(&mut built, &mut host, 0xfff84010, 4), 1);
+    assert_eq!(get(&mut built, &mut host, 0xfff84018, 4), 0);
+    assert_eq!(built.graph.nodes[coordinator].device.next_deadline(4), None);
 }
 
 #[test]
-fn board_assembly_registers_spi_selector_and_one_dma_controller_as_independent_nodes() {
-    use crate::{Plan, RefuseAdapters, Resources};
+fn board_registers_spi_selector_and_one_dma_controller_as_independent_nodes() {
+    use fujimod_emulator_exr2_plan::{Plan, RefuseAdapters, Resources};
     let plan = Plan::parse(
         &serde_json::json!({
             "schema": 1,
@@ -757,7 +754,7 @@ fn board_assembly_registers_spi_selector_and_one_dma_controller_as_independent_n
     )
     .unwrap();
     let mut adapters = RefuseAdapters;
-    let board = plan.build(Resources::default(), 0, &mut adapters).unwrap();
+    let board = crate::build(plan, Resources::default(), 0, &mut adapters).unwrap();
     assert_eq!(board.graph.nodes.len(), 3);
     let serial = board.graph.at(0xfff84080).unwrap();
     let selector = board.graph.at(0xfff98500).unwrap();

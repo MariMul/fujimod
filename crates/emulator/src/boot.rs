@@ -40,7 +40,7 @@ use fujimod_catalog::{
     reference::PartModel,
 };
 use fujimod_emulator_cpu::arm::Coprocessor;
-use fujimod_emulator_exr2_board::{MemoryChoices, Plan, RefuseAdapters, Resources};
+use fujimod_emulator_exr2_plan::{MemoryChoices, Plan, RefuseAdapters, Resources};
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::{
@@ -888,7 +888,10 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
     resources.inputs = serde_json::from_value::<preparation::Spec>(scene.clone())
         .map_err(|e| e.to_string())?
         .build(&assets)?;
-    let assembly = plan.build(resources, 0, &mut RefuseAdapters)?;
+    // Unit tests have no final crate to register the board builder.
+    #[cfg(test)]
+    fujimod_emulator_exr2_board::register_board_builder();
+    let built = plan.build(resources, 0, &mut RefuseAdapters)?;
     let bus_mode = match prepared.execution_policy.mode {
         RunExecutionMode::Strict => Mode::Strict,
     };
@@ -896,7 +899,7 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
         RunEngine::Unicorn => factory::Engine::Unicorn,
         RunEngine::Hypervisor => factory::Engine::Hypervisor,
     };
-    let bus = Bus::from_graph(bus_mode, assembly.graph)?;
+    let bus = Bus::from_graph(bus_mode, built.graph)?;
     let mut board = graph.build(
         factory::Options {
             engine,
@@ -905,7 +908,7 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
         bus,
         None,
     )?;
-    for controller in assembly.core_interrupts {
+    for controller in built.core_interrupts {
         board.configure_core_interrupts(
             controller.core,
             controller.device,
@@ -923,10 +926,10 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
         board,
         controls: None,
         contact_driver: None,
-        resources: assembly.resources,
+        resources: built.resources,
         xp5: None,
-        nodes: assembly.node_ids,
-        contacts: assembly.contacts,
+        nodes: built.node_ids,
+        contacts: built.contacts,
         recording_frames: Default::default(),
     })
 }

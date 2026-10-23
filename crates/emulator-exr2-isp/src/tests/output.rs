@@ -15,17 +15,17 @@ fn output(base: u64, irq: u32) -> (OutputChannel, ImageFrames, IrqRoutes) {
     .unwrap();
     let routes = routes(irq);
     let d = OutputChannel::new(
-        output::Options {
+        fujimod_emulator_devices::exr2::isp::options::output::Options {
             stop_ticks: 2,
             clock: fujimod_emulator_devices::exr2::isp::dma::Clock::Fixed { ticks: 5 },
-            geometry: output::GeometryPolicy::RefuseIncomplete,
+            geometry: fujimod_emulator_devices::exr2::isp::options::output::GeometryPolicy::RefuseIncomplete,
             diagnostic_reads: true,
         },
         output::Wiring {
             base,
             irq,
             channel: usize::from(irq == 0x2d),
-            channels: output::OutputChannels::default(),
+            channels: fujimod_emulator_devices::exr2::isp::output_channels::OutputChannels::default(),
             frames: frames.clone(),
             memory_outputs: None,
             routes: routes.clone(),
@@ -125,15 +125,15 @@ fn output_banks_refuse_physical_alias_overlap() {
         stride: 16,
     })
     .unwrap();
-    let channels = output::OutputChannels::default();
+    let channels = fujimod_emulator_devices::exr2::isp::output_channels::OutputChannels::default();
     let routes = routes(0x2c);
     routes.set(0x2d, Some(0)).unwrap();
     let make = |base, irq, channel| {
         OutputChannel::new(
-            output::Options {
+            fujimod_emulator_devices::exr2::isp::options::output::Options {
                 stop_ticks: 2,
                 clock: fujimod_emulator_devices::exr2::isp::dma::Clock::Fixed { ticks: 5 },
-                geometry: output::GeometryPolicy::RefuseIncomplete,
+                geometry: fujimod_emulator_devices::exr2::isp::options::output::GeometryPolicy::RefuseIncomplete,
                 diagnostic_reads: false,
             },
             output::Wiring {
@@ -170,15 +170,15 @@ fn paired_output_writes_both_payloads_before_either_irq_and_waits_for_both_acks(
         stride: 16,
     })
     .unwrap();
-    let channels = output::OutputChannels::default();
+    let channels = fujimod_emulator_devices::exr2::isp::output_channels::OutputChannels::default();
     let routes = routes(0x2c);
     routes.set(0x2d, Some(0)).unwrap();
     let make = |base, irq, channel| {
         OutputChannel::new(
-            output::Options {
+            fujimod_emulator_devices::exr2::isp::options::output::Options {
                 stop_ticks: 2,
                 clock: fujimod_emulator_devices::exr2::isp::dma::Clock::Fixed { ticks: 5 },
-                geometry: output::GeometryPolicy::RefuseIncomplete,
+                geometry: fujimod_emulator_devices::exr2::isp::options::output::GeometryPolicy::RefuseIncomplete,
                 diagnostic_reads: false,
             },
             output::Wiring {
@@ -242,17 +242,17 @@ fn unequal_output_rasters_wait_for_later_dma_before_publishing_both_irqs() {
         stride: 16,
     })
     .unwrap();
-    let channels = output::OutputChannels::default();
+    let channels = fujimod_emulator_devices::exr2::isp::output_channels::OutputChannels::default();
     let routes = routes(0x2c);
     routes.set(0x2d, Some(0)).unwrap();
     let make = |base, irq, channel| {
         OutputChannel::new(
-            output::Options {
+            fujimod_emulator_devices::exr2::isp::options::output::Options {
                 stop_ticks: 2,
                 clock: fujimod_emulator_devices::exr2::isp::dma::Clock::Throughput {
                     bytes_per_tick: 16,
                 },
-                geometry: output::GeometryPolicy::RefuseIncomplete,
+                geometry: fujimod_emulator_devices::exr2::isp::options::output::GeometryPolicy::RefuseIncomplete,
                 diagnostic_reads: false,
             },
             output::Wiring {

@@ -8,7 +8,7 @@ fn scaler_dma_padding_reset_and_unsupported_transform() {
     h.ram[0x8000..0x8010].copy_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
     h.ram[0x9000..0x9020].fill(0xa5);
     let mut d = Scaler::new(
-        scaler::Options {
+        fujimod_emulator_devices::exr2::isp::options::scaler::Options {
             completion_ticks: 4,
         },
         Irq { core: 0, line: 67 },

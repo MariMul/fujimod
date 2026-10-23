@@ -3,8 +3,8 @@
 //! Pad mux/direction/enable registers and interrupt sense registers are the
 //! only control inputs. Startup duration and electrical interpretation remain
 //! explicit inferred board inputs; no optical operation is qualified here.
-use crate::exr2::serial_dma;
 use super::{gpio, irq};
+use crate::exr2::serial_dma;
 use crate::{
     Cx, Device,
     checkpoint::Checkpoint,
@@ -127,7 +127,7 @@ impl XMountLens {
         }
         let port = x_mount_lens::Port::new(configuration, startup_ticks)?;
         let transport =
-            serial_dma::Assembly::with_wire(transport, Box::new(port.clone()))?.into_transport();
+            serial_dma::Nodes::with_wire(transport, Box::new(port.clone()))?.into_transport();
         let state = State {
             levels: vec![false; controllers.len()],
         };

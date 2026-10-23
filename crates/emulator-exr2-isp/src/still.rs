@@ -9,15 +9,9 @@ use fujimod_emulator_devices::imaging::{
     raw::{Cfa, Packing, RawView},
 };
 use fujimod_emulator_devices::{Cx, Device};
-use serde::Deserialize;
 use std::sync::Arc;
+use fujimod_emulator_devices::exr2::isp::options::still::Options;
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Options {
-    pub completion_ticks: u64,
-    pub cfa: Vec<u8>,
-}
 pub struct StillProcessor {
     r: Vec<u32>,
     cfa: Cfa,

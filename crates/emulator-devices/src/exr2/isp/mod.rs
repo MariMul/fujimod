@@ -5,6 +5,9 @@
 //! timing are declared explicitly by each model, independently of firmware.
 pub mod contrast;
 pub mod dma;
+pub mod memory_outputs;
+pub mod options;
+pub mod output_channels;
 pub mod parameters;
 pub use parameters::ParameterBank;
 

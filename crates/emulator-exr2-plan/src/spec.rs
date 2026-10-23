@@ -223,7 +223,7 @@ pub enum Model {
         options: dma::audio::Options,
     },
     ImageCombination {
-        options: fujimod_emulator_exr2_isp::combination::Options,
+        options: fujimod_emulator_devices::exr2::isp::options::combination::Options,
         irq: isp::Irq,
     },
     I2c {
@@ -379,7 +379,7 @@ pub enum Model {
         ram_bytes: u64,
     },
     ImageInput {
-        options: fujimod_emulator_exr2_isp::input::Options,
+        options: fujimod_emulator_devices::exr2::isp::options::input::Options,
         phase_irqs: [isp::Irq; 2],
         raw_irq: isp::Irq,
         readback_irq: isp::Irq,
@@ -392,7 +392,7 @@ pub enum Model {
         edges: String,
     },
     OutputChannel {
-        options: fujimod_emulator_exr2_isp::output::Options,
+        options: fujimod_emulator_devices::exr2::isp::options::output::Options,
         base: u64,
         irq: u32,
         channel: usize,
@@ -402,18 +402,18 @@ pub enum Model {
         memory_outputs: Option<String>,
     },
     Statistics {
-        options: fujimod_emulator_exr2_isp::producer::Options,
+        options: fujimod_emulator_devices::exr2::isp::options::producer::Options,
         routes: String,
         frames: String,
         images: String,
         grid: Option<String>,
     },
     PhaseDetection {
-        options: fujimod_emulator_exr2_isp::phase_detection::Options,
+        options: fujimod_emulator_devices::exr2::isp::options::phase_detection::Options,
         routes: String,
     },
     WindowAnalysis {
-        options: fujimod_emulator_exr2_isp::window_analysis::Options,
+        options: fujimod_emulator_devices::exr2::isp::options::window_analysis::Options,
         routes: String,
     },
     Parameters {
@@ -421,31 +421,31 @@ pub enum Model {
         bank: String,
     },
     RawConversion {
-        options: fujimod_emulator_exr2_isp::raw::RegisterOptions,
+        options: fujimod_emulator_devices::exr2::isp::options::raw::RegisterOptions,
     },
     Prefilter {
-        options: fujimod_emulator_exr2_isp::raw::Options,
+        options: fujimod_emulator_devices::exr2::isp::options::raw::Options,
         irq: isp::Irq,
     },
     RawStatistics {
-        options: fujimod_emulator_exr2_isp::raw::Options,
+        options: fujimod_emulator_devices::exr2::isp::options::raw::Options,
         irq: isp::Irq,
     },
     StillProcessor {
-        options: fujimod_emulator_exr2_isp::still::Options,
+        options: fujimod_emulator_devices::exr2::isp::options::still::Options,
         irq: isp::Irq,
     },
     Scaler {
-        options: fujimod_emulator_exr2_isp::scaler::Options,
+        options: fujimod_emulator_devices::exr2::isp::options::scaler::Options,
         irq: isp::Irq,
     },
     Warp {
-        options: fujimod_emulator_exr2_isp::warp::Options,
+        options: fujimod_emulator_devices::exr2::isp::options::warp::Options,
         irq: isp::Irq,
         stream: String,
     },
     VideoEncoder {
-        options: fujimod_emulator_exr2_isp::video::Options,
+        options: fujimod_catalog::construction::VideoEncoderOptions,
         irq: isp::Irq,
     },
     JpegEncoder {
@@ -458,13 +458,13 @@ pub enum Model {
         irq: isp::Irq,
     },
     Block11000 {
-        options: fujimod_emulator_exr2_isp::block11000::Options,
+        options: fujimod_emulator_devices::exr2::isp::options::block11000::Options,
     },
     FaceDetector {
-        options: fujimod_emulator_exr2_isp::face_detector::Options,
+        options: fujimod_emulator_devices::exr2::isp::options::face_detector::Options,
     },
     FaceResults {
-        profile: fujimod_emulator_exr2_isp::face_results::Profile,
+        profile: fujimod_emulator_devices::exr2::isp::options::face_results::Profile,
         routes: String,
     },
     Adapter {
@@ -472,7 +472,7 @@ pub enum Model {
     },
 }
 impl Model {
-    pub(super) fn node_references(&self) -> Vec<&str> {
+    pub fn node_references(&self) -> Vec<&str> {
         let mut refs = vec![];
         match self {
             Self::Power { gpio, .. } | Self::ContactActuator { gpio, .. } => {

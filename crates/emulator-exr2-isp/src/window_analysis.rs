@@ -9,20 +9,9 @@ use fujimod_emulator_devices::exr2::isp::{
 };
 use fujimod_emulator_devices::imaging::analysis::{self, WindowGrid};
 use fujimod_emulator_devices::{Cx, Device};
-use serde::Deserialize;
+use fujimod_emulator_devices::exr2::isp::options::window_analysis::Options;
 const BASE: u64 = 0xfff42000;
 const IMAGE_BYTES: usize = 8 << 20;
-#[derive(Clone, Copy, Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Arithmetic {
-    Y16GradientsAndLocalTracking,
-}
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Options {
-    pub arithmetic: Arithmetic,
-    pub ticks_per_window: u64,
-}
 pub struct Wiring {
     pub routes: IrqRoutes,
 }

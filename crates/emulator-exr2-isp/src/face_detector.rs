@@ -13,23 +13,9 @@ use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
+use fujimod_emulator_devices::exr2::isp::options::face_detector::{Options, Mode};
 
 pub const BASE: u64 = 0xfff14000;
-
-#[derive(Clone, Copy, Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Options {
-    #[serde(default)]
-    pub mode: Mode,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Mode {
-    #[default]
-    Configuration,
-    RetainedWords,
-}
 
 const FIXED_WORDS: &[(u16, u32)] = &[(0x08, 0x01000000), (0x564, 0xffff), (0x57c, 0)];
 

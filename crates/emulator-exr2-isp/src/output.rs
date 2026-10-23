@@ -2,95 +2,20 @@
 //! resampling, and completion latency are declared input laws; silicon
 //! filtering is unresolved. Each instance owns one bank.
 use fujimod_emulator_devices::exr2::isp::{
-    Irq,
     dma::{self, IrqRoutes, Raster, Transfer},
     due,
 };
-use super::readback::MemoryOutputHandle;
+use fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputHandle;
 use fujimod_emulator_devices::imaging::analysis::{ImageLayout, nearest_pairs};
 use fujimod_emulator_devices::scene::ImageFrames;
+use fujimod_emulator_devices::exr2::isp::output_channels::{FrameTransfer, OutputChannels, Source};
 use fujimod_emulator_devices::{Cx, Device};
-use serde::Deserialize;
-use std::sync::{Arc, Mutex};
+use fujimod_emulator_devices::exr2::isp::options::output::{Options, GeometryPolicy};
 
 #[cfg(test)]
 #[path = "tests/output_work.rs"]
 mod work_tests;
 
-#[derive(Clone, Copy, Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum GeometryPolicy {
-    SkipIncomplete,
-    RefuseIncomplete,
-}
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Options {
-    pub stop_ticks: u64,
-    pub clock: dma::Clock,
-    pub geometry: GeometryPolicy,
-    #[serde(default)]
-    pub diagnostic_reads: bool,
-}
-/// Both banks share this physical output interface. Reservations are current
-/// frame spans, never a history; alias overlap is refused before DMA begins.
-#[derive(Clone)]
-pub struct OutputChannels(Arc<Mutex<Channels>>);
-#[derive(Default, serde::Serialize, serde::Deserialize)]
-struct Channels {
-    transfers: [Option<FrameTransfer>; 2],
-    dma: [Transfer; 2],
-    clock: Option<dma::Clock>,
-    irqs: [Option<u32>; 2],
-    armed: [bool; 2],
-    readback_routes: Option<[Option<Irq>; 2]>,
-    readback_deadline: Option<u64>,
-}
-impl Default for OutputChannels {
-    fn default() -> Self {
-        let result = Self(Arc::new(Mutex::new(Channels::default())));
-        drop(result.0.lock().unwrap());
-        result
-    }
-}
-impl OutputChannels {
-    pub fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
-        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
-            "output-channels",
-            &*self.0.lock().map_err(|_| "output-channels poisoned")?,
-        )
-    }
-    pub fn validate_checkpoint(
-        &self,
-        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
-    ) -> Result<(), String> {
-        let _: Channels = saved.decode("output-channels")?;
-        Ok(())
-    }
-    pub fn restore_checkpoint(
-        &self,
-        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
-    ) -> Result<(), String> {
-        *self.0.lock().map_err(|_| "output-channels poisoned")? =
-            saved.decode::<Channels>("output-channels")?;
-        Ok(())
-    }
-
-    pub fn fingerprint(&self) -> serde_json::Value {
-        let channels = self.0.lock().unwrap();
-        let Channels {
-            transfers,
-            dma,
-            clock,
-            irqs,
-            armed,
-            readback_routes,
-            readback_deadline,
-        } = &*channels;
-        serde_json::json!({"transfers":transfers,"dma":dma.iter().map(Transfer::fingerprint).collect::<Vec<_>>(),
-            "clock":clock,"irqs":irqs,"armed":armed,"readback_routes":readback_routes,"readback_deadline":readback_deadline})
-    }
-}
 pub struct Wiring {
     pub base: u64,
     pub irq: u32,
@@ -99,18 +24,6 @@ pub struct Wiring {
     pub routes: IrqRoutes,
     pub frames: ImageFrames,
     pub memory_outputs: Option<MemoryOutputHandle>,
-}
-#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-enum Source {
-    Frame(u64),
-    Memory,
-}
-#[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
-struct FrameTransfer {
-    source: Source,
-    span: (u64, u64),
-    completed: bool,
-    route: Irq,
 }
 pub struct OutputChannel {
     options: Options,

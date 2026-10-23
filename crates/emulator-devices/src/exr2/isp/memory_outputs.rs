@@ -1,10 +1,9 @@
-//! Channel4's explicit connection to the two output channels. Each output
-//! owns its configuration, deadline, row writes, status and IRQ44/45. Input
-//! publishes the sampled pixels here and emits EOF38 one tick after participating
-//! output DMAs. The board declares input/output dependencies in both directions.
-use fujimod_emulator_devices::exr2::isp::dma::{Raster, Transfer};
+//! RAW readback destinations the EXR II image input and output banks share
+//! through one board wire.
+use crate::exr2::isp::dma::{Raster, Transfer};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
+
 #[derive(Default, Serialize, Deserialize)]
 pub struct MemoryOutputs {
     /// FFF10004 bit0 selects RAW transport instead of direct image output.

@@ -9,25 +9,11 @@ use fujimod_emulator_devices::exr2::isp::{
 use fujimod_emulator_devices::imaging::analysis::sad_curve;
 use fujimod_emulator_devices::imaging::raw::{Packing, RawView};
 use fujimod_emulator_devices::{Cx, Device};
-use serde::Deserialize;
+use fujimod_emulator_devices::exr2::isp::options::phase_detection::{Options, Arithmetic};
 
 const BASE: u64 = 0xfff24000;
 const RESULT: u64 = 0xfff25004;
 const MAX_SAMPLES: usize = 65536;
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum Arithmetic {
-    Disabled,
-    PairedU16Sad,
-    ApertureSad,
-}
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Options {
-    pub arithmetic: Arithmetic,
-    pub data_ticks: u64,
-    pub stop_ticks: u64,
-}
 pub struct Wiring {
     pub routes: IrqRoutes,
 }

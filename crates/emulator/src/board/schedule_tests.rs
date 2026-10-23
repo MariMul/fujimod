@@ -1,8 +1,8 @@
 use super::*;
-use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_cpu::Model;
 use fujimod_emulator_cpu::memory::Backing;
 use fujimod_emulator_cpu_unicorn::{Library, rprofile};
+use fujimod_emulator_devices::{Cx, Device};
 use std::sync::{Arc, Mutex};
 
 struct ResetLine(Arc<Mutex<Vec<u64>>>);
@@ -155,8 +155,8 @@ fn a_guest_reset_release_tightens_the_active_run_to_the_next_quantum_boundary() 
 
 #[test]
 fn native_software_interrupt_wiring_releases_the_declared_entry_at_the_existing_slice_boundary() {
-    use fujimod_emulator_exr2_board::{Plan, RefuseAdapters, Resources};
     use factory::{Engine, Graph, MemoryMap, Options, Peripheral, Processor, Ram};
+    use fujimod_emulator_exr2_plan::{Plan, RefuseAdapters, Resources};
     for pause in [None, Some(100), Some(137)] {
         let plan=Plan::parse(&serde_json::to_vec(&json!({
             "schema":1,"boot_entry":"loader","wires":{"release":"software-pulse"},"nodes":[
@@ -168,7 +168,8 @@ fn native_software_interrupt_wiring_releases_the_declared_entry_at_the_existing_
             ]
         })).unwrap()).unwrap();
         plan.validate_reset_outputs(&[true, false]).unwrap();
-        let assembly = plan
+        fujimod_emulator_exr2_board::register_board_builder();
+        let built = plan
             .build(Resources::default(), 0, &mut RefuseAdapters)
             .unwrap();
         let graph = Graph {
@@ -217,11 +218,11 @@ fn native_software_interrupt_wiring_releases_the_declared_entry_at_the_existing_
                     engine: Engine::Unicorn,
                     translation_cache_bytes: 1024 * 1024,
                 },
-                Bus::from_graph(bus::Mode::Strict, assembly.graph).unwrap(),
+                Bus::from_graph(bus::Mode::Strict, built.graph).unwrap(),
                 None,
             )
             .unwrap();
-        for c in assembly.core_interrupts {
+        for c in built.core_interrupts {
             b.configure_core_interrupts(c.core, c.device, Box::new(c.inputs))
                 .unwrap();
         }

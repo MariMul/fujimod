@@ -6,7 +6,7 @@ use fujimod_emulator_devices::Device;
 fn prefilter_deadlines_reset_ack_and_busy_refusal() {
     let mut h = TestHost::new();
     let mut d = Prefilter::new(
-        raw::Options {
+        fujimod_emulator_devices::exr2::isp::options::raw::Options {
             completion_ticks: 10,
             reset_ticks: 2,
         },
@@ -39,7 +39,7 @@ fn statistics_latches_only_addressed_roi_and_publishes_at_due() {
         b.copy_from_slice(&100u16.to_le_bytes());
     }
     let mut d = RawStatistics::new(
-        raw::Options {
+        fujimod_emulator_devices::exr2::isp::options::raw::Options {
             completion_ticks: 5,
             reset_ticks: 2,
         },
@@ -74,7 +74,7 @@ fn both_stock_prefilter_packing_fields_are_passive_configuration() {
     let mut h = TestHost::new();
     h.ram[0x8000..0x8100].fill(0xa5);
     let mut d = Prefilter::new(
-        raw::Options {
+        fujimod_emulator_devices::exr2::isp::options::raw::Options {
             completion_ticks: 10,
             reset_ticks: 2,
         },

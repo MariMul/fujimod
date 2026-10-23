@@ -2,7 +2,7 @@
 //! sensor-command transport, declared physical phase clocks, and RAW channels
 //! 2/4. No startup ledger, program signature, or instruction inspection.
 mod registers;
-use super::readback::MemoryOutputHandle;
+use fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputHandle;
 use fujimod_emulator_devices::exr2::isp::{
     Irq,
     dma::{Raster, Transfer, physical},
@@ -18,60 +18,8 @@ use fujimod_emulator_devices::parts::sensor::Sensor;
 use fujimod_emulator_devices::scene::FrameEdge;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
+use fujimod_emulator_devices::exr2::isp::options::input::{Options, Command, PhaseAck, ClockMode, ClockSource};
 
-#[derive(Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum Command {
-    PackedWrites,
-    PackedWords,
-}
-#[derive(Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum PhaseAck {
-    Disabled,
-    Inactive,
-    Enabled,
-    PreserveFields,
-}
-#[derive(Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum ClockMode {
-    InputEnable,
-    RegisterPeriods,
-    SourceMask,
-}
-#[derive(Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub enum ClockSource {
-    Periodic {
-        period_ticks: u64,
-        first_delay_ticks: Option<u64>,
-    },
-    Sensor {},
-}
-#[derive(Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Clock {
-    pub mode: ClockMode,
-    pub source: ClockSource,
-    pub secondary: bool,
-    pub companion_secondary: bool,
-}
-#[derive(Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Options {
-    pub reset_ticks: u64,
-    pub command_ticks: u64,
-    pub phase_ticks: u64,
-    pub command: Option<Command>,
-    pub command_controls: Vec<u32>,
-    pub phase_ack: PhaseAck,
-    pub clock: Option<Clock>,
-    pub sensor_period_ticks: Option<u64>,
-    pub raw_dma_ticks: u64,
-    pub readback_ticks: u64,
-    pub cfa: Option<Vec<u8>>,
-}
 pub struct Wiring {
     pub frame_period: Option<fujimod_emulator_devices::imaging::timing::FramePeriod>,
     pub statistics_grid: Option<fujimod_emulator_devices::imaging::analysis::GridHandle>,
@@ -1100,7 +1048,7 @@ impl Device for ImageInput {
             State,
             [Option<FrameEdge>; 2],
             Option<fujimod_emulator_devices::scene::SensorFrames>,
-            Option<super::readback::MemoryOutputs>,
+            Option<fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputs>,
             Option<serde_json::Value>,
         ) = serde_json::from_value(v.clone()).map_err(|e| e.to_string())?;
         if s.r.len() != 0x400 / 4

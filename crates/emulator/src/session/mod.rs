@@ -16,7 +16,7 @@ pub mod xp5;
 
 use crate::board::Board;
 use fujimod_emulator_devices::exr2::sdhc::Contacts;
-use fujimod_emulator_exr2_board::Resources;
+use fujimod_emulator_exr2_plan::Resources;
 use std::collections::BTreeMap;
 
 pub struct Session {

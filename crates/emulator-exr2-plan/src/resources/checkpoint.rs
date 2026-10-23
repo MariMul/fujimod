@@ -122,7 +122,7 @@ impl Wire {
                 let _: isp::parameters::Parameters = saved.decode("parameters")?;
             }
             Self::MemoryOutputs(_) => {
-                let _: fujimod_emulator_exr2_isp::readback::MemoryOutputs =
+                let _: fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputs =
                     saved.decode("memory-outputs")?;
             }
             Self::Stream(_) => {

@@ -30,7 +30,7 @@ fn producer_with_metering(
     width: usize,
     height: usize,
     pixels_per_tick: Option<u64>,
-    metering: Option<super::super::metering::Arithmetic>,
+    metering: Option<fujimod_emulator_devices::exr2::isp::options::metering::Arithmetic>,
 ) -> (Block18000, StatisticsFrames, ImageFrames, IrqRoutes, Memory) {
     let images = ImageFrames::from_pixels(
         ImageLayout {
@@ -56,7 +56,7 @@ fn producer_with_metering(
     let frames = StatisticsFrames::new(spans).unwrap();
     let routes = routes(0x2e);
     let mut d = Block18000::new(
-        producer::Options {
+        fujimod_emulator_devices::exr2::isp::options::producer::Options {
             pixels_per_tick,
             contrast: None,
             metering,
@@ -135,12 +135,12 @@ fn producer_with_raster_banks() -> (
     .unwrap();
     let routes = routes(0x2e);
     let mut d = Block18000::new(
-        producer::Options {
+        fujimod_emulator_devices::exr2::isp::options::producer::Options {
             pixels_per_tick: None,
             contrast: Some(
                 fujimod_emulator_devices::exr2::isp::contrast::Arithmetic::SquaredHorizontalGradients { luma_bits: 8 },
             ),
-            metering: Some(super::super::metering::Arithmetic::RgbCellMeans12),
+            metering: Some(fujimod_emulator_devices::exr2::isp::options::metering::Arithmetic::RgbCellMeans12),
             clock: fujimod_emulator_devices::exr2::isp::dma::Clock::Fixed { ticks: 5 },
             ack_ticks: 2,
             stop_ticks: 3,
@@ -319,7 +319,7 @@ fn external_statistics_preserve_a_span_overlapping_the_histogram_destination() {
     ];
     let frames = StatisticsFrames::new(spans).unwrap();
     let mut d = Block18000::new(
-        producer::Options {
+        fujimod_emulator_devices::exr2::isp::options::producer::Options {
             pixels_per_tick: None,
             contrast: None,
             metering: None,
@@ -540,7 +540,7 @@ fn radiometric_and_packed_metering_refuse_competing_bank_sources() {
         4,
         2,
         None,
-        Some(super::super::metering::Arithmetic::RgbCellMeans12),
+        Some(fujimod_emulator_devices::exr2::isp::options::metering::Arithmetic::RgbCellMeans12),
     );
     let edge = FrameEdge { index: 1, tick: 10 };
     images.publish(edge, &[5; 16]).unwrap();

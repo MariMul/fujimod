@@ -17,7 +17,7 @@ use fujimod_emulator::board::{
     factory,
 };
 use fujimod_emulator_cpu::{Register, arm};
-use fujimod_emulator_exr2_board::{Plan, Resources};
+use fujimod_emulator_exr2_plan::{Plan, Resources};
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
@@ -451,7 +451,7 @@ impl Board {
             &graph
                 .decoders
                 .iter()
-                .map(|d| fujimod_emulator_exr2_board::MemoryChoices {
+                .map(|d| fujimod_emulator_exr2_plan::MemoryChoices {
                     initial: d.initial,
                     choices: d.choices.len(),
                 })
@@ -480,7 +480,7 @@ impl Board {
         resources.inputs = json::<preparation::Spec>(scene)?
             .build(&bytes)
             .map_err(error)?;
-        let assembly = plan
+        let built = plan
             .build(resources, 0, &mut adapters)
             .map_err(|reason| adapters.failures.take().unwrap_or_else(|| error(reason)))?;
         if !adapters.pending.is_empty() {
@@ -488,7 +488,7 @@ impl Board {
                 "Python devices supplied for nodes that do not select an adapter",
             ));
         }
-        let mut bus = Bus::from_graph(mode, assembly.graph).map_err(error)?;
+        let mut bus = Bus::from_graph(mode, built.graph).map_err(error)?;
         bus.continue_refusals(continue_refusals).map_err(error)?;
         let mut board = graph
             .build(
@@ -500,7 +500,7 @@ impl Board {
                 None,
             )
             .map_err(error)?;
-        for controller in assembly.core_interrupts {
+        for controller in built.core_interrupts {
             board
                 .configure_core_interrupts(
                     controller.core,
@@ -519,10 +519,10 @@ impl Board {
                 board,
                 controls: None,
                 contact_driver: None,
-                nodes: assembly.node_ids,
-                contacts: assembly.contacts,
+                nodes: built.node_ids,
+                contacts: built.contacts,
                 recording_frames: Default::default(),
-                resources: assembly.resources,
+                resources: built.resources,
                 xp5: None,
             })),
             objects: adapters.objects,

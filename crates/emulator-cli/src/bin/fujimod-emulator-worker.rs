@@ -1,7 +1,9 @@
 //! Signed native owner for the common board factory. JSON-lines transport and
 //! raw-frame publication are outside guest execution and never supply its time.
-use fujimod_emulator::inputs::{Files, Location};
+use fujimod_catalog::emulator::Asset;
 use fujimod_emulator::board::{self, Board, InterruptMap, aprofile, bus::Bus, factory, mprofile};
+use fujimod_emulator::inputs::{Files, Location};
+use fujimod_emulator_cpu::{self as cpu, Access, Model, Register};
 use fujimod_emulator_devices::{
     graph::{DeviceGraph, DeviceWindow},
     parts::{
@@ -11,8 +13,6 @@ use fujimod_emulator_devices::{
     },
     xp5::{board as xp5_board, display, flash_storage, gpio, mailbox, panel_clock},
 };
-use fujimod_catalog::emulator::Asset;
-use fujimod_emulator_cpu::{self as cpu, Access, Model, Register};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
@@ -159,8 +159,10 @@ struct Gic {
 }
 impl Gic {
     fn runtime(self) -> Result<InterruptMap, String> {
-        let mut gic =
-            fujimod_emulator_devices::ip::arm::gicv3::Gic::new(self.affinities.clone(), self.lines)?;
+        let mut gic = fujimod_emulator_devices::ip::arm::gicv3::Gic::new(
+            self.affinities.clone(),
+            self.lines,
+        )?;
         for write in self.initial {
             match write {
                 GicWrite::Distributor {
@@ -710,6 +712,7 @@ impl Worker {
     }
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    fujimod_emulator_exr2_board::register_board_builder();
     let mut worker = None;
     let mut finished = false;
     let mut output = io::BufWriter::new(io::stdout().lock());

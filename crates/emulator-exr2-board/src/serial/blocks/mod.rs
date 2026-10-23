@@ -6,37 +6,16 @@ use fujimod_emulator_devices::{
     exr2::gpio::Pads,
     graph::Mapping,
     parts::{
-        pins::{Pin, Pins},
+        pins::Pins,
         spi::{Endpoint, FixedInput, FixedOptions, Shift},
     },
 };
+use fujimod_emulator_exr2_plan::serial::Options;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 const SPI: u64 = 0xfff84000;
 const UART: u64 = 0xfff46080;
 const DMA: u64 = 0xfff02080;
-#[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct PinLevel {
-    pub pin: Pin,
-    pub high: bool,
-}
-/// An explicitly fixed-low input for a selected byte-wide serial connection.
-/// Presence is a second physical pad constraint, not a firmware predicate.
-#[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct FixedLowByteInput {
-    pub required: [u32; 3],
-    pub selection: PinLevel,
-    pub presence: PinLevel,
-}
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Options {
-    pub transfer_ticks: u64,
-    pub max_program_bytes: usize,
-    pub spi0: Option<FixedLowByteInput>,
-}
 pub struct Wiring {
     pub gpio: Pads,
 }
@@ -516,10 +495,10 @@ struct SerialDevice {
     core: Arc<Mutex<SerialState>>,
     block: Block,
 }
-pub struct Assembly {
+pub struct BootSerialBlocks {
     core: Arc<Mutex<SerialState>>,
 }
-impl Assembly {
+impl BootSerialBlocks {
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
         Ok(Self {
             core: Arc::new(Mutex::new(SerialState::new(options, wiring)?)),

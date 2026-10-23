@@ -97,6 +97,7 @@ fn runtime_catalog_builds_checked_graph_without_language_adapters() {
         .unwrap();
     let mut resources = Resources::default();
     resources.inputs = inputs;
+    fujimod_emulator_exr2_board::register_board_builder();
     plan.build(resources, 0, &mut RefuseAdapters).unwrap();
     assert!(prepare("unknown", &[]).is_err());
 }
@@ -671,18 +672,16 @@ fn serial_spi1_refuses_a_shift_with_both_chip_selects_low() {
         document["nodes"].as_array_mut().unwrap().retain(|n| {
             ["irq0", "irq1", "serial_gpio", "serial_spi1"].contains(&n["name"].as_str().unwrap())
         });
-        let mut assembly = Plan::parse(&serde_json::to_vec(&document).unwrap())
+        fujimod_emulator_exr2_board::register_board_builder();
+        let mut built = Plan::parse(&serde_json::to_vec(&document).unwrap())
             .unwrap()
             .build(Resources::default(), 0, &mut RefuseAdapters)
             .unwrap();
-        let (gpio, spi) = (
-            assembly.node_ids["serial_gpio"],
-            assembly.node_ids["serial_spi1"],
-        );
+        let (gpio, spi) = (built.node_ids["serial_gpio"], built.node_ids["serial_spi1"]);
         let mut host = Clock(0);
         let mut access = |id: usize, address: u64, value: u64| {
             let mut cx = Cx::new(&mut host, 0, 0, id);
-            assembly.graph.nodes[id]
+            built.graph.nodes[id]
                 .device
                 .write(&mut cx, address, 4, value);
             cx.take_refusal()

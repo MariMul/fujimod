@@ -31,9 +31,9 @@ pub enum Wire {
     Aperture(fujimod_emulator_devices::imaging::exposure::ApertureHandle),
     SoftwarePulse(irq::SoftwarePulse),
     Parameters(isp::parameters::ParameterHandle),
-    MemoryOutputs(fujimod_emulator_exr2_isp::readback::MemoryOutputHandle),
+    MemoryOutputs(fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputHandle),
     Stream(isp::stream::StreamHandle),
-    OutputChannels(fujimod_emulator_exr2_isp::output::OutputChannels),
+    OutputChannels(fujimod_emulator_devices::exr2::isp::output_channels::OutputChannels),
     IrqRoutes(isp::dma::IrqRoutes),
     PhaseEdges(fujimod_emulator_devices::scene::FramePhases),
     BridgeRegisters(bridge::Registers),
@@ -129,15 +129,15 @@ pub struct Resources {
     pub inputs: Inputs,
     pub card_pins: BTreeMap<String, CardPins>,
     pub wires: BTreeMap<String, Wire>,
-    pub(super) users: BTreeMap<String, BTreeSet<usize>>,
-    pub(super) image_users: BTreeMap<String, BTreeSet<usize>>,
-    pub(super) gpio: BTreeMap<String, gpio::Pads>,
-    pub(super) pulses: BTreeMap<String, pulse::PulsePins>,
-    pub(super) encoders: BTreeMap<String, fujimod_emulator_devices::parts::encoder::EncoderInput>,
-    pub(super) hdmi_sinks: BTreeMap<String, HdmiSink>,
-    pub(super) controllers: BTreeMap<String, irq::Inputs>,
-    pub(super) clocks: BTreeMap<String, clock::Output>,
-    pub(super) software_sources: BTreeSet<String>,
+    pub users: BTreeMap<String, BTreeSet<usize>>,
+    pub image_users: BTreeMap<String, BTreeSet<usize>>,
+    pub gpio: BTreeMap<String, gpio::Pads>,
+    pub pulses: BTreeMap<String, pulse::PulsePins>,
+    pub encoders: BTreeMap<String, fujimod_emulator_devices::parts::encoder::EncoderInput>,
+    pub hdmi_sinks: BTreeMap<String, HdmiSink>,
+    pub controllers: BTreeMap<String, irq::Inputs>,
+    pub clocks: BTreeMap<String, clock::Output>,
+    pub software_sources: BTreeSet<String>,
 }
 impl Resources {
     pub fn optical_position(
@@ -203,7 +203,7 @@ impl Resources {
             .map(|users| users.iter().copied().collect())
             .unwrap_or_default())
     }
-    pub(super) fn image_input(&mut self, name: &str, node: usize) -> Result<ImageFrames, String> {
+    pub fn image_input(&mut self, name: &str, node: usize) -> Result<ImageFrames, String> {
         let image = self
             .inputs
             .images
@@ -237,7 +237,7 @@ impl Resources {
             .cloned()
             .ok_or_else(|| format!("{name} is not a constructed HDMI sink input"))
     }
-    pub(super) fn wire(&mut self, name: &str, node: usize) -> Result<&Wire, String> {
+    pub fn wire(&mut self, name: &str, node: usize) -> Result<&Wire, String> {
         let wire = self
             .wires
             .get(name)

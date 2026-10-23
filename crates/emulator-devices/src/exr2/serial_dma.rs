@@ -1,4 +1,4 @@
-//! Graph assembly for clocked byte serial, request DMA, and selector nodes.
+//! Graph nodes for clocked byte serial, request DMA, and selector devices.
 //! The fixed external bit level and every channel/request/IRQ connection are
 //! constructor inputs. Guest descriptor addresses are the only RAM authority.
 use crate::bus::InterruptLine;
@@ -227,10 +227,10 @@ impl Device for Transport {
 }
 
 /// Creates independent SPI, selector, and peripheral-DMA nodes for a board.
-pub struct Assembly {
+pub struct Nodes {
     transport: Transport,
 }
-impl Assembly {
+impl Nodes {
     pub fn new(wiring: Options, input: Input) -> Result<Self, String> {
         Ok(Self {
             transport: Transport::new(wiring, input)?,
