@@ -5,14 +5,6 @@
   "models": [
     "X100S"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "X100S service manual ZM01057-102",
-      "sha256": "4d19fc9f46efe12021cceb08e50e93771187ebee06b6e3a68d38e3c968cb696f",
-      "date": null
-    }
-  },
   "boot_options": {
     "sd-download": {
       "label": "SD firmware download",
@@ -45,19 +37,8 @@
         "firmware_write",
         "card_program_defined"
       ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 84,
-              "printed": "4-14"
-            }
-          ]
-        }
-      ],
       "notes": [
-        "The service entry does not specify the command control position; no front/rear identity is inferred."
+        "The command control position is unspecified."
       ]
     }
   },

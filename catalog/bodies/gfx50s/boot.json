@@ -5,14 +5,6 @@
   "models": [
     "GFX 50S"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "GFX 50S service manual ZM01203-101",
-      "sha256": "44f5d51bfb39cc2db1c3f081f33a8dbd906c00cb758aea0d5935ee3a28c3fbbb",
-      "date": null
-    }
-  },
   "boot_options": {
     "sd-download": {
       "label": "SD firmware download",
@@ -45,19 +37,8 @@
         "firmware_write",
         "card_program_defined"
       ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 30,
-              "printed": "3-8"
-            }
-          ]
-        }
-      ],
       "notes": [
-        "The service entry does not specify the command control position; no front/rear identity is inferred."
+        "The command control position is unspecified."
       ]
     }
   },

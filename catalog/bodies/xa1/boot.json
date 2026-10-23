@@ -5,14 +5,6 @@
   "models": [
     "X-A1"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "X-A1 service manual ZM01092-108",
-      "sha256": "48b285ffb60000d9a3af989da49cc3442b9e2d32fa97333fd0ab2a28be52969a",
-      "date": null
-    }
-  },
   "boot_options": {
     "sd-download": {
       "label": "SD firmware download",
@@ -45,19 +37,8 @@
         "firmware_write",
         "card_program_defined"
       ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 88,
-              "printed": "3-18"
-            }
-          ]
-        }
-      ],
       "notes": [
-        "The service entry does not specify the command control position; no front/rear identity is inferred."
+        "The command control position is unspecified."
       ]
     }
   },

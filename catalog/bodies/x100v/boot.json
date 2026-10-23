@@ -5,19 +5,11 @@
   "models": [
     "X100V"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "X100V service manual ZM01277-103",
-      "sha256": "291459ebfd8b22d592aba9cd67dbc6ba2730236a18779475b92fb5395c37e1e0",
-      "date": null
-    }
-  },
   "boot_options": {
-    "sd-download": {
-      "label": "SD firmware download",
+    "sd-boot": {
+      "label": "SD boot",
       "group": "sd_boot",
-      "purpose": "firmware_download",
+      "purpose": "card_program",
       "models": [
         "X100V"
       ],
@@ -42,83 +34,12 @@
         "instructions": []
       },
       "effects": [
-        "firmware_write",
         "card_program_defined"
       ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 88,
-              "printed": "3-8"
-            },
-            {
-              "pdf": 103,
-              "printed": "3-23"
-            }
-          ]
-        }
-      ],
       "notes": [
-        "The revised combined package contains ffboot.bin, ffinit.bin, ffuser.bin, X104BODY16KB.bin and X104BODY48KB.bin. The former separate body-card instructions are struck out. The sample screen identifies X104 Downloader 2.0."
+        "The card program determines the operation. A firmware-download card can write firmware.",
+        "Finder-pattern cards are for physical alignment. Limit that program to 10 minutes to avoid finder burn; remove the battery to stop it because the power lever does not work."
       ]
-    },
-    "finder-adjustment": {
-      "label": "SD finder adjustment",
-      "group": "sd_boot",
-      "purpose": "finder_adjustment",
-      "models": [
-        "X100V"
-      ],
-      "status": "documented",
-      "entry": {
-        "usb": "not_used",
-        "card": "service_boot",
-        "slot": null,
-        "hold": [
-          {
-            "label": "REAR COMMAND button",
-            "control_id": "rear_command_dial",
-            "action": "press"
-          },
-          {
-            "label": "Fn",
-            "control_id": null,
-            "action": "press"
-          }
-        ],
-        "release_when": null,
-        "instructions": []
-      },
-      "effects": [
-        "calibration_adjustment",
-        "card_program_defined"
-      ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 154,
-              "printed": "6-6"
-            },
-            {
-              "pdf": 160,
-              "printed": "6-12"
-            },
-            {
-              "pdf": 161,
-              "printed": "6-13"
-            }
-          ]
-        }
-      ],
-      "notes": [
-        "Uses a dedicated finder-pattern card for physical alignment. The manual limits operation to 10 minutes because the finder can burn, and specifies battery removal because the power lever does not work.",
-        "The separate FINDER ROTATION ADJ card contains DCIM, ffboot.bin and ffinit.bin at the card root."
-      ],
-      "maximum_runtime_seconds": 600
     }
   },
   "notes": []

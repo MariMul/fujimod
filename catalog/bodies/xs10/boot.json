@@ -5,14 +5,6 @@
   "models": [
     "X-S10"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "X-S10 service manual ZM01293-105",
-      "sha256": "abdbd6b05df6bec5169fc14c6c4991c704bcbc809f2057b4fa16224f903a932f",
-      "date": null
-    }
-  },
   "boot_options": {
     "sd-download": {
       "label": "SD firmware download",
@@ -44,17 +36,6 @@
       "effects": [
         "firmware_write",
         "card_program_defined"
-      ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 118,
-              "printed": "3-48"
-            }
-          ]
-        }
       ],
       "notes": []
     }

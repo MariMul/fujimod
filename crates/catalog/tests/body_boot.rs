@@ -30,7 +30,7 @@ fn startup_facts_load_without_promoting_candidates_or_shared_body_siblings() {
 }
 
 #[test]
-fn unqualified_dials_remain_unresolved_and_citations_are_required() {
+fn unqualified_dials_remain_unresolved_and_entry_controls_are_required() {
     let catalog = ReferenceCatalog::bundled().unwrap();
     let mut xt2 = catalog.boot_options("xt2").unwrap().clone();
     let option = xt2.boot_options.get_mut("sd-download").unwrap();
@@ -41,6 +41,6 @@ fn unqualified_dials_remain_unresolved_and_citations_are_required() {
             .iter()
             .any(|key| key.label == "Command dial" && key.control_id.is_none())
     );
-    option.evidence[0].pages.clear();
+    option.entry.hold.clear();
     assert!(xt2.validate().is_err());
 }

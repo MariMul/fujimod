@@ -5,14 +5,6 @@
   "models": [
     "X-M1"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "X-M1 service manual ZM01086-110",
-      "sha256": "3a88fa97ce776d900d5cd6aa9d1daacb7a16a20079f2f452bdef8fafe0048722",
-      "date": null
-    }
-  },
   "boot_options": {
     "sd-download": {
       "label": "SD firmware download",
@@ -45,19 +37,8 @@
         "firmware_write",
         "card_program_defined"
       ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 88,
-              "printed": "3-18"
-            }
-          ]
-        }
-      ],
       "notes": [
-        "The service entry does not specify the command control position; no front/rear identity is inferred."
+        "The command control position is unspecified."
       ]
     }
   },

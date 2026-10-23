@@ -5,17 +5,8 @@
   "models": [
     "X-S20"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "X-S20 service manual ZM01348-101",
-      "sha256": "21fa3d5e64471be52525e87c39883362c99e01c11ae4bc8d32f71e99adeb2704",
-      "date": null
-    }
-  },
   "boot_options": {},
   "notes": [
-    "No service SD boot key recipe was found in the supplied edition. Its repair or initialization procedure uses USB.",
-    "The separate DISP/BACK DAT procedure is an ordinary firmware update, not a service SD loader entry."
+    "SD boot keys are not recorded for this body."
   ]
 }

@@ -5,14 +5,6 @@
   "models": [
     "X-E2"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "X-E2 service manual ZM01094-105",
-      "sha256": "d57c76d75e6b6cc14bc0c2499b24c5e281b405e6fcf4db8a02df0233a30aca7f",
-      "date": null
-    }
-  },
   "boot_options": {
     "sd-download": {
       "label": "SD firmware download",
@@ -45,19 +37,8 @@
         "firmware_write",
         "card_program_defined"
       ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 99,
-              "printed": "3-25"
-            }
-          ]
-        }
-      ],
       "notes": [
-        "The service entry does not specify the command control position; no front/rear identity is inferred."
+        "The command control position is unspecified."
       ]
     }
   },

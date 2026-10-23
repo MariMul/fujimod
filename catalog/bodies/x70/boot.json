@@ -5,14 +5,6 @@
   "models": [
     "X70"
   ],
-  "sources": {
-    "existing-guide": {
-      "kind": "project_definition",
-      "reference": "FujiMod X70 panel startup combinations and service-mode guide",
-      "sha256": null,
-      "date": null
-    }
-  },
   "boot_options": {
     "sd-boot": {
       "label": "SD card boot",
@@ -44,12 +36,6 @@
       "effects": [
         "card_program_defined"
       ],
-      "evidence": [
-        {
-          "source_id": "existing-guide",
-          "pages": []
-        }
-      ],
       "notes": []
     },
     "firmware-update": {
@@ -76,12 +62,6 @@
       },
       "effects": [
         "firmware_write"
-      ],
-      "evidence": [
-        {
-          "source_id": "existing-guide",
-          "pages": []
-        }
       ],
       "notes": []
     },
@@ -121,12 +101,6 @@
       "effects": [
         "service_commands",
         "settings_reset_on_exit"
-      ],
-      "evidence": [
-        {
-          "source_id": "existing-guide",
-          "pages": []
-        }
       ],
       "notes": [
         "On X70 1.10, the unguarded service shutdown path resets settings. Its reset guard is firmware-specific."

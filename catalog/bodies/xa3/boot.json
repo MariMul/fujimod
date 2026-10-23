@@ -5,17 +5,8 @@
   "models": [
     "X-A3"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "X-A3 service manual ZM01180-108",
-      "sha256": "7345b9ef7e613d85616baa6f3386c07d4a62eb5776bea01d56f496d4292c12e2",
-      "date": null
-    }
-  },
   "boot_options": {},
   "notes": [
-    "No service SD boot key recipe was found in the supplied edition. Its repair or initialization procedure uses USB.",
-    "The separate DISP/BACK DAT procedure is an ordinary firmware update, not a service SD loader entry."
+    "SD boot keys are not recorded for this body."
   ]
 }

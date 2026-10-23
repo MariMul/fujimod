@@ -5,14 +5,6 @@
   "models": [
     "GFX 100S"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "GFX 100S service manual ZM01301-106",
-      "sha256": "e2afa3e62df6dd171414ddf7b74d85b4cd0526f0d1134229cc6cbd37e55a7d1f",
-      "date": null
-    }
-  },
   "boot_options": {
     "sd-download": {
       "label": "SD firmware download",
@@ -44,17 +36,6 @@
       "effects": [
         "firmware_write",
         "card_program_defined"
-      ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 146,
-              "printed": "3-50"
-            }
-          ]
-        }
       ],
       "notes": []
     }

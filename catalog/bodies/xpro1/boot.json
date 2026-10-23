@@ -5,14 +5,6 @@
   "models": [
     "X-Pro1"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "X-Pro1 service manual xpro1_ocred",
-      "sha256": "0f1eb34ce572d9a44cdd684e7f10f7dcaa862f0c9222dcc6158ea186c56a5ffa",
-      "date": null
-    }
-  },
   "boot_options": {
     "sd-download": {
       "label": "SD firmware download",
@@ -45,19 +37,8 @@
         "firmware_write",
         "card_program_defined"
       ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 76,
-              "printed": "3-16"
-            }
-          ]
-        }
-      ],
       "notes": [
-        "The service entry does not specify the command control position; no front/rear identity is inferred."
+        "The command control position is unspecified."
       ]
     }
   },

@@ -5,14 +5,6 @@
   "models": [
     "X-S1"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "X-S1 service manual ZM00951-107",
-      "sha256": "d4b21c2df8aaeedd7ee4b7268ac1c92353a8c8ff8cbaadd9e6a7a6e67a5209a5",
-      "date": null
-    }
-  },
   "boot_options": {
     "sd-download": {
       "label": "SD firmware download",
@@ -44,17 +36,6 @@
       "effects": [
         "firmware_write",
         "card_program_defined"
-      ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 55,
-              "printed": "3-16"
-            }
-          ]
-        }
       ],
       "notes": []
     }

@@ -310,7 +310,6 @@ BodyBootOptions = TypedDict(
         "models": Required["list[str]"],
         "notes": Required["list[str]"],
         "schema": Required["int"],
-        "sources": Required["dict[str, BootSource]"],
     },
     total=False,
 )
@@ -374,18 +373,11 @@ type BootCard = Literal[
 ]
 
 
-class BootCitation(TypedDict, total=False):
-    pages: Required[list[BootManualPage]]
-    source_id: Required[str]
-
-
 type BootEffect = Literal[
     "firmware_write",
-    "calibration_adjustment",
     "service_commands",
     "card_program_defined",
     "settings_reset_on_exit",
-    "usb_power_output",
 ]
 
 
@@ -410,18 +402,11 @@ class BootKey(TypedDict, total=False):
 type BootKeyAction = Literal["press", "full_press", "up"]
 
 
-class BootManualPage(TypedDict, total=False):
-    pdf: Required[int]
-    printed: Required[str]
-
-
 class BootOption(TypedDict, total=False):
     effects: Required[list[BootEffect]]
     entry: Required[BootEntry]
-    evidence: Required[list[BootCitation]]
     group: Required[BootGroup]
     label: Required[str]
-    maximum_runtime_seconds: NotRequired[int | None]
     models: Required[list[str]]
     notes: Required[list[str]]
     purpose: Required[BootPurpose]
@@ -432,8 +417,6 @@ type BootPurpose = Literal[
     "service_session",
     "firmware_update",
     "firmware_download",
-    "otg_inspection",
-    "finder_adjustment",
     "card_program",
     "entry_probe",
 ]
@@ -444,24 +427,10 @@ class BootRomIdentity(TypedDict, total=False):
     content: Required[ContentIdentity]
 
 
-class BootSource(TypedDict, total=False):
-    date: NotRequired[str | None]
-    kind: Required[BootSourceKind]
-    reference: Required[str]
-    sha256: NotRequired[str | None]
-
-
-type BootSourceKind = Literal[
-    "service_manual",
-    "owner_observation",
-    "project_definition",
-]
-
-
 type BootStatus = Literal["documented", "implemented", "candidate", "superseded"]
 
 
-type BootUsb = Literal["connected", "test_jig_no_pc", "not_used", "unspecified"]
+type BootUsb = Literal["connected", "not_used", "unspecified"]
 
 
 class BoundPosition(TypedDict, total=False):

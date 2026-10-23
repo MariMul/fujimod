@@ -28,8 +28,9 @@ documents validate their own identities and manual declarations; connections
 or located bindings require the corresponding hardware records.
 
 Each body's `boot.json` owns startup combinations: service mode, firmware
-update, SD download and SD diagnostics are grouped under `boot_options`.
-Structured held controls, USB/card conditions, source hashes and page citations
+update and SD boot are grouped under `boot_options`. Programs sharing an SD
+startup combination use one entry, with program-specific details in its notes.
+Structured held controls, USB/card conditions and instruction status
 stay separate from executable run inputs. Candidate and superseded instructions
 retain their status; a shared body does not extend an option to unlisted models.
 `ReferenceCatalog::boot_options` also retrieves these documents for bodies

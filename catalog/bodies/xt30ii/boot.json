@@ -5,14 +5,6 @@
   "models": [
     "X-T30 II"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "X-T30 II service manual ZM01315-104",
-      "sha256": "d4d8758aa5c5fcd98e6867f2685e4ebe55615072ef29a0a6aefb2a07ba5cf48b",
-      "date": null
-    }
-  },
   "boot_options": {
     "sd-download": {
       "label": "SD firmware download",
@@ -44,17 +36,6 @@
       "effects": [
         "firmware_write",
         "card_program_defined"
-      ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 132,
-              "printed": "3-24"
-            }
-          ]
-        }
       ],
       "notes": []
     }

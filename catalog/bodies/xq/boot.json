@@ -5,14 +5,6 @@
   "models": [
     "XQ1"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "XQ1 service manual ZM01096-105",
-      "sha256": "3bbb4f026862506909e832af9132a3997b54b817106b237f20b68c448f3a54e0",
-      "date": null
-    }
-  },
   "boot_options": {
     "sd-download": {
       "label": "SD firmware download",
@@ -45,20 +37,7 @@
         "firmware_write",
         "card_program_defined"
       ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 65,
-              "printed": "3-25"
-            }
-          ]
-        }
-      ],
-      "notes": [
-        "Revised Function + shutter instruction; the former shutter-only instruction is crossed out."
-      ]
+      "notes": []
     }
   },
   "notes": []

@@ -5,14 +5,6 @@
   "models": [
     "X20"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "X20 service manual ZM01055-102",
-      "sha256": "092ec2e22c329969133f79a5165bd07202642c20e5d4dc453a032d3cc6110675",
-      "date": null
-    }
-  },
   "boot_options": {
     "sd-download": {
       "label": "SD firmware download",
@@ -44,17 +36,6 @@
       "effects": [
         "firmware_write",
         "card_program_defined"
-      ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 68,
-              "printed": "4-14"
-            }
-          ]
-        }
       ],
       "notes": []
     }

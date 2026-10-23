@@ -5,14 +5,6 @@
   "models": [
     "X-T4"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "X-T4 service manual ZM01281-104",
-      "sha256": "eb49d6b9cc1f65e800ae28d3f8f8bfe330e6ba4a37b76b9e6e643bd18ba866d8",
-      "date": null
-    }
-  },
   "boot_options": {
     "sd-download": {
       "label": "SD firmware download",
@@ -45,20 +37,7 @@
         "firmware_write",
         "card_program_defined"
       ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 192,
-              "printed": "3-54"
-            }
-          ]
-        }
-      ],
-      "notes": [
-        "The combined download at PDF 192 is active. Separate download steps on PDF 193 are crossed out and use the same keys."
-      ]
+      "notes": []
     }
   },
   "notes": []

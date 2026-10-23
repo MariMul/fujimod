@@ -5,14 +5,6 @@
   "models": [
     "X-M5"
   ],
-  "sources": {
-    "owner-observation": {
-      "kind": "owner_observation",
-      "reference": "Owner-reported front-dial/Q startup comparison",
-      "sha256": null,
-      "date": "2026-10-23"
-    }
-  },
   "boot_options": {
     "sd-entry-candidate": {
       "label": "SD startup candidate",
@@ -44,18 +36,12 @@
       "effects": [
         "card_program_defined"
       ],
-      "evidence": [
-        {
-          "source_id": "owner-observation",
-          "pages": []
-        }
-      ],
       "notes": [
         "Owner reproduced an unresponsive startup with front command dial + Q and the experimental card; shutter + front dial was excluded. No lights without USB; a steady green LED appeared after connecting USB. The expected two-flash marker and a USB response were not observed."
       ]
     }
   },
   "notes": [
-    "No X-M5 service manual was reviewed. Q + movie-record was an earlier analogy from X-S10; the owner report is the current trial candidate."
+    "Front command dial + Q is the current owner-reported trial candidate."
   ]
 }

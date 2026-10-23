@@ -5,14 +5,6 @@
   "models": [
     "GFX 50R"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "GFX 50R service manual ZM01251-102",
-      "sha256": "3f2144d45c06e2d424a100da8b08594f32ecee27f45d19c6f10b89988d80350a",
-      "date": null
-    }
-  },
   "boot_options": {
     "sd-download": {
       "label": "SD firmware download",
@@ -45,28 +37,7 @@
         "firmware_write",
         "card_program_defined"
       ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 132,
-              "printed": "3-8"
-            },
-            {
-              "pdf": 152,
-              "printed": "3-28"
-            },
-            {
-              "pdf": 153,
-              "printed": "3-29"
-            }
-          ]
-        }
-      ],
-      "notes": [
-        "The body-card preparation prose names ffsys.bin, while its source and card diagrams name ffinit.bin. The manual also says same-named files in the body and microcontroller packages have different functions."
-      ]
+      "notes": []
     }
   },
   "notes": []

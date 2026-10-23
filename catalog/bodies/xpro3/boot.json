@@ -5,19 +5,11 @@
   "models": [
     "X-Pro3"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "X-Pro3 service manual ZM01271-109",
-      "sha256": "2ed5e5e2c61b16611b882e3a33aa3d7fd9e86883ec667ce9d3508dd8a967851f",
-      "date": null
-    }
-  },
   "boot_options": {
-    "sd-download": {
-      "label": "SD firmware download",
+    "sd-boot": {
+      "label": "SD boot",
       "group": "sd_boot",
-      "purpose": "firmware_download",
+      "purpose": "card_program",
       "models": [
         "X-Pro3"
       ],
@@ -42,76 +34,12 @@
         "instructions": []
       },
       "effects": [
-        "firmware_write",
         "card_program_defined"
-      ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 139,
-              "printed": "3-29"
-            },
-            {
-              "pdf": 140,
-              "printed": "3-30"
-            }
-          ]
-        }
-      ],
-      "notes": []
-    },
-    "finder-adjustment": {
-      "label": "SD finder adjustment",
-      "group": "sd_boot",
-      "purpose": "finder_adjustment",
-      "models": [
-        "X-Pro3"
-      ],
-      "status": "documented",
-      "entry": {
-        "usb": "not_used",
-        "card": "service_boot",
-        "slot": null,
-        "hold": [
-          {
-            "label": "REAR COMMAND button",
-            "control_id": "rear_command_dial",
-            "action": "press"
-          },
-          {
-            "label": "Fn",
-            "control_id": null,
-            "action": "press"
-          }
-        ],
-        "release_when": null,
-        "instructions": []
-      },
-      "effects": [
-        "calibration_adjustment",
-        "card_program_defined"
-      ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 213,
-              "printed": "6-15"
-            },
-            {
-              "pdf": 214,
-              "printed": "6-16"
-            }
-          ]
-        }
       ],
       "notes": [
-        "Uses a dedicated finder-pattern card for physical alignment. The manual limits operation to 10 minutes because the finder can burn, and specifies battery removal because the power lever does not work."
-      ],
-      "maximum_runtime_seconds": 600
+        "The card program determines the operation. A firmware-download card can write firmware.",
+        "Finder-pattern cards are for physical alignment. Limit that program to 10 minutes to avoid finder burn; remove the battery to stop it because the power lever does not work."
+      ]
     }
   },
   "notes": []

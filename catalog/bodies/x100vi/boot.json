@@ -5,14 +5,6 @@
   "models": [
     "X100VI"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "X100VI service manual ZM01363-103",
-      "sha256": "bf41e27484fd35ce2b0346bef109bf162517a2cffb030c7cab60387b9ab5f666",
-      "date": null
-    }
-  },
   "boot_options": {
     "sd-download": {
       "label": "SD firmware download",
@@ -45,32 +37,7 @@
         "firmware_write",
         "card_program_defined"
       ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 101,
-              "printed": "3-7"
-            },
-            {
-              "pdf": 102,
-              "printed": "3-8"
-            },
-            {
-              "pdf": 103,
-              "printed": "3-9"
-            },
-            {
-              "pdf": 150,
-              "printed": "3-56"
-            }
-          ]
-        }
-      ],
-      "notes": [
-        "The service package family is ZJ03333-***.zip, with installer Setup_X100VI_W_***.exe. Its BOOT card is FAT32, with ffboot.bin, marble_init.bin, X105BODY.bin and X105KCS.bin at the card root."
-      ]
+      "notes": []
     }
   },
   "notes": []

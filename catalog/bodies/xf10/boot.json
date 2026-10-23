@@ -5,16 +5,8 @@
   "models": [
     "XF10"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "XF10 service manual ZM01241-104",
-      "sha256": "c339e73277c72c042cba86434c2b78a8ade86703a2ff0a574d5d6c505896b6d1",
-      "date": null
-    }
-  },
   "boot_options": {},
   "notes": [
-    "No service SD boot key recipe was found in the supplied edition. Its repair or initialization procedure uses USB."
+    "SD boot keys are not recorded for this body."
   ]
 }

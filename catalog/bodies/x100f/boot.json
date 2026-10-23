@@ -5,14 +5,6 @@
   "models": [
     "X100F"
   ],
-  "sources": {
-    "service-manual": {
-      "kind": "service_manual",
-      "reference": "X100F service manual ZM01199-108",
-      "sha256": "8ea965e2405de2c48dcadea3ea97b304b5f60d058a9d42b06a5c0d11100d6d4e",
-      "date": null
-    }
-  },
   "boot_options": {
     "sd-download": {
       "label": "SD firmware download",
@@ -44,17 +36,6 @@
       "effects": [
         "firmware_write",
         "card_program_defined"
-      ],
-      "evidence": [
-        {
-          "source_id": "service-manual",
-          "pages": [
-            {
-              "pdf": 87,
-              "printed": "3-21"
-            }
-          ]
-        }
       ],
       "notes": []
     }
