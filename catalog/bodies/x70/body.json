@@ -5549,7 +5549,8 @@
               ],
               "pwic_modes": [
                 1
-              ]
+              ],
+              "usb_connected": null
             },
             "basis": "Declared catalog input."
           }
