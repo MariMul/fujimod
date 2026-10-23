@@ -3620,6 +3620,7 @@ class RunFactoryOptions(TypedDict, total=False):
     auxiliary_control_profile: NotRequired[RunAuxiliaryControlProfile | None]
     auxiliary_control_ticks: NotRequired[int | None]
     backdrop_profile: NotRequired[RunBackdropProfile | None]
+    camera_settings: NotRequired[dict[str, str] | None]
     clear_profile: NotRequired[RunClearProfile | None]
     clock_seconds_2000: NotRequired[int | None]
     control_bus_profile: NotRequired[RunControlBusProfile | None]
@@ -4354,7 +4355,7 @@ class RunStatisticsSpan(TypedDict, total=False):
 type RunStillCapture = Literal["register-capture-readonly-card-observation"]
 
 
-type RunStorageProfile = Literal["captured", "browser", "erased"]
+type RunStorageProfile = Literal["captured", "browser", "erased"] | Literal["settings"]
 
 
 class RunUsbInput(TypedDict, total=False):

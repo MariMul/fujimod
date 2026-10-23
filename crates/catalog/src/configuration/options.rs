@@ -162,6 +162,10 @@ pub struct RunFactoryOptions {
     /// Selected storage profile. Absence preserves the base selection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub storage_profile: Option<RunStorageProfile>,
+    /// Named camera settings written into the settings bank, with the
+    /// `settings` storage profile. Absence preserves the base selection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera_settings: Option<std::collections::BTreeMap<String, String>>,
     /// Selected user journals. Absence preserves the base selection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_journals: Option<RunUserJournals>,
@@ -605,6 +609,9 @@ pub enum RunSpi0InputProfile {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub enum RunStorageProfile {
+    /// A settings bank built from stock defaults and requested camera settings.
+    #[serde(rename = "settings")]
+    Settings,
     #[serde(rename = "captured")]
     Captured,
     #[serde(rename = "browser")]

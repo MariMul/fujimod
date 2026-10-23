@@ -9,8 +9,7 @@
       "factory_options": {
         "entry": "loader",
         "quantum": 10000,
-        "storage_profile": "browser",
-        "settings": "owner",
+        "storage_profile": "settings",
         "sd_card_profile": "declared-blank-sdhc-default-speed-unmeasured",
         "sd_card_present": true,
         "graphics_profile": "mode1-abgr8888-straight",

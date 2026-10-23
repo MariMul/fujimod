@@ -17266,6 +17266,16 @@
           ],
           "description": "Selected backdrop profile. Absence preserves the base selection."
         },
+        "camera_settings": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Named camera settings written into the settings bank, with the\n`settings` storage profile. Absence preserves the base selection.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
         "clear_profile": {
           "anyOf": [
             {
@@ -20215,12 +20225,21 @@
     },
     "RunStorageProfile": {
       "description": "Closed selection for storage profile.",
-      "enum": [
-        "captured",
-        "browser",
-        "erased"
-      ],
-      "type": "string"
+      "oneOf": [
+        {
+          "enum": [
+            "captured",
+            "browser",
+            "erased"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "settings",
+          "description": "A settings bank built from stock defaults and requested camera settings.",
+          "type": "string"
+        }
+      ]
     },
     "RunUsbInput": {
       "additionalProperties": false,
