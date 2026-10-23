@@ -100,6 +100,7 @@ struct State {
     phase_period: u64,
     sensor_due: Option<u64>,
     capture_ack: bool,
+    capture_irq_sent: bool,
     readback_due: Option<u64>,
     stop_due: Option<u64>,
     dma: Transfer,
@@ -178,6 +179,7 @@ impl ImageInput {
                 phase_period: 0,
                 sensor_due,
                 capture_ack: false,
+                capture_irq_sent: false,
                 readback_due: None,
                 stop_due: None,
                 dma: Transfer::default(),
@@ -564,6 +566,7 @@ impl ImageInput {
                     }
                     if o == 0x350 && v & 1 != 0 {
                         self.state.capture_ack = false;
+                        self.state.capture_irq_sent = false;
                     }
                 }
                 0x3b4 => {
@@ -640,19 +643,14 @@ impl ImageInput {
         }
         let s = &mut self.state;
         let r = &s.r;
-        if s.capture_ack
-            || s.dma.deadline().is_some()
-            || r[1] & 1 == 0
-            || r[0x354 / 4] & 0x10000000 == 0
-        {
+        if s.capture_ack || s.dma.deadline().is_some() || r[1] & 1 == 0 || r[0x35c / 4] & 1 == 0 {
             return Ok(true);
         }
         let format = r[0x354 / 4] >> 20 & 7;
-        if ![3, 4].contains(&format)
-            || r[0x354 / 4] & 0xff != 0
-            || r[0x35c / 4] & 1 == 0
-            || r[1] & 2 != 0
-        {
+        // The low byte is independent of the burst-format field. Retain it
+        // as programmed; it does not change the addressed active samples.
+        // Bits 28..30 enable completion/error interrupts, not the DMA itself.
+        if ![3, 4].contains(&format) || r[1] & 2 != 0 {
             return Err("RAW channel2 transport is unsupported".into());
         }
         let packing = if r[1] & 0x10000 != 0 {
@@ -785,7 +783,13 @@ impl ImageInput {
         }
         if self.state.dma.write(cx)? {
             self.state.capture_ack = true;
+        }
+        if self.state.capture_ack
+            && !self.state.capture_irq_sent
+            && self.state.r[0x354 / 4] & 0x10000000 != 0
+        {
             self.wiring.raw_irq.raise(cx)?;
+            self.state.capture_irq_sent = true;
         }
         if self.state.readback_due.is_some_and(|t| now >= t) {
             let mut outputs = self.wiring.memory_outputs.as_ref().unwrap().lock().unwrap();
@@ -872,6 +876,7 @@ impl Device for ImageInput {
             phase_period,
             sensor_due,
             capture_ack,
+            capture_irq_sent,
             readback_due,
             stop_due,
             dma,
@@ -879,7 +884,7 @@ impl Device for ImageInput {
         let state = serde_json::json!({"r":r,"reset":reset,"command_due":command_due,"command_armed":command_armed,
             "raw_exposure":raw_exposure,"command_done":command_done,"command_bytes":crate::fingerprint::bytes(command_bytes),"phases":phases,
             "phase_due":phase_due,"phase_pending":phase_pending,"phase_period":phase_period,"sensor_due":sensor_due,"capture_ack":capture_ack,
-            "readback_due":readback_due,"stop_due":stop_due,"dma":dma.fingerprint()});
+            "capture_irq_sent":capture_irq_sent,"readback_due":readback_due,"stop_due":stop_due,"dma":dma.fingerprint()});
         let sensor = self.wiring.sensor.as_ref().map(|s| s.fingerprint());
         let outputs = self
             .wiring
@@ -931,6 +936,12 @@ impl Device for ImageInput {
         }
     }
     fn next_deadline(&self, now: u64) -> Option<u64> {
+        if self.state.capture_ack
+            && !self.state.capture_irq_sent
+            && self.state.r[0x354 / 4] & 0x10000000 != 0
+        {
+            return Some(now);
+        }
         if self.wiring.frame_period.is_some()
             && self
                 .phase_period()

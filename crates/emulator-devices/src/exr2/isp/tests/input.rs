@@ -628,8 +628,6 @@ fn raw_dma_refuses_out_of_raster_windows_and_unmodeled_transport_selections() {
         (0x18, 0x40000, "bounded input window"),
         (0x18, 4, "bounded input window"),
         (0x354, 0x10200000, "transport"),
-        (0x354, 0x10300001, "transport"),
-        (0x35c, 0, "transport"),
         (4, 0x10003, "transport"),
     ] {
         let (mut d, mut h, _) = raw_window_input(true);
@@ -642,6 +640,60 @@ fn raw_dma_refuses_out_of_raster_windows_and_unmodeled_transport_selections() {
         assert!(h.ram[0x7ff0..0x8400].iter().all(|b| *b == 0xa5));
         assert!(d.save()[0]["dma"]["deadline"].is_null());
     }
+}
+#[test]
+fn raw_burst_low_byte_preserves_pixels_and_completion_waits_for_interrupt_enable() {
+    for packed in [false, true] {
+        for format in [3, 4] {
+            for low in [0, 1, 0x37, 0xff] {
+                let (mut d, mut h, _) = raw_window_input(packed);
+                let control = format << 20 | low;
+                write(&mut d, &mut h, 0xfff10354, control);
+                advance(&mut d, &mut h, 10);
+                let checkpoint = d.checkpoint().unwrap();
+                assert!(h.effects.is_empty());
+                advance(&mut d, &mut h, 15);
+                let row: &[u8] = if packed {
+                    &[0x10, 1, 0x12, 0x30, 1, 0x14]
+                } else {
+                    &[0x10, 1, 0x20, 1, 0x30, 1, 0x40, 1]
+                };
+                assert_eq!(&h.ram[0x8000..0x8000 + row.len()], row);
+                assert_eq!(h.effects, ["dma", "dma"]);
+                assert!(h.irqs.is_empty());
+                // Pending completion survives a checkpoint, then unmasking
+                // delivers exactly once without a second frame or DMA.
+                let completed = d.save();
+                d.restore_checkpoint(&checkpoint).unwrap();
+                advance(&mut d, &mut h, 15);
+                assert_eq!(d.save(), completed);
+                write(&mut d, &mut h, 0xfff10354, control | 0x10000000);
+                assert_eq!(d.next_deadline(15), Some(15));
+                advance(&mut d, &mut h, 15);
+                assert_eq!(h.irqs, [(0, 36)]);
+                advance(&mut d, &mut h, 20);
+                assert_eq!(h.irqs, [(0, 36)]);
+                write(&mut d, &mut h, 0xfff10350, 1);
+                advance(&mut d, &mut h, 30);
+                advance(&mut d, &mut h, 35);
+                assert_eq!(h.irqs, [(0, 36), (0, 36)]);
+                assert_eq!(
+                    read(&mut d, &mut h, 0xfff10354),
+                    (control | 0x10000000) as u64
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn disabled_raw_channel_does_not_dma_or_signal_completion() {
+    let (mut d, mut h, _) = raw_window_input(true);
+    write(&mut d, &mut h, 0xfff1035c, 0);
+    advance(&mut d, &mut h, 10);
+    advance(&mut d, &mut h, 20);
+    assert!(h.effects.is_empty());
+    assert!(d.save()[0]["dma"]["deadline"].is_null());
 }
 #[test]
 fn raw_readback_waits_for_both_outputs_then_eof() {
