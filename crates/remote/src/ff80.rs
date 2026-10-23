@@ -1,6 +1,5 @@
 //! ff80 range reads, stock debug key events and bounded polled waits.
 use crate::{backend::Backend, connection::Connection, *};
-use fujimod_catalog::controls::ControlOperation;
 use fujimod_usb::{
     ff80::{
         Session,
@@ -82,16 +81,15 @@ impl<S: BorrowMut<Session>> Backend for Ff80Backend<S> {
             {
                 return Err("Rotation exceeds 4096 steps".into());
             }
-            let operation = match &input.state {
-                InputState::Pressed => ControlOperation::Press,
-                InputState::Released => ControlOperation::Release,
-                InputState::Turn(delta) => ControlOperation::Step { delta: *delta },
-                InputState::Stage(id) => ControlOperation::Stage { id: id.clone() },
-                InputState::Position(id) => ControlOperation::Position { id: id.clone() },
-            };
-            let action = facts
-                .physical_controls
-                .action(&facts.control_ids, id, operation)?;
+            if input.state.is_touch() {
+                return Err(format!(
+                    "Control {id}: the ff80 debug transport cannot inject touch input"
+                ));
+            }
+            let action =
+                facts
+                    .physical_controls
+                    .action(&facts.control_ids, id, input.state.operation())?;
             // Resolve the entire action before sending any part of it.
             let names = action
                 .inputs
@@ -129,7 +127,7 @@ impl<S: BorrowMut<Session>> Backend for Ff80Backend<S> {
             Ok(())
         })
     }
-    fn accepted(&mut self, _: &Input, _: &mut ReadSet) -> Result<bool> {
+    fn accepted(&mut self, _: &Input, _: &Facts, _: &mut ReadSet) -> Result<bool> {
         Ok(true)
     }
     fn frame<'a>(

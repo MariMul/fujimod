@@ -118,6 +118,13 @@ def _convert(value):
     return value
 
 
+def _touch(x: int, y: int, kind: str) -> str:
+    return json.dumps({"kind": kind, "value": {"x": x, "y": y}})
+
+
+_TOUCH_END = json.dumps({"kind": "touch_end"})
+
+
 async def _drive(task):
     loop = asyncio.get_running_loop()
     try:
@@ -217,6 +224,21 @@ class Camera:
     async def turn(self, reference: Control, n: int, *, deadline: int) -> None:
         await _drive(self._task("turn", reference, deadline, n))
 
+    async def touch_start(self, reference: Control, x: int, y: int, *, deadline: int) -> None:
+        await _drive(self._native.set_input(_reference(reference), _touch(x, y, "touch_start"), deadline))
+
+    async def touch_move(self, reference: Control, x: int, y: int, *, deadline: int) -> None:
+        await _drive(self._native.set_input(_reference(reference), _touch(x, y, "touch_move"), deadline))
+
+    async def touch_end(self, reference: Control, *, deadline: int) -> None:
+        await _drive(self._native.set_input(_reference(reference), _TOUCH_END, deadline))
+
+    async def tap(self, reference: Control, x: int, y: int, *, deadline: int) -> None:
+        await self.drag(reference, [(x, y)], deadline=deadline)
+
+    async def drag(self, reference: Control, points: list[tuple[int, int]], *, deadline: int) -> None:
+        await _drive(self._native.touch_gesture(_reference(reference), json.dumps(points), deadline))
+
     async def frame(self) -> Capture:
         return await _drive(self._task("frame", None, 0))
 
@@ -273,6 +295,24 @@ class BlockingCamera:
 
     def turn(self, reference: Control, n: int, *, deadline: int) -> None:
         self._call("turn", reference, deadline, n)
+
+    def touch_start(self, reference: Control, x: int, y: int, *, deadline: int) -> None:
+        self._camera._native.set_input(_reference(reference), _touch(x, y, "touch_start"),
+                                       deadline).blocking()
+
+    def touch_move(self, reference: Control, x: int, y: int, *, deadline: int) -> None:
+        self._camera._native.set_input(_reference(reference), _touch(x, y, "touch_move"),
+                                       deadline).blocking()
+
+    def touch_end(self, reference: Control, *, deadline: int) -> None:
+        self._camera._native.set_input(_reference(reference), _TOUCH_END, deadline).blocking()
+
+    def tap(self, reference: Control, x: int, y: int, *, deadline: int) -> None:
+        self.drag(reference, [(x, y)], deadline=deadline)
+
+    def drag(self, reference: Control, points: list[tuple[int, int]], *, deadline: int) -> None:
+        self._camera._native.touch_gesture(_reference(reference), json.dumps(points),
+                                           deadline).blocking()
 
     def frame(self) -> Capture:
         return self._call("frame")
@@ -384,3 +424,6 @@ class _ScopedNative:
 
     def set_input(self, reference, state, deadline):
         return self._call("set_input", (reference, state), deadline)
+
+    def touch_gesture(self, reference, points, deadline):
+        return self._call("touch_gesture", (reference, points), deadline)

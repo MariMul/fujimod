@@ -11,7 +11,7 @@ pub trait Backend {
         reads: &'a mut ReadSet,
     ) -> LocalFuture<'a, Vec<u8>>;
     fn input<'a>(&'a mut self, input: &'a Input, facts: &'a Facts) -> LocalFuture<'a, ()>;
-    fn accepted(&mut self, input: &Input, reads: &mut ReadSet) -> Result<bool>;
+    fn accepted(&mut self, input: &Input, facts: &Facts, reads: &mut ReadSet) -> Result<bool>;
     fn frame<'a>(
         &'a mut self,
         facts: &'a Facts,

@@ -303,3 +303,27 @@ fn shutter_stages_release_all_contacts_and_positions_have_no_release_event() {
         assert_eq!(script.remaining(), 0);
     });
 }
+#[test]
+fn touch_is_refused_before_any_exchange() {
+    futures_lite::future::block_on(async {
+        let script = opened([]);
+        let session = script.begin_session(1024, None).await.unwrap();
+        let facts = crate::testing::touch_facts();
+        let mut remote = Ff80Remote::new(session, facts.clone(), options()).unwrap();
+        for state in [InputState::TouchStart { x: 1, y: 2 }, InputState::TouchEnd] {
+            let error = remote
+                .backend
+                .input(
+                    &Input {
+                        control: control("touchscreen"),
+                        state,
+                    },
+                    &facts,
+                )
+                .await
+                .unwrap_err();
+            assert!(error.contains("cannot inject touch"));
+        }
+        assert_eq!(script.remaining(), 0);
+    });
+}

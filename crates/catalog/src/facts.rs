@@ -73,7 +73,45 @@ pub enum ControlInterface {
         priority: u32,
         /// Firmware-selected interrupt mode.
         irq_mode: u32,
+        /// Firmware memory retaining the latest report decoded by the touch task.
+        decoded: DecodedTouch,
     },
+}
+
+/// Layout of the touch task's latest decoded report in firmware memory.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct DecodedTouch {
+    /// Firmware address of the decoded report.
+    pub address: u64,
+    /// Byte offset of the decoded contact count.
+    pub count: u32,
+    /// Byte offsets of each decoded contact, in report order.
+    pub contacts: Vec<DecodedTouchContact>,
+}
+
+/// Byte offsets of one decoded contact within the report.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct DecodedTouchContact {
+    /// Byte that is nonzero while the contact is down.
+    pub active: u32,
+    /// Little-endian 16-bit logical x coordinate.
+    pub x: u32,
+    /// Little-endian 16-bit logical y coordinate.
+    pub y: u32,
 }
 
 /// Firmware scanner predicates used for digital keys.

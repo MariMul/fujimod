@@ -63,6 +63,26 @@ pub fn facts() -> Facts {
         },"menu_manifest":null
     })).unwrap()
 }
+/// Synthetic facts with a touch surface whose decoded report sits at 1536.
+pub fn touch_facts() -> Facts {
+    let mut facts = facts();
+    facts.physical_controls.controls.insert(
+        "touchscreen".into(),
+        serde_json::from_value(json!({"name":"Touch screen","location":"rear","manual_page":null,"face":null,"icon":null,
+            "connection_ids":["controls-touch"],"assignable":false,"pushable":false,"positions":[],
+            "default_function":null,"role":null,"mechanical":false,"behavior":{"kind":"touch"}}))
+        .unwrap(),
+    );
+    facts.control_ids.interfaces.insert(
+        "controls-touch".into(),
+        serde_json::from_value(json!({"kind":"prefixed_touch","connection_id":"controls-touch","mode":1,
+            "register":0,"report_bytes":11,"contacts":2,"coordinate_bits":12,"width":720,"height":480,
+            "offset_tags":[0,1],"irq":15,"priority":10,"irq_mode":2,
+            "decoded":{"address":1536,"count":0,"contacts":[{"active":8,"x":10,"y":12},{"active":20,"x":22,"y":24}]}}))
+        .unwrap(),
+    );
+    facts
+}
 pub struct Synthetic {
     bytes: Vec<u8>,
     now: u64,
@@ -190,8 +210,20 @@ impl Backend for Synthetic {
             Ok(())
         })
     }
-    fn accepted(&mut self, _: &Input, _: &mut ReadSet) -> Result<bool> {
-        Ok(true)
+    fn accepted(&mut self, input: &Input, facts: &Facts, reads: &mut ReadSet) -> Result<bool> {
+        if !input.state.is_touch() {
+            return Ok(true);
+        }
+        let layout = facts
+            .physical_controls
+            .touch(&facts.control_ids, input.control.id())?
+            .decoded;
+        let start = layout.address as usize;
+        let size = memory::touch_report_size(layout);
+        reads
+            .stores
+            .push((layout.address, layout.address + size as u64));
+        memory::touch_decoded(layout, &self.bytes[start..start + size], &input.state)
     }
     fn frame<'a>(&'a mut self, _: &'a Facts, reads: &'a mut ReadSet) -> LocalFuture<'a, Capture> {
         Box::pin(async move {
@@ -567,5 +599,135 @@ fn input_task_boundary_is_live_and_tracks_tables_and_receive_states() {
                 .unwrap_err()
                 .contains("unavailable")
         );
+    });
+}
+
+#[cfg(test)]
+impl Synthetic {
+    /// Write the firmware's decoded report: one contact at a point, or none.
+    fn decoded_touch(&mut self, contact: Option<(u16, u16)>) {
+        self.bytes[1536..1564].fill(0);
+        if let Some((x, y)) = contact {
+            self.bytes[1536] = 1;
+            self.bytes[1544] = 1;
+            self.bytes[1546..1548].copy_from_slice(&x.to_le_bytes());
+            self.bytes[1548..1550].copy_from_slice(&y.to_le_bytes());
+        }
+    }
+}
+#[test]
+fn touch_waits_for_readiness_only_before_the_finger_goes_down() {
+    futures_lite::future::block_on(async {
+        let mut remote = Connection::connect(Synthetic::new(), touch_facts()).unwrap();
+        let screen = control("touchscreen");
+        let touch = |state| Input {
+            control: screen.clone(),
+            state,
+        };
+        let snapshot = remote.read(&screen.clone().into()).await.unwrap();
+        assert!(matches!(
+            snapshot.value,
+            Value::Control(ControlSnapshot {
+                supported: true,
+                ..
+            })
+        ));
+        for state in [InputState::TouchMove { x: 1, y: 1 }, InputState::TouchEnd] {
+            assert!(
+                remote
+                    .set_input(&touch(state), 10)
+                    .await
+                    .unwrap_err()
+                    .contains("No finger is down")
+            );
+        }
+        // Category-one bit 9 withholds input.
+        remote.backend.word(800, 1 << 9);
+        let start = touch(InputState::TouchStart { x: 100, y: 200 });
+        assert!(
+            remote
+                .set_input(&start, 3)
+                .await
+                .unwrap_err()
+                .contains("input readiness")
+        );
+        assert!(remote.backend.edges.is_empty());
+        remote.backend.word(800, 0);
+        remote.backend.decoded_touch(Some((100, 200)));
+        remote.set_input(&start, 10).await.unwrap();
+        assert!(
+            remote
+                .set_input(&start, 10)
+                .await
+                .unwrap_err()
+                .contains("already down")
+        );
+        // Moving and lifting a finger already down does not wait for readiness.
+        remote.backend.word(800, 1 << 9);
+        remote.backend.decoded_touch(Some((300, 200)));
+        remote
+            .set_input(&touch(InputState::TouchMove { x: 300, y: 200 }), 10)
+            .await
+            .unwrap();
+        remote.backend.decoded_touch(None);
+        remote
+            .set_input(&touch(InputState::TouchEnd), 10)
+            .await
+            .unwrap();
+        assert_eq!(remote.backend.edges.len(), 3);
+        assert!(
+            remote
+                .set_input(&touch(InputState::TouchStart { x: 720, y: 0 }), 10)
+                .await
+                .unwrap_err()
+                .contains("outside")
+        );
+    });
+}
+#[test]
+fn touch_is_accepted_when_the_decoded_report_shows_it() {
+    futures_lite::future::block_on(async {
+        let mut remote = Connection::connect(Synthetic::new(), touch_facts()).unwrap();
+        let screen = control("touchscreen");
+        // The report still shows an earlier position, so acceptance waits on it.
+        remote.backend.decoded_touch(Some((5, 6)));
+        let error = remote
+            .set_input(
+                &Input {
+                    control: screen.clone(),
+                    state: InputState::TouchStart { x: 7, y: 6 },
+                },
+                3,
+            )
+            .await
+            .unwrap_err();
+        assert!(error.contains("input acceptance"));
+        assert_eq!(remote.backend.waits.last().unwrap().stores, [(1536, 1562)]);
+        // The finger stays down after the timeout; its release awaits an empty report.
+        let end = Input {
+            control: screen,
+            state: InputState::TouchEnd,
+        };
+        remote.backend.decoded_touch(None);
+        remote.set_input(&end, 10).await.unwrap();
+        let layout = touch_facts();
+        let layout = &layout
+            .physical_controls
+            .touch(&layout.control_ids, "touchscreen")
+            .unwrap()
+            .decoded;
+        let mut report = [0u8; 26];
+        report[0] = 2;
+        report[8] = 1;
+        report[10] = 7;
+        report[12] = 6;
+        report[20] = 1;
+        let start = InputState::TouchStart { x: 7, y: 6 };
+        assert!(!memory::touch_decoded(layout, &report, &start).unwrap());
+        report[0] = 1;
+        report[20] = 0;
+        assert!(memory::touch_decoded(layout, &report, &start).unwrap());
+        assert!(!memory::touch_decoded(layout, &report, &InputState::TouchEnd).unwrap());
+        assert!(memory::touch_decoded(layout, &report[..12], &start).is_err());
     });
 }

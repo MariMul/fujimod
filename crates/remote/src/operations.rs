@@ -36,6 +36,40 @@ pub async fn turn<R: Remote + ?Sized>(
     )
     .await
 }
+/// One finger down at a point and lifted, each step recognized by the firmware.
+pub async fn tap<R: Remote + ?Sized>(
+    r: &mut R,
+    c: &Control,
+    x: u32,
+    y: u32,
+    deadline: u64,
+) -> Result<()> {
+    drag(r, c, &[(x, y)], deadline).await
+}
+/// One finger down at the first point, moved through the rest and lifted.
+/// Each point is recognized by the firmware before the next; no step waits a
+/// fixed duration.
+pub async fn drag<R: Remote + ?Sized>(
+    r: &mut R,
+    c: &Control,
+    points: &[(u32, u32)],
+    deadline: u64,
+) -> Result<()> {
+    let (&(x, y), rest) = points
+        .split_first()
+        .ok_or("A touch gesture requires at least one point")?;
+    let mut input = Input {
+        control: c.clone(),
+        state: InputState::TouchStart { x, y },
+    };
+    r.set_input(&input, deadline).await?;
+    for &(x, y) in rest {
+        input.state = InputState::TouchMove { x, y };
+        r.set_input(&input, deadline).await?;
+    }
+    input.state = InputState::TouchEnd;
+    r.set_input(&input, deadline).await
+}
 struct Tracked<'a, R: ?Sized> {
     remote: &'a mut R,
     reads: ReadSet,

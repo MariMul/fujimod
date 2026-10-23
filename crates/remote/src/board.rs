@@ -1,6 +1,8 @@
 //! In-process board transport. Execution yields between bounded, watched windows.
 use crate::{backend::Backend, connection::Connection, *};
-use fujimod_emulator::session::{Session, checkpoint::Snapshot as Checkpoint};
+use fujimod_emulator::session::{
+    Session, checkpoint::Snapshot as Checkpoint, contact_driver::Actuator,
+};
 
 /// Access is scoped to stopped-board calls, so language owners can retain a board.
 pub trait SessionOwner {
@@ -30,6 +32,8 @@ pub struct BoardBackend<S> {
     owner: S,
     options: Options,
     now: u64,
+    /// Last position of each finger down, which its release reports.
+    touches: std::collections::BTreeMap<String, (u16, u16)>,
 }
 pub type BoardRemote<S> = Connection<BoardBackend<S>>;
 impl<S: SessionOwner> Connection<BoardBackend<S>> {
@@ -43,6 +47,7 @@ impl<S: SessionOwner> Connection<BoardBackend<S>> {
                 owner,
                 options,
                 now,
+                touches: Default::default(),
             },
             facts,
         )
@@ -56,6 +61,9 @@ impl<S: SessionOwner> Connection<BoardBackend<S>> {
     pub fn restore(&mut self, saved: &Checkpoint) -> Result<()> {
         self.backend.owner.with_session(|s| s.restore(saved))?;
         self.backend.now = saved.now();
+        // A restored panel holds no remote finger.
+        self.backend.touches.clear();
+        self.touching.clear();
         Ok(())
     }
     pub fn set_scene(&mut self, scene: &serde_json::Value) -> Result<()> {
@@ -69,6 +77,18 @@ impl<S: SessionOwner> Connection<BoardBackend<S>> {
         }
         Ok(())
     }
+}
+/// The driver actuator a control's press drives: its own contact, or the
+/// press member of a dial or ring whose motion has separate contacts.
+fn actuator<'a>(actuators: &'a [Actuator], id: &str) -> Result<&'a Actuator> {
+    actuators
+        .iter()
+        .find(|a| a.id == id)
+        .or_else(|| {
+            let member = format!("{id}.press");
+            actuators.iter().find(|a| a.id == member)
+        })
+        .ok_or_else(|| format!("No physical actuator for {id}"))
 }
 fn tracked<T>(
     session: &Session,
@@ -108,17 +128,36 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
     fn input<'a>(&'a mut self, input: &'a Input, facts: &'a Facts) -> LocalFuture<'a, ()> {
         Box::pin(async move {
             let id = input.control.id();
-            use fujimod_catalog::controls::ControlOperation;
-            let operation = match &input.state {
-                InputState::Pressed => ControlOperation::Press,
-                InputState::Released => ControlOperation::Release,
-                InputState::Turn(delta) => ControlOperation::Step { delta: *delta },
-                InputState::Stage(id) => ControlOperation::Stage { id: id.clone() },
-                InputState::Position(id) => ControlOperation::Position { id: id.clone() },
-            };
             facts
                 .physical_controls
-                .action(&facts.control_ids, id, operation)?;
+                .action(&facts.control_ids, id, input.state.operation())?;
+            if input.state.is_touch() {
+                let (phase, x, y) = match input.state {
+                    InputState::TouchStart { x, y } => ("press", x, y),
+                    InputState::TouchMove { x, y } => ("drag", x, y),
+                    _ => {
+                        let (x, y) = self
+                            .touches
+                            .get(id)
+                            .ok_or_else(|| format!("No finger is down on {id}"))?;
+                        ("release", u32::from(*x), u32::from(*y))
+                    }
+                };
+                let point = (
+                    u16::try_from(x).map_err(|_| "Touch x exceeds 16 bits")?,
+                    u16::try_from(y).map_err(|_| "Touch y exceeds 16 bits")?,
+                );
+                self.owner.with_session(|s| {
+                    let (node, script) = s.touch_input(id, phase, point.0, point.1)?;
+                    s.touch(&node, &script)
+                })?;
+                if input.state == InputState::TouchEnd {
+                    self.touches.remove(id);
+                } else {
+                    self.touches.insert(id.into(), point);
+                }
+                return Ok(());
+            }
             self.owner.with_session(|s| match &input.state {
                 InputState::Turn(steps) => {
                     let (node, cycles) = s.rotation(id, *steps)?;
@@ -132,12 +171,7 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
                     if driver.busy() {
                         return Err("Board contact queue is busy".into());
                     }
-                    let actuator = driver
-                        .spec
-                        .actuators
-                        .iter()
-                        .find(|a| a.id == id)
-                        .ok_or_else(|| format!("No physical actuator for {id}"))?;
+                    let actuator = actuator(&driver.spec.actuators, id)?;
                     let pose = match &input.state {
                         InputState::Position(position) => {
                             actuator.states.iter().find(|p| &p.position == position)
@@ -151,15 +185,29 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
                             .get(usize::from(input.state == InputState::Pressed)),
                     }
                     .ok_or("Physical input pose is absent")?;
-                    let position = pose.position.clone();
-                    s.set_position(id, &position)
+                    let (actuator, position) = (actuator.id.clone(), pose.position.clone());
+                    s.set_position(&actuator, &position)
                 }
             })
         })
     }
-    fn accepted(&mut self, input: &Input, reads: &mut ReadSet) -> Result<bool> {
+    fn accepted(&mut self, input: &Input, facts: &Facts, reads: &mut ReadSet) -> Result<bool> {
         if matches!(input.state, InputState::Turn(_)) {
             return Ok(true);
+        }
+        if input.state.is_touch() {
+            // The firmware's touch task has decoded a report showing this input.
+            let layout = facts
+                .physical_controls
+                .touch(&facts.control_ids, input.control.id())?
+                .decoded;
+            return self.owner.with_session(|s| {
+                tracked(s, reads, |s| {
+                    let mut report = vec![0; crate::memory::touch_report_size(layout)];
+                    s.board.read_physical(layout.address, &mut report)?;
+                    crate::memory::touch_decoded(layout, &report, &input.state)
+                })
+            });
         }
         self.owner.with_session(|s| {
             tracked(s, reads, |s| {
@@ -169,12 +217,7 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
                     .ok_or("Physical acknowledgment driver is absent")?;
                 let id = input.control.id();
                 // input() resolved aliases; the live panel position identifies the pose.
-                let actuator = driver
-                    .spec
-                    .actuators
-                    .iter()
-                    .find(|a| a.id == id)
-                    .ok_or_else(|| format!("No checked actuator for {id}"))?;
+                let actuator = actuator(&driver.spec.actuators, id)?;
                 let pose = match &input.state {
                     InputState::Position(position) => {
                         actuator.states.iter().find(|p| &p.position == position)

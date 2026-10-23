@@ -1,5 +1,6 @@
 //! Four asynchronous primitives.
 use crate::{Control, Reference};
+use fujimod_catalog::controls::ControlOperation;
 use fujimod_recording::Frame;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, future::Future, pin::Pin};
@@ -40,6 +41,39 @@ pub enum InputState {
     Turn(i32),
     Stage(String),
     Position(String),
+    /// One finger down on a touch control at firmware logical coordinates.
+    TouchStart {
+        x: u32,
+        y: u32,
+    },
+    /// The finger already down moves to these coordinates.
+    TouchMove {
+        x: u32,
+        y: u32,
+    },
+    /// The finger lifts.
+    TouchEnd,
+}
+impl InputState {
+    /// The catalog operation this input requests from its physical control.
+    pub fn operation(&self) -> ControlOperation {
+        match self {
+            Self::Pressed => ControlOperation::Press,
+            Self::Released => ControlOperation::Release,
+            Self::Turn(delta) => ControlOperation::Step { delta: *delta },
+            Self::Stage(id) => ControlOperation::Stage { id: id.clone() },
+            Self::Position(id) => ControlOperation::Position { id: id.clone() },
+            Self::TouchStart { x, y } => ControlOperation::TouchStart { x: *x, y: *y },
+            Self::TouchMove { x, y } => ControlOperation::TouchMove { x: *x, y: *y },
+            Self::TouchEnd => ControlOperation::TouchEnd,
+        }
+    }
+    pub fn is_touch(&self) -> bool {
+        matches!(
+            self,
+            Self::TouchStart { .. } | Self::TouchMove { .. } | Self::TouchEnd
+        )
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Input {

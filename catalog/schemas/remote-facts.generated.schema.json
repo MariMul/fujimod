@@ -942,6 +942,10 @@
               "minimum": 0,
               "type": "integer"
             },
+            "decoded": {
+              "$ref": "#/$defs/DecodedTouch",
+              "description": "Firmware memory retaining the latest report decoded by the touch task."
+            },
             "height": {
               "description": "Firmware logical coordinate height.",
               "format": "uint32",
@@ -1019,7 +1023,8 @@
             "offset_tags",
             "irq",
             "priority",
-            "irq_mode"
+            "irq_mode",
+            "decoded"
           ],
           "type": "object"
         }
@@ -1412,6 +1417,67 @@
         "node_size",
         "cursor_active",
         "binding_id"
+      ],
+      "type": "object"
+    },
+    "DecodedTouch": {
+      "additionalProperties": false,
+      "description": "Layout of the touch task's latest decoded report in firmware memory.",
+      "properties": {
+        "address": {
+          "description": "Firmware address of the decoded report.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "contacts": {
+          "description": "Byte offsets of each decoded contact, in report order.",
+          "items": {
+            "$ref": "#/$defs/DecodedTouchContact"
+          },
+          "type": "array"
+        },
+        "count": {
+          "description": "Byte offset of the decoded contact count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "count",
+        "contacts"
+      ],
+      "type": "object"
+    },
+    "DecodedTouchContact": {
+      "additionalProperties": false,
+      "description": "Byte offsets of one decoded contact within the report.",
+      "properties": {
+        "active": {
+          "description": "Byte that is nonzero while the contact is down.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "x": {
+          "description": "Little-endian 16-bit logical x coordinate.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "y": {
+          "description": "Little-endian 16-bit logical y coordinate.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "active",
+        "x",
+        "y"
       ],
       "type": "object"
     },

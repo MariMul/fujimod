@@ -167,6 +167,24 @@ async def test_staged_shutter_and_position_inputs():
     remote.close()
 
 
+async def test_touch_reaches_the_remote_and_awaits_the_decoded_report():
+    remote = camera()
+    screen = control("touchscreen")
+    with pytest.raises(RuntimeError, match="No finger is down"):
+        await remote.touch_end(screen, deadline=10)
+    with pytest.raises(RuntimeError, match="outside"):
+        await remote.tap(screen, 720, 0, deadline=10)
+    with pytest.raises(RuntimeError, match="input acceptance"):
+        await remote.tap(screen, 10, 20, deadline=3)
+    with pytest.raises(RuntimeError, match="already down"):
+        remote.blocking.touch_start(screen, 10, 20, deadline=10)
+    with pytest.raises(RuntimeError, match="input acceptance"):
+        remote.blocking.touch_move(screen, 11, 20, deadline=6)
+    # The synthetic report holds no contact, so lifting the finger is accepted.
+    remote.blocking.touch_end(screen, deadline=10)
+    remote.close()
+
+
 async def test_operation_scoped_camera_returns_usb_between_wait_and_observation():
     from fujimod import usb
     from fujimod.remote import _ScopedNative

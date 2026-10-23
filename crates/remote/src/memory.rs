@@ -1,6 +1,9 @@
 //! Bounded live-memory observation. No reads advance execution.
-use crate::{ReadSet, Result, State, backend::Backend};
-use fujimod_catalog::{facts::ConfigurationLocation, remote::Facts};
+use crate::{InputState, ReadSet, Result, State, backend::Backend};
+use fujimod_catalog::{
+    facts::{ConfigurationLocation, DecodedTouch},
+    remote::Facts,
+};
 
 pub struct Memory<'a, B> {
     pub backend: &'a mut B,
@@ -244,4 +247,47 @@ pub fn word(bytes: &[u8], offset: u32) -> Result<u32> {
     Ok(u32::from_le_bytes(
         raw.try_into().map_err(|_| "Invalid word")?,
     ))
+}
+/// Bytes spanning every field of a decoded touch report.
+pub fn touch_report_size(layout: &DecodedTouch) -> usize {
+    layout
+        .contacts
+        .iter()
+        .flat_map(|c| [c.active + 1, c.x + 2, c.y + 2])
+        .chain([layout.count + 1])
+        .max()
+        .unwrap_or(1) as usize
+}
+/// Whether the firmware's latest decoded touch report shows this touch input.
+/// A finger down or moved is the one decoded contact, at its coordinates; a
+/// lifted finger leaves a report with no contacts.
+pub fn touch_decoded(layout: &DecodedTouch, report: &[u8], state: &InputState) -> Result<bool> {
+    let byte = |offset: u32| {
+        report
+            .get(offset as usize)
+            .copied()
+            .ok_or_else(|| "Decoded touch report is truncated".to_string())
+    };
+    let half = |offset: u32| -> Result<u32> {
+        Ok(u32::from(u16::from_le_bytes([
+            byte(offset)?,
+            byte(offset + 1)?,
+        ])))
+    };
+    let count = byte(layout.count)?;
+    match state {
+        InputState::TouchStart { x, y } | InputState::TouchMove { x, y } => {
+            if count != 1 {
+                return Ok(false);
+            }
+            for contact in &layout.contacts {
+                if byte(contact.active)? != 0 && half(contact.x)? == *x && half(contact.y)? == *y {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        }
+        InputState::TouchEnd => Ok(count == 0),
+        _ => Err("Decoded touch reports accept only touch inputs".into()),
+    }
 }

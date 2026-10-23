@@ -1158,6 +1158,7 @@ class ControlInterfaceVariant1(TypedDict, total=False):
     connection_id: Required[str]
     contacts: Required[int]
     coordinate_bits: Required[int]
+    decoded: Required[DecodedTouch]
     height: Required[int]
     irq: Required[int]
     irq_mode: Required[int]
@@ -1242,6 +1243,18 @@ class CursorLayout(TypedDict, total=False):
 class DebugKey(TypedDict, total=False):
     event: Required[int]
     name: Required[str]
+
+
+class DecodedTouch(TypedDict, total=False):
+    address: Required[int]
+    contacts: Required[list[DecodedTouchContact]]
+    count: Required[int]
+
+
+class DecodedTouchContact(TypedDict, total=False):
+    active: Required[int]
+    x: Required[int]
+    y: Required[int]
 
 
 class DecoderChoice(TypedDict, total=False):

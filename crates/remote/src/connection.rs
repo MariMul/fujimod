@@ -1,10 +1,12 @@
 //! A connection resolves references and shares the same action futures on every host.
 use crate::{backend::Backend, memory::Memory, *};
-use std::rc::Rc;
+use std::{collections::BTreeSet, rc::Rc};
 
 pub struct Connection<B> {
     pub(crate) backend: B,
     pub(crate) facts: Rc<Facts>,
+    /// Touch controls with a finger down, from TouchStart until TouchEnd.
+    pub(crate) touching: BTreeSet<String>,
 }
 impl<B: Backend> Connection<B> {
     pub fn connect(backend: B, facts: Facts) -> Result<Self> {
@@ -12,6 +14,7 @@ impl<B: Backend> Connection<B> {
         Ok(Self {
             backend,
             facts: Rc::new(facts),
+            touching: BTreeSet::new(),
         })
     }
     pub fn facts(&self) -> &Facts {
@@ -40,6 +43,17 @@ impl<B: Backend> Connection<B> {
     }
     pub async fn turn(&mut self, control: &Control, steps: i32, deadline: u64) -> Result<()> {
         crate::operations::turn(self, control, steps, deadline).await
+    }
+    pub async fn tap(&mut self, control: &Control, x: u32, y: u32, deadline: u64) -> Result<()> {
+        crate::operations::tap(self, control, x, y, deadline).await
+    }
+    pub async fn drag(
+        &mut self,
+        control: &Control,
+        points: &[(u32, u32)],
+        deadline: u64,
+    ) -> Result<()> {
+        crate::operations::drag(self, control, points, deadline).await
     }
     pub async fn navigate(&mut self, menu: &Menu, deadline: u64) -> Result<RemoteReadResult> {
         let facts = self.facts.clone();
@@ -133,7 +147,31 @@ impl<B: Backend> Remote for Connection<B> {
     }
     fn set_input<'a>(&'a mut self, input: &'a Input, deadline: u64) -> LocalFuture<'a, ()> {
         Box::pin(async move {
-            if input.state != InputState::Released {
+            let id = input.control.id();
+            if input.state.is_touch() {
+                // Refuse a point outside the surface before waiting on anything.
+                self.facts.physical_controls.action(
+                    &self.facts.control_ids,
+                    id,
+                    input.state.operation(),
+                )?;
+            }
+            let touching = self.touching.contains(id);
+            match input.state {
+                InputState::TouchStart { .. } if touching => {
+                    return Err(format!("A finger is already down on {id}; move it instead"));
+                }
+                InputState::TouchMove { .. } | InputState::TouchEnd if !touching => {
+                    return Err(format!("No finger is down on {id}"));
+                }
+                _ => {}
+            }
+            // Only a new press waits for UI readiness. A release, or a finger
+            // already down moving or lifting, must not block on it.
+            if !matches!(
+                input.state,
+                InputState::Released | InputState::TouchMove { .. } | InputState::TouchEnd
+            ) {
                 self.ready(deadline).await?;
                 let read_result = self
                     .read(&Reference::Control(input.control.clone()))
@@ -151,9 +189,18 @@ impl<B: Backend> Remote for Connection<B> {
             // Backends validate the complete physical action before applying it.
             // OFF must not depend on live state reads that can block its release.
             self.backend.input(input, &self.facts).await?;
+            match input.state {
+                InputState::TouchStart { .. } => {
+                    self.touching.insert(id.into());
+                }
+                InputState::TouchEnd => {
+                    self.touching.remove(id);
+                }
+                _ => {}
+            }
             loop {
                 let mut reads = ReadSet::default();
-                if self.backend.accepted(input, &mut reads)? {
+                if self.backend.accepted(input, &self.facts, &mut reads)? {
                     return Ok(());
                 }
                 if self.now() >= deadline {

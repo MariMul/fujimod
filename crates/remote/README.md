@@ -20,7 +20,8 @@ option identities come from the installed build's menu manifest.
 `Session`. Its checked physical panel and contact acknowledgment driver must
 already be connected. Continuations use exact store/device watches and yield
 between bounded instruction windows. Checkpoints, restoring, scene input and
-explicit clock advancement are board-only methods. Frame observations use the
+explicit clock advancement are board-only methods. A press of a dial or ring
+whose motion has its own contacts drives its `{id}.press` actuator. Frame observations use the
 selected scanout and a completed-frame counter from the board's device graph.
 
 `Ff80Remote::new(session, facts, options)` borrows or owns an existing USB
@@ -58,6 +59,25 @@ selects a shutter stage; `"released"` releases all shutter contacts.
 `"position", position=...` selects a catalog detent without inventing a release
 notification. The board acknowledges the selected physical pose; ff80 resolves
 all debug bindings before sending any part of the action and never retries it.
+
+`InputState::TouchStart { x, y }` puts one finger on a touch control at
+firmware logical coordinates, `TouchMove { x, y }` moves it and `TouchEnd`
+lifts it. The catalog refuses a point outside the touch protocol located for
+the control's connection. Only `TouchStart` waits for input readiness. The
+board accepts each step once the firmware's touch task has decoded a report
+showing it, read from the decoded report the catalog locates: one contact at
+the point, or no contact after `TouchEnd`. `operations::tap` and
+`operations::drag` compose these steps with no fixed durations. ff80 refuses
+touch. Python exposes `touch_start`, `touch_move`, `touch_end`, `tap` and
+`drag` on `Camera` and `camera.blocking`.
+
+`Connection::observe` installs a standing observer that runs before every
+wait, including those inside an input's readiness and acceptance. The read set
+it returns joins that wait, so state a caller tracks (display waits, passive
+probes, recording samples) is observed at every continuation boundary.
+Python passes it as `Camera.from_board(..., observer=...)`, returning
+`{"stores": [(lo, hi)], "devices": [name]}`. `camera.blocking.set_input`
+mirrors the async input call.
 
 For asynchronous application observations, `Camera.wait_for(predicate,
 reads=reads, condition=description, deadline=deadline)` returns the predicate's

@@ -4,7 +4,7 @@
 //! the checked relationship; spelling is never used to translate vocabularies.
 
 use crate::facts::{
-    ControlInterface, GpioScanner, ManualReference, NativeKeyNames, ScannerReader,
+    ControlInterface, DecodedTouch, GpioScanner, ManualReference, NativeKeyNames, ScannerReader,
     ScannerRecordWitness, ScannerTable,
 };
 use serde::{Deserialize, Serialize};
@@ -599,6 +599,35 @@ pub enum ControlOperation {
         /// Negative decreases; positive increases; zero is refused.
         delta: i32,
     },
+    /// Put a finger down on a touch surface at firmware logical coordinates.
+    TouchStart {
+        /// Logical x coordinate, less than the located width.
+        x: u32,
+        /// Logical y coordinate, less than the located height.
+        y: u32,
+    },
+    /// Move the finger already down on a touch surface.
+    TouchMove {
+        /// Logical x coordinate, less than the located width.
+        x: u32,
+        /// Logical y coordinate, less than the located height.
+        y: u32,
+    },
+    /// Lift the finger from a touch surface.
+    TouchEnd,
+}
+
+/// A touch control's located firmware protocol.
+#[derive(Clone, Copy, Debug)]
+pub struct TouchSurface<'a> {
+    /// Body connection carrying the touch reports.
+    pub connection_id: &'a str,
+    /// Firmware logical coordinate width.
+    pub width: u32,
+    /// Firmware logical coordinate height.
+    pub height: u32,
+    /// Firmware memory retaining the latest decoded report.
+    pub decoded: &'a DecodedTouch,
 }
 
 /// A declared physical action resolved against one firmware's located inputs.
@@ -684,6 +713,42 @@ impl PhysicalControls {
             }
         }
         bindings
+    }
+
+    /// The located touch protocol of a touch control.
+    pub fn touch<'a>(
+        &self,
+        firmware: &'a FirmwareControlIds,
+        id: &str,
+    ) -> Result<TouchSurface<'a>, String> {
+        let control = self.control(id)?.control;
+        if !matches!(control.behavior, Some(ControlBehavior::Touch)) {
+            return Err(format!("physical control {id} is not a touch surface"));
+        }
+        let mut located = control.connection_ids.iter().filter_map(|connection| {
+            match firmware.interfaces.get(connection) {
+                Some(ControlInterface::PrefixedTouch {
+                    connection_id,
+                    width,
+                    height,
+                    decoded,
+                    ..
+                }) => Some(TouchSurface {
+                    connection_id,
+                    width: *width,
+                    height: *height,
+                    decoded,
+                }),
+                _ => None,
+            }
+        });
+        match (located.next(), located.next()) {
+            (Some(surface), None) => Ok(surface),
+            (None, _) => Err(format!("touch control {id} has no located touch protocol")),
+            _ => Err(format!(
+                "touch control {id} has several located touch protocols"
+            )),
+        }
     }
 
     /// Look up a canonical identity, including a declared pad direction.
@@ -807,6 +872,29 @@ impl PhysicalControls {
             .behavior
             .as_ref()
             .ok_or_else(|| format!("physical control {id} has no bound actions"))?;
+        if let ControlBehavior::Touch = behavior {
+            let surface = self.touch(firmware, id)?;
+            let asserted = match operation {
+                ControlOperation::TouchStart { x, y } | ControlOperation::TouchMove { x, y } => {
+                    if x >= surface.width || y >= surface.height {
+                        return Err(format!(
+                            "touch ({x}, {y}) is outside {id}'s {}x{} logical surface",
+                            surface.width, surface.height
+                        ));
+                    }
+                    true
+                }
+                ControlOperation::TouchEnd => false,
+                _ => return Err(format!("touch control {id} accepts only touch operations")),
+            };
+            return Ok(ResolvedControlAction {
+                control_id: id.into(),
+                operation,
+                repetitions: 1,
+                asserted,
+                inputs: vec![],
+            });
+        }
         let (bindings, asserted, repetitions) =
             behavior.bindings(selected.direction, &operation)?;
         if bindings.is_empty() {
@@ -1144,10 +1232,26 @@ impl FirmwareControlIds {
         for (control_id, binding) in physical.bindings() {
             self.input(&control_id, binding)?;
         }
-        for connection_id in self.interfaces.keys() {
+        for (connection_id, interface) in &self.interfaces {
             if !connections.contains(connection_id.as_str()) {
                 return Err(format!(
                     "firmware input interface names unknown connection {connection_id}"
+                ));
+            }
+            if let ControlInterface::PrefixedTouch {
+                contacts,
+                width,
+                height,
+                decoded,
+                ..
+            } = interface
+                && (decoded.address == 0
+                    || decoded.contacts.len() != *contacts as usize
+                    || *width == 0
+                    || *height == 0)
+            {
+                return Err(format!(
+                    "touch interface {connection_id} has an invalid decoded report layout"
                 ));
             }
         }
@@ -1420,6 +1524,77 @@ mod tests {
                 .action(&firmware, "selector", ControlOperation::Press)
                 .is_err()
         );
+    }
+
+    #[test]
+    fn touch_surface_resolves_bounded_touch_operations_only() {
+        let (mut physical, mut firmware) = fixture();
+        let mut surface = control(json!({"kind":"touch"}));
+        surface["connection_ids"] = json!(["panel"]);
+        physical.controls.insert(
+            "touchscreen".into(),
+            serde_json::from_value(surface).unwrap(),
+        );
+        assert!(
+            physical
+                .action(&firmware, "touchscreen", ControlOperation::TouchEnd)
+                .unwrap_err()
+                .contains("no located touch protocol")
+        );
+        firmware.interfaces.insert(
+            "panel".into(),
+            serde_json::from_value(
+                json!({"kind":"prefixed_touch","connection_id":"panel","mode":1,
+                "register":0,"report_bytes":11,"contacts":2,"coordinate_bits":12,"width":720,
+                "height":480,"offset_tags":[1,2],"irq":15,"priority":10,"irq_mode":2,
+                "decoded":{"address":4096,"count":0,"contacts":[{"active":8,"x":10,"y":12},
+                    {"active":20,"x":22,"y":24}]}}),
+            )
+            .unwrap(),
+        );
+        firmware
+            .validate(&physical, &BTreeSet::from(["contact", "panel"]))
+            .unwrap();
+        assert_eq!(
+            physical
+                .touch(&firmware, "touchscreen")
+                .unwrap()
+                .decoded
+                .address,
+            4096
+        );
+        let start = physical
+            .action(
+                &firmware,
+                "touchscreen",
+                ControlOperation::TouchStart { x: 719, y: 479 },
+            )
+            .unwrap();
+        assert!(start.asserted && start.inputs.is_empty());
+        assert!(
+            !physical
+                .action(&firmware, "touchscreen", ControlOperation::TouchEnd)
+                .unwrap()
+                .asserted
+        );
+        for refused in [
+            ControlOperation::TouchMove { x: 720, y: 0 },
+            ControlOperation::TouchStart { x: 0, y: 480 },
+            ControlOperation::Press,
+            ControlOperation::Release,
+        ] {
+            assert!(physical.action(&firmware, "touchscreen", refused).is_err());
+        }
+        assert!(
+            physical
+                .action(
+                    &firmware,
+                    "menu_ok",
+                    ControlOperation::TouchStart { x: 0, y: 0 }
+                )
+                .is_err()
+        );
+        assert!(physical.touch(&firmware, "menu_ok").is_err());
     }
 
     #[test]

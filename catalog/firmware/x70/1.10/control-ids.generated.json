@@ -6181,7 +6181,23 @@
       ],
       "irq": 15,
       "priority": 10,
-      "irq_mode": 2
+      "irq_mode": 2,
+      "decoded": {
+        "address": 12753532,
+        "count": 0,
+        "contacts": [
+          {
+            "active": 8,
+            "x": 10,
+            "y": 12
+          },
+          {
+            "active": 20,
+            "x": 22,
+            "y": 24
+          }
+        ]
+      }
     }
   }
 }

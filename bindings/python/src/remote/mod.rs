@@ -292,6 +292,20 @@ impl Camera {
             Ok(Output::Unit)
         })))
     }
+    /// One finger down at the first point, moved through the rest and lifted.
+    fn touch_gesture(&self, reference: &str, points: &str, deadline: u64) -> PyResult<Task> {
+        let reference: Reference = decode(reference)?;
+        let Reference::Control(control) = reference else {
+            return Err(PyValueError::new_err("Touch requires a control"));
+        };
+        let points: Vec<(u32, u32)> = decode(points)?;
+        let mut lease = Lease::new(&self.slot)?;
+        Ok(Task::new(Box::pin(async move {
+            let r = lease.remote.as_deref_mut().ok_or("Camera lost its owner")?;
+            remote::operations::drag(r, &control, &points, deadline).await?;
+            Ok(Output::Unit)
+        })))
+    }
     #[getter]
     fn now(&self) -> PyResult<u64> {
         self.slot
@@ -419,7 +433,7 @@ impl Camera {
     }
     #[staticmethod]
     fn synthetic() -> PyResult<Self> {
-        let facts = remote::testing::facts();
+        let facts = remote::testing::touch_facts();
         let remote = remote::connection::Connection::connect(
             remote::testing::Synthetic::new(),
             facts.clone(),

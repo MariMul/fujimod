@@ -355,7 +355,11 @@ impl<B: Backend> Memory<'_, B> {
                     && matches!(&input.target, InputTarget::Control { control_id }
                         if control_id == id
                             || control_id.strip_prefix(id).is_some_and(|rest| rest.starts_with('.')))
-            });
+            }) || self
+                .facts
+                .physical_controls
+                .touch(&self.facts.control_ids, id)
+                .is_ok();
             return Ok(RemoteReadResult {
                 state,
                 value: Value::Control(ControlSnapshot {
