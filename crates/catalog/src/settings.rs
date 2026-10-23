@@ -1,9 +1,11 @@
-//! Generated settings-bank layout for one firmware.
+//! Generated settings layout for one firmware.
 //!
-//! Stock firmware loads its settings from a bank of flash blocks at startup.
-//! The document locates that bank, the stock defaults table in the update, the
-//! fields every valid bank carries, and the named settings a run may request.
-//! It holds addresses, sizes and hashes; bank bytes are built from the update.
+//! Stock firmware loads its settings from a bank of flash blocks at startup,
+//! and its user profile from a header the power controller keeps and from
+//! journal records in flash. The document locates the bank, the stock defaults
+//! tables in the update, the fields every valid bank and record carries, and
+//! the named settings a run may request. It holds addresses, sizes and hashes;
+//! bank and record bytes are built from the update.
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -37,8 +39,50 @@ pub struct FirmwareSettings {
     pub defaults: Option<UpdateRange>,
     /// Bytes every valid bank carries: signature, identity, body hardware values.
     pub fields: Vec<SettingsField>,
+    /// The stock user profile, when located.
+    pub profile: Option<SettingsProfile>,
     /// Settings a run may request by name, each with its named values.
     pub settings: BTreeMap<String, NamedSetting>,
+}
+
+/// The stock user profile: a sixteen-byte header kept by the power controller
+/// and journal records in managed flash blocks. Firmware that finds no valid
+/// header and records resets the profile to its defaults at startup.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct SettingsProfile {
+    /// Stock header defaults. Byte 14 is the marker `0xaa`; byte 15 holds the
+    /// checksum that makes the sixteen bytes sum to zero.
+    pub header: UpdateRange,
+    /// Journal records the stock loader requires, by name.
+    pub records: BTreeMap<String, ProfileRecord>,
+}
+
+/// One journal record: stock defaults and fixed bytes, sealed with one parity
+/// bit per data word and an XOR checksum of the data words in its last four bytes.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
+pub struct ProfileRecord {
+    /// Physical flash block holding the record at its start.
+    pub block: u32,
+    /// Managed logical index of that block.
+    pub managed_index: u16,
+    /// Record length in bytes.
+    pub bytes: u64,
+    /// Stock defaults copied into the record.
+    pub defaults: UpdateRange,
+    /// Record offset of the defaults.
+    pub defaults_offset: u64,
+    /// Record offset of the parity bitmap; the data words precede it.
+    pub parity_offset: u64,
+    /// Bytes every valid record carries outside the defaults.
+    pub fields: Vec<SettingsField>,
 }
 
 /// A method-4 encoded section of the installed flash image.
@@ -88,12 +132,12 @@ pub struct UpdateRange {
     pub sha256: String,
 }
 
-/// Bytes written at a bank offset.
+/// Bytes written at a bank or record offset.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
 pub struct SettingsField {
-    /// Byte offset in the bank.
+    /// Byte offset in the bank or record.
     pub offset: u64,
     /// Bytes written there; at most 128.
     pub bytes: Vec<u8>,
@@ -110,14 +154,16 @@ pub struct SettingsField {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct NamedSetting {
-    /// Byte offset in the bank.
+    /// Where the setting is stored: `bank`, `header`, or a profile record name.
+    pub store: String,
+    /// Byte offset in that store.
     pub offset: u64,
     /// Encoded bytes for each value name; all the same length.
     pub values: BTreeMap<String, Vec<u8>>,
 }
 
 impl FirmwareSettings {
-    /// Validate identity, bank extent and field bounds.
+    /// Validate identity, store extents and field bounds.
     pub fn validate(&self) -> Result<(), String> {
         crate::reference::validate_id(&self.id)?;
         crate::reference::validate_id(&self.firmware_id)?;
@@ -130,7 +176,16 @@ impl FirmwareSettings {
             return fail("empty bank or descriptor");
         }
         let source_end = self.source.address.checked_add(self.source.size);
-        for range in std::iter::once(&bank.descriptor).chain(&self.defaults) {
+        let profile = self.profile.as_ref();
+        let ranges = std::iter::once(&bank.descriptor)
+            .chain(&self.defaults)
+            .chain(profile.map(|profile| &profile.header))
+            .chain(
+                profile
+                    .into_iter()
+                    .flat_map(|p| p.records.values().map(|r| &r.defaults)),
+            );
+        for range in ranges {
             if range.address < self.source.address
                 || range
                     .address
@@ -138,7 +193,7 @@ impl FirmwareSettings {
                     .zip(source_end)
                     .is_none_or(|(end, limit)| end > limit)
             {
-                return fail("descriptor or defaults outside the source section");
+                return fail("stock range outside the source section");
             }
             if range.size == 0
                 || range.address.checked_add(range.size).is_none()
@@ -151,20 +206,59 @@ impl FirmwareSettings {
                 return fail("invalid update range");
             }
         }
-        if self.defaults.as_ref().is_some_and(|table| table.size % 4 != 0) {
+        if self
+            .defaults
+            .as_ref()
+            .is_some_and(|table| table.size % 4 != 0)
+        {
             return fail("defaults table is not whole entries");
         }
-        let inside = |offset: u64, size: usize| {
+        // Store extents, each with the offsets its fields and settings occupy.
+        let mut stores: BTreeMap<&str, (u64, BTreeSet<u64>)> = BTreeMap::new();
+        stores.insert("bank", (bank.bytes, BTreeSet::new()));
+        if let Some(profile) = profile {
+            if profile.header.size != 16 {
+                return fail("profile header is not sixteen bytes");
+            }
+            stores.insert("header", (14, BTreeSet::new()));
+            for (name, record) in &profile.records {
+                let parity_bytes = (record.parity_offset / 4).div_ceil(8);
+                if name.is_empty()
+                    || stores.contains_key(name.as_str())
+                    || record.parity_offset % 4 != 0
+                    || record.defaults_offset + record.defaults.size > record.parity_offset
+                    || record.parity_offset + parity_bytes + 4 > record.bytes
+                    || record.bytes > 0x10_0000
+                {
+                    return fail("profile record name, defaults or parity outside the record");
+                }
+                stores.insert(name, (record.parity_offset, BTreeSet::new()));
+            }
+        }
+        let place = |stores: &mut BTreeMap<&str, (u64, BTreeSet<u64>)>,
+                     store: &str,
+                     offset: u64,
+                     size: usize| {
+            let Some((extent, offsets)) = stores.get_mut(store) else {
+                return false;
+            };
             size > 0
                 && size <= 128
                 && offset
                     .checked_add(size as u64)
-                    .is_some_and(|end| end <= bank.bytes)
+                    .is_some_and(|end| end <= *extent)
+                && offsets.insert(offset)
         };
-        let mut offsets = BTreeSet::new();
         for field in &self.fields {
-            if !inside(field.offset, field.bytes.len()) || !offsets.insert(field.offset) {
+            if !place(&mut stores, "bank", field.offset, field.bytes.len()) {
                 return fail("field outside the bank or repeated");
+            }
+        }
+        for (name, record) in profile.into_iter().flat_map(|p| &p.records) {
+            for field in &record.fields {
+                if !place(&mut stores, name, field.offset, field.bytes.len()) {
+                    return fail("record field outside its record or repeated");
+                }
             }
         }
         for (name, setting) in &self.settings {
@@ -172,10 +266,9 @@ impl FirmwareSettings {
             let size = sizes.next().unwrap_or(0);
             if name.is_empty()
                 || !sizes.all(|other| other == size)
-                || !inside(setting.offset, size)
-                || !offsets.insert(setting.offset)
+                || !place(&mut stores, &setting.store, setting.offset, size)
             {
-                return fail("named setting is empty, uneven or overlaps a field");
+                return fail("named setting is empty, uneven, unstored or overlaps a field");
             }
         }
         Ok(())

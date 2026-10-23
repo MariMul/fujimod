@@ -100,34 +100,43 @@ impl NandInput {
                 requested,
             } => {
                 let flash = asset(&base)?;
-                let bank = fujimod_settings::build(&layout, flash, &requested)?;
+                let settings = fujimod_settings::build(&layout, flash, &requested)?;
+                let bank = settings.bank;
                 let block_bytes = options.page_bytes as u64 * options.pages_per_block as u64;
                 let mut bytes = vec![0xff; (u64::from(bank.blocks) * block_bytes) as usize];
                 let content = bytes
                     .get_mut(..bank.bytes.len())
                     .ok_or("Settings bank exceeds its flash blocks")?;
                 content.copy_from_slice(&bank.bytes);
-                let offset = u64::from(bank.first_block) * block_bytes;
-                if offset + bytes.len() as u64 > options.bytes {
-                    return Err("Settings bank exceeds NAND geometry".into());
+                let mut placements = vec![(u64::from(bank.first_block), bytes, bank.logical_first)];
+                for record in settings.profile.into_iter().flat_map(|p| p.records) {
+                    let mut block = vec![0xff; block_bytes as usize];
+                    block
+                        .get_mut(..record.bytes.len())
+                        .ok_or("Profile record exceeds its flash block")?
+                        .copy_from_slice(&record.bytes);
+                    placements.push((u64::from(record.block), block, record.managed_index));
                 }
+                let mut overlays = Vec::new();
                 let mut spare = BTreeMap::new();
-                tag_managed_blocks(
-                    &options,
-                    offset,
-                    bytes.len() as u64,
-                    bank.logical_first,
-                    &mut spare,
-                )?;
-                Nand::new(
-                    options,
-                    Arc::from(flash.as_slice()),
-                    vec![Overlay {
+                for (first_block, bytes, logical) in placements {
+                    let offset = first_block * block_bytes;
+                    if offset + bytes.len() as u64 > options.bytes {
+                        return Err("Settings exceed NAND geometry".into());
+                    }
+                    if overlays.iter().any(|o: &Overlay| {
+                        offset < o.offset + o.bytes.len() as u64
+                            && o.offset < offset + bytes.len() as u64
+                    }) {
+                        return Err("Settings placements overlap".into());
+                    }
+                    tag_managed_blocks(&options, offset, bytes.len() as u64, logical, &mut spare)?;
+                    overlays.push(Overlay {
                         offset,
                         bytes: Arc::from(bytes),
-                    }],
-                    spare,
-                )
+                    });
+                }
+                Nand::new(options, Arc::from(flash.as_slice()), overlays, spare)
             }
         }
     }

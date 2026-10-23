@@ -1,11 +1,35 @@
-//! Camera settings banks built from a firmware's catalog layout and its update file.
+//! Camera settings built from a firmware's catalog layout and its update file.
 //!
 //! A bank starts as zero bytes, takes the stock defaults table read from the
-//! update, then the layout's fields and the requested named settings. Stock
-//! firmware reads the result from flash as it would a camera's own settings.
+//! update, then the layout's fields and the requested named settings. When the
+//! layout locates the user profile, its header and journal records are built
+//! the same way from the stock profile defaults. Stock firmware reads the
+//! result as it would a camera's own settings.
 #![forbid(unsafe_code)]
 use fujimod_catalog::settings::{FirmwareSettings, UpdateRange};
 use std::collections::BTreeMap;
+
+/// Settings ready to place before cold boot.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Settings {
+    pub bank: Bank,
+    pub profile: Option<Profile>,
+}
+
+/// The user profile: the power controller's header and the flash journal records.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Profile {
+    pub header: [u8; 16],
+    pub records: Vec<Record>,
+}
+
+/// A sealed journal record and its flash block.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Record {
+    pub bytes: Vec<u8>,
+    pub block: u32,
+    pub managed_index: u16,
+}
 
 /// A settings bank ready to place in flash.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -52,13 +76,35 @@ fn word(bytes: &[u8], at: usize) -> u32 {
     u32::from_le_bytes(bytes[at..at + 4].try_into().expect("four bytes"))
 }
 
-/// Build the bank for `requested` settings (`name -> value name`) from the
+/// Seal a stock journal record: one parity bit per little-endian data word
+/// before `parity_offset`, then the XOR of those words in the last four bytes.
+pub fn seal_journal(record: &mut [u8], parity_offset: usize) -> Result<(), String> {
+    let words = parity_offset / 4;
+    let checksum_offset = record
+        .len()
+        .checked_sub(4)
+        .ok_or("journal record is shorter than its checksum")?;
+    if !parity_offset.is_multiple_of(4) || parity_offset + words.div_ceil(8) > checksum_offset {
+        return Err("journal parity does not fit before the checksum".into());
+    }
+    record[parity_offset..].fill(0);
+    let mut checksum = 0u32;
+    for index in 0..words {
+        let value = word(record, index * 4);
+        checksum ^= value;
+        record[parity_offset + index / 8] |= (value.count_ones() as u8 & 1) << (index % 8);
+    }
+    record[checksum_offset..].copy_from_slice(&checksum.to_le_bytes());
+    Ok(())
+}
+
+/// Build the settings for `requested` settings (`name -> value name`) from the
 /// installed flash image.
 pub fn build(
     layout: &FirmwareSettings,
     flash: &[u8],
     requested: &BTreeMap<String, String>,
-) -> Result<Bank, String> {
+) -> Result<Settings, String> {
     layout.validate()?;
     let section = source(layout, flash)?;
     let bank = &layout.bank;
@@ -69,6 +115,7 @@ pub fn build(
         return Err("stock bank descriptor differs from the layout".into());
     }
     let size = usize::try_from(bank.bytes).map_err(|_| "bank too large")?;
+    let mut stores: BTreeMap<&str, Vec<u8>> = BTreeMap::new();
     let mut bytes = vec![0; size];
     if let Some(table) = &layout.defaults {
         let table = read(&section, layout, table)?;
@@ -83,12 +130,24 @@ pub fn build(
             bytes[offset] = entry[2];
         }
     }
-    let mut put = |offset: u64, value: &[u8]| {
-        let offset = offset as usize;
-        bytes[offset..offset + value.len()].copy_from_slice(value);
-    };
     for field in &layout.fields {
-        put(field.offset, &field.bytes);
+        put(&mut bytes, field.offset, &field.bytes);
+    }
+    stores.insert("bank", bytes);
+    if let Some(profile) = &layout.profile {
+        let header = read(&section, layout, &profile.header)?;
+        if header[14] != 0xaa {
+            return Err("stock profile header has no marker".into());
+        }
+        stores.insert("header", header);
+        for (name, record) in &profile.records {
+            let mut bytes = vec![0; record.bytes as usize];
+            put(&mut bytes, record.defaults_offset, &read(&section, layout, &record.defaults)?);
+            for field in &record.fields {
+                put(&mut bytes, field.offset, &field.bytes);
+            }
+            stores.insert(name, bytes);
+        }
     }
     for (name, value) in requested {
         let setting = layout
@@ -99,19 +158,48 @@ pub fn build(
             .values
             .get(value)
             .ok_or_else(|| format!("setting {name} has no value {value}"))?;
-        put(setting.offset, encoded);
+        let store = stores
+            .get_mut(setting.store.as_str())
+            .ok_or_else(|| format!("setting {name} names an absent store"))?;
+        put(store, setting.offset, encoded);
     }
-    Ok(Bank {
-        bytes,
-        first_block: bank.first_block,
-        blocks: bank.blocks,
-        logical_first: bank.logical_first,
+    let profile = match &layout.profile {
+        None => None,
+        Some(located) => {
+            let mut header: [u8; 16] = stores["header"].clone().try_into().expect("sixteen bytes");
+            header[15] = header[..15].iter().fold(0u8, |sum, b| sum.wrapping_sub(*b));
+            let mut records = Vec::new();
+            for (name, record) in &located.records {
+                let mut bytes = stores.remove(name.as_str()).expect("record store");
+                seal_journal(&mut bytes, record.parity_offset as usize)?;
+                records.push(Record {
+                    bytes,
+                    block: record.block,
+                    managed_index: record.managed_index,
+                });
+            }
+            Some(Profile { header, records })
+        }
+    };
+    Ok(Settings {
+        bank: Bank {
+            bytes: stores.remove("bank").expect("bank store"),
+            first_block: bank.first_block,
+            blocks: bank.blocks,
+            logical_first: bank.logical_first,
+        },
+        profile,
     })
 }
 
-/// The value name a bank holds for `name`, when it matches one.
+fn put(store: &mut [u8], offset: u64, value: &[u8]) {
+    let offset = offset as usize;
+    store[offset..offset + value.len()].copy_from_slice(value);
+}
+
+/// The value name a bank holds for the bank setting `name`, when it matches one.
 pub fn value(layout: &FirmwareSettings, bank: &[u8], name: &str) -> Option<String> {
-    let setting = layout.settings.get(name)?;
+    let setting = layout.settings.get(name).filter(|s| s.store == "bank")?;
     setting.values.iter().find_map(|(value, encoded)| {
         let offset = setting.offset as usize;
         (bank.get(offset..offset + encoded.len()) == Some(encoded.as_slice()))

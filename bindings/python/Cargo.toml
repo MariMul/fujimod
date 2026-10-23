@@ -35,6 +35,7 @@ pyo3 = { workspace = true, features = ["experimental-async", "experimental-inspe
 fujimod-usb.workspace = true
 fujimod-workflows.workspace = true
 fujimod-catalog.workspace = true
+fujimod-settings.workspace = true
 fujimod-corpus = { path = "../../crates/corpus" }
 fujimod-emulator = { path = "../../crates/emulator", optional = true }
 fujimod-emulator-cpu = { path = "../../crates/emulator-cpu", optional = true }

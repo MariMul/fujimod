@@ -5339,6 +5339,11 @@
           "type": "string"
         },
         {
+          "const": "SerialAudioReceiveSource",
+          "description": "Clocked external PCM input and serial receive DMA.",
+          "type": "string"
+        },
+        {
           "const": "ThreeByteDCZoomLensController",
           "description": "Three Byte D C Zoom Lens Controller.",
           "type": "string"
@@ -7888,6 +7893,17 @@
           "description": "Stable document identity.",
           "type": "string"
         },
+        "profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SettingsProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The stock user profile, when located."
+        },
         "schema": {
           "description": "Document version.",
           "format": "uint32",
@@ -9448,6 +9464,13 @@
           },
           "description": "Declared refs.",
           "type": "object"
+        },
+        "replaces": {
+          "description": "Nodes absorbed by this composed hardware model.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "required": [
@@ -13187,10 +13210,14 @@
       "description": "A setting a run requests by name, such as `debug` or `language`.",
       "properties": {
         "offset": {
-          "description": "Byte offset in the bank.",
+          "description": "Byte offset in that store.",
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "store": {
+          "description": "Where the setting is stored: `bank`, `header`, or a profile record name.",
+          "type": "string"
         },
         "values": {
           "additionalProperties": {
@@ -13207,6 +13234,7 @@
         }
       },
       "required": [
+        "store",
         "offset",
         "values"
       ],
@@ -15123,6 +15151,64 @@
         }
       ]
     },
+    "ProfileRecord": {
+      "additionalProperties": false,
+      "description": "One journal record: stock defaults and fixed bytes, sealed with one parity\nbit per data word and an XOR checksum of the data words in its last four bytes.",
+      "properties": {
+        "block": {
+          "description": "Physical flash block holding the record at its start.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "bytes": {
+          "description": "Record length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "defaults": {
+          "$ref": "#/$defs/UpdateRange",
+          "description": "Stock defaults copied into the record."
+        },
+        "defaults_offset": {
+          "description": "Record offset of the defaults.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fields": {
+          "description": "Bytes every valid record carries outside the defaults.",
+          "items": {
+            "$ref": "#/$defs/SettingsField"
+          },
+          "type": "array"
+        },
+        "managed_index": {
+          "description": "Managed logical index of that block.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parity_offset": {
+          "description": "Record offset of the parity bitmap; the data words precede it.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block",
+        "managed_index",
+        "bytes",
+        "defaults",
+        "defaults_offset",
+        "parity_offset",
+        "fields"
+      ],
+      "type": "object"
+    },
     "PulseInterface": {
       "additionalProperties": false,
       "description": "A pulse interface required by an optical mechanism.",
@@ -16192,7 +16278,7 @@
     },
     "SettingsField": {
       "additionalProperties": false,
-      "description": "Bytes written at a bank offset.",
+      "description": "Bytes written at a bank or record offset.",
       "properties": {
         "basis": {
           "description": "What the bytes are and where they come from.",
@@ -16209,7 +16295,7 @@
           "type": "array"
         },
         "offset": {
-          "description": "Byte offset in the bank.",
+          "description": "Byte offset in the bank or record.",
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
@@ -16219,6 +16305,28 @@
         "offset",
         "bytes",
         "basis"
+      ],
+      "type": "object"
+    },
+    "SettingsProfile": {
+      "additionalProperties": false,
+      "description": "The stock user profile: a sixteen-byte header kept by the power controller\nand journal records in managed flash blocks. Firmware that finds no valid\nheader and records resets the profile to its defaults at startup.",
+      "properties": {
+        "header": {
+          "$ref": "#/$defs/UpdateRange",
+          "description": "Stock header defaults. Byte 14 is the marker `0xaa`; byte 15 holds the\nchecksum that makes the sixteen bytes sum to zero."
+        },
+        "records": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ProfileRecord"
+          },
+          "description": "Journal records the stock loader requires, by name.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "header",
+        "records"
       ],
       "type": "object"
     },

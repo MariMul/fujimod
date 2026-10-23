@@ -1315,6 +1315,7 @@ type DeviceKind = Literal[
     "SerialAudioDMA",
     "SerialAudioTransferControlRegisters",
     "SerialAudioTransmitSink",
+    "SerialAudioReceiveSource",
     "ThreeByteDCZoomLensController",
     "ThreeByteLensController",
     "USBControl",
@@ -1808,6 +1809,7 @@ FirmwareSettings = TypedDict(
         "fields": Required["list[SettingsField]"],
         "firmware_id": Required["str"],
         "id": Required["str"],
+        "profile": NotRequired["SettingsProfile | None"],
         "schema": Required["int"],
         "settings": Required["dict[str, NamedSetting]"],
         "source": Required["SettingsSource"],
@@ -2119,6 +2121,7 @@ class HardwareDeviceModel(TypedDict, total=False):
     dependencies: Required[list[HardwareDeviceDependency]]
     kind: Required[DeviceKind]
     refs: Required[dict[str, str]]
+    replaces: NotRequired[list[str]]
 
 
 class HardwareDiagnosticHeaders(TypedDict, total=False):
@@ -2831,6 +2834,7 @@ class NamedRange(TypedDict, total=False):
 
 class NamedSetting(TypedDict, total=False):
     offset: Required[int]
+    store: Required[str]
     values: Required[dict[str, list[int]]]
 
 
@@ -3385,6 +3389,16 @@ type ProcessorModel = Literal["cortex-r5f", "cortex-a7", "cortex-a53", "cortex-m
 type ProcessorRegister = Literal["pc", "sp", "pstate", "cpsr"]
 
 
+class ProfileRecord(TypedDict, total=False):
+    block: Required[int]
+    bytes: Required[int]
+    defaults: Required[UpdateRange]
+    defaults_offset: Required[int]
+    fields: Required[list[SettingsField]]
+    managed_index: Required[int]
+    parity_offset: Required[int]
+
+
 class PulseInterface(TypedDict, total=False):
     capture_channel: NotRequired[int | None]
     counter_channels: Required[list[int]]
@@ -3489,6 +3503,9 @@ class RootRoute(TypedDict, total=False):
 class RunAdcInputs(TypedDict, total=False):
     block_id: Required[str]
     samples: Required[list[int]]
+
+
+type RunAudioInputProfile = Literal["declared-silent-stereo-pcm48000"]
 
 
 type RunAuxiliaryControlProfile = Literal["stock-control3-bit0-clear-ack-unmeasured"]
@@ -3617,6 +3634,7 @@ type RunFaceStopProfile = Literal["declared-armed-face-dma-idle-abort-unmeasured
 
 
 class RunFactoryOptions(TypedDict, total=False):
+    audio_input_profile: NotRequired[RunAudioInputProfile | None]
     auxiliary_control_profile: NotRequired[RunAuxiliaryControlProfile | None]
     auxiliary_control_ticks: NotRequired[int | None]
     backdrop_profile: NotRequired[RunBackdropProfile | None]
@@ -4504,6 +4522,11 @@ class SettingsField(TypedDict, total=False):
     basis: Required[str]
     bytes: Required[list[int]]
     offset: Required[int]
+
+
+class SettingsProfile(TypedDict, total=False):
+    header: Required[UpdateRange]
+    records: Required[dict[str, ProfileRecord]]
 
 
 class SettingsSource(TypedDict, total=False):

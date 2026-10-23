@@ -198,8 +198,187 @@
       "basis": "Alternate configuration bank for logical 0x1c800: stock mapper 0x94522c adds 0x3f00 for selection 1. Same declared synthetic focus knots as the base bank; not measured lens calibration."
     }
   ],
+  "profile": {
+    "header": {
+      "address": 11488084,
+      "size": 16,
+      "sha256": "70f7e6411d8c85ecb6bb240a79c2e3202bc217ab4d531abd0c207e754fd5f69f"
+    },
+    "records": {
+      "main": {
+        "block": 976,
+        "managed_index": 86,
+        "bytes": 4096,
+        "defaults": {
+          "address": 12450000,
+          "size": 3700,
+          "sha256": "fe77e90d0dcdc6c4d9266883aae904dc59b333e1b96ca2c11de083a206885f63"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 3964,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Main record marker after the sequence word."
+          },
+          {
+            "offset": 132,
+            "bytes": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ],
+            "basis": "Erased main record bytes before the pages."
+          }
+        ]
+      },
+      "custom": {
+        "block": 978,
+        "managed_index": 88,
+        "bytes": 4096,
+        "defaults": {
+          "address": 11488100,
+          "size": 1792,
+          "sha256": "44ede3d57725dc03ef0812e021ca0c30fa646fd44e90e84ee1a6fbc529db917e"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 3964,
+        "fields": []
+      }
+    }
+  },
   "settings": {
     "debug": {
+      "store": "bank",
       "offset": 247,
       "values": {
         "off": [
@@ -207,6 +386,24 @@
         ],
         "on": [
           1
+        ]
+      }
+    },
+    "language": {
+      "store": "main",
+      "offset": 340,
+      "values": {
+        "en": [
+          1
+        ]
+      }
+    },
+    "setup": {
+      "store": "header",
+      "offset": 11,
+      "values": {
+        "done": [
+          7
         ]
       }
     }

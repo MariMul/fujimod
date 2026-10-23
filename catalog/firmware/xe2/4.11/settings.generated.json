@@ -111,8 +111,10 @@
       "basis": "Explicit synthetic active normal-read accelerometer setting; stock 0x9510bc masks this configuration byte with 0x1f and writes sensor CTRL_REG1 (0x2a). No fast-read mode or physical calibration claim."
     }
   ],
+  "profile": null,
   "settings": {
     "debug": {
+      "store": "bank",
       "offset": 247,
       "values": {
         "off": [

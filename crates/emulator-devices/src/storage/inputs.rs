@@ -130,7 +130,13 @@ impl PreparePersistentInputs for PersistentInputs {
                 bytes: Arc::from(data),
             });
             if let Some(index) = p.managed_index {
-                tag_managed_blocks(&geometry, p.physical_offset, p.bytes as u64, index, &mut spare)?;
+                tag_managed_blocks(
+                    &geometry,
+                    p.physical_offset,
+                    p.bytes as u64,
+                    index,
+                    &mut spare,
+                )?;
             }
         }
         if let Some(a) = &set.append {
@@ -169,26 +175,19 @@ impl PreparePersistentInputs for PersistentInputs {
         Nand::new(geometry.clone(), base, overlays, spare)
     }
 }
-/// Stock journal format: increment LE16 sequence; one parity bit per LE32
-/// data word plus an XOR checksum. Layout is supplied by the firmware data.
+/// Stock journal format: increment LE16 sequence, then seal with one parity bit
+/// per LE32 data word plus an XOR checksum. Layout is supplied by the firmware data.
 fn append_record(
     record: &[u8],
     payload: &[u8],
     layout: &PersistentJournalAppend,
 ) -> Result<Vec<u8>, String> {
-    let parity_bytes = (layout.parity_offset / 4).div_ceil(8);
     if record.len() < 2
         || layout.record_payload_offset < 2
-        || !layout.parity_offset.is_multiple_of(4)
-        || layout.parity_offset > record.len()
         || layout
             .record_payload_offset
             .checked_add(payload.len())
             .is_none_or(|e| e > layout.parity_offset)
-        || layout
-            .parity_offset
-            .checked_add(parity_bytes)
-            .is_none_or(|e| e > layout.checksum_offset)
         || layout.checksum_offset.checked_add(4) != Some(record.len())
     {
         return Err("Invalid journal record layout".into());
@@ -198,14 +197,8 @@ fn append_record(
     result[..2].copy_from_slice(&sequence.to_le_bytes());
     result[layout.record_payload_offset..layout.record_payload_offset + payload.len()]
         .copy_from_slice(payload);
-    result[layout.parity_offset..].fill(0);
-    let mut checksum = 0u32;
-    for word in 0..layout.parity_offset / 4 {
-        let value = u32::from_le_bytes(result[word * 4..word * 4 + 4].try_into().unwrap());
-        checksum ^= value;
-        result[layout.parity_offset + word / 8] |= (value.count_ones() as u8 & 1) << (word % 8);
-    }
-    result[layout.checksum_offset..].copy_from_slice(&checksum.to_le_bytes());
+    fujimod_settings::seal_journal(&mut result, layout.parity_offset)
+        .map_err(|_| "Invalid journal record layout")?;
     Ok(result)
 }
 #[cfg(test)]

@@ -121,8 +121,10 @@
       "basis": "Declared synthetic focus conversion knots: stock 0x779b30 reads 19 little-endian U16 inputs here, computes reciprocal spline coordinates, and clamps a zero focal-group count to one. Positive decreasing inputs make the coordinates strictly increasing after its fixed first knot. Not measured lens calibration."
     }
   ],
+  "profile": null,
   "settings": {
     "debug": {
+      "store": "bank",
       "offset": 247,
       "values": {
         "off": [

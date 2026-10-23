@@ -121,8 +121,10 @@
       "basis": "Declared synthetic focus conversion knots: X20 0x737c18 reads 19 little-endian U16 values here and computes 16777215/value after its fixed first knot; positive decreasing inputs produce strictly increasing spline coordinates. One focal group follows the stock zero-to-one count clamp at 0x733be0. Not measured lens calibration."
     }
   ],
+  "profile": null,
   "settings": {
     "debug": {
+      "store": "bank",
       "offset": 247,
       "values": {
         "off": [

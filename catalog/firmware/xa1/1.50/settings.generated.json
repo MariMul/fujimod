@@ -71,8 +71,10 @@
       "basis": "Internal version."
     }
   ],
+  "profile": null,
   "settings": {
     "debug": {
+      "store": "bank",
       "offset": 247,
       "values": {
         "off": [

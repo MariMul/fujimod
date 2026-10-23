@@ -1,6 +1,7 @@
 use super::*;
 use fujimod_catalog::settings::{
-    NamedSetting, SETTINGS_SCHEMA_URI, SettingsBank, SettingsField, SettingsSource,
+    NamedSetting, ProfileRecord, SETTINGS_SCHEMA_URI, SettingsBank, SettingsField,
+    SettingsProfile, SettingsSource,
 };
 
 /// An update holding one literal-only method-4 stream, stored inverted.
@@ -58,9 +59,11 @@ fn fixture() -> (Vec<u8>, FirmwareSettings) {
             bytes: vec![0x55, 0xaa],
             basis: "Settings signature.".into(),
         }],
+        profile: None,
         settings: BTreeMap::from([(
             "debug".into(),
             NamedSetting {
+                store: "bank".into(),
                 offset: 0xf7,
                 values: BTreeMap::from([("off".into(), vec![0]), ("on".into(), vec![1])]),
             },
@@ -74,7 +77,9 @@ fn banks_take_stock_defaults_fields_and_requested_settings() {
     let (source, layout) = fixture();
     let flash = flash_image(&source, 4).unwrap();
     let requested = BTreeMap::from([("debug".into(), "on".into())]);
-    let bank = build(&layout, &flash, &requested).unwrap();
+    let settings = build(&layout, &flash, &requested).unwrap();
+    assert_eq!(settings.profile, None);
+    let bank = settings.bank;
     assert_eq!((bank.first_block, bank.blocks, bank.logical_first), (931, 40, 41));
     assert_eq!(bank.bytes.len(), 0x400);
     assert_eq!((bank.bytes[0x10], bank.bytes[0xf0]), (9, 7));
@@ -93,4 +98,81 @@ fn unknown_settings_and_changed_updates_refuse() {
     let mut changed = flash.clone();
     *changed.last_mut().unwrap() ^= 1;
     assert!(build(&layout, &changed, &BTreeMap::new()).is_err());
+}
+
+/// The fixture with a profile: a header and a record of eight default bytes
+/// after the bank defaults, with `language` in the record and `setup` in the header.
+fn profile_fixture() -> (Vec<u8>, FirmwareSettings) {
+    let (_, mut layout) = fixture();
+    let descriptor: Vec<u8> = [2u32, 40, 931].into_iter().flat_map(u32::to_le_bytes).collect();
+    let table = [0x10, 0, 9, 0, 0xf0, 0, 7, 0, 0xff, 0xff, 0, 0];
+    let header = [0, 0, 0, 0, 0xd0, 7, 0, 0xff, 0, 0x80, 0, 4, 0, 0, 0xaa, 0];
+    let record = [1, 2, 3, 4, 5, 6, 7, 8];
+    let mut section = descriptor;
+    section.extend([0; 4]);
+    section.extend(table);
+    section.extend(header);
+    section.extend(record);
+    layout.source.size = section.len() as u64;
+    layout.source.sha256 = fujimod_firmware::sha256(&section);
+    layout.profile = Some(SettingsProfile {
+        header: range(0x101c, &header),
+        records: BTreeMap::from([(
+            "main".into(),
+            ProfileRecord {
+                block: 976,
+                managed_index: 86,
+                bytes: 0x100,
+                defaults: range(0x102c, &record),
+                defaults_offset: 0x10,
+                parity_offset: 0xe0,
+                fields: vec![SettingsField {
+                    offset: 2,
+                    bytes: vec![0xff, 0xff],
+                    basis: "Record marker.".into(),
+                }],
+            },
+        )]),
+    });
+    for (name, store, offset, values) in [
+        ("language", "main", 0x12, [("en", 1u8), ("ja", 0)]),
+        ("setup", "header", 11, [("done", 7), ("pending", 4)]),
+    ] {
+        layout.settings.insert(
+            name.into(),
+            NamedSetting {
+                store: store.into(),
+                offset,
+                values: values.into_iter().map(|(n, v)| (n.into(), vec![v])).collect(),
+            },
+        );
+    }
+    (update(&section, 4, 0x10), layout)
+}
+
+#[test]
+fn profiles_take_stock_defaults_settings_and_sealed_records() {
+    let (source, layout) = profile_fixture();
+    let flash = flash_image(&source, 4).unwrap();
+    let requested = BTreeMap::from([
+        ("language".into(), "en".into()),
+        ("setup".into(), "done".into()),
+    ]);
+    let profile = build(&layout, &flash, &requested).unwrap().profile.unwrap();
+    assert_eq!(profile.header[11], 7);
+    assert_eq!(profile.header.iter().fold(0u8, |s, b| s.wrapping_add(*b)), 0);
+    let record = &profile.records[0];
+    assert_eq!((record.block, record.managed_index), (976, 86));
+    assert_eq!(&record.bytes[..4], [0, 0, 0xff, 0xff]);
+    assert_eq!(&record.bytes[0x10..0x18], [1, 2, 1, 4, 5, 6, 7, 8]);
+    let mut sealed = record.bytes.clone();
+    seal_journal(&mut sealed, 0xe0).unwrap();
+    assert_eq!(sealed, record.bytes);
+    let checksum = (0..0xe0 / 4).fold(0u32, |sum, i| sum ^ word(&record.bytes, i * 4));
+    assert_eq!(record.bytes[0xfc..], checksum.to_le_bytes());
+    // Parity bit for the word holding 0xff 0xff is clear (sixteen bits set).
+    assert_eq!(record.bytes[0xe0] & 1, 0);
+    let mut moved = layout.clone();
+    moved.settings.get_mut("setup").unwrap().offset = 14;
+    assert!(build(&moved, &flash, &requested).is_err());
 }

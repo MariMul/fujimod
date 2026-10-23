@@ -13,6 +13,7 @@ mod python_values;
 mod raster;
 mod scanout_observation;
 mod scene;
+mod settings;
 mod xp4;
 
 use pyo3::exceptions::PyRuntimeError;
@@ -155,6 +156,8 @@ mod binding {
 
     #[pymodule_export]
     use super::discovery::{FrontierEntry, Intervention};
+    #[pymodule_export]
+    use super::settings::settings_header;
     #[pymodule_export]
     use super::display_pixels::decode_display_rgb;
     #[pymodule_export]
