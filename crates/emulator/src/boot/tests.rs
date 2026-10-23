@@ -784,3 +784,33 @@ fn declared_pcm_input_selects_one_composed_receiver_in_the_prepared_graph() {
         3
     );
 }
+
+#[test]
+fn raw_readback_duration_is_an_explicit_prepared_input() {
+    let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
+    resolved
+        .configuration
+        .preset
+        .as_mut()
+        .unwrap()
+        .factory_options
+        .raw_readback_ticks = Some(100000);
+    let run = prepared(resolved.clone()).unwrap();
+    assert_eq!(
+        model(&run, "image_input")["options"]["readback_ticks"],
+        100000
+    );
+    resolved
+        .configuration
+        .preset
+        .as_mut()
+        .unwrap()
+        .factory_options
+        .raw_readback_ticks = Some(0);
+    assert!(
+        prepared(resolved)
+            .err()
+            .unwrap()
+            .contains("positive virtual transfer ticks")
+    );
+}

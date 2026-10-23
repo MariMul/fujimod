@@ -12,6 +12,9 @@ use serde::{Deserialize, Serialize};
 )]
 #[derive(Default)]
 pub struct RunFactoryOptions {
+    /// Explicit RAW-to-output DMA duration in virtual ticks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_readback_ticks: Option<u64>,
     /// Explicit external serial audio source.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audio_input_profile: Option<RunAudioInputProfile>,

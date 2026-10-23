@@ -2043,6 +2043,18 @@ pub(super) fn assemble(
                 "ticks_per_second":12000000, "sample_rate":48000, "sample":0},
                 "routes":"imaging_routes"});
         }
+        if rule.name == "image_input" {
+            if let Some(ticks) = configuration
+                .preset
+                .as_ref()
+                .and_then(|p| p.factory_options.raw_readback_ticks)
+            {
+                if ticks == 0 {
+                    return Err("RAW readback requires positive virtual transfer ticks".into());
+                }
+                recipe["options"]["readback_ticks"] = json!(ticks);
+            }
+        }
         if rule.name == "video_encoder" {
             use fujimod_catalog::construction::VideoEncoderBackend;
             let selected = configuration

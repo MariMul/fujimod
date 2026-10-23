@@ -1241,6 +1241,15 @@
             "null"
           ]
         },
+        "raw_readback_ticks": {
+          "description": "Explicit RAW-to-output DMA duration in virtual ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "rectangle_profile": {
           "anyOf": [
             {

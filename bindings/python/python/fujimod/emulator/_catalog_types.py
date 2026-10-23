@@ -3677,6 +3677,7 @@ class RunFactoryOptions(TypedDict, total=False):
     producer_stop_ticks: NotRequired[int | None]
     pulse_timer_profile: NotRequired[RunPulseTimerProfile | None]
     quantum: NotRequired[int | None]
+    raw_readback_ticks: NotRequired[int | None]
     rectangle_profile: NotRequired[RunRectangleProfile | None]
     sd_card_format: NotRequired[RunCardFormat | None]
     sd_card_present: NotRequired[bool | None]
