@@ -36,7 +36,7 @@
       "basis": "Normal USB vendor ID."
     },
     {
-      "offset": 318,
+      "offset": 380,
       "bytes": [
         166,
         2
