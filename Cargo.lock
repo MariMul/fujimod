@@ -3458,6 +3458,7 @@ dependencies = [
 name = "fujimod-emulator-cpu-unicorn"
 version = "0.1.0"
 dependencies = [
+ "ciborium",
  "cmake",
  "fujimod-emulator-cpu",
  "serde",

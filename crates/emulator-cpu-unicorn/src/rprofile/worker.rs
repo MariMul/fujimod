@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
+mod durable;
 
 /// Inputs needed to construct one native R-profile processor on its owner
 /// thread.
@@ -90,6 +91,9 @@ impl Snapshot for RemoteSnapshot {
     }
     fn as_any(&self) -> &dyn Any {
         self
+    }
+    fn export(&self) -> Result<Vec<u8>, String> {
+        self.export_bytes()
     }
 }
 impl Drop for RemoteSnapshot {
@@ -318,6 +322,8 @@ enum Operation {
     SetInterrupt(Interrupt, bool),
     Snapshot(Option<u64>),
     Restore(u64),
+    ExportSnapshot(u64),
+    ImportSnapshot(Vec<u8>),
     InstallHooks(Vec<(usize, HookKind)>),
     RemoveHooks(Vec<(HookId, usize)>),
     ObserveBackings(Vec<BackingRange>),
@@ -494,6 +500,7 @@ impl Operation {
             Self::SetInterrupt(_, _) => WorkerRpcCounter::SetInterrupt,
             Self::Snapshot(_) => WorkerRpcCounter::Snapshot,
             Self::Restore(_) => WorkerRpcCounter::Restore,
+            Self::ExportSnapshot(_) | Self::ImportSnapshot(_) => return None,
             Self::InstallHooks(_) => WorkerRpcCounter::InstallHooks,
             Self::RemoveHooks(_) => WorkerRpcCounter::RemoveHooks,
             Self::ObserveBackings(_) => WorkerRpcCounter::ObserveBackings,
@@ -1064,11 +1071,11 @@ fn dispatch(context: &WorkerLoop, cpu: &core::Core, operation: Operation) -> Res
             let previous = previous.and_then(|token| snapshots.get(&token).map(Box::as_ref));
             let snapshot = cpu.snapshot(previous)?;
             drop(snapshots);
-            let token = context.next_snapshot.get();
-            context.next_snapshot.set(token.wrapping_add(1).max(1));
-            context.snapshots.borrow_mut().insert(token, snapshot);
-            Value::Snapshot(token)
+            context.retain_snapshot(snapshot)?
         }
+        Operation::ImportSnapshot(bytes) => context.retain_snapshot(cpu.import_snapshot(&bytes)?)?,
+        Operation::ExportSnapshot(token) => Value::Bytes(context.snapshots.borrow()
+            .get(&token).ok_or("unknown worker snapshot token")?.export()?),
         Operation::Restore(token) => {
             let snapshots = context.snapshots.borrow();
             let snapshot = snapshots
@@ -1849,6 +1856,9 @@ impl Cpu for CpuWorker {
         self.stopped_pstate.set(None);
         self.loop_window.set(None);
         Ok(())
+    }
+    fn import_snapshot(&self, bytes: &[u8]) -> Result<Box<dyn Snapshot>, String> {
+        self.import_bytes(bytes)
     }
     unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String> {
         Ok(unsafe { self.install_hooks(&[hook]) }?.remove(0))

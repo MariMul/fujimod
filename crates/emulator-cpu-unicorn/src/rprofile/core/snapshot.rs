@@ -6,9 +6,11 @@ use fujimod_emulator_cpu::memory::pages::Image;
 use sha2::{Digest, Sha256};
 use std::any::Any;
 use std::sync::atomic::Ordering;
+mod portable;
 
 struct Saved {
     context: Box<dyn Snapshot>,
+    identity_input: u32,
     clock: Option<Clock>,
     clock_overshoot: u64,
     policy: ExecutionPolicy,
@@ -38,6 +40,9 @@ impl Snapshot for Saved {
     }
     fn as_any(&self) -> &dyn Any {
         self
+    }
+    fn export(&self) -> Result<Vec<u8>, String> {
+        portable::export(self)
     }
 }
 impl Execution {
@@ -127,7 +132,7 @@ impl Execution {
             .map_err(|_| "exclusive monitors poisoned")?
             .reservation(self.monitor);
         Ok(
-            serde_json::json!({"architecture":self.cpu.architecture_state()?, "pmu":self.pmu.get().fingerprint(),
+            serde_json::json!({"architecture":self.cpu.architecture_state()?, "identity_input":self.identity_input.get(), "pmu":self.pmu.get().fingerprint(),
             "clock":self.clock.get().map(|c|serde_json::json!({"now":c.now,"phase":c.phase,"ratio":c.ratio.parts()})),
             "execution_policy":self.policy.get().name(),
             "tcm":memory,"irq":self.irq.get(),"reservation":reservation.map(|r|(r.address,r.size)),
@@ -192,7 +197,12 @@ impl Core {
         let e = &self.execution;
         e.checkpoint_boundary()?;
         if let Some(previous) = previous {
-            self.checked_snapshot(previous)?;
+            if previous.owner() != self.identity()
+                || !(previous.as_any().is::<Saved>()
+                    || previous.as_any().is::<portable::Imported>())
+            {
+                return Err("CPU snapshot belongs to a different processor/backend".into());
+            }
         }
         let context = e.cpu.snapshot(None)?;
         let tcm = std::array::from_fn(|bank| {
@@ -207,6 +217,7 @@ impl Core {
         let (budget, head) = e.accounting().counters();
         Ok(Box::new(Saved {
             context,
+            identity_input: e.identity_input.get(),
             clock: e.clock.get(),
             clock_overshoot: e.clock_overshoot.get(),
             policy: e.policy.get(),
@@ -237,9 +248,18 @@ impl Core {
         }))
     }
     pub(super) fn restore_captured(&self, snapshot: &dyn Snapshot) -> Result<(), String> {
+        if snapshot.owner() != self.identity() {
+            return Err("CPU snapshot belongs to a different processor".into());
+        }
+        if let Some(imported) = snapshot.as_any().downcast_ref::<portable::Imported>() {
+            let saved = imported.bind(self)?;
+            return self.restore_saved(&saved);
+        }
+        self.restore_saved(self.checked_snapshot(snapshot)?)
+    }
+    fn restore_saved(&self, saved: &Saved) -> Result<(), String> {
         let e = &self.execution;
         e.checkpoint_boundary()?;
-        let saved = self.checked_snapshot(snapshot)?;
         if saved.maps != e.checkpoint_maps() || saved.mmio != e.checkpoint_mmio() {
             return Err(
                 "CPU snapshot external mappings differ; restore the board memory decode first"
@@ -290,6 +310,7 @@ impl Core {
             }
         }
         e.clock.set(saved.clock);
+        e.identity_input.set(saved.identity_input);
         e.clock_overshoot.set(saved.clock_overshoot);
         e.set_policy(saved.policy)?;
         e.pmu.set(saved.pmu);
@@ -312,6 +333,9 @@ impl Core {
         *e.failure.borrow_mut() = saved.failure.clone();
         e.rearm_observers()?;
         Ok(())
+    }
+    pub(super) fn import_captured(&self, bytes: &[u8]) -> Result<Box<dyn Snapshot>, String> {
+        portable::import(self, bytes)
     }
 }
 

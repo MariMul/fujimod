@@ -2,7 +2,8 @@
 //! supplied guest clock, gated by PMCR.E and PMCNTENSET.C. No host clock or
 //! instruction-observation cadence contributes to it.
 use super::*;
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct Counter {
     control: u32,
     enabled: u32,

@@ -465,6 +465,9 @@ impl Cpu for Core {
     fn restore(&self, snapshot: &dyn Snapshot) -> Result<(), String> {
         self.restore_captured(snapshot)
     }
+    fn import_snapshot(&self, bytes: &[u8]) -> Result<Box<dyn Snapshot>, String> {
+        self.import_captured(bytes)
+    }
     unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String> {
         let e = &self.execution;
         if e.active.get() {

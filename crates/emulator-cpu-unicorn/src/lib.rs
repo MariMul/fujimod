@@ -7,6 +7,7 @@ mod test_support;
 use fujimod_emulator_cpu::*;
 use std::{any::Any, ffi::c_void, ptr::NonNull};
 mod architecture;
+mod durable;
 mod ffi;
 pub mod jit;
 use std::cell::{Cell, Ref, RefCell};
@@ -219,6 +220,7 @@ struct Context {
     api: Rc<ffi::Api>,
     raw: ffi::Context,
     owner: Identity,
+    durable: Result<durable::Architecture, String>,
 }
 impl Drop for Context {
     fn drop(&mut self) {
@@ -233,6 +235,9 @@ impl Snapshot for Context {
     }
     fn as_any(&self) -> &dyn Any {
         self
+    }
+    fn export(&self) -> Result<Vec<u8>, String> {
+        durable::export(self.durable.as_ref().map_err(Clone::clone)?)
     }
 }
 fn register_id(register: Register) -> Result<i32, String> {
@@ -705,23 +710,31 @@ impl Cpu for Core {
     fn snapshot(&self, _previous: Option<&dyn Snapshot>) -> Result<Box<dyn Snapshot>, String> {
         let mut raw = std::ptr::null_mut();
         self.check(unsafe { (self.api.uc_context_alloc)(self.raw, &mut raw) })?;
-        let context = Context {
+        let mut context = Context {
             api: self.api.clone(),
             raw,
             owner: self.identity,
+            durable: Err("processor architecture has not been captured".into()),
         };
         self.check(unsafe { (self.api.uc_context_save)(self.raw, raw) })?;
+        context.durable = durable::capture(self, &context);
         Ok(Box::new(context))
     }
     fn restore(&self, snapshot: &dyn Snapshot) -> Result<(), String> {
         if snapshot.owner() != self.identity {
             return Err("CPU snapshot belongs to a different processor".into());
         }
+        if let Some(imported) = snapshot.as_any().downcast_ref::<durable::Imported>() {
+            return imported.restore(self);
+        }
         let context = snapshot
             .as_any()
             .downcast_ref::<Context>()
             .ok_or("CPU snapshot belongs to a different backend")?;
         self.check(unsafe { (self.api.uc_context_restore)(self.raw, context.raw) })
+    }
+    fn import_snapshot(&self, bytes: &[u8]) -> Result<Box<dyn Snapshot>, String> {
+        durable::import(self, bytes)
     }
     unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String> {
         let (kind, callback, span) = match hook {

@@ -493,11 +493,14 @@ pub struct BlockAccounting {
     pub enabled: u64,
     pub pause_requested: *const AtomicU32,
 }
-/// An in-process CPU snapshot; architectural portable checkpoints are a
-/// runtime/profile responsibility. A snapshot cannot restore a different CPU.
+/// A checkpoint associated with an owning processor. Durable export carries
+/// data only; `Cpu::import_snapshot` binds that data to a receiving processor.
 pub trait Snapshot: Any {
     fn owner(&self) -> Identity;
     fn as_any(&self) -> &dyn Any;
+    fn export(&self) -> Result<Vec<u8>, String> {
+        Err("processor snapshot has no durable encoding".into())
+    }
 }
 /// One thread-affine processor. This trait is deliberately not Send/Sync.
 /// The owner serializes execution, inspection, maps and callback installation.
@@ -727,6 +730,11 @@ pub trait Cpu {
     /// may ignore it. Physical board RAM is captured by the execution owner.
     fn snapshot(&self, previous: Option<&dyn Snapshot>) -> Result<Box<dyn Snapshot>, String>;
     fn restore(&self, snapshot: &dyn Snapshot) -> Result<(), String>;
+    /// Decode and validate detached checkpoint data without changing live state.
+    /// The returned checkpoint belongs to this CPU and is applied by `restore`.
+    fn import_snapshot(&self, _bytes: &[u8]) -> Result<Box<dyn Snapshot>, String> {
+        Err("processor cannot import durable snapshots".into())
+    }
     /// # Safety
     /// Callback data must remain valid until the hook is removed or the CPU
     /// is destroyed; callbacks must not unwind and must obey the owner's
