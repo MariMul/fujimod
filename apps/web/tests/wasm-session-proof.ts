@@ -9,6 +9,7 @@ export async function proveSession(base: EngineConfig) {
     firmwareId: 'generated-session',
     bundle: '/runtime/wasm-session-proof/',
     camera: undefined as EngineConfig['camera'],
+    execution: { mode: 'replay' as const },
   };
   const errors: string[] = [],
     cards: CardState[] = [],

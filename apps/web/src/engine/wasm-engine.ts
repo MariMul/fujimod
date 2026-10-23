@@ -47,6 +47,25 @@ class Listeners<T> {
 }
 /** Main-thread transport only; guest execution and pacing belong to the worker. */
 export class WasmEngine implements Engine {
+  async exportSnapshot(): Promise<Uint8Array> {
+    return this.rpc<Uint8Array>({ action: 'export_snapshot' });
+  }
+  async loadSnapshot(bytes: Uint8Array, config: EngineConfig, progress: LoadingProgress) {
+    if (this.booted) throw Error('Engine already booted.');
+    this.progress = progress;
+    try {
+      const inputs = await this.rpc<Input[]>({
+        action: 'load_snapshot',
+        bytes,
+        config: this.absolute(config),
+      });
+      this.booted = true;
+      this.sceneInput = config.sceneInput;
+      return inputs;
+    } finally {
+      this.progress = undefined;
+    }
+  }
   private timings = new HostTimings();
   private worker: Worker;
   private serial = 0;

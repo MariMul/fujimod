@@ -40,6 +40,8 @@ export interface EmulatorModule {
   _camera_error(this: void, handle: number, out: number): number;
   /** Session extensions: absent exports refuse the operation, never emulate success. */
   _camera_session_create?: EmulatorModule['_camera_create'];
+  /** Reconstruct a session using the constructor and inputs inside an archive. */
+  _camera_snapshot_create?: (data: number, length: number) => number;
   /** Native prepared run: document, update, boot ROM, optional NAND and settings spans. */
   _camera_prepared_session_create?: (
     document: number,
@@ -120,6 +122,16 @@ export interface SaveResult {
 }
 /** Each command has one JSON request/result and an optional opaque binary span. */
 export interface SessionCommands {
+  export_snapshot: {
+    request: Record<string, never>;
+    result: {
+      format: 'wasm-session-cbor';
+      schema: 1;
+      snapshot: { offset: number; length: number };
+      tick: string;
+      instructions: string[];
+    };
+  };
   usb_status: { request: { node: string }; result: UsbStatus };
   usb_reset: { request: { node: string }; result: Record<string, never> };
   usb_setup: { request: { node: string }; result: Record<string, never> };
@@ -286,12 +298,24 @@ export class EmulatorSession {
     );
     if (!this.handle) throw Error(this.error(0));
   }
+  /** Load a complete portable archive into an uncreated session. */
+  loadSnapshot(bytes: Uint8Array) {
+    if (this.handle) throw Error('Session already created.');
+    const create = this.module._camera_snapshot_create;
+    if (!create)
+      throw new UnsupportedEmulatorOperation('Missing C ABI export: camera_snapshot_create.');
+    this.handle = this.upload(bytes, (p, n) => this.call(() => create(p, n)));
+    if (!this.handle) throw Error(this.error(0));
+  }
   /** Construct from a native prepared run; the boot ROM is required, NAND and settings are optional. */
   private createPrepared(document: string, update: Uint8Array, inputs: PreparedInputs | undefined) {
     const create = this.module._camera_prepared_session_create;
     if (!create)
-      throw new UnsupportedEmulatorOperation('Missing C ABI export: camera_prepared_session_create.');
-    if (!inputs || inputs.bootRom.length === 0) throw Error('Prepared session requires a boot ROM.');
+      throw new UnsupportedEmulatorOperation(
+        'Missing C ABI export: camera_prepared_session_create.',
+      );
+    if (!inputs || inputs.bootRom.length === 0)
+      throw Error('Prepared session requires a boot ROM.');
     const empty = new Uint8Array();
     // The document is shipped as its exact text: re-serializing parsed JSON would
     // turn integral floats into integers, which the native identity check rejects.

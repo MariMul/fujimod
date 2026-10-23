@@ -16,6 +16,15 @@ pub struct Snapshot {
     contact_driver: Option<super::contact_driver::Driver>,
 }
 impl Snapshot {
+    pub fn execution_policy(&self) -> fujimod_emulator_cpu::ExecutionPolicy {
+        self.board.execution_policy()
+    }
+    pub fn observations(&self) -> &[(usize, Vec<u64>)] {
+        self.board.observations()
+    }
+    pub fn failure(&self) -> Option<&str> {
+        self.board.failure()
+    }
     /// Conservative encoded-device cost, including shared blobs at every retention.
     pub fn encoded_device_bytes(&self) -> usize {
         self.board.encoded_device_bytes() + self.resources.encoded_bytes()

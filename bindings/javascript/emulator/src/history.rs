@@ -36,9 +36,10 @@ fn boundary(value: Boundary) -> Value {
 }
 
 #[derive(Clone)]
-struct Presentation {
-    boundary: Boundary,
-    frames: BTreeMap<usize, Arc<Frame>>,
+pub(super) struct Presentation {
+    pub boundary: Boundary,
+    pub frames: BTreeMap<usize, Arc<Frame>>,
+    pub powered_on: bool,
 }
 struct Checkpoint {
     id: String,
@@ -67,10 +68,76 @@ impl History {
     }
 }
 impl Session {
-    fn presentation(&self) -> Presentation {
+    pub(super) fn error_report(&mut self) -> Result<Value, String> {
+        let mut report = self.core.board.state();
+        let mut rejected = Vec::new();
+        let live = if self.failed {
+            None
+        } else {
+            match self.core.checkpoint(None) {
+                Ok(saved) => Some(saved),
+                Err(error) => {
+                    rejected.push(json!({"source":"current","tick":self.core.board.now().to_string(),"error":error}));
+                    None
+                }
+            }
+        };
+        let mut candidates = Vec::new();
+        if let Some(live) = &live {
+            candidates.push(("current", live, self.presentation()));
+        }
+        if let Some(history) = &self.history {
+            for (saved, presentation) in history.core.snapshots().zip(history.marks.iter().rev()) {
+                candidates.push(("history", saved, presentation.clone()));
+            }
+            for saved in history.checkpoints.iter().rev() {
+                candidates.push(("checkpoint", &saved.core, saved.presentation.clone()));
+            }
+        }
+        if let Some(reset) = &self.reset_image {
+            candidates.push((
+                "reset",
+                reset.as_ref(),
+                Presentation {
+                    boundary: Boundary {
+                        tick: reset.now(),
+                        instructions: reset.instruction_counts().to_vec(),
+                    },
+                    frames: Default::default(),
+                    powered_on: true,
+                },
+            ));
+        }
+        candidates.sort_by(|a, b| {
+            b.1.now()
+                .cmp(&a.1.now())
+                .then_with(|| b.1.instruction_counts().cmp(a.1.instruction_counts()))
+        });
+        for (source, saved, presentation) in candidates {
+            let encoded = match saved.failure() {
+                Some(error) => Err(format!("saved execution failed: {error}")),
+                None => self.encode_point(saved, &presentation),
+            };
+            match encoded {
+                Ok(bytes) => {
+                    report["snapshot"] = json!({"source":source,"tick":saved.now().to_string(),"instructions":saved.instruction_counts().iter().map(u64::to_string).collect::<Vec<_>>(),"rejected":rejected});
+                    self.result_bytes = bytes;
+                    return Ok(
+                        json!({"report":report,"snapshot":{"offset":0,"length":self.result_bytes.len()}}),
+                    );
+                }
+                Err(error) => rejected
+                    .push(json!({"source":source,"tick":saved.now().to_string(),"error":error})),
+            }
+        }
+        report["snapshot"] = json!({"unavailable":true,"rejected":rejected});
+        Ok(json!({"report":report}))
+    }
+    pub(super) fn presentation(&self) -> Presentation {
         Presentation {
             boundary: Boundary::capture(&self.core),
             frames: self.frames.clone(),
+            powered_on: self.powered_on,
         }
     }
     pub(super) fn collect_frames(&mut self) {
@@ -78,7 +145,7 @@ impl Session {
             self.frames.insert(frame.output, Arc::new(frame));
         }
     }
-    fn restored(&mut self) {
+    pub(super) fn restored(&mut self) {
         self.failed = self.core.board.state()["failure"].is_string();
         self.scene_upload.clear();
         self.scene_dimensions = None;
@@ -136,6 +203,7 @@ impl Session {
                 history.marks.push_back(Presentation {
                     boundary: Boundary::capture(&self.core),
                     frames: self.frames.clone(),
+                    powered_on: self.powered_on,
                 });
                 while history.marks.len() > history.core.retained_marks() {
                     history.marks.pop_front();
@@ -167,6 +235,7 @@ impl Session {
             .ok_or("unknown or expired checkpoint ID")?;
         self.core.restore(&saved.core)?;
         self.frames = saved.presentation.frames.clone();
+        self.powered_on = saved.presentation.powered_on;
         history.branch()?;
         self.restored();
         Ok(boundary(Boundary::capture(&self.core)))
@@ -181,6 +250,7 @@ impl Session {
         let restored = history.core.undo(&mut self.core)?;
         history.marks.pop_back();
         self.frames = presentation.frames;
+        self.powered_on = presentation.powered_on;
         self.restored();
         Ok(boundary(restored))
     }
@@ -196,6 +266,7 @@ impl Session {
             .ok_or("rollback target precedes retained history")?;
         let restored = history.core.rollback(&mut self.core, tick)?;
         self.frames = history.marks[index].frames.clone();
+        self.powered_on = history.marks[index].powered_on;
         history.marks.truncate(index + 1);
         self.restored();
         Ok(boundary(restored))

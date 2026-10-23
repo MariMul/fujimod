@@ -80,6 +80,13 @@ export async function openPreparedCamera(
   );
 }
 
+/** Open an exported running session without separate firmware or graph files. */
+export async function openSnapshot(modulePath: string, snapshotPath: string) {
+  const module = await loadNodeModule(modulePath);
+  const bytes = await readFile(snapshotPath);
+  return attachCamera(module, (session) => session.loadSnapshot(bytes));
+}
+
 function attachCamera(
   module: Awaited<ReturnType<typeof loadNodeModule>>,
   create: (session: EmulatorSession) => void,

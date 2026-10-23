@@ -357,7 +357,11 @@ impl Session {
             }
             "error_report" => {
                 options::<Empty>(c.options)?;
-                json!({"report":self.core.board.state()})
+                self.error_report()?
+            }
+            "export_snapshot" => {
+                options::<Empty>(c.options)?;
+                self.export_snapshot()?
             }
             "fingerprint" => {
                 options::<Empty>(c.options)?;

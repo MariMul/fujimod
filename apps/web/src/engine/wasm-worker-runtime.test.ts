@@ -476,3 +476,30 @@ test('prepared cameras expose controls, card storage, preview and replay through
     vi.unstubAllGlobals();
   }
 });
+
+test('portable snapshots load into a fresh worker without a cold boot and report bytes survive transport', async () => {
+  const f = setup();
+  const loaded = await f.send({
+    action: 'load_snapshot',
+    bytes: new Uint8Array([7, 8, 9]),
+    config: f.config,
+  });
+  assert.equal(loaded.type, 'reply');
+  assert.deepEqual(f.calls.find((c) => c.action === 'load_snapshot')?.bytes, [7, 8, 9]);
+  assert.equal(
+    f.calls.some((c) => ['boot_to_rec', 'restore_durable', 'power_cycle'].includes(c.action)),
+    false,
+  );
+  const profile = await f.send({ action: 'profile' });
+  assert.equal(profile.type, 'reply');
+  if (profile.type === 'reply') assert.equal((profile.result as { ticks: number }).ticks, 17);
+  const exported = await f.send({ action: 'export_snapshot' });
+  assert.equal(exported.type, 'reply');
+  if (exported.type === 'reply') assert.deepEqual(exported.result, new Uint8Array([0xa1, 0x01]));
+  const report = await f.send({ action: 'error_report' });
+  assert.equal(report.type, 'reply');
+  if (report.type === 'reply') {
+    const result = report.result as { snapshot: ArrayBuffer };
+    assert.deepEqual(new Uint8Array(result.snapshot), new Uint8Array([0xa1, 0x01]));
+  }
+});

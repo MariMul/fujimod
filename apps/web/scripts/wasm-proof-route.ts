@@ -66,6 +66,7 @@ export function wasmProofRoute(env: Record<string, string> = {}): Plugin {
         }
         if (
           path !== '/__wasm-proof' &&
+          path !== '/__wasm-snapshot' &&
           path !== '/__wasm-camera' &&
           path !== '/__wasm-lifecycle' &&
           path !== '/__wasm-phases' &&
@@ -73,15 +74,17 @@ export function wasmProofRoute(env: Record<string, string> = {}): Plugin {
         )
           return next();
         const script =
-          path === '/__wasm-workers'
-            ? 'wasm-workers-proof'
-            : path === '/__wasm-phases'
-              ? 'wasm-phases-proof'
-              : path === '/__wasm-lifecycle'
-                ? 'wasm-lifecycle-proof'
-                : path === '/__wasm-camera'
-                  ? 'wasm-camera-proof'
-                  : 'wasm-proof';
+          path === '/__wasm-snapshot'
+            ? 'wasm-snapshot-proof'
+            : path === '/__wasm-workers'
+              ? 'wasm-workers-proof'
+              : path === '/__wasm-phases'
+                ? 'wasm-phases-proof'
+                : path === '/__wasm-lifecycle'
+                  ? 'wasm-lifecycle-proof'
+                  : path === '/__wasm-camera'
+                    ? 'wasm-camera-proof'
+                    : 'wasm-proof';
         response.setHeader('Content-Type', 'text/html');
         response.end(
           `<!doctype html><html lang="en"><meta charset="utf-8"><title>Wasm execution proof</title><body><script type="module" src="/tests/${script}.ts"></script></body></html>`,

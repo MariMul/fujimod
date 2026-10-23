@@ -7,6 +7,8 @@ import type { SessionState } from 'fujimod/emulator';
 
 export type WasmRequest =
   | { action: 'prepare'; bundle: string }
+  | { action: 'load_snapshot'; bytes: Uint8Array; config: EngineConfig }
+  | { action: 'export_snapshot' }
   | { action: 'usb_status' | 'usb_reset' | 'usb_step'; node: string }
   | { action: 'usb_setup'; node: string; bytes: Uint8Array }
   | { action: 'usb_out'; node: string; endpoint: number; bytes: Uint8Array }

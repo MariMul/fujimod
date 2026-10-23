@@ -164,3 +164,18 @@ test('Wasm download events preserve per-asset progress at the engine boundary', 
   await boot;
   f.engine.dispose();
 });
+
+test('portable snapshot loading resolves a relative runtime bundle before dispatch', async () => {
+  const f = setup();
+  const loading = f.engine.loadSnapshot(new Uint8Array([1, 2, 3]), testConfig(false), () => {});
+  const message = f.sent.at(-1)!;
+  assert(message.type === 'rpc' && message.request.action === 'load_snapshot');
+  assert.equal(message.request.config.bundle, 'https://example.invalid/runtime/');
+  assert.deepEqual([...message.request.bytes], [1, 2, 3]);
+  f.resolve([]);
+  await loading;
+  const exported = f.engine.exportSnapshot();
+  f.resolve(new Uint8Array([4, 5]));
+  assert.deepEqual([...(await exported)], [4, 5]);
+  f.engine.dispose();
+});

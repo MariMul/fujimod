@@ -15,7 +15,7 @@ Wasm view until the synchronous frame listener returns. Metrics count native
 source events separately from delivered LCD frames. Host inspection never
 advances the guest.
 
-Native history is owner-bound. The worker retains eight explicit checkpoints
+In-memory history IDs belong to their session. The worker retains eight explicit checkpoints
 at two guest-second intervals; Undo uses native rollback, falling back to a
 retained checkpoint when the finer native history has expired. CBOR history is
 opaque to JavaScript. Checkpoints are distinct from durable camera saves;
@@ -32,7 +32,27 @@ These routes are development-only. The ordinary app supports deterministic
 development scenarios through `?scenario=x70-lcd` with a configured local DAT.
 
 Downloadable reports identify large buffers by hash and a bounded preview while
-retaining small register arrays and scalar diagnostics.
+retaining small register arrays and scalar diagnostics. They also include a
+`snapshot.bin` archive: the complete stopped machine, shared device resources,
+media, queued inputs, power state, presentation frames, and exact constructor
+document and binary inputs. After a fault the exporter chooses the newest healthy
+retained point, falling back to its reset point; `report.snapshot` records the
+chosen boundary and rejected candidates. Export does not rewind the live session.
+
+`Engine.exportSnapshot()` exports the current point. A fresh engine loads the
+bytes with `loadSnapshot(bytes, config, progress)`. The configuration supplies the
+runtime bundle and presentation options; construction reads its graph and firmware
+inputs from the archive. Loading defaults to paused replay mode. Select
+`execution.mode: 'live'` to resume pacing. No cold boot, media replacement or scene
+input is applied while loading. The runtime validates the archive schema, binary
+hashes, execution topology, processor model, clocks and device configuration.
+
+The JavaScript binding exposes `EmulatorSession.loadSnapshot(bytes)` and the
+`export_snapshot` command. Node callers can use `openSnapshot(modulePath, snapshotPath)`.
+The development route `/__wasm-snapshot` verifies a report archive against fresh
+worker restoration and continued execution. Its browser check downloads the file,
+closes the source page, opens `/__wasm-snapshot?load`, and loads the file from disk
+in Chromium and WebKit. Firmware is not fetched during that load.
 
 The camera browser check requires `FUJIMOD_WASM_EXPECT_EXECUTION`, a JSON
 execution receipt for the identical manifest, DAT, boot tick and LCD output,

@@ -60,6 +60,32 @@ returns a stopped report while retaining the session for inspection. No Python
 runtime is required. The Python package exposes the same construction through
 `fujimod.emulator.Board.from_inputs`.
 
+## Durable snapshots
+
+`session.checkpoint(None)?.export()?` returns a versioned binary archive that can
+be written to disk. It contains CPU architecture, RAM, memory decoders, scheduler
+phase, pending device operations, shared resources, media and queued inputs.
+The receiving session is constructed with the matching graph and attachments:
+
+```rust,ignore
+let saved = receiver.import_snapshot(&std::fs::read("snapshot.bin")?)?;
+receiver.restore(&saved)?;
+```
+
+Import validates the complete archive and binds CPU points and exclusive monitors
+to the receiving session without changing its running state. Restore explicitly
+applies that point. In-memory points still belong to one execution owner; their
+exported data can be imported by a fresh matching session. Board-only callers use
+`Keyframe::export`, `Board::import_keyframe`, and `Board::restore_keyframe`.
+Archives carry schema and content hashes, and reject mismatched clocks, mappings,
+device wiring and strict/discovery execution modes. Unserializable execution
+harnesses are refused. Portable CPU encoding supports Unicorn Cortex-R5F and
+HVF AArch64; other CPU models report unsupported export.
+
+The JavaScript transport additionally embeds exact constructor documents and
+their binary inputs, allowing `EmulatorSession.loadSnapshot(bytes)` to construct
+a fresh session directly. Browser reports include this complete `snapshot.bin`.
+
 ## XP5 board and session API
 
 Rust callers can open an XP5 board through

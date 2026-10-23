@@ -60,6 +60,15 @@ pub struct Keyframe {
     durable_blocker: Option<String>,
 }
 impl Keyframe {
+    pub fn execution_policy(&self) -> ExecutionPolicy {
+        self.saved.execution_policy
+    }
+    pub fn observations(&self) -> &[(usize, Vec<u64>)] {
+        &self.observations
+    }
+    pub fn failure(&self) -> Option<&str> {
+        self.saved.error.as_deref()
+    }
     pub fn encoded_device_bytes(&self) -> usize {
         self.devices.encoded_bytes()
     }

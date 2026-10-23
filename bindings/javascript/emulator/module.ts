@@ -47,6 +47,7 @@ const requiredFunctions = [
   '_camera_create',
   '_camera_session_create',
   '_camera_prepared_session_create',
+  '_camera_snapshot_create',
   '_camera_command',
   '_camera_scene_buffer',
   '_camera_scene_commit',

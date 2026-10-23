@@ -22,7 +22,8 @@ test('Node loader resolves a module file and its adjacent Wasm binary', async ()
         return {
           HEAPU8: new Uint8Array(64),
           _camera_alloc: () => 8, _camera_free: () => {}, _camera_create: () => 1,
-          _camera_session_create: () => 1, _camera_command: () => 0,
+          _camera_session_create: () => 1,
+    _camera_prepared_session_create: () => 1, _camera_snapshot_create: () => 1, _camera_command: () => 0,
           _camera_scene_buffer: () => 0, _camera_scene_commit: () => 0,
           _camera_destroy: () => 0, _camera_run_until: () => 0, _camera_input: () => 0,
           _camera_status: () => 0, _camera_frame: () => 1, _camera_error: () => 0,

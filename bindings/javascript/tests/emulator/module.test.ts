@@ -10,6 +10,8 @@ function emulatorModule() {
     _camera_free: () => {},
     _camera_create: () => 1,
     _camera_session_create: () => 1,
+    _camera_prepared_session_create: () => 1,
+    _camera_snapshot_create: () => 1,
     _camera_command: () => 0,
     _camera_scene_buffer: () => 0,
     _camera_scene_commit: () => 0,
@@ -66,7 +68,10 @@ test('manifest parsing validates the versioned runtime and observation shape', (
   });
   assert.equal(manifest.output, 1);
   assert.equal(manifest.executionPolicy, 'exact');
-  assert.equal(parseEmulatorManifest({ ...manifest, executionPolicy: undefined }).executionPolicy, undefined);
+  assert.equal(
+    parseEmulatorManifest({ ...manifest, executionPolicy: undefined }).executionPolicy,
+    undefined,
+  );
   assert.throws(
     () => parseEmulatorManifest({ ...manifest, executionPolicy: 'invalid' }),
     /Unsupported emulator manifest/,

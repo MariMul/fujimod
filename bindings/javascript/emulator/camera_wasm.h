@@ -38,6 +38,8 @@ int32_t camera_status(CameraHandle handle, CameraStatus *out);
  * Pixels are tightly packed RGBA8888, top row first. */
 int32_t camera_frame(CameraHandle handle, uint32_t output, CameraFrame *out);
 int32_t camera_error(CameraHandle handle, CameraBytes *out);
+/* Reconstruct a running session from an exported archive, including its inputs. */
+CameraHandle camera_snapshot_create(const uint8_t *bytes, uint32_t length);
 /* Session construction uses the checked shared graph. It returns an unexecuted
  * board so durable inputs can be restored before guest boot writes. */
 CameraHandle camera_session_create(const uint8_t *json, uint32_t json_len,
@@ -55,7 +57,9 @@ typedef struct { CameraBytes json, bytes; } CameraResult;
 /* {action,options} JSON. History uses same-owner checkpoint IDs; history returns
  * CBOR input-log bytes and replay accepts them in the upload span. Boundary
  * u64 values are decimal JSON strings. fingerprint returns the complete Session
- * identity as a compact SHA-256 result. See SESSION_ABI.md; no durable contexts. */
+ * identity as a compact SHA-256 result. export_snapshot returns a complete binary
+ * archive, accepted by camera_snapshot_create. error_report also returns the
+ * newest healthy point's archive in its optional snapshot binary span. */
 int32_t camera_command(CameraHandle, const uint8_t *json, uint32_t json_len,
                        const uint8_t *bytes, uint32_t bytes_len, CameraResult *out);
 int32_t camera_scene_buffer(CameraHandle, uint32_t width, uint32_t height, CameraBytes *out);

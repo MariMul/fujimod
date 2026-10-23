@@ -7,6 +7,7 @@ mod history;
 mod jit;
 mod lifecycle;
 mod session;
+mod snapshot;
 use session::Session;
 use std::{cell::RefCell, collections::BTreeMap};
 
@@ -173,6 +174,35 @@ pub extern "C" fn camera_destroy(handle: u32) -> i32 {
         } else {
             owner.error = "invalid session handle".into();
             -1
+        }
+    })
+}
+/// Construct and restore a complete session from an exported snapshot.
+/// # Safety
+/// The input span must be valid and immutable for this call. Inputs are copied.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn camera_snapshot_create(data: *const u8, len: u32) -> u32 {
+    OWNER.with(|owner| {
+        let mut owner = owner.borrow_mut();
+        let result = (|| {
+            let handle = owner
+                .next
+                .checked_add(1)
+                .ok_or("session handle space exhausted")?;
+            let session = Session::load_snapshot(unsafe { bytes(data, len)? })?;
+            owner.sessions.insert(handle, session);
+            owner.next = handle;
+            Ok::<_, String>(handle)
+        })();
+        match result {
+            Ok(handle) => {
+                owner.error.clear();
+                handle
+            }
+            Err(error) => {
+                owner.error = error;
+                0
+            }
         }
     })
 }

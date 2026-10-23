@@ -17,6 +17,9 @@ struct Header<C, D> {
 }
 impl Snapshot {
     pub fn export(&self) -> Result<Vec<u8>, String> {
+        self.export_checkpoint()?.to_bytes()
+    }
+    pub fn export_checkpoint(&self) -> Result<Encoded, String> {
         let header = Header {
             definition: self.definition.clone(),
             nodes: self.nodes.clone(),
@@ -25,9 +28,8 @@ impl Snapshot {
             controls: &self.controls,
             contact_driver: &self.contact_driver,
         };
-        Encoded::encode(KIND, &header)?
-            .with_children(vec![self.board.export()?, self.resources.export()?])
-            .to_bytes()
+        Ok(Encoded::encode(KIND, &header)?
+            .with_children(vec![self.board.export()?, self.resources.export()?]))
     }
 }
 impl Session {
@@ -55,6 +57,9 @@ impl Session {
     /// an explicit `restore` operation; import does not execute or drive inputs.
     pub fn import_snapshot(&self, bytes: &[u8]) -> Result<Snapshot, String> {
         let encoded = Encoded::from_bytes(bytes)?;
+        self.import_checkpoint(&encoded)
+    }
+    pub fn import_checkpoint(&self, encoded: &Encoded) -> Result<Snapshot, String> {
         let header: Header<Option<SwitchPanel>, Option<super::super::contact_driver::Driver>> =
             encoded.decode(KIND)?;
         if !encoded.blobs().is_empty() || encoded.children().len() != 2 {

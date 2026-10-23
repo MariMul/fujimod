@@ -106,6 +106,114 @@ fn create_with(scanner: bool, configure: impl FnOnce(&mut Value)) -> u32 {
     handle
 }
 
+fn load_snapshot(bytes: &[u8]) -> u32 {
+    let handle = unsafe { camera_snapshot_create(bytes.as_ptr(), bytes.len() as u32) };
+    assert_ne!(handle, 0, "{}", error(0));
+    handle
+}
+
+#[test]
+fn portable_archive_reconstructs_a_destroyed_session_and_continues_exactly() {
+    let source = create(false);
+    command(source, "watch_pcs", json!({"addresses":[0x10000]}), &[]).unwrap();
+    command(
+        source,
+        "set_position",
+        json!({"id":"lever","position":"on"}),
+        &[],
+    )
+    .unwrap();
+    assert_eq!(camera_run_until(source, 11), 0, "{}", error(source));
+    let before = command(source, "fingerprint", json!({}), &[]).unwrap().0;
+    let (metadata, bytes) = command(source, "export_snapshot", json!({}), &[]).unwrap();
+    assert_eq!(metadata["tick"], "11");
+    assert_eq!(metadata["snapshot"]["length"], bytes.len());
+    assert_eq!(
+        command(source, "fingerprint", json!({}), &[]).unwrap().0,
+        before
+    );
+    assert_eq!(camera_run_until(source, 53), 0, "{}", error(source));
+    let expected = command(source, "fingerprint", json!({}), &[]).unwrap().0;
+    assert_eq!(camera_destroy(source), 0);
+    let loaded = load_snapshot(&bytes);
+    assert_eq!(
+        command(loaded, "fingerprint", json!({}), &[]).unwrap().0,
+        before
+    );
+    assert_eq!(
+        command(loaded, "state", json!({}), &[]).unwrap().0["positions"]["lever"],
+        "on"
+    );
+    assert_eq!(camera_run_until(loaded, 53), 0, "{}", error(loaded));
+    assert_eq!(
+        command(loaded, "fingerprint", json!({}), &[]).unwrap().0,
+        expected
+    );
+    assert_eq!(camera_destroy(loaded), 0);
+    let mut corrupt = bytes;
+    corrupt.truncate(corrupt.len() - 1);
+    assert_eq!(
+        unsafe { camera_snapshot_create(corrupt.as_ptr(), corrupt.len() as u32) },
+        0
+    );
+}
+
+#[test]
+fn error_report_exports_a_healthy_retained_point_without_changing_the_failed_session() {
+    let source = create_with(false, |c| {
+        c["graph"]["execution"]["processors"][0]["registers"] = json!([["Pc", 0xfffd0000u32]]);
+    });
+    command(source, "checkpoint", json!({}), &[]).unwrap();
+    assert_ne!(camera_run_until(source, 1), 0);
+    let original_error = error(source);
+    let failed = command(source, "fingerprint", json!({}), &[]).unwrap().0;
+    let (report, bytes) = command(source, "error_report", json!({}), &[]).unwrap();
+    assert!(!bytes.is_empty());
+    assert_eq!(report["report"]["snapshot"]["tick"], "0");
+    assert_ne!(report["report"]["snapshot"]["source"], "current");
+    assert_eq!(
+        command(source, "fingerprint", json!({}), &[]).unwrap().0,
+        failed
+    );
+    assert_eq!(camera_destroy(source), 0);
+    let loaded = load_snapshot(&bytes);
+    let mut status = Status::default();
+    assert_eq!(unsafe { camera_status(loaded, &mut status) }, 0);
+    assert_eq!(status.failed, 0);
+    assert_eq!(status.ticks, 0);
+    assert_ne!(camera_run_until(loaded, 1), 0);
+    assert_eq!(error(loaded), original_error);
+    assert_eq!(camera_destroy(loaded), 0);
+}
+
+#[test]
+fn powered_off_archive_preserves_power_controls_and_its_cold_reset_image() {
+    let source = create(false);
+    command(
+        source,
+        "set_position",
+        json!({"id":"lever","position":"on"}),
+        &[],
+    )
+    .unwrap();
+    command(source, "power", json!({"on":false}), &[]).unwrap();
+    let (_, bytes) = command(source, "export_snapshot", json!({}), &[]).unwrap();
+    assert_eq!(camera_destroy(source), 0);
+    let loaded = load_snapshot(&bytes);
+    let state = command(loaded, "state", json!({}), &[]).unwrap().0;
+    assert_eq!(state["poweredOn"], false);
+    assert_eq!(state["positions"]["lever"], "on");
+    assert_eq!(camera_run_until(loaded, 5), 0);
+    let mut status = Status::default();
+    assert_eq!(unsafe { camera_status(loaded, &mut status) }, 0);
+    assert_eq!(status.ticks, 0);
+    command(loaded, "power", json!({"on":true}), &[]).unwrap();
+    assert_eq!(camera_run_until(loaded, 5), 0, "{}", error(loaded));
+    assert_eq!(unsafe { camera_status(loaded, &mut status) }, 0);
+    assert_eq!(status.ticks, 5);
+    assert_eq!(camera_destroy(loaded), 0);
+}
+
 #[test]
 fn cbor_history_preserves_u64_runs_and_restores_failed_replay_at_ratio_24() {
     #[derive(Deserialize, Serialize)]
@@ -124,7 +232,7 @@ fn cbor_history_preserves_u64_runs_and_restores_failed_replay_at_ratio_24() {
     assert_eq!(command(h, "fingerprint", json!({}), &[]).unwrap().0, cold);
     assert_eq!(checkpoint["tick"], "0");
     assert_eq!(camera_run_until(h, 5), 0, "{}", error(h));
-    let at_five = command(h, "error_report", json!({}), &[]).unwrap().0;
+    let at_five = command(h, "error_report", json!({}), &[]).unwrap().0["report"].clone();
     let five_fingerprint = command(h, "fingerprint", json!({}), &[]).unwrap().0;
     assert_ne!(five_fingerprint, cold);
     let (summary, bytes) = command(h, "history", json!({}), &[]).unwrap();
@@ -142,7 +250,7 @@ fn cbor_history_preserves_u64_runs_and_restores_failed_replay_at_ratio_24() {
         command(h, "undo", json!({}), &[]).unwrap().0,
         json!({"tick":"0","instructions":["0"]})
     );
-    let before = command(h, "error_report", json!({}), &[]).unwrap().0;
+    let before = command(h, "error_report", json!({}), &[]).unwrap().0["report"].clone();
     assert_eq!(command(h, "fingerprint", json!({}), &[]).unwrap().0, cold);
     log.entries[0].after.instructions[0] += 1;
     let mut bad = Vec::new();
@@ -153,7 +261,7 @@ fn cbor_history_preserves_u64_runs_and_restores_failed_replay_at_ratio_24() {
             .contains("differs")
     );
     assert_eq!(
-        command(h, "error_report", json!({}), &[]).unwrap().0,
+        command(h, "error_report", json!({}), &[]).unwrap().0["report"].clone(),
         before
     );
     assert_eq!(command(h, "fingerprint", json!({}), &[]).unwrap().0, cold);
@@ -162,7 +270,7 @@ fn cbor_history_preserves_u64_runs_and_restores_failed_replay_at_ratio_24() {
         json!({"tick":"5","instructions":["120"]})
     );
     assert_eq!(
-        command(h, "error_report", json!({}), &[]).unwrap().0,
+        command(h, "error_report", json!({}), &[]).unwrap().0["report"].clone(),
         at_five
     );
     assert_eq!(
@@ -177,7 +285,7 @@ fn cbor_history_preserves_u64_runs_and_restores_failed_replay_at_ratio_24() {
         json!({"tick":"5","instructions":["120"]})
     );
     assert_eq!(
-        command(h, "error_report", json!({}), &[]).unwrap().0,
+        command(h, "error_report", json!({}), &[]).unwrap().0["report"].clone(),
         at_five
     );
     assert_eq!(

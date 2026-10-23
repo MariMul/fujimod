@@ -49,6 +49,11 @@ export function testCameraModule(shared = false) {
     _camera_session_create() {
       return createError ? 0 : 1;
     },
+    _camera_snapshot_create(p, n) {
+      calls.push({ action: 'load_snapshot', options: {}, bytes: [...bytes(p, n)] });
+      ticks = 17n;
+      return createError ? 0 : 1;
+    },
     _camera_destroy() {
       return 0;
     },
@@ -134,7 +139,9 @@ export function testCameraModule(shared = false) {
           };
           break;
         case 'error_report':
+          binary = new Uint8Array([0xa1, 0x01]);
           result = {
+            snapshot: { offset: 0, length: binary.length },
             report: {
               bus: {
                 devices: [
@@ -142,6 +149,16 @@ export function testCameraModule(shared = false) {
                 ],
               },
             },
+          };
+          break;
+        case 'export_snapshot':
+          binary = new Uint8Array([0xa1, 0x01]);
+          result = {
+            format: 'wasm-session-cbor',
+            schema: 1,
+            snapshot: { offset: 0, length: binary.length },
+            tick: String(ticks),
+            instructions: [String(ticks * 2n)],
           };
           break;
         case 'restore':

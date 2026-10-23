@@ -147,6 +147,7 @@ struct Load {
 }
 
 pub struct Session {
+    pub(super) construction: Option<super::snapshot::Construction>,
     pub core: fujimod_emulator::session::Session,
     pub(super) reset_image: Option<Arc<fujimod_emulator::session::checkpoint::Snapshot>>,
     pub(super) powered_on: bool,
@@ -169,6 +170,7 @@ impl Session {
         firmware: &[u8],
         policy: fujimod_emulator_cpu::ExecutionPolicy,
     ) -> Result<Self, String> {
+        let construction = super::snapshot::Construction::resolved(config, firmware);
         let definition: serde_json::Value =
             serde_json::from_slice(config).map_err(|e| e.to_string())?;
         let config: Config = serde_json::from_slice(config).map_err(|e| e.to_string())?;
@@ -321,8 +323,10 @@ impl Session {
             board.write_memory(0, image.base, &image.bytes)?;
         }
         board.set_execution_policy(policy)?;
-        Ok(Self {
+        let mut session = Self {
+            construction: Some(construction),
             core: fujimod_emulator::session::Session {
+                xp5: None,
                 definition,
                 controls: None,
                 contact_driver: None,
@@ -346,7 +350,9 @@ impl Session {
             history: None,
             error: String::new(),
             failed: false,
-        })
+        };
+        session.reset_image = session.core.checkpoint(None).ok().map(Arc::new);
+        Ok(session)
     }
     pub fn run(&mut self, until: u64) -> Result<(), String> {
         if !self.powered_on {

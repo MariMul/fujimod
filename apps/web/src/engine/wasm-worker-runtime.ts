@@ -167,7 +167,12 @@ export class WasmWorkerRuntime {
           { type: 'reply', serial: message.serial, result },
           result instanceof Uint8Array && result.buffer instanceof ArrayBuffer
             ? [result.buffer]
-            : [],
+            : result !== null &&
+                typeof result === 'object' &&
+                'snapshot' in result &&
+                result.snapshot instanceof ArrayBuffer
+              ? [result.snapshot]
+              : [],
         );
       } catch (error) {
         const fatal =
@@ -226,6 +231,7 @@ export class WasmWorkerRuntime {
         request.scene,
         request.seedIdentity,
       );
+    if (request.action === 'load_snapshot') return this.loadSnapshot(request.bytes, request.config);
     const s = this.require();
     if (
       this.manifest?.usb &&
@@ -240,6 +246,8 @@ export class WasmWorkerRuntime {
     )
       throw Error('A USB-connected execution cannot rewind external host transactions.');
     switch (request.action) {
+      case 'export_snapshot':
+        return s.command('export_snapshot', {}).bytes;
       case 'usb_status':
       case 'usb_reset':
         return s.command(request.action, { node: request.node }).result;
@@ -415,9 +423,10 @@ export class WasmWorkerRuntime {
           failed: status.failed,
         };
         if (!s.module._camera_command) return { report: base };
-        const { result } = s.command('error_report', {});
+        const { result, bytes } = s.command('error_report', {});
         return {
           report: await diagnosticReport({ ...base, ...result.report }),
+          snapshot: result.snapshot ? extent(bytes, result.snapshot) : undefined,
         };
       }
       case 'save':
@@ -428,6 +437,32 @@ export class WasmWorkerRuntime {
         return;
       }
     }
+  }
+  private async loadSnapshot(bytes: Uint8Array, config: EngineConfig) {
+    if (this.session) throw Error('Wasm worker already booted.');
+    this.config = config;
+    const { session, manifest, identity, loadTimings } = await this.prepare(config.bundle);
+    this.loadTimings = loadTimings;
+    session.loadSnapshot(bytes);
+    this.session = session;
+    this.manifest = manifest;
+    this.runtimeKey = await digest(
+      new TextEncoder().encode(`${identity}:${await digest(new Uint8Array(bytes))}`),
+    );
+    this.replayMode = config.execution?.mode !== 'live';
+    this.failed = session.status().failed;
+    this.observeCurrent();
+    this.started = performance.now();
+    this.startedTicks = session.status().ticks;
+    this.speedSamples = [{ wall: this.started, ticks: this.startedTicks }];
+    this.rebase();
+    this.nextCheckpoint = this.startedTicks;
+    this.publish(true);
+    this.start();
+    return (this.state?.inputs ?? manifest.inputs ?? []).map((input) => ({
+      ...input,
+      initial: this.state?.positions[input.id] ?? input.initial,
+    }));
   }
   private async boot(
     dat: ArrayBuffer,

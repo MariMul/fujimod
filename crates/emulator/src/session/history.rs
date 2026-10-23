@@ -272,6 +272,10 @@ impl History {
     pub fn retained_marks(&self) -> usize {
         self.marks.len()
     }
+    /// Retained machine points, newest first, without restoring or replaying.
+    pub fn snapshots(&self) -> impl Iterator<Item = &Snapshot> {
+        self.marks.iter().rev().map(|mark| mark.saved.as_ref())
+    }
     pub fn entries(&self) -> &[Entry] {
         &self.log
     }

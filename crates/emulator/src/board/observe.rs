@@ -79,7 +79,7 @@ unsafe fn entered(pc: u64, _: u32, data: *mut c_void) {
     );
 }
 impl Board {
-    pub(super) fn observation_topology(&self) -> Vec<(usize, Vec<u64>)> {
+    pub fn observation_topology(&self) -> Vec<(usize, Vec<u64>)> {
         self.watches
             .iter()
             .map(|w| (w.core, w.addresses.clone()))

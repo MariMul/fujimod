@@ -59,6 +59,12 @@ export interface ReplayLog {
   bytes: Uint8Array;
 }
 export interface Engine {
+  exportSnapshot(): Promise<Uint8Array>;
+  loadSnapshot(
+    bytes: Uint8Array,
+    config: EngineConfig,
+    progress: LoadingProgress,
+  ): Promise<Input[]>;
   checkpoint(): Promise<Checkpoint>;
   restoreCheckpoint(id: string): Promise<void>;
   undo(): Promise<Record<string, string>>;

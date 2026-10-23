@@ -1,6 +1,6 @@
 //! Shared EXR II construction from the checked runtime/device plans. Python
 //! transition adapters refuse before CPU construction on every target.
-use super::session::{Firmware, Session, decode, library_path};
+use super::session::{Firmware, Session, decode};
 use fujimod_emulator::board::{
     bus::{Bus, Mode},
     factory,
@@ -278,6 +278,13 @@ impl Session {
         settings: Option<Vec<u8>>,
         policy: fujimod_emulator_cpu::ExecutionPolicy,
     ) -> Result<Self, String> {
+        let construction = super::snapshot::Construction::prepared(
+            document,
+            &update,
+            &boot_rom,
+            nand.as_deref(),
+            settings.as_deref(),
+        );
         let request: PreparedRequest =
             serde_json::from_slice(document).map_err(|e| e.to_string())?;
         let config: PreparedConfig =
@@ -314,7 +321,6 @@ impl Session {
                 clock_seconds_2000: request.clock_seconds2000,
                 preferred_languages: request.preferred_languages,
             },
-            None,
         )?;
         core.board.set_execution_policy(policy)?;
         let browser = config.browser;
@@ -327,7 +333,7 @@ impl Session {
             nands,
         };
         let identity = camera_identity(&firmware_id, &firmware_sha256, &storage)?;
-        Self::start_camera(
+        let mut session = Self::start_camera(
             core,
             Attachments {
                 quantum,
@@ -344,7 +350,9 @@ impl Session {
                 initial_positions: browser.initial_positions,
                 boot_inputs: browser.boot_inputs,
             },
-        )
+        )?;
+        session.construction = Some(construction);
+        Ok(session)
     }
 
     pub fn create_camera(
@@ -352,6 +360,7 @@ impl Session {
         dat: &[u8],
         policy: fujimod_emulator_cpu::ExecutionPolicy,
     ) -> Result<Self, String> {
+        let construction = super::snapshot::Construction::camera(config, dat);
         let identity: DefinitionEnvelope =
             serde_json::from_slice(config).map_err(|e| e.to_string())?;
         let mut definition = serde_json::to_value(identity.graph).map_err(|e| e.to_string())?;
@@ -439,6 +448,7 @@ impl Session {
             cpu.coprocessor(c.register, Some(value | c.set_bits))?;
         }
         let core = fujimod_emulator::session::Session {
+            xp5: None,
             definition,
             controls: None,
             contact_driver: None,
@@ -448,7 +458,7 @@ impl Session {
             contacts: assembly.contacts,
             recording_frames: Default::default(),
         };
-        Self::start_camera(
+        let mut session = Self::start_camera(
             core,
             Attachments {
                 quantum: g.quantum,
@@ -465,7 +475,9 @@ impl Session {
                 initial_positions: c.initial_positions,
                 boot_inputs: c.boot_inputs,
             },
-        )
+        )?;
+        session.construction = Some(construction);
+        Ok(session)
     }
 
     /// Apply the browser attachments to a booted core and start its checkpoint.
@@ -511,6 +523,7 @@ impl Session {
             }
         }
         let mut session = Self {
+            construction: None,
             core,
             reset_image: None,
             powered_on: true,
