@@ -179,6 +179,18 @@ impl Machine {
             })
             .collect())
     }
+    pub fn checkpoint_backings(&self) -> Result<Vec<(std::ptr::NonNull<u8>, usize)>, String> {
+        self.maps
+            .lock()
+            .map_err(|_| "HVF maps poisoned")?
+            .iter()
+            .map(|(&base, mapping)| {
+                let pointer = std::ptr::NonNull::new(mapping.pointer as *mut u8)
+                    .ok_or("HVF map has a null backing")?;
+                Ok((pointer, (mapping.end - base) as usize))
+            })
+            .collect()
+    }
     pub fn overlaps(&self, address: u64, end: u64) -> Result<bool, String> {
         Ok(self
             .maps

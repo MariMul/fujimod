@@ -1,4 +1,7 @@
 //! Signed checks using source-authored CPU programs and declared peripherals.
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+#[path = "check/durable.rs"]
+mod durable;
 #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
 fn main() {
     panic!("hvf-check requires macOS ARM64");
@@ -1208,6 +1211,7 @@ fn main() -> Result<(), String> {
         assert_eq!(u32::from_le_bytes(word), if reverse { 7 } else { 99 });
     }
     architectural_board_checks()?;
+    durable::run()?;
     println!(
         "PASS: bounded execution, two workers, callback reentrancy, snapshots, SVC/ERET, IRQ, shared GIC/ICC, WFI, counter trap, MMIO, native MMU, exclusives/peer stores/CLREX, code replacement, cancellation, map lifetime and shared factory deadline/IRQ scheduling and M-profile firmware mailbox execution and peer-store reservation invalidation"
     );

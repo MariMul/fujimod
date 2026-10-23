@@ -67,6 +67,9 @@ struct State {
     registers: worker::Registers,
 }
 impl Snapshot for State {
+    fn export(&self) -> Result<Vec<u8>, String> {
+        self.registers.export()
+    }
     fn owner(&self) -> Identity {
         self.owner
     }
@@ -394,6 +397,7 @@ impl Cpu for Core {
             instruction_progress: true,
             architectural_exits: true,
             tighten_instruction_limit: true,
+            backing_observation: true,
             ..Features::default()
         }
     }
@@ -475,6 +479,9 @@ impl Cpu for Core {
         }));
         out.sort_by_key(|m| m.begin);
         Ok(out)
+    }
+    fn checkpoint_backings(&self) -> Result<Vec<(NonNull<u8>, usize)>, String> {
+        self.machine.checkpoint_backings()
     }
     unsafe fn map_backing(
         &self,
@@ -646,6 +653,12 @@ impl Cpu for Core {
         self.rpc(Op::Restore(state.registers.clone()))?;
         Ok(())
     }
+    fn import_snapshot(&self, bytes: &[u8]) -> Result<Box<dyn Snapshot>, String> {
+        Ok(Box::new(State {
+            owner: self.identity,
+            registers: worker::Registers::import(bytes)?,
+        }))
+    }
     unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String> {
         if !matches!(hook, Hook::Instruction { .. }) {
             return Err("HVF currently supports instruction observations only".into());
@@ -681,8 +694,22 @@ impl Cpu for Core {
     fn accounting(&self) -> Option<NonNull<BlockAccounting>> {
         None
     }
-    unsafe fn observe_backings(&self, _: &[BackingObserver]) -> Result<(), String> {
-        Err("HVF backing observation is unsupported".into())
+    unsafe fn observe_backings(&self, ranges: &[BackingObserver]) -> Result<(), String> {
+        // Hardware RAM writes have no software dirty callback. Invalidate all
+        // pages at each stopped rearm; equal immutable pages still share storage.
+        // No observer pointer is retained by the VM or its worker threads.
+        for range in ranges {
+            let page = 1usize
+                .checked_shl(range.page_shift)
+                .ok_or("HVF observer page shift exceeds target")?;
+            let words = range.bytes.div_ceil(page).div_ceil(64);
+            for index in 0..words {
+                unsafe {
+                    (*range.bitmap.as_ptr().add(index)).fetch_or(u64::MAX, Ordering::Relaxed);
+                }
+            }
+        }
+        Ok(())
     }
     fn watch_stores(&self, _: u64, _: u64) -> Result<(), String> {
         Err("HVF watched stores are unsupported".into())

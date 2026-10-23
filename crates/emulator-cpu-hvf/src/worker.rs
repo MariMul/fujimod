@@ -8,6 +8,7 @@ use std::sync::{
     mpsc,
 };
 use std::time::{Duration, Instant};
+mod portable;
 
 pub enum Op {
     Read(Register),
