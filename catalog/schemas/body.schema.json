@@ -3256,6 +3256,11 @@
           "type": "string"
         },
         {
+          "const": "SerialAudioReceiveSource",
+          "description": "Clocked external PCM input and serial receive DMA.",
+          "type": "string"
+        },
+        {
           "const": "ThreeByteDCZoomLensController",
           "description": "Three Byte D C Zoom Lens Controller.",
           "type": "string"
@@ -3984,6 +3989,13 @@
           },
           "description": "Declared refs.",
           "type": "object"
+        },
+        "replaces": {
+          "description": "Nodes absorbed by this composed hardware model.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "required": [

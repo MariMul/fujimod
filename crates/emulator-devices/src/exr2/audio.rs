@@ -3,6 +3,7 @@
 //! The X70 control and transfer fields are retained as guest-written words.
 //! DMA endpoints consume opaque bytes only when explicitly connected; this
 //! model does not create samples, transfer deadlines, or completion IRQs.
+pub mod receive;
 pub mod transmit;
 use crate::parts::audio_sink::AudioSink;
 use crate::{Cx, Device};
@@ -121,6 +122,24 @@ impl SerialAudio {
             return Err("serial-audio DMA reached a disabled transmitter".into());
         }
         self.sinks[bank].receive_dma(bytes)
+    }
+
+    /// An explicitly clocked stereo input supplies 16-bit frames when RX is enabled.
+    pub fn can_receive(&self, source: u64, sample_rate: u32) -> Result<bool, String> {
+        let bank = BASES
+            .iter()
+            .position(|base| source == base + 0x20)
+            .ok_or("unsupported serial-audio receive FIFO")?;
+        if self.read_word(bank, FORMAT) & 0x10000 == 0 {
+            return Ok(false);
+        }
+        if self.read_word(bank, SAMPLE_WIDTH) != 0
+            || self.read_word(bank, FORMAT) & 3 != 2
+            || sample_rate != 48000
+        {
+            return Err("serial-audio input requires declared 48 kHz stereo 16-bit packing".into());
+        }
+        Ok(true)
     }
 
     pub fn sink_bytes_received(&self, bank: usize) -> Option<u64> {

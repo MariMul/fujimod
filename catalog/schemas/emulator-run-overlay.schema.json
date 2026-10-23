@@ -542,6 +542,16 @@
       ],
       "type": "string"
     },
+    "RunAudioInputProfile": {
+      "description": "External PCM supplied by the selected run, independent of guest execution.",
+      "oneOf": [
+        {
+          "const": "declared-silent-stereo-pcm48000",
+          "description": "Constant zero, 48 kHz, stereo signed 16-bit PCM.",
+          "type": "string"
+        }
+      ]
+    },
     "RunAuxiliaryControlProfile": {
       "description": "Closed selection for auxiliary control profile.",
       "enum": [
@@ -787,6 +797,17 @@
     "RunFactoryOptions": {
       "additionalProperties": false,
       "properties": {
+        "audio_input_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunAudioInputProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit external serial audio source."
+        },
         "auxiliary_control_profile": {
           "anyOf": [
             {

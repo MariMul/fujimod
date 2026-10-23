@@ -1,16 +1,15 @@
 use super::super::{
-    adc, audio, boot, clock, companion, core_release, lz,
+    adc, audio, boot, clock, companion, core_release,
     display::{device as scanout, formatter, timing},
-    dram, gpio, gpu, hdmi, i2c, irq, isp, jpeg, dma, nand, pulse, reset, sdhc,
-    sdio, spi, timer, usb,
+    dma, dram, gpio, gpu, hdmi, i2c, irq, isp, jpeg, lz, nand, pulse, reset, sdhc, sdio, spi,
+    timer, usb,
 };
 use crate::{
     bus::InterruptLine,
     graph::Mapping,
     parts::{
         audio_sink, command_data_output, contact_actuator, encoder, gpio_contact_response,
-        hdmi_sink, lens, sd_card,
-        sensor, spi as spi_parts, stabilizer, usb_endpoint, wifi_module,
+        hdmi_sink, lens, sd_card, sensor, spi as spi_parts, stabilizer, usb_endpoint, wifi_module,
     },
     storage::fat,
 };
@@ -198,6 +197,10 @@ pub enum Model {
     },
     Scanout {
         options: scanout::Options,
+    },
+    SerialAudioReceiver {
+        options: audio::receive::Options,
+        routes: String,
     },
     SerialAudioTransmitter {
         options: audio::transmit::Options,

@@ -1,8 +1,8 @@
 use super::super::{
-    adc, audio, boot, clock, companion, core_release, lz,
+    adc, audio, boot, clock, companion, core_release,
     display::{formatter, timing},
-    dram, gpio, gpu, hdmi, i2c, irq, isp, jpeg, dma, nand, pulse, reset, sdhc,
-    sdio, spi, timer, usb,
+    dma, dram, gpio, gpu, hdmi, i2c, irq, isp, jpeg, lz, nand, pulse, reset, sdhc, sdio, spi,
+    timer, usb,
 };
 use super::{
     AdapterFactory, Assembly, Card, CoreInterrupts, Model, Resources, SerialEndpoint, Wire,
@@ -295,6 +295,27 @@ impl Builder<'_> {
                     return Err("scanout requires both complete physical register windows".into());
                 }
                 Box::new(super::super::display::Scanout::new(options)?)
+            }
+            Model::SerialAudioReceiver { options, routes } => {
+                let expected = [
+                    (dma::audio::BASE, 0x40),
+                    (audio::BASES[0], 0x1000),
+                    (audio::BASES[1], 0x1000),
+                ];
+                if windows.len() != expected.len()
+                    || windows
+                        .iter()
+                        .zip(expected)
+                        .any(|(w, (base, size))| w.base != base || w.size != size)
+                {
+                    return Err(
+                        "audio receiver requires its DMA channel and both audio banks".into(),
+                    );
+                }
+                Box::new(audio::receive::Receiver::new(
+                    options,
+                    wire!(resources, id, routes, IrqRoutes),
+                )?)
             }
             Model::SerialAudioTransmitter {
                 options,

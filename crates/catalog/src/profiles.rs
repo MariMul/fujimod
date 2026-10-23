@@ -376,6 +376,9 @@ pub struct DeviceDependency {
 #[serde(deny_unknown_fields)]
 #[schemars(rename = "HardwareDeviceModel")]
 pub struct DeviceModel {
+    /// Nodes absorbed by this composed hardware model.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub replaces: Vec<String>,
     /// Declared dependencies.
     pub dependencies: Vec<DeviceDependency>,
     /// Declared kind.
@@ -1620,6 +1623,8 @@ pub enum DeviceKind {
     SerialAudioTransferControlRegisters,
     /// Serial Audio Transmit Sink.
     SerialAudioTransmitSink,
+    /// Clocked external PCM input and serial receive DMA.
+    SerialAudioReceiveSource,
     /// Three Byte D C Zoom Lens Controller.
     ThreeByteDCZoomLensController,
     /// Three Byte Lens Controller.

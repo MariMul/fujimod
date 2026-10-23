@@ -2015,11 +2015,34 @@ pub(super) fn assemble(
         .chain(browser.map(|_| &CARD_NODE_RULE));
     let mut nodes = Vec::with_capacity(NODE_RULES.len() + 1);
     let mut serialized_nodes = Vec::with_capacity(NODE_RULES.len() + 1);
+    let receive_audio = configuration
+        .preset
+        .as_ref()
+        .is_some_and(|p| p.factory_options.audio_input_profile.is_some());
+    let receiver_rule = NodeRule {
+        name: "audio_registers",
+        blocks: &["audio-dma", "serial-audio", "serial-audio-aux"],
+        dependencies: &["irq0", "irq1"],
+    };
     for rule in rules {
+        if receive_audio && rule.name == "audio_dma" {
+            continue;
+        }
+        let rule = if receive_audio && rule.name == "audio_registers" {
+            &receiver_rule
+        } else {
+            rule
+        };
         let mut recipe = match (rule.name, browser) {
             ("sd", Some(browser)) => card_recipe(selection, browser)?,
             _ => model_recipe(rule.name)?,
         };
+        if receive_audio && rule.name == "audio_registers" {
+            recipe = json!({"kind":"serial-audio-receiver", "options": {
+                "ram_bytes":536870912, "max_transfer_bytes":1048576,
+                "ticks_per_second":12000000, "sample_rate":48000, "sample":0},
+                "routes":"imaging_routes"});
+        }
         if rule.name == "video_encoder" {
             use fujimod_catalog::construction::VideoEncoderBackend;
             let selected = configuration

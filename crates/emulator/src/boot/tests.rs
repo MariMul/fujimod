@@ -750,3 +750,37 @@ fn video_encoder_backend_is_selected_in_the_prepared_graph() {
         );
     }
 }
+
+#[test]
+fn declared_pcm_input_selects_one_composed_receiver_in_the_prepared_graph() {
+    use fujimod_catalog::configuration::RunAudioInputProfile;
+    let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
+    resolved
+        .configuration
+        .preset
+        .as_mut()
+        .unwrap()
+        .factory_options
+        .audio_input_profile = Some(RunAudioInputProfile::DeclaredSilentStereoPcm48000);
+    let run = prepared(resolved).unwrap();
+    assert!(!run.plan.nodes.iter().any(|node| node.name == "audio_dma"));
+    assert_eq!(
+        model(&run, "audio_registers")["kind"],
+        "serial-audio-receiver"
+    );
+    assert_eq!(
+        model(&run, "audio_registers")["options"]["sample_rate"],
+        48000
+    );
+    assert_eq!(model(&run, "audio_registers")["options"]["sample"], 0);
+    assert_eq!(
+        run.plan
+            .nodes
+            .iter()
+            .find(|node| node.name == "audio_registers")
+            .unwrap()
+            .windows
+            .len(),
+        3
+    );
+}

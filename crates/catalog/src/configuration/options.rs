@@ -12,6 +12,9 @@ use serde::{Deserialize, Serialize};
 )]
 #[derive(Default)]
 pub struct RunFactoryOptions {
+    /// Explicit external serial audio source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_input_profile: Option<RunAudioInputProfile>,
     /// Explicit H.264 backend; absence selects the local platform default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub video_encoder_backend: Option<crate::construction::VideoEncoderBackend>,
@@ -753,4 +756,13 @@ pub enum RunFaceStopProfile {
 pub enum RunLensContinuationProfile {
     #[serde(rename = "declared-lens-controller-close-focus-reference-target222-unmeasured")]
     DeclaredLensControllerCloseFocusReferenceTarget222Unmeasured,
+}
+
+/// External PCM supplied by the selected run, independent of guest execution.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
+pub enum RunAudioInputProfile {
+    /// Constant zero, 48 kHz, stereo signed 16-bit PCM.
+    DeclaredSilentStereoPcm48000,
 }
