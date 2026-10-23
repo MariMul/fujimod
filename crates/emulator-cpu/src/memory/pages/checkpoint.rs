@@ -14,7 +14,7 @@ impl Image {
             .pages
             .iter()
             .enumerate()
-            .filter(|(_, page)| page.iter().any(|&byte| byte != 0))
+            .filter(|(_, page)| !Arc::ptr_eq(page, zero()) && page.iter().any(|&byte| byte != 0))
             .collect::<Vec<_>>();
         let size = nonzero.iter().try_fold(HEADER, |size, (index, _)| {
             size.checked_add(8 + PAGE_BYTES.min(self.len - index * PAGE_BYTES))

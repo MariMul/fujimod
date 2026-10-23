@@ -182,12 +182,9 @@ mod tests {
             );
             drop(sensor);
             let exported = source.checkpoint().unwrap().export().unwrap();
-            (
-                Checkpoint::encode("archive", &exported).unwrap(),
-                source.fingerprint().unwrap(),
-            )
+            (exported.to_bytes().unwrap(), source.fingerprint().unwrap())
         };
-        let archive: Checkpoint = encoded.decode("archive").unwrap();
+        let archive = Checkpoint::from_bytes(&encoded).unwrap();
         let saved = ResourceSnapshot::from_checkpoint(&archive).unwrap();
         let mut target = resources();
         let handle = target.inputs.sensors["sensor"].clone();

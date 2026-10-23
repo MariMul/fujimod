@@ -1,4 +1,5 @@
 //! Physical bus decoding and backing, independent of CPU-private mappings.
+mod checkpoint;
 use fujimod_emulator_cpu::{Cpu, exclusive, memory::Backing};
 use std::{
     cell::{Ref, RefCell},

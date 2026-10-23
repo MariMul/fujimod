@@ -1,8 +1,10 @@
 //! Typed binary device state. Diagnostic JSON is never a restore source.
+mod archive;
 use serde::{Serialize, de::DeserializeOwned};
 use std::sync::Arc;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Checkpoint {
     kind: std::borrow::Cow<'static, str>,
     #[serde(with = "shared_bytes")]
