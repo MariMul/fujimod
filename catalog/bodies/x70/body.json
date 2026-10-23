@@ -956,6 +956,7 @@
               "name": "prefilter",
               "kind": "PrefilterControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -1877,6 +1878,7 @@
               "name": "prefilter",
               "kind": "PrefilterControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -4693,6 +4695,7 @@
               "name": "prefilter",
               "kind": "PrefilterControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}

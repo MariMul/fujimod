@@ -682,6 +682,19 @@ class Session:
             raise ValueError("RGB input must contain exactly width * height * 3 bytes")
         self._native_board().image_rgb(self._node(name), width, height, payload)
 
+    def set_sensor_raw16(
+        self, name: str, width: int, height: int, raw16: Buffer
+    ) -> None:
+        """Replace one sensor input with a little-endian U16 RAW raster."""
+        if type(width) is not int or not 1 <= width <= sys.maxsize:
+            raise ValueError("width must be a positive host-sized integer")
+        if type(height) is not int or not 1 <= height <= sys.maxsize:
+            raise ValueError("height must be a positive host-sized integer")
+        payload = bytes(raw16)
+        if len(payload) != width * height * 2:
+            raise ValueError("RAW input must contain exactly width * height U16 samples")
+        self._native_board().sensor_raw16(self._node(name), width, height, payload)
+
     def frame_state(self, node: str) -> dict[str, object]:
         """Return the current state of a clocked frame source."""
         return _json_object(

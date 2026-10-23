@@ -1,6 +1,6 @@
 //! Ordered external inputs and bounded Undo on shared machine keyframes.
 //! Instruction counts disambiguate inputs within one guest tick at high ratios.
-use super::{checkpoint::Snapshot, Session};
+use super::{Session, checkpoint::Snapshot};
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_devices::{parts::touch_controller::ContactInput, scene::StatisticsCadence};
 use std::{collections::VecDeque, sync::Arc};
@@ -81,6 +81,12 @@ pub enum Input {
         bytes: Vec<u8>,
         white_luminance: f64,
     },
+    SensorRaw16 {
+        source: String,
+        width: usize,
+        height: usize,
+        bytes: Vec<u8>,
+    },
     SensorImage {
         source: String,
     },
@@ -124,9 +130,9 @@ impl Input {
                 node.capacity() + script.capacity() * size_of::<ContactInput>()
             }
             Self::Logic { wire, .. } => wire.capacity(),
-            Self::Rgb { source, bytes, .. } | Self::SensorRgb { source, bytes, .. } => {
-                source.capacity() + bytes.capacity()
-            }
+            Self::Rgb { source, bytes, .. }
+            | Self::SensorRgb { source, bytes, .. }
+            | Self::SensorRaw16 { source, bytes, .. } => source.capacity() + bytes.capacity(),
             Self::SensorImage { source } | Self::Analytic { source } => source.capacity(),
             Self::CardFormat {
                 node,
@@ -194,6 +200,12 @@ impl Input {
                 bytes,
                 white_luminance,
             } => session.sensor_rgb(source, *width, *height, bytes, *white_luminance),
+            Self::SensorRaw16 {
+                source,
+                width,
+                height,
+                bytes,
+            } => session.sensor_raw16(source, *width, *height, bytes),
             Self::SensorImage { source } => session.sensor_image(source),
             Self::Analytic { source } => session.analytic(source),
             Self::CardFormat {

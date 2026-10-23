@@ -15,8 +15,8 @@ pub mod usb;
 pub mod xp5;
 
 use crate::board::Board;
-use fujimod_emulator_exr2_board::Resources;
 use fujimod_emulator_devices::exr2::sdhc::Contacts;
+use fujimod_emulator_exr2_board::Resources;
 use std::collections::BTreeMap;
 
 pub struct Session {
@@ -234,6 +234,40 @@ impl Session {
         }
         let mut frame = Frame::new(width, height, FramePixels::Rgb24(bytes.to_vec().into()))?;
         frame.white_luminance = white_luminance;
+        input
+            .lock()
+            .map_err(|_| "sensor input is poisoned")?
+            .set_frame(frame);
+        Ok(())
+    }
+    /// Replace a sensor input with an external little-endian U16 RAW raster.
+    /// The sensor's programmed window and transfer format still control DMA.
+    pub fn sensor_raw16(
+        &self,
+        name: &str,
+        width: usize,
+        height: usize,
+        bytes: &[u8],
+    ) -> Result<(), String> {
+        use fujimod_emulator_devices::scene::{Frame, FramePixels};
+        let input = self
+            .resources
+            .inputs
+            .sensors
+            .get(name)
+            .ok_or("no such sensor input")?;
+        let expected = width
+            .checked_mul(height)
+            .and_then(|samples| samples.checked_mul(2))
+            .ok_or("sensor RAW input size overflow")?;
+        if bytes.len() > 64 << 20 || bytes.len() != expected {
+            return Err("sensor RAW input must contain exactly width * height U16 samples".into());
+        }
+        let samples = bytes
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect();
+        let frame = Frame::new(width, height, FramePixels::Raw16(samples))?;
         input
             .lock()
             .map_err(|_| "sensor input is poisoned")?

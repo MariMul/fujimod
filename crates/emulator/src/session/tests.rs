@@ -42,8 +42,8 @@ fn card_session() -> Session {
     )
     .unwrap();
     let adc = bus.register(0xfff8a000, 0x60, Box::new(analog)).unwrap();
-    use fujimod_emulator_exr2_board::CardPins;
     use fujimod_emulator_devices::{exr2::gpio, parts::pins::Pin};
+    use fujimod_emulator_exr2_board::CardPins;
     let gpio = gpio::Gpio::new(
         gpio::Options {
             input_levels: [0; 16],
@@ -576,6 +576,27 @@ fn card_insertion_refuses_full_gpio_queue_before_replacing_media() {
             .unwrap(),
         b"card bytes"
     );
+}
+
+#[test]
+fn sensor_raw16_replaces_the_current_frame_without_changing_the_latched_frame() {
+    use fujimod_emulator_devices::scene::{Frame, FramePixels, SensorFrames};
+    use std::sync::{Arc, Mutex};
+    let mut session = card_session();
+    let sensor = Arc::new(Mutex::new(SensorFrames::new(
+        Frame::new(2, 1, FramePixels::Raw16(vec![1, 2])).unwrap(),
+    )));
+    session
+        .resources
+        .inputs
+        .sensors
+        .insert("sensor".into(), sensor.clone());
+    session
+        .sensor_raw16("sensor", 3, 1, &[3, 0, 4, 0, 5, 0])
+        .unwrap();
+    let frames = sensor.lock().unwrap();
+    assert!(matches!(&frames.current.pixels, FramePixels::Raw16(p) if p == &[3, 4, 5]));
+    assert!(matches!(&frames.latched.pixels, FramePixels::Raw16(p) if p == &[1, 2]));
 }
 
 #[test]

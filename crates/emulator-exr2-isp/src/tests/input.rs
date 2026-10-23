@@ -1,7 +1,7 @@
-use fujimod_emulator_devices::exr2::isp::*;
 use crate::*;
-use fujimod_emulator_devices::test_host::*;
 use fujimod_emulator_devices::Device;
+use fujimod_emulator_devices::exr2::isp::*;
+use fujimod_emulator_devices::test_host::*;
 pub(super) fn cfa() -> Vec<u8> {
     (0..36).map(|i| (i % 3) as u8).collect()
 }
@@ -488,6 +488,46 @@ fn raw_sensor_freezes_frame_packs12_preserves_padding_and_waits_for_ack() {
     assert_eq!(d.next_deadline(30), Some(35));
     advance(&mut d, &mut h, 35);
     assert_eq!(&h.ram[0x8000..0x8003], &[0, 0, 0]);
+}
+
+#[test]
+fn raw_channel3_delivers_sensor_rows_on_irq37_and_waits_for_its_ack() {
+    let (mut d, mut h, _) = raw_window_input(false);
+    h.ram[0x7ff0..0x8400].fill(0xa5);
+    for (offset, value) in [
+        (0x35c, 0),
+        (0x370, 0x10300000),
+        (0x374, 0x8040),
+        (0x378, 1),
+        (0x37c, 16),
+    ] {
+        write(&mut d, &mut h, 0xfff10000 + offset, value);
+    }
+    advance(&mut d, &mut h, 10);
+    assert_eq!(d.next_deadline(10), Some(15));
+    advance(&mut d, &mut h, 14);
+    assert_eq!(h.ram[0x8040], 0xa5);
+    advance(&mut d, &mut h, 15);
+    assert_eq!(
+        &h.ram[0x8040..0x8048],
+        &[0x10, 0x01, 0x20, 0x01, 0x30, 0x01, 0x40, 0x01]
+    );
+    assert_eq!(
+        &h.ram[0x80d0..0x80d8],
+        &[0x10, 0x02, 0x20, 0x02, 0x30, 0x02, 0x40, 0x02]
+    );
+    assert_eq!(h.irqs, [(0, 37)]);
+    assert_eq!(d.next_deadline(15), Some(20));
+    write(&mut d, &mut h, 0xfff1036c, 1);
+    assert_eq!(d.next_deadline(15), Some(20));
+    advance(&mut d, &mut h, 20);
+    assert_eq!(d.next_deadline(20), Some(25));
+    advance(&mut d, &mut h, 25);
+    assert_eq!(h.irqs, [(0, 37), (0, 37)]);
+    assert_eq!(
+        &h.ram[0x8040..0x8048],
+        &[0x10, 0x01, 0x20, 0x01, 0x30, 0x01, 0x40, 0x01]
+    );
 }
 fn raw_window_input(
     packed: bool,

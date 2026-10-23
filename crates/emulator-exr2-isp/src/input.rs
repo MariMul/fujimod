@@ -2,6 +2,7 @@
 //! sensor-command transport, declared physical phase clocks, and RAW channels
 //! 2/4. No startup ledger, program signature, or instruction inspection.
 mod registers;
+use super::readback::MemoryOutputHandle;
 use fujimod_emulator_devices::exr2::isp::{
     Irq,
     dma::{Raster, Transfer, physical},
@@ -9,7 +10,6 @@ use fujimod_emulator_devices::exr2::isp::{
     parameters::ParameterHandle,
     word,
 };
-use super::readback::MemoryOutputHandle;
 use fujimod_emulator_devices::imaging::{
     film::Film,
     raw::{Cfa, Packing, RawView},
@@ -101,9 +101,12 @@ struct State {
     sensor_due: Option<u64>,
     capture_ack: bool,
     capture_irq_sent: bool,
+    raw3_ack: bool,
+    raw3_irq_sent: bool,
     readback_due: Option<u64>,
     stop_due: Option<u64>,
     dma: Transfer,
+    raw3_dma: Transfer,
 }
 pub struct ImageInput {
     state: State,
@@ -180,9 +183,12 @@ impl ImageInput {
                 sensor_due,
                 capture_ack: false,
                 capture_irq_sent: false,
+                raw3_ack: false,
+                raw3_irq_sent: false,
                 readback_due: None,
                 stop_due: None,
                 dma: Transfer::default(),
+                raw3_dma: Transfer::default(),
             },
             options,
             wiring,
@@ -589,6 +595,9 @@ impl ImageInput {
                     if o == 0x350 && v & 1 != 0 {
                         self.state.capture_ack = false;
                         self.state.capture_irq_sent = false;
+                    } else if o == 0x36c && v & 1 != 0 {
+                        self.state.raw3_ack = false;
+                        self.state.raw3_irq_sent = false;
                     }
                 }
                 0x3b4 => {
@@ -671,26 +680,63 @@ impl ImageInput {
         if !sensor.readout_valid() {
             return Ok(false);
         }
-        let s = &mut self.state;
-        let r = &s.r;
-        if s.capture_ack || s.dma.deadline().is_some() || r[1] & 1 == 0 || r[0x35c / 4] & 1 == 0 {
-            return Ok(true);
+        let State {
+            r,
+            dma,
+            raw3_dma,
+            raw_exposure,
+            capture_ack,
+            raw3_ack,
+            ..
+        } = &mut self.state;
+        if r[1] & 1 != 0 && r[0x35c / 4] & 1 != 0 && !*capture_ack && dma.deadline().is_none() {
+            *dma = Self::prepare_raw_channel(
+                cx.now(),
+                self.options.raw_dma_ticks,
+                &r,
+                sensor,
+                0x354,
+                0x358,
+                0x360,
+                "RAW channel2",
+            )?;
+            *raw_exposure = sensor.physical_exposure();
         }
-        let format = r[0x354 / 4] >> 20 & 7;
-        // The low byte is independent of the burst-format field. Retain it
-        // as programmed; it does not change the addressed active samples.
-        // Bits 28..30 enable completion/error interrupts, not the DMA itself.
+        if r[1] & 1 != 0 && r[0x378 / 4] & 1 != 0 && !*raw3_ack && raw3_dma.deadline().is_none() {
+            *raw3_dma = Self::prepare_raw_channel(
+                cx.now(),
+                self.options.raw_dma_ticks,
+                &r,
+                sensor,
+                0x370,
+                0x374,
+                0x37c,
+                "RAW channel3",
+            )?;
+        }
+        Ok(true)
+    }
+    fn prepare_raw_channel(
+        now: u64,
+        ticks: u64,
+        r: &[u32],
+        sensor: &mut Sensor,
+        format_offset: usize,
+        destination_offset: usize,
+        stride_offset: usize,
+        channel_name: &str,
+    ) -> Result<Transfer, String> {
+        let format = r[format_offset / 4] >> 20 & 7;
+        // The low byte is independent of the burst-format field. Bits 28..30
+        // gate completion/error interrupts, not the DMA itself.
         if ![3, 4].contains(&format) || r[1] & 2 != 0 {
-            return Err("RAW channel2 transport is unsupported".into());
+            return Err(format!("{channel_name} transport is unsupported"));
         }
         let packing = if r[1] & 0x10000 != 0 {
             Packing::Packed12
         } else {
             Packing::U16
         };
-        // Window origins and counts occupy distinct fields. FFF10024 is the
-        // active width; transport rounds destination rows independently,
-        // leaving padding untouched.
         let width = (r[0x24 / 4] & 0x3fff) as usize;
         let height = (r[0x18 / 4] & 0x3fff) as usize + 1;
         let left = (r[0x14 / 4] >> 16 & 0x3fff) as usize;
@@ -703,33 +749,26 @@ impl ImageInput {
             || left + width > sensor.width
             || top + height > sensor.height
         {
-            return Err("RAW sensor DMA requires a bounded input window".into());
+            return Err(format!("{channel_name} requires a bounded input window"));
         }
         let row = packing.row_bytes(width);
         let alignment = (if packing == Packing::Packed12 { 4 } else { 1 }) << (format + 3);
-        let dst = Raster {
-            address: r[0x358 / 4] as u64,
+        let destination = Raster {
+            address: r[destination_offset / 4] as u64,
             width,
             height,
             pitch: packing
                 .row_bytes(width.div_ceil(alignment) * alignment)
-                .checked_add(r[0x360 / 4] as usize)
-                .ok_or("RAW channel2 pitch overflow")?,
+                .checked_add(r[stride_offset / 4] as usize)
+                .ok_or_else(|| format!("{channel_name} pitch overflow"))?,
         };
-        s.dma
-            .prepare_deferred(cx.now(), self.options.raw_dma_ticks, dst, row)?;
-        s.raw_exposure = sensor.physical_exposure();
-        let readout = match sensor.freeze_readout(packing, [left, top, width, height]) {
-            Ok(readout) => readout,
-            Err(error) => {
-                s.dma.cancel();
-                return Err(error);
-            }
-        };
-        s.dma
+        let mut transfer = Transfer::default();
+        transfer.prepare_deferred(now, ticks, destination, row)?;
+        let readout = sensor.freeze_readout(packing, [left, top, width, height])?;
+        transfer
             .pixels
             .defer_rows(row, height, move |rows, out| readout.write_rows(rows, out));
-        Ok(true)
+        Ok(transfer)
     }
     fn tick(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
         let now = cx.now();
@@ -820,6 +859,25 @@ impl ImageInput {
         {
             self.wiring.raw_irq.raise(cx)?;
             self.state.capture_irq_sent = true;
+        }
+        if self.state.raw3_dma.write(cx)? {
+            self.state.raw3_ack = true;
+        }
+        if self.state.raw3_ack
+            && !self.state.raw3_irq_sent
+            && self.state.r[0x370 / 4] & 0x10000000 != 0
+        {
+            Irq {
+                core: self.wiring.raw_irq.core,
+                line: self
+                    .wiring
+                    .raw_irq
+                    .line
+                    .checked_add(1)
+                    .ok_or("RAW channel3 IRQ overflow")?,
+            }
+            .raise(cx)?;
+            self.state.raw3_irq_sent = true;
         }
         if self.state.readback_due.is_some_and(|t| now >= t) {
             let mut outputs = self.wiring.memory_outputs.as_ref().unwrap().lock().unwrap();
@@ -915,14 +973,18 @@ impl Device for ImageInput {
             sensor_due,
             capture_ack,
             capture_irq_sent,
+            raw3_ack,
+            raw3_irq_sent,
             readback_due,
             stop_due,
             dma,
+            raw3_dma,
         } = &self.state;
         let state = serde_json::json!({"r":r,"reset":reset,"command_due":command_due,"command_armed":command_armed,
             "raw_exposure":raw_exposure,"command_done":command_done,"command_bytes":fujimod_emulator_devices::fingerprint::bytes(command_bytes),"phases":phases,
             "phase_due":phase_due,"phase_pending":phase_pending,"phase_period":phase_period,"sensor_due":sensor_due,"capture_ack":capture_ack,
-            "capture_irq_sent":capture_irq_sent,"readback_due":readback_due,"stop_due":stop_due,"dma":dma.fingerprint()});
+            "capture_irq_sent":capture_irq_sent,"raw3_ack":raw3_ack,"raw3_irq_sent":raw3_irq_sent,
+            "readback_due":readback_due,"stop_due":stop_due,"dma":dma.fingerprint(),"raw3_dma":raw3_dma.fingerprint()});
         let sensor = self.wiring.sensor.as_ref().map(|s| s.fingerprint());
         let outputs = self
             .wiring
@@ -980,6 +1042,12 @@ impl Device for ImageInput {
         {
             return Some(now);
         }
+        if self.state.raw3_ack
+            && !self.state.raw3_irq_sent
+            && self.state.r[0x370 / 4] & 0x10000000 != 0
+        {
+            return Some(now);
+        }
         if self.wiring.frame_period.is_some()
             && self
                 .phase_period()
@@ -995,6 +1063,7 @@ impl Device for ImageInput {
             .chain(s.phase_due.into_iter().flatten())
             .chain(s.sensor_due)
             .chain(s.dma.deadline())
+            .chain(s.raw3_dma.deadline())
             .chain(s.readback_due)
             .chain(s.stop_due)
             .min()
