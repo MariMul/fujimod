@@ -38,6 +38,65 @@ fn registers([x, y, w, h]: [usize; 4]) -> Vec<u32> {
     r
 }
 
+/// Statistics of `frame` equal per-sample scalar sums over its windows.
+fn assert_matches_scalar(frame: &ExposedFrame, grid: [usize; 2], rect: [usize; 4]) {
+    let [x, y, w, h] = rect;
+    let mut colors = [0u64; 3];
+    let mut energy = [0u64; 2];
+    for yy in y.min(grid[1])..(y + h).min(grid[1]) {
+        let mut row = [0u64; 2];
+        let end = (x + w).min(grid[0]);
+        for xx in x.min(grid[0])..end {
+            let sample = frame.sample(xx, yy, grid);
+            for c in 0..3 {
+                colors[c] += u64::from(sample[c]);
+            }
+            for (c, distance) in [3, 1].into_iter().enumerate() {
+                if xx + distance < end {
+                    let d = i64::from(frame.sample(xx + distance, yy, grid)[1])
+                        - i64::from(sample[1]);
+                    row[c] += (d * d) as u64;
+                }
+            }
+        }
+        energy[0] += row[0] / 2304;
+        energy[1] += row[1] / 256;
+    }
+    let r = registers(rect);
+    let color = color_spans(frame, grid, &r).unwrap();
+    for c in 0..3 {
+        let expected = colors[c] * [2, 5, 2][c] / 9;
+        assert_eq!(
+            u32::from_le_bytes(color[c].bytes[..4].try_into().unwrap()) as u64,
+            expected
+        );
+        assert_eq!(
+            u64::from_le_bytes(color[3].bytes[c * 8..c * 8 + 8].try_into().unwrap()),
+            expected
+        );
+    }
+    let contrast = contrast_spans(frame, grid, &r).unwrap();
+    for c in 0..2 {
+        assert_eq!(
+            u32::from_le_bytes(contrast[c].bytes[..4].try_into().unwrap()) as u64,
+            energy[c]
+        );
+    }
+    assert_eq!(
+        u64::from_le_bytes(contrast[2].bytes[..8].try_into().unwrap()),
+        energy[1]
+    );
+}
+
+fn rects(grid: [usize; 2]) -> [[usize; 4]; 4] {
+    [
+        [0, 0, grid[0], grid[1]],
+        [grid[0] / 2, grid[1] / 3, 7, 5],
+        [grid[0] + 2, grid[1] + 1, 3, 4],
+        [0, 0, 1, 1],
+    ]
+}
+
 #[test]
 fn repeated_source_runs_match_scalar_sampling_with_clips_and_per_row_rounding() {
     for [width, height] in [[1, 1], [3, 2], [7, 5], [23, 17]] {
@@ -59,63 +118,85 @@ fn repeated_source_runs_match_scalar_sampling_with_clips_and_per_row_rounding() 
             };
             let frame = exposed(Arc::new(Frame::new(width, height, pixels).unwrap()), 0.001);
             for grid in [[1, 1], [3, 4], [17, 13], [64, 41]] {
-                for rect @ [x, y, w, h] in [
-                    [0, 0, grid[0], grid[1]],
-                    [grid[0] / 2, grid[1] / 3, 7, 5],
-                    [grid[0] + 2, grid[1] + 1, 3, 4],
-                    [0, 0, 1, 1],
-                ] {
-                    let mut colors = [0u64; 3];
-                    let mut energy = [0u64; 2];
-                    for yy in y.min(grid[1])..(y + h).min(grid[1]) {
-                        let mut row = [0u64; 2];
-                        let end = (x + w).min(grid[0]);
-                        for xx in x.min(grid[0])..end {
-                            let sample = frame.sample(xx, yy, grid);
-                            for c in 0..3 {
-                                colors[c] += u64::from(sample[c]);
-                            }
-                            for (c, distance) in [3, 1].into_iter().enumerate() {
-                                if xx + distance < end {
-                                    let d = i64::from(frame.sample(xx + distance, yy, grid)[1])
-                                        - i64::from(sample[1]);
-                                    row[c] += (d * d) as u64;
-                                }
-                            }
-                        }
-                        energy[0] += row[0] / 2304;
-                        energy[1] += row[1] / 256;
-                    }
-                    let r = registers(rect);
-                    let color = color_spans(&frame, grid, &r).unwrap();
-                    for c in 0..3 {
-                        let expected = colors[c] * [2, 5, 2][c] / 9;
-                        assert_eq!(
-                            u32::from_le_bytes(color[c].bytes[..4].try_into().unwrap()) as u64,
-                            expected
-                        );
-                        assert_eq!(
-                            u64::from_le_bytes(
-                                color[3].bytes[c * 8..c * 8 + 8].try_into().unwrap()
-                            ),
-                            expected
-                        );
-                    }
-                    let contrast = contrast_spans(&frame, grid, &r).unwrap();
-                    for c in 0..2 {
-                        assert_eq!(
-                            u32::from_le_bytes(contrast[c].bytes[..4].try_into().unwrap()) as u64,
-                            energy[c]
-                        );
-                    }
-                    assert_eq!(
-                        u64::from_le_bytes(contrast[2].bytes[..8].try_into().unwrap()),
-                        energy[1]
-                    );
+                for rect in rects(grid) {
+                    assert_matches_scalar(&frame, grid, rect);
                 }
             }
         }
     }
+}
+
+/// Measurements prepared by a renderer, binned with and without a lens, read
+/// precomputed sample offsets; they equal the scalar sums too.
+#[test]
+fn prepared_readouts_match_scalar_sampling() {
+    use fujimod_emulator_devices::exr2::isp::parameters::Parameters;
+    use fujimod_emulator_devices::imaging::optics::{Illumination, Projection, Spec};
+    use fujimod_emulator_devices::imaging::radiometric::Renderer;
+    use fujimod_emulator_devices::scene::SensorFrames;
+    use std::sync::Mutex;
+    for [width, height] in [[7, 5], [23, 17], [40, 29]] {
+        for lens in [false, true] {
+            let pixels = FramePixels::Rgb24(
+                (0..width * height * 3)
+                    .map(|i| ((i * 73 + i / (width * 3) * 59) % 256) as u8)
+                    .collect::<Vec<_>>()
+                    .into(),
+            );
+            let projection = lens.then(|| {
+                Projection::new(
+                    Spec {
+                        focus: "focus".into(),
+                        focal_length_mm: 18.5,
+                        subject_distance_mm: 2000.,
+                        sensor_width_mm: 2.,
+                        relative_illumination: Illumination::CosineFourth,
+                    },
+                    Arc::new(Mutex::new(0.3)),
+                )
+                .unwrap()
+            });
+            let mut renderer = Renderer::new(
+                Calibration {
+                    full_scale: 16380,
+                    reference_white: [256; 3],
+                    saturation_lux_seconds: 1.,
+                    color_sample_weights: [2, 5, 2],
+                },
+                Arc::new(Mutex::new(SensorFrames::new(
+                    Frame::new(width, height, pixels).unwrap(),
+                ))),
+                Arc::new(Mutex::new(Exposure {
+                    seconds: 0.001,
+                    analog_gain: 1.,
+                })),
+                Arc::new(Mutex::new(8.)),
+                Arc::new(Mutex::new(Parameters {
+                    words: fujimod_emulator_devices::test_host::film_words(),
+                    film: Default::default(),
+                })),
+                projection,
+            )
+            .unwrap();
+            let image = renderer.capture().unwrap().unwrap();
+            for grid in [[3, 4], [17, 13], [64, 41]] {
+                for rect in rects(grid) {
+                    let frame = image.measurement_windows(grid, &[rect_in(grid, rect)]).unwrap();
+                    assert!(frame.sample_offsets(grid, rect_in(grid, rect), 1).is_some());
+                    assert_matches_scalar(&frame, grid, rect);
+                }
+                let whole = image.measurement_windows(grid, &[[0, 0, grid[0], grid[1]]]).unwrap();
+                for rect in rects(grid) {
+                    assert_matches_scalar(&whole, grid, rect);
+                }
+            }
+        }
+    }
+}
+
+fn rect_in(grid: [usize; 2], [x, y, w, h]: [usize; 4]) -> [usize; 4] {
+    let [left, top] = [x.min(grid[0]), y.min(grid[1])];
+    [left, top, (x + w).min(grid[0]) - left, (y + h).min(grid[1]) - top]
 }
 
 fn bytes(spans: &[fujimod_emulator_devices::scene::StatisticsSpan]) -> Vec<(usize, u32, Vec<u8>)> {

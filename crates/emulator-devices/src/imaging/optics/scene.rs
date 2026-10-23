@@ -1,4 +1,4 @@
-use crate::scene::{Frame, FramePixels};
+use crate::scene::{Frame, FramePixels, mosaic::MappedSites};
 use std::{borrow::Cow, sync::Arc};
 
 /// Immutable scene irradiance. Row prefixes are independent of the lens,
@@ -11,12 +11,15 @@ pub(super) struct Scene {
     pub frame: Arc<Frame>,
     pub dimensions: [usize; 2],
     prefix: Vec<[u32; 3]>,
+    /// Linear mosaic sites, for a full-resolution mosaic scene.
+    sites: Option<MappedSites>,
 }
 impl Scene {
     /// Scene irradiance of an RGB or mosaic frame. RAW samples have no scene
     /// radiance and are never projected.
     pub fn new(frame: Arc<Frame>) -> Result<Self, String> {
         let dimensions = [frame.width, frame.height];
+        let mut sites = None;
         let prefix = match &frame.pixels {
             FramePixels::Rgb24(bytes) => {
                 let linear: [u16; 256] = std::array::from_fn(|i| {
@@ -35,7 +38,15 @@ impl Scene {
                 })
             }
             FramePixels::Mosaic { .. } => {
-                frame.mosaic().ok_or("mosaic scene has no site radiance")?;
+                let mosaic = frame.mosaic().ok_or("mosaic scene has no site radiance")?;
+                let scale = if mosaic.max > 0. {
+                    65535. / f64::from(mosaic.max)
+                } else {
+                    0.
+                };
+                sites = Some(
+                    mosaic.mapped(|v| libm::rint(f64::from(v) * scale).clamp(0., 65535.) as u16),
+                );
                 Vec::new()
             }
             FramePixels::Raw16(_) => {
@@ -46,6 +57,7 @@ impl Scene {
             frame,
             dimensions,
             prefix,
+            sites,
         })
     }
     /// Integrate linear scene cells over each readout pixel before optical
@@ -100,20 +112,13 @@ impl Scene {
             frame: self.frame.clone(),
             dimensions,
             prefix,
+            sites: None,
         }
     }
     #[inline(always)]
     pub fn linear(&self, x: usize, y: usize) -> [u16; 3] {
-        if self.prefix.is_empty() {
-            let sites = self.frame.mosaic().expect("mosaic scene");
-            let scale = if sites.max > 0. {
-                65535. / f64::from(sites.max)
-            } else {
-                0.
-            };
-            sites
-                .site(x, y)
-                .map(|v| libm::rint(f64::from(v) * scale).clamp(0., 65535.) as u16)
+        if let Some(sites) = &self.sites {
+            sites.site(x, y)
         } else {
             let row = y * (self.dimensions[0] + 1);
             std::array::from_fn(|c| (self.prefix[row + x + 1][c] - self.prefix[row + x][c]) as u16)
@@ -125,8 +130,10 @@ impl Scene {
     /// Borrow stored prefixes, or compute only this mosaic row.
     pub fn row(&self, y: usize) -> Row<'_> {
         let width = self.dimensions[0];
-        let prefix = if self.prefix.is_empty() {
-            Cow::Owned(prefix_sums([width, 1], |x, _| self.linear(x, y)))
+        let prefix = if let Some(sites) = &self.sites {
+            let mut values = vec![[0; 3]; width];
+            sites.row(y, &mut values);
+            Cow::Owned(prefix_sums([width, 1], |x, _| values[x]))
         } else {
             Cow::Borrowed(&self.prefix[y * (width + 1)..(y + 1) * (width + 1)])
         };
@@ -275,6 +282,7 @@ mod tests {
         let dense = Scene {
             frame: frame.clone(),
             dimensions: [width, height],
+            sites: None,
             prefix: prefix_sums([width, height], |x, y| {
                 let mut sum = [0f64; 3];
                 let mut count = [0u32; 3];

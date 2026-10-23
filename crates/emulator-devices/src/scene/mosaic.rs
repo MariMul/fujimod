@@ -120,6 +120,62 @@ impl MosaicSites {
         }
         values
     }
+    /// The sites under a per-value law. Every site value is a cell mean or
+    /// the radiance of one of 65536 counts, so the law runs once per cell and
+    /// once per count; `MappedSites::row` equals `law` applied to `site`.
+    pub fn mapped(&self, law: impl Fn(f32) -> u16) -> MappedSites {
+        MappedSites {
+            cfa: self.cfa,
+            width: self.width,
+            cells_wide: self.cells_wide,
+            counts: self.radiance.counts.clone(),
+            cell_means: self.cell_means.iter().map(|m| m.map(&law)).collect(),
+            counts_mapped: (0..=u16::MAX)
+                .map(|count| law((f64::from(count) / self.radiance.norm) as f32))
+                .collect(),
+        }
+    }
+}
+
+/// Mosaic sites after a per-value law, from `MosaicSites::mapped`.
+pub(crate) struct MappedSites {
+    cfa: Cfa,
+    width: usize,
+    cells_wide: usize,
+    counts: Arc<[u8]>,
+    cell_means: Vec<[u16; 3]>,
+    counts_mapped: Vec<u16>,
+}
+
+impl MappedSites {
+    #[inline(always)]
+    pub fn site(&self, x: usize, y: usize) -> [u16; 3] {
+        let mut values = self.cell_means[(y / 6) * self.cells_wide + x / 6];
+        let own = usize::from(self.cfa[y % 6][x % 6]);
+        if own < 3 {
+            let at = (y * self.width + x) * 2;
+            values[own] = self.counts_mapped
+                [usize::from(u16::from_le_bytes([self.counts[at], self.counts[at + 1]]))];
+        }
+        values
+    }
+    /// Mapped values of sites `0..out.len()` of row `y`.
+    pub fn row(&self, y: usize, out: &mut [[u16; 3]]) {
+        let cfa = &self.cfa[y % 6];
+        let cells = &self.cell_means[(y / 6) * self.cells_wide..];
+        let counts = &self.counts[y * self.width * 2..(y + 1) * self.width * 2];
+        for (cell, (sites, counts)) in out.chunks_mut(6).zip(counts.chunks(12)).enumerate() {
+            let mean = cells[cell];
+            for (phase, (site, count)) in sites.iter_mut().zip(counts.chunks_exact(2)).enumerate() {
+                *site = mean;
+                let own = usize::from(cfa[phase]);
+                if own < 3 {
+                    site[own] =
+                        self.counts_mapped[usize::from(u16::from_le_bytes([count[0], count[1]]))];
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]

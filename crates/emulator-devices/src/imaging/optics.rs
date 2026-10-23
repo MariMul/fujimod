@@ -477,6 +477,10 @@ fn encode_response_coordinates(
     coordinates: &Coordinates,
 ) -> Arc<[u8]> {
     let mut pixels = vec![0; linear.len() * 6];
+    if coordinates.xs.is_empty() {
+        return pixels.into();
+    }
+    let response = Response::new(scale, linear.len());
     // The normalized field axes do not depend on the other coordinate. Keep
     // their original operation order while sharing them across the readout.
     let xs: Vec<_> = coordinates
@@ -490,31 +494,62 @@ fn encode_response_coordinates(
             })
         })
         .collect();
-    for (row, &y) in coordinates.ys.iter().enumerate() {
+    let width = coordinates.xs.len();
+    for ((&y, linear), out) in coordinates
+        .ys
+        .iter()
+        .zip(linear.chunks_exact(width))
+        .zip(pixels.chunks_exact_mut(width * 6))
+    {
         let y = ((y as f64 + 0.5) / dimensions[1] as f64 - 0.5) * sensor[1];
         let yy = distance.map_or(0., |d| {
             let y = y / d;
             y * y
         });
-        for (col, &xx) in xs.iter().enumerate() {
+        for ((&xx, &value), out) in xs.iter().zip(linear).zip(out.chunks_exact_mut(6)) {
             let field = if distance.is_some() {
                 let v = 1. / (1. + xx + yy);
                 v * v
             } else {
                 1.
             };
-            let i = row * coordinates.xs.len() + col;
+            let terms = response.terms(value);
             for c in 0..3 {
-                pixels[i * 6 + c * 2..i * 6 + c * 2 + 2].copy_from_slice(
-                    &((f64::from(linear[i][c]) * scale[c] / 65535. * field)
-                        .round_ties_even()
-                        .clamp(0., 16383.) as u16)
-                        .to_le_bytes(),
+                out[c * 2..c * 2 + 2].copy_from_slice(
+                    &((terms[c] * field).round_ties_even().clamp(0., 16383.) as u16).to_le_bytes(),
                 );
             }
         }
     }
     pixels.into()
+}
+/// The exposure term `linear * scale / 65535` of the response, in its
+/// original operation order. A readout with more pixels than there are
+/// 16-bit linear values computes each value's term once.
+struct Response {
+    scale: [f64; 3],
+    table: Vec<[f64; 3]>,
+}
+impl Response {
+    fn new(scale: [f64; 3], pixels: usize) -> Self {
+        let term = |v: u16| std::array::from_fn(|c| f64::from(v) * scale[c] / 65535.);
+        Self {
+            scale,
+            table: if pixels > 1 << 16 {
+                (0..=u16::MAX).map(term).collect()
+            } else {
+                Vec::new()
+            },
+        }
+    }
+    #[inline(always)]
+    fn terms(&self, linear: [u16; 3]) -> [f64; 3] {
+        if self.table.is_empty() {
+            std::array::from_fn(|c| f64::from(linear[c]) * self.scale[c] / 65535.)
+        } else {
+            std::array::from_fn(|c| self.table[usize::from(linear[c])][c])
+        }
+    }
 }
 pub(crate) fn bin_exposure(frame: &mut ExposedFrame, dimensions: [usize; 2]) -> Result<(), String> {
     if !projects(&frame.frame) {
@@ -576,8 +611,12 @@ mod tests {
     }
     #[test]
     fn response_axis_hoisting_matches_scalar_rounding_and_field_extremes() {
-        let dims = [19, 13];
-        for window in [[0, 0, 19, 13], [2, 3, 7, 5]] {
+        // Readouts above 65536 pixels look response terms up per value.
+        for (dims, window) in [
+            ([19, 13], [0, 0, 19, 13]),
+            ([19, 13], [2, 3, 7, 5]),
+            ([300, 230], [0, 0, 300, 230]),
+        ] {
             let coordinates = Coordinates::new(dims, dims, window).unwrap();
             let linear: Vec<[u16; 3]> = (0..coordinates.xs.len() * coordinates.ys.len())
                 .map(|i| [(i * 811) as u16, (i * 1301) as u16, (i * 2113) as u16])

@@ -155,21 +155,34 @@ pub fn color_spans(
             return Err("color statistics window exceeds sensor extent".into());
         }
         let mut total = [0u64; 3];
-        for (yy, rows) in runs(
-            y.min(grid[1]),
-            (y + h).min(grid[1]),
-            grid[1],
-            frame.sample_dimensions()[1],
-        ) {
-            for (xx, columns) in runs(
-                x.min(grid[0]),
-                (x + w).min(grid[0]),
-                grid[0],
-                frame.sample_dimensions()[0],
-            ) {
-                let v = frame.sample(xx, yy, grid);
+        let [left, top] = [x.min(grid[0]), y.min(grid[1])];
+        let [right, bottom] = [(x + w).min(grid[0]), (y + h).min(grid[1])];
+        let [width, height] = frame.sample_dimensions();
+        if let Some(offsets) = frame.sample_offsets(grid, [left, top, right - left, bottom - top], 1)
+        {
+            let columns: Vec<_> = runs(left, right, grid[0], width)
+                .map(|(xx, n)| (offsets.columns[xx - left], n))
+                .collect();
+            for (yy, rows) in runs(top, bottom, grid[1], height) {
+                let row = offsets.rows[yy - top];
+                let mut line = [0u64; 3];
+                for &(column, n) in &columns {
+                    let v = offsets.sample(row, column);
+                    for c in 0..3 {
+                        line[c] += u64::from(v[c]) * n;
+                    }
+                }
                 for c in 0..3 {
-                    total[c] += u64::from(v[c]) * columns * rows;
+                    total[c] += line[c] * rows;
+                }
+            }
+        } else {
+            for (yy, rows) in runs(top, bottom, grid[1], height) {
+                for (xx, columns) in runs(left, right, grid[0], width) {
+                    let v = frame.sample(xx, yy, grid);
+                    for c in 0..3 {
+                        total[c] += u64::from(v[c]) * columns * rows;
+                    }
                 }
             }
         }
@@ -238,27 +251,55 @@ pub fn contrast_spans(
             return Err("contrast window exceeds sensor extent".into());
         }
         let mut total = [0u64; 2];
-        for (yy, rows) in runs(
-            y.min(grid[1]),
-            (y + h).min(grid[1]),
-            grid[1],
-            frame.sample_dimensions()[1],
-        ) {
+        let [left, top] = [x.min(grid[0]), y.min(grid[1])];
+        let [end, bottom] = [(x + w).min(grid[0]), (y + h).min(grid[1])];
+        let [width, height] = frame.sample_dimensions();
+        // Each distance pairs runs of equal samples; the pairs do not depend on
+        // the row, so they are found once per window.
+        let pairs = [3, 1].map(|distance| {
+            let pair_end = end.saturating_sub(distance);
+            let mut pairs = Vec::new();
+            let mut xx = left;
+            while xx < pair_end {
+                let next = run_end(xx, pair_end, grid[0], width)
+                    .min(run_end(xx + distance, end, grid[0], width) - distance);
+                pairs.push((xx, distance, (next - xx) as u64));
+                xx = next;
+            }
+            pairs
+        });
+        let offsets = frame.sample_offsets(grid, [left, top, end - left, bottom - top], 1);
+        let offset_pairs = offsets.as_ref().map(|offsets| {
+            pairs.each_ref().map(|pairs| {
+                pairs
+                    .iter()
+                    .map(|&(xx, distance, n)| {
+                        (
+                            offsets.columns[xx - left],
+                            offsets.columns[xx + distance - left],
+                            n,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            })
+        });
+        for (yy, rows) in runs(top, bottom, grid[1], height) {
             let mut row = [0u64; 2];
-            let end = (x + w).min(grid[0]);
-            for (i, distance) in [3, 1].into_iter().enumerate() {
-                let pair_end = end.saturating_sub(distance);
-                let mut xx = x.min(grid[0]);
-                while xx < pair_end {
-                    let next = run_end(xx, pair_end, grid[0], frame.sample_dimensions()[0]).min(
-                        run_end(xx + distance, end, grid[0], frame.sample_dimensions()[0])
-                            - distance,
-                    );
-                    let a = i64::from(frame.sample(xx, yy, grid)[1]);
-                    let b = i64::from(frame.sample(xx + distance, yy, grid)[1]);
-                    let d = b - a;
-                    row[i] += (d * d) as u64 * (next - xx) as u64;
-                    xx = next;
+            for i in 0..2 {
+                if let (Some(offsets), Some(offset_pairs)) = (&offsets, &offset_pairs) {
+                    let line = offsets.rows[yy - top];
+                    for &(a, b, n) in &offset_pairs[i] {
+                        let d = i64::from(offsets.channel(line, b, 1))
+                            - i64::from(offsets.channel(line, a, 1));
+                        row[i] += (d * d) as u64 * n;
+                    }
+                } else {
+                    for &(xx, distance, n) in &pairs[i] {
+                        let a = i64::from(frame.sample(xx, yy, grid)[1]);
+                        let b = i64::from(frame.sample(xx + distance, yy, grid)[1]);
+                        let d = b - a;
+                        row[i] += (d * d) as u64 * n;
+                    }
                 }
             }
             // Hardware-law rounding is per grid row, before combining repeats.

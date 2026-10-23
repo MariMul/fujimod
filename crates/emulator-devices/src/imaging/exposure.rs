@@ -72,7 +72,8 @@ impl Filtered {
 
 /// Immutable prepared raw storage and precomputed byte offsets for a readout.
 /// Construction only accepts samples already prepared by a guest consumer.
-pub(crate) struct SampleOffsets {
+/// `columns[i]` and `rows[j]` locate grid sample (x + i * step, y + j).
+pub struct SampleOffsets {
     pub pixels: Arc<[u8]>,
     pub columns: Vec<usize>,
     pub rows: Vec<usize>,
@@ -84,6 +85,11 @@ impl SampleOffsets {
         std::array::from_fn(|c| {
             u16::from_le_bytes([self.pixels[at + c * 2], self.pixels[at + c * 2 + 1]])
         })
+    }
+    #[inline(always)]
+    pub fn channel(&self, row: usize, column: usize, channel: usize) -> u16 {
+        let at = row + column + channel * 2;
+        u16::from_le_bytes([self.pixels[at], self.pixels[at + 1]])
     }
 }
 /// Immutable values at one physical exposure edge, shared by the preview and
@@ -344,7 +350,9 @@ impl ExposedFrame {
             _ => [self.frame.width, self.frame.height],
         }
     }
-    pub(crate) fn sample_offsets(
+    /// Offsets of the samples `sample` returns for a grid window, or `None`
+    /// when the window's samples are not all prepared.
+    pub fn sample_offsets(
         &self,
         grid: [usize; 2],
         window: [usize; 4],
