@@ -108,7 +108,7 @@ pub fn parse(
                             );
                             registers.set(UI_RAMP_CURSOR, cursor + 1);
                         }
-                    } else if index == 0x16c && write.apply(0) != 0x40001 & write.mask() {
+                    } else if index == 0x16c && registers.get(index) != Some(0x40001) {
                         return fail("Graphics UI non-gradient ramp/filter write is unsupported");
                     }
                 }
