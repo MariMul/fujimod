@@ -525,9 +525,12 @@ fn encode_rows<'a>(
     field: impl Fn(f64, f64) -> f64,
 ) {
     for (yy, linear, out) in rows {
-        for ((&xx, &[r, g, b]), out) in xs.iter().zip(linear).zip(out.chunks_exact_mut(6)) {
+        // Array maps and chunked iterators are not inlined in this crate's
+        // optimization profile; keep the channels and offsets explicit.
+        let out = &mut out[..xs.len() * 6];
+        for (i, (&xx, &[r, g, b])) in xs.iter().zip(linear).enumerate() {
+            let out = &mut out[i * 6..i * 6 + 6];
             let field = field(xx, yy);
-            // Array maps are not inlined here; keep the channels explicit.
             let encode = |v: u16, scale: f64| {
                 (f64::from(v) * scale / 65535. * field)
                     .round_ties_even()

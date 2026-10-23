@@ -158,7 +158,8 @@ pub fn color_spans(
         let [left, top] = [x.min(grid[0]), y.min(grid[1])];
         let [right, bottom] = [(x + w).min(grid[0]), (y + h).min(grid[1])];
         let [width, height] = frame.sample_dimensions();
-        if let Some(offsets) = frame.sample_offsets(grid, [left, top, right - left, bottom - top], 1)
+        if let Some(offsets) =
+            frame.sample_offsets(grid, [left, top, right - left, bottom - top], 1)
         {
             let columns: Vec<_> = runs(left, right, grid[0], width)
                 .map(|(xx, n)| (offsets.columns[xx - left], n))

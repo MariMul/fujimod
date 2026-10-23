@@ -308,19 +308,20 @@ impl Image {
                     workers,
                     |range, rows| {
                         let mut memo = FilmPixels::new(&self.film);
+                        let columns = &readout.columns[..layout.width];
                         for (local_y, row) in rows.chunks_exact_mut(layout.stride).enumerate() {
                             let source_row = readout.rows[range.start + local_y];
-                            for (x, pair) in row[..layout.width * 2].chunks_exact_mut(4).enumerate()
-                            {
-                                let left = self.color(
-                                    readout.sample(source_row, readout.columns[x * 2]),
-                                    &mut memo,
-                                );
+                            // Index the pairs: chunked iterators are not
+                            // inlined in this crate's optimization profile.
+                            let row = &mut row[..layout.width * 2];
+                            for x in 0..layout.width / 2 {
+                                let left = self
+                                    .color(readout.sample(source_row, columns[x * 2]), &mut memo);
                                 let right = self.color(
-                                    readout.sample(source_row, readout.columns[x * 2 + 1]),
+                                    readout.sample(source_row, columns[x * 2 + 1]),
                                     &mut memo,
                                 );
-                                store(pair, Film::pack(left, right));
+                                store(&mut row[x * 4..x * 4 + 4], Film::pack(left, right));
                             }
                         }
                     },

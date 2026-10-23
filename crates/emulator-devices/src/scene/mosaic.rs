@@ -159,21 +159,34 @@ impl MappedSites {
         }
         values
     }
-    /// Mapped values of sites `0..out.len()` of row `y`.
-    pub fn row(&self, y: usize, out: &mut [[u16; 3]]) {
+    /// Running sums of the mapped sites of row `y`: `out[0]` is zero and
+    /// `out[x + 1]` sums sites `0..=x`.
+    pub fn row_prefix(&self, y: usize, out: &mut [[u32; 3]]) {
+        // Index loops: chunked iterator adapters are not inlined in this
+        // crate's optimization profile.
         let cfa = &self.cfa[y % 6];
         let cells = &self.cell_means[(y / 6) * self.cells_wide..];
         let counts = &self.counts[y * self.width * 2..(y + 1) * self.width * 2];
-        for (cell, (sites, counts)) in out.chunks_mut(6).zip(counts.chunks(12)).enumerate() {
-            let mean = cells[cell];
-            for (phase, (site, count)) in sites.iter_mut().zip(counts.chunks_exact(2)).enumerate() {
-                *site = mean;
-                let own = usize::from(cfa[phase]);
-                if own < 3 {
-                    site[own] =
-                        self.counts_mapped[usize::from(u16::from_le_bytes([count[0], count[1]]))];
-                }
+        let out = &mut out[..self.width + 1];
+        out[0] = [0; 3];
+        let [mut r, mut g, mut b] = [0u32; 3];
+        let mut x = 0;
+        while x < self.width {
+            let [mr, mg, mb] = cells[x / 6];
+            let [mr, mg, mb] = [u32::from(mr), u32::from(mg), u32::from(mb)];
+            for (phase, &own) in cfa.iter().enumerate().take(self.width - x) {
+                let at = (x + phase) * 2;
+                let site = u32::from(
+                    self.counts_mapped
+                        [usize::from(u16::from_le_bytes([counts[at], counts[at + 1]]))],
+                );
+                // Select rather than index, so the sums stay in registers.
+                r += if own == 0 { site } else { mr };
+                g += if own == 1 { site } else { mg };
+                b += if own == 2 { site } else { mb };
+                out[x + phase + 1] = [r, g, b];
             }
+            x += 6;
         }
     }
 }

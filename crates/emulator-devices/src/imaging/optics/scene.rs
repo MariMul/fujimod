@@ -87,7 +87,7 @@ impl Scene {
             })
             .collect();
         let mut prefix = vec![[0u32; 3]; (width + 1) * height];
-        let (mut values, mut row_prefix) = (Vec::new(), Vec::new());
+        let mut row_prefix = Vec::new();
         // Horizontal integrals of one source row, reused by each readout row
         // the source row overlaps.
         let mut horizontal = vec![[0u64; 3]; width];
@@ -101,7 +101,7 @@ impl Scene {
             colors.fill([0; 3]);
             for sy in top / height..bottom.div_ceil(height) {
                 if horizontal_y != Some(sy) {
-                    let row = self.row_prefix(sy, &mut values, &mut row_prefix);
+                    let row = self.row_prefix(sy, &mut row_prefix);
                     for (sums, column) in horizontal.iter_mut().zip(&columns) {
                         let (first, last) = (column.first, column.last);
                         for c in 0..3 {
@@ -157,36 +157,22 @@ impl Scene {
         let width = self.dimensions[0];
         let prefix = if self.sites.is_some() {
             let mut prefix = Vec::new();
-            self.row_prefix(y, &mut Vec::new(), &mut prefix);
+            self.row_prefix(y, &mut prefix);
             Cow::Owned(prefix)
         } else {
             Cow::Borrowed(&self.prefix[y * (width + 1)..(y + 1) * (width + 1)])
         };
         Row { prefix }
     }
-    /// Row `y`'s prefix sums: stored, or computed into `prefix` with `values`
-    /// as scratch for a mosaic scene.
-    fn row_prefix<'a>(
-        &'a self,
-        y: usize,
-        values: &mut Vec<[u16; 3]>,
-        prefix: &'a mut Vec<[u32; 3]>,
-    ) -> &'a [[u32; 3]] {
+    /// Row `y`'s prefix sums: stored, or computed into `prefix` for a
+    /// mosaic scene.
+    fn row_prefix<'a>(&'a self, y: usize, prefix: &'a mut Vec<[u32; 3]>) -> &'a [[u32; 3]] {
         let width = self.dimensions[0];
         let Some(sites) = &self.sites else {
             return &self.prefix[y * (width + 1)..(y + 1) * (width + 1)];
         };
-        values.resize(width, [0; 3]);
-        sites.row(y, values);
         prefix.resize(width + 1, [0; 3]);
-        prefix[0] = [0; 3];
-        let mut sum = [0u32; 3];
-        for (out, value) in prefix[1..].iter_mut().zip(values.iter()) {
-            for c in 0..3 {
-                sum[c] += u32::from(value[c]);
-            }
-            *out = sum;
-        }
+        sites.row_prefix(y, prefix);
         prefix
     }
     pub fn horizontal(&self, x: usize, y: usize, radius: usize, fraction: u32) -> [u16; 3] {
