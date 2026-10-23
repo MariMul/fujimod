@@ -17,11 +17,11 @@
         },
         {
           "offset": 1484,
-          "value": 194,
-          "name": "synthetic NOR manufacturer"
+          "value": 32,
+          "name": "NOR manufacturer"
         }
       ],
-      "basis": "Synthetic cold loader input in a free RAM gap; kernel entry bypasses boot ROM."
+      "basis": "Synthetic cold loader input in a free RAM gap; kernel entry bypasses boot ROM. The manufacturer word 0x20 matches the loader handoff copy at 0x82cfc + 0x5cc in RAM read from a running X-S10 3.11; the cold boot reason and every other word stay synthetic."
     },
     "spi_inputs": {
       "1": {
@@ -83,7 +83,7 @@
     },
     "serial_flash": {
       "contents": "registered-update",
-      "jedec_id": 12722202,
+      "jedec_id": 2145056,
       "geometry": {
         "erase_bytes": 65536,
         "page_bytes": 256,
@@ -91,7 +91,7 @@
         "page_ticks": 512,
         "basis": "Declared catalog input."
       },
-      "basis": "Synthetic 64 MiB NOR with manufacturer 0xc2; identity is also declared in the loader handoff. Not a measured chip identity."
+      "basis": "64 MiB NOR with manufacturer 0x20, as in the loader handoff of a running X-S10 3.11, whose flash aperture repeats after 64 MiB. The memory-type and capacity bytes (0xbb, 0x20) are unmeasured; the manufacturer is also declared in the loader handoff."
     },
     "adc_input": {
       "samples": [

@@ -3,7 +3,7 @@
   "schema": 1,
   "id": "xs10",
   "soc_id": "xp4",
-  "dram_bytes": 536870912,
+  "dram_bytes": 1073741824,
   "nand": null,
   "sensor": null,
   "lens": null,
@@ -109,7 +109,7 @@
     ],
     "profiles": {
       "xs10-discovery": {
-        "dram_basis": "Declared catalog input."
+        "dram_basis": "Read from a running X-S10 3.11: 0x0..0x40000000 holds distinct, unaliased data, and its live L1 table maps exactly that 1 GiB."
       }
     }
   }
