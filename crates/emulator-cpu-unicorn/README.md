@@ -10,7 +10,9 @@ git submodule update --init -- crates/emulator-cpu-unicorn/vendor/unicorn
 ```
 
 The crate's build script configures CMake and builds the archive automatically.
-The build requires CMake and a native C compiler.
+The build requires CMake 3.24 or newer and a native C compiler. Configuration
+starts with a fresh CMake cache so compiler changes cannot discard the ARM-only
+selection. The build refuses a cache that selects other guest architectures.
 
 ## Exact loop execution
 

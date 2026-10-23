@@ -19,6 +19,10 @@ fn main() {
 
     let mut config = cmake::Config::new(source);
     config
+        // A compiler-path change makes CMake discard its cache and rerun
+        // configuration without our -D options. Start fresh so ARM-only
+        // selection survives toolchain changes in a reused Cargo directory.
+        .configure_arg("--fresh")
         .define("BUILD_SHARED_LIBS", "OFF")
         .define("UNICORN_LEGACY_STATIC_ARCHIVE", "ON")
         .define("UNICORN_ARCH", "arm")
@@ -28,6 +32,17 @@ fn main() {
         .define("UNICORN_FUZZ", "OFF")
         .build_target("unicorn_archive");
     let output = config.build();
+    let cache = std::fs::read_to_string(output.join("build/CMakeCache.txt"))
+        .expect("read configured Unicorn architecture");
+    assert!(
+        cache.lines().any(|line| {
+            line.starts_with("UNICORN_ARCH:")
+                && line
+                    .split_once('=')
+                    .is_some_and(|(_, value)| value == "arm")
+        }),
+        "Unicorn must be configured for ARM only; refusing a mixed-architecture archive"
+    );
 
     println!(
         "cargo:rustc-link-search=native={}",
