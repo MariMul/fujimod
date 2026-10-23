@@ -3,6 +3,12 @@
   "schema": 1,
   "id": "xt1-552-settings",
   "firmware_id": "xt1-552",
+  "source": {
+    "flash_offset": 1441792,
+    "address": 7865344,
+    "size": 4115008,
+    "sha256": "38042d1d8756c7269ff6d1b2c9ae31dc19fefd296989aa9d524b8af6ed1b169f"
+  },
   "bank": {
     "descriptor": {
       "address": 10955880,

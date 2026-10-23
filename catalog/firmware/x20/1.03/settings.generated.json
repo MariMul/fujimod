@@ -3,6 +3,12 @@
   "schema": 1,
   "id": "x20-103-settings",
   "firmware_id": "x20-103",
+  "source": {
+    "flash_offset": 966656,
+    "address": 6407168,
+    "size": 2729376,
+    "sha256": "113fbe8e40aa799ed4a87b2f4e62ae87c7919d4ffc6a64ba9256b7584b824b07"
+  },
   "bank": {
     "descriptor": {
       "address": 8192192,

@@ -3,6 +3,12 @@
   "schema": 1,
   "id": "x100s-121-settings",
   "firmware_id": "x100s-121",
+  "source": {
+    "flash_offset": 966656,
+    "address": 6407168,
+    "size": 2529600,
+    "sha256": "777bbe8ff18218d48986d14da0ea5ca341ee475224c8d0c0fea5f861b4fd74d6"
+  },
   "bank": {
     "descriptor": {
       "address": 7980360,

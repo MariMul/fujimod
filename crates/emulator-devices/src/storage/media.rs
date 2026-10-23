@@ -31,7 +31,6 @@ pub enum NandInput {
     Settings {
         options: Options,
         base: String,
-        installation: fujimod_catalog::reference::FirmwareInstallation,
         layout: fujimod_catalog::settings::FirmwareSettings,
         requested: BTreeMap<String, String>,
     },
@@ -97,13 +96,11 @@ impl NandInput {
             Self::Settings {
                 options,
                 base,
-                installation,
                 layout,
                 requested,
             } => {
                 let flash = asset(&base)?;
-                let mut source = fujimod_settings::Update::new(flash, &installation);
-                let bank = fujimod_settings::build(&layout, &mut source, &requested)?;
+                let bank = fujimod_settings::build(&layout, flash, &requested)?;
                 let block_bytes = options.page_bytes as u64 * options.pages_per_block as u64;
                 let mut bytes = vec![0xff; (u64::from(bank.blocks) * block_bytes) as usize];
                 let content = bytes

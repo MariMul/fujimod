@@ -3,6 +3,12 @@
   "schema": 1,
   "id": "x30-103-settings",
   "firmware_id": "x30-103",
+  "source": {
+    "flash_offset": 1441792,
+    "address": 9044992,
+    "size": 3648416,
+    "sha256": "19bd9d935f4493fd998f5812d9c5bca234584c854f5b479a998eb40e726238f3"
+  },
   "bank": {
     "descriptor": {
       "address": 11701184,

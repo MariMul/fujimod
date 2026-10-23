@@ -7895,6 +7895,10 @@
           },
           "description": "Settings a run may request by name, each with its named values.",
           "type": "object"
+        },
+        "source": {
+          "$ref": "#/$defs/SettingsSource",
+          "description": "The decoded update section holding the bank descriptor and defaults table."
         }
       },
       "required": [
@@ -7902,6 +7906,7 @@
         "schema",
         "id",
         "firmware_id",
+        "source",
         "bank",
         "fields",
         "settings"
@@ -16209,6 +16214,41 @@
         "offset",
         "bytes",
         "basis"
+      ],
+      "type": "object"
+    },
+    "SettingsSource": {
+      "additionalProperties": false,
+      "description": "A method-4 encoded section of the installed flash image.",
+      "properties": {
+        "address": {
+          "description": "Firmware address of the first decoded byte.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "flash_offset": {
+          "description": "Offset of the encoded stream in the installed flash image.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "Lowercase hexadecimal SHA-256 of the decoded section.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Decoded length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "flash_offset",
+        "address",
+        "size",
+        "sha256"
       ],
       "type": "object"
     },

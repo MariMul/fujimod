@@ -3,6 +3,12 @@
   "schema": 1,
   "id": "xa2-130-settings",
   "firmware_id": "xa2-130",
+  "source": {
+    "flash_offset": 1441792,
+    "address": 6407168,
+    "size": 2452832,
+    "sha256": "de93659e222385b8a9d262ea27b796400ff7f6aef7e96990929c2a67bae18061"
+  },
   "bank": {
     "descriptor": {
       "address": 7984748,

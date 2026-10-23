@@ -3,6 +3,12 @@
   "schema": 1,
   "id": "xa1-150-settings",
   "firmware_id": "xa1-150",
+  "source": {
+    "flash_offset": 1441792,
+    "address": 6407168,
+    "size": 2631616,
+    "sha256": "443caa12a281b58496ba10c467b39a00e1bddd88d8bdb1f8f67b141b426c6e92"
+  },
   "bank": {
     "descriptor": {
       "address": 8162500,

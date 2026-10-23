@@ -3,6 +3,12 @@
   "schema": 1,
   "id": "x100t-111-settings",
   "firmware_id": "x100t-111",
+  "source": {
+    "flash_offset": 1441792,
+    "address": 9044992,
+    "size": 3399968,
+    "sha256": "b9593278a28d90c9f8b079e7f98d3dc08b627158493071fcdee632aa9da65c52"
+  },
   "bank": {
     "descriptor": {
       "address": 11456184,

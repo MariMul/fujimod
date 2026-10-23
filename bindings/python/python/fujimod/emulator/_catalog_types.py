@@ -1809,6 +1809,7 @@ FirmwareSettings = TypedDict(
         "id": Required["str"],
         "schema": Required["int"],
         "settings": Required["dict[str, NamedSetting]"],
+        "source": Required["SettingsSource"],
     },
     total=False,
 )
@@ -4500,6 +4501,13 @@ class SettingsField(TypedDict, total=False):
     basis: Required[str]
     bytes: Required[list[int]]
     offset: Required[int]
+
+
+class SettingsSource(TypedDict, total=False):
+    address: Required[int]
+    flash_offset: Required[int]
+    sha256: Required[str]
+    size: Required[int]
 
 
 Soc = TypedDict(

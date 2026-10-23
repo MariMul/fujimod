@@ -3,6 +3,12 @@
   "schema": 1,
   "id": "xm1-150-settings",
   "firmware_id": "xm1-150",
+  "source": {
+    "flash_offset": 1441792,
+    "address": 6407168,
+    "size": 2631680,
+    "sha256": "f2e2acab892dafeed85171f6870a411f0a2d5eae10921b86a24630d401dcff16"
+  },
   "bank": {
     "descriptor": {
       "address": 8162516,

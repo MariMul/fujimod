@@ -3,6 +3,12 @@
   "schema": 1,
   "id": "xe2-411-settings",
   "firmware_id": "xe2-411",
+  "source": {
+    "flash_offset": 1441792,
+    "address": 9044992,
+    "size": 3519680,
+    "sha256": "57236181275971691cc1248489626464115aa2bf3957ad52d65c201ef7e82403"
+  },
   "bank": {
     "descriptor": {
       "address": 11578580,

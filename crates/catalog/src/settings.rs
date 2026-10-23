@@ -28,6 +28,8 @@ pub struct FirmwareSettings {
     pub id: String,
     /// Firmware whose stock loader reads this bank.
     pub firmware_id: String,
+    /// The decoded update section holding the bank descriptor and defaults table.
+    pub source: SettingsSource,
     /// Where the bank lives in flash.
     pub bank: SettingsBank,
     /// Stock default values applied to an otherwise zero bank, when the
@@ -37,6 +39,21 @@ pub struct FirmwareSettings {
     pub fields: Vec<SettingsField>,
     /// Settings a run may request by name, each with its named values.
     pub settings: BTreeMap<String, NamedSetting>,
+}
+
+/// A method-4 encoded section of the installed flash image.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
+pub struct SettingsSource {
+    /// Offset of the encoded stream in the installed flash image.
+    pub flash_offset: u64,
+    /// Firmware address of the first decoded byte.
+    pub address: u64,
+    /// Decoded length in bytes.
+    pub size: u64,
+    /// Lowercase hexadecimal SHA-256 of the decoded section.
+    pub sha256: String,
 }
 
 /// The flash blocks holding the settings bank.
@@ -112,7 +129,17 @@ impl FirmwareSettings {
         if bank.blocks == 0 || bank.bytes == 0 || bank.descriptor.size != 12 {
             return fail("empty bank or descriptor");
         }
+        let source_end = self.source.address.checked_add(self.source.size);
         for range in std::iter::once(&bank.descriptor).chain(&self.defaults) {
+            if range.address < self.source.address
+                || range
+                    .address
+                    .checked_add(range.size)
+                    .zip(source_end)
+                    .is_none_or(|(end, limit)| end > limit)
+            {
+                return fail("descriptor or defaults outside the source section");
+            }
             if range.size == 0
                 || range.address.checked_add(range.size).is_none()
                 || range.sha256.len() != 64

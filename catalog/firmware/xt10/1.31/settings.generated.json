@@ -3,6 +3,12 @@
   "schema": 1,
   "id": "xt10-131-settings",
   "firmware_id": "xt10-131",
+  "source": {
+    "flash_offset": 1441792,
+    "address": 9044992,
+    "size": 3522720,
+    "sha256": "8b8e0cfc5729523da8078a4fc311265fd0ba0c87ed79837fd6da78751075d9c4"
+  },
   "bank": {
     "descriptor": {
       "address": 11580296,

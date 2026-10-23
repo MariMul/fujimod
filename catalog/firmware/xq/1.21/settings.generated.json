@@ -3,6 +3,12 @@
   "schema": 1,
   "id": "xq1-121-settings",
   "firmware_id": "xq1-121",
+  "source": {
+    "flash_offset": 1441792,
+    "address": 6816768,
+    "size": 2794816,
+    "sha256": "5a9f32d3dd1680bf8559982efb76b2b23985262eaf927b56aab762ea276463c4"
+  },
   "bank": {
     "descriptor": {
       "address": 8653448,

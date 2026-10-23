@@ -3,6 +3,12 @@
   "schema": 1,
   "id": "xq2-101-settings",
   "firmware_id": "xq2-101",
+  "source": {
+    "flash_offset": 1441792,
+    "address": 6816768,
+    "size": 2800672,
+    "sha256": "0b6ca6d9b4ca82645f9ce3b1281f5c8c767368517a68f160fc1ef2e7656925ec"
+  },
   "bank": {
     "descriptor": {
       "address": 8654808,
