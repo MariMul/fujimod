@@ -28,8 +28,8 @@ pub enum NandInput {
     },
     /// A settings bank built from the installed flash image (`base`) with the
     /// requested named settings, placed in its stock flash blocks before cold boot.
-    /// `camera` names the assets holding a camera's bank sections (section name
-    /// to asset); the bank is then that camera's.
+    /// `camera` names the zstd-compressed assets holding a camera's bank
+    /// sections (section name to asset); the bank is then that camera's.
     Settings {
         options: Options,
         base: String,
@@ -115,7 +115,7 @@ impl NandInput {
             } => {
                 let sections = camera
                     .into_iter()
-                    .map(|(section, name)| Ok((section, asset(&name)?.clone())))
+                    .map(|(section, name)| Ok((section, decompress(asset(&name)?)?)))
                     .collect::<Result<BTreeMap<_, _>, String>>()?;
                 let camera = (!sections.is_empty()).then_some(&sections);
                 settings_medium(options, asset(&base)?, &layout, &requested, camera, true)
@@ -139,6 +139,18 @@ impl NandInput {
             }
         }
     }
+}
+
+/// The bytes of a zstd frame.
+fn decompress(compressed: &[u8]) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    let mut decoder = ruzstd::decoding::StreamingDecoder::new(compressed)
+        .map_err(|failure| format!("Camera section is not zstd: {failure}"))?;
+    let mut bytes = Vec::new();
+    decoder
+        .read_to_end(&mut bytes)
+        .map_err(|failure| format!("Camera section does not decompress: {failure}"))?;
+    Ok(bytes)
 }
 
 /// Place the built settings, with or without the bank, in their managed blocks.
