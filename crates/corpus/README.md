@@ -52,13 +52,21 @@ annotations, and search mapped units with byte masks. `names` retains names
 and donor provenance; callers can require equal normalized code. Metadata
 annotations use explicit `kind`, `text`, and `source` fields.
 
-`save`/`open` use a versioned internal binary cache, not a portable interchange
-contract. Rebuilding/addition changes numeric
-function/family ids; persist `(firmware, unit, address)` keys in locator reports.
-Rebuild after adding units, or `merge` indexes and rebuild automatically.
+`Index::save` writes a versioned SQLite store; its schema is internal, not a
+portable interchange contract. `Store::open` reads only the SQLite header.
+Lookups (`Lookup`: stats, find, family, members, names, calls, features,
+references, strings, reads, byte searches and symbols) run as SQL queries
+against the store and share one implementation with the in-memory `Index`.
+Graph-wide work (`build`, `merge`, `candidates`, `pairs`, `name_support`,
+`sample_links`, `data_witnesses`) runs on an `Index`: `Store::load` reads all of
+it, and `Store::subset` reads only the selected firmwares before rebuilding
+families. Rebuilding/addition changes numeric function/family ids; persist
+`(firmware, unit, address)` keys in locator reports. Rebuild after adding units,
+or `merge` indexes and rebuild automatically.
 
 Python uses `from fujimod.corpus import Index`, with the same operations and
-JSON-compatible dictionaries. Build the extension through the existing
+JSON-compatible dictionaries. `Index.open` answers lookups from the store and
+loads the complete index once, on the first graph query or change. Build the extension through the existing
 `bindings/python` package. Test output goes under `target/corpus-tests`.
 
 Analysis names propagate through every grade, including weak links. Each donor
@@ -78,7 +86,7 @@ Shape-only nominations have weak grade. They account for conditional split
 address immediates and MOV/MOVW low halves followed by MOVT, without merging
 families or transferring names. Callers verify actual instructions, references
 and ambiguity before accepting a locator result. This query uses an in-memory
-cache and does not change the serialized index format.
+cache and does not change the saved store.
 
 `sample_links(count, seed)` draws deterministic bottom-k samples of every grade
 over the complete pair population, with cross-ISA links separated. `features`,
@@ -86,11 +94,11 @@ over the complete pair population, with cross-ISA links separated. `features`,
 observational corroboration. A positive witness is not ground-truth proof;
 corroboration never blocks names in analysis or locator queries.
 
-Address aliases are explicit one-hop byte mappings in `UnitInput.address_aliases`.
+Address aliases are explicit one-hop byte mappings in `address_aliases` of the
+unit input. A unit keeps its layout and bytes; decoding consumes its boundaries.
 They affect reads; pointer classification remains a separate caller-supplied
 window policy. Adjacent A32 MOVW/MOVT and AArch64 ADRP/ADD materializations expose
-complete data/string references rather than address fragments. Caches prior to
-`FMCORP03` must be regenerated.
+complete data/string references rather than address fragments.
 
 Named data ranges use `DataSymbol` and
 [`schema/data-symbol.schema.json`](schema/data-symbol.schema.json). `add_symbol`

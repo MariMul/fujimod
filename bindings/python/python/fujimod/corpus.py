@@ -40,6 +40,8 @@ class Index:
 
     @classmethod
     def open(cls, path: str | PathLike[str]) -> Self:
+        """Open a saved store. Lookups query it directly; graph queries such as
+        candidates, pairs and name support, and any change, load it once."""
         obj = cls.__new__(cls)
         obj._native = CorpusIndex.open(str(path))
         return obj

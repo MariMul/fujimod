@@ -19,4 +19,4 @@ serde_json.workspace = true
 thiserror.workspace = true
 regex = "1"
 sha2 = "0.10"
-bincode = "1.3"
+rusqlite.workspace = true

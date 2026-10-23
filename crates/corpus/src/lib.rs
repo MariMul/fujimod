@@ -12,6 +12,10 @@ mod quality;
 pub use quality::NameSupport;
 mod model;
 pub use model::*;
+mod lookup;
+pub use lookup::*;
+mod store;
+pub use store::Store;
 
 #[cfg(test)]
 mod tests;

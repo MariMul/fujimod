@@ -78,7 +78,7 @@ class CorpusBinding(unittest.TestCase):
         )
         i.annotate(f["family"], "note", "synthetic", "test")
         output = (
-            Path(__file__).resolve().parents[3] / "target/corpus-tests/python.index"
+            Path(__file__).resolve().parents[3] / "target/corpus-tests/python.sqlite"
         )
         output.parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -92,6 +92,12 @@ class CorpusBinding(unittest.TestCase):
                 restored.names(f["id"], ["a"])["synthetic"][0]["sources"],
                 ["invented-header"],
             )
+            self.assertEqual(restored.find(firmware="b"), i.find(firmware="b"))
+            self.assertEqual(restored.read("b", "bank", 0x1000, 4), body[:4])
+            self.assertEqual(restored.subset(["a"]).stats()["firmwares"], {"a": 1})
+            self.assertEqual(restored.pairs("a", "b"), i.pairs("a", "b"))
+            restored.add_name(f["id"], "restored", "test")
+            self.assertEqual(restored.find("restored")[0]["id"], f["id"])
         finally:
             output.unlink(missing_ok=True)
 

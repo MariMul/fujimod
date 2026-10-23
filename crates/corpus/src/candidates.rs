@@ -91,8 +91,8 @@ impl Index {
                     found.insert(
                         id,
                         FunctionCandidate {
-                            function: self.view(id),
-                            grade: self.grade(reference, id),
+                            function: self.shown(id),
+                            grade: self.grade_ids(reference, id),
                             origins: vec!["family".into()],
                         },
                     );
@@ -105,7 +105,7 @@ impl Index {
                             found
                                 .entry(id)
                                 .or_insert_with(|| FunctionCandidate {
-                                    function: self.view(id),
+                                    function: self.shown(id),
                                     grade: Grade::Weak,
                                     origins: vec![],
                                 })
@@ -150,7 +150,7 @@ impl Index {
                     found
                         .entry(id)
                         .or_insert_with(|| FunctionCandidate {
-                            function: self.view(id),
+                            function: self.shown(id),
                             grade: Grade::Weak,
                             origins: vec![],
                         })
