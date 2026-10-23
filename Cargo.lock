@@ -3538,7 +3538,6 @@ dependencies = [
  "apple-cf",
  "ciborium",
  "fujimod-catalog",
- "fujimod-settings",
  "fujimod-workspace-hack",
  "futures-lite",
  "libm",
@@ -3570,7 +3569,6 @@ dependencies = [
 name = "fujimod-emulator-exr2-board"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-audio",
  "fujimod-emulator-exr2-codecs",
@@ -3647,7 +3645,6 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-parts-controls",
- "fujimod-emulator-parts-lens",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -3684,22 +3681,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-catalog",
  "fujimod-emulator-devices",
- "fujimod-emulator-exr2-audio",
- "fujimod-emulator-exr2-codecs",
- "fujimod-emulator-exr2-companion",
- "fujimod-emulator-exr2-display",
- "fujimod-emulator-exr2-gpu",
- "fujimod-emulator-exr2-i2c",
- "fujimod-emulator-exr2-io",
- "fujimod-emulator-exr2-serial",
- "fujimod-emulator-exr2-storage",
- "fujimod-emulator-exr2-system",
- "fujimod-emulator-parts-controls",
- "fujimod-emulator-parts-io",
- "fujimod-emulator-parts-lens",
- "fujimod-emulator-parts-sensor",
  "fujimod-emulator-parts-storage",
- "fujimod-emulator-storage",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -3723,6 +3705,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-ip",
+ "fujimod-emulator-parts-io",
  "fujimod-emulator-parts-storage",
  "fujimod-emulator-storage",
  "fujimod-workspace-hack",
@@ -3866,7 +3849,6 @@ name = "fujimod-emulator-storage"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog",
- "fujimod-emulator-devices",
  "fujimod-emulator-parts-storage",
  "fujimod-settings",
  "fujimod-workspace-hack",
@@ -3954,7 +3936,6 @@ dependencies = [
  "fujimod-emulator-exr2-plan",
  "fujimod-emulator-graphics",
  "fujimod-emulator-parts-controls",
- "fujimod-emulator-parts-lens",
  "fujimod-emulator-parts-storage",
  "fujimod-emulator-storage",
  "fujimod-firmware",

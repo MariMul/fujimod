@@ -15,7 +15,7 @@ pub mod usb;
 pub mod xp5;
 
 use crate::board::Board;
-use fujimod_emulator_exr2_storage::sdhc::Contacts;
+use fujimod_emulator_devices::parts::card_contacts::Contacts;
 use fujimod_emulator_exr2_plan::Resources;
 use std::collections::BTreeMap;
 
@@ -77,7 +77,7 @@ impl Session {
         let sink_id = self.node(sink)?;
         let transmitter_id = self.node(transmitter)?;
         self.board
-            .device_input::<fujimod_emulator_parts_io::hdmi_sink::Input, _>(
+            .device_input::<fujimod_emulator_devices::parts::hdmi_sink::Input, _>(
                 sink_id,
                 |input, _| {
                     input.set_connected(connected);

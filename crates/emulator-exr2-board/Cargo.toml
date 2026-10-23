@@ -31,7 +31,6 @@ fujimod-emulator-exr2-display.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-exr2-isp.workspace = true
 fujimod-emulator-exr2-plan.workspace = true
-fujimod-catalog.workspace = true
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json.workspace = true
 fujimod-workspace-hack.workspace = true

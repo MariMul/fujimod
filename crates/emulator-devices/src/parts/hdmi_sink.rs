@@ -1,7 +1,7 @@
 //! Connected HDMI sink input and its explicitly supplied EDID bytes.
 use serde::Deserialize;
 use serde_json::{Value, json};
-use fujimod_emulator_devices::{Cx, Device};
+use crate::{Cx, Device};
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -109,7 +109,7 @@ impl Input {
 }
 
 impl Device for Input {
-    fujimod_emulator_devices::checkpoint_fields!(sink: HdmiSink);
+    crate::checkpoint_fields!(sink: HdmiSink);
 
     fn name(&self) -> &'static str {
         "hdmi-sink-input"

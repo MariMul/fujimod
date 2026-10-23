@@ -13,7 +13,8 @@ use fujimod_emulator_devices::{Device, bus::InterruptLine, graph::Mapping};
 use fujimod_emulator_parts_io::{audio_sink::AudioSink, usb_endpoint};
 use fujimod_emulator_parts_controls::{encoder::Encoder, gpio_contact_response::GpioContactResponse};
 use fujimod_emulator_parts_lens::{lens::{LensUnit, bridge::Bridge}, stabilizer::Stabilizer};
-use fujimod_emulator_parts_storage::{sd_card, wifi_module::WifiModule};
+use fujimod_emulator_parts_storage::sd_card;
+use fujimod_emulator_parts_io::wifi_module::WifiModule;
 use fujimod_emulator_parts_sensor::sensor::Sensor;
 use fujimod_emulator_storage::fat;
 use fujimod_emulator_exr2_plan::{
@@ -718,8 +719,8 @@ impl Builder<'_> {
                 },
             )?) },
             Model::Formatter { options } => { let options: fujimod_emulator_exr2_display::formatter::Options = crate::decode(options)?; Box::new(formatter::Formatter::new(options)?) },
-            Model::HdmiSink { options } => { let options: fujimod_emulator_parts_io::hdmi_sink::Options = crate::decode(options)?; 
-                let input = fujimod_emulator_parts_io::hdmi_sink::Input::new(options)?;
+            Model::HdmiSink { options } => { let options: fujimod_emulator_devices::parts::hdmi_sink::Options = crate::decode(options)?; 
+                let input = fujimod_emulator_devices::parts::hdmi_sink::Input::new(options)?;
                 resources.hdmi_sinks.insert(name.to_owned(), input.sink());
                 Box::new(input)
             }
@@ -790,7 +791,7 @@ impl Builder<'_> {
                         },
                     );
                 }
-                let contacts = sdhc::Contacts::new(present, protected);
+                let contacts = fujimod_emulator_devices::parts::card_contacts::Contacts::new(present, protected);
                 let host = sdhc::SdHost::new(
                     options,
                     sdhc::Wiring {
@@ -806,7 +807,7 @@ impl Builder<'_> {
                 options,
                 module,
                 irq,
-            } => { let options: fujimod_emulator_exr2_storage::sdio::Options = crate::decode(options)?; let module: fujimod_emulator_parts_storage::wifi_module::Options = crate::decode(module)?; Box::new(sdio::SdioHost::new(
+            } => { let options: fujimod_emulator_exr2_storage::sdio::Options = crate::decode(options)?; let module: fujimod_emulator_parts_io::wifi_module::Options = crate::decode(module)?; Box::new(sdio::SdioHost::new(
                 options,
                 sdio::Wiring {
                     module: WifiModule::new(module)?,

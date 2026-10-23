@@ -1,7 +1,7 @@
 //! Explicit peer wires and external scene/media inputs, never CPU state.
 use fujimod_emulator_devices::exr2::{clock, gpio, irq, isp, pulse};
-use fujimod_emulator_parts_io::hdmi_sink::HdmiSink;
-use fujimod_emulator_parts_lens::lens::bridge;
+use fujimod_emulator_devices::parts::hdmi_sink::HdmiSink;
+use fujimod_emulator_devices::parts::lens_bridge;
 use fujimod_emulator_parts_storage::sd_card::Card;
 use fujimod_emulator_devices::scene::{ImageFrames, SensorFramesHandle, StatisticsFrames};
 use std::{
@@ -36,7 +36,7 @@ pub enum Wire {
     OutputChannels(fujimod_emulator_devices::exr2::isp::output_channels::OutputChannels),
     IrqRoutes(isp::dma::IrqRoutes),
     PhaseEdges(fujimod_emulator_devices::scene::FramePhases),
-    BridgeRegisters(bridge::Registers),
+    BridgeRegisters(lens_bridge::Registers),
     LogicLevel(fujimod_emulator_devices::signals::Level),
     OpticalPosition(fujimod_emulator_devices::scene::optics::Position),
 }
@@ -133,7 +133,7 @@ pub struct Resources {
     pub image_users: BTreeMap<String, BTreeSet<usize>>,
     pub gpio: BTreeMap<String, gpio::Pads>,
     pub pulses: BTreeMap<String, pulse::PulsePins>,
-    pub encoders: BTreeMap<String, fujimod_emulator_parts_controls::encoder::EncoderInput>,
+    pub encoders: BTreeMap<String, fujimod_emulator_devices::parts::encoder_input::EncoderInput>,
     pub hdmi_sinks: BTreeMap<String, HdmiSink>,
     pub controllers: BTreeMap<String, irq::Inputs>,
     pub clocks: BTreeMap<String, clock::Output>,
@@ -219,13 +219,13 @@ impl Resources {
     pub fn encoder(
         &self,
         name: &str,
-    ) -> Result<fujimod_emulator_parts_controls::encoder::EncoderInput, String> {
+    ) -> Result<fujimod_emulator_devices::parts::encoder_input::EncoderInput, String> {
         self.encoders
             .get(name)
             .cloned()
             .ok_or_else(|| format!("{name} is not an encoder input"))
     }
-    pub fn bridge_registers(&self, name: &str) -> Result<bridge::Registers, String> {
+    pub fn bridge_registers(&self, name: &str) -> Result<lens_bridge::Registers, String> {
         match self.wires.get(name) {
             Some(Wire::BridgeRegisters(registers)) => Ok(registers.clone()),
             _ => Err(format!("{name} is not a lens bridge register connection")),

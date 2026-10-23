@@ -8,13 +8,13 @@ use std::collections::BTreeMap;
 pub struct Wiring {
     pub controllers: Vec<(usize, fujimod_emulator_devices::exr2::irq::Inputs)>,
     pub cable: Option<fujimod_emulator_devices::signals::Level>,
-    pub bridge: Option<fujimod_emulator_parts_lens::lens::bridge::Registers>,
+    pub bridge: Option<fujimod_emulator_devices::parts::lens_bridge::Registers>,
 }
 pub struct I2cController {
     engine: Registers,
     controllers: [fujimod_emulator_devices::exr2::irq::Inputs; 2],
     cable: Option<fujimod_emulator_devices::signals::Level>,
-    bridge: Option<fujimod_emulator_parts_lens::lens::bridge::Registers>,
+    bridge: Option<fujimod_emulator_devices::parts::lens_bridge::Registers>,
     due: BTreeMap<u64, u64>,
     cable_expected: Option<bool>,
 }

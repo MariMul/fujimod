@@ -11,6 +11,7 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+fujimod-emulator-parts-io.workspace = true
 fujimod-emulator-parts-storage.workspace = true
 fujimod-emulator-storage.workspace = true
 fujimod-emulator-ip.workspace = true

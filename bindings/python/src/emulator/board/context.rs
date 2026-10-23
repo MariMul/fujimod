@@ -20,7 +20,7 @@ pub struct DeviceContext {
     pads: BTreeMap<String, Pads>,
     pulses: BTreeMap<String, PulsePins>,
     controllers: BTreeMap<String, Inputs>,
-    bridges: BTreeMap<String, fujimod_emulator_parts_lens::lens::bridge::Registers>,
+    bridges: BTreeMap<String, fujimod_emulator_devices::parts::lens_bridge::Registers>,
 }
 impl DeviceContext {
     pub fn new(

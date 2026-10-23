@@ -4,7 +4,7 @@
 //! attached sink supplies cable state and EDID bytes; status timing and DDC
 //! completion use guest virtual time. No transmitter lock or pixel output is synthesized.
 use fujimod_emulator_devices::bus::InterruptLine;
-use fujimod_emulator_parts_io::hdmi_sink::HdmiSink;
+use fujimod_emulator_devices::parts::hdmi_sink::HdmiSink;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -356,7 +356,7 @@ impl Device for Transmitter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_parts_io::hdmi_sink::Options as SinkOptions;
+    use fujimod_emulator_devices::parts::hdmi_sink::Options as SinkOptions;
     use fujimod_emulator_devices::{Host, Record};
 
     #[derive(Default)]

@@ -12,7 +12,6 @@ name = "fujimod_emulator_devices"
 
 [dependencies]
 fujimod-catalog = { path = "../catalog" }
-fujimod-settings = { path = "../settings" }
 sha2 = "0.10"
 serde_json = "1"
 serde = { version = "1", features = ["derive", "rc"] }

@@ -12,7 +12,6 @@ doctest = false
 
 [dependencies]
 fujimod-emulator-parts-controls.workspace = true
-fujimod-emulator-parts-lens.workspace = true
 fujimod-emulator-devices.workspace = true
 serde_json = "1"
 serde = { version = "1", features = ["derive", "rc"] }

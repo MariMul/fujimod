@@ -9,7 +9,7 @@ use fujimod_emulator_storage::fat;
 use fujimod_emulator_exr2_storage::sdhc::{self, SdHost};
 
 fn card_session() -> Session {
-    let contacts = sdhc::Contacts::new(true, false);
+    let contacts = fujimod_emulator_devices::parts::card_contacts::Contacts::new(true, false);
     let card = fat::format(
         &format(),
         &[("/DCIM/100_FUJI/A.JPG".into(), b"card bytes".to_vec())],

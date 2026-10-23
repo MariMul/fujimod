@@ -8,27 +8,8 @@ use fujimod_emulator_devices::exr2::pulse::{PulsePins, Pwm};
 use fujimod_emulator_devices::parts::pins::{Pin, Pins};
 use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine};
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
+use fujimod_emulator_devices::parts::lens_bridge::Registers;
 
-#[derive(Clone, Default)]
-pub struct Registers(Arc<Mutex<[u8; 4]>>);
-impl Registers {
-    pub fn write_register(&self, address: u8, value: u8) -> Result<(), String> {
-        if address >= 4 {
-            return Err("unknown lens bridge register".into());
-        }
-        self.0.lock().unwrap()[address as usize] = value;
-        Ok(())
-    }
-    pub fn read_register(&self, address: u8) -> Result<u8, String> {
-        self.0
-            .lock()
-            .unwrap()
-            .get(address as usize)
-            .copied()
-            .ok_or_else(|| "unknown lens bridge register".into())
-    }
-}
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
@@ -82,7 +63,7 @@ impl Bridge {
         self.position
     }
     fn configuration(&self) -> Result<Configuration, String> {
-        let r = self.wiring.registers.0.lock().unwrap();
+        let r = self.wiring.registers.snapshot();
         let control = r[0];
         let divider = [64, 32, 16, 8][(r[2] >> 4 & 3) as usize];
         let (clock, manual) = match self.wiring.gpio.function(self.options.pulse_pin)? {

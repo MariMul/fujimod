@@ -291,7 +291,7 @@ fn fingerprint_observes_cable_admission_and_bridge_without_settling_work() {
         .unwrap()
     };
     let cable = fujimod_emulator_devices::signals::Level::new(false);
-    let bridge = fujimod_emulator_parts_lens::lens::bridge::Registers::default();
+    let bridge = fujimod_emulator_devices::parts::lens_bridge::Registers::default();
     let wiring = || Wiring {
         controllers: controllers.clone(),
         cable: Some(cable.clone()),

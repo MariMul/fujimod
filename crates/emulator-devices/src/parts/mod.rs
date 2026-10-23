@@ -1,6 +1,11 @@
-//! Pin, GPIO, control and analog-sample handles that board parts and their
-//! controllers share.
+//! Handles that board parts, their controllers, plans and sessions share: pins, GPIO,
+//! controls, analog samples, card contacts, encoder inputs, lens bridge registers and
+//! HDMI sinks.
 pub mod analog;
+pub mod card_contacts;
 pub mod controls;
+pub mod encoder_input;
 pub mod gpio;
+pub mod hdmi_sink;
+pub mod lens_bridge;
 pub mod pins;
