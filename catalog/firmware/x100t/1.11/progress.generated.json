@@ -5,6 +5,7 @@
   "model": "X100T",
   "version": "1.11",
   "stages": {
+    "research": "pass",
     "analysis": "pass",
     "rec": "pass",
     "menu": "pass",

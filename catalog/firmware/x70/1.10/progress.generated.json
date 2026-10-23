@@ -5,6 +5,7 @@
   "model": "X70",
   "version": "1.10",
   "stages": {
+    "research": "pass",
     "analysis": "pass",
     "rec": "pass",
     "menu": "pass",

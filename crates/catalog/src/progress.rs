@@ -30,12 +30,14 @@ pub struct FirmwareProgress {
     pub mods: BTreeMap<String, ModProgress>,
 }
 
-/// Bring-up stages, grouped as emulator, camera, mods and SD card.
+/// Bring-up stages, grouped as research, emulator, camera, mods and SD card.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ProgressStages {
-    /// Firmware unpacked, analyzed and its static facts located.
+    /// The firmware was registered and unpacked and every code unit exported.
+    pub research: StageProgress,
+    /// The firmware's static boot facts were located.
     pub analysis: StageProgress,
     /// The emulator boots to the shooting screen.
     pub rec: StageProgress,

@@ -5,6 +5,7 @@
   "model": "X-T1",
   "version": "5.52",
   "stages": {
+    "research": "pass",
     "analysis": "not-run",
     "rec": "pass",
     "menu": "pass",

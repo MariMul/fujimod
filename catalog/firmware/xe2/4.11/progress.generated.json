@@ -5,6 +5,7 @@
   "model": "X-E2",
   "version": "4.11",
   "stages": {
+    "research": "pass",
     "analysis": "pass",
     "rec": "pass",
     "menu": "not-run",

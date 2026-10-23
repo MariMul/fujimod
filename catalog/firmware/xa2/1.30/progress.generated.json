@@ -5,6 +5,7 @@
   "model": "X-A2",
   "version": "1.30",
   "stages": {
+    "research": "pass",
     "analysis": "not-run",
     "rec": "pass",
     "menu": "pass",

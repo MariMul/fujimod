@@ -25,11 +25,11 @@
     },
     "ProgressStages": {
       "additionalProperties": false,
-      "description": "Bring-up stages, grouped as emulator, camera, mods and SD card.",
+      "description": "Bring-up stages, grouped as research, emulator, camera, mods and SD card.",
       "properties": {
         "analysis": {
           "$ref": "#/$defs/StageProgress",
-          "description": "Firmware unpacked, analyzed and its static facts located."
+          "description": "The firmware's static boot facts were located."
         },
         "camera-identity": {
           "$ref": "#/$defs/StageProgress",
@@ -59,12 +59,17 @@
           "$ref": "#/$defs/StageProgress",
           "description": "The emulator boots to the shooting screen."
         },
+        "research": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "The firmware was registered and unpacked and every code unit exported."
+        },
         "sd-image": {
           "$ref": "#/$defs/StageProgress",
           "description": "The dual-boot SD card image was built."
         }
       },
       "required": [
+        "research",
         "analysis",
         "rec",
         "menu",

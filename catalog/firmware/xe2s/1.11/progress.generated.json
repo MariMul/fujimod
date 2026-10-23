@@ -5,6 +5,7 @@
   "model": "X-E2S",
   "version": "1.11",
   "stages": {
+    "research": "pass",
     "analysis": "pass",
     "rec": "not-run",
     "menu": "not-run",

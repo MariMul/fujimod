@@ -5,6 +5,7 @@
   "model": "XQ2",
   "version": "1.01",
   "stages": {
+    "research": "pass",
     "analysis": "not-run",
     "rec": "pass",
     "menu": "not-run",

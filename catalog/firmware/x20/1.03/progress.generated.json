@@ -5,6 +5,7 @@
   "model": "X20",
   "version": "1.03",
   "stages": {
+    "research": "pass",
     "analysis": "not-run",
     "rec": "pass",
     "menu": "pass",

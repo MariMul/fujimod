@@ -5,6 +5,7 @@
   "model": "X100S",
   "version": "1.21",
   "stages": {
+    "research": "pass",
     "analysis": "not-run",
     "rec": "pass",
     "menu": "pass",

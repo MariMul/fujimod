@@ -5,6 +5,7 @@
   "model": "X-T10",
   "version": "1.31",
   "stages": {
+    "research": "pass",
     "analysis": "pass",
     "rec": "pass",
     "menu": "pass",
