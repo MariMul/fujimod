@@ -121,7 +121,59 @@
       "basis": "Declared synthetic focus conversion knots: X20 0x737c18 reads 19 little-endian U16 values here and computes 16777215/value after its fixed first knot; positive decreasing inputs produce strictly increasing spline coordinates. One focal group follows the stock zero-to-one count clamp at 0x733be0. Not measured lens calibration."
     }
   ],
-  "profile": null,
+  "profile": {
+    "header": {
+      "address": 8235596,
+      "size": 16,
+      "sha256": "0aafa100b4c3326627759df7f6af5ce87b24dd2f0cfa826a57258506820ca7bd"
+    },
+    "records": {
+      "main": {
+        "block": 3884,
+        "managed_index": 338,
+        "bytes": 512,
+        "defaults": {
+          "address": 9135776,
+          "size": 242,
+          "sha256": "9c27df02dc723b5b244b6096a620182fc23e8d8475a59d8de5ec8ba428d627d6"
+        },
+        "defaults_offset": 40,
+        "parity_offset": 492,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Main record marker after the sequence word."
+          }
+        ]
+      },
+      "custom": {
+        "block": 3886,
+        "managed_index": 340,
+        "bytes": 84,
+        "defaults": {
+          "address": 8235612,
+          "size": 64,
+          "sha256": "f9bc87e5e9c0c8662a6b138d4ab94b2abaea0c475267ab796c7dc68bb39ec970"
+        },
+        "defaults_offset": 4,
+        "parity_offset": 76,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Custom record marker after the sequence word."
+          }
+        ]
+      }
+    }
+  },
   "settings": {
     "debug": {
       "store": "bank",
@@ -132,6 +184,24 @@
         ],
         "on": [
           1
+        ]
+      }
+    },
+    "language": {
+      "store": "main",
+      "offset": 45,
+      "values": {
+        "en": [
+          1
+        ]
+      }
+    },
+    "setup": {
+      "store": "header",
+      "offset": 11,
+      "values": {
+        "done": [
+          7
         ]
       }
     }

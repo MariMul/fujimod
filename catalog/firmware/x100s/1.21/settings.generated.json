@@ -211,7 +211,59 @@
       "basis": "Explicit synthetic focus knots in the alternate configuration banks selected by stock offset mapper 0x694928: logical 0x1b800 maps by +0xab00 or +0xea00. Same positive decreasing inputs as the unmapped bank; no measured lens calibration."
     }
   ],
-  "profile": null,
+  "profile": {
+    "header": {
+      "address": 8026032,
+      "size": 16,
+      "sha256": "38a794e7401b001dbf6b6dca49cc69e1427050102dc681eed93757cdf1b93bd7"
+    },
+    "records": {
+      "main": {
+        "block": 3884,
+        "managed_index": 338,
+        "bytes": 512,
+        "defaults": {
+          "address": 8936000,
+          "size": 242,
+          "sha256": "a26783be9da6283b1d1082ccc2984159b41a076dc78e5aaabd2fe1f08517cd68"
+        },
+        "defaults_offset": 40,
+        "parity_offset": 492,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Main record marker after the sequence word."
+          }
+        ]
+      },
+      "custom": {
+        "block": 3886,
+        "managed_index": 340,
+        "bytes": 116,
+        "defaults": {
+          "address": 8026048,
+          "size": 96,
+          "sha256": "936d8891559a03ab98e5553a1f763396164f2889abd015714a1907bec143f7d2"
+        },
+        "defaults_offset": 4,
+        "parity_offset": 108,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Custom record marker after the sequence word."
+          }
+        ]
+      }
+    }
+  },
   "settings": {
     "debug": {
       "store": "bank",
@@ -222,6 +274,24 @@
         ],
         "on": [
           1
+        ]
+      }
+    },
+    "language": {
+      "store": "main",
+      "offset": 46,
+      "values": {
+        "en": [
+          1
+        ]
+      }
+    },
+    "setup": {
+      "store": "header",
+      "offset": 11,
+      "values": {
+        "done": [
+          7
         ]
       }
     }

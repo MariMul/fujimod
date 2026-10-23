@@ -71,7 +71,59 @@
       "basis": "Internal version."
     }
   ],
-  "profile": null,
+  "profile": {
+    "header": {
+      "address": 7995804,
+      "size": 16,
+      "sha256": "38a794e7401b001dbf6b6dca49cc69e1427050102dc681eed93757cdf1b93bd7"
+    },
+    "records": {
+      "main": {
+        "block": 982,
+        "managed_index": 86,
+        "bytes": 512,
+        "defaults": {
+          "address": 8859200,
+          "size": 280,
+          "sha256": "ef007586c7d2fdc727fe614334f325edb5873c4784a1ce5a4bc3833d28457f13"
+        },
+        "defaults_offset": 40,
+        "parity_offset": 492,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Main record marker after the sequence word."
+          }
+        ]
+      },
+      "custom": {
+        "block": 984,
+        "managed_index": 88,
+        "bytes": 52,
+        "defaults": {
+          "address": 7995820,
+          "size": 40,
+          "sha256": "1f50f5aa7452a84f8f41505dae299803da47d2c73f2080603534d33f00a18b9d"
+        },
+        "defaults_offset": 4,
+        "parity_offset": 44,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Custom record marker after the sequence word."
+          }
+        ]
+      }
+    }
+  },
   "settings": {
     "debug": {
       "store": "bank",
@@ -82,6 +134,24 @@
         ],
         "on": [
           1
+        ]
+      }
+    },
+    "language": {
+      "store": "main",
+      "offset": 57,
+      "values": {
+        "en": [
+          1
+        ]
+      }
+    },
+    "setup": {
+      "store": "header",
+      "offset": 11,
+      "values": {
+        "done": [
+          7
         ]
       }
     }

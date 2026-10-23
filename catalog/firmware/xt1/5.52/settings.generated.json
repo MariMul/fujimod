@@ -71,7 +71,193 @@
       "basis": "Internal version."
     }
   ],
-  "profile": null,
+  "profile": {
+    "header": {
+      "address": 10995508,
+      "size": 16,
+      "sha256": "342cdfa6f02b2b2a507d081fe33a17facc02468faec5647f40b36ef0c0f571a2"
+    },
+    "records": {
+      "main": {
+        "block": 976,
+        "managed_index": 86,
+        "bytes": 4096,
+        "defaults": {
+          "address": 11979440,
+          "size": 384,
+          "sha256": "fcddfed8ee3ddd5aab4dcbf210c59408e2740340171e9e846de01116dea994a8"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 3964,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Main record marker after the sequence word."
+          },
+          {
+            "offset": 132,
+            "bytes": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ],
+            "basis": "Erased main record bytes before the pages."
+          }
+        ]
+      },
+      "custom": {
+        "block": 978,
+        "managed_index": 88,
+        "bytes": 4096,
+        "defaults": {
+          "address": 10995524,
+          "size": 448,
+          "sha256": "302af16e33b47616a67e0cd77a955345e6556e2c10ae5f14c3fc5ff37d7fdd37"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 3964,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Custom record marker after the sequence word."
+          }
+        ]
+      }
+    }
+  },
   "settings": {
     "debug": {
       "store": "bank",
@@ -82,6 +268,24 @@
         ],
         "on": [
           1
+        ]
+      }
+    },
+    "language": {
+      "store": "main",
+      "offset": 287,
+      "values": {
+        "en": [
+          1
+        ]
+      }
+    },
+    "setup": {
+      "store": "header",
+      "offset": 11,
+      "values": {
+        "done": [
+          7
         ]
       }
     }

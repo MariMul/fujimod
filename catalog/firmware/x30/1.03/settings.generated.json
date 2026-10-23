@@ -244,7 +244,16 @@
         },
         "defaults_offset": 260,
         "parity_offset": 3964,
-        "fields": []
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Custom record marker after the sequence word."
+          }
+        ]
       }
     }
   },
