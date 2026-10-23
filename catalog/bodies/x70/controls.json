@@ -41,6 +41,37 @@
     ]
   },
   "analog_levels": 1024,
+  "boot": {
+    "sd": {
+      "hold": [
+        {
+          "id": "command_control.press"
+        },
+        {
+          "id": "movie_record_button"
+        }
+      ]
+    },
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_button"
+        }
+      ]
+    },
+    "service": {
+      "usb": true,
+      "hold": [
+        {
+          "id": "selector.up"
+        },
+        {
+          "id": "shutter_button",
+          "stage": "full"
+        }
+      ]
+    }
+  },
   "controls": {
     "af_ae_lock_button": {
       "name": "AF-L/AE-L (autofocus/autoexposure lock) button",

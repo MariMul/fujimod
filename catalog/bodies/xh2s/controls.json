@@ -48,6 +48,18 @@
     ]
   },
   "analog_levels": null,
+  "boot": {
+    "sd": {
+      "hold": [
+        {
+          "id": "iso_button"
+        },
+        {
+          "id": "movie_recording_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "iso_button": {
       "name": "ISO button",

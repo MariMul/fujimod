@@ -42,6 +42,19 @@
     ]
   },
   "analog_levels": null,
+  "boot": {
+    "sd": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "shutter_button"
+        },
+        {
+          "id": "fn1_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "command_dial": {
       "name": "Command dial",

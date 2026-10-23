@@ -27,15 +27,10 @@ levels, spring-return behavior and analog resolution are null. Controls-only
 documents validate their own identities and manual declarations; connections
 or located bindings require the corresponding hardware records.
 
-Each body's `boot.json` owns startup combinations: service mode, firmware
-update and SD boot are grouped under `boot_options`. Programs sharing an SD
-startup combination use one entry, with program-specific details in its notes.
-Structured held controls, USB/card conditions and instruction status
-stay separate from executable run inputs. Candidate and superseded instructions
-retain their status; a shared body does not extend an option to unlisted models.
-`ReferenceCatalog::boot_options` also retrieves these documents for bodies
-without hardware definitions. Panel presentation and service-mode guides consume
-this data rather than keeping their own key combinations.
+An optional `boot` map in `controls.json` records confirmed `sd`,
+`firmware_update` and `service` startup combinations. Each entry contains
+`hold` inputs and an optional `usb` cable condition. Held IDs use the existing
+control action names, with an optional shutter `stage`.
 
 Run configurations are executable preparation policy outside the reference
 catalog. A configuration selects immutable reference identities and explicit

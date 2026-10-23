@@ -53,8 +53,58 @@ pub struct PhysicalControls {
     pub manual: ManualReference,
     /// Analog sample resolution used by this body's contacts.
     pub analog_levels: Option<u16>,
+    /// Confirmed inputs held while powering on.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[cfg_attr(
+        feature = "typescript",
+        tsify(type = "Partial<Record<BootMode, BootCombination>>")
+    )]
+    pub boot: BTreeMap<BootMode, BootCombination>,
     /// Controls keyed by their canonical physical identities.
     pub controls: BTreeMap<String, PhysicalControl>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
+#[serde(rename_all = "snake_case")]
+pub enum BootMode {
+    Sd,
+    FirmwareUpdate,
+    Service,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+#[serde(deny_unknown_fields)]
+pub struct BootCombination {
+    /// Required USB cable state, when specified.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", tsify(optional))]
+    pub usb: Option<bool>,
+    pub hold: Vec<BootHold>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+#[serde(deny_unknown_fields)]
+pub struct BootHold {
+    /// Control action identity, including a pad direction or dial .press action.
+    pub id: String,
+    /// Shutter stage, when required.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", tsify(optional))]
+    pub stage: Option<String>,
 }
 
 /// A control's documented appearance and declared physical actions.
@@ -791,6 +841,36 @@ impl PhysicalControls {
             );
         }
         let mut roles = BTreeSet::new();
+        for (mode, combination) in &self.boot {
+            if combination.hold.is_empty() {
+                return Err(format!("boot mode {mode:?} has no held controls"));
+            }
+            let mut held = BTreeSet::new();
+            for input in &combination.hold {
+                if !held.insert(&input.id) {
+                    return Err(format!("boot mode {mode:?} repeats {}", input.id));
+                }
+                let id = input.id.strip_suffix(".press").unwrap_or(&input.id);
+                let selected = self.control(id)?;
+                let control = selected.control;
+                if input.id.ends_with(".press")
+                    && !matches!(
+                        control.behavior,
+                        Some(ControlBehavior::Dial { .. } | ControlBehavior::Ring { .. })
+                    )
+                {
+                    return Err(format!("{} is not a dial press", input.id));
+                }
+                if let Some(stage) = &input.stage {
+                    if !matches!(&control.behavior, Some(ControlBehavior::Shutter { stages }) if stages.contains_key(&format!("{stage}_press")))
+                    {
+                        return Err(format!("{} has no shutter stage {stage}", input.id));
+                    }
+                } else if !control.pushable && selected.direction.is_none() {
+                    return Err(format!("{} cannot be held", input.id));
+                }
+            }
+        }
         for (id, control) in &self.controls {
             if id.is_empty()
                 || !id

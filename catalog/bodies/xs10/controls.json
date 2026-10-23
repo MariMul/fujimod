@@ -39,6 +39,19 @@
     ]
   },
   "analog_levels": null,
+  "boot": {
+    "sd": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "quick_menu_button"
+        },
+        {
+          "id": "movie_recording_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "movie_recording_button": {
       "name": "t (movie recording) button",

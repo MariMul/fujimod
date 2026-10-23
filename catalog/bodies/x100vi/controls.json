@@ -53,6 +53,19 @@
     ]
   },
   "analog_levels": 1024,
+  "boot": {
+    "sd": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "front_command_dial.press"
+        },
+        {
+          "id": "rear_command_dial.press"
+        }
+      ]
+    }
+  },
   "controls": {
     "af_ae_lock_button": {
       "name": "AEL (exposure lock)/AFL (focus lock) button",

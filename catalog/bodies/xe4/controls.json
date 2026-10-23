@@ -45,6 +45,19 @@
     ]
   },
   "analog_levels": null,
+  "boot": {
+    "sd": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "front_command_dial.press"
+        },
+        {
+          "id": "fn_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "shutter_button": {
       "name": "Shutter button",

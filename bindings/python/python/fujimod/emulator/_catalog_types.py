@@ -299,22 +299,6 @@ Body = TypedDict(
 )
 
 
-BodyBootOptions = TypedDict(
-    "BodyBootOptions",
-    {
-        "$schema": Required[
-            'Literal["https://fujimod.com/schemas/body-boot.generated.schema.json"]'
-        ],
-        "body_id": Required["str"],
-        "boot_options": Required["dict[str, BootOption]"],
-        "models": Required["list[str]"],
-        "notes": Required["list[str]"],
-        "schema": Required["int"],
-    },
-    total=False,
-)
-
-
 class BodyConnection(TypedDict, total=False):
     id: Required[str]
     kind: Required[ConnectionKind]
@@ -365,72 +349,19 @@ class BodyWiring(TypedDict, total=False):
     target_id: Required[str]
 
 
-type BootCard = Literal[
-    "service_boot",
-    "firmware_update",
-    "not_required",
-    "unspecified",
-]
+class BootCombination(TypedDict, total=False):
+    hold: Required[list[BootHold]]
+    usb: NotRequired[bool | None]
 
 
-type BootEffect = Literal[
-    "firmware_write",
-    "service_commands",
-    "card_program_defined",
-    "settings_reset_on_exit",
-]
-
-
-class BootEntry(TypedDict, total=False):
-    card: Required[BootCard]
-    hold: Required[list[BootKey]]
-    instructions: Required[list[str]]
-    release_when: NotRequired[str | None]
-    slot: NotRequired[int | None]
-    usb: Required[BootUsb]
-
-
-type BootGroup = Literal["service", "firmware_update", "sd_boot"]
-
-
-class BootKey(TypedDict, total=False):
-    action: Required[BootKeyAction]
-    control_id: NotRequired[str | None]
-    label: Required[str]
-
-
-type BootKeyAction = Literal["press", "full_press", "up"]
-
-
-class BootOption(TypedDict, total=False):
-    effects: Required[list[BootEffect]]
-    entry: Required[BootEntry]
-    group: Required[BootGroup]
-    label: Required[str]
-    models: Required[list[str]]
-    notes: Required[list[str]]
-    purpose: Required[BootPurpose]
-    status: Required[BootStatus]
-
-
-type BootPurpose = Literal[
-    "service_session",
-    "firmware_update",
-    "firmware_download",
-    "card_program",
-    "entry_probe",
-]
+class BootHold(TypedDict, total=False):
+    id: Required[str]
+    stage: NotRequired[str | None]
 
 
 class BootRomIdentity(TypedDict, total=False):
     address: Required[int]
     content: Required[ContentIdentity]
-
-
-type BootStatus = Literal["documented", "implemented", "candidate", "superseded"]
-
-
-type BootUsb = Literal["connected", "not_used", "unspecified"]
 
 
 class BoundPosition(TypedDict, total=False):
@@ -3468,6 +3399,7 @@ PhysicalControls = TypedDict(
         "$schema": Required["str"],
         "analog_levels": NotRequired["int | None"],
         "body_id": Required["str"],
+        "boot": NotRequired["PhysicalControlsVariant0"],
         "controls": Required["dict[str, PhysicalControl]"],
         "id": Required["str"],
         "manual": Required["ManualReference"],
@@ -3475,6 +3407,12 @@ PhysicalControls = TypedDict(
     },
     total=False,
 )
+
+
+class PhysicalControlsVariant0(TypedDict, total=False):
+    firmware_update: NotRequired[BootCombination]
+    sd: NotRequired[BootCombination]
+    service: NotRequired[BootCombination]
 
 
 type PictureLayout = Literal["bgra8888-straight"]

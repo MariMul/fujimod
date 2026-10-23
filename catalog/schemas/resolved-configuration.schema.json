@@ -1620,6 +1620,48 @@
       ],
       "type": "object"
     },
+    "BootCombination": {
+      "additionalProperties": false,
+      "properties": {
+        "hold": {
+          "items": {
+            "$ref": "#/$defs/BootHold"
+          },
+          "type": "array"
+        },
+        "usb": {
+          "description": "Required USB cable state, when specified.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "hold"
+      ],
+      "type": "object"
+    },
+    "BootHold": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Control action identity, including a pad direction or dial .press action.",
+          "type": "string"
+        },
+        "stage": {
+          "description": "Shutter stage, when required.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
     "BootRomIdentity": {
       "additionalProperties": false,
       "description": "A verified boot ROM image and its load address.",
@@ -16322,6 +16364,22 @@
         "body_id": {
           "description": "Body owning the documented controls.",
           "type": "string"
+        },
+        "boot": {
+          "additionalProperties": false,
+          "description": "Confirmed inputs held while powering on.",
+          "properties": {
+            "firmware_update": {
+              "$ref": "#/$defs/BootCombination"
+            },
+            "sd": {
+              "$ref": "#/$defs/BootCombination"
+            },
+            "service": {
+              "$ref": "#/$defs/BootCombination"
+            }
+          },
+          "type": "object"
         },
         "controls": {
           "additionalProperties": {

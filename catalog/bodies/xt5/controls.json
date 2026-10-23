@@ -50,6 +50,18 @@
     ]
   },
   "analog_levels": null,
+  "boot": {
+    "sd": {
+      "hold": [
+        {
+          "id": "front_command_dial.press"
+        },
+        {
+          "id": "rear_command_dial.press"
+        }
+      ]
+    }
+  },
   "controls": {
     "fn1_button": {
       "name": "Fn1 button",

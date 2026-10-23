@@ -1,7 +1,6 @@
 //! Validated firmware, camera, and emulator catalog data.
 pub mod application_inputs;
 pub mod assembly;
-pub mod boot;
 pub mod bulk;
 pub mod settings;
 pub mod camera;
