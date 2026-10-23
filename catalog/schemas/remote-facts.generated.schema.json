@@ -3078,12 +3078,6 @@
           "minimum": 0,
           "type": "integer"
         },
-        "commit": {
-          "description": "Commit.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
         "dynamic_count": {
           "description": "Dynamic count.",
           "format": "uint32",
@@ -3202,7 +3196,6 @@
         "dynamic_key_first",
         "dynamic_value_first",
         "value_address",
-        "commit",
         "surface",
         "parent",
         "key",

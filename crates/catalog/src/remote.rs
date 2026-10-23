@@ -657,8 +657,6 @@ pub struct NativeSetting {
     pub dynamic_value_first: u32,
     /// Value address.
     pub value_address: u32,
-    /// Commit.
-    pub commit: u32,
     /// Surface.
     pub surface: u32,
     /// Parent.
