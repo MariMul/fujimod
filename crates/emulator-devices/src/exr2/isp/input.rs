@@ -425,11 +425,15 @@ impl ImageInput {
             .ok_or("RAW channel4 has no connected output channels")?
             .lock()
             .unwrap();
-        if outputs.active || outputs.destinations.iter().any(Option::is_none) {
-            return Err("RAW channel4 requires both idle programmed outputs".into());
+        if outputs.active {
+            return Err("RAW channel4 requires idle programmed outputs".into());
         }
-        let targets = outputs.destinations.map(Option::unwrap);
-        if targets[0].overlaps(targets[1])? || targets.iter().any(|r| r.width % 2 != 0) {
+        let targets = outputs.destinations;
+        if match targets {
+            [Some(a), Some(b)] => a.overlaps(b)?,
+            _ => false,
+        } || targets.iter().flatten().any(|r| r.width % 2 != 0)
+        {
             return Err("RAW readback outputs overlap or have odd widths".into());
         }
         let bank = self
@@ -457,6 +461,10 @@ impl ImageInput {
         };
         let result = (|| {
             for (i, target) in targets.iter().enumerate() {
+                let Some(target) = target else {
+                    outputs.transfers[i].cancel();
+                    continue;
+                };
                 outputs.transfers[i].prepare(
                     cx.now(),
                     self.options.readback_ticks,

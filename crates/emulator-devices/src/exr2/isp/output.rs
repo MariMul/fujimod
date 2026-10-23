@@ -43,7 +43,7 @@ struct Channels {
     clock: Option<dma::Clock>,
     irqs: [Option<u32>; 2],
     armed: [bool; 2],
-    readback_routes: Option<[Irq; 2]>,
+    readback_routes: Option<[Option<Irq>; 2]>,
     readback_deadline: Option<u64>,
 }
 impl Default for OutputChannels {
@@ -250,18 +250,22 @@ impl OutputChannel {
             channels.readback_deadline = deadline;
         }
         if channels.readback_routes.is_none() {
-            if channels.transfers.iter().any(Option::is_some) || !channels.armed.iter().all(|v| *v)
-            {
-                return Err("RAW readback requires two idle armed output banks".into());
+            let mut routes = [None; 2];
+            for i in 0..2 {
+                if outputs.active_destinations[i].is_some() {
+                    if channels.transfers[i].is_some() || !channels.armed[i] {
+                        return Err(
+                            "RAW readback requires idle armed participating output banks".into(),
+                        );
+                    }
+                    routes[i] = Some(
+                        self.wiring
+                            .routes
+                            .latch(channels.irqs[i].ok_or("missing output IRQ")?)?,
+                    );
+                }
             }
-            channels.readback_routes = Some([
-                self.wiring
-                    .routes
-                    .latch(channels.irqs[0].ok_or("missing first output IRQ")?)?,
-                self.wiring
-                    .routes
-                    .latch(channels.irqs[1].ok_or("missing second output IRQ")?)?,
-            ]);
+            channels.readback_routes = Some(routes);
         }
         if outputs.transfers.iter().any(|t| t.ready(cx.now())) {
             if outputs
@@ -272,7 +276,7 @@ impl OutputChannel {
                 return Err("RAW readback output clocks differ".into());
             }
             let routes = channels.readback_routes.unwrap();
-            for route in routes {
+            for route in routes.into_iter().flatten() {
                 self.wiring.routes.validate(route)?;
             }
             let targets = outputs.active_destinations;
@@ -280,17 +284,19 @@ impl OutputChannel {
                 transfer.write(cx)?;
             }
             for i in 0..2 {
-                let raster = targets[i].ok_or("RAW readback output lost its destination")?;
+                let Some(raster) = targets[i] else {
+                    continue;
+                };
                 let span = dma::span(raster.address, raster.pitch * raster.height)?;
                 channels.transfers[i] = Some(FrameTransfer {
                     source: Source::Memory,
                     span: (span.start, span.end),
                     completed: true,
-                    route: routes[i],
+                    route: routes[i].ok_or("RAW readback output lost its IRQ")?,
                 });
+                outputs.destinations[i] = None;
             }
-            outputs.destinations = [None; 2];
-            for route in routes {
+            for route in routes.into_iter().flatten() {
                 route.raise(cx)?;
             }
         }

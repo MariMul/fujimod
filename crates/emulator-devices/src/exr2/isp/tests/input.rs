@@ -1039,6 +1039,103 @@ fn raw_readback_flows_through_both_output_channels_before_eof() {
 }
 
 #[test]
+fn raw_readback_only_uses_armed_output_banks_and_their_irq_routes() {
+    use crate::imaging::analysis::ImageLayout;
+    use crate::scene::ImageFrames;
+    for mask in 0..4 {
+        let mut h = TestHost::new();
+        h.ram[0x9000..0xb000].fill(0xa5);
+        let memory: readback::MemoryOutputHandle = Default::default();
+        let channels = output::OutputChannels::default();
+        let routes = dma::IrqRoutes::default();
+        let frames = ImageFrames::new(ImageLayout {
+            width: 6,
+            height: 6,
+            stride: 12,
+        })
+        .unwrap();
+        let mut banks = Vec::new();
+        for i in 0..2 {
+            if mask & (1 << i) != 0 {
+                routes.set(44 + i, Some(0)).unwrap();
+            }
+            let base = 0xfff12000 + i as u64 * 0x1000;
+            let mut bank = OutputChannel::new(
+                output::Options {
+                    stop_ticks: 2,
+                    clock: dma::Clock::Fixed { ticks: 5 },
+                    geometry: output::GeometryPolicy::RefuseIncomplete,
+                    diagnostic_reads: false,
+                },
+                output::Wiring {
+                    base,
+                    irq: 44 + i,
+                    channel: i as usize,
+                    channels: channels.clone(),
+                    routes: routes.clone(),
+                    frames: frames.clone(),
+                    memory_outputs: Some(memory.clone()),
+                },
+            )
+            .unwrap();
+            for (offset, value) in [
+                (0xb0, (5 << 16) | 7),
+                (0xb4, 7),
+                (0xc0, 0x9000 + i * 0x1000),
+                (0xc4, 8),
+            ] {
+                write(&mut bank, &mut h, base + offset, value);
+            }
+            if mask & (1 << i) != 0 {
+                write(&mut bank, &mut h, base, 0x10001);
+            }
+            banks.push(bank);
+        }
+        let mut wiring = input_wiring();
+        let parameters: parameters::ParameterHandle = Default::default();
+        parameters.lock().unwrap().words[0x200 / 4] = 0x1000100;
+        parameters.lock().unwrap().words[0x204 / 4] = 0x100;
+        wiring.parameters = Some(parameters);
+        wiring.memory_outputs = Some(memory);
+        let mut input = ImageInput::new(input_options(), wiring).unwrap();
+        for (offset, value) in [
+            (0x394, 0x1000000),
+            (0x398, 6 << 16),
+            (0x39c, 0x40000),
+            (0x3a0, 6),
+            (0x3a4, 12),
+            (0x3a8, 0x8000),
+            (0x3ac, 0xc003),
+            (0x3b8, 0xfb000000),
+            (0x390, 1),
+        ] {
+            write(&mut input, &mut h, 0xfff10000 + offset, value);
+        }
+        for bank in &mut banks {
+            advance(bank, &mut h, 0);
+        }
+        assert!(h.effects.is_empty());
+        for bank in &mut banks {
+            advance(bank, &mut h, 7);
+        }
+        advance(&mut input, &mut h, 8);
+        let mut expected: Vec<_> = (0..2)
+            .filter(|i| mask & (1 << i) != 0)
+            .map(|i| (0, 44 + i))
+            .collect();
+        expected.push((0, 38));
+        assert_eq!(h.irqs, expected, "armed mask {mask}");
+        for i in 0..2 {
+            let address = 0x9000 + i * 0x1000;
+            assert_eq!(
+                h.ram[address..address + 12] == [0xa5; 12],
+                mask & (1 << i) == 0
+            );
+        }
+    }
+}
+
+#[test]
 fn register_input_needs_no_color_layout_until_readback_is_connected() {
     let mut options = input_options();
     options.cfa = None;

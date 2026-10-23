@@ -1,6 +1,6 @@
 //! Channel4's explicit connection to the two output channels. Each output
 //! owns its configuration, deadline, row writes, status and IRQ44/45. Input
-//! publishes the sampled pixels here and emits EOF38 one tick after both
+//! publishes the sampled pixels here and emits EOF38 one tick after participating
 //! output DMAs. The board declares input/output dependencies in both directions.
 use super::dma::{Raster, Transfer};
 use serde::{Deserialize, Serialize};
