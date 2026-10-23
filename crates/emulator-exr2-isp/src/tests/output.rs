@@ -94,7 +94,7 @@ fn output_latches_pixels_and_address_before_irq_and_waits_for_ack() {
     }
 }
 #[test]
-fn output_stop_route_withdrawal_and_refusals() {
+fn output_stop_masked_irq_completion_and_refusals() {
     let base = 0xfff12000;
     let (mut d, frames, routes) = output(base, 0x2c);
     let mut m = Memory::default();
@@ -108,7 +108,8 @@ fn output_stop_route_withdrawal_and_refusals() {
     advance(&mut d, &mut m, 0);
     routes.set(0x2c, None).unwrap();
     advance(&mut d, &mut m, 5);
-    assert!(m.effects.is_empty());
+    assert_eq!(&m.bytes[0x4000..0x4020], &[4; 32]);
+    assert_eq!(m.effects, [Effect::Dma(0x4000, 32), Effect::Irq(0, 0x2c)]);
     write(&mut d, &mut m, base, 0);
     assert_eq!(d.next_deadline(5), Some(7));
     advance(&mut d, &mut m, 6);
@@ -302,7 +303,7 @@ fn unequal_output_rasters_wait_for_later_dma_before_publishing_both_irqs() {
 fn worker_output_keeps_latched_pixels_cancellation_and_paired_publication() {
     fujimod_emulator_devices::work::configure(2).unwrap();
     output_latches_pixels_and_address_before_irq_and_waits_for_ack();
-    output_stop_route_withdrawal_and_refusals();
+    output_stop_masked_irq_completion_and_refusals();
     output_banks_refuse_physical_alias_overlap();
     paired_output_writes_both_payloads_before_either_irq_and_waits_for_both_acks();
     unequal_output_rasters_wait_for_later_dma_before_publishing_both_irqs();

@@ -89,12 +89,24 @@ fn window_route_change_refuses_before_result_dma() {
     let (mut d, mut m, routes) = window();
     window_config(&mut d, &mut m, 1);
     write(&mut d, &mut m, 0xfff42000, 1);
-    routes.set(0x46, None).unwrap();
+    routes.set(0x46, Some(1)).unwrap();
     m.now = 3;
     let mut cx = Cx::new(&mut m, 0, 0, 0);
     d.advance(&mut cx);
     assert!(cx.refusal().unwrap().contains("owner changed"));
     assert!(m.effects.is_empty());
+}
+#[test]
+fn window_masking_preserves_result_dma_status_and_latched_irq() {
+    let (mut d, mut m, routes) = window();
+    window_config(&mut d, &mut m, 1);
+    write(&mut d, &mut m, 0xfff42000, 1);
+    routes.set(0x46, None).unwrap();
+    advance(&mut d, &mut m, 3);
+    assert_eq!(m.effects, [Effect::Dma(0xc000, 8), Effect::Irq(0, 0x46)]);
+    assert_eq!(read(&mut d, &mut m, 0xfff42000), 0x10000);
+    advance(&mut d, &mut m, 4);
+    assert_eq!(m.effects.len(), 2);
 }
 #[test]
 fn maximum_window_count_uses_the_complete_result_extent() {

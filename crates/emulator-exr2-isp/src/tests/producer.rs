@@ -494,7 +494,23 @@ fn statistics_stop_masks_alias_overlap_and_route_withdrawal() {
     advance(&mut d, &mut m, 10);
     routes.set(0x2e, None).unwrap();
     advance(&mut d, &mut m, 15);
-    assert!(m.effects.is_empty());
+    assert_eq!(
+        m.effects,
+        [
+            Effect::Dma(0x4000, 4),
+            Effect::Dma(0x8000, 4),
+            Effect::Irq(0, 0x2e)
+        ]
+    );
+    for ch in 0..2 {
+        write(&mut d, &mut m, 0xfff1888c + ch * 0x100, 0);
+        write(&mut d, &mut m, 0xfff188f4 + ch * 0x100, 1);
+        let now = m.now + 2;
+        advance(&mut d, &mut m, now);
+        assert_eq!(read(&mut d, &mut m, 0xfff1888c + ch * 0x100), 0);
+        assert_eq!(read(&mut d, &mut m, 0xfff188f4 + ch * 0x100), 0);
+    }
+    m.effects.clear();
     routes.set(0x2e, Some(0)).unwrap();
     write(&mut d, &mut m, 0xfff18504, 0x40004000);
     frames.publish(FrameEdge { index: 2, tick: 20 }).unwrap();
@@ -663,7 +679,7 @@ fn raster_worker_result_is_frozen_in_fingerprint_and_checkpoint_until_due() {
 }
 
 #[test]
-fn raster_worker_results_are_discarded_when_route_or_transfer_is_cancelled() {
+fn raster_worker_finishes_while_masked_but_discards_stopped_transfers() {
     fujimod_emulator_devices::work::configure(2).unwrap();
     let (mut d, frames, images, routes, mut memory, _, pixels) = producer_with_raster_banks();
     let edge = FrameEdge { index: 1, tick: 10 };
@@ -672,7 +688,14 @@ fn raster_worker_results_are_discarded_when_route_or_transfer_is_cancelled() {
     advance(&mut d, &mut memory, 10);
     routes.set(0x2e, None).unwrap();
     advance(&mut d, &mut memory, 15);
-    assert!(memory.effects.is_empty());
+    let (mut unmasked, frames, images, _, mut expected, _, pixels) = producer_with_raster_banks();
+    images.publish(edge, &pixels).unwrap();
+    frames.publish(edge).unwrap();
+    advance(&mut unmasked, &mut expected, 10);
+    advance(&mut unmasked, &mut expected, 15);
+    assert_eq!(memory.bytes, expected.bytes);
+    assert_eq!(memory.effects, expected.effects);
+    assert_eq!(memory.effects.last(), Some(&Effect::Irq(0, 0x2e)));
     assert_eq!(d.save()["pending_due"], serde_json::Value::Null);
     assert_eq!(
         d.fingerprint().unwrap()["raster_result"],

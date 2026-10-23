@@ -175,7 +175,7 @@ impl MemoryDma {
         let count = pending.count as usize;
         if let Some(irq) = pending.irq {
             self.routes
-                .validate_latched(irq)
+                .validate(irq)
                 .map_err(|_| "memory DMA IRQ bank changed during transfer")?;
         }
         match pending.operation {
