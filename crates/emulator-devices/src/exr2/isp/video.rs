@@ -1,8 +1,9 @@
 //! FFF60000 H.264 sequence registers. The modeled configuration uses the
 //! FFF604/60B/60C/60D/60E fields: C00 bit11 initializes, bits14/15 start,
 //! and C24 bit9 reports a sequence-start notice on IRQ75 after two declared
-//! virtual ticks. Frame compression, bitstream DMA and frame completion
-//! remain unmodeled.
+//! virtual ticks for an unconfigured sequence. A start with a programmed
+//! image input requires frame compression, bitstream DMA and completion;
+//! those operations refuse until modeled.
 use super::{Irq, due, word};
 use crate::{Cx, Device};
 use serde::Deserialize;
@@ -61,6 +62,12 @@ impl Device for VideoEncoder {
             match v {
                 0 | 0x800 => self.r[o / 4] = 0,
                 0x4000 | 0x8000 => {
+                    if self.r[0x400 / 4] != 0 {
+                        cx.fail(
+                            "H.264 frame compression, bitstream DMA and completion are unmodeled",
+                        );
+                        return;
+                    }
                     if self.started || self.pending.is_some() {
                         cx.fail("H.264 frame encoding is unmodeled");
                         return;

@@ -27,6 +27,14 @@ fn parameter_domains_and_raw_video_refusals() {
     }
     assert_eq!(d.next_deadline(0), None);
     assert!(h.effects.is_empty());
+    // A real main-image submission cannot be accepted as a setup notice.
+    // Its frame completion and bitstream writes have no device model yet.
+    let mut cx = h.cx();
+    d.write(&mut cx, 0xfff60c00, 4, 0x8000);
+    assert!(cx.refusal().unwrap().contains("frame compression"));
+    assert_eq!(d.next_deadline(0), None);
+    assert!(h.effects.is_empty());
+    write(&mut d, &mut h, 0xfff60400, 0);
     write(&mut d, &mut h, 0xfff60c00, 0x4000);
     advance(&mut d, &mut h, 1);
     assert!(h.irqs.is_empty());
