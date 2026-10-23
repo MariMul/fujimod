@@ -7,49 +7,57 @@ divided by the emulator's time for the same event. Emulated (virtual) time is
 not a speed; when a milestone takes more emulated time than the camera takes,
 the emulator does extra work and that is a correctness bug.
 
+## Measurements
+
+The X70 runs with saved settings and a set clock: it reaches REC at 0.34 s of
+emulated time and accepts input at 1.35 s, after 53.6M instructions. Board
+construction from the run configuration takes 0.15 s. REC live view with a RAW
+scene costs 1.44 CPU seconds per emulated second; the ISP statistics producer
+alone takes 134 ms per frame and the image output channels about 47 ms more.
+
+| Change | CPU seconds to input readiness |
+|---|---|
+| Before | 1.09–1.14 |
+| Memory DMA status as a fast read | 0.81–0.82 |
+
 ## Where the time goes
 
-A release X70 boot was sampled at 1 ms intervals with `sample` (12 s, main thread
-only; both cores run on it). Shares are inclusive.
+Samples of three boots to input readiness, as shares of emulation time:
 
 | Cost | Share |
 |---|---|
-| Inside `uc_emu_start` (translated code, helpers and device callbacks) | 95% |
-| Slow-path loads and stores (`load_helper`, `store_helper`) | 32% |
-| — device register accesses (`Bus::access`) | 11% |
-| — of which waking dependent devices (`Bus::wake_dependents`) | 4.4% |
-| — recovering the exact instruction for an access (`cpu_restore_state`) | 6% |
-| Exclusive loads and stores handled in Rust (`exclusive_instruction`) | 11% |
-| Per-block exit-request helper (`helper_check_exit_request`) | 6.6% |
-| Entering and leaving translated code (`tb_exec_lock`/`unlock`) | 8.7% |
-| — of which JIT write-protect switches (`pthread_jit_write_protect_np`) | 5.1% |
-| Deadline recomputation (`State::refresh_deadlines`) | 6.1% |
-| SipHash in device maps | 3% |
-| SHA-256 during execution | 1.7% |
+| Translating guest code (`tb_gen_code`) | 21% |
+| Device register accesses (`load_helper`, `store_helper`) | 19% |
+| Per-block hook helper (`helper_uc_tracecode`) | 12% |
+| Device deadlines, mostly firmware LZ decompression (`method4::Stream::feed`) | 10% |
+| Instruction callbacks, half of them exclusives (`Execution::instruction`) | 8% |
+| Per-access and per-block exit checks (`helper_check_exit_request`) | 7% |
+| JIT write-protect switches | 5% |
 
-At most a seventh of the samples fall in translated guest code itself. The rest
-is the cost of leaving it, finding the exact instruction again, and
-bookkeeping that runs per access or per slice.
+Before the DMA change, 81% of all device accesses during boot were one status
+register polled in a tight loop, each a full exit into the board.
 
 ## Plan
 
-In expected order of return, each measured by host instructions retired for
-the boot and the button scenario (load barely changes them) and by wall time:
+In expected order of return, each measured by CPU time to input readiness and
+host instructions retired (load barely changes them):
 
-1. Exclusives without leaving translated code. LDREX, STREX and CLREX become
-   TCG helpers that call the shared monitor directly with the physical
-   address and register values, instead of stopping, decoding the word,
-   reading registers through the API and restarting the instruction. Monitor
-   semantics stay as they are.
-2. Fewer exits and switches. Keep the JIT in execute mode across exec-loop
-   iterations and switch only when code is generated or invalidated; replace
-   the per-block exit-request helper with an inline flag test.
-3. Device accesses without `cpu_restore_state`. Supply the instruction count
-   the access needs from the translation (the position within the block is
-   known when the access is generated) rather than searching the block tree.
-4. Scheduler bookkeeping. Wake only the dependents an access can affect and
-   update deadlines incrementally instead of recomputing them.
-5. Hashing. Device maps keyed by addresses use a fast non-cryptographic hasher;
-   SHA-256 runs only where a digest is reported.
-6. Then re-profile with the camera's power-on state (saved settings, set clock)
-   and continue down the new list.
+1. Polled status registers as fast reads. Each register a boot loop polls is
+   published as an atomic the CPU reads without entering the device. Then let
+   interactive runs skip a polling loop whose only input is such a register
+   until the device's next deadline, as exact runs already do.
+2. Inline block accounting. The budget debit, pause test and ring write move
+   from the per-block hook helper into translated code at block start, with
+   the helper called only when the budget runs out.
+3. Exit checks without helper calls. Test the exit flag inline after accesses
+   that can stop the CPU instead of calling a helper after every load and store.
+4. Exclusives without leaving translated code. LDREX, STREX and CLREX become
+   TCG helpers that call the shared monitor directly; monitor semantics stay.
+5. Firmware decompression in whole tokens and slices instead of per byte.
+6. Translation cost: fewer generated helper calls per block (items 2 and 3)
+   shrink every block; then measure what remains.
+7. Device access bookkeeping: wake only the dependents an access can affect and
+   update deadlines incrementally.
+
+The ISP statistics producer and image output channels, which dominate live view,
+are optimized with the scene and ISP work.
