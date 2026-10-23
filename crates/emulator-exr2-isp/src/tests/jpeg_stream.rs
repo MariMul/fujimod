@@ -3,7 +3,7 @@ use crate::Warp;
 use fujimod_emulator_devices::Device;
 use fujimod_emulator_devices::exr2::isp::Irq;
 use fujimod_emulator_devices::exr2::isp::stream::{State, StreamHandle};
-use fujimod_emulator_devices::exr2::jpeg::{Encoder, encoder};
+use fujimod_emulator_exr2_codecs::jpeg::{Encoder, encoder};
 use fujimod_emulator_devices::test_host::{TestHost, advance, read, write};
 
 fn encoder(stream: StreamHandle) -> Encoder {

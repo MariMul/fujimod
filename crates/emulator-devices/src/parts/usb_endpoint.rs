@@ -437,7 +437,7 @@ impl Endpoint {
         }
         Ok(())
     }
-    pub(crate) fn offset(address: u64, size: u8) -> Option<(bool, usize, usize)> {
+    pub fn offset(address: u64, size: u8) -> Option<(bool, usize, usize)> {
         if let Some(relative) = address.checked_sub(PHY + 0x800)
             && relative < 0x100
             && size == 4

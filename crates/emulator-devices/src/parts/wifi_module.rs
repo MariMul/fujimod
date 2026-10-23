@@ -28,7 +28,7 @@ enum Phase {
     Configured,
 }
 #[derive(Clone, Copy, Serialize, serde::Deserialize)]
-pub(crate) enum Change {
+pub enum Change {
     None,
     Byte(u32, u8),
     Phase(PhaseChange),
@@ -36,9 +36,9 @@ pub(crate) enum Change {
     Direct,
 }
 #[derive(Clone, Copy, Serialize, serde::Deserialize)]
-pub(crate) struct PhaseChange(Phase);
+pub struct PhaseChange(Phase);
 #[derive(Serialize, Deserialize)]
-pub(crate) struct Operation {
+pub struct Operation {
     pub response: u32,
     pub change: Change,
 }
@@ -89,7 +89,7 @@ impl WifiModule {
                 0 | 1 | 3 | 5 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 0x100 | 0x109 | 0x10a | 0x10b
             )
     }
-    pub(crate) fn direct(&self, argument: u32) -> Result<Operation, String> {
+    pub fn direct(&self, argument: u32) -> Result<Operation, String> {
         let write = argument & 0x80000000 != 0;
         let function = argument >> 28 & 7;
         let raw = argument & 0x08000000 != 0;
@@ -141,10 +141,10 @@ impl WifiModule {
             },
         })
     }
-    pub(crate) fn block_size(&self) -> u16 {
+    pub fn block_size(&self) -> u16 {
         u16::from_le_bytes([self.bytes[0x110], self.bytes[0x111]])
     }
-    pub(crate) fn vendor(
+    pub fn vendor(
         &self,
         address: u32,
         write: bool,
@@ -215,7 +215,7 @@ impl WifiModule {
             change: Change::Phase(PhaseChange(next)),
         })
     }
-    pub(crate) fn commit(&mut self, operation: Operation) {
+    pub fn commit(&mut self, operation: Operation) {
         match operation.change {
             Change::None => (),
             Change::Direct => self.direct = true,

@@ -400,7 +400,7 @@ struct RasterInput<'py> {
     reader: Bound<'py, PyAny>,
     error: Option<(String, PyErr)>,
 }
-impl fujimod_emulator_devices::exr2::gpu::Inputs for RasterInput<'_> {
+impl fujimod_emulator_exr2_gpu::Inputs for RasterInput<'_> {
     fn has_reader(&self) -> bool {
         true
     }
@@ -439,7 +439,7 @@ pub fn gpu_ui_render<'py>(
         reader,
         error: None,
     };
-    let result = fujimod_emulator_devices::exr2::gpu::ui_render(&batch.draws, cpu, &mut host);
+    let result = fujimod_emulator_exr2_gpu::ui_render(&batch.draws, cpu, &mut host);
     let (outputs, touched, hashes) = match result {
         Ok(out) => out,
         Err(e) => {
@@ -460,9 +460,9 @@ pub fn gpu_ui_render<'py>(
 
 #[pyfunction]
 pub fn graphics_memo_len() -> usize {
-    fujimod_emulator_devices::exr2::gpu::memo_len()
+    fujimod_emulator_exr2_gpu::memo_len()
 }
 #[pyfunction]
 pub fn graphics_memo_clear() {
-    fujimod_emulator_devices::exr2::gpu::memo_clear();
+    fujimod_emulator_exr2_gpu::memo_clear();
 }

@@ -25,3 +25,6 @@ openh264 = "=0.9.3"
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
+
+[dev-dependencies]
+fujimod-emulator-exr2-codecs.workspace = true

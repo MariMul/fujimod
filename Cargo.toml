@@ -14,6 +14,16 @@ members = [
   "crates/emulator-cpu-unicorn",
   "crates/emulator-cpu-unicorn/sys",
   "crates/emulator-devices",
+  "crates/emulator-exr2-io",
+  "crates/emulator-exr2-system",
+  "crates/emulator-exr2-companion",
+  "crates/emulator-exr2-storage",
+  "crates/emulator-exr2-codecs",
+  "crates/emulator-exr2-serial",
+  "crates/emulator-exr2-audio",
+  "crates/emulator-exr2-gpu",
+  "crates/emulator-exr2-i2c",
+  "crates/emulator-exr2-display",
   "crates/emulator-xp5",
   "crates/emulator-xp4",
   "crates/emulator-exr2-isp",
@@ -47,6 +57,16 @@ fujimod-simulation = { path = "crates/simulation", version = "0.1.0" }
 fujimod-catalog = { path = "crates/catalog", version = "0.1.0" }
 fujimod-emulator = { path = "crates/emulator", version = "0.1.0" }
 fujimod-emulator-devices = { path = "crates/emulator-devices", version = "0.1.0" }
+fujimod-emulator-exr2-io = { path = "crates/emulator-exr2-io", version = "0.1.0" }
+fujimod-emulator-exr2-system = { path = "crates/emulator-exr2-system", version = "0.1.0" }
+fujimod-emulator-exr2-companion = { path = "crates/emulator-exr2-companion", version = "0.1.0" }
+fujimod-emulator-exr2-storage = { path = "crates/emulator-exr2-storage", version = "0.1.0" }
+fujimod-emulator-exr2-codecs = { path = "crates/emulator-exr2-codecs", version = "0.1.0" }
+fujimod-emulator-exr2-serial = { path = "crates/emulator-exr2-serial", version = "0.1.0" }
+fujimod-emulator-exr2-audio = { path = "crates/emulator-exr2-audio", version = "0.1.0" }
+fujimod-emulator-exr2-gpu = { path = "crates/emulator-exr2-gpu", version = "0.1.0" }
+fujimod-emulator-exr2-i2c = { path = "crates/emulator-exr2-i2c", version = "0.1.0" }
+fujimod-emulator-exr2-display = { path = "crates/emulator-exr2-display", version = "0.1.0" }
 fujimod-emulator-xp5 = { path = "crates/emulator-xp5", version = "0.1.0" }
 fujimod-emulator-xp4 = { path = "crates/emulator-xp4", version = "0.1.0" }
 fujimod-emulator-exr2-isp = { path = "crates/emulator-exr2-isp", version = "0.1.0" }

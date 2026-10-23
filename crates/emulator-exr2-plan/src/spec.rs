@@ -1,9 +1,14 @@
-use fujimod_emulator_devices::exr2::{
-    adc, audio, boot, clock, companion, core_release,
-    display::{device as scanout, formatter, timing},
-    dma, dram, gpio, gpu, hdmi, i2c, irq, isp, jpeg, lz, nand, pulse, reset, sdhc, sdio, spi,
-    timer, usb,
-};
+use fujimod_emulator_exr2_io::{adc, hdmi, usb};
+use fujimod_emulator_exr2_audio::{self as audio};
+use fujimod_emulator_exr2_system::{boot, core_release, dram, reset, timer};
+use fujimod_emulator_devices::exr2::{clock, gpio, irq, isp, pulse};
+use fujimod_emulator_exr2_companion::companion;
+use fujimod_emulator_exr2_display::{device as scanout, formatter, timing};
+use fujimod_emulator_exr2_serial::{dma, spi};
+use fujimod_emulator_exr2_gpu::{self as gpu};
+use fujimod_emulator_exr2_i2c::{self as i2c};
+use fujimod_emulator_exr2_codecs::{jpeg, lz};
+use fujimod_emulator_exr2_storage::{nand, sdhc, sdio};
 use fujimod_emulator_devices::{
     bus::InterruptLine,
     graph::Mapping,
@@ -208,14 +213,14 @@ pub enum Model {
         routes: String,
     },
     SerialDmaLink {
-        options: fujimod_emulator_devices::exr2::serial_dma::Options,
-        input: fujimod_emulator_devices::exr2::serial_dma::Input,
+        options: fujimod_emulator_exr2_serial::serial_dma::Options,
+        input: fujimod_emulator_exr2_serial::serial_dma::Input,
     },
     XMountLens {
-        transport: fujimod_emulator_devices::exr2::serial_dma::Options,
+        transport: fujimod_emulator_exr2_serial::serial_dma::Options,
         configuration: fujimod_emulator_devices::parts::x_mount_link::Configuration,
         startup_ticks: u64,
-        pins: fujimod_emulator_devices::exr2::x_mount_connector::Options,
+        pins: fujimod_emulator_exr2_serial::x_mount_connector::Options,
         gpio: String,
         controllers: Vec<String>,
     },
@@ -340,7 +345,7 @@ pub enum Model {
     },
     Fe80Processing {
         transport: companion::Options,
-        options: fujimod_emulator_devices::exr2::companion_processing::Options,
+        options: fujimod_emulator_exr2_companion::companion_processing::Options,
         frames: String,
         routes: String,
     },

@@ -4,11 +4,8 @@ use crate::board::{
     bus::{Bus, Mode},
     factory,
 };
-use fujimod_emulator_devices::{
-    bus::InterruptLine,
-    exr2::sdhc::{self, SdHost},
-    storage::fat,
-};
+use fujimod_emulator_devices::{bus::InterruptLine, storage::fat};
+use fujimod_emulator_exr2_storage::sdhc::{self, SdHost};
 
 fn card_session() -> Session {
     let contacts = sdhc::Contacts::new(true, false);
@@ -34,8 +31,8 @@ fn card_session() -> Session {
     .unwrap();
     let mut bus = Bus::new(Mode::Strict);
     let id = bus.register(sdhc::BASE, 0x108, Box::new(host)).unwrap();
-    let analog = fujimod_emulator_devices::exr2::adc::controller::Converter::new(
-        fujimod_emulator_devices::exr2::adc::controller::Options {
+    let analog = fujimod_emulator_exr2_io::adc::controller::Converter::new(
+        fujimod_emulator_exr2_io::adc::controller::Options {
             conversion_ticks: 7,
             samples: [1023; 12],
         },
@@ -284,7 +281,7 @@ fn physical_controls_validate_every_target_and_change_only_external_electrical_i
     assert_eq!(session.adc_samples("adc").unwrap()[8], 21);
     let handle = session
         .board
-        .inspect_device::<fujimod_emulator_devices::exr2::adc::controller::Converter, _>(
+        .inspect_device::<fujimod_emulator_exr2_io::adc::controller::Converter, _>(
             session.node("adc").unwrap(),
             |adc| Ok(adc.external_inputs()),
         )

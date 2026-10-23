@@ -11,6 +11,16 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+fujimod-emulator-exr2-io.workspace = true
+fujimod-emulator-exr2-system.workspace = true
+fujimod-emulator-exr2-companion.workspace = true
+fujimod-emulator-exr2-storage.workspace = true
+fujimod-emulator-exr2-codecs.workspace = true
+fujimod-emulator-exr2-serial.workspace = true
+fujimod-emulator-exr2-audio.workspace = true
+fujimod-emulator-exr2-gpu.workspace = true
+fujimod-emulator-exr2-i2c.workspace = true
+fujimod-emulator-exr2-display.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-exr2-isp.workspace = true
 fujimod-emulator-exr2-plan.workspace = true

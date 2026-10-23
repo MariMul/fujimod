@@ -649,7 +649,7 @@ impl Board {
         let session = self.session()?;
         let inputs = session
             .board
-            .inspect_device::<fujimod_emulator_devices::exr2::adc::controller::Converter, _>(
+            .inspect_device::<fujimod_emulator_exr2_io::adc::controller::Converter, _>(
                 session.node(node).map_err(error)?,
                 |adc| Ok(adc.external_inputs()),
             )

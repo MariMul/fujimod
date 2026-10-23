@@ -1,31 +1,7 @@
 //! X70 EXR II controller register models and profiles.
 
-pub mod adc;
-pub mod audio;
-pub mod boot;
 pub mod clock;
-pub mod companion;
-pub mod companion_processing;
-pub mod core_release;
-pub mod display;
-pub mod dma;
-pub mod dram;
 pub mod gpio;
-pub mod gpu;
-pub mod hdmi;
-pub mod i2c;
 pub mod irq;
 pub mod isp;
-pub mod jpeg;
-pub mod lz;
-pub mod nand;
 pub mod pulse;
-pub mod reset;
-pub mod sdhc;
-pub mod sdio;
-pub mod serial_dma;
-pub mod spi;
-pub mod timer;
-pub mod uart;
-pub mod usb;
-pub mod x_mount_connector;

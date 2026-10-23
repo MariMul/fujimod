@@ -25,7 +25,7 @@ pub struct BuiltBoard {
     pub graph: DeviceGraph,
     pub node_ids: BTreeMap<String, usize>,
     pub core_interrupts: Vec<CoreInterrupts>,
-    pub contacts: BTreeMap<String, fujimod_emulator_devices::exr2::sdhc::Contacts>,
+    pub contacts: BTreeMap<String, fujimod_emulator_exr2_storage::sdhc::Contacts>,
     pub resources: Resources,
 }
 

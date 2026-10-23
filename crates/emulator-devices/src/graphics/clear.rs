@@ -308,5 +308,7 @@ pub fn render_clear(source: &[u8], width: u64, rectangle: [i64; 4], pixel: &[u8]
     output
 }
 
+#[doc(hidden)]
+pub mod fixtures;
 #[cfg(test)]
-pub(crate) mod tests;
+mod tests;

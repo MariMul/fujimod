@@ -1,12 +1,7 @@
 //! Host electrical transitions through the checked device graph.
 use super::Session;
-use fujimod_emulator_devices::{
-    exr2::adc::controller::Converter,
-    parts::{
-        pins::Pin,
-        switch_panel::{Signal, Spec, SwitchPanel},
-    },
-};
+use fujimod_emulator_exr2_io::adc::controller::Converter;
+use fujimod_emulator_devices::parts::{pins::Pin, switch_panel::{Signal, Spec, SwitchPanel}};
 use std::collections::BTreeMap;
 
 impl Session {
@@ -62,7 +57,7 @@ impl Session {
                     ..
                 } => {
                     self.board
-                        .inspect_device::<fujimod_emulator_devices::exr2::spi::SpiController, _>(
+                        .inspect_device::<fujimod_emulator_exr2_serial::spi::SpiController, _>(
                             self.node(node)?,
                             |serial| serial.status_value(*route, *register).map(|_| ()),
                         )?;
@@ -97,7 +92,7 @@ impl Session {
                     value,
                 } => {
                     self.board
-                        .edit_device::<fujimod_emulator_devices::exr2::spi::SpiController, _>(
+                        .edit_device::<fujimod_emulator_exr2_serial::spi::SpiController, _>(
                             self.node(node)?,
                             |serial| {
                                 let old = serial.status_value(*route, *register)?;
@@ -173,7 +168,7 @@ impl Session {
         script: &[fujimod_emulator_devices::parts::touch_controller::ContactInput],
     ) -> Result<(), String> {
         self.board
-            .inspect_device::<fujimod_emulator_devices::exr2::i2c::I2cController, _>(
+            .inspect_device::<fujimod_emulator_exr2_i2c::I2cController, _>(
                 self.node(node)?,
                 |bus| bus.admit_touch(self.board.now(), script),
             )
@@ -185,7 +180,7 @@ impl Session {
     ) -> Result<(), String> {
         let now = self.board.now();
         self.board
-            .edit_device::<fujimod_emulator_devices::exr2::i2c::I2cController, _>(self.node(node)?, |bus| {
+            .edit_device::<fujimod_emulator_exr2_i2c::I2cController, _>(self.node(node)?, |bus| {
                 bus.touch(now, script)
             })
     }
@@ -262,7 +257,7 @@ impl Session {
         if phase == "tap" {
             let period = self
                 .board
-                .inspect_device::<fujimod_emulator_devices::exr2::i2c::I2cController, _>(
+                .inspect_device::<fujimod_emulator_exr2_i2c::I2cController, _>(
                     self.node(node)?,
                     |bus| bus.touch_period(),
                 )?;

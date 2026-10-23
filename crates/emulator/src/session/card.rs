@@ -1,10 +1,7 @@
 //! Host FAT access to the very medium owned by the native SD controller.
 use super::Session;
-use fujimod_emulator_devices::{
-    exr2::sdhc::{DataFault, SdHost},
-    parts::sd_card::Card,
-    storage::fat,
-};
+use fujimod_emulator_exr2_storage::sdhc::{DataFault, SdHost};
+use fujimod_emulator_devices::{parts::sd_card::Card, storage::fat};
 use serde_json::{Value, json};
 
 impl Session {

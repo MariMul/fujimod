@@ -1,6 +1,6 @@
 //! Observational scanout through the native register model and physical RAM.
 use super::Session;
-use fujimod_emulator_devices::exr2::display::{Scanout, device::Observation, scanout::Frame};
+use fujimod_emulator_exr2_display::{Scanout, device::Observation, scanout::Frame};
 impl Session {
     /// Reuse a presentation only after rechecking registers and every source byte.
     /// No event, guest instruction or architectural state participates in this memo.

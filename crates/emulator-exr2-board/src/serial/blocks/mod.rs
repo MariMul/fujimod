@@ -1,6 +1,6 @@
 //! SPI0 byte shifter and UART/DMA with physical GPIO selection.
 //! Uploaded UART bytes are opaque transport; no recipient effect is inferred.
-use fujimod_emulator_devices::exr2::{dma::uart::PeripheralDma, uart};
+use fujimod_emulator_exr2_serial::{dma::uart::PeripheralDma, uart};
 use fujimod_emulator_devices::{
     Cx, Device, Record, Value, WordMap,
     exr2::gpio::Pads,

@@ -15,7 +15,7 @@ pub mod usb;
 pub mod xp5;
 
 use crate::board::Board;
-use fujimod_emulator_devices::exr2::sdhc::Contacts;
+use fujimod_emulator_exr2_storage::sdhc::Contacts;
 use fujimod_emulator_exr2_plan::Resources;
 use std::collections::BTreeMap;
 
@@ -34,7 +34,7 @@ pub struct Session {
         BTreeMap<
             (String, usize, bool),
             fujimod_recording::cache::CaptureCache<
-                Option<std::sync::Arc<fujimod_emulator_devices::exr2::display::scanout::Frame>>,
+                Option<std::sync::Arc<fujimod_emulator_exr2_display::scanout::Frame>>,
             >,
         >,
     >,
@@ -85,7 +85,7 @@ impl Session {
                 },
             )?;
         self.board
-            .device_input::<fujimod_emulator_devices::exr2::hdmi::Transmitter, _>(
+            .device_input::<fujimod_emulator_exr2_io::hdmi::Transmitter, _>(
                 transmitter_id,
                 |device, cx| {
                     device.set_connected(cx, connected);
@@ -117,7 +117,7 @@ impl Session {
     pub fn serial_state(&self, name: &str) -> Result<serde_json::Value, String> {
         use fujimod_emulator_devices::Device;
         self.board
-            .inspect_device::<fujimod_emulator_devices::exr2::spi::SpiController, _>(
+            .inspect_device::<fujimod_emulator_exr2_serial::spi::SpiController, _>(
                 self.node(name)?,
                 |serial| Ok(serial.save()),
             )
@@ -130,7 +130,7 @@ impl Session {
         value: u8,
     ) -> Result<(), String> {
         self.board
-            .edit_device::<fujimod_emulator_devices::exr2::spi::SpiController, _>(
+            .edit_device::<fujimod_emulator_exr2_serial::spi::SpiController, _>(
                 self.node(name)?,
                 |serial| serial.status_input(route, register, value),
             )

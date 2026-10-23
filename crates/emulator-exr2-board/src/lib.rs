@@ -6,7 +6,7 @@ mod construct;
 pub mod serial;
 #[cfg(test)]
 mod tests;
-use fujimod_emulator_devices::exr2::dma;
+use fujimod_emulator_exr2_serial::dma;
 use fujimod_emulator_devices::graph::{DeviceGraph, Node as GraphNode, validate_mappings};
 use fujimod_emulator_exr2_plan::{AdapterFactory, BuiltBoard, Model, Plan, Resources, Wire};
 use std::collections::{BTreeMap, BTreeSet};
@@ -193,7 +193,7 @@ fn build(
             // DMA consolidation remaps these edges below.
             direct_dependencies.extend((0..4).map(|offset| (id + 4, id + offset)));
         } else if let Model::SerialDmaLink { options, input } = node.model {
-            let devices = fujimod_emulator_devices::exr2::serial_dma::Nodes::new(options, input)?;
+            let devices = fujimod_emulator_exr2_serial::serial_dma::Nodes::new(options, input)?;
             let expected: BTreeSet<_> = devices
                 .windows()
                 .iter()

@@ -99,10 +99,10 @@ impl Card {
     pub fn revision(&self) -> u64 {
         self.revision
     }
-    pub(crate) fn initialize_revision(&mut self, revision: u64) {
+    pub fn initialize_revision(&mut self, revision: u64) {
         self.revision = revision;
     }
-    pub(crate) fn supersede(&mut self, revision: u64) -> Result<(), String> {
+    pub fn supersede(&mut self, revision: u64) -> Result<(), String> {
         self.revision = self
             .revision
             .max(revision.checked_add(1).ok_or("SD revision overflow")?);

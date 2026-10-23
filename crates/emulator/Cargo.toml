@@ -11,6 +11,11 @@ name = "fujimod_emulator"
 crate-type = ["rlib"]
 
 [dependencies]
+fujimod-emulator-exr2-io = { path = "../../crates/emulator-exr2-io" }
+fujimod-emulator-exr2-storage = { path = "../../crates/emulator-exr2-storage" }
+fujimod-emulator-exr2-serial = { path = "../../crates/emulator-exr2-serial" }
+fujimod-emulator-exr2-i2c = { path = "../../crates/emulator-exr2-i2c" }
+fujimod-emulator-exr2-display = { path = "../../crates/emulator-exr2-display" }
 fujimod-emulator-xp5 = { path = "../../crates/emulator-xp5" }
 fujimod-emulator-xp4 = { path = "../../crates/emulator-xp4" }
 fujimod-recording = { path = "../recording" }
@@ -26,6 +31,7 @@ sha2 = "0.10"
 fujimod-workspace-hack.workspace = true
 
 [dev-dependencies]
+fujimod-emulator-exr2-system = { path = "../../crates/emulator-exr2-system" }
 fujimod-emulator-exr2-board = { path = "../emulator-exr2-board" }
 
 [lints.rust]
