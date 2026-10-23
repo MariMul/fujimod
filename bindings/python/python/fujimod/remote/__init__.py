@@ -118,6 +118,15 @@ def _convert(value):
     return value
 
 
+def _input_state(state: str, stage: str | None, position: str | None) -> str:
+    if state not in ("pressed", "released", "stage", "position"):
+        raise ValueError("Invalid input state")
+    value = {"kind": state}
+    if state in ("stage", "position"):
+        value["value"] = stage if state == "stage" else position
+    return json.dumps(value)
+
+
 def _touch(x: int, y: int, kind: str) -> str:
     return json.dumps({"kind": kind, "value": {"x": x, "y": y}})
 
@@ -153,12 +162,16 @@ class Camera:
     @classmethod
     def from_board(cls, board, facts: dict, *, quantum: int, window_instructions: int,
                    scanout_node: str, frame_counter_kind: str, frame_counter_pointer: str,
-                   output: str = "lcd") -> Camera:
+                   output: str = "lcd", observer: Callable[[], dict] | None = None) -> Camera:
+        """``observer`` runs before every wait, including the waits inside an
+        input's readiness and acceptance. It returns the read set it observed
+        (``{"stores": [(lo, hi)], "devices": [name]}``), which joins the wait."""
         options = dict(quantum=quantum, window_instructions=window_instructions,
                        scanout_node=scanout_node, output=output,
                        frame_counter_kind=frame_counter_kind,
                        frame_counter_pointer=frame_counter_pointer)
-        return cls(_native.Camera.from_board(board, json.dumps(facts), json.dumps(options)))
+        observe = None if observer is None else lambda: json.dumps(observer())
+        return cls(_native.Camera.from_board(board, json.dumps(facts), json.dumps(options), observe))
 
     @classmethod
     def from_ff80(cls, session, facts: dict, *, read_bytes: int, write_bytes: int,
@@ -185,12 +198,8 @@ class Camera:
 
     async def set_input(self, reference: Control, state: str, *, deadline: int,
                         stage: str | None = None, position: str | None = None) -> None:
-        if state not in ("pressed", "released", "stage", "position"):
-            raise ValueError("Invalid input state")
-        value = {"kind": state}
-        if state in ("stage", "position"):
-            value["value"] = stage if state == "stage" else position
-        await _drive(self._native.set_input(_reference(reference), json.dumps(value), deadline))
+        await _drive(self._native.set_input(_reference(reference),
+                                            _input_state(state, stage, position), deadline))
 
     async def wait(self, reads: dict, *, deadline: int) -> None:
         await _drive(self._native.wait_reads(json.dumps(reads), deadline))
@@ -289,6 +298,11 @@ class BlockingCamera:
 
     def select(self, reference: Option, *, deadline: int) -> None:
         self._call("select", reference, deadline)
+
+    def set_input(self, reference: Control, state: str, *, deadline: int,
+                  stage: str | None = None, position: str | None = None) -> None:
+        self._camera._native.set_input(_reference(reference), _input_state(state, stage, position),
+                                       deadline).blocking()
 
     def press(self, reference: Control, *, deadline: int) -> None:
         self._call("press", reference, deadline)

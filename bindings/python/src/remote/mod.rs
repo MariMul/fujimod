@@ -238,32 +238,7 @@ impl Camera {
         })))
     }
     fn wait_reads(&self, reads: &str, deadline: u64) -> PyResult<Task> {
-        #[derive(serde::Deserialize)]
-        #[serde(untagged)]
-        enum DeviceWatch {
-            Id(usize),
-            Name(String),
-        }
-        #[derive(serde::Deserialize)]
-        #[serde(deny_unknown_fields)]
-        struct Reads {
-            stores: Vec<(u64, u64)>,
-            devices: Vec<DeviceWatch>,
-        }
-        let observed: Reads = decode(reads)?;
-        let mut reads = ReadSet {
-            stores: observed.stores,
-            devices: Default::default(),
-        };
-        for watch in observed.devices {
-            let id = match watch {
-                DeviceWatch::Id(id) => id,
-                DeviceWatch::Name(name) => *self.device_ids.get(&name).ok_or_else(|| {
-                    PyValueError::new_err(format!("Unknown observed device {name}"))
-                })?,
-            };
-            reads.devices.insert(id);
-        }
+        let reads = read_set(reads, &self.device_ids).map_err(PyValueError::new_err)?;
         let mut lease = Lease::new(&self.slot)?;
         Ok(Task::new(Box::pin(async move {
             lease
@@ -374,6 +349,35 @@ impl Camera {
         })))
     }
 }
+/// Decode a Python read set; devices are graph node names or IDs.
+fn read_set(json: &str, device_ids: &BTreeMap<String, usize>) -> Result<ReadSet> {
+    #[derive(serde::Deserialize)]
+    #[serde(untagged)]
+    enum DeviceWatch {
+        Id(usize),
+        Name(String),
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Reads {
+        stores: Vec<(u64, u64)>,
+        devices: Vec<DeviceWatch>,
+    }
+    let observed: Reads = serde_json::from_str(json).map_err(|e| e.to_string())?;
+    let mut reads = ReadSet {
+        stores: observed.stores,
+        devices: Default::default(),
+    };
+    for watch in observed.devices {
+        reads.devices.insert(match watch {
+            DeviceWatch::Id(id) => id,
+            DeviceWatch::Name(name) => *device_ids
+                .get(&name)
+                .ok_or_else(|| format!("Unknown observed device {name}"))?,
+        });
+    }
+    Ok(reads)
+}
 #[pyfunction]
 fn facts_from_selection(selection: &str, manifest: &str) -> PyResult<String> {
     let selection = decode(selection)?;
@@ -392,11 +396,15 @@ pub(crate) fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult
 #[cfg(all(feature = "emulator", not(target_os = "emscripten")))]
 #[pymethods]
 impl Camera {
+    /// `observer`, when given, runs before every wait and returns its read set
+    /// as JSON; see `Connection::observe`.
     #[staticmethod]
+    #[pyo3(signature = (board, facts, options, observer=None))]
     fn from_board(
         board: Py<crate::emulator::board::Board>,
         facts: &str,
         options: &str,
+        observer: Option<Py<PyAny>>,
     ) -> PyResult<Self> {
         let facts: Facts = decode(facts)?;
         let device_ids = Python::attach(|py| -> PyResult<BTreeMap<String, usize>> {
@@ -408,8 +416,19 @@ impl Camera {
                 .map(|(name, id)| (name.clone(), *id))
                 .collect())
         })?;
-        let remote = remote::BoardRemote::new(PythonBoard(board), facts.clone(), decode(options)?)
-            .map_err(error)?;
+        let mut remote =
+            remote::BoardRemote::new(PythonBoard(board), facts.clone(), decode(options)?)
+                .map_err(error)?;
+        if let Some(observer) = observer {
+            let ids = device_ids.clone();
+            remote.observe(Some(Box::new(move || {
+                let json = Python::attach(|py| -> PyResult<String> {
+                    observer.bind(py).call0()?.extract()
+                })
+                .map_err(|e| e.to_string())?;
+                read_set(&json, &ids)
+            })));
+        }
         Ok(Self {
             slot: Rc::new(RefCell::new(Some(Box::new(remote)))),
             facts: Rc::new(facts),

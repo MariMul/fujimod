@@ -487,6 +487,42 @@ fn wait_until_can_repeat_raw_observations_and_wait_on_their_ranges() {
 }
 
 #[test]
+fn standing_observer_runs_before_each_wait_and_joins_its_watch_set() {
+    futures_lite::future::block_on(async {
+        let mut remote = Connection::connect(Synthetic::new(), facts()).unwrap();
+        let calls = std::rc::Rc::new(std::cell::Cell::new(0));
+        let observed = calls.clone();
+        remote.observe(Some(Box::new(move || {
+            observed.set(observed.get() + 1);
+            Ok(ReadSet {
+                stores: vec![(900, 904)],
+                devices: [9].into(),
+            })
+        })));
+        let mut checks = 0;
+        operations::wait_until(
+            &mut remote,
+            |view| {
+                checks += 1;
+                let ready = checks == 3;
+                Box::pin(async move {
+                    view.read_memory(768, 4).await?;
+                    Ok(ready)
+                })
+            },
+            10,
+            "synthetic observed condition",
+        )
+        .await
+        .unwrap();
+        assert_eq!(calls.get(), 2);
+        assert_eq!(remote.backend.waits.len(), 2);
+        assert_eq!(remote.backend.waits[0].stores, [(768, 772), (900, 904)]);
+        assert_eq!(remote.backend.waits[0].devices, [9].into());
+    });
+}
+
+#[test]
 fn navigation_resolves_again_after_each_edge() {
     futures_lite::future::block_on(async {
         let mut backend = Synthetic::new();

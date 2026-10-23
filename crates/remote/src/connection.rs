@@ -2,9 +2,16 @@
 use crate::{backend::Backend, memory::Memory, *};
 use std::{collections::BTreeSet, rc::Rc};
 
+/// A caller's standing observation, run before every wait. It returns the
+/// reads it made; they join that wait's watch set, so state the caller tracks
+/// is observed at every continuation boundary, including while an operation
+/// waits for input readiness or acceptance.
+pub type Observer = Box<dyn FnMut() -> Result<ReadSet>>;
+
 pub struct Connection<B> {
     pub(crate) backend: B,
     pub(crate) facts: Rc<Facts>,
+    observer: Option<Observer>,
     /// Touch controls with a finger down, from TouchStart until TouchEnd.
     pub(crate) touching: BTreeSet<String>,
 }
@@ -14,11 +21,16 @@ impl<B: Backend> Connection<B> {
         Ok(Self {
             backend,
             facts: Rc::new(facts),
+            observer: None,
             touching: BTreeSet::new(),
         })
     }
     pub fn facts(&self) -> &Facts {
         &self.facts
+    }
+    /// Install or remove the standing observation run before every wait.
+    pub fn observe(&mut self, observer: Option<Observer>) {
+        self.observer = observer;
     }
     async fn ready(&mut self, deadline: u64) -> Result<()> {
         loop {
@@ -143,7 +155,16 @@ impl<B: Backend> RemoteReader for Connection<B> {
 }
 impl<B: Backend> Remote for Connection<B> {
     fn wait<'a>(&'a mut self, reads: &'a ReadSet, deadline: u64) -> LocalFuture<'a, ()> {
-        Box::pin(async move { self.backend.wait(reads, deadline).await })
+        Box::pin(async move {
+            match &mut self.observer {
+                Some(observe) => {
+                    let mut watched = reads.clone();
+                    watched.extend(observe()?);
+                    self.backend.wait(&watched, deadline).await
+                }
+                None => self.backend.wait(reads, deadline).await,
+            }
+        })
     }
     fn set_input<'a>(&'a mut self, input: &'a Input, deadline: u64) -> LocalFuture<'a, ()> {
         Box::pin(async move {
