@@ -45,6 +45,8 @@ pub struct Extensions {
     pub retry_block: Option<unsafe extern "C" fn(Engine, u32) -> Error>,
     pub request_restart: Option<unsafe extern "C" fn(Engine) -> Error>,
     pub set_parallel_cpus: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
+    /// Test exit requests only at block entry; hook exits stay immediate.
+    pub set_block_exits: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     // uc_embedder_features bits (0 without the export): 1 = block hook size bit 31
     // is the Thumb state while a translation filter is installed.
     // Bit 4: stoppable Thumb instruction entries with synchronized ITSTATE.
@@ -86,6 +88,10 @@ impl Extensions {
                 "uc_embedder_set_parallel_cpus",
             ),
             (self.accounting.is_some(), "uc_embedder_accounting"),
+            (
+                self.set_block_exits.is_some(),
+                "uc_embedder_set_block_exits",
+            ),
             (
                 self.features & 3 == 3,
                 "uc_embedder_features (Thumb block state and budgeted accounting)",
@@ -187,6 +193,7 @@ mod linked {
         fn uc_embedder_retry_block(engine: Engine, count: u32) -> Error;
         fn uc_embedder_request_restart(engine: Engine) -> Error;
         fn uc_embedder_set_parallel_cpus(engine: Engine, enabled: bool) -> Error;
+        fn uc_embedder_set_block_exits(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_accounting(engine: Engine) -> *mut Accounting;
         fn uc_embedder_exit_counters(engine: Engine) -> *const u64;
         fn uc_embedder_features() -> u32;
@@ -202,6 +209,7 @@ mod linked {
             retry_block: Some(uc_embedder_retry_block),
             request_restart: Some(uc_embedder_request_restart),
             set_parallel_cpus: Some(uc_embedder_set_parallel_cpus),
+            set_block_exits: Some(uc_embedder_set_block_exits),
             accounting: Some(uc_embedder_accounting),
             exit_counters: Some(uc_embedder_exit_counters),
             features: unsafe { uc_embedder_features() },

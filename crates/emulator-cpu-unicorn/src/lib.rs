@@ -129,6 +129,16 @@ impl Core {
             .ok_or("CPU backend has no per-engine parallel TCG control")?;
         check(&self.api, unsafe { set(self.raw, enabled) })
     }
+    /// Test exit requests only at block entry. Device callbacks' stop requests
+    /// then take effect at the next block; instruction-hook exits stay immediate.
+    pub(crate) fn set_block_exits(&self, enabled: bool) -> Result<(), String> {
+        let set = self
+            .api
+            .extensions
+            .set_block_exits
+            .ok_or("CPU backend has no block-entry exit control")?;
+        check(&self.api, unsafe { set(self.raw, enabled) })
+    }
 }
 #[derive(Default)]
 struct Inspection {

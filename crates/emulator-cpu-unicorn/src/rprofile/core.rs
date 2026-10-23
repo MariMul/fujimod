@@ -295,6 +295,9 @@ impl Execution {
         self.cpu.set_parallel_cpus(
             self.parallel_tcg && cfg!(not(target_os = "emscripten")) && enabled,
         )?;
+        // Interactive accounting is coarse, so a device's stop request may wait
+        // for the next block; exact runs stop after the access.
+        self.cpu.set_block_exits(enabled)?;
         self.policy.set(policy);
         for read in self.fast_reads.borrow().iter() {
             read.set_enabled(enabled);
