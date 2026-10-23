@@ -368,7 +368,7 @@ impl Device for Command {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::xp5::tests::TestHost;
+    use crate::test_host::recording::RecordingHost;
     #[test]
     fn timing_input_causes_ack_without_granting_raw_dma_support() {
         let sensor = Sensor::new(
@@ -379,7 +379,7 @@ mod tests {
             (0x51, 8),
         );
         let mut command = Command::new(0xfff6c000, sensor.clone(), 17).unwrap();
-        let mut host = TestHost::default();
+        let mut host = RecordingHost::default();
         command.write(&mut Cx::new(&mut host, 3, 0xabad, 0), 0xfff6c140, 4, 15);
         sensor.timing(&mut Cx::new(&mut host, 0, 0, 0), true);
         assert!(host.irqs.iter().rev().find(|(i, _)| *i == 100).unwrap().1);
@@ -409,7 +409,7 @@ mod tests {
         fn experiment(cpu: usize, pc: u64, late: bool) -> Value {
             let sensor = Sensor::new(None, (0x51, 8));
             let mut command = Command::new(0xfff6c000, sensor.clone(), 17).unwrap();
-            let mut host = TestHost {
+            let mut host = RecordingHost {
                 ram_base: 0x1000,
                 ram: vec![
                     0x81, 0, 0x51, 8, 0, 0, 0, 0, 0x81, 0, 0, 4, 0, 0, 0, 0, 0x81, 1, 0, 0xa5, 0,
@@ -467,7 +467,7 @@ mod tests {
     fn dma_command_waits_for_guest_time_and_restores_pending_transport() {
         let sensor = Sensor::new(None, (0x59, 4));
         let mut command = Command::new(0xff948000, sensor.clone(), 100_000).unwrap();
-        let mut host = TestHost {
+        let mut host = RecordingHost {
             ram_base: 0x1000,
             ram: vec![0x81, 0, 0x59, 4, 0, 0, 0, 0],
             ..Default::default()

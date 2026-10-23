@@ -95,12 +95,12 @@ impl Device for KeyedIoGroup {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::xp5::tests::TestHost;
+    use crate::test_host::recording::RecordingHost;
     #[test]
     fn masks_routes_and_acknowledgments_are_independent_of_program_and_base() {
         let mut results = Vec::new();
         for (base, cpu, pc) in [(0xfff42000, 0, 0x1070450), (0xff904000, 3, 0xdeadbeef)] {
-            let mut h = TestHost::default();
+            let mut h = RecordingHost::default();
             let mut d = KeyedIoGroup::new(base);
             for (offset, value) in [
                 (0x20, 0x3c008),

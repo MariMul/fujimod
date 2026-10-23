@@ -258,7 +258,7 @@ impl Device for InputBuffer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::xp5::tests::TestHost;
+    use crate::test_host::recording::RecordingHost;
     #[test]
     fn upstream_edges_dma_and_w1c_are_independent_of_program_and_early_service() {
         fn experiment(cpu: usize, pc: u64) -> Value {
@@ -291,7 +291,7 @@ mod tests {
                 Some(statistics.clone()),
             )
             .unwrap();
-            let mut host = TestHost::default();
+            let mut host = RecordingHost::default();
             host.now = 10;
             input.write(&mut Cx::new(&mut host, cpu, pc, 0), 0x200000, 4, 0);
             assert_eq!(input.next_deadline(10), Some(18));

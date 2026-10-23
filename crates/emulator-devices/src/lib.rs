@@ -27,8 +27,6 @@ pub mod storage;
 #[doc(hidden)]
 pub mod test_host;
 pub mod work;
-pub mod xp4;
-pub mod xp5;
 
 pub use bus::{Cx, Device, Host};
 pub use map::WordMap;

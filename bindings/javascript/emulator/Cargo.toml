@@ -12,6 +12,7 @@ name = "fujimod_emulator_javascript"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
+fujimod-emulator-xp5.workspace = true
 ciborium.workspace = true
 fujimod-emulator = { workspace = true, default-features = false }
 fujimod-emulator-cpu.workspace = true

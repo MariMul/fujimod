@@ -11,6 +11,8 @@ name = "fujimod_emulator"
 crate-type = ["rlib"]
 
 [dependencies]
+fujimod-emulator-xp5 = { path = "../../crates/emulator-xp5" }
+fujimod-emulator-xp4 = { path = "../../crates/emulator-xp4" }
 fujimod-recording = { path = "../recording" }
 serde = { version = "1", features = ["derive"] }
 fujimod-emulator-devices = { path = "../emulator-devices" }

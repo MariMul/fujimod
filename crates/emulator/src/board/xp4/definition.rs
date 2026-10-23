@@ -59,7 +59,7 @@ pub struct Definition {
         bool,
         BTreeMap<u8, u16>,
         Vec<(u8, u16)>,
-        Option<fujimod_emulator_devices::xp4::rtc::StagedConfig>,
+        Option<fujimod_emulator_xp4::rtc::StagedConfig>,
         Vec<u8>,
     )>,
     #[serde(default)]

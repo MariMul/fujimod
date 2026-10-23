@@ -3,7 +3,7 @@
 mod cadence;
 pub mod clocked;
 pub mod frames;
-pub(crate) mod mosaic;
+pub mod mosaic;
 pub mod optics;
 pub mod raf;
 mod recorded;

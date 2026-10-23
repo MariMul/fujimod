@@ -3452,6 +3452,8 @@ dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-xp4",
+ "fujimod-emulator-xp5",
  "fujimod-recording",
  "fujimod-workspace-hack",
  "libc",
@@ -3471,6 +3473,7 @@ dependencies = [
  "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-board",
+ "fujimod-emulator-xp5",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -3493,6 +3496,7 @@ dependencies = [
  "fujimod-emulator",
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
+ "fujimod-emulator-xp5",
  "fujimod-workspace-hack",
  "serde_json",
 ]
@@ -3580,11 +3584,35 @@ dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-xp5",
  "fujimod-firmware",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "fujimod-emulator-xp4"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "fujimod-emulator-xp5"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "sha2",
+ "toml 0.9.12+spec-1.1.0",
 ]
 
 [[package]]

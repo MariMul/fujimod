@@ -895,14 +895,34 @@ fn rectangles(
 mod tests {
     use super::*;
     use crate::Host;
-    use crate::xp5::renderer::AddressHigh;
-    use crate::xp5::tests::{TestBus, TestHost};
+    use crate::test_host::{bus::TestBus, recording::RecordingHost};
+    /// The pixmap high-address register beside the renderer reads zero and
+    /// refuses nonzero writes, like the XP5 register at the same address.
+    struct AddressHigh;
+    impl Device for AddressHigh {
+        fn name(&self) -> &'static str {
+            "dmp-pixmap-high-zero"
+        }
+        fn read(&mut self, cx: &mut Cx<'_>, address: u64, n: u8) -> u64 {
+            if address != 0xff90e73c || n != 4 {
+                cx.unmodeled();
+            }
+            0
+        }
+        fn write(&mut self, cx: &mut Cx<'_>, address: u64, n: u8, v: u64) {
+            if address != 0xff90e73c || n != 4 {
+                cx.unmodeled();
+            } else if v != 0 {
+                cx.fail("DMP high-address pixmap DMA is unresolved");
+            }
+        }
+    }
     fn register(bus: &mut TestBus, base: u64, size: u64) -> Result<(), String> {
         bus.register(base, size, Box::new(Renderer::new(base, 153)?))?;
         bus.register(0xff90e73c, 4, Box::new(AddressHigh))?;
         Ok(())
     }
-    fn put(host: &mut TestHost, address: u64, words: &[u32]) {
+    fn put(host: &mut RecordingHost, address: u64, words: &[u32]) {
         host.ram_write(
             address,
             &words
@@ -916,7 +936,7 @@ mod tests {
     fn pending_dma_has_exact_deadline_early_noop_and_restorable_program_independent_effects() {
         let experiment = |base, irq, pc, core| {
             let mut renderer = Renderer::new(base, irq).unwrap();
-            let mut host = TestHost {
+            let mut host = RecordingHost {
                 now: 100,
                 ram_base: 0x1000,
                 ram: vec![0xa5; 64],
@@ -1092,7 +1112,7 @@ mod tests {
         }
         words
     }
-    fn submit(bus: &mut TestBus, host: &mut TestHost, path: &[u32], fill: &[u32], pc: u64) {
+    fn submit(bus: &mut TestBus, host: &mut RecordingHost, path: &[u32], fill: &[u32], pc: u64) {
         for (offset, value) in [
             (0x10d4, 0x100000),
             (0x10dc, (path.len() / 2) as u32),
@@ -1114,12 +1134,12 @@ mod tests {
     fn authored_path_and_fill_commands_drive_dma_fences_and_ack() {
         let path = path_program(1, [0, 0, 16, 16]);
         let fill = fill_program(1, false);
-        let mut host = TestHost {
+        let mut host = RecordingHost {
             ram: vec![0; 0x4000],
             events: Vec::new(),
             irqs: Vec::new(),
             ram_base: 0x100000,
-            ..TestHost::default()
+            ..RecordingHost::default()
         };
         put(&mut host, 0x100000, &path);
         put(&mut host, 0x100800, &fill);

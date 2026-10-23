@@ -1,6 +1,6 @@
 use super::*;
 use crate::parts::serial::Unconnected;
-use crate::xp5::tests::TestHost;
+use crate::test_host::recording::RecordingHost;
 const BASE: u64 = 0x100000;
 
 fn controller() -> Controller {
@@ -15,24 +15,24 @@ fn controller() -> Controller {
     )
     .unwrap()
 }
-fn write(c: &mut Controller, h: &mut TestHost, offset: u64, value: u64) {
+fn write(c: &mut Controller, h: &mut RecordingHost, offset: u64, value: u64) {
     let mut cx = Cx::new(h, 0, 0x1234, 0);
     c.write(&mut cx, BASE + offset, 2, value);
     assert_eq!(cx.refusal(), None);
 }
-fn read(c: &mut Controller, h: &mut TestHost, offset: u64) -> u64 {
+fn read(c: &mut Controller, h: &mut RecordingHost, offset: u64) -> u64 {
     let mut cx = Cx::new(h, 0, 0x1234, 0);
     let value = c.read(&mut cx, BASE + offset, 2);
     assert_eq!(cx.refusal(), None);
     value
 }
-fn tick(c: &mut Controller, h: &mut TestHost, now: u64) {
+fn tick(c: &mut Controller, h: &mut RecordingHost, now: u64) {
     h.now = now;
     let mut cx = Cx::new(h, 0, 0, 0);
     c.advance(&mut cx);
     assert_eq!(cx.refusal(), None);
 }
-fn configure(c: &mut Controller, h: &mut TestHost, loopback: bool) {
+fn configure(c: &mut Controller, h: &mut RecordingHost, loopback: bool) {
     write(c, h, 0, 0xc7); // 8 bits, Motorola mode3.
     write(c, h, 0x10, 6);
     write(c, h, 0x24, 3);
@@ -40,7 +40,7 @@ fn configure(c: &mut Controller, h: &mut TestHost, loopback: bool) {
 }
 #[test]
 fn fifo_bytes_and_request_edges_follow_serial_clocks() {
-    let mut h = TestHost::default();
+    let mut h = RecordingHost::default();
     let mut c = controller();
     configure(&mut c, &mut h, true);
     let p = c.port();
@@ -91,7 +91,7 @@ fn fifo_bytes_and_request_edges_follow_serial_clocks() {
 }
 #[test]
 fn interrupt_masks_timeout_clear_and_host_inspection_are_distinct() {
-    let mut h = TestHost::default();
+    let mut h = RecordingHost::default();
     let mut c = controller();
     configure(&mut c, &mut h, true);
     write(&mut c, &mut h, 0x14, 2);
@@ -120,7 +120,7 @@ fn interrupt_masks_timeout_clear_and_host_inspection_are_distinct() {
 }
 #[test]
 fn overrun_latches_and_acknowledges_without_fabricated_data() {
-    let mut h = TestHost::default();
+    let mut h = RecordingHost::default();
     let mut c = controller();
     configure(&mut c, &mut h, true);
     write(&mut c, &mut h, 0x14, 1);
@@ -141,7 +141,7 @@ fn overrun_latches_and_acknowledges_without_fabricated_data() {
 }
 #[test]
 fn pending_frame_checkpoint_restores_fresh_and_early_ticks_are_noops() {
-    let mut h = TestHost::default();
+    let mut h = RecordingHost::default();
     let mut c = controller();
     configure(&mut c, &mut h, true);
     write(&mut c, &mut h, 8, 0x67);
@@ -151,7 +151,7 @@ fn pending_frame_checkpoint_restores_fresh_and_early_ticks_are_noops() {
     restored.restore(&state).unwrap();
     assert_eq!(restored.save(), state);
     tick(&mut c, &mut h, 1000);
-    tick(&mut restored, &mut TestHost::default(), 1000);
+    tick(&mut restored, &mut RecordingHost::default(), 1000);
     assert_eq!(restored.save(), c.save());
     assert_eq!(read(&mut c, &mut h, 8), 0x67);
     let mut bad = state;
@@ -163,7 +163,7 @@ fn pending_frame_checkpoint_restores_fresh_and_early_ticks_are_noops() {
 #[test]
 fn fractional_serial_clock_preserves_phase_across_contiguous_frames() {
     let mut c = controller();
-    let mut h = TestHost::default();
+    let mut h = RecordingHost::default();
     write(&mut c, &mut h, 0, 3); // Four-bit frames.
     write(&mut c, &mut h, 0x10, 2);
     write(&mut c, &mut h, 4, 3);
@@ -183,7 +183,7 @@ fn fractional_serial_clock_preserves_phase_across_contiguous_frames() {
 #[test]
 fn unconnected_wire_and_unsupported_modes_refuse_without_rx_or_completion() {
     for pc in [0x10, 0xfeed0000] {
-        let mut h = TestHost::default();
+        let mut h = RecordingHost::default();
         let mut c = controller();
         configure(&mut c, &mut h, false);
         let before = c.save();
@@ -194,7 +194,7 @@ fn unconnected_wire_and_unsupported_modes_refuse_without_rx_or_completion() {
         assert_eq!(c.next_deadline(0), None);
         assert!(h.irqs.is_empty());
     }
-    let mut h = TestHost::default();
+    let mut h = RecordingHost::default();
     let mut c = controller();
     for (offset, value) in [(0, 0x37), (4, 4), (0x14, 16), (0x24, 4)] {
         let before = c.save();
@@ -217,7 +217,7 @@ fn explicit_fixed_wire_input_is_sampled_only_after_the_programmed_frame() {
             Box::new(crate::parts::serial::InputLevel(high)),
         )
         .unwrap();
-        let mut h = TestHost::default();
+        let mut h = RecordingHost::default();
         configure(&mut c, &mut h, false);
         let p = c.port();
         p.lock().unwrap().transmit(0, 1, 0x55).unwrap();
@@ -235,7 +235,7 @@ fn explicit_fixed_wire_input_is_sampled_only_after_the_programmed_frame() {
 #[test]
 fn active_retiming_and_disabling_unread_data_refuse_without_discarding_state() {
     let mut c = controller();
-    let mut h = TestHost::default();
+    let mut h = RecordingHost::default();
     configure(&mut c, &mut h, true);
     write(&mut c, &mut h, 8, 0x67);
     for (offset, value) in [(0, 0x47), (0x10, 4), (4, 0)] {
@@ -259,7 +259,7 @@ fn active_retiming_and_disabling_unread_data_refuse_without_discarding_state() {
 fn interrupt_fanout_and_checkpoint_wiring_are_explicit() {
     let mut c = controller();
     c.interrupts.push(InterruptLine::Shared(78));
-    let mut h = TestHost::default();
+    let mut h = RecordingHost::default();
     configure(&mut c, &mut h, true);
     write(&mut c, &mut h, 0x14, 8);
     assert_eq!(h.irqs, vec![(77, true), (78, true)]);

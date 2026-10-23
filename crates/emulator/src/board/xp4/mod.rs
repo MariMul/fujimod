@@ -16,7 +16,7 @@ use fujimod_emulator_cpu::{
 };
 use fujimod_emulator_cpu_unicorn::Library;
 use fujimod_emulator_devices::ip::arm::gicv2::Gic;
-use fujimod_emulator_devices::xp4::IntervalTimers;
+use fujimod_emulator_xp4::IntervalTimers;
 use std::{
     cell::{Cell, RefCell, UnsafeCell},
     collections::{BTreeMap, BTreeSet, VecDeque},
@@ -1127,7 +1127,7 @@ impl Session {
             }
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .usb_phy(fujimod_emulator_devices::xp4::usb_phy::Config {
+                .usb_phy(fujimod_emulator_xp4::usb_phy::Config {
                     base,
                     initial,
                     parallel,

@@ -1,5 +1,7 @@
 //! Device host for tests in this crate and the crates built on it.
+pub mod bus;
 pub mod ram;
+pub mod recording;
 use crate::{Cx, Device, Host, Record};
 
 #[derive(Clone, Default)]

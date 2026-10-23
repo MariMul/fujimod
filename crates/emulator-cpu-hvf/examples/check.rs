@@ -852,7 +852,7 @@ fn main() -> Result<(), String> {
             mprofile,
         };
         use fujimod_emulator_devices::ip::arm::gicv3::Gic;
-        use fujimod_emulator_devices::xp5::mailbox::{Channel, Mailbox, Pins};
+        use fujimod_emulator_xp5::mailbox::{Channel, Mailbox, Pins};
         use fujimod_emulator_devices::{Cx, Device};
         struct Reset;
         impl Device for Reset {

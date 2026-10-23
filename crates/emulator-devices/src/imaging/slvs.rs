@@ -305,7 +305,7 @@ impl Device for Receiver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::xp5::tests::TestHost;
+    use crate::test_host::recording::RecordingHost;
     const BASE: u64 = 0xff940000;
     const PERIOD: u64 = 16_667_000;
     const ACTIVE: u64 = PERIOD / 2;
@@ -337,7 +337,7 @@ mod tests {
                 50,
             )
             .unwrap();
-            let mut host = TestHost::default();
+            let mut host = RecordingHost::default();
             assert_eq!(
                 rx.read(&mut Cx::new(&mut host, cpu, pc, 0), 0xfff69000, 4),
                 0x10001
@@ -381,7 +381,7 @@ mod tests {
             assert!(host.ram.is_empty());
         }
     }
-    fn rig(streaming: bool) -> (Sensor, Receiver, TestHost) {
+    fn rig(streaming: bool) -> (Sensor, Receiver, RecordingHost) {
         let sensor = Sensor::new(
             Some(super::super::sensor::ImageRoutes {
                 dma: Some([162, 163]),
@@ -423,21 +423,21 @@ mod tests {
             ACTIVE,
         )
         .unwrap();
-        let host = TestHost {
+        let host = RecordingHost {
             ram: vec![0x55; 0x1000],
             ram_base: 0x1_0000_0000,
             ..Default::default()
         };
         (sensor, receiver, host)
     }
-    fn irq(host: &TestHost, line: u32) -> bool {
+    fn irq(host: &RecordingHost, line: u32) -> bool {
         host.irqs
             .iter()
             .rev()
             .find(|(n, _)| *n == line)
             .is_some_and(|(_, v)| *v)
     }
-    fn enable(receiver: &mut Receiver, host: &mut TestHost) {
+    fn enable(receiver: &mut Receiver, host: &mut RecordingHost) {
         let mut cx = Cx::new(host, 2, 0xfeed, 0);
         receiver.write(&mut cx, BASE + 0x10c, 4, 3);
         receiver.write(&mut cx, BASE, 4, 0x11);

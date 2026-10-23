@@ -3,8 +3,8 @@
 use super::Cluster;
 use fujimod_emulator_devices::graphics::scanout::Frame;
 use fujimod_emulator_devices::ip::usb::dwc3::{self, Dwc3};
-use fujimod_emulator_devices::xp4::adc::Adc;
-use fujimod_emulator_devices::xp4::storage::{self, DmaController, SerialFlashController};
+use fujimod_emulator_xp4::adc::Adc;
+use fujimod_emulator_xp4::storage::{self, DmaController, SerialFlashController};
 use fujimod_emulator_devices::{Cx, Device, Host, Record};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -52,7 +52,7 @@ pub struct Devices {
     windows: Vec<(u64, u64, usize)>,
     pub log: Vec<Record>,
     prior_records: usize,
-    pins: Option<fujimod_emulator_devices::xp4::gpio::SharedPins>,
+    pins: Option<fujimod_emulator_xp4::gpio::SharedPins>,
     adc: Option<(usize, Arc<Mutex<Adc>>)>,
     usb: Option<Arc<Mutex<Dwc3>>>,
     pub frames: BTreeMap<usize, Frame>,
@@ -174,7 +174,7 @@ impl Devices {
         Ok(())
     }
     pub fn gpio(&mut self, inputs: [u16; 16]) -> Result<(), String> {
-        let base = fujimod_emulator_devices::xp4::gpio::BASE;
+        let base = fujimod_emulator_xp4::gpio::BASE;
         if self.pins.is_some()
             || self
                 .windows
@@ -183,10 +183,10 @@ impl Devices {
         {
             return Err("Overlapping XP4 GPIO wiring".into());
         }
-        let pins = fujimod_emulator_devices::xp4::gpio::Pins::new(inputs);
+        let pins = fujimod_emulator_xp4::gpio::Pins::new(inputs);
         let id = self.models.len();
         self.models
-            .push(Some(Box::new(fujimod_emulator_devices::xp4::gpio::Gpio::new(
+            .push(Some(Box::new(fujimod_emulator_xp4::gpio::Gpio::new(
                 pins.clone(),
             ))));
         self.windows.push((base, base + 0x400, id));
@@ -205,7 +205,7 @@ impl Devices {
         {
             return Err("Overlapping XP4 temperature wiring".into());
         }
-        let model = fujimod_emulator_devices::xp4::temperature::Temperature::new(value, ticks)?;
+        let model = fujimod_emulator_xp4::temperature::Temperature::new(value, ticks)?;
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         self.windows.extend(ranges.map(|(a, b)| (a, b, id)));
@@ -226,7 +226,7 @@ impl Devices {
             .as_ref()
             .ok_or("Power SPI requires physical GPIO wiring")?
             .clone();
-        let part = fujimod_emulator_devices::xp4::power_serial::PowerSerial::new(
+        let part = fujimod_emulator_xp4::power_serial::PowerSerial::new(
             pins,
             port,
             pin,
@@ -247,7 +247,7 @@ impl Devices {
         active_high: bool,
         inputs: BTreeMap<u8, u16>,
         disable_writes: Vec<(u8, u16)>,
-        rtc: Option<fujimod_emulator_devices::xp4::rtc::StagedConfig>,
+        rtc: Option<fujimod_emulator_xp4::rtc::StagedConfig>,
         retained_registers: Vec<u8>,
     ) -> Result<(), String> {
         let pins = self
@@ -255,7 +255,7 @@ impl Devices {
             .as_ref()
             .ok_or("Checksum power SPI requires physical GPIO wiring")?
             .clone();
-        let part = fujimod_emulator_devices::xp4::checksum_power_serial::ChecksumPowerSerial::new(
+        let part = fujimod_emulator_xp4::checksum_power_serial::ChecksumPowerSerial::new(
             pins,
             port,
             pin,
@@ -270,7 +270,7 @@ impl Devices {
     }
 
     pub fn adc(&mut self, inputs: [u16; 12], sample_ticks: u64) -> Result<(), String> {
-        let base = fujimod_emulator_devices::xp4::adc::BASE;
+        let base = fujimod_emulator_xp4::adc::BASE;
         if self
             .windows
             .iter()
@@ -314,8 +314,8 @@ impl Devices {
         self.usb = Some(model);
         Ok(())
     }
-    pub fn usb_phy(&mut self, config: fujimod_emulator_devices::xp4::usb_phy::Config) -> Result<(), String> {
-        let model = fujimod_emulator_devices::xp4::usb_phy::Phy::new(config)?;
+    pub fn usb_phy(&mut self, config: fujimod_emulator_xp4::usb_phy::Config) -> Result<(), String> {
+        let model = fujimod_emulator_xp4::usb_phy::Phy::new(config)?;
         let ranges = [
             (config.base, config.base + 8),
             (config.base + 0x400, config.base + 0x404),
@@ -393,15 +393,15 @@ impl Devices {
         }
         let picture = match layout {
             None => None,
-            Some("bgra8888-straight") => Some(fujimod_emulator_devices::xp4::lcdc::Picture::Bgra8888Straight),
+            Some("bgra8888-straight") => Some(fujimod_emulator_xp4::lcdc::Picture::Bgra8888Straight),
             _ => return Err("Unsupported XP4 LCDC picture layout".into()),
         };
         let video = match video_layout {
             None => None,
-            Some("yycbcr422") => Some(fujimod_emulator_devices::xp4::lcdc::Video::YyCbCr422),
+            Some("yycbcr422") => Some(fujimod_emulator_xp4::lcdc::Video::YyCbCr422),
             _ => return Err("Unsupported XP4 LCDC video layout".into()),
         };
-        let model = fujimod_emulator_devices::xp4::lcdc::Lcdc::new(base, pixel_ticks, irqs, picture, video)?;
+        let model = fujimod_emulator_xp4::lcdc::Lcdc::new(base, pixel_ticks, irqs, picture, video)?;
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + 0x604, id));
@@ -424,7 +424,7 @@ impl Devices {
     }
     pub fn requests(&mut self, inputs: Vec<(u64, u64)>) -> Result<(), String> {
         let id = self.models.len();
-        let model = fujimod_emulator_devices::xp4::requests::Requests::new(&inputs)?;
+        let model = fujimod_emulator_xp4::requests::Requests::new(&inputs)?;
         self.windows
             .extend(inputs.iter().map(|&(a, _)| (a, a + 4, id)));
         self.models.push(Some(Box::new(model)));
@@ -439,7 +439,7 @@ impl Devices {
             {
                 return Err("Overlapping XP4 MOVDC window".into());
             }
-            let model = fujimod_emulator_devices::xp4::movdc::Movdc::new(base, irq, reset, period, luma)?;
+            let model = fujimod_emulator_xp4::movdc::Movdc::new(base, irq, reset, period, luma)?;
             let id = self.models.len();
             self.models.push(Some(Box::new(model)));
             self.windows.push((base, base + 0x10c, id));
@@ -595,12 +595,12 @@ impl Devices {
         self.windows.push((base, base + 0x6c, id));
     }
     pub fn spi(&mut self, base: u64, miso: bool) -> Result<(), String> {
-        self.spi_input(base, Box::new(fujimod_emulator_devices::xp4::spi::FixedPin(miso)))
+        self.spi_input(base, Box::new(fujimod_emulator_xp4::spi::FixedPin(miso)))
     }
     fn spi_input(
         &mut self,
         base: u64,
-        input: Box<dyn fujimod_emulator_devices::xp4::spi::Input>,
+        input: Box<dyn fujimod_emulator_xp4::spi::Input>,
     ) -> Result<(), String> {
         if !(0xfff32000..=0xfff38000).contains(&base)
             || base & 0xfff != 0
@@ -613,7 +613,7 @@ impl Devices {
         }
         let id = self.models.len();
         self.models
-            .push(Some(Box::new(fujimod_emulator_devices::xp4::spi::Spi::new(
+            .push(Some(Box::new(fujimod_emulator_xp4::spi::Spi::new(
                 base, input,
             ))));
         self.windows.push((base, base + 0x28, id));

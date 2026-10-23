@@ -1,7 +1,7 @@
 use super::*;
 use crate::ip::arm::pl022::{Clock, Controller};
 use crate::parts::serial::Unconnected;
-use crate::xp5::tests::TestHost;
+use crate::test_host::recording::RecordingHost;
 
 const BASE: u64 = 0x100000;
 const SERIAL: u64 = 0x200000;
@@ -17,25 +17,25 @@ fn pair(routing: SharedRouting, connections: BTreeMap<u8, Connection>) -> Pair {
     )
     .unwrap()
 }
-fn write(d: &mut dyn Device, h: &mut TestHost, address: u64, value: u64) {
+fn write(d: &mut dyn Device, h: &mut RecordingHost, address: u64, value: u64) {
     let mut cx = Cx::new(h, 0, 0x1234, 0);
     d.write(&mut cx, address, 4, value);
     assert_eq!(cx.refusal(), None, "{address:#x} <- {value:#x}");
 }
-fn read(d: &mut dyn Device, h: &mut TestHost, address: u64) -> u64 {
+fn read(d: &mut dyn Device, h: &mut RecordingHost, address: u64) -> u64 {
     let mut cx = Cx::new(h, 0, 0x1234, 0);
     let v = d.read(&mut cx, address, 4);
     assert_eq!(cx.refusal(), None);
     v
 }
-fn advance(d: &mut dyn Device, h: &mut TestHost) {
+fn advance(d: &mut dyn Device, h: &mut RecordingHost) {
     let mut cx = Cx::new(h, 0, 0, 0);
     d.advance(&mut cx);
     assert_eq!(cx.refusal(), None);
 }
 fn configure(
     d: &mut Pair,
-    h: &mut TestHost,
+    h: &mut RecordingHost,
     lane: u64,
     source: u64,
     destination: u64,
@@ -58,7 +58,7 @@ fn software_transfer_copies_addressed_bytes_before_status_and_acknowledges_zero(
     let routing = Arc::new(Mutex::new(Routing::default()));
     routing.lock().unwrap().set_request(0, 63).unwrap();
     let mut d = pair(routing.clone(), BTreeMap::new());
-    let mut h = TestHost {
+    let mut h = RecordingHost {
         ram: (0..128).collect(),
         ..Default::default()
     };
@@ -103,7 +103,7 @@ fn software_transfer_copies_addressed_bytes_before_status_and_acknowledges_zero(
 struct SerialDma {
     d: Pair,
     serial: Controller,
-    h: TestHost,
+    h: RecordingHost,
 }
 impl SerialDma {
     fn fresh() -> Self {
@@ -136,7 +136,7 @@ impl SerialDma {
         Self {
             d: pair(routing, connections),
             serial,
-            h: TestHost {
+            h: RecordingHost {
                 ram: (0..128).collect(),
                 ..Default::default()
             },
@@ -265,7 +265,7 @@ fn global_stop_honors_error_mask_and_unknown_transfer_shapes_never_run() {
     let routing = Arc::new(Mutex::new(Routing::default()));
     routing.lock().unwrap().set_request(0, 63).unwrap();
     let mut d = pair(routing.clone(), BTreeMap::new());
-    let mut h = TestHost {
+    let mut h = RecordingHost {
         ram: vec![0x55; 128],
         ..Default::default()
     };
@@ -310,7 +310,7 @@ fn exhausted_counter_cannot_restart_until_the_guest_programs_a_new_count() {
     let routing = Arc::new(Mutex::new(Routing::default()));
     routing.lock().unwrap().set_request(0, 63).unwrap();
     let mut d = pair(routing, BTreeMap::new());
-    let mut h = TestHost {
+    let mut h = RecordingHost {
         ram: (0..128).collect(),
         ..Default::default()
     };

@@ -1,8 +1,6 @@
 //! XP5 host controls shared by standard emulator sessions.
-use fujimod_emulator_devices::{
-    parts::resistor_keys::{Key, ResistorKeys},
-    xp5::gpio::SharedPins,
-};
+use fujimod_emulator_devices::parts::resistor_keys::{Key, ResistorKeys};
+use fujimod_emulator_xp5::gpio::SharedPins;
 use std::time::Duration;
 
 /// External XP5 controls retained by a session after device construction.
