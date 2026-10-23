@@ -387,23 +387,36 @@ impl ImageInput {
         if v != 1
             || s.readback_due.is_some()
             || s.stop_due.is_some()
-            || r[0x394 / 4] != 0x1000000
             || r[0x398 / 4] & 65535 != 0
-            || r[0x3ac / 4] != 0xc003
             || r[0x3b8 / 4] != 0xfb000000
-            || r[0x39c / 4] != 0x40000
         {
-            return Err("RAW channel4 requires idle U16 mode3 full-field transport".into());
+            return Err("RAW channel4 requires an idle full-field transport".into());
         }
+        // Separate packed-sample transport from the burst selector. The
+        // packed path programs its line pitch in samples; U16 uses bytes.
+        // Other source controls and partial-field modes remain unsupported.
+        let (packing, pitch) = match (r[0x394 / 4], r[0x3ac / 4], r[0x39c / 4]) {
+            (0x1000000, 0xc003, 0x40000) => (Packing::U16, r[0x3a4 / 4] as usize),
+            (0x1000100, 0xc004, 0) => (
+                Packing::Packed12,
+                Packing::Packed12.row_bytes(r[0x3a4 / 4] as usize),
+            ),
+            _ => return Err("RAW channel4 packing/burst/field controls are unsupported".into()),
+        };
         let src = Raster {
             address: r[0x3a8 / 4] as u64,
             width: (r[0x398 / 4] >> 16) as usize,
             height: r[0x3a0 / 4] as usize,
-            pitch: r[0x3a4 / 4] as usize,
+            pitch,
         };
-        src.validate(src.width * 2)?;
-        if src.width < 6 || src.height < 6 || src.address & 1 != 0 || src.pitch & 1 != 0 {
-            return Err("RAW channel4 U16 geometry is unsupported".into());
+        src.validate(packing.row_bytes(src.width))?;
+        if src.width < 6
+            || src.height < 6
+            || src.width % 2 != 0
+            || src.address & 1 != 0
+            || r[0x3a4 / 4] & 1 != 0
+        {
+            return Err("RAW channel4 geometry is unsupported".into());
         }
         let mut outputs = self
             .wiring
@@ -440,7 +453,7 @@ impl ImageInput {
             width: src.width,
             height: src.height,
             pitch: src.pitch,
-            packing: Packing::U16,
+            packing,
         };
         let result = (|| {
             for (i, target) in targets.iter().enumerate() {

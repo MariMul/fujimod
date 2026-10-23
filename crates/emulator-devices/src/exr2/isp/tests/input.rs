@@ -696,6 +696,139 @@ fn disabled_raw_channel_does_not_dma_or_signal_completion() {
     assert!(d.save()[0]["dma"]["deadline"].is_null());
 }
 #[test]
+fn packed_raw_readback_matches_u16_with_independent_row_padding() {
+    use crate::imaging::raw::Packing;
+    fn render(packing: Packing, padding: usize, mutate_after_start: bool) -> Vec<Vec<u8>> {
+        let mut h = TestHost::new();
+        let outputs: readback::MemoryOutputHandle = Default::default();
+        for i in 0..2 {
+            outputs
+                .lock()
+                .unwrap()
+                .configure(
+                    i,
+                    Some(dma::Raster {
+                        address: 0x9000 + i as u64 * 0x1000,
+                        width: 6,
+                        height: 6,
+                        pitch: 16,
+                    }),
+                )
+                .unwrap();
+        }
+        let bank: parameters::ParameterHandle = Default::default();
+        let words = crate::imaging::film::color_tests::words();
+        bank.lock().unwrap().words[..words.len()].copy_from_slice(&words);
+        let mut wiring = input_wiring();
+        wiring.memory_outputs = Some(outputs.clone());
+        wiring.parameters = Some(bank);
+        let mut d = ImageInput::new(input_options(), wiring).unwrap();
+        let pitch = packing.row_bytes(6 + padding);
+        h.ram[0x8000..0x8000 + pitch * 6].fill(0xa5);
+        for y in 0..6 {
+            for x in (0..6).step_by(2) {
+                let a = (200 + y * 440 + x * 70) as u16;
+                let b = a + 70;
+                let at = 0x8000 + y * pitch + packing.row_bytes(x);
+                match packing {
+                    Packing::U16 => {
+                        h.ram[at..at + 2].copy_from_slice(&a.to_le_bytes());
+                        h.ram[at + 2..at + 4].copy_from_slice(&b.to_le_bytes());
+                    }
+                    Packing::Packed12 => h.ram[at..at + 3].copy_from_slice(&[
+                        a as u8,
+                        ((a >> 8) | (b << 4)) as u8,
+                        (b >> 4) as u8,
+                    ]),
+                }
+            }
+        }
+        let packed = packing == Packing::Packed12;
+        for (offset, value) in [
+            (0x394, if packed { 0x1000100 } else { 0x1000000 }),
+            (0x398, 6 << 16),
+            (0x39c, if packed { 0 } else { 0x40000 }),
+            (0x3a0, 6),
+            (
+                0x3a4,
+                if packed {
+                    6 + padding as u32
+                } else {
+                    pitch as u32
+                },
+            ),
+            (0x3a8, 0x8000),
+            (0x3ac, if packed { 0xc004 } else { 0xc003 }),
+            (0x3b8, 0xfb000000),
+            (0x390, 1),
+        ] {
+            write(&mut d, &mut h, 0xfff10000 + offset, value);
+        }
+        if mutate_after_start {
+            h.ram[0x8000..0x8000 + pitch * 6].fill(0);
+        }
+        assert!(h.effects.is_empty());
+        h.now = 7;
+        let mut result: Vec<Vec<u8>> = Vec::new();
+        for transfer in &mut outputs.lock().unwrap().transfers {
+            assert!(transfer.write(&mut h.cx()).unwrap());
+        }
+        for address in [0x9000, 0xa000] {
+            result.push(
+                (0..6)
+                    .flat_map(|row| h.ram[address + row * 16..address + row * 16 + 12].to_vec())
+                    .collect(),
+            );
+        }
+        assert!(result[0].windows(4).any(|w| w != &result[0][..4]));
+        result
+    }
+    let expected = render(Packing::U16, 0, false);
+    for padding in [0, 2, 10] {
+        assert_eq!(render(Packing::Packed12, padding, false), expected);
+        assert_eq!(render(Packing::Packed12, padding, true), expected);
+    }
+}
+
+#[test]
+fn packed_raw_readback_refuses_unknown_controls_and_short_pitch() {
+    for (offset, value) in [
+        (0x394, 0x1100100),
+        (0x398, (6 << 16) | 1),
+        (0x39c, 1),
+        (0x3a4, 4),
+        (0x3a4, 7),
+        (0x3ac, 0xc002),
+        (0x3b8, 0xfb000100),
+    ] {
+        let mut h = TestHost::new();
+        let mut d = ImageInput::new(input_options(), input_wiring()).unwrap();
+        for (o, v) in [
+            (0x394, 0x1000100),
+            (0x398, 6 << 16),
+            (0x39c, 0),
+            (0x3a0, 6),
+            (0x3a4, 6),
+            (0x3a8, 0x8000),
+            (0x3ac, 0xc004),
+            (0x3b8, 0xfb000000),
+            (offset, value),
+        ] {
+            write(&mut d, &mut h, 0xfff10000 + o, v);
+        }
+        let mut cx = h.cx();
+        d.write(&mut cx, 0xfff10390, 4, 1);
+        let refusal = cx.refusal().unwrap();
+        assert!(
+            !refusal.contains("no connected output"),
+            "{offset:#x}: {refusal}"
+        );
+        assert!(h.effects.is_empty());
+        assert_eq!(d.next_deadline(0), None);
+    }
+}
+
+#[test]
 fn raw_readback_waits_for_both_outputs_then_eof() {
     let mut h = TestHost::new();
     let outputs: readback::MemoryOutputHandle = Default::default();
