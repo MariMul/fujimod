@@ -3470,7 +3470,7 @@ dependencies = [
  "fujimod-emulator-parts-controls",
  "fujimod-emulator-storage",
  "fujimod-emulator-xp4",
- "fujimod-emulator-xp5",
+ "fujimod-emulator-xp5-board",
  "fujimod-recording",
  "fujimod-settings",
  "fujimod-workspace-hack",
@@ -3494,7 +3494,10 @@ dependencies = [
  "fujimod-emulator-graphics",
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-parts-controls",
- "fujimod-emulator-xp5",
+ "fujimod-emulator-xp5-board",
+ "fujimod-emulator-xp5-display",
+ "fujimod-emulator-xp5-io",
+ "fujimod-emulator-xp5-storage",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -3518,7 +3521,7 @@ dependencies = [
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
  "fujimod-emulator-ip-arm",
- "fujimod-emulator-xp5",
+ "fujimod-emulator-xp5-io",
  "fujimod-workspace-hack",
  "serde_json",
 ]
@@ -3782,7 +3785,9 @@ dependencies = [
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-parts-controls",
  "fujimod-emulator-storage",
- "fujimod-emulator-xp5",
+ "fujimod-emulator-xp5-board",
+ "fujimod-emulator-xp5-display",
+ "fujimod-emulator-xp5-io",
  "fujimod-firmware",
  "fujimod-workspace-hack",
  "serde",
@@ -3861,21 +3866,69 @@ dependencies = [
 ]
 
 [[package]]
-name = "fujimod-emulator-xp5"
+name = "fujimod-emulator-xp5-board"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-ip",
+ "fujimod-emulator-ip-arm",
+ "fujimod-emulator-ip-dmp",
+ "fujimod-emulator-parts-io",
+ "fujimod-emulator-xp5-display",
+ "fujimod-emulator-xp5-imaging",
+ "fujimod-emulator-xp5-io",
+ "fujimod-emulator-xp5-storage",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "toml 0.9.12+spec-1.1.0",
+]
+
+[[package]]
+name = "fujimod-emulator-xp5-display"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-graphics",
- "fujimod-emulator-ip",
- "fujimod-emulator-ip-arm",
- "fujimod-emulator-ip-dmp",
+ "fujimod-emulator-xp5-io",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "fujimod-emulator-xp5-imaging"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "toml 0.9.12+spec-1.1.0",
+]
+
+[[package]]
+name = "fujimod-emulator-xp5-io"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
  "fujimod-emulator-parts-controls",
  "fujimod-emulator-parts-io",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
- "sha2",
- "toml 0.9.12+spec-1.1.0",
+]
+
+[[package]]
+name = "fujimod-emulator-xp5-storage"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-ip",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -26,6 +26,7 @@ pub mod signals;
 #[doc(hidden)]
 pub mod test_host;
 pub mod work;
+pub mod xp5;
 
 pub use bus::{Cx, Device, Host};
 pub use map::WordMap;

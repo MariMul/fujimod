@@ -15,6 +15,11 @@ members = [
   "crates/emulator-cpu-unicorn",
   "crates/emulator-cpu-unicorn/sys",
   "crates/emulator-devices",
+  "crates/emulator-xp5-board",
+  "crates/emulator-xp5-io",
+  "crates/emulator-xp5-display",
+  "crates/emulator-xp5-storage",
+  "crates/emulator-xp5-imaging",
   "crates/emulator-parts-io",
   "crates/emulator-parts-controls",
   "crates/emulator-parts-sensor",
@@ -34,7 +39,6 @@ members = [
   "crates/emulator-exr2-gpu",
   "crates/emulator-exr2-i2c",
   "crates/emulator-exr2-display",
-  "crates/emulator-xp5",
   "crates/emulator-xp4",
   "crates/emulator-exr2-isp",
   "crates/emulator-exr2-board",
@@ -67,6 +71,11 @@ fujimod-simulation = { path = "crates/simulation", version = "0.1.0" }
 fujimod-catalog = { path = "crates/catalog", version = "0.1.0" }
 fujimod-emulator = { path = "crates/emulator", version = "0.1.0" }
 fujimod-emulator-devices = { path = "crates/emulator-devices", version = "0.1.0" }
+fujimod-emulator-xp5-board = { path = "crates/emulator-xp5-board", version = "0.1.0" }
+fujimod-emulator-xp5-io = { path = "crates/emulator-xp5-io", version = "0.1.0" }
+fujimod-emulator-xp5-display = { path = "crates/emulator-xp5-display", version = "0.1.0" }
+fujimod-emulator-xp5-storage = { path = "crates/emulator-xp5-storage", version = "0.1.0" }
+fujimod-emulator-xp5-imaging = { path = "crates/emulator-xp5-imaging", version = "0.1.0" }
 fujimod-emulator-parts-io = { path = "crates/emulator-parts-io", version = "0.1.0" }
 fujimod-emulator-parts-controls = { path = "crates/emulator-parts-controls", version = "0.1.0" }
 fujimod-emulator-parts-sensor = { path = "crates/emulator-parts-sensor", version = "0.1.0" }
@@ -86,7 +95,6 @@ fujimod-emulator-exr2-audio = { path = "crates/emulator-exr2-audio", version = "
 fujimod-emulator-exr2-gpu = { path = "crates/emulator-exr2-gpu", version = "0.1.0" }
 fujimod-emulator-exr2-i2c = { path = "crates/emulator-exr2-i2c", version = "0.1.0" }
 fujimod-emulator-exr2-display = { path = "crates/emulator-exr2-display", version = "0.1.0" }
-fujimod-emulator-xp5 = { path = "crates/emulator-xp5", version = "0.1.0" }
 fujimod-emulator-xp4 = { path = "crates/emulator-xp4", version = "0.1.0" }
 fujimod-emulator-exr2-isp = { path = "crates/emulator-exr2-isp", version = "0.1.0" }
 fujimod-emulator-exr2-board = { path = "crates/emulator-exr2-board", version = "0.1.0" }

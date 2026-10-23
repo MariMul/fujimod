@@ -10,7 +10,8 @@ use fujimod_emulator_cpu::{Model, Register, arm, timeline::Ratio};
 use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, graphics::scanout::Frame, parts::{controls::Source, pins::DriveInput}};
 use fujimod_emulator_parts_controls::resistor_keys::{Key, Options as ResistorKeysOptions, ResistorKeys};
 use fujimod_emulator_graphics::raster::PixelOrder;
-use fujimod_emulator_xp5::{board, display, gpio, panel_clock};
+use fujimod_emulator_xp5_board::board;
+use fujimod_emulator_xp5_display::display;
 use serde::Deserialize;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
@@ -181,7 +182,7 @@ impl Session {
                 controls,
                 displays,
             } => {
-                let pins = gpio::Pins::shared();
+                let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
                 let driver: Arc<dyn DriveInput> = pins.clone();
                 let input = Arc::new(match controls {
                     Controls::X100vi { resistor_keys } => ResistorKeys::new(driver, resistor_keys)?,
@@ -209,7 +210,7 @@ impl Session {
                 let mut resources = board::Resources {
                     controls: input.clone(),
                     pins,
-                    clocks: panel_clock::Clocks::new(),
+                    clocks: fujimod_emulator_devices::xp5::panel_clocks::Clocks::new(),
                     companion: None,
                     storage: None,
                     displays: scanouts,

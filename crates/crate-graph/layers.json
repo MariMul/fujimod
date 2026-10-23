@@ -26,13 +26,17 @@
       "fujimod-emulator-parts-sensor",
       "fujimod-emulator-storage",
       "fujimod-emulator-xp4",
-      "fujimod-emulator-xp5"
+      "fujimod-emulator-xp5-display",
+      "fujimod-emulator-xp5-imaging",
+      "fujimod-emulator-xp5-io",
+      "fujimod-emulator-xp5-storage"
     ],
     "plan": [
       "fujimod-emulator-exr2-plan"
     ],
     "board": [
-      "fujimod-emulator-exr2-board"
+      "fujimod-emulator-exr2-board",
+      "fujimod-emulator-xp5-board"
     ],
     "engine": [
       "fujimod-emulator",
@@ -75,8 +79,7 @@
         "fujimod-emulator-ip-dmp",
         "fujimod-emulator-parts-controls",
         "fujimod-emulator-storage",
-        "fujimod-emulator-xp4",
-        "fujimod-emulator-xp5"
+        "fujimod-emulator-xp4"
       ],
       "fujimod-emulator-exr2-board": [
         "fujimod-emulator-exr2-audio",
@@ -102,11 +105,20 @@
         "fujimod-emulator-exr2-gpu",
         "fujimod-emulator-graphics",
         "fujimod-emulator-storage"
+      ],
+      "fujimod-emulator-xp5-board": [
+        "fujimod-emulator-ip",
+        "fujimod-emulator-ip-arm",
+        "fujimod-emulator-ip-dmp",
+        "fujimod-emulator-parts-io",
+        "fujimod-emulator-xp5-display",
+        "fujimod-emulator-xp5-imaging",
+        "fujimod-emulator-xp5-io",
+        "fujimod-emulator-xp5-storage"
       ]
     },
     "oversize_models": [
-      "fujimod-emulator-exr2-isp",
-      "fujimod-emulator-xp5"
+      "fujimod-emulator-exr2-isp"
     ],
     "interface_devices": [
       "fujimod-emulator-devices/src/exr2/clock.rs",

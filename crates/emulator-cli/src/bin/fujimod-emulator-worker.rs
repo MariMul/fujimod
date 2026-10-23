@@ -6,7 +6,10 @@ use fujimod_emulator::inputs::{Files, Location};
 use fujimod_emulator_cpu::{self as cpu, Access, Model, Register};
 use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, parts::{controls::Source, pins::DriveInput}};
 use fujimod_emulator_parts_controls::resistor_keys::{Key, Options as ResistorKeysOptions, ResistorKeys};
-use fujimod_emulator_xp5::{board as xp5_board, display, flash_storage, gpio, mailbox, panel_clock};
+use fujimod_emulator_xp5_board::board as xp5_board;
+use fujimod_emulator_xp5_display::display;
+use fujimod_emulator_xp5_storage::flash_storage;
+use fujimod_emulator_xp5_io::mailbox;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
@@ -455,7 +458,7 @@ impl Worker {
                 storage: _,
                 displays,
             } => {
-                let pins = gpio::Pins::shared();
+                let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
                 let driver: Arc<dyn DriveInput> = pins.clone();
                 let input = Arc::new(match controls {
                     ControlInput::X100vi { resistor_keys } => {
@@ -476,7 +479,7 @@ impl Worker {
                 let mut resources = xp5_board::Resources {
                     controls: input.clone(),
                     pins,
-                    clocks: panel_clock::Clocks::new(),
+                    clocks: fujimod_emulator_devices::xp5::panel_clocks::Clocks::new(),
                     companion: companion.map(|c| xp5_board::Companion {
                         pins: c.pins(),
                         channel: mailbox::Channel::default(),
