@@ -9,7 +9,7 @@ use fujimod_emulator_devices::{
         pins::DriveInput,
         resistor_keys::{Key, Options as ResistorKeysOptions, ResistorKeys},
     },
-    xp5::{board, display, flash_storage, gpio, mailbox, panel_clock},
+    xp5::{board as xp5_board, display, flash_storage, gpio, mailbox, panel_clock},
 };
 use fujimod_catalog::emulator::Asset;
 use fujimod_emulator_cpu::{self as cpu, Access, Model, Register};
@@ -477,11 +477,11 @@ impl Worker {
                         "XP5 mailbox companion must select a declared M-profile processor".into(),
                     );
                 }
-                let mut resources = board::Resources {
+                let mut resources = xp5_board::Resources {
                     controls: input.clone(),
                     pins,
                     clocks: panel_clock::Clocks::new(),
-                    companion: companion.map(|c| board::Companion {
+                    companion: companion.map(|c| xp5_board::Companion {
                         pins: c.pins(),
                         channel: mailbox::Channel::default(),
                     }),
@@ -495,7 +495,7 @@ impl Worker {
                         .map(Scanout::config)
                         .collect::<Result<BTreeMap<_, _>, _>>()?,
                 };
-                board::register_all(&mut graph, &windows, &mut resources, &mut |window| {
+                xp5_board::register_all(&mut graph, &windows, &mut resources, &mut |window| {
                     let missing = format!("{}@{:#x}", window.kind, window.base);
                     if mode == board::bus::Mode::Strict {
                         Err(format!("unknown device {missing}"))
