@@ -14,6 +14,8 @@ use super::super::isp::{Irq, dma::IrqRoutes};
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 pub const BASE: u64 = 0xfff02000;
 pub const IRQ: u32 = 0x5b;
@@ -67,6 +69,8 @@ pub struct MemoryDma {
     routes: IrqRoutes,
     state: State,
     scratch: Box<[u8]>,
+    /// The completion status word, published for side-effect-free polling.
+    status: Arc<AtomicU32>,
 }
 impl MemoryDma {
     pub fn new(_options: Options, wiring: Wiring) -> Result<Self, String> {
@@ -78,7 +82,12 @@ impl MemoryDma {
             routes: wiring.routes,
             state: State::default(),
             scratch: vec![0; SCRATCH_BYTES].into_boxed_slice(),
+            status: Arc::new(AtomicU32::new(0)),
         })
+    }
+    fn publish_status(&self) {
+        self.status
+            .store(self.state.registers[STATUS], Ordering::Release);
     }
     fn offset(&self, address: u64, size: u8) -> Option<usize> {
         let offset = address.checked_sub(self.base)?;
@@ -253,6 +262,7 @@ impl Device for MemoryDma {
         self.validate_checkpoint(saved)?;
         let saved: Saved = saved.decode(self.name())?;
         self.state = saved.state;
+        self.publish_status();
         Ok(())
     }
     fn fingerprint(&self) -> Result<Value, String> {
@@ -305,6 +315,18 @@ impl Device for MemoryDma {
             }
             _ => self.state.registers[offset / 4] = value,
         }
+        self.publish_status();
+    }
+    fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<crate::bus::FastReadWord> {
+        let status = self.base + 0x24;
+        if status >= window_base && status + 4 <= window_base.saturating_add(window_size) {
+            vec![crate::bus::FastReadWord::atomic_u32(
+                status - window_base,
+                self.status.clone(),
+            )]
+        } else {
+            Vec::new()
+        }
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
         self.offset(address, size).is_some()
@@ -325,6 +347,7 @@ impl Device for MemoryDma {
         }
         self.state.pending = None;
         self.state.registers[STATUS] = 0x40;
+        self.publish_status();
         if let Some(irq) = pending.irq {
             if let Err(e) = irq.raise(cx) {
                 cx.fail(e);
@@ -347,6 +370,7 @@ impl Device for MemoryDma {
             return Err("invalid memory DMA checkpoint".into());
         }
         self.state = state;
+        self.publish_status();
         Ok(())
     }
 }
@@ -477,6 +501,32 @@ mod tests {
         d.write(&mut cx, BASE, 4, 1u64 << 32);
         assert!(cx.refusal().is_some());
         assert_eq!(d.save(), saved);
+    }
+    #[test]
+    fn completion_status_is_published_for_polling_without_device_reads() {
+        let mut d = model();
+        let mut h = Memory::default();
+        assert!(d.fast_reads(BASE + 0x40, 0x40).is_empty());
+        let reads = d.fast_reads(BASE, 0x40);
+        assert_eq!(reads.len(), 1);
+        assert_eq!(reads[0].offset, 0x24);
+        let crate::bus::FastReadValue::AtomicU32(word) = &reads[0].value else {
+            panic!("memory DMA status is an atomic fast read");
+        };
+        let status = || word.load(Ordering::Acquire);
+        assert_eq!(status(), 0);
+        h.now = 100;
+        configure(&mut d, &mut h, 0x1500400, 0x40001000, 0x2000, 81);
+        write(&mut d, &mut h, 0x28, 5).unwrap();
+        assert_eq!(status(), 1);
+        h.now = 102;
+        advance(&mut d, &mut h).unwrap();
+        assert_eq!(status(), 0x40);
+        let saved = d.checkpoint().unwrap();
+        write(&mut d, &mut h, 0x28, 8).unwrap();
+        assert_eq!(status(), 0);
+        d.restore_checkpoint(&saved).unwrap();
+        assert_eq!(status(), 0x40);
     }
     #[test]
     fn fill_latches_seed_then_commits_at_exact_deadline_independent_of_early_advances() {

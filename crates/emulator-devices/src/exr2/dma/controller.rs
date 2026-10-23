@@ -129,6 +129,12 @@ impl Controller {
 }
 
 impl Device for Controller {
+    fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<crate::bus::FastReadWord> {
+        self.modes
+            .iter()
+            .flat_map(|mode| mode.device.fast_reads(window_base, window_size))
+            .collect()
+    }
     fn name(&self) -> &'static str {
         "exr2-dma-controller"
     }
