@@ -14,6 +14,6 @@ pub(super) fn settings_header(
 ) -> PyResult<Option<Vec<u8>>> {
     let layout: fujimod_catalog::settings::FirmwareSettings =
         serde_json::from_str(layout).map_err(|failure| error(failure.to_string()))?;
-    let settings = fujimod_settings::build(&layout, flash, &requested).map_err(error)?;
+    let settings = fujimod_settings::build(&layout, flash, &requested, None).map_err(error)?;
     Ok(settings.profile.map(|profile| profile.header.to_vec()))
 }

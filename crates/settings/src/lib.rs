@@ -6,7 +6,7 @@
 //! the same way from the stock profile defaults. Stock firmware reads the
 //! result as it would a camera's own settings.
 #![forbid(unsafe_code)]
-use fujimod_catalog::settings::{FirmwareSettings, UpdateRange};
+use fujimod_catalog::settings::{FirmwareSettings, SectionLength, UpdateRange};
 use std::collections::BTreeMap;
 
 /// Settings ready to place before cold boot.
@@ -99,11 +99,14 @@ pub fn seal_journal(record: &mut [u8], parity_offset: usize) -> Result<(), Strin
 }
 
 /// Build the settings for `requested` settings (`name -> value name`) from the
-/// installed flash image.
+/// installed flash image. With a camera's NAND sections (`name -> bytes`), the
+/// bank is that camera's: erased except for the sections the layout declares.
+/// Without, it is the update's defaults table and the layout's fields.
 pub fn build(
     layout: &FirmwareSettings,
     flash: &[u8],
     requested: &BTreeMap<String, String>,
+    camera: Option<&BTreeMap<String, Vec<u8>>>,
 ) -> Result<Settings, String> {
     layout.validate()?;
     let section = source(layout, flash)?;
@@ -116,8 +119,11 @@ pub fn build(
     }
     let size = usize::try_from(bank.bytes).map_err(|_| "bank too large")?;
     let mut stores: BTreeMap<&str, Vec<u8>> = BTreeMap::new();
-    let mut bytes = vec![0; size];
-    if let Some(table) = &layout.defaults {
+    let mut bytes = match camera {
+        Some(sections) => camera_bank(layout, size, sections)?,
+        None => vec![0; size],
+    };
+    if let (None, Some(table)) = (camera, &layout.defaults) {
         let table = read(&section, layout, table)?;
         if table[table.len() - 4..] != [0xff, 0xff, 0, 0] {
             return Err("defaults table has no terminator".into());
@@ -130,8 +136,10 @@ pub fn build(
             bytes[offset] = entry[2];
         }
     }
-    for field in &layout.fields {
-        put(&mut bytes, field.offset, &field.bytes);
+    if camera.is_none() {
+        for field in &layout.fields {
+            put(&mut bytes, field.offset, &field.bytes);
+        }
     }
     stores.insert("bank", bytes);
     if let Some(profile) = &layout.profile {
@@ -190,6 +198,37 @@ pub fn build(
         },
         profile,
     })
+}
+
+/// An erased bank holding a camera's sections, each checked against the length
+/// the layout declares. Fixed sections go first: counted lengths read them.
+fn camera_bank(
+    layout: &FirmwareSettings,
+    size: usize,
+    sections: &BTreeMap<String, Vec<u8>>,
+) -> Result<Vec<u8>, String> {
+    if let Some(name) = sections
+        .keys()
+        .find(|name| !layout.sections.iter().any(|s| &s.name == *name))
+    {
+        return Err(format!("{} declares no bank section {name}", layout.firmware_id));
+    }
+    let mut bank = vec![0xff; size];
+    let mut ordered: Vec<_> = layout.sections.iter().collect();
+    ordered.sort_by_key(|s| !matches!(s.length, SectionLength::Fixed { .. }));
+    for section in ordered {
+        let expected = section.length.bytes(&bank)?;
+        let bytes = sections.get(&section.name).map_or(&[][..], Vec::as_slice);
+        if bytes.len() as u64 != expected {
+            return Err(format!(
+                "camera section {} holds {} bytes; the bank declares {expected}",
+                section.name,
+                bytes.len()
+            ));
+        }
+        put(&mut bank, section.offset, bytes);
+    }
+    Ok(bank)
 }
 
 fn put(store: &mut [u8], offset: u64, value: &[u8]) {

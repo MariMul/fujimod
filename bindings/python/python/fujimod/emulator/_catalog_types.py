@@ -1810,6 +1810,7 @@ FirmwareSettings = TypedDict(
         "id": Required["str"],
         "profile": NotRequired["SettingsProfile | None"],
         "schema": Required["int"],
+        "sections": Required["list[SettingsSection]"],
         "settings": Required["dict[str, NamedSetting]"],
         "source": Required["SettingsSource"],
     },
@@ -4447,6 +4448,20 @@ class Scanout(TypedDict, total=False):
     width: Required[int]
 
 
+type SectionLength = SectionLengthVariant0 | SectionLengthVariant1
+
+
+class SectionLengthVariant0(TypedDict, total=False):
+    bytes: Required[int]
+    kind: Required[Literal["fixed"]]
+
+
+class SectionLengthVariant1(TypedDict, total=False):
+    bits: Required[int]
+    counts: Required[int]
+    kind: Required[Literal["counted"]]
+
+
 class SensorAssembly(TypedDict, total=False):
     connection_id: Required[str]
     control_bus: NotRequired[ControlBusAttachment | None]
@@ -4530,6 +4545,13 @@ class SettingsField(TypedDict, total=False):
 class SettingsProfile(TypedDict, total=False):
     header: Required[UpdateRange]
     records: Required[dict[str, ProfileRecord]]
+
+
+class SettingsSection(TypedDict, total=False):
+    basis: Required[str]
+    length: Required[SectionLength]
+    name: Required[str]
+    offset: Required[int]
 
 
 class SettingsSource(TypedDict, total=False):

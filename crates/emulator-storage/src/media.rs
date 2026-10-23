@@ -28,11 +28,15 @@ pub enum NandInput {
     },
     /// A settings bank built from the installed flash image (`base`) with the
     /// requested named settings, placed in its stock flash blocks before cold boot.
+    /// `camera` names the assets holding a camera's bank sections (section name
+    /// to asset); the bank is then that camera's.
     Settings {
         options: Options,
         base: String,
         layout: fujimod_catalog::settings::FirmwareSettings,
         requested: BTreeMap<String, String>,
+        #[serde(default)]
+        camera: BTreeMap<String, String>,
     },
     /// The stock user profile's journal records built from the installed flash
     /// image (`base`) with the requested named settings; the settings bank stays
@@ -107,7 +111,15 @@ impl NandInput {
                 base,
                 layout,
                 requested,
-            } => settings_medium(options, asset(&base)?, &layout, &requested, true),
+                camera,
+            } => {
+                let sections = camera
+                    .into_iter()
+                    .map(|(section, name)| Ok((section, asset(&name)?.clone())))
+                    .collect::<Result<BTreeMap<_, _>, String>>()?;
+                let camera = (!sections.is_empty()).then_some(&sections);
+                settings_medium(options, asset(&base)?, &layout, &requested, camera, true)
+            }
             Self::Profile {
                 options,
                 base,
@@ -123,7 +135,7 @@ impl NandInput {
                 if layout.profile.is_none() {
                     return Err(format!("{} has no located user profile", layout.firmware_id));
                 }
-                settings_medium(options, asset(&base)?, &layout, &requested, false)
+                settings_medium(options, asset(&base)?, &layout, &requested, None, false)
             }
         }
     }
@@ -135,9 +147,10 @@ fn settings_medium(
     flash: &[u8],
     layout: &fujimod_catalog::settings::FirmwareSettings,
     requested: &BTreeMap<String, String>,
+    camera: Option<&BTreeMap<String, Vec<u8>>>,
     with_bank: bool,
 ) -> Result<Nand, String> {
-    let settings = fujimod_settings::build(layout, flash, requested)?;
+    let settings = fujimod_settings::build(layout, flash, requested, camera)?;
     let block_bytes = options.page_bytes as u64 * options.pages_per_block as u64;
     let mut placements = Vec::new();
     if with_bank {

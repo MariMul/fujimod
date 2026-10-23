@@ -93,6 +93,60 @@
       ],
       "type": "object"
     },
+    "SectionLength": {
+      "description": "A section's length: fixed, or counted from bytes the bank itself holds.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Always this many bytes.",
+          "properties": {
+            "bytes": {
+              "description": "Byte count.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "fixed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "bytes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Two little-endian 24-bit entry counts at `counts` and `counts + 3`,\n`bits` per entry: the first list rounded up to 64-bit words, the\nsecond to bytes.",
+          "properties": {
+            "bits": {
+              "description": "Bits per entry.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "counts": {
+              "description": "Bank offset of the first count.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "counted",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "counts",
+            "bits"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "SettingsBank": {
       "additionalProperties": false,
       "description": "The flash blocks holding the settings bank.",
@@ -194,6 +248,37 @@
       "required": [
         "header",
         "records"
+      ],
+      "type": "object"
+    },
+    "SettingsSection": {
+      "additionalProperties": false,
+      "description": "One part of the bank the stock loader reads into its configuration RAM.",
+      "properties": {
+        "basis": {
+          "description": "The loader that reads it.",
+          "type": "string"
+        },
+        "length": {
+          "$ref": "#/$defs/SectionLength",
+          "description": "How many bytes the loader reads."
+        },
+        "name": {
+          "description": "File name part, such as `configuration`.",
+          "type": "string"
+        },
+        "offset": {
+          "description": "Byte offset in the bank.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "offset",
+        "length",
+        "basis"
       ],
       "type": "object"
     },
@@ -318,6 +403,13 @@
       "minimum": 0,
       "type": "integer"
     },
+    "sections": {
+      "description": "Parts of the bank the firmware reads, which a camera's NAND files supply\nby name (`nand-<name>.bin.zst`). Empty when not located.",
+      "items": {
+        "$ref": "#/$defs/SettingsSection"
+      },
+      "type": "array"
+    },
     "settings": {
       "additionalProperties": {
         "$ref": "#/$defs/NamedSetting"
@@ -338,7 +430,8 @@
     "source",
     "bank",
     "fields",
-    "settings"
+    "settings",
+    "sections"
   ],
   "title": "FirmwareSettings",
   "type": "object"

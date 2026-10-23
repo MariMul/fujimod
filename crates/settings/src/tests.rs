@@ -1,7 +1,7 @@
 use super::*;
 use fujimod_catalog::settings::{
-    NamedSetting, ProfileRecord, SETTINGS_SCHEMA_URI, SettingsBank, SettingsField,
-    SettingsProfile, SettingsSource,
+    NamedSetting, ProfileRecord, SETTINGS_SCHEMA_URI, SectionLength, SettingsBank, SettingsField,
+    SettingsProfile, SettingsSection, SettingsSource,
 };
 
 /// An update holding one literal-only method-4 stream, stored inverted.
@@ -60,6 +60,20 @@ fn fixture() -> (Vec<u8>, FirmwareSettings) {
             basis: "Settings signature.".into(),
         }],
         profile: None,
+        sections: vec![
+            SettingsSection {
+                name: "configuration".into(),
+                offset: 0,
+                length: SectionLength::Fixed { bytes: 0x300 },
+                basis: "Sample boot read.".into(),
+            },
+            SettingsSection {
+                name: "table".into(),
+                offset: 0x380,
+                length: SectionLength::Counted { counts: 0x280, bits: 34 },
+                basis: "Sample counted read.".into(),
+            },
+        ],
         settings: BTreeMap::from([(
             "debug".into(),
             NamedSetting {
@@ -77,7 +91,7 @@ fn banks_take_stock_defaults_fields_and_requested_settings() {
     let (source, layout) = fixture();
     let flash = flash_image(&source, 4).unwrap();
     let requested = BTreeMap::from([("debug".into(), "on".into())]);
-    let settings = build(&layout, &flash, &requested).unwrap();
+    let settings = build(&layout, &flash, &requested, None).unwrap();
     assert_eq!(settings.profile, None);
     let bank = settings.bank;
     assert_eq!((bank.first_block, bank.blocks, bank.logical_first), (931, 40, 41));
@@ -92,12 +106,12 @@ fn unknown_settings_and_changed_updates_refuse() {
     let (source, layout) = fixture();
     let flash = flash_image(&source, 4).unwrap();
     let unknown = BTreeMap::from([("language".into(), "en".into())]);
-    assert!(build(&layout, &flash, &unknown).unwrap_err().contains("language"));
+    assert!(build(&layout, &flash, &unknown, None).unwrap_err().contains("language"));
     let value = BTreeMap::from([("debug".into(), "maybe".into())]);
-    assert!(build(&layout, &flash, &value).unwrap_err().contains("maybe"));
+    assert!(build(&layout, &flash, &value, None).unwrap_err().contains("maybe"));
     let mut changed = flash.clone();
     *changed.last_mut().unwrap() ^= 1;
-    assert!(build(&layout, &changed, &BTreeMap::new()).is_err());
+    assert!(build(&layout, &changed, &BTreeMap::new(), None).is_err());
 }
 
 /// The fixture with a profile: a header and a record of eight default bytes
@@ -158,7 +172,7 @@ fn profiles_take_stock_defaults_settings_and_sealed_records() {
         ("language".into(), "en".into()),
         ("setup".into(), "done".into()),
     ]);
-    let profile = build(&layout, &flash, &requested).unwrap().profile.unwrap();
+    let profile = build(&layout, &flash, &requested, None).unwrap().profile.unwrap();
     assert_eq!(profile.header[11], 7);
     assert_eq!(profile.header.iter().fold(0u8, |s, b| s.wrapping_add(*b)), 0);
     let record = &profile.records[0];
@@ -174,5 +188,34 @@ fn profiles_take_stock_defaults_settings_and_sealed_records() {
     assert_eq!(record.bytes[0xe0] & 1, 0);
     let mut moved = layout.clone();
     moved.settings.get_mut("setup").unwrap().offset = 14;
-    assert!(build(&moved, &flash, &requested).is_err());
+    assert!(build(&moved, &flash, &requested, None).is_err());
+}
+
+#[test]
+fn camera_sections_replace_the_stock_bank_and_take_requested_settings() {
+    let (source, layout) = fixture();
+    let flash = flash_image(&source, 4).unwrap();
+    let mut configuration = vec![0x11; 0x300];
+    configuration[0x202..0x204].copy_from_slice(&[0x55, 0xaa]);
+    // Two 34-bit entries in the first list (two 64-bit words, 16 bytes), one in the second (5 bytes).
+    configuration[0x280..0x286].copy_from_slice(&[2, 0, 0, 1, 0, 0]);
+    let camera = BTreeMap::from([
+        ("configuration".to_owned(), configuration.clone()),
+        ("table".to_owned(), vec![0x22; 21]),
+    ]);
+    let requested = BTreeMap::from([("debug".into(), "on".into())]);
+    let bank = build(&layout, &flash, &requested, Some(&camera)).unwrap().bank.bytes;
+    assert_eq!(&bank[..0xf7], &configuration[..0xf7]);
+    assert_eq!(bank[0xf7], 1, "requested bank settings still apply");
+    assert_eq!(bank[0x10], 0x11, "the stock defaults table does not");
+    assert_eq!(&bank[0x380..0x395], &[0x22; 21]);
+    assert!(bank[0x300..0x380].iter().chain(&bank[0x395..]).all(|&b| b == 0xff));
+
+    let short = BTreeMap::from([
+        ("configuration".to_owned(), configuration.clone()),
+        ("table".to_owned(), vec![0x22; 20]),
+    ]);
+    assert!(build(&layout, &flash, &requested, Some(&short)).unwrap_err().contains("21"));
+    let unknown = BTreeMap::from([("extra".to_owned(), vec![0])]);
+    assert!(build(&layout, &flash, &requested, Some(&unknown)).unwrap_err().contains("extra"));
 }

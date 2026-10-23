@@ -43,6 +43,73 @@ pub struct FirmwareSettings {
     pub profile: Option<SettingsProfile>,
     /// Settings a run may request by name, each with its named values.
     pub settings: BTreeMap<String, NamedSetting>,
+    /// Parts of the bank the firmware reads, which a camera's NAND files supply
+    /// by name (`nand-<name>.bin.zst`). Empty when not located.
+    pub sections: Vec<SettingsSection>,
+}
+
+/// One part of the bank the stock loader reads into its configuration RAM.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct SettingsSection {
+    /// File name part, such as `configuration`.
+    pub name: String,
+    /// Byte offset in the bank.
+    pub offset: u64,
+    /// How many bytes the loader reads.
+    pub length: SectionLength,
+    /// The loader that reads it.
+    pub basis: String,
+}
+
+/// A section's length: fixed, or counted from bytes the bank itself holds.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum SectionLength {
+    /// Always this many bytes.
+    Fixed {
+        /// Byte count.
+        bytes: u64,
+    },
+    /// Two little-endian 24-bit entry counts at `counts` and `counts + 3`,
+    /// `bits` per entry: the first list rounded up to 64-bit words, the
+    /// second to bytes.
+    Counted {
+        /// Bank offset of the first count.
+        counts: u64,
+        /// Bits per entry.
+        bits: u32,
+    },
+}
+
+impl SectionLength {
+    /// The byte count for a bank whose counts are already in place.
+    pub fn bytes(&self, bank: &[u8]) -> Result<u64, String> {
+        match self {
+            Self::Fixed { bytes } => Ok(*bytes),
+            Self::Counted { counts, bits } => {
+                let at = usize::try_from(*counts).map_err(|_| "count offset too large")?;
+                let count = |o: usize| -> Result<u64, String> {
+                    let b = bank.get(o..o + 3).ok_or("section counts outside the bank")?;
+                    Ok(u64::from(b[0]) | u64::from(b[1]) << 8 | u64::from(b[2]) << 16)
+                };
+                let bits = u64::from(*bits);
+                Ok(((count(at)? * bits + 63) & !63) / 8 + (count(at + 3)? * bits + 7) / 8)
+            }
+        }
+    }
 }
 
 /// The stock user profile: a sixteen-byte header kept by the power controller
@@ -276,6 +343,26 @@ impl FirmwareSettings {
                 || !place(&mut stores, &setting.store, setting.offset, size)
             {
                 return fail("named setting is empty, uneven, unstored or overlaps a field");
+            }
+        }
+        let mut names = BTreeSet::new();
+        for section in &self.sections {
+            let within = |offset: u64, size: u64| {
+                offset
+                    .checked_add(size)
+                    .is_some_and(|end| end <= bank.bytes)
+            };
+            let length = match section.length {
+                SectionLength::Fixed { bytes } if bytes > 0 => within(section.offset, bytes),
+                SectionLength::Fixed { .. } => false,
+                SectionLength::Counted { counts, bits } => bits > 0 && within(counts, 6),
+            };
+            if crate::reference::validate_id(&section.name).is_err()
+                || !names.insert(section.name.as_str())
+                || !within(section.offset, 0)
+                || !length
+            {
+                return fail("section name repeated or invalid, or outside the bank");
             }
         }
         Ok(())
