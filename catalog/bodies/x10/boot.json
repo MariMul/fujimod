@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/body-boot.generated.schema.json",
+  "schema": 1,
+  "body_id": "x10",
+  "models": [
+    "X10"
+  ],
+  "sources": {
+    "service-manual": {
+      "kind": "service_manual",
+      "reference": "X10 service manual ZM00949-100",
+      "sha256": "e90eab9010779075776301ef4eaf3e0a14b47dd88a2a2237022bf723d5957d28",
+      "date": null
+    }
+  },
+  "boot_options": {},
+  "notes": [
+    "No service SD boot key recipe was found in the shorter supplied ZM00949-100 edition. ZM00949-400 is supplementary."
+  ]
+}

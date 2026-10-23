@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/body-boot.generated.schema.json",
+  "schema": 1,
+  "body_id": "xt100",
+  "models": [
+    "X-T100"
+  ],
+  "sources": {
+    "service-manual": {
+      "kind": "service_manual",
+      "reference": "X-T100 service manual ZM01237-108",
+      "sha256": "5b353b091ea1baf4350f985fefc2fae62c050747cf8040dcb10abf6ef0f217e0",
+      "date": null
+    }
+  },
+  "boot_options": {},
+  "notes": [
+    "No service SD boot key recipe was found in the supplied edition. Its repair or initialization procedure uses USB."
+  ]
+}

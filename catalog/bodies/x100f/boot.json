@@ -1,0 +1,63 @@
+{
+  "$schema": "https://fujimod.com/schemas/body-boot.generated.schema.json",
+  "schema": 1,
+  "body_id": "x100f",
+  "models": [
+    "X100F"
+  ],
+  "sources": {
+    "service-manual": {
+      "kind": "service_manual",
+      "reference": "X100F service manual ZM01199-108",
+      "sha256": "8ea965e2405de2c48dcadea3ea97b304b5f60d058a9d42b06a5c0d11100d6d4e",
+      "date": null
+    }
+  },
+  "boot_options": {
+    "sd-download": {
+      "label": "SD firmware download",
+      "group": "sd_boot",
+      "purpose": "firmware_download",
+      "models": [
+        "X100F"
+      ],
+      "status": "documented",
+      "entry": {
+        "usb": "not_used",
+        "card": "service_boot",
+        "slot": null,
+        "hold": [
+          {
+            "label": "Function",
+            "control_id": null,
+            "action": "press"
+          },
+          {
+            "label": "Rear command dial",
+            "control_id": "rear_command_dial",
+            "action": "press"
+          }
+        ],
+        "release_when": null,
+        "instructions": []
+      },
+      "effects": [
+        "firmware_write",
+        "card_program_defined"
+      ],
+      "evidence": [
+        {
+          "source_id": "service-manual",
+          "pages": [
+            {
+              "pdf": 87,
+              "printed": "3-21"
+            }
+          ]
+        }
+      ],
+      "notes": []
+    }
+  },
+  "notes": []
+}

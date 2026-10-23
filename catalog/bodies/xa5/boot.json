@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/body-boot.generated.schema.json",
+  "schema": 1,
+  "body_id": "xa5",
+  "models": [
+    "X-A5"
+  ],
+  "sources": {
+    "service-manual": {
+      "kind": "service_manual",
+      "reference": "X-A5 service manual ZM01225-105",
+      "sha256": "d75642957654af77f0442e308e0068500645eb053d95a2918e7ee6f05b553767",
+      "date": null
+    }
+  },
+  "boot_options": {},
+  "notes": [
+    "No service SD boot key recipe was found in the supplied edition. Its repair or initialization procedure uses USB."
+  ]
+}

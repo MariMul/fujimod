@@ -1,0 +1,382 @@
+{
+  "$defs": {
+    "BootCard": {
+      "enum": [
+        "service_boot",
+        "firmware_update",
+        "not_required",
+        "unspecified"
+      ],
+      "type": "string"
+    },
+    "BootCitation": {
+      "additionalProperties": false,
+      "description": "Source pages supporting an option.",
+      "properties": {
+        "pages": {
+          "description": "Relevant complete manual pages; empty for non-PDF observations.",
+          "items": {
+            "$ref": "#/$defs/BootManualPage"
+          },
+          "type": "array"
+        },
+        "source_id": {
+          "description": "Key in the body's source map.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "pages"
+      ],
+      "type": "object"
+    },
+    "BootEffect": {
+      "description": "Program capabilities or known lifecycle effects.",
+      "enum": [
+        "firmware_write",
+        "calibration_adjustment",
+        "service_commands",
+        "card_program_defined",
+        "settings_reset_on_exit",
+        "usb_power_output"
+      ],
+      "type": "string"
+    },
+    "BootEntry": {
+      "additionalProperties": false,
+      "description": "Physical entry conditions; no host command sequence is encoded here.",
+      "properties": {
+        "card": {
+          "$ref": "#/$defs/BootCard",
+          "description": "Card contents required by the procedure."
+        },
+        "hold": {
+          "description": "Simultaneously held controls when powering on.",
+          "items": {
+            "$ref": "#/$defs/BootKey"
+          },
+          "type": "array"
+        },
+        "instructions": {
+          "description": "Existing ordered guide text, when the published guide has additional steps.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "release_when": {
+          "description": "Observable condition for releasing the held controls, when specified.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "slot": {
+          "description": "Card slot when specified, numbered from one.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "usb": {
+          "$ref": "#/$defs/BootUsb",
+          "description": "USB condition in the source procedure."
+        }
+      },
+      "required": [
+        "usb",
+        "card",
+        "hold",
+        "instructions"
+      ],
+      "type": "object"
+    },
+    "BootGroup": {
+      "description": "Top-level startup groups.",
+      "enum": [
+        "service",
+        "firmware_update",
+        "sd_boot"
+      ],
+      "type": "string"
+    },
+    "BootKey": {
+      "additionalProperties": false,
+      "description": "One held control with an explicit physical action.",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/BootKeyAction",
+          "description": "Press or directional action; a label is never parsed to infer this."
+        },
+        "control_id": {
+          "description": "Canonical physical-control identity, when the source resolves it unambiguously.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "label": {
+          "description": "Exact control wording retained from the source.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "action"
+      ],
+      "type": "object"
+    },
+    "BootKeyAction": {
+      "enum": [
+        "press",
+        "full_press",
+        "up"
+      ],
+      "type": "string"
+    },
+    "BootManualPage": {
+      "additionalProperties": false,
+      "properties": {
+        "pdf": {
+          "description": "One-based PDF page, including the cover.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "printed": {
+          "description": "Printed page footer.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pdf",
+        "printed"
+      ],
+      "type": "object"
+    },
+    "BootOption": {
+      "additionalProperties": false,
+      "description": "One startup option; describing it does not enable a camera operation.",
+      "properties": {
+        "effects": {
+          "description": "Actions the selected program can perform, not consequences of every key press.",
+          "items": {
+            "$ref": "#/$defs/BootEffect"
+          },
+          "type": "array"
+        },
+        "entry": {
+          "$ref": "#/$defs/BootEntry",
+          "description": "Controls and connection/card conditions at power-on."
+        },
+        "evidence": {
+          "description": "Source and page citations.",
+          "items": {
+            "$ref": "#/$defs/BootCitation"
+          },
+          "type": "array"
+        },
+        "group": {
+          "$ref": "#/$defs/BootGroup",
+          "description": "Related startup options shown together by a caller."
+        },
+        "label": {
+          "description": "Human-readable name.",
+          "type": "string"
+        },
+        "maximum_runtime_seconds": {
+          "description": "Maximum continuous runtime explicitly stated by the source, when present.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "models": {
+          "description": "Exact model names covered; shared bodies do not imply sibling support.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "notes": {
+          "description": "Interpretation details or revisions relevant to this option.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "purpose": {
+          "$ref": "#/$defs/BootPurpose",
+          "description": "Program or session selected by this procedure."
+        },
+        "status": {
+          "$ref": "#/$defs/BootStatus",
+          "description": "Whether the instruction is documented, implemented, provisional, or deleted."
+        }
+      },
+      "required": [
+        "label",
+        "group",
+        "purpose",
+        "models",
+        "status",
+        "entry",
+        "effects",
+        "evidence",
+        "notes"
+      ],
+      "type": "object"
+    },
+    "BootPurpose": {
+      "description": "Distinct purposes which may share the same startup controls.",
+      "enum": [
+        "service_session",
+        "firmware_update",
+        "firmware_download",
+        "otg_inspection",
+        "finder_adjustment",
+        "card_program",
+        "entry_probe"
+      ],
+      "type": "string"
+    },
+    "BootSource": {
+      "additionalProperties": false,
+      "description": "A manual or observation supporting startup facts.",
+      "properties": {
+        "date": {
+          "description": "Observation date, when applicable.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/BootSourceKind",
+          "description": "Source category, distinct from the option's evidence status."
+        },
+        "reference": {
+          "description": "Document reference or concise observation identity.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Complete PDF digest when the source is a service manual.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "reference"
+      ],
+      "type": "object"
+    },
+    "BootSourceKind": {
+      "description": "Evidence categories available without distributing source documents.",
+      "oneOf": [
+        {
+          "const": "service_manual",
+          "description": "A visually reviewed service manual.",
+          "type": "string"
+        },
+        {
+          "const": "owner_observation",
+          "description": "An owner-reported physical observation.",
+          "type": "string"
+        },
+        {
+          "const": "project_definition",
+          "description": "An existing published implementation or guide.",
+          "type": "string"
+        }
+      ]
+    },
+    "BootStatus": {
+      "description": "Evidence status; candidates and deleted instructions are not active procedures.",
+      "enum": [
+        "documented",
+        "implemented",
+        "candidate",
+        "superseded"
+      ],
+      "type": "string"
+    },
+    "BootUsb": {
+      "enum": [
+        "connected",
+        "test_jig_no_pc",
+        "not_used",
+        "unspecified"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/body-boot.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Hand-maintained startup options for a body, including model-specific variants.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/body-boot.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "body_id": {
+      "description": "Body identity; a hardware definition is not required.",
+      "type": "string"
+    },
+    "boot_options": {
+      "additionalProperties": {
+        "$ref": "#/$defs/BootOption"
+      },
+      "description": "Startup options keyed by purpose, grouped for callers.",
+      "type": "object"
+    },
+    "models": {
+      "description": "Camera model names reviewed in this document.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "notes": {
+      "description": "Body-specific coverage or interpretation notes.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "schema": {
+      "description": "Document format version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "sources": {
+      "additionalProperties": {
+        "$ref": "#/$defs/BootSource"
+      },
+      "description": "Source identities, without file locations.",
+      "type": "object"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "body_id",
+    "models",
+    "sources",
+    "boot_options",
+    "notes"
+  ],
+  "title": "BodyBootOptions",
+  "type": "object"
+}

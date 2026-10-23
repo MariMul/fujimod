@@ -27,6 +27,15 @@ levels, spring-return behavior and analog resolution are null. Controls-only
 documents validate their own identities and manual declarations; connections
 or located bindings require the corresponding hardware records.
 
+Each body's `boot.json` owns startup combinations: service mode, firmware
+update, SD download and SD diagnostics are grouped under `boot_options`.
+Structured held controls, USB/card conditions, source hashes and page citations
+stay separate from executable run inputs. Candidate and superseded instructions
+retain their status; a shared body does not extend an option to unlisted models.
+`ReferenceCatalog::boot_options` also retrieves these documents for bodies
+without hardware definitions. Panel presentation and service-mode guides consume
+this data rather than keeping their own key combinations.
+
 Run configurations are executable preparation policy outside the reference
 catalog. A configuration selects immutable reference identities and explicit
 external inputs. REC with USB, service sessions and SD boot are small typed

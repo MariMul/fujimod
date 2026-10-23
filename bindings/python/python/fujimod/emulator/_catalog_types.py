@@ -299,6 +299,23 @@ Body = TypedDict(
 )
 
 
+BodyBootOptions = TypedDict(
+    "BodyBootOptions",
+    {
+        "$schema": Required[
+            'Literal["https://fujimod.com/schemas/body-boot.generated.schema.json"]'
+        ],
+        "body_id": Required["str"],
+        "boot_options": Required["dict[str, BootOption]"],
+        "models": Required["list[str]"],
+        "notes": Required["list[str]"],
+        "schema": Required["int"],
+        "sources": Required["dict[str, BootSource]"],
+    },
+    total=False,
+)
+
+
 class BodyConnection(TypedDict, total=False):
     id: Required[str]
     kind: Required[ConnectionKind]
@@ -349,9 +366,102 @@ class BodyWiring(TypedDict, total=False):
     target_id: Required[str]
 
 
+type BootCard = Literal[
+    "service_boot",
+    "firmware_update",
+    "not_required",
+    "unspecified",
+]
+
+
+class BootCitation(TypedDict, total=False):
+    pages: Required[list[BootManualPage]]
+    source_id: Required[str]
+
+
+type BootEffect = Literal[
+    "firmware_write",
+    "calibration_adjustment",
+    "service_commands",
+    "card_program_defined",
+    "settings_reset_on_exit",
+    "usb_power_output",
+]
+
+
+class BootEntry(TypedDict, total=False):
+    card: Required[BootCard]
+    hold: Required[list[BootKey]]
+    instructions: Required[list[str]]
+    release_when: NotRequired[str | None]
+    slot: NotRequired[int | None]
+    usb: Required[BootUsb]
+
+
+type BootGroup = Literal["service", "firmware_update", "sd_boot"]
+
+
+class BootKey(TypedDict, total=False):
+    action: Required[BootKeyAction]
+    control_id: NotRequired[str | None]
+    label: Required[str]
+
+
+type BootKeyAction = Literal["press", "full_press", "up"]
+
+
+class BootManualPage(TypedDict, total=False):
+    pdf: Required[int]
+    printed: Required[str]
+
+
+class BootOption(TypedDict, total=False):
+    effects: Required[list[BootEffect]]
+    entry: Required[BootEntry]
+    evidence: Required[list[BootCitation]]
+    group: Required[BootGroup]
+    label: Required[str]
+    maximum_runtime_seconds: NotRequired[int | None]
+    models: Required[list[str]]
+    notes: Required[list[str]]
+    purpose: Required[BootPurpose]
+    status: Required[BootStatus]
+
+
+type BootPurpose = Literal[
+    "service_session",
+    "firmware_update",
+    "firmware_download",
+    "otg_inspection",
+    "finder_adjustment",
+    "card_program",
+    "entry_probe",
+]
+
+
 class BootRomIdentity(TypedDict, total=False):
     address: Required[int]
     content: Required[ContentIdentity]
+
+
+class BootSource(TypedDict, total=False):
+    date: NotRequired[str | None]
+    kind: Required[BootSourceKind]
+    reference: Required[str]
+    sha256: NotRequired[str | None]
+
+
+type BootSourceKind = Literal[
+    "service_manual",
+    "owner_observation",
+    "project_definition",
+]
+
+
+type BootStatus = Literal["documented", "implemented", "candidate", "superseded"]
+
+
+type BootUsb = Literal["connected", "test_jig_no_pc", "not_used", "unspecified"]
 
 
 class BoundPosition(TypedDict, total=False):

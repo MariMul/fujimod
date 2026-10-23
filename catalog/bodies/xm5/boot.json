@@ -1,0 +1,61 @@
+{
+  "$schema": "https://fujimod.com/schemas/body-boot.generated.schema.json",
+  "schema": 1,
+  "body_id": "xm5",
+  "models": [
+    "X-M5"
+  ],
+  "sources": {
+    "owner-observation": {
+      "kind": "owner_observation",
+      "reference": "Owner-reported front-dial/Q startup comparison",
+      "sha256": null,
+      "date": "2026-10-23"
+    }
+  },
+  "boot_options": {
+    "sd-entry-candidate": {
+      "label": "SD startup candidate",
+      "group": "sd_boot",
+      "purpose": "entry_probe",
+      "models": [
+        "X-M5"
+      ],
+      "status": "candidate",
+      "entry": {
+        "usb": "not_used",
+        "card": "service_boot",
+        "slot": null,
+        "hold": [
+          {
+            "label": "Front command dial",
+            "control_id": "front_command_dial",
+            "action": "press"
+          },
+          {
+            "label": "Q",
+            "control_id": "quick_menu_button",
+            "action": "press"
+          }
+        ],
+        "release_when": null,
+        "instructions": []
+      },
+      "effects": [
+        "card_program_defined"
+      ],
+      "evidence": [
+        {
+          "source_id": "owner-observation",
+          "pages": []
+        }
+      ],
+      "notes": [
+        "Owner reproduced an unresponsive startup with front command dial + Q and the experimental card; shutter + front dial was excluded. No lights without USB; a steady green LED appeared after connecting USB. The expected two-flash marker and a USB response were not observed."
+      ]
+    }
+  },
+  "notes": [
+    "No X-M5 service manual was reviewed. Q + movie-record was an earlier analogy from X-S10; the owner report is the current trial candidate."
+  ]
+}

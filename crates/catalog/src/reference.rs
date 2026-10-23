@@ -2489,6 +2489,8 @@ pub struct ReferenceCatalog {
     firmwares: BTreeMap<String, Firmware>,
     /// Hand-authored physical controls, keyed by body identity.
     physical_controls: BTreeMap<String, crate::controls::PhysicalControls>,
+    /// Startup facts, including bodies without executable hardware definitions.
+    boot_options: BTreeMap<String, crate::boot::BodyBootOptions>,
     /// Generated located inputs, keyed by firmware identity.
     control_ids: BTreeMap<String, crate::controls::FirmwareControlIds>,
     first_start: BTreeMap<String, crate::first_start::FirstStartMenu>,
@@ -2622,6 +2624,11 @@ impl ReferenceCatalog {
         self.physical_controls.get(body_id)
     }
 
+    /// Return a body's startup combinations and their evidence status.
+    pub fn boot_options(&self, body_id: &str) -> Option<&crate::boot::BodyBootOptions> {
+        self.boot_options.get(body_id)
+    }
+
     /// Every firmware identity, in identity order.
     pub fn firmware_ids(&self) -> impl Iterator<Item = &str> {
         self.firmwares.keys().map(String::as_str)
@@ -2639,6 +2646,11 @@ impl ReferenceCatalog {
         path: &Path,
     ) -> Result<(), String> {
         match kind {
+            ReferenceKind::BodyBoot => {
+                let value: crate::boot::BodyBootOptions = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(&mut self.boot_options, value.body_id.clone(), value, path)
+            }
             ReferenceKind::FirstStart => {
                 let value: crate::first_start::FirstStartMenu = decode(bytes, path)?;
                 value.validate()?;
@@ -2696,6 +2708,21 @@ impl ReferenceCatalog {
     }
 
     fn validate_controls(&self) -> Result<(), String> {
+        for (body_id, boot) in &self.boot_options {
+            if let Some(physical) = self.physical_controls.get(body_id) {
+                for option in boot.boot_options.values() {
+                    for key in &option.entry.hold {
+                        if let Some(id) = &key.control_id {
+                            physical.control(id)?;
+                        }
+                    }
+                }
+            } else if boot.boot_options.values().any(|option|
+                option.entry.hold.iter().any(|key| key.control_id.is_some()))
+            {
+                return Err(format!("body {body_id} boot keys refer to missing physical controls"));
+            }
+        }
         for firmware_id in self.first_start.keys() {
             if !self.firmwares.contains_key(firmware_id) {
                 return Err(format!(
@@ -3195,6 +3222,7 @@ enum ReferenceKind {
     Body,
     Firmware,
     PhysicalControls,
+    BodyBoot,
     ControlIds,
     FirstStart,
     Bulk,
@@ -3206,6 +3234,7 @@ impl ReferenceKind {
         match path.file_name().and_then(|name| name.to_str()) {
             Some("body.json") => Ok(Self::Body),
             Some("controls.json") => Ok(Self::PhysicalControls),
+            Some("boot.json") => Ok(Self::BodyBoot),
             _ => Err(format!("{} is not a body document", path.display())),
         }
     }

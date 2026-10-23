@@ -1,0 +1,21 @@
+{
+  "$schema": "https://fujimod.com/schemas/body-boot.generated.schema.json",
+  "schema": 1,
+  "body_id": "xa10",
+  "models": [
+    "X-A10"
+  ],
+  "sources": {
+    "service-manual": {
+      "kind": "service_manual",
+      "reference": "X-A10 service manual ZM01185-107",
+      "sha256": "1ec37782e1dcd3ff7d17ddc4980354eda29220dae7e6cf0b8da56d7752ec5401",
+      "date": null
+    }
+  },
+  "boot_options": {},
+  "notes": [
+    "No service SD boot key recipe was found in the supplied edition. Its repair or initialization procedure uses USB.",
+    "The separate DISP/BACK DAT procedure is an ordinary firmware update, not a service SD loader entry."
+  ]
+}

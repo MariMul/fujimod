@@ -3,6 +3,7 @@ use serde_json::Value;
 use std::{collections::BTreeSet, fs, path::Path};
 
 const ROOTS: &[&str] = &[
+    "BodyBootOptions",
     "LensStopResponse",
     "LensClockMode",
     "LensMotorCounter",

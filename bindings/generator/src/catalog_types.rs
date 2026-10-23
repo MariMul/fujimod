@@ -8,6 +8,7 @@ const RUST_SCHEMA_FILES: &[(&str, &str)] = &[
     ("soc.schema.json", "Soc"),
     ("part.schema.json", "Part"),
     ("body.schema.json", "Body"),
+    ("body-boot.generated.schema.json", "BodyBootOptions"),
     ("firmware.schema.json", "Firmware"),
     ("resolved-selection.schema.json", "ResolvedSelection"),
     (

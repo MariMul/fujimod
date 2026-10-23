@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/body-boot.generated.schema.json",
+  "schema": 1,
+  "body_id": "xa7",
+  "models": [
+    "X-A7"
+  ],
+  "sources": {
+    "service-manual": {
+      "kind": "service_manual",
+      "reference": "X-A7 service manual ZM01269-101",
+      "sha256": "ce0e2f0825888d2f048b3fe3ea84d82fa748450b51ed9d40342541fdc7547b48",
+      "date": null
+    }
+  },
+  "boot_options": {},
+  "notes": [
+    "No service SD boot key recipe was found in the supplied edition. Its repair or initialization procedure uses USB."
+  ]
+}

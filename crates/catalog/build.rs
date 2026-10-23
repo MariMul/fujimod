@@ -55,6 +55,7 @@ fn main() {
             .unwrap_or_default();
         let kind = match (*kind, name) {
             ("Body", "controls.json") => "PhysicalControls",
+            ("Body", "boot.json") => "BodyBoot",
             ("Firmware", "control-ids.generated.json") => "ControlIds",
             ("Firmware", "first-start.generated.json") => "FirstStart",
             ("Firmware", "bulk.generated.json") => "Bulk",

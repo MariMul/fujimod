@@ -136,6 +136,10 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         schema::<crate::controls::PhysicalControls>(crate::controls::PHYSICAL_CONTROLS_SCHEMA_URI),
     );
     documents.insert(
+        "body-boot.generated.schema.json",
+        schema::<crate::boot::BodyBootOptions>(crate::boot::BODY_BOOT_SCHEMA_URI),
+    );
+    documents.insert(
         "control-ids.schema.json",
         schema::<crate::controls::FirmwareControlIds>(crate::controls::CONTROL_IDS_SCHEMA_URI),
     );

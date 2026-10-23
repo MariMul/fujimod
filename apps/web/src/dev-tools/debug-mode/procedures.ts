@@ -1,4 +1,8 @@
-/** Per-firmware facts for the Enter Debug Mode wizard. The wizard itself is generic. */
+import bootData from '../../../../../catalog/bodies/x70/boot.json';
+import { bootOption } from '../../cameras/boot-options';
+import type { BodyBootOptions } from 'fujimod';
+
+/** Per-firmware support for the Enter Debug Mode wizard; body entry comes from the catalog. */
 export interface DebugModeProcedure {
   firmwareId: string;
   model: string;
@@ -9,13 +13,8 @@ export interface DebugModeProcedure {
   unsupported?: string;
 }
 const untraced = 'Its service-mode entry and its factory-reset guard have not been traced yet.';
-export const serviceModeEntry = [
-  'Connect the camera to this computer with a USB cable.',
-  'Switch the camera OFF.',
-  'Hold UP on the selector and press the shutter button all the way down.',
-  'Keep holding both and switch the camera ON.',
-  'Release the buttons when the green lamp lights.',
-];
+export const serviceModeEntry = bootOption(bootData as BodyBootOptions, 'service-mode').entry
+  .instructions;
 export const procedures: DebugModeProcedure[] = [
   {
     firmwareId: 'x70-110',

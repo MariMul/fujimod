@@ -1,0 +1,137 @@
+{
+  "$schema": "https://fujimod.com/schemas/body-boot.generated.schema.json",
+  "schema": 1,
+  "body_id": "x70",
+  "models": [
+    "X70"
+  ],
+  "sources": {
+    "existing-guide": {
+      "kind": "project_definition",
+      "reference": "FujiMod X70 panel startup combinations and service-mode guide",
+      "sha256": null,
+      "date": null
+    }
+  },
+  "boot_options": {
+    "sd-boot": {
+      "label": "SD card boot",
+      "group": "sd_boot",
+      "purpose": "card_program",
+      "models": [
+        "X70"
+      ],
+      "status": "implemented",
+      "entry": {
+        "usb": "unspecified",
+        "card": "service_boot",
+        "slot": null,
+        "hold": [
+          {
+            "label": "Command dial",
+            "control_id": "command_control",
+            "action": "press"
+          },
+          {
+            "label": "Movie-record",
+            "control_id": "movie_record_button",
+            "action": "press"
+          }
+        ],
+        "release_when": null,
+        "instructions": []
+      },
+      "effects": [
+        "card_program_defined"
+      ],
+      "evidence": [
+        {
+          "source_id": "existing-guide",
+          "pages": []
+        }
+      ],
+      "notes": []
+    },
+    "firmware-update": {
+      "label": "Firmware update",
+      "group": "firmware_update",
+      "purpose": "firmware_update",
+      "models": [
+        "X70"
+      ],
+      "status": "implemented",
+      "entry": {
+        "usb": "unspecified",
+        "card": "firmware_update",
+        "slot": null,
+        "hold": [
+          {
+            "label": "DISP BACK",
+            "control_id": "disp_back_button",
+            "action": "press"
+          }
+        ],
+        "release_when": null,
+        "instructions": []
+      },
+      "effects": [
+        "firmware_write"
+      ],
+      "evidence": [
+        {
+          "source_id": "existing-guide",
+          "pages": []
+        }
+      ],
+      "notes": []
+    },
+    "service-mode": {
+      "label": "Service mode",
+      "group": "service",
+      "purpose": "service_session",
+      "models": [
+        "X70"
+      ],
+      "status": "implemented",
+      "entry": {
+        "usb": "connected",
+        "card": "not_required",
+        "slot": null,
+        "hold": [
+          {
+            "label": "UP on the selector",
+            "control_id": "selector",
+            "action": "up"
+          },
+          {
+            "label": "Shutter button",
+            "control_id": "shutter_button",
+            "action": "full_press"
+          }
+        ],
+        "release_when": "The green lamp lights.",
+        "instructions": [
+          "Connect the camera to this computer with a USB cable.",
+          "Switch the camera OFF.",
+          "Hold UP on the selector and press the shutter button all the way down.",
+          "Keep holding both and switch the camera ON.",
+          "Release the buttons when the green lamp lights."
+        ]
+      },
+      "effects": [
+        "service_commands",
+        "settings_reset_on_exit"
+      ],
+      "evidence": [
+        {
+          "source_id": "existing-guide",
+          "pages": []
+        }
+      ],
+      "notes": [
+        "On X70 1.10, the unguarded service shutdown path resets settings. Its reset guard is firmware-specific."
+      ]
+    }
+  },
+  "notes": []
+}
