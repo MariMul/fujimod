@@ -19,6 +19,7 @@ alone takes 134 ms per frame and the image output channels about 47 ms more.
 |---|---|
 | Before | 1.09–1.14 |
 | Memory DMA status as a fast read | 0.81–0.82 |
+| Interactive runs test exits only at block entry | 0.72–0.74 |
 
 ## Where the time goes
 
@@ -46,11 +47,12 @@ host instructions retired (load barely changes them):
    published as an atomic the CPU reads without entering the device. Then let
    interactive runs skip a polling loop whose only input is such a register
    until the device's next deadline, as exact runs already do.
-2. Inline block accounting. The budget debit, pause test and ring write move
-   from the per-block hook helper into translated code at block start, with
-   the helper called only when the budget runs out.
-3. Exit checks without helper calls. Test the exit flag inline after accesses
-   that can stop the CPU instead of calling a helper after every load and store.
+2. Block hook calls. Debiting the budget in translated code instead of the
+   hook helper left host instructions unchanged (30.9G for three boots either
+   way): most blocks reach the hook because the interactive budget is short or
+   the accounting mode changed. Find why, and widen the interactive window.
+3. Done: interactive runs test exits at block entry with QEMU's inline test
+   and no check after guest loads and stores.
 4. Exclusives without leaving translated code. LDREX, STREX and CLREX become
    TCG helpers that call the shared monitor directly; monitor semantics stay.
 5. Firmware decompression in whole tokens and slices instead of per byte.
