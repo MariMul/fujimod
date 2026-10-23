@@ -124,6 +124,16 @@ impl Xp4Session {
             .map(|saved| crate::emulator::python_observation::snapshot(py, &saved))
             .transpose()
     }
+    forward!(memory_watch_begin(ranges: Vec<(u64, u64)>, limit: usize) -> ());
+    forward!(memory_watch_end() -> ());
+    pub(super) fn memory_watch_enabled(&self) -> bool {
+        self.inner.memory_watch_enabled()
+    }
+    pub(super) fn memory_watch_state(
+        &self,
+    ) -> fujimod_emulator::board::xp4::observation::MemorySnapshot {
+        self.inner.memory_watch_state()
+    }
     pub(super) fn reg_read(&self, core: usize, register: i32) -> PyResult<u32> {
         let value = self.read_register(
             core,

@@ -94,6 +94,28 @@ impl Xp4 {
     fn function_watch_state<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>> {
         self.with(py, |s| s.function_watch_state(py))
     }
+    #[pyo3(signature=(ranges, limit=1_000_000))]
+    fn memory_watch_begin(
+        &self,
+        py: Python<'_>,
+        ranges: Vec<(u64, u64)>,
+        limit: usize,
+    ) -> PyResult<()> {
+        self.with(py, |s| s.memory_watch_begin(ranges, limit))
+    }
+    fn memory_watch_end(&self, py: Python<'_>) -> PyResult<()> {
+        self.with(py, |s| s.memory_watch_end())
+    }
+    fn memory_watch_enabled(&self, py: Python<'_>) -> PyResult<bool> {
+        self.with(py, |s| Ok(s.memory_watch_enabled()))
+    }
+    fn memory_watch_state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        self.with(py, |s| {
+            let value = serde_json::to_string(&s.memory_watch_state())
+                .map_err(|error| crate::emulator::error(error.to_string()))?;
+            py.import("json")?.call_method1("loads", (value,))
+        })
+    }
     fn reg_read(&self, py: Python<'_>, core: usize, register: i32) -> PyResult<u32> {
         self.with(py, |s| s.reg_read(core, register))
     }

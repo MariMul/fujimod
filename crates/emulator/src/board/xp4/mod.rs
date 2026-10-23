@@ -75,6 +75,7 @@ struct RunState {
     pending_calls: Vec<BTreeMap<u32, Vec<usize>>>,
     exclusive: Vec<Option<(u64, usize)>>,
     recorder: Option<observe::Recorder>,
+    memory_watch: Option<observation::MemoryWatch>,
     pc_observers: Vec<BTreeSet<u64>>,
     devices: Option<devices::Devices>,
     cache_dirty: bool,
@@ -96,6 +97,99 @@ struct Cluster {
     state: UnsafeCell<RunState>,
 }
 impl Cluster {
+    fn record_memory(&self, core: usize, access: Access, address: u64, size: i32, value: i64) {
+        if unsafe { (*self.state.get()).memory_watch.is_none() } {
+            return;
+        }
+        let result = (|| -> Result<Option<observation::MemoryRecord>, String> {
+            let bytes = usize::try_from(size).map_err(|_| "invalid observed memory width")?;
+            if bytes == 0 {
+                return Err("invalid observed memory width".into());
+            }
+            let physical = match self.cpus[core].translate(address, access) {
+                Ok(physical) => physical,
+                Err(_) => return Ok(None),
+            };
+            if physical.saturating_add(bytes as u64) > self.ram.len() as u64 {
+                return Ok(None);
+            }
+            let (instructions, tick, in_range) = {
+                let state = unsafe { &*self.state.get() };
+                let Some(watch) = state.memory_watch.as_ref() else {
+                    return Ok(None);
+                };
+                (
+                    state.instructions,
+                    state.ticks,
+                    watch.overlaps(physical, bytes),
+                )
+            };
+            if !in_range {
+                return Ok(None);
+            }
+            if !(1..=16).contains(&bytes) {
+                return Err("Memory watch cannot capture this CPU access width".into());
+            }
+            let byte_order = if self.reg(core, arm::CPSR)? & (1 << 9) != 0 {
+                "big"
+            } else {
+                "little"
+            };
+            let before = if access == Access::Fetch {
+                None
+            } else {
+                let mut data = vec![0; bytes];
+                self.cpus[core].read_memory(address, &mut data)?;
+                Some(data)
+            };
+            let observed_value = match access {
+                Access::Fetch => None,
+                Access::Write if bytes <= 8 => {
+                    let mask = u64::MAX >> (64 - bytes.min(8) * 8);
+                    Some(value as u64 & mask)
+                }
+                Access::Read if bytes <= 8 => {
+                    let data = before.as_ref().unwrap();
+                    Some(if byte_order == "little" {
+                        data.iter()
+                            .rev()
+                            .fold(0u64, |v, b| (v << 8) | u64::from(*b))
+                    } else {
+                        data.iter().fold(0u64, |v, b| (v << 8) | u64::from(*b))
+                    })
+                }
+                _ => None,
+            };
+            Ok(Some(observation::MemoryRecord {
+                source: match access {
+                    Access::Fetch => "cpu-fetch",
+                    Access::Read => "cpu-read",
+                    Access::Write => "cpu-write",
+                },
+                address,
+                physical,
+                size: bytes,
+                value: observed_value,
+                before,
+                byte_order,
+                core,
+                pc: self.reg(core, arm::PC)?,
+                instructions,
+                tick,
+            }))
+        })();
+        let state = unsafe { &mut *self.state.get() };
+        if let Some(watch) = state.memory_watch.as_mut() {
+            match result {
+                Ok(Some(record)) => watch.push(record),
+                Ok(None) => {}
+                Err(error) => {
+                    watch.violation.get_or_insert(error);
+                }
+            }
+        }
+    }
+
     fn external_devices<T>(
         &self,
         action: impl FnOnce(&mut devices::Devices, u64) -> Result<T, String>,
@@ -313,7 +407,13 @@ unsafe fn code(address: u64, size: u32, data: *mut c_void) {
         cluster.fail(hook.core, error);
     }
 }
+unsafe fn memory_access(access: Access, address: u64, size: i32, value: i64, data: *mut c_void) {
+    let hook = unsafe { &*data.cast::<Hook>() };
+    let cluster = unsafe { &*hook.cluster };
+    cluster.record_memory(hook.core, access, address, size, value);
+}
 fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), String> {
+    c.record_memory(core, Access::Fetch, address, size as i32, 0);
     if let Some(guard) = unsafe { &mut (*c.state.get()).driver_guard } {
         // Check architecture before a return sentinel or IRQ can bypass the
         // routine boundary (e.g. MOVS PC,LR restoring an unmasked SPSR).
@@ -1084,6 +1184,7 @@ impl Session {
                 pending_calls: vec![BTreeMap::new(); cores],
                 exclusive: vec![None; cores],
                 recorder: None,
+                memory_watch: None,
                 pc_observers: vec![BTreeSet::new(); cores],
                 devices,
                 cache_dirty: false,
@@ -1165,6 +1266,7 @@ impl Session {
             || state.devices.is_some()
             || state.timer.is_some()
             || state.recorder.is_some()
+            || state.memory_watch.is_some()
             || state.pc_observers.iter().any(|items| !items.is_empty())
         {
             return Err(
@@ -1212,6 +1314,93 @@ impl Session {
             (&mut (*self.inner.state.get()).pc_observers)[core] = addresses.into_iter().collect();
         }
         Ok(())
+    }
+    pub fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize) -> Result<(), String> {
+        if self.inner.running.get() {
+            return Err("Memory watch requires a paused XP4 board".into());
+        }
+        if ranges.is_empty()
+            || ranges.len() > 256
+            || limit == 0
+            || limit > 1 << 22
+            || ranges
+                .iter()
+                .any(|&(lo, hi)| lo >= hi || hi > self.inner.ram.len() as u64)
+        {
+            return Err("Memory watch requires bounded physical RAM ranges".into());
+        }
+        let state = unsafe { &mut *self.inner.state.get() };
+        if state.memory_watch.is_some() {
+            return Err("Another memory watch is active".into());
+        }
+        if state.driver_guard.is_some() {
+            return Err("Memory watch cannot attach during a guarded routine".into());
+        }
+        let mut ranges = ranges;
+        ranges.sort_unstable();
+        let mut merged: Vec<(u64, u64)> = Vec::with_capacity(ranges.len());
+        for (start, end) in ranges {
+            if let Some(last) = merged.last_mut()
+                && start <= last.1
+            {
+                last.1 = last.1.max(end);
+            } else {
+                merged.push((start, end));
+            }
+        }
+        let mut watch = observation::MemoryWatch {
+            ranges: merged,
+            limit,
+            records: Vec::new(),
+            violation: None,
+            hooks: Vec::new(),
+        };
+        for (core, cpu) in self.inner.cpus.iter().enumerate() {
+            let data = (&*self.inner.hooks[core] as *const Hook).cast_mut().cast();
+            let hook = CpuHook::Memory {
+                callback: memory_access,
+                data,
+                read: true,
+                write: true,
+                range: HookRange::Inclusive {
+                    begin: 0,
+                    end: self.inner.ram.len() as u64 - 1,
+                },
+            };
+            match unsafe { cpu.install_hook(hook) } {
+                Ok(id) => watch.hooks.push((core, id)),
+                Err(error) => {
+                    for (installed_core, installed) in watch.hooks.drain(..) {
+                        self.inner.cpus[installed_core].remove_hook(installed)?;
+                    }
+                    return Err(error);
+                }
+            }
+        }
+        unsafe {
+            (*self.inner.state.get()).memory_watch = Some(watch);
+        }
+        Ok(())
+    }
+    pub fn memory_watch_end(&self) -> Result<(), String> {
+        if self.inner.running.get() {
+            return Err("Memory watch requires a paused XP4 board".into());
+        }
+        let Some(mut watch) = (unsafe { (*self.inner.state.get()).memory_watch.take() }) else {
+            return Ok(());
+        };
+        for (core, hook) in watch.hooks.drain(..) {
+            self.inner.cpus[core].remove_hook(hook)?;
+        }
+        Ok(())
+    }
+    pub fn memory_watch_enabled(&self) -> bool {
+        unsafe { (*self.inner.state.get()).memory_watch.is_some() }
+    }
+    pub fn memory_watch_state(&self) -> observation::MemorySnapshot {
+        unsafe { (*self.inner.state.get()).memory_watch.as_ref() }
+            .map(observation::MemoryWatch::snapshot)
+            .unwrap_or_else(observation::MemorySnapshot::disabled)
     }
     #[allow(clippy::too_many_arguments)]
     pub fn function_watch_begin(
