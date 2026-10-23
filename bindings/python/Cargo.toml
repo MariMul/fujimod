@@ -19,6 +19,7 @@ emulator = [
     "dep:fujimod-emulator",
     "dep:fujimod-emulator-cpu",
     "dep:fujimod-emulator-devices",
+    "dep:fujimod-emulator-exr2-board",
     "dep:pkg-config",
     "dep:sha2",
     "fujimod-remote/board",
