@@ -486,6 +486,15 @@
           7
         ]
       }
+    },
+    "white_balance": {
+      "store": "main",
+      "offset": 430,
+      "values": {
+        "daylight": [
+          1
+        ]
+      }
     }
   }
 }
