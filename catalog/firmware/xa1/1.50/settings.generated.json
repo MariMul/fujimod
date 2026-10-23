@@ -1,0 +1,81 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "xa1-150-settings",
+  "firmware_id": "xa1-150",
+  "bank": {
+    "descriptor": {
+      "address": 8162500,
+      "size": 12,
+      "sha256": "a32853ed7e2af917d6ce82c44f0781692dd9ff13dc7c0809423a24359880ad81"
+    },
+    "kind": 2,
+    "blocks": 40,
+    "first_block": 937,
+    "logical_first": 41,
+    "bytes": 4325376
+  },
+  "defaults": {
+    "address": 8161844,
+    "size": 504,
+    "sha256": "8179e82dd07c45460f20ca51150e4b14d119dd27878690454a3f0cb8c5b263b1"
+  },
+  "fields": [
+    {
+      "offset": 256,
+      "bytes": [
+        203,
+        4
+      ],
+      "basis": "Normal USB vendor ID."
+    },
+    {
+      "offset": 318,
+      "bytes": [
+        183,
+        2
+      ],
+      "basis": "Normal USB product ID."
+    },
+    {
+      "offset": 348,
+      "bytes": [
+        88,
+        45,
+        65,
+        49,
+        0
+      ],
+      "basis": "Body product name."
+    },
+    {
+      "offset": 514,
+      "bytes": [
+        85,
+        170
+      ],
+      "basis": "Settings bank signature."
+    },
+    {
+      "offset": 516,
+      "bytes": [
+        1,
+        120
+      ],
+      "basis": "Internal version."
+    }
+  ],
+  "settings": {
+    "debug": {
+      "offset": 247,
+      "values": {
+        "off": [
+          0
+        ],
+        "on": [
+          1
+        ]
+      }
+    }
+  }
+}

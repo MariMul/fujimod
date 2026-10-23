@@ -1,0 +1,131 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "xq1-121-settings",
+  "firmware_id": "xq1-121",
+  "bank": {
+    "descriptor": {
+      "address": 8653448,
+      "size": 12,
+      "sha256": "324cd67e633dc7d4f9fb8de449632dd2938ffe7d7159d77fee4c462131eb34e2"
+    },
+    "kind": 2,
+    "blocks": 40,
+    "first_block": 931,
+    "logical_first": 41,
+    "bytes": 4194304
+  },
+  "defaults": {
+    "address": 8652792,
+    "size": 504,
+    "sha256": "ff0d65b1abf08faae3b24983442994e27d2d8af16bbc2225e722f75875931604"
+  },
+  "fields": [
+    {
+      "offset": 256,
+      "bytes": [
+        203,
+        4
+      ],
+      "basis": "Normal USB vendor ID."
+    },
+    {
+      "offset": 318,
+      "bytes": [
+        184,
+        2
+      ],
+      "basis": "Normal USB product ID."
+    },
+    {
+      "offset": 410,
+      "bytes": [
+        88,
+        81,
+        49,
+        0
+      ],
+      "basis": "Body product name."
+    },
+    {
+      "offset": 514,
+      "bytes": [
+        85,
+        170
+      ],
+      "basis": "Settings bank signature."
+    },
+    {
+      "offset": 516,
+      "bytes": [
+        1,
+        129
+      ],
+      "basis": "Internal version."
+    },
+    {
+      "offset": 38929,
+      "bytes": [
+        1
+      ],
+      "basis": "Explicit synthetic active normal-read accelerometer setting; stock 0x6ea9e0 masks this configuration byte with 0x1f and writes sensor CTRL_REG1 (0x2a)."
+    },
+    {
+      "offset": 123904,
+      "bytes": [
+        0,
+        250,
+        72,
+        238,
+        144,
+        226,
+        216,
+        214,
+        32,
+        203,
+        104,
+        191,
+        176,
+        179,
+        248,
+        167,
+        64,
+        156,
+        136,
+        144,
+        208,
+        132,
+        24,
+        121,
+        96,
+        109,
+        168,
+        97,
+        240,
+        85,
+        56,
+        74,
+        128,
+        62,
+        200,
+        50,
+        16,
+        39
+      ],
+      "basis": "Declared synthetic focus conversion knots: stock 0x779b30 reads 19 little-endian U16 inputs here, computes reciprocal spline coordinates, and clamps a zero focal-group count to one. Positive decreasing inputs make the coordinates strictly increasing after its fixed first knot. Not measured lens calibration."
+    }
+  ],
+  "settings": {
+    "debug": {
+      "offset": 247,
+      "values": {
+        "off": [
+          0
+        ],
+        "on": [
+          1
+        ]
+      }
+    }
+  }
+}

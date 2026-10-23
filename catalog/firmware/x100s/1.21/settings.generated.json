@@ -1,0 +1,221 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "x100s-121-settings",
+  "firmware_id": "x100s-121",
+  "bank": {
+    "descriptor": {
+      "address": 7980360,
+      "size": 12,
+      "sha256": "b39a76fd585e808f28a5a7922bf1efd0ac9030b537e3253f8629ea951faa9b2f"
+    },
+    "kind": 5,
+    "blocks": 320,
+    "first_block": 3546,
+    "logical_first": 0,
+    "bytes": 4194304
+  },
+  "defaults": {
+    "address": 7979728,
+    "size": 504,
+    "sha256": "ce854a38abbb3715de3f44e2ce8dddb19d077b1c562bc886ac42e200c54d8015"
+  },
+  "fields": [
+    {
+      "offset": 256,
+      "bytes": [
+        203,
+        4
+      ],
+      "basis": "Normal USB vendor ID."
+    },
+    {
+      "offset": 318,
+      "bytes": [
+        167,
+        2
+      ],
+      "basis": "Normal USB product ID."
+    },
+    {
+      "offset": 410,
+      "bytes": [
+        88,
+        49,
+        48,
+        48,
+        83,
+        0
+      ],
+      "basis": "Body product name."
+    },
+    {
+      "offset": 514,
+      "bytes": [
+        85,
+        170
+      ],
+      "basis": "Settings bank signature."
+    },
+    {
+      "offset": 516,
+      "bytes": [
+        2,
+        51
+      ],
+      "basis": "Internal version."
+    },
+    {
+      "offset": 38929,
+      "bytes": [
+        1
+      ],
+      "basis": "Explicit synthetic active normal-read accelerometer setting; stock 0x6a664c masks this configuration byte with 0x1f and writes sensor CTRL_REG1 (0x2a). No fast-read mode or physical calibration claim."
+    },
+    {
+      "offset": 112640,
+      "bytes": [
+        0,
+        250,
+        72,
+        238,
+        144,
+        226,
+        216,
+        214,
+        32,
+        203,
+        104,
+        191,
+        176,
+        179,
+        248,
+        167,
+        64,
+        156,
+        136,
+        144,
+        208,
+        132,
+        24,
+        121,
+        96,
+        109,
+        168,
+        97,
+        240,
+        85,
+        56,
+        74,
+        128,
+        62,
+        200,
+        50,
+        16,
+        39
+      ],
+      "basis": "Declared synthetic focus conversion knots: X100S 0x735500 reads 19 little-endian U16 values at 0x1b800 and computes 16777215/value after its fixed first knot; positive decreasing inputs produce strictly increasing spline coordinates. One focal group follows the stock zero-to-one count clamp at 0x731698. Not measured lens calibration."
+    },
+    {
+      "offset": 156416,
+      "bytes": [
+        0,
+        250,
+        72,
+        238,
+        144,
+        226,
+        216,
+        214,
+        32,
+        203,
+        104,
+        191,
+        176,
+        179,
+        248,
+        167,
+        64,
+        156,
+        136,
+        144,
+        208,
+        132,
+        24,
+        121,
+        96,
+        109,
+        168,
+        97,
+        240,
+        85,
+        56,
+        74,
+        128,
+        62,
+        200,
+        50,
+        16,
+        39
+      ],
+      "basis": "Explicit synthetic focus knots in the alternate configuration banks selected by stock offset mapper 0x694928: logical 0x1b800 maps by +0xab00 or +0xea00. Same positive decreasing inputs as the unmapped bank; no measured lens calibration."
+    },
+    {
+      "offset": 172544,
+      "bytes": [
+        0,
+        250,
+        72,
+        238,
+        144,
+        226,
+        216,
+        214,
+        32,
+        203,
+        104,
+        191,
+        176,
+        179,
+        248,
+        167,
+        64,
+        156,
+        136,
+        144,
+        208,
+        132,
+        24,
+        121,
+        96,
+        109,
+        168,
+        97,
+        240,
+        85,
+        56,
+        74,
+        128,
+        62,
+        200,
+        50,
+        16,
+        39
+      ],
+      "basis": "Explicit synthetic focus knots in the alternate configuration banks selected by stock offset mapper 0x694928: logical 0x1b800 maps by +0xab00 or +0xea00. Same positive decreasing inputs as the unmapped bank; no measured lens calibration."
+    }
+  ],
+  "settings": {
+    "debug": {
+      "offset": 247,
+      "values": {
+        "off": [
+          0
+        ],
+        "on": [
+          1
+        ]
+      }
+    }
+  }
+}
