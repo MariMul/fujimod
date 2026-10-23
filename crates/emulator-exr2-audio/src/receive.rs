@@ -130,8 +130,8 @@ impl Receiver {
             let irq = p.irq;
             self.state.pending = None;
             self.state.completed = completed;
-            self.state.active = self.word(0x2c) & 0x40000000 != 0;
-            self.state.alternate = self.state.active;
+            self.state.alternate = self.word(0x2c) & 0x40000000 != 0;
+            self.state.active = self.state.alternate && self.word(0x2c) & 0x10000000 != 0;
             irq.raise(cx)?;
         } else {
             let (source, destination, count) = self.descriptor()?;
@@ -144,6 +144,11 @@ impl Receiver {
                 .checked_add(delay)
                 .ok_or("audio DMA deadline overflow")?;
             let irq = self.routes.latch(0x5c)?;
+            // Bit 28 hands off one staged alternate descriptor. Consuming
+            // it prevents a repeat channel from replaying an unstaged buffer.
+            if self.state.alternate {
+                self.state.registers.insert(0x2c, self.word(0x2c) & !0x10000000);
+            }
             self.state.pending = Some(Pending {
                 due,
                 source,
@@ -247,6 +252,7 @@ impl Device for Receiver {
                     }
                     self.state.active = true;
                     self.state.alternate = false;
+                    self.state.completed = 0;
                 }
                 _ => {
                     cx.fail("unsupported serial-audio DMA control");
@@ -255,6 +261,13 @@ impl Device for Receiver {
             }
         }
         self.state.registers.insert(o, value);
+        // A late handoff resumes a drained repeat channel. An abort clears
+        // alternate/completed and requires a new START instead.
+        if o == 0x2c && value & 0x50000000 == 0x50000000
+            && self.state.alternate && self.state.completed != 0 && self.state.pending.is_none()
+        {
+            self.state.active = true;
+        }
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         if let Err(e) = self.tick(cx) {
@@ -332,6 +345,9 @@ mod tests {
         ] {
             write(d, h, BASE + o, v);
         }
+        if repeat {
+            write(d, h, BASE + 0x2c, 0x50122011);
+        }
     }
     #[test]
     fn explicit_pcm_clock_dma_precedes_irq_and_disabled_receiver_has_no_deadline() {
@@ -371,11 +387,38 @@ mod tests {
         advance(&mut d, &mut h, 1000);
         assert_eq!(&h.ram[0x1010..0x1018], &(-1234i16).to_le_bytes().repeat(4));
         assert_eq!(h.irqs.len(), 2);
-        assert_eq!(read(&mut d, &mut h, BASE + 0x24), 4);
+        assert_eq!(read(&mut d, &mut h, BASE + 0x24), 0x40);
         write(&mut d, &mut h, BASE + 0x28, 0x101);
         advance(&mut d, &mut h, 2000);
         assert_eq!(h.irqs.len(), 2);
         assert_eq!(d.next_deadline(2000), None);
+    }
+    #[test]
+    fn staged_alternate_is_consumed_once_then_a_new_movie_can_start() {
+        let (mut d, mut h) = setup();
+        start(&mut d, &mut h, true);
+        write(&mut d, &mut h, 0xfffa0008, 0x10002);
+        advance(&mut d, &mut h, 0);
+        advance(&mut d, &mut h, 500);
+        advance(&mut d, &mut h, 500);
+        assert_eq!(read(&mut d, &mut h, BASE + 0x2c) & 0x10000000, 0);
+        advance(&mut d, &mut h, 1000);
+        assert_eq!(d.next_deadline(1000), None);
+        assert_eq!(read(&mut d, &mut h, BASE + 0x24), 0x40);
+        advance(&mut d, &mut h, 2000);
+        assert_eq!(h.irqs.len(), 2);
+        write(&mut d, &mut h, BASE + 0x2c, 0x50122011);
+        assert_eq!(d.next_deadline(2000), Some(2000));
+        advance(&mut d, &mut h, 2000);
+        advance(&mut d, &mut h, 2500);
+        assert_eq!(h.irqs.len(), 3);
+        assert_eq!(d.next_deadline(2500), None);
+        start(&mut d, &mut h, true);
+        assert_eq!(read(&mut d, &mut h, BASE + 0x24), 5);
+        advance(&mut d, &mut h, 2500);
+        advance(&mut d, &mut h, 3000);
+        assert_eq!(h.irqs.len(), 4);
+        assert_eq!(&h.ram[0x1000..0x1008], &(-1234i16).to_le_bytes().repeat(4));
     }
     #[test]
     fn repeat_rearms_while_its_irq_bank_is_masked() {

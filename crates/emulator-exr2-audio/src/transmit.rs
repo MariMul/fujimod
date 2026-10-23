@@ -126,8 +126,8 @@ impl Transmitter {
             let irq = p.irq;
             self.state.pending = None;
             self.state.completed = completed;
-            self.state.active = self.word(0x2c) & 0x40000000 != 0;
-            self.state.alternate = self.state.active;
+            self.state.alternate = self.word(0x2c) & 0x40000000 != 0;
+            self.state.active = self.state.alternate && self.word(0x2c) & 0x10000000 != 0;
             irq.raise(cx)?;
         } else {
             let (source, destination, count) = self.descriptor()?;
@@ -140,6 +140,11 @@ impl Transmitter {
                 .checked_add(delay)
                 .ok_or("audio DMA deadline overflow")?;
             let irq = self.routes.latch(0x5c)?;
+            // Bit 28 hands off one staged alternate descriptor. Consuming
+            // it prevents a repeat channel from replaying an unstaged buffer.
+            if self.state.alternate {
+                self.state.registers.insert(0x2c, self.word(0x2c) & !0x10000000);
+            }
             let mut bytes = vec![0; count];
             cx.ram_read(source, &mut bytes)?;
             self.state.pending = Some(Pending {
@@ -238,6 +243,7 @@ impl Device for Transmitter {
                     }
                     self.state.active = true;
                     self.state.alternate = false;
+                    self.state.completed = 0;
                 }
                 _ => {
                     cx.fail("unsupported serial-audio DMA control");
@@ -246,6 +252,13 @@ impl Device for Transmitter {
             }
         }
         self.state.registers.insert(o, value);
+        // A late handoff resumes a drained repeat channel. An abort clears
+        // alternate/completed and requires a new START instead.
+        if o == 0x2c && value & 0x50000000 == 0x50000000
+            && self.state.alternate && self.state.completed != 0 && self.state.pending.is_none()
+        {
+            self.state.active = true;
+        }
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         if let Err(e) = self.tick(cx) {
@@ -347,6 +360,31 @@ mod tests {
         assert_eq!(d.next_deadline(108), None);
         advance(&mut d, &mut h, 200);
         assert_eq!(d.audio.sink_bytes_received(0), Some(4));
+    }
+    #[test]
+    fn repeat_consumes_one_handoff_and_abort_blocks_late_rearm() {
+        let (mut d, mut h) = setup();
+        for (o, value) in [(12, 0x1000), (16, 0xfffa0010), (20, 4), (0x2c, 0x50221011)] {
+            write(&mut d, &mut h, BASE + o, value);
+        }
+        write(&mut d, &mut h, 0xfffa0008, 0x20001);
+        advance(&mut d, &mut h, 0);
+        advance(&mut d, &mut h, 8);
+        advance(&mut d, &mut h, 8);
+        assert_eq!(read(&mut d, &mut h, BASE + 0x2c) & 0x10000000, 0);
+        advance(&mut d, &mut h, 16);
+        assert_eq!(d.next_deadline(16), None);
+        assert_eq!(d.audio.sink_bytes_received(0), Some(8));
+        assert_eq!(h.irqs.len(), 2);
+        write(&mut d, &mut h, BASE + 0x2c, 0x50221011);
+        advance(&mut d, &mut h, 16);
+        advance(&mut d, &mut h, 24);
+        assert_eq!(d.audio.sink_bytes_received(0), Some(12));
+        assert_eq!(d.next_deadline(24), None);
+        write(&mut d, &mut h, BASE + 0x28, 8);
+        write(&mut d, &mut h, BASE + 0x2c, 0x50221011);
+        advance(&mut d, &mut h, 32);
+        assert_eq!(d.audio.sink_bytes_received(0), Some(12));
     }
     #[test]
     fn stop_and_checkpoint_keep_pending_work_and_disconnected_sinks_do_not_complete() {
