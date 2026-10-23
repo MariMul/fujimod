@@ -54,8 +54,8 @@ or program uploads do not authorize an encoding mode.
 All input is latched at START. Compression runs without guest effects. A due
 virtual deadline writes the encoded bytes, zero-pads only to a word boundary,
 updates the cursor and exact bit count, then raises the configured IRQ. A
-frame can cross from either bank into the other; crossing sets the bank-start
-status. Acknowledging one of several pending status bits schedules another
+frame can cross from either bank into the other. The first accepted frame and
+each crossing set the bank-start status. Acknowledging one of several pending status bits schedules another
 IRQ at the current virtual tick. Early advancement is inert. The declared
 throughput is 64 luma samples per virtual tick; setup, pause and finish take
 two ticks. These are model clocks, independent of host elapsed time.

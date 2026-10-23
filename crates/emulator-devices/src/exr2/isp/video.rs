@@ -207,7 +207,15 @@ impl VideoEncoder {
         }
         let mut writes = Vec::new();
         let mut remaining = payload.len();
-        let mut flags = 1 << 12;
+        // The first accepted access unit starts the initial output bank, just
+        // as a wrap starts the next bank. Publish its bytes before either
+        // notice; ACK of the bank-start bit leaves the frame notice pending.
+        let mut flags = (1 << 12)
+            | if self.state.config.is_none() {
+                1 << 9
+            } else {
+                0
+            };
         while remaining > 0 {
             let n = remaining.min(sizes[bank] - cursor);
             writes.push((bases[bank] + cursor as u64, n));

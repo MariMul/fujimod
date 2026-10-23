@@ -224,6 +224,10 @@ fn start_latches_input_and_destinations_and_queues_finish() {
         .unwrap();
     assert!((image.y()[8] as i16 - 40).abs() < 12);
     assert!(h.ram[0x40000..0x40000 + length].iter().all(|b| *b == 0));
+    assert_eq!(read(&mut d, &mut h, 0xfff60c24), (1 << 9) | (1 << 12));
+    write(&mut d, &mut h, 0xfff60c24, 1 << 9);
+    assert_eq!(d.next_deadline(h.now), Some(deadline));
+    advance(&mut d, &mut h, deadline);
     assert_eq!(read(&mut d, &mut h, 0xfff60c24), 1 << 12);
     write(&mut d, &mut h, 0xfff60c24, 1 << 12);
     assert_eq!(d.next_deadline(h.now), Some(deadline + 2));
