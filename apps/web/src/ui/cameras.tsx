@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { For, Show, createSignal, onSettled } from 'solid-js';
 import { phases, started, status, type FirmwareProgress, type Phase } from './camera-progress';
 import './cameras.css';
 export interface Generation {
@@ -21,15 +21,63 @@ function help(model: string, phase: Phase) {
   if (phase.fraction) return `Help test on your ${model}`;
   return `Have ${AN.test(model) ? 'an' : 'a'} ${model}? Help test it`;
 }
-function Segment(props: { model: string; phase: Phase; owners: Owner[] }) {
+/** The one segment whose tip is open, so taps and hovers never leave two tips showing. */
+interface Tips {
+  open: () => string | undefined;
+  show: (key: string | undefined) => void;
+}
+function createTips(): Tips {
+  const [open, show] = createSignal<string>();
+  onSettled(() => {
+    const outside = (event: PointerEvent) => {
+      if (!(event.target instanceof Element && event.target.closest('#camera-table .phase')))
+        show(undefined);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') show(undefined);
+    };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('keydown', escape);
+    };
+  });
+  return { open, show: (key) => show(() => key) };
+}
+function Segment(props: { model: string; phase: Phase; owners: Owner[]; tips: Tips }) {
+  const key = () => `${props.model} ${props.phase.id}`;
+  // A mouse opens the tip by hovering; a tap toggles it. Focus from a tap is not a keyboard visit.
+  let pressed = false,
+    wasOpen = false;
   return (
     <li
-      class={{
-        phase: true,
-        research: props.phase.id === 'research',
-        partial: props.phase.fraction > 0 && props.phase.fraction < 1,
-      }}
+      class={{ phase: true, open: props.tips.open() === key() }}
       tabindex="0"
+      onPointerEnter={(event) => event.pointerType === 'mouse' && props.tips.show(key())}
+      onPointerLeave={(event) => {
+        if (event.pointerType === 'mouse' && props.tips.open() === key())
+          props.tips.show(undefined);
+      }}
+      onPointerDown={(event) => {
+        pressed = event.pointerType !== 'mouse';
+        wasOpen = props.tips.open() === key();
+      }}
+      onFocusIn={() => pressed || props.tips.show(key())}
+      onFocusOut={(event) => {
+        const next = event.relatedTarget;
+        if (
+          !(next instanceof Node && event.currentTarget.contains(next)) &&
+          props.tips.open() === key()
+        )
+          props.tips.show(undefined);
+      }}
+      onClick={(event) => {
+        if (!pressed) return;
+        pressed = false;
+        if (event.target instanceof Element && event.target.closest('.tip')) return;
+        props.tips.show(wasOpen ? undefined : key());
+      }}
       style={{
         '--w': String(props.phase.weight),
         '--p': `${props.phase.fraction * 100}%`,
@@ -76,7 +124,7 @@ function Segment(props: { model: string; phase: Phase; owners: Owner[] }) {
     </li>
   );
 }
-function ProgressRow(props: { progress: FirmwareProgress; owners: Owner[] }) {
+function ProgressRow(props: { progress: FirmwareProgress; owners: Owner[]; tips: Tips }) {
   const list = () => phases(props.progress);
   return (
     <div class={{ 'progress-row': true, owned: props.owners.length > 0 }}>
@@ -87,7 +135,14 @@ function ProgressRow(props: { progress: FirmwareProgress; owners: Owner[] }) {
       </div>
       <ul class="bar" aria-label={`${props.progress.model} progress`}>
         <For each={list()}>
-          {(phase) => <Segment model={props.progress.model} phase={phase} owners={props.owners} />}
+          {(phase) => (
+            <Segment
+              model={props.progress.model}
+              phase={phase}
+              owners={props.owners}
+              tips={props.tips}
+            />
+          )}
         </For>
       </ul>
     </div>
@@ -97,6 +152,7 @@ function GenerationGroup(props: {
   group: Generation;
   progress: Record<string, FirmwareProgress>;
   owners: ReadonlyMap<string, Owner[]>;
+  tips: Tips;
 }) {
   const rows = () =>
     props.group.models.flatMap((model) => {
@@ -113,7 +169,11 @@ function GenerationGroup(props: {
       </h4>
       <For each={rows()}>
         {(progress) => (
-          <ProgressRow progress={progress} owners={props.owners.get(progress.model) ?? []} />
+          <ProgressRow
+            progress={progress}
+            owners={props.owners.get(progress.model) ?? []}
+            tips={props.tips}
+          />
         )}
       </For>
       <Show when={rest().length}>
@@ -145,6 +205,7 @@ export function CameraTable(props: {
   progress: Record<string, FirmwareProgress>;
   owners: Owner[];
 }) {
+  const tips = createTips();
   const owners = () => {
     const result = new Map<string, Owner[]>();
     for (const owner of props.owners)
@@ -175,7 +236,12 @@ export function CameraTable(props: {
           <div class="col">
             <For each={groups}>
               {(group) => (
-                <GenerationGroup group={group} progress={props.progress} owners={owners()} />
+                <GenerationGroup
+                  group={group}
+                  progress={props.progress}
+                  owners={owners()}
+                  tips={tips}
+                />
               )}
             </For>
           </div>
@@ -187,6 +253,7 @@ export function CameraTable(props: {
             group={{ name: 'Other cameras', years: '', models: unlisted() }}
             progress={props.progress}
             owners={owners()}
+            tips={tips}
           />
         </div>
       </Show>

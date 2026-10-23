@@ -29,7 +29,7 @@ export interface Step {
 export interface Phase {
   id: 'research' | 'emulator' | 'camera' | 'mods' | 'sd-card';
   label: string;
-  /** Share of the bar's width; the research dot has a fixed size. */
+  /** Share of the bar's width. */
   weight: number;
   /** Completed share of this phase, 0–1. */
   fraction: number;
@@ -79,17 +79,16 @@ function stepPhase(
 /** Research: the `research` stage unpacks and exports the firmware; `analysis` locates its boot facts. */
 function researchPhase(progress: FirmwareProgress): Phase {
   const exported = progress.stages.research === 'pass',
-    located = progress.stages.analysis === 'pass',
     list = [
       { label: 'Firmware unpacked', done: exported },
       { label: 'Code exported', done: exported },
-      { label: 'Boot facts located', done: located },
+      { label: 'Boot facts located', done: progress.stages.analysis === 'pass' },
     ];
   return {
     id: 'research',
     label: 'Research',
-    weight: 0,
-    fraction: (Number(exported) + Number(located)) / 2,
+    weight: 10,
+    fraction: list.filter((step) => step.done).length / list.length,
     value: stepValue(list),
     steps: list,
   };
@@ -100,7 +99,7 @@ export function phases(progress: FirmwareProgress): Phase[] {
     working = mods.filter((result) => result === 'pass').length;
   return [
     researchPhase(progress),
-    stepPhase('emulator', 'Emulator', 35, progress, ['rec', 'menu']),
+    stepPhase('emulator', 'Emulator', 30, progress, ['rec', 'menu']),
     stepPhase('camera', 'Camera', 20, progress, [
       'camera-identity',
       'camera-snapshot',
@@ -109,7 +108,7 @@ export function phases(progress: FirmwareProgress): Phase[] {
     {
       id: 'mods',
       label: 'Mods',
-      weight: 35,
+      weight: 30,
       fraction: mods.length ? working / mods.length : 0,
       value: working ? `${working} of ${mods.length}` : 'Not yet',
       steps: steps(progress, ['mod-target', 'mod-build']),

@@ -5,9 +5,8 @@
   --phase-camera: #d95926;
   --phase-mods: #199e70;
   --phase-sd-card: #c98500;
-  /* Opacity of the outline around bodies a contributor owns. */
-  --owned-outline-opacity: 55%;
-  --owned-outline: rgb(255 255 255 / var(--owned-outline-opacity));
+  /* The outline around bodies a contributor owns. */
+  --owned-outline: rgb(255 255 255 / 30%);
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
   gap: 32px 40px;
@@ -22,12 +21,16 @@
 }
 #camera-table .legend {
   display: flex;
-  gap: 14px;
+  flex-wrap: wrap;
+  gap: 4px 14px;
   margin: 0;
   padding: 0;
   list-style: none;
   font-size: 11px;
   color: var(--dim);
+}
+#camera-table .legend li {
+  white-space: nowrap;
 }
 #camera-table .legend li::before {
   content: '';
@@ -90,17 +93,17 @@
   padding: 0;
   list-style: none;
 }
-/* Bodies a contributor owns: a 1px outline 1px outside the track, following its rounded ends. */
+/* Bodies a contributor owns: a 1px outline 2px outside the track, following its rounded ends. */
 .progress-row.owned .bar {
   position: relative;
 }
 .progress-row.owned .bar::after {
   content: '';
   position: absolute;
-  inset: 5px -2px auto;
-  height: 8px;
+  inset: 4px -3px auto;
+  height: 10px;
   border: 1px solid var(--owned-outline);
-  border-radius: 4px;
+  border-radius: 5px;
   box-sizing: border-box;
   pointer-events: none;
 }
@@ -125,35 +128,13 @@
   background: var(--c);
   transition: filter 120ms;
 }
-/* The research dot: as tall as the track, filled when done and a ring when partly done. */
-.progress-row .phase.research {
-  flex: 0 0 4px;
-  margin-right: 2px;
-}
-.progress-row .research .track {
-  border-radius: 50%;
-}
-.progress-row .research .fill {
-  border-radius: 50%;
-}
-.progress-row .research.partial .fill {
-  width: 100%;
-  background: none;
-  box-shadow: 0 0 0 1px var(--c) inset;
-}
-.progress-row .research.partial .track {
-  background: none;
-}
-.progress-row .bar:hover .track,
-.progress-row .bar:focus-within .track {
+.progress-row .bar:has(.open) .track {
   opacity: 0.45;
 }
-.progress-row .phase:hover .track,
-.progress-row .phase:focus-within .track {
+.progress-row .phase.open .track {
   opacity: 1;
 }
-.progress-row .phase:hover .fill,
-.progress-row .phase:focus-within .fill {
+.progress-row .phase.open .fill {
   filter: brightness(1.2);
 }
 .progress-row .phase:focus-visible .track {
@@ -202,8 +183,7 @@
   right: 0;
   translate: 0 0;
 }
-.progress-row .phase:hover .tip,
-.progress-row .phase:focus-within .tip {
+.progress-row .phase.open .tip {
   opacity: 1;
   visibility: visible;
   transform: none;
@@ -285,7 +265,7 @@
   padding: 0 3px;
   border-radius: 4px;
   outline: 1px solid var(--owned-outline);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 #camera-table .rest b {
   display: block;

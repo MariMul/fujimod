@@ -56,7 +56,7 @@ test('a stage fills its share of its phase and the row names the first unfinishe
     }),
   );
   expect(list.map((phase) => [phase.id, phase.fraction, phase.value])).toEqual([
-    ['research', 1 / 2, '2 of 3'],
+    ['research', 2 / 3, '2 of 3'],
     ['emulator', 1 / 2, '1 of 2'],
     ['camera', 1 / 3, '1 of 3'],
     ['mods', 1 / 4, '1 of 4'],
@@ -123,20 +123,42 @@ test('started models draw a bar; the others are listed as not started', () => {
   expect(host.querySelectorAll('.progress-row .phase')).toHaveLength(5);
 });
 
-test('the research dot is filled when both stages pass and a ring when one does', () => {
+test('research fills a third for each of its steps', () => {
+  expect(phases(progress('X70', ['research', 'analysis']))[0]?.fraction).toBe(1);
+  const [research] = phases(progress('X30', ['research']));
+  expect([research?.fraction, research?.value]).toEqual([2 / 3, '2 of 3']);
+  expect(phases(progress('X20', ['analysis']))[0]?.fraction).toBe(1 / 3);
+});
+
+test('one tip is open at a time, whether tapped, hovered or focused', () => {
   const host = table(
     [[{ name: 'EXR Processor II', years: '', models: ['X70', 'X30'] }]],
-    [progress('X70', ['research', 'analysis']), progress('X30', ['research'])],
+    [progress('X70', ['research']), progress('X30', ['research'])],
   );
-  const dots = [...host.querySelectorAll('.bar .phase:first-child')];
-  expect(
-    dots.map((dot) => [dot.classList.contains('research'), dot.classList.contains('partial')]),
-  ).toEqual([
-    [true, false],
-    [true, true],
-  ]);
-  expect(dots[0]?.getAttribute('aria-label')).toBe('Research: Done');
-  expect(dots[1]?.querySelector('.tip-value')?.textContent).toBe('2 of 3');
+  const [a, b] = [...host.querySelectorAll<HTMLElement>('.bar')].map((bar) =>
+    bar.querySelector<HTMLElement>('.phase:nth-child(2)')!,
+  );
+  const open = () => [...host.querySelectorAll('.phase.open')];
+  const tap = (element: Element) => {
+    element.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' }));
+    element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    flush();
+  };
+  tap(a!);
+  expect(open()).toEqual([a]);
+  tap(b!);
+  expect(open()).toEqual([b]);
+  tap(b!);
+  expect(open()).toEqual([]);
+  a!.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+  flush();
+  expect(open()).toEqual([a]);
+  b!.focus();
+  flush();
+  expect(open()).toEqual([b]);
+  document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+  flush();
+  expect(open()).toEqual([]);
 });
 
 test('the camera popover asks an owner for help until every camera step passes', () => {
