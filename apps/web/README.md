@@ -127,14 +127,30 @@ bundle; there is one engine implementation.
 
 `@fujimod/emulator-ui/viewer/lcd` composes actual guest LCD frames and fault feedback. Native
 card state and FAT files supply the SD browser. Unsupported lifecycle operations
-return their native error. With no selected scene, the app supplies the bundled
-1536×1024 default scene PNG through the ordinary RGB scene interface: the
-Elogio del Horizonte in Gijón, photographed by the project's author with an
-X70 and rendered from the camera's own JPEG, with the deepest shadows lifted
-slightly. The original RAF is `src/engine/assets/default-scene.raf.zst`
-(Zstandard, lossless; Git LFS). Its average brightness is close to where the camera's metering
-settles, so a correct exposure looks like the original photograph. Scene input and
-preview timing are applied through the graph's declared native policies.
+return their native error. Scene input and preview timing are applied through
+the graph's declared native policies.
+
+### Default scene
+
+With no selected scene the camera sees the Elogio del Horizonte in Gijón,
+photographed by the project's author with an X70.
+
+- **Original:** `src/engine/assets/default-scene.raf.zst`, the camera's RAF
+  compressed losslessly with Zstandard (Git LFS). It is never edited.
+- **Derived file:** `scripts/assets/default-scene.ts` decompresses it to
+  `build/assets/default-scene.raf` (ignored), skipping the work when the
+  output's SHA-256 already matches the recorded original. Every consumer reads
+  that one file: the web build serves it as an asset, and native runs and tests
+  load it through `fujimod.scenes.default_scene_raf()`, which runs the script
+  when the file is missing or stale.
+- **Sensor input:** the RAF reaches the sensor through the RAF input (per-site
+  linear radiance on the sensor's color filter pattern, normalized by the
+  RAF's recorded exposure), not the RGB input. The browser `Scene` is a union
+  of an RGB image (selected images, webcam) and a RAF; the worker's `scene`
+  action passes RAF bytes to the Wasm camera's RAF input.
+- `default-scene.png`, the camera's JPEG with the deepest shadows lifted,
+  remains only for bodies whose sensors have not been checked against an X70
+  RAF.
 
 The model is **CAMERA ( Fujifilm X70 )** by
 [McCLOUD2101](https://sketchfab.com/McCLOUD2101),
