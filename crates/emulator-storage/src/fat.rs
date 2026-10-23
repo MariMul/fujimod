@@ -24,17 +24,19 @@ pub struct Options {
 }
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum Kind {
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+pub enum CardEntryKind {
     File,
     Directory,
 }
 #[derive(Clone, Debug, Serialize)]
-pub struct Entry {
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+pub struct CardEntry {
     pub name: String,
     pub path: String,
-    pub kind: Kind,
+    pub kind: CardEntryKind,
     pub bytes: u32,
-    pub children: Vec<Entry>,
+    pub children: Vec<CardEntry>,
 }
 #[derive(Clone)]
 struct DirEntry {
@@ -317,7 +319,7 @@ impl<'a> Reader<'a> {
         }
         err("Empty card path")
     }
-    pub fn tree(&self) -> Result<Vec<Entry>, String> {
+    pub fn tree(&self) -> Result<Vec<CardEntry>, String> {
         self.walk(self.root, "", 0, &mut BTreeSet::new(), &mut 0)
     }
     fn walk(
@@ -327,7 +329,7 @@ impl<'a> Reader<'a> {
         depth: usize,
         visited: &mut BTreeSet<u32>,
         count: &mut usize,
-    ) -> Result<Vec<Entry>, String> {
+    ) -> Result<Vec<CardEntry>, String> {
         if depth > 8 || !visited.insert(cluster) {
             return err("Directory tree cycles or aliases an earlier directory");
         }
@@ -345,16 +347,16 @@ impl<'a> Reader<'a> {
             }
             let path = format!("{parent}/{}", raw.name);
             let kind = if raw.attributes & 0x10 != 0 {
-                Kind::Directory
+                CardEntryKind::Directory
             } else {
-                Kind::File
+                CardEntryKind::File
             };
-            let children = if kind == Kind::Directory {
+            let children = if kind == CardEntryKind::Directory {
                 self.walk(raw.first, &path, depth + 1, visited, count)?
             } else {
                 Vec::new()
             };
-            entries.push(Entry {
+            entries.push(CardEntry {
                 name: raw.name,
                 path,
                 kind,
@@ -363,7 +365,8 @@ impl<'a> Reader<'a> {
             });
         }
         entries.sort_by(|a, b| {
-            (a.kind != Kind::Directory, &a.name).cmp(&(b.kind != Kind::Directory, &b.name))
+            (a.kind != CardEntryKind::Directory, &a.name)
+                .cmp(&(b.kind != CardEntryKind::Directory, &b.name))
         });
         Ok(entries)
     }
@@ -681,7 +684,7 @@ mod tests {
         assert_eq!(reader.read("EMPTY.BIN", 1).unwrap(), Vec::<u8>::new());
         let tree = reader.tree().unwrap();
         assert_eq!(tree.len(), 2);
-        assert_eq!(tree[0].kind, Kind::Directory);
+        assert_eq!(tree[0].kind, CardEntryKind::Directory);
         assert_eq!(tree[0].children[0].children[0].bytes, 70001);
         assert_eq!(card.revision(), revision);
     }

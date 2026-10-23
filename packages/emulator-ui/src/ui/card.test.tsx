@@ -23,9 +23,12 @@ afterEach(() => {
 const state: CardState = {
   supported: true,
   present: true,
+  protected: false,
   busy: false,
   revision: 1,
   capacity_bytes: 1024 ** 3,
+  data_faults: [],
+  fault_history: [],
 };
 test('card observations follow engine replacement, busy/insertion state and fresh revisions', async () => {
   let publish!: (state: CardState) => void;
@@ -227,12 +230,14 @@ test.each([
       name: 'FFBoot.BIN',
       path: '/FFBoot.BIN',
       bytes: gates.allowSdCardBootDownload ? 2 : 64 * 1024 ** 2,
+      children: [],
     },
     {
       kind: 'file',
       name: 'ffsys.bin',
       path: '/ffsys.bin',
       bytes: gates.allowSdCardBootDownload ? 2 : 64 * 1024 ** 2,
+      children: [],
     },
   ];
   const nestedBoot: CardEntry = {
@@ -240,18 +245,21 @@ test.each([
     name: 'FFSYS.BIN',
     path: '/DCIM/FFSYS.BIN',
     bytes: 2,
+    children: [],
   };
   const photo: CardEntry = {
     kind: 'file',
     name: 'photo.JPG',
     path: '/DCIM/photo.JPG',
     bytes: 2,
+    children: [],
   };
   const backup: CardEntry = {
     kind: 'file',
     name: 'ffboot.bin.bak',
     path: '/ffboot.bin.bak',
     bytes: 2,
+    children: [],
   };
   const readCardFile = vi.fn<Engine['readCardFile']>(async () => new Uint8Array([1, 2]));
   const engine = {
@@ -328,6 +336,7 @@ test('a card containing only gated firmware files has no downloads', async () =>
         name,
         path: `/${name}`,
         bytes: 64 * 1024 ** 2,
+        children: [],
       })),
     }),
     readCardFile,

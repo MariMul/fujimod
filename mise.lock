@@ -43,9 +43,9 @@ url = "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-win
 url_api = "https://api.github.com/repos/Kitware/CMake/releases/assets/605998125"
 
 [[tools.emsdk]]
-version = "5.0.3"
+version = "6.0.13"
 backend = "vfox:jdx/vfox-emsdk"
-specifiers = ["5.0.3"]
+specifiers = ["6.0.13"]
 
 [tools.emsdk."platforms.linux-arm64"]
 url = "https://github.com/emscripten-core/emsdk/archive/refs/heads/main.tar.gz"

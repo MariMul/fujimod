@@ -1,10 +1,10 @@
-import type { Input } from 'fujimod/emulator';
+import type { ControlInput } from 'fujimod/emulator';
 import { expect, test } from 'vite-plus/test';
 import { compatibleVariants, controlFace, defaultLayout } from './default-layout';
 import type { ControlNode } from './layout';
 import catalog from './fixtures/catalog-inputs.json';
 
-const bodies = catalog as Record<string, Input[]>;
+const bodies = catalog as Record<string, ControlInput[]>;
 
 function nodes(layout: ControlNode[]): ControlNode[] {
   return layout.flatMap((node) => [node, ...nodes(node.children ?? [])]);

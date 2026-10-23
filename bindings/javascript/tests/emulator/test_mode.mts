@@ -1,13 +1,21 @@
 // Runtime tests select an explicit Emscripten module creation option.
 import assert from 'node:assert/strict';
-import type { JitOptions, JitStatistics, ModuleOptions } from '../../dist/emulator/node.mjs';
+import type {
+  EmulatorModule,
+  JitOptions,
+  JitStatistics,
+  ModuleOptions,
+} from '../../dist/emulator/index.js';
 export function moduleOptions(options: boolean | JitOptions = true): ModuleOptions {
   const policy = process.env.FUJIMOD_EXECUTION_POLICY ?? 'exact';
   assert(policy === 'interactive' || policy === 'exact');
   return {
     executionPolicy: policy,
-    ...(process.env.FUJIMOD_TCG_JIT === '0' ? { tcgJit: false } :
-      process.env.FUJIMOD_TCG_JIT === '1' ? { tcgJit: options } : {}),
+    ...(process.env.FUJIMOD_TCG_JIT === '0'
+      ? { tcgJit: false }
+      : process.env.FUJIMOD_TCG_JIT === '1'
+        ? { tcgJit: options }
+        : {}),
   };
 }
 export function verifyJitStats(stats: JitStatistics) {
@@ -22,6 +30,6 @@ export function verifyJitStats(stats: JitStatistics) {
   }
   return stats;
 }
-export function finishJit(module: { tcgJitStats(): JitStatistics }) {
-  console.error(JSON.stringify({ jit: verifyJitStats(module.tcgJitStats()) }));
+export function finishJit(module: EmulatorModule) {
+  console.error(JSON.stringify({ jit: verifyJitStats(module.jitStatistics()) }));
 }

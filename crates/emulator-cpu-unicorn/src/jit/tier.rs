@@ -11,13 +11,14 @@ use std::{
 
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "camelCase")]
-pub struct Options {
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+pub struct JitOptions {
     pub threshold: u32,
     pub batch_size: usize,
     pub max_functions: usize,
     pub max_bytes: usize,
 }
-impl Default for Options {
+impl Default for JitOptions {
     fn default() -> Self {
         Self {
             threshold: 32,
@@ -27,7 +28,7 @@ impl Default for Options {
         }
     }
 }
-impl Options {
+impl JitOptions {
     pub fn validate(self) -> Result<Self, String> {
         for (name, value, low, high) in [
             ("threshold", self.threshold as usize, 1, 1000000),
@@ -61,6 +62,7 @@ pub trait Host {
 }
 #[derive(Clone, Default, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
 pub struct Stats {
     pub offered: u64,
     pub compiled: u64,
@@ -76,7 +78,26 @@ pub struct Stats {
     pub prepare_milliseconds: f64,
     pub capacity_refusals: u64,
     pub last_error: Option<String>,
+    #[cfg_attr(feature = "typescript", tsify(type = "Record<string, number>"))]
     pub unsupported_operations: BTreeMap<String, u64>,
+}
+/// Browser tier counters published to the host.
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+pub struct Statistics {
+    #[cfg_attr(feature = "typescript", tsify(type = "true"))]
+    pub enabled: bool,
+    #[serde(flatten)]
+    pub stats: Stats,
+    pub installed: usize,
+    pub retained_bytes: usize,
+    pub cached_functions: usize,
+    pub options: JitOptions,
+    /// Decimal counters: these can exceed JavaScript's safe integers.
+    pub chained_executions: String,
+    pub compiled_executions: String,
+    pub entries: String,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct Key {
@@ -109,7 +130,7 @@ pub struct Tier<H: Host> {
     host: H,
 }
 impl<H: Host> Tier<H> {
-    pub fn new(options: Options, mut host: H) -> Result<Self, String> {
+    pub fn new(options: JitOptions, mut host: H) -> Result<Self, String> {
         Ok(Self {
             state: State::new(options, &mut host)?,
             host,
@@ -140,7 +161,7 @@ impl<H: Host> Tier<H> {
     pub fn stats(&self) -> &Stats {
         self.state.stats()
     }
-    pub fn options(&self) -> Options {
+    pub fn options(&self) -> JitOptions {
         self.state.options()
     }
     pub fn installed(&self) -> usize {
@@ -154,7 +175,7 @@ impl<H: Host> Tier<H> {
     }
 }
 struct State {
-    options: Options,
+    options: JitOptions,
     stats: Stats,
     engines: BTreeMap<u32, Engine>,
     records: BTreeMap<Key, Record>,
@@ -172,7 +193,7 @@ struct State {
     stamp: u64,
 }
 impl State {
-    pub fn new<H: Host>(options: Options, host: &mut H) -> Result<Self, String> {
+    pub fn new<H: Host>(options: JitOptions, host: &mut H) -> Result<Self, String> {
         let options = options.validate()?;
         let module = Compiler::dispatcher(&host.dispatch_layout()?)?;
         let dispatcher = host.grow_table(1)?;
@@ -211,7 +232,7 @@ impl State {
     pub fn stats(&self) -> &Stats {
         &self.stats
     }
-    pub fn options(&self) -> Options {
+    pub fn options(&self) -> JitOptions {
         self.options
     }
     pub fn installed(&self) -> usize {

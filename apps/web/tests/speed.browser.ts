@@ -170,7 +170,7 @@ try {
   const history = await page.evaluate(async () => {
     const profile = await window.cameraEngine!.profile();
     const log = await window.cameraEngine!.history();
-    return { checkpoints: profile.checkpoints, entries: log.entries, bytes: log.bytes.length };
+    return { checkpoints: profile.checkpoints, entries: log.entries, bytes: log.log.length };
   });
   result.history = history;
   assert.ok(Array.isArray(history.checkpoints) && history.checkpoints.length >= 2);

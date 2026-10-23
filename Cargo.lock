@@ -3476,9 +3476,12 @@ dependencies = [
  "fujimod-workspace-hack",
  "libc",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
  "sha2",
  "toml 0.9.12+spec-1.1.0",
+ "tsify",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -3535,8 +3538,11 @@ dependencies = [
  "fujimod-unicorn-sys",
  "fujimod-workspace-hack",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
  "sha2",
+ "tsify",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -3553,10 +3559,13 @@ dependencies = [
  "rusty_h264-common",
  "rusty_h264-encoder",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
  "sha2",
  "toml 0.9.12+spec-1.1.0",
+ "tsify",
  "videotoolbox",
+ "wasm-bindgen",
  "zune-core",
  "zune-jpeg",
 ]
@@ -3784,15 +3793,21 @@ dependencies = [
  "fujimod-emulator-graphics",
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-parts-controls",
+ "fujimod-emulator-parts-io",
  "fujimod-emulator-storage",
  "fujimod-emulator-xp5-board",
  "fujimod-emulator-xp5-display",
  "fujimod-emulator-xp5-io",
  "fujimod-firmware",
  "fujimod-workspace-hack",
+ "js-sys",
  "serde",
+ "serde-wasm-bindgen",
+ "serde_bytes",
  "serde_json",
  "sha2",
+ "tsify",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -3813,7 +3828,10 @@ dependencies = [
  "fujimod-emulator-devices",
  "fujimod-workspace-hack",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
+ "tsify",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -3849,8 +3867,11 @@ dependencies = [
  "fujimod-workspace-hack",
  "ruzstd",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
  "sha2",
+ "tsify",
+ "wasm-bindgen",
 ]
 
 [[package]]

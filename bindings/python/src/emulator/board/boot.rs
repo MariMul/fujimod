@@ -23,7 +23,7 @@ impl<'a> Owner<'a> {
             _loan: PhantomData,
         }
     }
-    fn run(mut self, limit: u64) -> Result<boot::Report, String> {
+    fn run(mut self, limit: u64) -> Result<boot::RecReport, String> {
         if self.thread != thread::current().id() {
             return Err("session execution moved from its owner thread".into());
         }

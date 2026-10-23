@@ -18,7 +18,7 @@ execFileSync(
   },
 );
 mkdirSync(outputDirectory, { recursive: true });
-for (const name of ['host', 'loader']) {
+for (const name of ['host']) {
   const source = join(sourceDirectory, `${name}.ts`);
   const javascript = stripTypeScriptTypes(readFileSync(source, 'utf8'), {
     mode: 'strip',

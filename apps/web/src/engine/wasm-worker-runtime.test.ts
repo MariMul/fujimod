@@ -1,7 +1,7 @@
 import { test, vi } from 'vite-plus/test';
 import { gzipSync } from 'node:zlib';
 import assert from 'node:assert/strict';
-import { EmulatorSession, type EmulatorManifest } from 'fujimod/emulator';
+import type { EmulatorManifest } from 'fujimod/emulator';
 import { WasmWorkerRuntime } from './wasm-worker-runtime';
 import { testCameraModule } from './wasm-test-module';
 import type {
@@ -43,7 +43,7 @@ function setup(
         pending.delete(event.serial!);
       }
     },
-    async () => ({ session: new EmulatorSession(fake.module), manifest, identity: 'test' }),
+    async () => ({ module: fake.module, manifest, identity: 'test' }),
     {
       async saved() {
         return options.saved;
@@ -71,7 +71,7 @@ function setup(
   };
   return { ...fake, runtime, events, saves, send, config, manifest };
 }
-test('worker routes physical inputs, scene, card operations, restart, power, profile and rollback through the ABI', async () => {
+test('worker routes physical inputs, scene, card operations, restart, power, profile and rollback through the Camera bindings', async () => {
   const f = setup();
   const boot = await f.send({
     action: 'boot',
@@ -212,12 +212,6 @@ test('creation refusal diagnostics never ask a nonexistent board for status or f
     seedIdentity: [],
   });
   assert(boot.type === 'error' && boot.fault?.kind === 'unsupported-device');
-  f.module._camera_status = () => {
-    throw Error('No CPU exists');
-  };
-  f.module._camera_frame = () => {
-    throw Error('No display exists');
-  };
   const reply = await f.send({ action: 'error_report' });
   assert(reply.type === 'reply');
   const report = reply.result as { report: { created: boolean; status: unknown; frame: unknown } };
@@ -250,7 +244,7 @@ test('worker preserves checkpoint IDs and replay bytes across the transport', as
   assert.equal(f.calls.find((c) => c.action === 'restore')!.options.id, '0');
   const log = await f.send({ action: 'history' });
   assert(log.type === 'reply');
-  assert.deepEqual([...(log.result as { bytes: Uint8Array }).bytes], [0x81, 1]);
+  assert.deepEqual([...(log.result as { log: Uint8Array }).log], [0x81, 1]);
   await f.send({ action: 'replay_history', bytes: new Uint8Array([0x81, 1]) });
   assert.deepEqual(f.calls.find((c) => c.action === 'replay')!.bytes, [0x81, 1]);
 });
@@ -271,7 +265,7 @@ test('declared preview policy is applied once and source metrics use observation
   assert(f.events.some((e) => e.type === 'metrics' && e.metrics.runtime?.sourceFrames === 0));
 });
 
-test('a portable camera save restores media through the C ABI before boot', async () => {
+test('a portable camera save restores media before boot', async () => {
   const f = setup({
     saved: {
       durable: new Uint8Array([7, 8, 9]).buffer,
@@ -347,11 +341,7 @@ test('USB worker preserves opaque packets, advances only on usb_step, and refuse
     { action: 'usb_in', node: 'port', endpoint: 0x82, size: 512 },
     { action: 'usb_status', node: 'port' },
   ];
-  const scratch = f.module._camera_alloc(24);
-  const ticks = () => {
-    f.module._camera_status(1, scratch);
-    return new DataView(f.memory.buffer).getBigUint64(scratch, true);
-  };
+  const ticks = f.ticks;
   const initialTicks = ticks();
   const before = f.calls.length;
   for (const request of requests) assert.equal((await f.send(request)).type, 'reply');
@@ -370,7 +360,6 @@ test('USB worker preserves opaque packets, advances only on usb_step, and refuse
   assert.equal(ticks(), initialTicks);
   assert.equal((await f.send({ action: 'usb_step', node: 'port' })).type, 'reply');
   assert.equal(ticks(), initialTicks + 12000n);
-  f.module._camera_free(scratch, 24);
   const undo = await f.send({ action: 'undo' });
   assert.equal(undo.type, 'error');
   if (undo.type === 'error') assert.match(undo.error, /cannot rewind/);
@@ -382,12 +371,9 @@ test('live cameras forward browser languages and local wall time', async () => {
   f.manifest.construction = 'prepared';
   f.manifest.prepared = { document: 'document.json', bootRom: 'boot.bin' };
   let supplied: { clockSeconds2000: number; preferredLanguages: string[] } | undefined;
-  f.module._camera_prepared_session_create = (p, n) => {
-    supplied = JSON.parse(
-      new TextDecoder().decode(f.module.HEAPU8.subarray(p, p + n)),
-    ) as typeof supplied;
-    return 1;
-  };
+  f.prepared((request) => {
+    supplied = JSON.parse(request) as typeof supplied;
+  });
   vi.stubGlobal('navigator', { languages: ['de-AT', 'en-US'] });
   vi.stubGlobal('fetch', async () => new Response('{}'));
   const localSeconds = () => {
@@ -417,7 +403,7 @@ test('live cameras forward browser languages and local wall time', async () => {
   }
 });
 
-test('prepared cameras expose controls, card storage, preview and replay through the session ABI', async () => {
+test('prepared cameras expose controls, card storage, preview and replay through the Camera bindings', async () => {
   const f = setup();
   f.manifest.construction = 'prepared';
   f.manifest.prepared = Object.assign(
@@ -425,8 +411,8 @@ test('prepared cameras expose controls, card storage, preview and replay through
     { nand: 'nand.gz', settings: 'settings.bin', camera: { configuration: 'camera.zst' } },
   );
   let creates = 0;
-  f.module._camera_prepared_session_create = (p, n, ...spans) => {
-    const request = JSON.parse(new TextDecoder().decode(f.module.HEAPU8.subarray(p, p + n))) as {
+  f.prepared((text, camera) => {
+    const request = JSON.parse(text) as {
       document: string;
       clockSeconds2000: number;
       preferredLanguages: string[];
@@ -435,16 +421,11 @@ test('prepared cameras expose controls, card storage, preview and replay through
     assert.equal(request.document, '{"number":1.0}');
     assert.equal(request.clockSeconds2000, 0);
     assert.deepEqual(request.preferredLanguages, []);
-    // Camera sections arrive unchanged, packed in the last span in request order.
+    // Camera sections arrive unchanged, packed in one span in request order.
     assert.deepEqual(request.camera, [['configuration', 14]]);
-    const [camera, cameraLength] = spans.slice(-2);
-    assert.equal(
-      new TextDecoder().decode(f.module.HEAPU8.subarray(camera, camera! + cameraLength!)),
-      '{"number":1.0}',
-    );
+    assert.equal(new TextDecoder().decode(camera), '{"number":1.0}');
     creates++;
-    return 1;
-  };
+  });
   vi.stubGlobal(
     'fetch',
     async (url: URL) =>

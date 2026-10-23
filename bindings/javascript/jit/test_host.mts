@@ -1,4 +1,4 @@
-// The TS boundary forwards configuration and loads Rust-requested exports.
+// The Emscripten library loads Rust-requested exports into the function table.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
@@ -19,14 +19,14 @@ class BrowserTextDecoder extends TextDecoder {
 const memory = new WebAssembly.Memory({ initial: 4, maximum: 32, shared: true }),
   table = new WebAssembly.Table({ initial: 2, element: 'anyfunc' });
 let library: Record<string, unknown> = {};
-const module: Record<string, unknown> = {
+const context = {
+  Module: {} as Record<string, unknown>,
   _uc_embedder_tci_wasm_load: (...args: number[]) => {
     assert.deepEqual(args, [7, 8, 0, 9]);
     return 42n;
   },
-};
-const context = {
-  Module: module,
+  _uc_embedder_tci_wasm_store: () => assert.fail('the fixture imports only load'),
+  _uc_embedder_tci_wasm_call: () => assert.fail('the fixture imports only load'),
   wasmMemory: memory,
   wasmTable: table,
   HEAPU8: new Uint8Array(memory.buffer),
@@ -90,99 +90,10 @@ clear(2);
 assert.equal(table.get(2), null);
 assert.equal((library.unicorn_jit_host_now as () => number)(), 123.5);
 
-function loader(value: unknown, reject = false) {
-  const memory = new WebAssembly.Memory({ initial: 4, maximum: 32, shared: true });
-  let next = 0x10000,
-    oldHook = 0,
-    grow = true;
-  const allocated = new Map<number, number>(),
-    configs: string[] = [];
-  const expected = { enabled: true, compiled: 7, entries: '123', options: { threshold: 19 } };
-  const state = {
-    Module: {} as Record<string, unknown>,
-    wasmMemory: memory,
-    HEAPU8: new Uint8Array(memory.buffer),
-    TextEncoder,
-    TextDecoder: BrowserTextDecoder,
-    DataView,
-  };
-  const write = (out: number, text: string) => {
-    const bytes = new TextEncoder().encode(text);
-    state.HEAPU8.set(bytes, 0x1000);
-    const view = new DataView(memory.buffer);
-    view.setUint32(out, 0x1000, true);
-    view.setUint32(out + 4, bytes.length, true);
-  };
-  state.Module = {
-    postRun: () => {
-      oldHook++;
-    },
-    _camera_alloc: (length: number) => {
-      const pointer = next;
-      next += (length + 7) & -8;
-      allocated.set(pointer, length);
-      return pointer;
-    },
-    _camera_free: (pointer: number, length: number) => {
-      assert.equal(allocated.get(pointer), length);
-      allocated.delete(pointer);
-    },
-    _camera_policy_setup: (pointer: number, length: number) => { assert.equal(new TextDecoder().decode(state.HEAPU8.subarray(pointer, pointer + length)), 'interactive'); return 0; },
-    _camera_jit_setup: (pointer: number, length: number) => {
-      configs.push(new TextDecoder().decode(state.HEAPU8.subarray(pointer, pointer + length)));
-      return reject ? -1 : 0;
-    },
-    _camera_jit_stats: (out: number) => {
-      if (grow) {
-        grow = false;
-        memory.grow(1);
-        state.HEAPU8 = new Uint8Array(memory.buffer);
-      }
-      write(out, JSON.stringify(expected));
-      return 0;
-    },
-    _camera_error: (_handle: number, out: number) => {
-      write(out, 'config refused');
-      return 0;
-    },
-  };
-  if (value !== undefined) state.Module.tcgJit = value;
-  runInNewContext(source('./loader.ts'), state);
-  const callbacks = state.Module.postRun as (() => void)[];
-  if (reject) {
-    assert.throws(() => callbacks.forEach((fn) => fn()), /config refused/);
-  } else {
-    callbacks.forEach((fn) => fn());
-    assert.deepEqual(
-      JSON.parse(JSON.stringify((state.Module.tcgJitStats as () => unknown)())),
-      expected,
-    );
-  }
-  assert.equal((state.Module.HEAPU8 as Uint8Array).byteLength, memory.buffer.byteLength);
-  memory.grow(1); // Another pthread can grow memory without touching owner JS.
-  assert.equal((state.Module.HEAPU8 as Uint8Array).byteLength, memory.buffer.byteLength);
-  assert.equal(oldHook, 1);
-  assert.equal(allocated.size, 0);
-  assert.deepEqual(configs, [value === undefined ? '' : JSON.stringify(value)]);
-}
-for (const value of [undefined, false, true, { threshold: 19, unknown: 'forwarded to Rust' }])
-  loader(value);
-loader(true, true);
-const child = {
-  Module: { postRun: [] as (() => void)[] },
-  ENVIRONMENT_IS_PTHREAD: undefined as boolean | undefined,
-};
-runInNewContext(source('./loader.ts'), child);
-child.ENVIRONMENT_IS_PTHREAD = true;
-child.Module.postRun.forEach((callback) => callback()); // No owner C ABI calls on pthreads.
 console.log(
   JSON.stringify({
     passed: true,
     hostImports: true,
     rustExportManifest: true,
-    configurationTransport: true,
-    memoryGrowth: true,
-    borrowedStatistics: true,
-    errorCleanup: true,
   }),
 );

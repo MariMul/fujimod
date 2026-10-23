@@ -148,16 +148,13 @@ pub struct Session {
     pub(super) reset_image: Option<Arc<fujimod_emulator::session::checkpoint::Snapshot>>,
     pub(super) powered_on: bool,
     pub(super) generation: u64,
-    pub result_json: Vec<u8>,
-    pub result_bytes: Vec<u8>,
-    pub scene_upload: Vec<u8>,
-    pub scene_dimensions: Option<(usize, usize)>,
-    pub camera: Option<super::camera::Metadata>,
+    /// Identifies this session in its checkpoint IDs and input logs.
+    pub(super) owner: u32,
+    pub(crate) camera: Option<super::camera::Metadata>,
     pub(super) quantum: usize,
     pub(super) input: Option<(Arc<ResistorKeys>, usize)>,
     pub frames: BTreeMap<usize, Arc<Frame>>,
     pub(super) history: Option<super::history::History>,
-    pub error: String,
     pub failed: bool,
 }
 impl Session {
@@ -333,10 +330,7 @@ impl Session {
                 contacts: Default::default(),
                 recording_frames: Default::default(),
             },
-            result_json: vec![],
-            result_bytes: vec![],
-            scene_upload: vec![],
-            scene_dimensions: None,
+            owner: next_owner(),
             camera: None,
             reset_image: None,
             powered_on: true,
@@ -345,7 +339,6 @@ impl Session {
             input,
             frames: BTreeMap::new(),
             history: None,
-            error: String::new(),
             failed: false,
         };
         session.reset_image = session.core.checkpoint(None).ok().map(Arc::new);
@@ -393,6 +386,12 @@ impl Session {
         input.enqueue(Duration::from_nanos(at), Key::parse(key)?, pressed)?;
         self.core.board.inputs_changed(*source)
     }
+}
+
+/// Owner IDs are unique within this module instance.
+pub(super) fn next_owner() -> u32 {
+    static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 pub(super) fn decode(

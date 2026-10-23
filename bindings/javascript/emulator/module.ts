@@ -1,94 +1,45 @@
-import type { EmulatorModule } from './abi.ts';
-import type { BootInput, Input } from './contracts.ts';
+import type {
+  BootInput,
+  ControlInput,
+  ExecutionPolicyName,
+  MainModule,
+  ModuleOptions,
+} from './camera.generated.ts';
 
-export interface JitOptions {
-  threshold?: number;
-  batchSize?: number;
-  maxFunctions?: number;
-  maxBytes?: number;
-}
+/** A loaded module. Its API and types are generated from the Rust bindings. */
+export type EmulatorModule = MainModule;
+export type Camera = EmulatorModule['Camera']['prototype'];
+export type Frame = EmulatorModule['Frame']['prototype'];
+export type Status = EmulatorModule['Status']['prototype'];
 
-export interface ModuleOptions {
-  /** Shared board/CPU policy. Interactive is the feature-exploration default. */
-  executionPolicy?: 'interactive' | 'exact';
-  tcgJit?: boolean | JitOptions;
-}
-
-export interface EnabledJitStatistics {
-  enabled: true;
-  options: { maxFunctions: number };
-  installed: number;
-  compiled: number;
-  flushes: number;
-  capacityRefusals: number;
-  unsupported: number;
-  cacheHits: number;
-  compileMilliseconds: number;
-  prepareMilliseconds: number;
-  chainedExecutions: string;
-  compiledExecutions: string;
-  entries: string;
-  failures: number;
-  lastError: string | null;
-}
-
-export type JitStatistics = { enabled: false } | EnabledJitStatistics;
-
-export interface ModuleFactoryOptions extends ModuleOptions {
+export interface ModuleFactoryOptions {
   wasmBinary: ArrayBuffer;
   locateFile(path: string): string;
 }
 
 export type EmulatorModuleFactory = (options: ModuleFactoryOptions) => Promise<unknown>;
 
-const requiredFunctions = [
-  '_camera_alloc',
-  '_camera_free',
-  '_camera_create',
-  '_camera_session_create',
-  '_camera_prepared_session_create',
-  '_camera_snapshot_create',
-  '_camera_command',
-  '_camera_scene_buffer',
-  '_camera_scene_commit',
-  '_camera_destroy',
-  '_camera_run_until',
-  '_camera_input',
-  '_camera_status',
-  '_camera_frame',
-  '_camera_error',
-  'tcgJitStats',
-] as const;
-
-export type LoadedEmulatorModule = EmulatorModule &
-  Required<
-    Pick<
-      EmulatorModule,
-      '_camera_session_create' | '_camera_command' | '_camera_scene_buffer' | '_camera_scene_commit'
-    >
-  >;
-
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object';
 }
 
-function moduleFrom(value: unknown): LoadedEmulatorModule {
-  if (!record(value) || !(value.HEAPU8 instanceof Uint8Array))
-    throw new Error('Generated module has no Wasm heap.');
-  for (const name of requiredFunctions) {
-    if (typeof value[name] !== 'function') throw new Error(`Missing C ABI export: ${name}.`);
-  }
-  return value as unknown as LoadedEmulatorModule;
-}
-
-/** Instantiate a generated module while keeping the Wasm binary independently addressable. */
+/** Instantiate a generated module and select its execution policy and JIT tier. */
 export async function instantiateEmulatorModule(
   factory: EmulatorModuleFactory,
   wasmBinary: ArrayBuffer,
   locateFile: (path: string) => string,
   options: ModuleOptions = {},
-): Promise<LoadedEmulatorModule> {
-  return moduleFrom(await factory({ ...options, wasmBinary, locateFile }));
+): Promise<EmulatorModule> {
+  const loaded = await factory({ wasmBinary, locateFile });
+  if (
+    !record(loaded) ||
+    typeof loaded.configure !== 'function' ||
+    typeof loaded.Camera !== 'function'
+  )
+    throw new Error('Generated module has no camera bindings.');
+  const module = loaded as unknown as EmulatorModule;
+  module.configure(options);
+  return module;
 }
 
 /** Load an Emscripten module and its Wasm binary in browsers or workers. */
@@ -97,7 +48,7 @@ export async function loadEmulatorModule(
   wasmUrl: string | URL,
   options: ModuleOptions = {},
   fetcher: typeof fetch = fetch,
-): Promise<LoadedEmulatorModule> {
+): Promise<EmulatorModule> {
   const base = globalThis.location?.href;
   const moduleHref =
     moduleUrl instanceof URL
@@ -122,6 +73,70 @@ export async function loadEmulatorModule(
   );
 }
 
+/** Byte inputs of a prepared run. The update container is the `dat` argument. */
+export interface PreparedInputs {
+  bootRom: Uint8Array;
+  nand?: Uint8Array;
+  settings?: Uint8Array;
+  /** The camera's zstd-compressed NAND sections by section name, passed through unchanged. */
+  camera?: Record<string, Uint8Array>;
+}
+
+/** Construct a camera the way its manifest declares. */
+export function createCamera(
+  module: EmulatorModule,
+  config: unknown,
+  dat: Uint8Array,
+  construction: EmulatorManifest['construction'],
+  inputs?: PreparedInputs,
+): Camera {
+  switch (construction) {
+    case 'resolved':
+      return module.Camera.fromResolved(JSON.stringify(config), dat);
+    case 'session':
+      return module.Camera.fromGraph(JSON.stringify(config), dat);
+    case 'prepared':
+      // The document is shipped as its exact text: re-serializing parsed JSON would
+      // turn integral floats into integers, which the native identity check rejects.
+      if (typeof config !== 'string') throw new Error('Prepared document must be JSON text.');
+      if (!inputs) throw new Error('Prepared session requires a boot ROM.');
+      return createPrepared(module, config, dat, inputs);
+  }
+}
+
+/** Camera sections travel packed in one span, listed in the request in order. */
+function createPrepared(
+  module: EmulatorModule,
+  request: string,
+  update: Uint8Array,
+  inputs: PreparedInputs,
+): Camera {
+  const sections = Object.entries(inputs.camera ?? {});
+  const camera = new Uint8Array(sections.reduce((sum, [, bytes]) => sum + bytes.length, 0));
+  sections.reduce((offset, [, bytes]) => {
+    camera.set(bytes, offset);
+    return offset + bytes.length;
+  }, 0);
+  const parsed: unknown = JSON.parse(request);
+  if (!record(parsed)) throw new Error('Prepared request must be a JSON object.');
+  const text = sections.length
+    ? JSON.stringify({ ...parsed, camera: sections.map(([name, bytes]) => [name, bytes.length]) })
+    : request;
+  return module.Camera.fromPrepared(
+    text,
+    update,
+    inputs.bootRom,
+    inputs.nand,
+    inputs.settings,
+    sections.length ? camera : undefined,
+  );
+}
+
+/** Whether a thrown error reports a failed guest rather than a refused host request. */
+export function isGuestExecutionError(error: unknown): error is Error {
+  return error instanceof Error && error.name === 'GuestExecutionError';
+}
+
 /** Validate the versioned manifest before fetching a module or binary. */
 export function parseEmulatorManifest(value: unknown): EmulatorManifest {
   if (!record(value)) throw new Error('Invalid emulator manifest.');
@@ -134,6 +149,10 @@ export function parseEmulatorManifest(value: unknown): EmulatorManifest {
     typeof manifest.wasm !== 'string' ||
     manifest.wasm.length === 0 ||
     !['resolved', 'session', 'prepared'].includes(manifest.construction) ||
+    (manifest.construction === 'prepared' &&
+      (!record(manifest.prepared) ||
+        typeof manifest.prepared.document !== 'string' ||
+        typeof manifest.prepared.bootRom !== 'string')) ||
     (manifest.executionPolicy !== undefined &&
       !['interactive', 'exact'].includes(manifest.executionPolicy)) ||
     !record(manifest.session) ||
@@ -180,13 +199,15 @@ export interface EmulatorManifest {
   module: string;
   wasm: string;
   construction: 'resolved' | 'session' | 'prepared';
+  /** Native prepared run: the document is JSON text, the boot ROM is raw bytes. */
+  prepared?: { document: string; bootRom: string };
   /** Override the default policy for native-parity qualification bundles. */
-  executionPolicy?: ModuleOptions['executionPolicy'];
+  executionPolicy?: ExecutionPolicyName;
   session: Record<string, unknown>;
   ticksPerSecond: number;
   bootTicks: number;
   output: number;
-  inputs?: Input[];
+  inputs?: ControlInput[];
   /** Optional external endpoint and boot inputs configured by the caller. */
   usb?: {
     kind: 'exr2';

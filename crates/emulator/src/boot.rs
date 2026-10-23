@@ -1024,7 +1024,8 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
 /// A stopped, passive boot observation. `rec` also identifies the first-start
 /// recording role (`system_mode == 3`) after its menus close.
 #[derive(Clone, Debug, Serialize)]
-pub struct Report {
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+pub struct RecReport {
     pub status: String,
     pub instructions: u64,
     pub virtual_ticks: u64,
@@ -1044,7 +1045,7 @@ fn word(session: &Session, address: u64) -> Result<u32, String> {
     session.board.read_physical(address, &mut bytes)?;
     Ok(u32::from_le_bytes(bytes))
 }
-fn observe(session: &Session, spec: &Prepared, presses: usize) -> Result<Report, String> {
+fn observe(session: &Session, spec: &Prepared, presses: usize) -> Result<RecReport, String> {
     let o = &spec.observation;
     let r = &o.readiness;
     let wide = |address| -> Result<u64, String> {
@@ -1067,7 +1068,7 @@ fn observe(session: &Session, spec: &Prepared, presses: usize) -> Result<Report,
             .transpose()?
             .unwrap_or(0)
             != 0;
-    Ok(Report {
+    Ok(RecReport {
         status: "running".into(),
         instructions: session.board.instruction_counts().iter().sum(),
         virtual_ticks: session.board.now(),
@@ -1311,7 +1312,7 @@ fn setup_calendar(
 
 /// Run a named runtime to REC or an explicit stopped frontier. First-start menus
 /// use calibrated UP/DOWN and MENU/OK ADC presses, never RAM writes.
-pub fn to_rec(session: &mut Session, instruction_limit: u64) -> Result<Report, String> {
+pub fn to_rec(session: &mut Session, instruction_limit: u64) -> Result<RecReport, String> {
     if instruction_limit == 0 {
         return Err("instruction limit must be positive".into());
     }

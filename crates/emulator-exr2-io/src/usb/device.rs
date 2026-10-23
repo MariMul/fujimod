@@ -7,7 +7,7 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
-    pub endpoints: Option<usb_endpoint::Options>,
+    pub endpoints: Option<usb_endpoint::EndpointOptions>,
 }
 pub struct Wiring {
     pub cable: Level,
@@ -175,7 +175,7 @@ impl fujimod_emulator_devices::capability::UsbPort for UsbController {
         UsbController::cable_connected(self)
     }
     fn bus_status(&self) -> std::result::Result<serde_json::Value, String> {
-        Ok(self.endpoint()?.bus_status())
+        serde_json::to_value(self.endpoint()?.bus_status()).map_err(|e| e.to_string())
     }
     fn host_reset(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>) -> std::result::Result<(), String> {
         self.endpoint_mut()?.host_reset(cx)

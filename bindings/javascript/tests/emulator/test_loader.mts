@@ -1,15 +1,9 @@
-// Generated ARM exercises LZ and memory DMA register interfaces through the C ABI.
+// Generated ARM exercises LZ and memory DMA register interfaces through the Camera bindings.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { loadNodeModule } from '../../dist/emulator/node.mjs';
-import type { EmulatorModule } from '../../dist/emulator/index.js';
 import { finishJit, moduleOptions } from './test_mode.mts';
-
-interface GuestModule extends EmulatorModule {
-  _camera_session_create: NonNullable<EmulatorModule['_camera_session_create']>;
-  _camera_command: NonNullable<EmulatorModule['_camera_command']>;
-}
 
 interface Literal {
   at: number;
@@ -41,10 +35,6 @@ interface SessionReport {
   timeline: unknown;
 }
 
-interface CommandReport {
-  report: SessionReport;
-}
-
 interface Result {
   memory: MemoryState;
   lz: LzState;
@@ -55,10 +45,7 @@ interface Result {
 const modulePath =
   process.argv[2] ??
   fileURLToPath(new URL('../../../../target/emulator/camera.mjs', import.meta.url));
-const loaded = await loadNodeModule(modulePath, moduleOptions({ threshold: 1, batchSize: 1 }));
-if (!loaded._camera_session_create || !loaded._camera_command)
-  throw new Error('The generated module does not expose session commands.');
-const module = loaded as GuestModule;
+const module = await loadNodeModule(modulePath, moduleOptions({ threshold: 1, batchSize: 1 }));
 
 const words: number[] = [];
 const literals: Literal[] = [];
@@ -225,54 +212,13 @@ function configuration(quantum: number) {
   };
 }
 
-const view = (): DataView => new DataView(module.HEAPU8.buffer);
-const output = module._camera_alloc(32);
-if (!output) throw new Error('Could not allocate a result descriptor.');
-
-function upload(bytes: Uint8Array): number {
-  const pointer = module._camera_alloc(bytes.length);
-  if (!pointer) throw new Error('Could not allocate an input buffer.');
-  module.HEAPU8.set(bytes, pointer);
-  return pointer;
-}
-
-function span(at: number): Uint8Array {
-  const descriptor = view();
-  const pointer = descriptor.getUint32(at, true);
-  const length = descriptor.getUint32(at + 4, true);
-  if (pointer + length > module.HEAPU8.byteLength) throw new Error('Invalid result span.');
-  return module.HEAPU8.subarray(pointer, pointer + length);
-}
-
-function error(handle = 0): string {
-  module._camera_error(handle, output);
-  return new TextDecoder().decode(span(output));
-}
-
 let previous: Result | undefined;
 for (const quantum of [17, 1000]) {
-  const json = new TextEncoder().encode(JSON.stringify(configuration(quantum)));
-  const configPointer = upload(json);
-  const firmwarePointer = upload(firmware);
-  const handle = module._camera_session_create(
-    configPointer,
-    json.length,
-    firmwarePointer,
-    firmware.length,
-  );
-  assert(handle, error());
-  module._camera_free(configPointer, json.length);
-  module._camera_free(firmwarePointer, firmware.length);
+  const camera = module.Camera.fromGraph(JSON.stringify(configuration(quantum)), firmware);
   try {
-    assert.equal(module._camera_run_until(handle, 2000n), 0, error(handle));
-    const request = new TextEncoder().encode(
-      JSON.stringify({ action: 'error_report', options: {} }),
-    );
-    const requestPointer = upload(request);
-    try {
-      const code = module._camera_command(handle, requestPointer, request.length, 0, 0, output);
-      assert.equal(code, 0, code === 0 ? '' : error(handle));
-      const report = (JSON.parse(new TextDecoder().decode(span(output))) as CommandReport).report;
+    camera.runUntil(2000n);
+    {
+      const report = camera.errorReport().report as unknown as SessionReport;
       const controller = report.bus.devices.find((device) => device.kind === 'exr2-dma-controller');
       assert(controller?.state.modes);
       const memoryMode = controller.state.modes.find((mode) => mode.name === 'exr2-memory-dma');
@@ -295,14 +241,11 @@ for (const quantum of [17, 1000]) {
       };
       if (previous) assert.deepEqual(result, previous);
       previous = result;
-    } finally {
-      module._camera_free(requestPointer, request.length);
     }
   } finally {
-    assert.equal(module._camera_destroy(handle), 0);
+    camera.close();
   }
 }
 
-module._camera_free(output, 32);
 console.log(JSON.stringify({ passed: true, quantums: [17, 1000], lzBytes: 18, fillBytes: 64 }));
 finishJit(module);

@@ -1,17 +1,20 @@
 import { readFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { EmulatorSession, type SessionCommands } from './abi.ts';
-import { copyBuffer } from './buffers.ts';
+import type { ModuleOptions } from './camera.generated.ts';
 import {
+  createCamera,
   instantiateEmulatorModule,
+  type Camera,
+  type EmulatorModule,
   type EmulatorModuleFactory,
-  type JitStatistics,
-  type ModuleOptions,
 } from './module.ts';
 
 /** Load a generated module from disk and its adjacent Wasm binary. */
-export async function loadNodeModule(modulePath: string, options: ModuleOptions = {}) {
+export async function loadNodeModule(
+  modulePath: string,
+  options: ModuleOptions = {},
+): Promise<EmulatorModule> {
   const absolutePath = resolve(modulePath);
   if (!absolutePath.endsWith('.mjs')) throw new Error('Emulator module path must end in .mjs.');
   const loaded: unknown = await import(pathToFileURL(absolutePath).href);
@@ -33,34 +36,21 @@ export async function loadNodeModule(modulePath: string, options: ModuleOptions 
   );
 }
 
-export interface CameraStatus {
-  ticks: string;
-  instructions: string;
-  failed: boolean;
+export interface OpenCamera {
+  module: EmulatorModule;
+  camera: Camera;
 }
 
-export interface CameraFrame {
-  width: number;
-  height: number;
-  output: number;
-  sequence: string;
-  rgba: Uint8Array<ArrayBuffer>;
-}
-
-export type Camera = Awaited<ReturnType<typeof openCamera>>;
-
-/** Open a serialized camera session from its generated module and input files. */
+/** Open an EXR II camera from its generated module, device graph document and DAT. */
 export async function openCamera(
   modulePath: string,
   configPath: string,
   datPath: string,
-  moduleOptions: ModuleOptions = {},
-) {
-  const module = await loadNodeModule(modulePath, moduleOptions);
-  const configBytes = await readFile(configPath);
-  const datBytes = await readFile(datPath);
-  const config: unknown = JSON.parse(configBytes.toString('utf8'));
-  return attachCamera(module, (session) => session.create(config, datBytes, 'session'));
+  options: ModuleOptions = {},
+): Promise<OpenCamera> {
+  const module = await loadNodeModule(modulePath, options);
+  const config: unknown = JSON.parse(await readFile(configPath, 'utf8'));
+  return { module, camera: createCamera(module, config, await readFile(datPath), 'session') };
 }
 
 /**
@@ -102,112 +92,26 @@ export async function openPreparedCamera(
   modulePath: string,
   bundlePath: string,
   updatePath: string,
-  moduleOptions: ModuleOptions = {},
-) {
-  const module = await loadNodeModule(modulePath, moduleOptions);
+  options: ModuleOptions = {},
+): Promise<OpenCamera> {
+  const module = await loadNodeModule(modulePath, options);
   const { document, inputs } = await readPreparedBundle(bundlePath);
-  const update = await readFile(updatePath);
-  return attachCamera(module, (session) =>
-    session.create(JSON.stringify({ document }), update, 'prepared', inputs),
+  const camera = createCamera(
+    module,
+    JSON.stringify({ document }),
+    await readFile(updatePath),
+    'prepared',
+    inputs,
   );
+  return { module, camera };
 }
 
 /** Open an exported running session without separate firmware or graph files. */
-export async function openSnapshot(modulePath: string, snapshotPath: string) {
-  const module = await loadNodeModule(modulePath);
-  const bytes = await readFile(snapshotPath);
-  return attachCamera(module, (session) => session.loadSnapshot(bytes));
+export async function openSnapshot(
+  modulePath: string,
+  snapshotPath: string,
+  options: ModuleOptions = {},
+): Promise<OpenCamera> {
+  const module = await loadNodeModule(modulePath, options);
+  return { module, camera: module.Camera.fromSnapshot(await readFile(snapshotPath)) };
 }
-
-function attachCamera(
-  module: Awaited<ReturnType<typeof loadNodeModule>>,
-  create: (session: EmulatorSession) => void,
-) {
-  let alive = true;
-  const session = new EmulatorSession(module, () => {
-    alive = false;
-  });
-  try {
-    create(session);
-  } catch (error) {
-    if (alive) session.dispose();
-    throw error;
-  }
-
-  const invoke = <T,>(operation: () => T): T => {
-    if (!alive) throw new Error('Camera session is unavailable.');
-    return operation();
-  };
-
-  return {
-    command<K extends keyof SessionCommands>(
-      action: K,
-      options: SessionCommands[K]['request'] = {} as SessionCommands[K]['request'],
-      binary: Uint8Array = new Uint8Array(),
-    ) {
-      const response = invoke(() => session.command(action, options, binary));
-      return { json: response.result, bytes: response.bytes };
-    },
-    run(until: bigint) {
-      invoke(() => session.run(until));
-    },
-    status(): CameraStatus {
-      const status = invoke(() => session.status());
-      return {
-        ticks: status.ticks.toString(),
-        instructions: status.instructions.toString(),
-        failed: status.failed,
-      };
-    },
-    scene(width: number, height: number, rgb: Uint8Array) {
-      invoke(() => session.scene({ width, height, rgb }));
-    },
-    frame(output = 1): CameraFrame | undefined {
-      const frame = invoke(() => session.frame(output));
-      if (!frame) return undefined;
-      return {
-        width: frame.width,
-        height: frame.height,
-        output,
-        sequence: frame.sequence.toString(),
-        rgba: copyBuffer(frame.rgba),
-      };
-    },
-    read(address: number | bigint, size: number): Uint8Array<ArrayBuffer> {
-      if (typeof address === 'number' && !Number.isSafeInteger(address))
-        throw new RangeError('Invalid memory span.');
-      const parsedAddress = typeof address === 'bigint' ? address : BigInt(address);
-      if (
-        parsedAddress < 0n ||
-        parsedAddress > 0xffffffffn ||
-        !Number.isSafeInteger(size) ||
-        size < 0 ||
-        parsedAddress + BigInt(size) > 0x1_0000_0000n
-      )
-        throw new RangeError('Invalid memory span.');
-      return invoke(
-        () => session.command('memory_read', { address: parsedAddress.toString(), size }).bytes,
-      );
-    },
-    capacity() {
-      return invoke(() => module.HEAPU8.buffer.byteLength);
-    },
-    jitStats(): JitStatistics {
-      return invoke(() => module.tcgJitStats());
-    },
-    alive() {
-      return alive;
-    },
-    close() {
-      if (!alive) return;
-      try {
-        session.dispose();
-      } finally {
-        alive = false;
-      }
-    },
-  };
-}
-
-export type { JitOptions, JitStatistics, ModuleOptions } from './module.ts';
-export type { SessionCommands } from './abi.ts';

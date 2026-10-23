@@ -30,12 +30,16 @@ each copy duplicates large build output. Other contributors' edits in the same
 checkout are not a reason to isolate: report tests they break instead.
 
 The owner may approve one specific worktree in the conversation. Only then
-create it with `FUJIMOD_WORKTREE_APPROVED="owner approved: purpose"` set for
-that `git worktree add`; without it the `post-checkout` hook removes the new
-worktree. An approval covers one worktree and does not carry over to other
-agents or conversations. Approved creations are logged in
-`.git/fujimod-worktrees.log`. The hooks are installed with
-`mise run hooks-install`.
+create it on its own branch, with `FUJIMOD_WORKTREE_APPROVED="owner approved:
+purpose"` set for `git worktree add -b worktree/PURPOSE PATH origin/main`;
+without it the `post-checkout` hook removes the new worktree. An approval covers
+one worktree and its branch and does not carry over to other agents or
+conversations. Approved creations are logged in `.git/fujimod-worktrees.log`.
+The hooks are installed with `mise run hooks-install`. Inside the worktree,
+commit to its branch with plain `git add` and `git commit` at each milestone.
+Land it with `mise run land` (`scripts/git/land.py`) from the worktree: it
+rebases the branch onto `origin/main`, pushes `main` as a fast-forward and syncs
+the main checkout. Once landed, remove the worktree and delete its branch.
 
 Commit with `mise run commit -- -m "Describe the change" path/one path/two`
 (`scripts/git/commit.py`). It catches up with `origin/main` (merging upstream

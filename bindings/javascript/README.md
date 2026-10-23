@@ -47,18 +47,32 @@ binary. Permission UI and physical camera integration remain unvalidated.
 
 ## Emulator runtime
 
-The `fujimod/emulator` entry publishes the browser-safe Wasm ABI, session types,
-buffer helpers and generic contracts. A staged package contains the generated
-`camera.mjs` and `camera.wasm` beside that entry, so a browser can load them with
-`loadBundledEmulatorModule()`. The Node-only `fujimod/emulator/node` entry loads
-an explicit module path and its adjacent Wasm file with `loadNodeModule()` or
-opens a serialized session with `openCamera()`. Node filesystem APIs are kept out
-of the browser entry.
+The `fujimod/emulator` entry loads the emulator module and exports its `Camera`
+class and types. The Rust crate in `emulator/` declares that interface once:
+wasm-bindgen generates the class and its glue from `#[wasm_bindgen]` items, and
+tsify generates the TypeScript types of the serde values they exchange. Emscripten
+links the crate with Unicorn and runs wasm-bindgen on the result
+(`-sWASM_BINDGEN`). A loaded module is configured once with its execution policy
+and JIT tier, then constructs cameras with `Camera.fromGraph`, `fromPrepared`,
+`fromResolved` or `fromSnapshot`. Failures throw `Error`; once the guest has
+failed, their name is `GuestExecutionError`.
+
+The build writes the generated declarations to `emulator/camera.generated.ts`,
+which is checked in so TypeScript consumers type-check without an Emscripten
+build. Commit it with any change to the Rust interface; never edit it.
+
+A staged package contains the generated `camera.mjs` and `camera.wasm` beside
+that entry, so a browser can load them with `loadBundledEmulatorModule()`. The
+Node-only `fujimod/emulator/node` entry loads an explicit module path and its
+adjacent Wasm file with `loadNodeModule()`, or opens a camera with `openCamera()`,
+`openPreparedCamera()` or `openSnapshot()`. Node filesystem APIs are kept out of
+the browser entry.
 
 Build and stage the runtime with the pinned Mise toolchain:
 
 ```sh
 mise install
+npm --prefix bindings/javascript run setup:tooling
 mise run javascript-emulator-build
 ```
 

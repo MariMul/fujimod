@@ -1,7 +1,7 @@
 import type { AssetProgress } from '../engine/download-progress';
 import type { EngineFault } from '../engine/fault';
 import type { FaultContext } from '../ui/fault';
-import type { Connection } from 'fujimod/emulator';
+import type { Connection } from '../engine/api';
 
 export function sessionState() {
   return {

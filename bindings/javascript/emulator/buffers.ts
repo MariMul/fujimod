@@ -1,6 +1,3 @@
-import { EmulatorSession, type EmulatorModule, type PreparedInputs } from './abi.ts';
-import type { EmulatorManifest } from './module.ts';
-
 export interface BufferFile {
   path: string;
   bytes: Uint8Array;
@@ -48,22 +45,4 @@ export function copySpan(bytes: Uint8Array, span: { offset: number; length: numb
   )
     throw new Error('Invalid buffer span.');
   return bytes.slice(span.offset, span.offset + span.length);
-}
-
-/** Construct a browser session from caller-owned config and data buffers. */
-export function createBufferSession(
-  module: EmulatorModule,
-  config: unknown,
-  dat: Uint8Array,
-  construction: EmulatorManifest['construction'] = 'session',
-  inputs?: PreparedInputs,
-) {
-  const session = new EmulatorSession(module);
-  try {
-    session.create(config, dat, construction, inputs);
-    return session;
-  } catch (error) {
-    session.dispose();
-    throw error;
-  }
 }

@@ -1,4 +1,9 @@
-import { EmulatorSession, loadEmulatorModule, type SessionCommands } from 'fujimod/emulator';
+import {
+  loadEmulatorModule,
+  type Camera,
+  type DeviceWorkers,
+  type Fingerprint,
+} from 'fujimod/emulator';
 
 interface Status {
   ticks: string;
@@ -19,22 +24,53 @@ type Entry =
       kind: 'boundary';
       name: string;
       status: Status;
-      fingerprint: SessionCommands['fingerprint']['result'];
+      fingerprint: Fingerprint;
     }
-  | {
-      kind: 'command';
-      action: keyof SessionCommands;
-      options: SessionCommands[keyof SessionCommands]['request'];
-    }
-  | {
-      kind: 'observe';
-      action: keyof SessionCommands;
-      options: SessionCommands[keyof SessionCommands]['request'];
-      name?: string;
-      result?: unknown;
-      bytesSha256?: string;
-    }
+  | ({ kind: 'command' } & Command)
+  | ({ kind: 'observe'; name?: string; result?: unknown; bytesSha256?: string } & Observation)
   | { kind: 'scene'; width: number; height: number; file: string; sha256: string };
+/** Plan operations, each one Camera method. */
+type Command =
+  | { action: 'checkpoint' | 'preview' }
+  | { action: 'restore'; options: { id: string } }
+  | { action: 'set_position'; options: { id: string; position: string } }
+  | { action: 'press'; options: { id: string; stage?: string } }
+  | { action: 'release'; options: { id: string } };
+type Observation =
+  | { action: 'error_report' }
+  | { action: 'device_states'; options: { kind: string } }
+  | { action: 'memory_read'; options: { address: string; size: number } };
+function execute(camera: Camera, command: Command) {
+  switch (command.action) {
+    case 'checkpoint':
+      return camera.checkpoint();
+    case 'preview':
+      return camera.preview();
+    case 'restore':
+      return camera.restore(command.options.id);
+    case 'set_position':
+      return camera.setPosition(command.options.id, command.options.position);
+    case 'press':
+      return camera.press(command.options.id, command.options.stage);
+    case 'release':
+      return camera.release(command.options.id);
+  }
+}
+function observe(
+  camera: Camera,
+  observation: Observation,
+): { result?: unknown; bytes?: Uint8Array } {
+  switch (observation.action) {
+    case 'error_report':
+      return { result: camera.errorReport().report };
+    case 'device_states':
+      return { result: camera.deviceStates(observation.options.kind) };
+    case 'memory_read': {
+      const { address, size } = observation.options;
+      return { bytes: camera.memoryRead(BigInt(address), size) };
+    }
+  }
+}
 interface Photo {
   path: string;
   bytes: number;
@@ -71,8 +107,8 @@ export interface CompleteWorkerReceipt {
   complete: true;
   identityPassed: true;
   workerPreference: {
-    initial: SessionCommands['device_workers']['result'];
-    selected: SessionCommands['device_workers']['result'];
+    initial: DeviceWorkers;
+    selected: DeviceWorkers;
   };
   wasmSha256: string;
   sourceIdentity: unknown;
@@ -99,7 +135,7 @@ interface EntryMemory {
   index: number;
   kind: Entry['kind'];
   heapBytes: number;
-  action?: keyof SessionCommands;
+  action?: string;
 }
 export type WorkerMessage =
   | { type: 'frame'; width: number; height: number; rgba: ArrayBuffer }
@@ -137,7 +173,7 @@ async function bytes(url: string) {
   return new Uint8Array(await response.arrayBuffer());
 }
 owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2; plan: string }>) => {
-  let session: EmulatorSession | undefined;
+  let session: Camera | undefined;
   const phases: WorkerPhase[] = [];
   let lastEntry: EntryMemory | null = null;
   let trapped = false;
@@ -190,10 +226,9 @@ owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2; plan: string }>) 
         scenes.set(entry.file, rgb);
       }
     }
-    session = new EmulatorSession(module);
-    session.create(fixture.config, dat, 'session');
-    const initial = session.command('device_workers', {}).result;
-    const selected = session.command('device_workers', { count: event.data.workers }).result;
+    session = module.Camera.fromGraph(JSON.stringify(fixture.config), dat);
+    const initial = session.deviceWorkers();
+    const selected = session.deviceWorkers(event.data.workers);
     same(
       selected,
       { count: event.data.workers, effective: event.data.workers },
@@ -215,7 +250,7 @@ owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2; plan: string }>) 
       lastEntry = {
         index,
         kind: entry.kind,
-        heapBytes: module.HEAPU8.byteLength,
+        heapBytes: module.memoryBytes(),
         ...('action' in entry ? { action: entry.action } : {}),
       };
       if (['scene', 'boundary'].includes(entry.kind)) console.log(JSON.stringify(lastEntry));
@@ -237,67 +272,64 @@ owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2; plan: string }>) 
             guestSeconds,
             wallSeconds,
             speed: guestSeconds / wallSeconds,
-            heapBytes: module.HEAPU8.byteLength,
+            heapBytes: module.memoryBytes(),
           };
           phases.push(phase);
           owner.postMessage({ type: 'phase', phase } satisfies WorkerMessage);
           break;
         }
         case 'run':
-          session.run(BigInt(entry.tick));
+          session.runUntil(BigInt(entry.tick));
           break;
         case 'command':
-          session.command(entry.action, entry.options);
+          execute(session, entry);
           break;
         case 'observe': {
-          const observed = session.command(entry.action, entry.options);
+          const observed = observe(session, entry);
           const label = entry.name || entry.action;
           if (Object.hasOwn(entry, 'result')) same(observed.result, entry.result, label);
           if (entry.bytesSha256)
-            same(await digest(observed.bytes), entry.bytesSha256, `${label} bytes`);
+            same(await digest(observed.bytes!), entry.bytesSha256, `${label} bytes`);
           break;
         }
         case 'scene':
-          session.scene({ width: entry.width, height: entry.height, rgb: scenes.get(entry.file)! });
+          session.setScene(entry.width, entry.height, scenes.get(entry.file)!);
           break;
         case 'frame': {
           const f = session.frame(1);
-          const rgba = f?.rgba.slice();
-          const actual =
-            f && rgba
-              ? {
-                  width: f.width,
-                  height: f.height,
-                  sequence: f.sequence.toString(),
-                  sha256: await digest(rgba),
-                }
-              : null;
+          const image = f && {
+            width: f.width,
+            height: f.height,
+            sequence: f.sequence.toString(),
+            rgba: f.rgba.slice(),
+          };
+          f?.free();
+          const actual = image
+            ? {
+                width: image.width,
+                height: image.height,
+                sequence: image.sequence,
+                sha256: await digest(image.rgba),
+              }
+            : null;
           same(actual, entry.value, `LCD observation ${frames}`);
           frames++;
-          if (f && rgba)
+          if (image)
             owner.postMessage(
               {
                 type: 'frame',
-                width: f.width,
-                height: f.height,
-                rgba: rgba.buffer,
+                width: image.width,
+                height: image.height,
+                rgba: image.rgba.buffer,
               } satisfies WorkerMessage,
-              [rgba.buffer],
+              [image.rgba.buffer],
             );
           break;
         }
         case 'boundary':
-          same(
-            session.command('fingerprint', {}).result,
-            entry.fingerprint,
-            `${entry.name} full Session`,
-          );
+          same(session.fingerprint(), entry.fingerprint, `${entry.name} full Session`);
           same(status(), entry.status, `${entry.name} status`);
-          same(
-            session.command('device_workers', {}).result,
-            selected,
-            'Stable executor preference',
-          );
+          same(session.deviceWorkers(), selected, 'Stable executor preference');
           boundaries++;
           break;
       }
@@ -309,9 +341,10 @@ owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2; plan: string }>) 
       phases.some((p) => p.stage === 'warm'),
       'Replay needs a warmed phase',
     );
-    const fingerprint = session.command('fingerprint', {}).result;
+    const fingerprint = session.fingerprint();
     for (const photo of fixture.photos) {
-      const data = session.command('card_read', { path: photo.path, maxBytes: 32 << 20 }).bytes;
+      // An owned copy, transferable to the owner.
+      const data = new Uint8Array(session.cardRead(photo.path, undefined, 32 << 20));
       same(data.length, photo.bytes, 'JPEG size');
       same(await digest(data), photo.sha256, 'JPEG identity');
       owner.postMessage(
@@ -319,7 +352,7 @@ owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2; plan: string }>) 
         [data.buffer],
       );
     }
-    same(session.command('fingerprint', {}).result, fingerprint, 'Card reads are observational');
+    same(session.fingerprint(), fingerprint, 'Card reads are observational');
     owner.postMessage({
       type: 'result',
       result: {
@@ -337,7 +370,7 @@ owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2; plan: string }>) 
           .filter((p) => p.stage === 'warm')
           .every((p) => p.speed >= fixture.expected.minimumSpeed),
         photographicQualification: 'separate',
-        jit: module.tcgJitStats(),
+        jit: module.jitStatistics(),
       },
     } satisfies WorkerMessage);
   } catch (error) {
@@ -349,6 +382,6 @@ owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2; plan: string }>) 
   } finally {
     // A trapped Wasm call may leave an owner borrow live; terminate its worker
     // instead of reentering the failed instance during cleanup.
-    if (!trapped) session?.dispose();
+    if (!trapped) session?.close();
   }
 };

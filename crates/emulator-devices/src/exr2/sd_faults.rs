@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 /// Direction of a multi-block data transfer on the card's data lines.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
 pub enum DataDirection {
     Read,
     Write,
@@ -13,6 +14,7 @@ pub enum DataDirection {
 /// guest's own recovery runs.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
 pub struct DataFault {
     pub direction: DataDirection,
     /// Sector whose transfer fails; `None` selects each transfer's first sector.
@@ -24,6 +26,7 @@ pub struct DataFault {
 }
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
 pub struct DataFaultEvent {
     pub command: u8,
     pub sector: u32,

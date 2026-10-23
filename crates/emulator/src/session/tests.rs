@@ -107,9 +107,9 @@ fn card_observations_revision_retention_and_format_are_shared_session_operations
     let mut session = card_session();
     let before = session.board.state();
     let state = session.card_state("sd").unwrap();
-    let revision = state["revision"].as_u64().unwrap();
+    let revision = state.revision.unwrap();
     assert_eq!(
-        session.card_tree("sd", Some(revision)).unwrap()["entries"][0]["path"],
+        session.card_tree("sd", Some(revision)).unwrap().entries[0].path,
         "/DCIM"
     );
     assert_eq!(
@@ -138,7 +138,7 @@ fn card_observations_revision_retention_and_format_are_shared_session_operations
     assert_eq!(cold.card_state("sd").unwrap(), state);
     cold.card_format("sd", &format(), &[("/B.TXT".into(), b"new bytes".to_vec())])
         .unwrap();
-    assert!(cold.card_state("sd").unwrap()["revision"].as_u64().unwrap() > revision);
+    assert!(cold.card_state("sd").unwrap().revision.unwrap() > revision);
     assert_eq!(
         cold.card_read("sd", "/B.TXT", None, 100).unwrap(),
         b"new bytes"
@@ -161,7 +161,7 @@ fn card_observations_revision_retention_and_format_are_shared_session_operations
 fn initial_revision_is_external_metadata_only_before_guest_execution() {
     let mut session = card_session();
     session.initialize_card_revision("sd", 123).unwrap();
-    assert_eq!(session.card_state("sd").unwrap()["revision"], 123);
+    assert_eq!(session.card_state("sd").unwrap().revision, Some(123));
     session
         .board
         .write_memory(0, 0, &0xeafffffeu32.to_le_bytes())
@@ -176,7 +176,7 @@ fn initial_revision_is_external_metadata_only_before_guest_execution() {
         .unwrap();
     session.board.run_for_instructions(1, 8).unwrap();
     assert!(session.initialize_card_revision("sd", 456).is_err());
-    assert_eq!(session.card_state("sd").unwrap()["revision"], 123);
+    assert_eq!(session.card_state("sd").unwrap().revision, Some(123));
 }
 
 #[test]
@@ -290,7 +290,7 @@ fn physical_controls_validate_every_target_and_change_only_external_electrical_i
     assert_eq!(handle.values()[8], 21);
     assert!(session.set_position("menu", "unknown").is_err());
     assert_eq!(
-        session.control_state().unwrap()["positions"]["menu"],
+        session.control_state().unwrap().positions["menu"],
         "pressed"
     );
     let saved = session.checkpoint(None).unwrap();
@@ -299,7 +299,7 @@ fn physical_controls_validate_every_target_and_change_only_external_electrical_i
     session.restore(&saved).unwrap();
     assert_eq!(handle.values()[8], 21);
     assert_eq!(
-        session.control_state().unwrap()["positions"]["menu"],
+        session.control_state().unwrap().positions["menu"],
         "pressed"
     );
     session.set_position("menu", "released").unwrap();
@@ -377,11 +377,7 @@ fn session_keyframe_and_input_replay_preserve_card_adc_and_fractional_cpu_bounda
     let replay: Vec<super::history::Entry> = encoded.decode("input-log").unwrap();
     session.restore(&before).unwrap();
     assert_eq!(session.board.instruction_counts(), [13]);
-    assert!(
-        session.card_state("sd").unwrap()["present"]
-            .as_bool()
-            .unwrap()
-    );
+    assert!(session.card_state("sd").unwrap().present);
     assert_eq!(session.adc_samples("adc").unwrap(), vec![837; 12]);
     History::replay(&mut session, &replay).unwrap();
     assert_eq!(session.fingerprint().unwrap(), straight);
@@ -536,8 +532,8 @@ fn rust_card_insertion_drives_the_declared_native_gpio_contacts() {
     );
     assert!(!pads.input_level(detect).unwrap());
     assert!(!pads.input_level(protect).unwrap());
-    assert_eq!(session.card_state("sd").unwrap()["present"], false);
-    assert_eq!(session.card_state("sd").unwrap()["protected"], true);
+    assert_eq!(session.card_state("sd").unwrap().present, false);
+    assert_eq!(session.card_state("sd").unwrap().protected, true);
     session
         .board
         .write_memory(0, 0, &0xeafffffeu32.to_le_bytes())

@@ -558,12 +558,8 @@ impl Session {
             input: None,
             frames: Default::default(),
             history: None,
-            error: String::new(),
             failed: false,
-            result_json: vec![],
-            result_bytes: vec![],
-            scene_upload: vec![],
-            scene_dimensions: None,
+            owner: super::session::next_owner(),
             camera: Some(Metadata {
                 card: a.card,
                 storage: a.storage,

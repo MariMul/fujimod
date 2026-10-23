@@ -1,55 +1,46 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { EmulatorModule } from '../../dist/emulator/abi.js';
-import { instantiateEmulatorModule, parseEmulatorManifest } from '../../dist/emulator/module.js';
+import type { ModuleOptions } from '../../dist/emulator/index.js';
+import {
+  instantiateEmulatorModule,
+  isGuestExecutionError,
+  parseEmulatorManifest,
+} from '../../dist/emulator/module.js';
 
-function emulatorModule() {
-  return {
-    HEAPU8: new Uint8Array(64),
-    _camera_alloc: () => 8,
-    _camera_free: () => {},
-    _camera_create: () => 1,
-    _camera_session_create: () => 1,
-    _camera_prepared_session_create: () => 1,
-    _camera_snapshot_create: () => 1,
-    _camera_command: () => 0,
-    _camera_scene_buffer: () => 0,
-    _camera_scene_commit: () => 0,
-    _camera_destroy: () => 0,
-    _camera_run_until: () => 0,
-    _camera_input: () => 0,
-    _camera_status: () => 0,
-    _camera_frame: () => 1,
-    _camera_error: () => 0,
-    tcgJitStats: () => ({ enabled: false }),
-  } satisfies EmulatorModule;
-}
-
-test('module factory receives independent binary and asset resolution', async () => {
+test('module factory receives independent binary and asset resolution, then configures', async () => {
   let received: { wasmBinary: ArrayBuffer; locateFile(path: string): string } | undefined;
+  const configured: ModuleOptions[] = [];
   const binary = new Uint8Array([0, 97, 115, 109]).buffer;
-  const loaded = await instantiateEmulatorModule(
+  await instantiateEmulatorModule(
     async (options) => {
       received = options;
-      return emulatorModule();
+      return { configure: (value: ModuleOptions) => configured.push(value), Camera: class {} };
     },
     binary,
     (path) => new URL(path, 'https://assets.example/runtime/camera.wasm').href,
+    { executionPolicy: 'exact', tcgJit: false },
   );
-  assert.equal(loaded.HEAPU8.byteLength, 64);
   assert.equal(received?.wasmBinary, binary);
   assert.equal(received?.locateFile('camera.wasm'), 'https://assets.example/runtime/camera.wasm');
+  assert.deepEqual(configured, [{ executionPolicy: 'exact', tcgJit: false }]);
 });
 
-test('module validation rejects incomplete generated modules', async () => {
+test('module validation rejects modules without camera bindings', async () => {
   await assert.rejects(
     instantiateEmulatorModule(
-      async () => ({ HEAPU8: new Uint8Array(4) }),
+      async () => ({}),
       new ArrayBuffer(0),
       () => '',
     ),
-    /Missing C ABI export/,
+    /no camera bindings/,
   );
+});
+
+test('guest failures are distinguished by error name', () => {
+  const guest = new Error('guest faulted');
+  guest.name = 'GuestExecutionError';
+  assert.equal(isGuestExecutionError(guest), true);
+  assert.equal(isGuestExecutionError(new Error('refused')), false);
 });
 
 test('manifest parsing validates the versioned runtime and observation shape', () => {

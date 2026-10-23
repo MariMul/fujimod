@@ -11,5 +11,5 @@
     "lib": ["ES2023", "DOM"],
     "types": ["node"]
   },
-  "files": ["host.ts", "loader.ts", "build.mts", "test_host.mts"]
+  "files": ["host.ts", "build.mts", "test_host.mts"]
 }

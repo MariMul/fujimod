@@ -82,7 +82,7 @@ harnesses are refused. Portable CPU encoding supports Unicorn Cortex-R5F and
 HVF AArch64; other CPU models report unsupported export.
 
 The JavaScript transport additionally embeds exact constructor documents and
-their binary inputs, allowing `EmulatorSession.loadSnapshot(bytes)` to construct
+their binary inputs, allowing `Camera.fromSnapshot(bytes)` to construct
 a fresh session directly. Browser reports include this complete
 `snapshot.emusnap`.
 

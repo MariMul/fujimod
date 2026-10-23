@@ -1,10 +1,13 @@
 //! Portable running sessions, including their constructor inputs and presentation.
-use super::{history::Presentation, session::Session};
+use super::{
+    history::Presentation,
+    results::{Point, SessionSnapshot},
+    session::Session,
+};
 use fujimod_emulator::session::checkpoint::Snapshot;
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_devices::{checkpoint::Checkpoint as Encoded, graphics::scanout::Frame};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
 use std::{collections::BTreeMap, sync::Arc};
 
 const KIND: &str = "wasm-session-v1";
@@ -143,14 +146,17 @@ impl Session {
             .with_children(vec![construction.encode()?, saved.export_checkpoint()?])
             .to_bytes()
     }
-    pub(super) fn export_snapshot(&mut self) -> Result<Value, String> {
+    pub fn export_snapshot(&self) -> Result<SessionSnapshot, String> {
         let saved = self.core.checkpoint(None)?;
-        self.result_bytes = self.encode_point(&saved, &self.presentation())?;
-        Ok(
-            json!({"format":"wasm-session-cbor","schema":1,"snapshot":{"offset":0,"length":self.result_bytes.len()},"tick":saved.now().to_string(),"instructions":saved.instruction_counts().iter().map(u64::to_string).collect::<Vec<_>>()}),
-        )
+        let snapshot = self.encode_point(&saved, &self.presentation())?;
+        let point = Point::new(saved.now(), saved.instruction_counts());
+        Ok(SessionSnapshot {
+            snapshot,
+            tick: point.tick,
+            instructions: point.instructions,
+        })
     }
-    pub(super) fn load_snapshot(bytes: &[u8]) -> Result<Self, String> {
+    pub fn load_snapshot(bytes: &[u8]) -> Result<Self, String> {
         let encoded = Encoded::from_bytes(bytes)?;
         let header: Header = encoded.decode(KIND)?;
         if encoded.children().len() != 2

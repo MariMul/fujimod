@@ -1,5 +1,5 @@
 import { isDetentSound, type DetentSound } from '../feedback/detent-sound';
-import type { BootInput, Input } from 'fujimod/emulator';
+import type { BootInput, ControlInput } from 'fujimod/emulator';
 
 export const DEVICE_PANEL_SCHEMA = 1 as const;
 
@@ -162,7 +162,7 @@ function boundInputIds(panel: DevicePanel): string[] {
 
 export function unknownDevicePanelInputIds(
   panel: DevicePanel,
-  inputs: readonly Pick<Input, 'id'>[],
+  inputs: readonly Pick<ControlInput, 'id'>[],
 ): string[] {
   const knownIds = new Set(inputs.map((input) => input.id));
   return boundInputIds(panel).filter((id) => !knownIds.has(id));
@@ -176,7 +176,7 @@ export function exportDevicePanel(panel: DevicePanel): string {
 export function importDevicePanel(
   json: string,
   expectedBody: string,
-  inputs: readonly Pick<Input, 'id'>[],
+  inputs: readonly Pick<ControlInput, 'id'>[],
 ): DevicePanelImport {
   const value: unknown = JSON.parse(json);
   if (!isDevicePanel(value))

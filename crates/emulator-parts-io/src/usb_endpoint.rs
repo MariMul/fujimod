@@ -17,19 +17,36 @@ const WORD: &[usize] = &[
 const DMA: &[usize] = &[4, 12, 16, 0x20, 0x24, 0x28, 0x44];
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct Options {
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+pub struct EndpointOptions {
     pub transfer_ticks: u64,
     pub packet_bytes: usize,
     pub dma_limit: usize,
     pub out_endpoints: Vec<(u8, usize)>,
     pub in_endpoints: Vec<(u8, usize)>,
 }
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
 pub struct Wiring {
     pub irq: InterruptLine,
     pub dma_irq: InterruptLine,
     pub ram_bytes: u64,
+}
+/// Bus progress observed by a host, without DMA payloads.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+pub struct BusStatus {
+    pub options: EndpointOptions,
+    pub wiring: Wiring,
+    pub registers: Vec<u32>,
+    pub rx_length: [usize; 2],
+    pub rx_position: [usize; 2],
+    pub setup_length: usize,
+    pub setup_position: usize,
+    pub tx_packets: Vec<usize>,
+    pub tx_bytes: Vec<usize>,
+    pub active_dma: bool,
 }
 #[derive(serde::Serialize)]
 struct Queue {
@@ -122,7 +139,7 @@ struct Transfer {
     due: Option<u64>,
 }
 pub struct Endpoint {
-    options: Options,
+    options: EndpointOptions,
     wiring: Wiring,
     regs: Box<[u32]>,
     dma: [[u32; 18]; 2],
@@ -141,7 +158,7 @@ pub struct Endpoint {
     scratch: Box<[u8]>,
 }
 impl Endpoint {
-    pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
+    pub fn new(options: EndpointOptions, wiring: Wiring) -> Result<Self, String> {
         if options.transfer_ticks == 0
             || !matches!(options.packet_bytes, 64 | 512)
             || !(64..=1 << 20).contains(&options.dma_limit)
@@ -211,13 +228,19 @@ impl Endpoint {
         self.signal(cx)
     }
     /// Observe bus progress without copying DMA payloads or consuming packets.
-    pub fn bus_status(&self) -> serde_json::Value {
-        serde_json::json!({"options":self.options,"wiring":self.wiring,"registers":&*self.regs,
-            "rx_length":self.rx_length,"rx_position":self.rx_position,
-            "setup_length":self.setup_length,"setup_position":self.setup_position,
-            "tx_packets":self.tx.iter().map(|q|q.packets.len()).collect::<Vec<_>>(),
-            "tx_bytes":self.tx.iter().map(|q|q.bytes.len()).collect::<Vec<_>>(),
-            "active_dma":self.active.is_some()})
+    pub fn bus_status(&self) -> BusStatus {
+        BusStatus {
+            options: self.options.clone(),
+            wiring: self.wiring.clone(),
+            registers: self.regs.to_vec(),
+            rx_length: self.rx_length,
+            rx_position: self.rx_position,
+            setup_length: self.setup_length,
+            setup_position: self.setup_position,
+            tx_packets: self.tx.iter().map(|q| q.packets.len()).collect(),
+            tx_bytes: self.tx.iter().map(|q| q.bytes.len()).collect(),
+            active_dma: self.active.is_some(),
+        }
     }
     pub fn host_reset(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
         if self.active.is_some() {
@@ -688,7 +711,7 @@ mod tests {
     use fujimod_emulator_devices::test_host::ram::{Effect, Ram};
     fn model() -> Endpoint {
         Endpoint::new(
-            Options {
+            EndpointOptions {
                 transfer_ticks: 4,
                 packet_bytes: 64,
                 dma_limit: 1024,

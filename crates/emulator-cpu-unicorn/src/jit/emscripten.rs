@@ -1,8 +1,8 @@
 //! Owner-thread engine adapter. Browser imports load bytes and table handles;
 //! the Rust tier owns every compilation and retirement decision.
 use super::{
-    Environment, Helper, HelperKind, HelperLayout, Host, MemoryLayout, Metadata, Module, Options,
-    Stats, Tier,
+    Environment, Helper, HelperKind, HelperLayout, Host, JitOptions, MemoryLayout, Metadata,
+    Module, Statistics, Tier,
 };
 use std::{
     cell::RefCell,
@@ -195,7 +195,7 @@ unsafe extern "C" fn notice(
         }
     });
 }
-pub fn setup(options: Option<Options>) -> Result<(), String> {
+pub fn setup(options: Option<JitOptions>) -> Result<(), String> {
     RUNTIME.with(|runtime| {
         let mut runtime = runtime.borrow_mut();
         if !matches!(*runtime, Runtime::Unconfigured) {
@@ -214,20 +214,6 @@ pub fn flush() {
             let _ = tier.flush();
         }
     });
-}
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Statistics {
-    enabled: bool,
-    #[serde(flatten)]
-    stats: Stats,
-    installed: usize,
-    retained_bytes: usize,
-    cached_functions: usize,
-    options: Options,
-    chained_executions: String,
-    compiled_executions: String,
-    entries: String,
 }
 pub fn statistics() -> Option<Statistics> {
     RUNTIME.with(|runtime| match &*runtime.borrow() {

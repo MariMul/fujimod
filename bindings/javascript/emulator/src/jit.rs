@@ -1,115 +1,99 @@
-//! Transport configuration and borrowed diagnostic bytes for the Rust tier.
-use super::{Bytes, OWNER};
-use fujimod_emulator_cpu_unicorn::jit::Options;
-use std::cell::RefCell;
-thread_local! {static RESULT:RefCell<Vec<u8>>=const {RefCell::new(Vec::new())};}
+//! Browser TCG tier selection and statistics. Rust owns defaults and bounds.
+use fujimod_emulator_cpu_unicorn::jit::{JitOptions, Statistics};
+use serde::{Deserialize, Serialize};
+use tsify::Tsify;
 
-fn configuration(bytes: &[u8]) -> Result<Option<Options>, String> {
-    if bytes.is_empty() {
-        return Ok(Some(Options::default()));
+/// `false` disables the tier, `true` selects Rust defaults.
+#[derive(Tsify)]
+#[serde(untagged)]
+#[tsify(hashmap_as_object, missing_as_null)]
+pub enum JitSelection {
+    Enabled(bool),
+    Options(JitOptions),
+}
+impl<'de> Deserialize<'de> for JitSelection {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+        match serde_json::Value::deserialize(deserializer)? {
+            serde_json::Value::Bool(enabled) => Ok(Self::Enabled(enabled)),
+            options @ serde_json::Value::Object(_) => serde_json::from_value(options)
+                .map(Self::Options)
+                .map_err(|e| D::Error::custom(format!("tcgJit: {e}"))),
+            _ => Err(D::Error::custom(
+                "tcgJit must be false, true or an options object",
+            )),
+        }
     }
-    if bytes.len() > 4096 {
-        return Err("tcgJit configuration exceeds 4096 bytes".into());
-    }
-    let value: serde_json::Value =
-        serde_json::from_slice(bytes).map_err(|e| format!("tcgJit: {e}"))?;
+}
+pub(super) fn selection(value: Option<JitSelection>) -> Result<Option<JitOptions>, String> {
     match value {
-        serde_json::Value::Bool(false) => Ok(None),
-        serde_json::Value::Bool(true) => Ok(Some(Options::default())),
-        serde_json::Value::Object(_) => {
-            let options: Options =
-                serde_json::from_value(value).map_err(|e| format!("tcgJit: {e}"))?;
-            Ok(Some(options.validate()?))
-        }
-        _ => Err("tcgJit must be false, true or an options object".into()),
+        None | Some(JitSelection::Enabled(true)) => Ok(Some(JitOptions::default())),
+        Some(JitSelection::Enabled(false)) => Ok(None),
+        Some(JitSelection::Options(options)) => Ok(Some(options.validate()?)),
     }
 }
-fn error(message: String) -> i32 {
-    OWNER.with(|owner| owner.borrow_mut().error = message);
-    -1
-}
-/// # Safety
-/// Input is a borrowed JSON span. An empty span selects Rust defaults.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn camera_jit_setup(pointer: *const u8, length: u32) -> i32 {
-    if pointer.is_null() && length != 0 {
-        return error("null tcgJit configuration".into());
-    }
-    let bytes = if length == 0 {
-        &[]
-    } else {
-        unsafe { std::slice::from_raw_parts(pointer, length as usize) }
-    };
-    let result = configuration(bytes).and_then(|options| {
-        #[cfg(target_os = "emscripten")]
-        {
-            fujimod_emulator_cpu_unicorn::jit::emscripten::setup(options)
-        }
-        #[cfg(not(target_os = "emscripten"))]
-        {
-            let _ = options;
-            Err("the generated-code tier requires Emscripten".into())
-        }
-    });
-    match result {
-        Ok(()) => 0,
-        Err(message) => error(message),
-    }
-}
-/// # Safety
-/// `out` is writable Bytes storage; the result is borrowed until the next call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn camera_jit_stats(out: *mut Bytes) -> i32 {
-    if out.is_null() {
-        return error("null tcgJit statistics output".into());
-    }
+pub(super) fn setup(options: Option<JitOptions>) -> Result<(), String> {
     #[cfg(target_os = "emscripten")]
-    let result = match fujimod_emulator_cpu_unicorn::jit::emscripten::statistics() {
-        Some(stats) => serde_json::to_vec(&stats),
-        None => serde_json::to_vec(&serde_json::json!({"enabled":false})),
-    };
-    #[cfg(not(target_os = "emscripten"))]
-    let result = serde_json::to_vec(&serde_json::json!({"enabled":false}));
-    match result {
-        Err(e) => error(e.to_string()),
-        Ok(bytes) => RESULT.with(|result| {
-            let mut result = result.borrow_mut();
-            *result = bytes;
-            unsafe {
-                out.write(Bytes {
-                    data: result.as_ptr(),
-                    len: result.len() as u32,
-                })
-            };
-            0
-        }),
+    {
+        fujimod_emulator_cpu_unicorn::jit::emscripten::setup(options)
     }
+    #[cfg(not(target_os = "emscripten"))]
+    {
+        match options {
+            None => Ok(()),
+            Some(_) => Err("the generated-code tier requires Emscripten".into()),
+        }
+    }
+}
+#[derive(Serialize, Tsify)]
+#[tsify(hashmap_as_object, missing_as_null)]
+pub struct DisabledStatistics {
+    #[tsify(type = "false")]
+    enabled: bool,
+}
+#[derive(Serialize, Tsify)]
+#[serde(untagged)]
+#[tsify(hashmap_as_object, missing_as_null)]
+pub enum JitStatistics {
+    Disabled(DisabledStatistics),
+    Enabled(Statistics),
+}
+pub(super) fn statistics() -> JitStatistics {
+    #[cfg(target_os = "emscripten")]
+    if let Some(stats) = fujimod_emulator_cpu_unicorn::jit::emscripten::statistics() {
+        return JitStatistics::Enabled(stats);
+    }
+    JitStatistics::Disabled(DisabledStatistics { enabled: false })
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn parse(text: &str) -> Result<Option<JitOptions>, String> {
+        let value: JitSelection = serde_json::from_str(text).map_err(|e| e.to_string())?;
+        selection(Some(value))
+    }
     #[test]
     fn rust_owns_default_selection_types_and_option_bounds() {
-        assert_eq!(configuration(b"").unwrap().unwrap().max_functions, 32768);
-        assert!(configuration(b"false").unwrap().is_none());
-        assert_eq!(configuration(b"true").unwrap().unwrap().threshold, 32);
+        assert_eq!(selection(None).unwrap().unwrap().max_functions, 32768);
+        assert!(parse("false").unwrap().is_none());
+        assert_eq!(parse("true").unwrap().unwrap().threshold, 32);
         assert_eq!(
-            configuration(br#"{"threshold":2,"batchSize":1}"#)
+            parse(r#"{"threshold":2,"batchSize":1}"#)
                 .unwrap()
                 .unwrap()
                 .threshold,
             2
         );
-        for bytes in [
-            &b"null"[..],
-            b"0",
-            br#""true""#,
-            b"[]",
-            br#"{"threshold":0}"#,
-            br#"{"batchSize":1.5}"#,
-            br#"{"unknown":1}"#,
+        for text in [
+            "null",
+            "0",
+            r#""true""#,
+            "[]",
+            r#"{"threshold":0}"#,
+            r#"{"batchSize":1.5}"#,
+            r#"{"unknown":1}"#,
         ] {
-            assert!(configuration(bytes).is_err());
+            assert!(parse(text).is_err(), "{text}");
         }
     }
 }

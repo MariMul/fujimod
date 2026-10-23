@@ -1,20 +1,19 @@
 import type {
+  Camera,
+  CardTree,
   EmulatorManifest,
   EmulatorModule,
-  SessionCommands,
-} from '../../dist/emulator/index.js';
-import type {
-  Camera,
-  CameraFrame,
-  CameraStatus,
-  JitOptions,
+  Frame,
   JitStatistics,
   ModuleOptions,
-  SessionCommands as NodeSessionCommands,
-} from '../../dist/emulator/node.mjs';
+  SessionState,
+  Status,
+} from '../../dist/emulator/index.js';
+import type { OpenCamera } from '../../dist/emulator/node.mjs';
 
-declare const camera: Camera;
 declare const module: EmulatorModule;
+declare const camera: Camera;
+declare const opened: OpenCamera;
 
 const manifest: EmulatorManifest = {
   schema: 1,
@@ -27,37 +26,32 @@ const manifest: EmulatorManifest = {
   bootTicks: 0,
   output: 1,
 };
-const status: { ticks: string; instructions: string; failed: boolean } = camera.status();
-const frame: CameraFrame | undefined = camera.frame();
-const cameraStatus: CameraStatus = camera.status();
-const jitOptions: JitOptions = { threshold: 2 };
-const moduleOptions: ModuleOptions = { tcgJit: jitOptions };
-const jitStatistics: JitStatistics = camera.jitStats();
-const memory: { address: string; size: number } = camera.command('memory_read', {
-  address: '4096',
-  size: 4,
-}).json;
-const stats = camera.jitStats();
+const options: ModuleOptions = { executionPolicy: 'interactive', tcgJit: { threshold: 2 } };
+const status: Status = camera.status();
+const ticks: bigint = status.ticks;
+const frame: Frame | undefined = camera.frame(1);
+const pixels: Uint8Array | undefined = frame?.rgba;
+const state: SessionState = camera.press('menu');
+const positions: Record<string, string> = state.positions;
+const tree: CardTree = camera.cardTree(3);
+const memory: Uint8Array = camera.memoryRead(4096n, 4);
+const stats: JitStatistics = module.jitStatistics();
 const count: number = stats.enabled ? stats.installed : 0;
-type MemoryRead = SessionCommands['memory_read']['request'];
-type NodeMemoryRead = NodeSessionCommands['memory_read']['request'];
-const request: MemoryRead = { address: '8192', size: 8 };
-const nodeRequest: NodeMemoryRead = request;
-const heap: Uint8Array = module.HEAPU8;
-// @ts-expect-error Unknown ABI commands are rejected.
-camera.command('start');
-// @ts-expect-error Binary command input stays Uint8Array.
-camera.command('replay', {}, new ArrayBuffer(1));
+const reopened: Camera = opened.module.Camera.fromSnapshot(camera.exportSnapshot().snapshot);
+// @ts-expect-error Touch phases are a closed set.
+camera.touch('screen', 'hover', 0, 0);
+// @ts-expect-error Guest ticks are bigint.
+camera.runUntil(1);
+// @ts-expect-error Binary input stays Uint8Array.
+camera.replay(new ArrayBuffer(1));
 // @ts-expect-error Manifest ABI versions are exact.
 const invalid: EmulatorManifest = { ...manifest, abi: 2 };
-void status;
-void frame;
-void cameraStatus;
-void moduleOptions;
-void jitStatistics;
+void options;
+void ticks;
+void pixels;
+void positions;
+void tree;
 void memory;
 void count;
-void request;
-void nodeRequest;
-void heap;
+void reopened;
 void invalid;

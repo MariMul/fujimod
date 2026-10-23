@@ -10,15 +10,17 @@ import { digest } from './identity';
 import { diagnosticReport } from './diagnostics';
 import { faultFrom } from '@fujimod/emulator-ui/engine/fault';
 import {
-  EmulatorSession,
-  GuestExecutionError,
+  createCamera,
   HostTimings,
   instantiateEmulatorModule,
+  isGuestExecutionError,
   parseEmulatorManifest,
-  type EmulatorManifest,
-  type EmulatorModuleFactory,
   type BootInput,
-  type Checkpoint,
+  type Camera,
+  type EmulatorManifest,
+  type EmulatorModule,
+  type EmulatorModuleFactory,
+  type Point,
   type SessionState,
 } from 'fujimod/emulator';
 import type {
@@ -28,8 +30,10 @@ import type {
 } from '@fujimod/emulator-ui/engine/wasm-worker-protocol';
 
 type Send = (event: WasmWorkerEvent, transfer?: Transferable[]) => void;
+/** A retained checkpoint and its guest time. */
+type Checkpoint = Point & { id: string };
 interface Loaded {
-  session: EmulatorSession;
+  module: EmulatorModule;
   manifest: EmulatorManifest;
   identity: string;
   loadTimings?: ReturnType<HostTimings['snapshot']>;
@@ -78,7 +82,7 @@ export async function loadWasm(
   );
   const identity = await timing.measureAsync('binaryDigest', () => digest(wasmBinary));
   return {
-    session: new EmulatorSession(module),
+    module,
     manifest,
     identity,
     loadTimings: timing.snapshot(),
@@ -95,16 +99,11 @@ function packFiles(files: CardFile[]) {
   files.forEach((file, i) => bytes.set(file.bytes, rows[i]!.offset));
   return { rows, bytes };
 }
-function extent(bytes: Uint8Array, span: { offset: number; length: number }): ArrayBuffer {
-  if (
-    !Number.isSafeInteger(span.offset) ||
-    !Number.isSafeInteger(span.length) ||
-    span.offset < 0 ||
-    span.length < 0 ||
-    span.offset + span.length > bytes.length
-  )
-    throw Error('Invalid session save extent.');
-  return bytes.slice(span.offset, span.offset + span.length).buffer;
+/** Show a scene, or restore the analytic one. */
+function showScene(camera: Camera, scene: Scene | null) {
+  if (scene && 'raf' in scene) camera.sceneRaf(scene.raf);
+  else if (scene) camera.setScene(scene.width, scene.height, scene.rgb);
+  else camera.clearScene();
 }
 
 /** One serialized owner. Rendering borrows Wasm memory before any next mutation. */
@@ -113,7 +112,8 @@ export class WasmWorkerRuntime {
   private loadTimings?: Loaded['loadTimings'];
   private loaded?: Promise<Loaded>;
   private bundle?: string;
-  private session?: EmulatorSession;
+  private module?: EmulatorModule;
+  private camera?: Camera;
   private manifest?: EmulatorManifest;
   private config?: EngineConfig;
   private state?: SessionState;
@@ -177,7 +177,7 @@ export class WasmWorkerRuntime {
       } catch (error) {
         const fatal =
           message.request.action === 'boot' ||
-          error instanceof GuestExecutionError ||
+          isGuestExecutionError(error) ||
           error instanceof WebAssembly.RuntimeError;
         if (fatal) {
           this.failed = true;
@@ -207,8 +207,8 @@ export class WasmWorkerRuntime {
     ));
   }
   private require() {
-    if (!this.session) throw Error('Wasm session is not ready.');
-    return this.session;
+    if (!this.camera) throw Error('Wasm session is not ready.');
+    return this.camera;
   }
   private observe(state: SessionState) {
     this.state = state;
@@ -216,7 +216,7 @@ export class WasmWorkerRuntime {
   }
   private observeCurrent() {
     if (this.manifest && this.manifest.construction !== 'resolved')
-      this.observe(this.require().command('state', {}).result);
+      this.observe(this.require().state());
   }
   private async dispatch(request: WasmRequest): Promise<unknown> {
     if (request.action === 'prepare') {
@@ -232,6 +232,7 @@ export class WasmWorkerRuntime {
         request.seedIdentity,
       );
     if (request.action === 'load_snapshot') return this.loadSnapshot(request.bytes, request.config);
+    if (request.action === 'error_report') return this.errorReport();
     const s = this.require();
     if (
       this.manifest?.usb &&
@@ -247,102 +248,76 @@ export class WasmWorkerRuntime {
       throw Error('A USB-connected execution cannot rewind external host transactions.');
     switch (request.action) {
       case 'export_snapshot':
-        return s.command('export_snapshot', {}).bytes;
+        return s.exportSnapshot().snapshot;
       case 'usb_status':
+        return s.usbStatus(request.node);
       case 'usb_reset':
-        return s.command(request.action, { node: request.node }).result;
+        return s.usbReset(request.node);
       case 'usb_setup':
-        return s.command('usb_setup', { node: request.node }, request.bytes).result;
+        return s.usbSetup(request.node, request.bytes);
       case 'usb_out':
-        return s.command(
-          'usb_out',
-          { node: request.node, endpoint: request.endpoint },
-          request.bytes,
-        ).result;
+        return s.usbOut(request.node, request.endpoint, request.bytes);
       case 'usb_in':
-        return s.command('usb_in', {
-          node: request.node,
-          endpoint: request.endpoint,
-          size: request.size,
-        }).bytes;
+        return s.usbIn(request.node, request.endpoint, request.size);
       case 'usb_in_token':
-        return s.command('usb_in_token', { node: request.node, endpoint: request.endpoint }).result;
+        return s.usbInToken(request.node, request.endpoint);
       case 'usb_step':
         // One explicit host scheduling quantum; status itself never advances time.
-        s.run(
+        s.runUntil(
           s.status().ticks + BigInt(Math.max(1, Math.floor(this.manifest!.ticksPerSecond / 1000))),
         );
         this.rebase();
-        return s.command('usb_status', { node: request.node }).result;
+        return s.usbStatus(request.node);
       case 'press':
       case 'release': {
-        const { action, ...options } = request;
         if (this.manifest?.construction === 'resolved') {
-          if (action === 'press' && request.stage)
+          if (request.action === 'press' && request.stage)
             throw Error('Resolved key ABI does not support staged or touch input.');
-          s.input(request.id, action === 'press');
-        } else if (action === 'press') this.observe(s.command('press', options).result);
-        else this.observe(s.command('release', options).result);
+          s.input(request.id, request.action === 'press', s.status().ticks);
+        } else if (request.action === 'press') this.observe(s.press(request.id, request.stage));
+        else this.observe(s.release(request.id));
         return;
       }
       case 'rotate':
-        this.observe(s.command('rotate', { id: request.id, steps: request.steps }).result);
+        this.observe(s.rotate(request.id, request.steps));
         return;
       case 'touch':
-        this.observe(
-          s.command('touch', { id: request.id, phase: request.phase, x: request.x, y: request.y })
-            .result,
-        );
+        this.observe(s.touch(request.id, request.phase, request.x, request.y));
         return;
       case 'set_position':
-        this.observe(
-          s.command('set_position', { id: request.id, position: request.position }).result,
-        );
+        this.observe(s.setPosition(request.id, request.position));
         return;
       case 'scene':
-        s.scene(request.scene);
+        showScene(s, request.scene);
         this.scene = request.scene && 'rgb' in request.scene ? request.scene : undefined;
         return;
       case 'power':
         if (this.state?.poweredOn === request.on) return;
-        await this.coldChange(() => this.observe(s.command('power', { on: request.on }).result));
+        await this.coldChange(() => this.observe(s.power(request.on)));
         if (this.config?.camera) await this.save();
         return;
       case 'power_cycle':
-        await this.coldChange(
-          () => this.observe(s.command('power_cycle', { inputs: request.inputs }).result),
-          request.inputs,
-        );
+        await this.coldChange(() => this.observe(s.powerCycle(request.inputs)), request.inputs);
         return;
       case 'card_state':
-        return s.command('card_state', {}).result;
+        return s.cardState();
       case 'card_tree':
-        return s.command('card_tree', { revision: request.revision }).result;
+        return s.cardTree(request.revision);
       case 'card_read':
-        return s.command('card_read', { path: request.path, ...request.options }).bytes;
+        return s.cardRead(request.path, request.options?.revision, request.options?.maxBytes);
       case 'card_insert':
-        this.observe(s.command('card_insert', { present: request.present }).result);
+        this.observe(s.cardInsert(request.present));
         return;
       case 'card_format':
         await this.coldChange(() => {
-          this.observe(s.command('card_format', {}).result);
-          if (this.state?.poweredOn)
-            this.observe(
-              s.command('power_cycle', { inputs: this.config?.bootInputs ?? [] }).result,
-            );
+          this.observe(s.cardFormat());
+          if (this.state?.poweredOn) this.observe(s.powerCycle(this.config?.bootInputs ?? []));
         }, this.config?.bootInputs);
         return;
       case 'restart_card': {
         const { rows, bytes } = packFiles(request.files);
         await this.coldChange(
-          () =>
-            this.observe(
-              s.command(
-                'restart_card',
-                { files: rows, inputs: this.config?.bootInputs ?? [] },
-                bytes,
-              ).result,
-            ),
+          () => this.observe(s.replaceCard(rows, bytes, this.config?.bootInputs ?? [])),
           this.config?.bootInputs,
         );
         return;
@@ -350,23 +325,21 @@ export class WasmWorkerRuntime {
       case 'checkpoint':
         return this.captureCheckpoint();
       case 'restore_checkpoint':
-        s.command('restore', { id: request.id });
+        s.restore(request.id);
         this.afterRestore();
         return;
       case 'undo':
-        s.command('undo', {});
+        s.undo();
         this.afterRestore();
         return this.state?.positions ?? {};
-      case 'history': {
-        const log = s.command('history', {});
-        return { ...log.result, bytes: log.bytes };
-      }
+      case 'history':
+        return s.history();
       case 'replay_history':
-        s.command('replay', {}, new Uint8Array(request.bytes));
+        s.replay(new Uint8Array(request.bytes));
         this.afterRestore();
         return;
       case 'fingerprint':
-        return s.command('fingerprint', {}).result;
+        return s.fingerprint();
       case 'rollback': {
         if (!Number.isFinite(request.seconds) || request.seconds <= 0)
           throw Error('Invalid rollback duration.');
@@ -375,60 +348,29 @@ export class WasmWorkerRuntime {
         const retained =
           this.points.filter((point) => BigInt(point.tick) <= target).at(-1) ?? this.points[0];
         try {
-          s.command('rollback', { tick: String(target < 0n ? 0n : target) });
+          s.rollback(target < 0n ? 0n : target);
         } catch (error) {
           if (!(error instanceof Error) || !/retained history/.test(error.message) || !retained)
             throw error;
-          s.command('restore', { id: retained.id });
+          s.restore(retained.id);
         }
         this.afterRestore();
         return this.state?.positions ?? {};
       }
       case 'profile':
         return {
-          ...s.command('profile', { limit: request.limit }).result,
+          ...s.profile(request.limit),
           checkpoints: this.points,
-          wasmBytes: s.module.HEAPU8.byteLength,
-          jit: s.module.tcgJitStats?.(),
-          hostTimings: {
-            abi: s.timings.snapshot(),
-            worker: this.timings.snapshot(),
-            load: this.loadTimings,
-          },
+          wasmBytes: this.module!.memoryBytes(),
+          jit: this.module!.jitStatistics(),
+          hostTimings: { worker: this.timings.snapshot(), load: this.loadTimings },
           observations: Object.fromEntries(
             (this.manifest?.observations ?? []).map((o) => [
               o.name,
-              [...s.command('memory_read', { address: o.address, size: o.size }).bytes],
+              [...s.memoryRead(BigInt(o.address), o.size)],
             ]),
           ),
         };
-      case 'error_report': {
-        if (!s.created)
-          return {
-            report: {
-              runtime: 'wasm',
-              runtimeKey: this.runtimeKey,
-              firmwareId: this.config?.firmwareId,
-              created: false,
-              status: null,
-              frame: null,
-            },
-          };
-        const status = s.status();
-        const base = {
-          runtime: 'wasm',
-          runtimeKey: this.runtimeKey,
-          ticks: String(status.ticks),
-          instructions: String(status.instructions),
-          failed: status.failed,
-        };
-        if (!s.module._camera_command) return { report: base };
-        const { result, bytes } = s.command('error_report', {});
-        return {
-          report: await diagnosticReport({ ...base, ...result.report }),
-          snapshot: result.snapshot ? extent(bytes, result.snapshot) : undefined,
-        };
-      }
       case 'save':
         return this.save();
       case 'replay': {
@@ -438,13 +380,41 @@ export class WasmWorkerRuntime {
       }
     }
   }
+  private async errorReport() {
+    if (!this.module) throw Error('Wasm session is not ready.');
+    if (!this.camera)
+      return {
+        report: {
+          runtime: 'wasm',
+          runtimeKey: this.runtimeKey,
+          firmwareId: this.config?.firmwareId,
+          created: false,
+          status: null,
+          frame: null,
+        },
+      };
+    const status = this.camera.status();
+    const base = {
+      runtime: 'wasm',
+      runtimeKey: this.runtimeKey,
+      ticks: String(status.ticks),
+      instructions: String(status.instructions),
+      failed: status.failed,
+    };
+    const { report, snapshot } = this.camera.errorReport();
+    return {
+      report: await diagnosticReport({ ...base, ...report }),
+      snapshot: snapshot?.slice().buffer,
+    };
+  }
   private async loadSnapshot(bytes: Uint8Array, config: EngineConfig) {
-    if (this.session) throw Error('Wasm worker already booted.');
+    if (this.camera) throw Error('Wasm worker already booted.');
     this.config = config;
-    const { session, manifest, identity, loadTimings } = await this.prepare(config.bundle);
+    const { module, manifest, identity, loadTimings } = await this.prepare(config.bundle);
     this.loadTimings = loadTimings;
-    session.loadSnapshot(bytes);
-    this.session = session;
+    this.module = module;
+    const session = module.Camera.fromSnapshot(bytes);
+    this.camera = session;
     this.manifest = manifest;
     this.runtimeKey = await digest(
       new TextEncoder().encode(`${identity}:${await digest(new Uint8Array(bytes))}`),
@@ -471,14 +441,14 @@ export class WasmWorkerRuntime {
     scene: Scene | undefined,
     seedIdentity: { path: string; sha256: string }[],
   ) {
-    if (this.session) throw Error('Wasm worker already booted.');
+    if (this.camera) throw Error('Wasm worker already booted.');
     this.config = config;
     const saved = config.camera ? await this.cameras.saved(config.camera.id) : undefined;
     this.scene = scene && 'rgb' in scene ? scene : undefined;
     this.send({ type: 'progress', message: 'Loading Wasm runtime…' });
-    const { session, manifest, identity, loadTimings } = await this.prepare(config.bundle);
+    const { module, manifest, identity, loadTimings } = await this.prepare(config.bundle);
     this.loadTimings = loadTimings;
-    this.session = session;
+    this.module = module;
     this.manifest = manifest;
     this.runtimeKey = await this.timings.measureAsync('runtimeIdentity', async () =>
       digest(
@@ -524,8 +494,9 @@ export class WasmWorkerRuntime {
         prepared,
         new URL('wasm.json', config.bundle),
       );
-      this.timings.measure('create', () =>
-        session.create(
+      this.camera = this.timings.measure('create', () =>
+        createCamera(
+          module,
           JSON.stringify({ document: text, clockSeconds2000, preferredLanguages }),
           new Uint8Array(dat),
           'prepared',
@@ -533,8 +504,9 @@ export class WasmWorkerRuntime {
         ),
       );
     } else
-      this.timings.measure('create', () =>
-        session.create(
+      this.camera = this.timings.measure('create', () =>
+        createCamera(
+          module,
           manifest.construction === 'resolved'
             ? manifest.session
             : {
@@ -550,20 +522,14 @@ export class WasmWorkerRuntime {
           manifest.construction,
         ),
       );
+    const session = this.camera;
     if (manifest.construction !== 'resolved') {
-      if (saved)
-        this.observe(session.command('restore_durable', {}, new Uint8Array(saved.durable)).result);
+      if (saved) this.observe(session.restoreDurable(new Uint8Array(saved.durable)));
       if (files.length) {
         const packed = packFiles(files);
-        this.observe(
-          session.command(
-            'restart_card',
-            { files: packed.rows, inputs: config.bootInputs ?? [] },
-            packed.bytes,
-          ).result,
-        );
+        this.observe(session.replaceCard(packed.rows, packed.bytes, config.bootInputs ?? []));
       } else if (saved && (config.restart || config.bootInputs?.length))
-        this.observe(session.command('power_cycle', { inputs: config.bootInputs ?? [] }).result);
+        this.observe(session.powerCycle(config.bootInputs ?? []));
       this.observeCurrent();
     } else if (files.length || config.camera || Object.keys(config.initialPositions ?? {}).length)
       throw Error('Resolved ABI has no storage or initial positions.');
@@ -573,7 +539,7 @@ export class WasmWorkerRuntime {
       assets: [loadingStep('build', 'complete'), loadingStep('boot', 'loading')],
     });
     if (scene && 'raf' in scene) {
-      session.scene(scene);
+      showScene(session, scene);
       scene = undefined;
     }
     await this.coldBoot(config.bootInputs);
@@ -611,22 +577,21 @@ export class WasmWorkerRuntime {
     this.nextInspection = 0n;
     this.nextPresentation = 0n;
     this.nextCheckpoint = 0n;
-    if (this.scene) s.scene(this.scene);
+    if (this.scene) showScene(s, this.scene);
     if (this.state?.poweredOn !== false) {
-      if (this.manifest!.bootTicks) s.run(s.status().ticks + BigInt(this.manifest!.bootTicks));
+      if (this.manifest!.bootTicks) s.runUntil(s.status().ticks + BigInt(this.manifest!.bootTicks));
       if (this.manifest!.construction === 'prepared') {
-        const report = s.command('boot_to_rec', { limit: 2_000_000_000 }).result;
+        const report = s.bootToRec(2_000_000_000n);
         if (report.status !== 'rec')
           throw Error(report.failure ?? `Camera boot stopped: ${report.status}`);
       }
-      if (this.scene) s.scene(this.scene);
+      if (this.scene) showScene(s, this.scene);
       if (
         this.manifest!.construction === 'prepared' ||
         (this.manifest!.construction === 'session' && this.manifest!.session.preview)
       )
-        s.command('preview', {});
-      for (const input of held)
-        if (input.position === undefined) s.command('release', { id: input.id });
+        s.preview();
+      for (const input of held) if (input.position === undefined) s.release(input.id);
       if (held.some((input) => input.position === undefined)) {
         const end = s.status().ticks + BigInt(rate * 5);
         for (;;) {
@@ -635,7 +600,7 @@ export class WasmWorkerRuntime {
           if (!q || (!q.active && !q.pending)) break;
           if (s.status().ticks >= end)
             throw Error('Boot contacts did not release within five guest seconds.');
-          s.run(s.status().ticks + BigInt(Math.max(1, Math.round(rate / 10))));
+          s.runUntil(s.status().ticks + BigInt(Math.max(1, Math.round(rate / 10))));
           await new Promise<void>((resolve) => setTimeout(resolve, 0));
         }
       }
@@ -689,7 +654,7 @@ export class WasmWorkerRuntime {
             const maximum = now + BigInt(Math.max(1, Math.floor(rate / 10)));
             if (target > now && this.state?.poweredOn !== false) {
               // A whole presentation quantum avoids tiny history transactions at the pacing edge.
-              s.run(maximum);
+              this.timings.measure('run', () => s.runUntil(maximum));
               if (
                 this.manifest!.construction !== 'resolved' &&
                 !this.manifest!.usb &&
@@ -725,7 +690,7 @@ export class WasmWorkerRuntime {
     );
   }
   private captureCheckpoint(): Checkpoint {
-    const { retainedIds, ...saved } = this.require().command('checkpoint', {}).result;
+    const { retainedIds, ...saved } = this.require().checkpoint();
     this.points = this.points.filter((point) => retainedIds.includes(point.id));
     this.points.push(saved);
     this.points = this.points.slice(-8);
@@ -751,7 +716,7 @@ export class WasmWorkerRuntime {
     if (this.manifest!.construction === 'resolved' || tick < this.nextInspection) return;
     this.sourceFrames =
       this.manifest!.construction === 'prepared' || this.manifest!.session.preview
-        ? this.require().command('preview_state', {}).result.state.frames
+        ? this.require().previewState().frames
         : undefined;
     this.sourceTicks = tick;
     this.nextInspection = tick + BigInt(Math.round(this.manifest!.ticksPerSecond / 10));
@@ -767,7 +732,7 @@ export class WasmWorkerRuntime {
       const quantum = BigInt(Math.max(1, Math.floor(this.manifest!.ticksPerSecond / 10)));
       while (s.status().ticks < end) {
         const next = s.status().ticks + quantum;
-        s.run(next < end ? next : end);
+        s.runUntil(next < end ? next : end);
         if (
           this.manifest!.construction !== 'resolved' &&
           !this.manifest!.usb &&
@@ -822,10 +787,11 @@ export class WasmWorkerRuntime {
     this.speedSamples.push({ wall, ticks: status.ticks });
     while (this.speedSamples.length > 2 && wall - this.speedSamples[1]!.wall >= 2000)
       this.speedSamples.shift();
-    const frame = s.frame(this.manifest!.output);
+    const frame = this.timings.measure('frame', () => s.frame(this.manifest!.output));
     if (!frame) return;
     const { rgba, width, height } = frame,
       sequence = Number(frame.sequence);
+    frame.free();
     if (typeof SharedArrayBuffer !== 'undefined' && rgba.buffer instanceof SharedArrayBuffer) {
       this.leased = new Promise<void>((resolve) => {
         this.release = resolve;
@@ -871,9 +837,9 @@ export class WasmWorkerRuntime {
     try {
       if (!camera) throw Error('This session does not belong to a saved camera.');
       if (this.failed) throw Error('The stopped camera cannot replace its last good save.');
-      const { result, bytes } = this.require().command('save', {});
+      const result = this.require().save();
       const record = await this.cameras.save(camera.id, camera.revision, {
-        durable: extent(bytes, result.durable),
+        durable: result.durable.slice().buffer,
         runtimeKey: this.runtimeKey,
         poweredOn: result.poweredOn,
         positions: result.positions,

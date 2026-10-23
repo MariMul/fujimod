@@ -1,4 +1,4 @@
-//! Observational EXR II pixels cached for the borrowed C ABI view.
+//! Observational EXR II pixels cached for borrowed `Frame` views.
 use super::session::Session;
 use fujimod_emulator_devices::graphics::scanout::Frame;
 use std::sync::Arc;

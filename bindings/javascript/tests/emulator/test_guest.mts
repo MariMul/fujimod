@@ -3,13 +3,6 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { loadNodeModule } from '../../dist/emulator/node.mjs';
-import type { EmulatorModule, SessionCommands } from '../../dist/emulator/index.js';
-import type { JitStatistics } from '../../dist/emulator/node.mjs';
-type RequiredExports = '_camera_session_create' | '_camera_command';
-type GuestModule = Omit<EmulatorModule, RequiredExports | 'tcgJitStats'> &
-  Required<Pick<EmulatorModule, RequiredExports>> & {
-    tcgJitStats(): JitStatistics & { invalidations: number };
-  };
 interface RunOptions {
   ratio: number;
   quantum: number;
@@ -291,72 +284,39 @@ function configuration(
 async function run(scenario: string, jit: boolean, options: RunOptions) {
   const fault =
     scenario.startsWith('late-') || scenario === 'bulk-unmapped' || scenario === 'bulk-protected';
-  const module = (await loadNodeModule(
-    modulePath,
-    { executionPolicy: 'exact', tcgJit: jit ? { threshold: 2, batchSize: 2 } : false },
-  )) as GuestModule;
+  const module = await loadNodeModule(modulePath, {
+    executionPolicy: 'exact',
+    tcgJit: jit ? { threshold: 2, batchSize: 2 } : false,
+  });
   const image = program(scenario),
-    json = new TextEncoder().encode(
-      JSON.stringify(
-        configuration(image, scenario === 'peer-alias' ? 2 : 1, scenario === 'due-dma', {
-          ...options,
-          protectedCode: scenario === 'late-protected',
-          protectStack: scenario === 'bulk-protected',
-        }),
-      ),
+    json = JSON.stringify(
+      configuration(image, scenario === 'peer-alias' ? 2 : 1, scenario === 'due-dma', {
+        ...options,
+        protectedCode: scenario === 'late-protected',
+        protectStack: scenario === 'bulk-protected',
+      }),
     );
-  const out = module._camera_alloc(32),
-    view = () => new DataView(module.HEAPU8.buffer);
-  const upload = (bytes: Uint8Array) => {
-    const p = module._camera_alloc(bytes.length);
-    module.HEAPU8.set(bytes, p);
-    return p;
+  const camera = module.Camera.fromGraph(json, image);
+  let executionError: string | null = null;
+  const advance = (tick: number, fails = false) => {
+    try {
+      camera.runUntil(BigInt(tick));
+      assert(!fails, 'the guest did not fault');
+    } catch (error) {
+      if (!fails) throw error;
+      executionError = (error as Error).message;
+    }
   };
-  const span = (at: number) =>
-    module.HEAPU8.subarray(
-      view().getUint32(at, true),
-      view().getUint32(at, true) + view().getUint32(at + 4, true),
-    );
-  const error = () => {
-    module._camera_error(handle, out);
-    return new TextDecoder().decode(span(out));
-  };
-  const c = upload(json),
-    f = upload(image),
-    handle = module._camera_session_create(c, json.length, f, image.length);
-  assert(handle, error());
-  module._camera_free(c, json.length);
-  module._camera_free(f, image.length);
-  function command<K extends keyof SessionCommands>(
-    action: K,
-    options: SessionCommands[K]['request'] = {} as SessionCommands[K]['request'],
-  ) {
-    const bytes = new TextEncoder().encode(JSON.stringify({ action, options })),
-      p = upload(bytes);
-    const code = module._camera_command(handle, p, bytes.length, 0, 0, out);
-    assert.equal(code, 0, code ? error() : '');
-    const result = {
-      json: JSON.parse(new TextDecoder().decode(span(out))) as SessionCommands[K]['result'],
-      bytes: span(out + 8).slice(),
-    };
-    module._camera_free(p, bytes.length);
-    return result;
-  }
-  const advance = (tick: number, expected = 0) =>
-    assert.equal(module._camera_run_until(handle, BigInt(tick)), expected, error());
   const word = (address: number) =>
-    new DataView(
-      command('memory_read', { address: String(address), size: 4 }).bytes.buffer,
-    ).getUint32(0, true);
+    new DataView(camera.memoryRead(BigInt(address), 4).buffer).getUint32(0, true);
   try {
     advance(options.ratio === 1 ? 100 : 2);
-    const saved = command('checkpoint').json;
-    advance(12000 / options.ratio, fault ? -1 : 0);
-    const executionError = fault ? error() : null;
+    const saved = camera.checkpoint();
+    advance(12000 / options.ratio, fault);
     const result = {
       error: executionError,
-      fingerprint: command('fingerprint').json,
-      report: command('error_report').json,
+      fingerprint: camera.fingerprint(),
+      report: camera.errorReport().report,
       output: word(0x18000),
       iterations: word(0x18004),
     };
@@ -384,10 +344,10 @@ async function run(scenario: string, jit: boolean, options: RunOptions) {
         );
     } else if (!fault)
       assert(result.output > result.iterations, 'the peer code write did not replace the add');
-    command('restore', { id: saved.id });
-    advance(12000 / options.ratio, fault ? -1 : 0);
-    assert.deepEqual(command('fingerprint').json, result.fingerprint);
-    const stats = module.tcgJitStats();
+    camera.restore(saved.id);
+    advance(12000 / options.ratio, fault);
+    assert.deepEqual(camera.fingerprint(), result.fingerprint);
+    const stats = module.jitStatistics();
     if (jit) {
       assert(stats.enabled);
       assert.equal(stats.failures, 0, stats.lastError ?? 'JIT failed');
@@ -408,8 +368,7 @@ async function run(scenario: string, jit: boolean, options: RunOptions) {
     );
     return result;
   } finally {
-    assert.equal(module._camera_destroy(handle), 0);
-    module._camera_free(out, 32);
+    camera.close();
   }
 }
 for (const options of [

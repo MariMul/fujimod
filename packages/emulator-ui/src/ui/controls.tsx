@@ -1,6 +1,6 @@
 import { For, Show, Switch, Match, createSignal, createEffect, onSettled, untrack } from 'solid-js';
 import type { Engine } from '../engine/api';
-import type { Input } from 'fujimod/emulator';
+import type { ControlInput } from 'fujimod/emulator';
 import type { LCDViewer } from '../viewer/lcd';
 import type { ControlNode, DevicePanel, NodePath, PowerCombo } from './layout';
 import type { LayoutEditor } from './layout-editor';
@@ -19,7 +19,7 @@ export class ControlSession {
   data?: DevicePanel;
   detent = new DetentFeedback();
   detentSounds: Record<string, DetentSound> = {};
-  inputs = new Map<string, Input>();
+  inputs = new Map<string, ControlInput>();
   relativeSteps = new Map<string, number>();
   positions = new Map<string, string>();
   renders = new Map<string, () => void>();
@@ -61,7 +61,12 @@ export class ControlSession {
       document.removeEventListener('visibilitychange', visibility);
     };
   }
-  render(inputs: Input[], engine: Engine, data: DevicePanel, initial: Record<string, string> = {}) {
+  render(
+    inputs: ControlInput[],
+    engine: Engine,
+    data: DevicePanel,
+    initial: Record<string, string> = {},
+  ) {
     this.clear();
     this.engine = engine;
     this.detentSounds = data.detentSounds ?? {};

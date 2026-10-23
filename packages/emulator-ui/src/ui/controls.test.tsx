@@ -5,7 +5,7 @@ import { ControlSession, Controls } from './controls';
 import { LayoutEditor } from './layout-editor';
 import { LayoutInspector } from './LayoutInspector';
 import type { Engine } from '../engine/api';
-import type { Input } from 'fujimod/emulator';
+import type { ControlInput } from 'fujimod/emulator';
 import type { DevicePanel } from './layout';
 let dispose: (() => void) | undefined;
 beforeAll(() => {
@@ -20,7 +20,7 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 function mount(
-  inputs: Input[],
+  inputs: ControlInput[],
   data: DevicePanel,
   onLayoutChange?: (panel: DevicePanel) => void | Promise<void>,
 ) {
@@ -198,13 +198,15 @@ test('a mounted empty panel reacts to the guest input inventory arriving later',
 });
 
 function change(host: HTMLElement, label: string, value: string, type = 'change') {
-  const field = host.querySelector<HTMLInputElement | HTMLSelectElement>(`[aria-label="${label}"]`)!;
+  const field = host.querySelector<HTMLInputElement | HTMLSelectElement>(
+    `[aria-label="${label}"]`,
+  )!;
   field.value = value;
   field.dispatchEvent(new Event(type, { bubbles: true }));
   flush();
 }
 
-const qAndFocus: Input[] = [
+const qAndFocus: ControlInput[] = [
   { id: 'q', label: 'Q (quick menu) button', kind: 'button', supported: true },
   {
     id: 'focus',
@@ -280,14 +282,12 @@ test('the minus badge removes a control and Done leaves editing', () => {
 test('a D-pad sheet binds each direction to an input', () => {
   const { host, session, editor, engine } = mount(
     [
-      ...['up', 'down', 'left', 'right'].map(
-        (direction): Input => ({
-          id: `selector.${direction}`,
-          label: `Selector / ${direction}`,
-          kind: 'button',
-          supported: true,
-        }),
-      ),
+      ...['up', 'down', 'left', 'right'].map((direction): ControlInput => ({
+        id: `selector.${direction}`,
+        label: `Selector / ${direction}`,
+        kind: 'button',
+        supported: true,
+      })),
       { id: 'menu_ok', label: 'MENU/OK button', kind: 'button', supported: true },
     ],
     {

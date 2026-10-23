@@ -17,4 +17,4 @@ pub use binary::Binary;
 pub use decode::Compiler;
 pub use emit::{Module, PreparedFunction};
 pub use layout::{Environment, Helper, HelperKind, HelperLayout, MemoryLayout};
-pub use tier::{Host, Metadata, Options, Stats, Tier};
+pub use tier::{Host, JitOptions, Metadata, Statistics, Stats, Tier};

@@ -1,5 +1,5 @@
 import { For, Show, createSignal } from 'solid-js';
-import type { Input } from 'fujimod/emulator';
+import type { ControlInput } from 'fujimod/emulator';
 import type { ControlSession } from './controls';
 import { compatibleVariants } from './default-layout';
 import { downloadBlob } from './download';
@@ -34,7 +34,7 @@ const SLOTS: Record<'dpad' | 'command', [string, string][]> = {
 function InputPicker(props: {
   label: string;
   value?: string;
-  inputs: readonly Input[];
+  inputs: readonly ControlInput[];
   onChange: (id: string) => void;
 }) {
   return (

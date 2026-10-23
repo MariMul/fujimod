@@ -1,4 +1,4 @@
-import type { Input } from 'fujimod/emulator';
+import type { ControlInput } from 'fujimod/emulator';
 import { DEVICE_PANEL_SCHEMA, type ControlNode, type DevicePanel } from './layout';
 
 export type Variant = NonNullable<ControlNode['variant']>;
@@ -16,14 +16,21 @@ export type InputGroup =
       kind: 'pad';
       id: string;
       label: string;
-      up: Input;
-      down: Input;
-      left: Input;
-      right: Input;
-      center?: Input;
+      up: ControlInput;
+      down: ControlInput;
+      left: ControlInput;
+      right: ControlInput;
+      center?: ControlInput;
     }
-  | { kind: 'command'; id: string; label: string; decrease: Input; increase: Input; press?: Input }
-  | { kind: 'single'; input: Input };
+  | {
+      kind: 'command';
+      id: string;
+      label: string;
+      decrease: ControlInput;
+      increase: ControlInput;
+      press?: ControlInput;
+    }
+  | { kind: 'single'; input: ControlInput };
 
 /** Short captions for inputs shared across bodies; other inputs use their label. */
 const captions: Record<string, string> = {
@@ -70,7 +77,7 @@ function caption(id: string, name: string): string {
 }
 
 /** The presentations an input allows. Relative motion, positions and stages decide before kind. */
-export function compatibleVariants(input: Input): Variant[] {
+export function compatibleVariants(input: ControlInput): Variant[] {
   if (input.relative) return ['ticks', 'dial'];
   const positions = input.positions?.length ?? 0;
   if (positions > 5) return ['dial', 'segment', 'ticks'];
@@ -81,7 +88,7 @@ export function compatibleVariants(input: Input): Variant[] {
 }
 
 /** The face, icon or caption a control shows, derived from its owner's-manual label. */
-export function controlFace(input: Input): ControlFace {
+export function controlFace(input: ControlInput): ControlFace {
   let name = input.label;
   // An ungrouped id may list an alias after " / "; a grouped id names its group first.
   if (name.includes(' / ')) name = name.split(' / ')[input.id.includes('.') ? 1 : 0]!;
@@ -101,13 +108,13 @@ export function controlFace(input: Input): ControlFace {
 }
 
 /** Group pad directions and command steps by the id prefix before ".". */
-export function groupInputs(inputs: readonly Input[]): InputGroup[] {
-  const byPrefix = new Map<string, Map<string, Input>>();
+export function groupInputs(inputs: readonly ControlInput[]): InputGroup[] {
+  const byPrefix = new Map<string, Map<string, ControlInput>>();
   for (const input of inputs) {
     const dot = input.id.indexOf('.');
     if (dot < 0) continue;
     const prefix = input.id.slice(0, dot);
-    const members = byPrefix.get(prefix) ?? new Map<string, Input>();
+    const members = byPrefix.get(prefix) ?? new Map<string, ControlInput>();
     members.set(input.id.slice(dot + 1), input);
     byPrefix.set(prefix, members);
   }
@@ -145,14 +152,14 @@ export function groupInputs(inputs: readonly Input[]): InputGroup[] {
   return result;
 }
 
-function shown(input: Input) {
+function shown(input: ControlInput) {
   return input.supported && input.kind !== 'touch' && !input.id.endsWith('_latch');
 }
 
 /** Keys beside the D-pad and command controls, as on the back of the camera. */
 const SIDE_KEYS = 6;
 
-function controlNode(input: Input): ControlNode {
+function controlNode(input: ControlInput): ControlNode {
   const variant = compatibleVariants(input)[0]!;
   const node: ControlNode = { kind: 'control', id: input.id, variant };
   if (variant !== 'key' && variant !== 'record') {
@@ -209,7 +216,7 @@ function groupNode(group: Exclude<InputGroup, { kind: 'single' }>): ControlNode 
 }
 
 /** A usable panel for any body: supported controls, grouped, with short faces. */
-export function defaultLayout(inputs: readonly Input[], body: string): DevicePanel {
+export function defaultLayout(inputs: readonly ControlInput[], body: string): DevicePanel {
   const groups = groupInputs(inputs.filter(shown));
   const positional: ControlNode[] = [];
   const clusters: ControlNode[] = [];
@@ -233,7 +240,9 @@ export function defaultLayout(inputs: readonly Input[], body: string): DevicePan
           {
             kind: 'column',
             className: 'c1',
-            children: [{ kind: 'grid', className: 'side-keys', children: keys.slice(0, SIDE_KEYS) }],
+            children: [
+              { kind: 'grid', className: 'side-keys', children: keys.slice(0, SIDE_KEYS) },
+            ],
           },
           { kind: 'column', className: 'c2 clusters', children: clusters },
         ],

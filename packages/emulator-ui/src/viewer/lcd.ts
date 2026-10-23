@@ -2,7 +2,7 @@ import { createStore } from 'solid-js';
 import { touchPoint } from './touch';
 import { badgeStyle } from '../feedback/input';
 import type { Engine, Frame } from '../engine/api';
-import type { Input, TouchPhase } from 'fujimod/emulator';
+import type { ControlInput, TouchPhase } from 'fujimod/emulator';
 
 /** Compose guest LCD frames and fault feedback on a 2D canvas. */
 export class LCDViewer {
@@ -37,7 +37,7 @@ export class LCDViewer {
   clearTouch() {
     this.stopTouch?.();
   }
-  configureTouch(inputs: Input[], engine: Engine, error: (error: unknown) => void) {
+  configureTouch(inputs: ControlInput[], engine: Engine, error: (error: unknown) => void) {
     this.stopTouch?.();
     const input = inputs.find((input) => input.kind === 'touch' && input.supported);
     if (!input?.width || !input.height) return;

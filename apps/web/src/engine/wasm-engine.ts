@@ -2,21 +2,21 @@ import type { LoadingProgress } from '@fujimod/emulator-ui/engine/download-progr
 import {
   HostTimings,
   type BootInput,
-  type CardReadOptions,
   type CardState,
   type CardTree,
-  type Checkpoint,
-  type Connection,
-  type EngineFingerprint,
-  type Input,
+  type ControlInput,
+  type Fingerprint,
+  type InputLog,
   type TouchPhase,
 } from 'fujimod/emulator';
 import type {
   BootMedia,
   CardFile,
+  CardReadOptions,
+  Checkpoint,
+  Connection,
   Engine,
   EngineConfig,
-  ReplayLog,
   Frame,
   ReplayStep,
   Scene,
@@ -54,7 +54,7 @@ export class WasmEngine implements Engine {
     if (this.booted) throw Error('Engine already booted.');
     this.progress = progress;
     try {
-      const inputs = await this.rpc<Input[]>({
+      const inputs = await this.rpc<ControlInput[]>({
         action: 'load_snapshot',
         bytes,
         config: this.absolute(config),
@@ -159,9 +159,10 @@ export class WasmEngine implements Engine {
           this.powerListeners.emit(this.latestPower);
         }
         this.latestCard = event.state.card;
-        this.latestConnections = event.state.connections;
+        // The Wasm camera models no external host connections.
+        this.latestConnections = [];
         this.cardListeners.emit(event.state.card);
-        this.connectionListeners.emit(event.state.connections);
+        this.connectionListeners.emit([]);
         return;
       case 'metrics':
         this.metricListeners.emit({
@@ -238,13 +239,13 @@ export class WasmEngine implements Engine {
     return positions;
   }
   history() {
-    return this.rpc<ReplayLog>({ action: 'history' });
+    return this.rpc<InputLog>({ action: 'history' });
   }
   replayHistory(bytes: Uint8Array) {
     return this.rpc({ action: 'replay_history', bytes });
   }
   fingerprint() {
-    return this.rpc<EngineFingerprint>({ action: 'fingerprint' });
+    return this.rpc<Fingerprint>({ action: 'fingerprint' });
   }
   prepare(config: EngineConfig) {
     void this.rpc({ action: 'prepare', bundle: this.absolute(config).bundle }).catch(() => {});
@@ -254,7 +255,7 @@ export class WasmEngine implements Engine {
     config: EngineConfig,
     progress: LoadingProgress,
     media?: BootMedia,
-  ): Promise<Input[]> {
+  ): Promise<ControlInput[]> {
     this.progress = progress;
     this.sceneInput = config.sceneInput;
     this.firmwareId = config.firmwareId;
@@ -266,7 +267,7 @@ export class WasmEngine implements Engine {
     const scene = this.sceneInput
       ? (this.selectedScene ?? (await this.loadDefaultScene()))
       : undefined;
-    const inputs = await this.rpc<Input[]>(
+    const inputs = await this.rpc<ControlInput[]>(
       { action: 'boot', dat, config: this.absolute(config), files, scene, seedIdentity },
       [dat],
     );

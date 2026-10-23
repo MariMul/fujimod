@@ -1,19 +1,63 @@
 //! Host FAT access to the very medium owned by the native SD controller.
 use super::Session;
-use fujimod_emulator_devices::exr2::sd_faults::DataFault;
+use fujimod_emulator_devices::capability::CardSlot;
+use fujimod_emulator_devices::exr2::sd_faults::{DataFault, DataFaultEvent};
 use fujimod_emulator_devices::parts::sd_card::Card;
 use fujimod_emulator_storage::fat;
-use serde_json::{Value, json};
-use fujimod_emulator_devices::capability::{CardSlot};
+
+/// SD card contacts and host controller state.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+pub struct CardState {
+    pub supported: bool,
+    pub present: bool,
+    pub protected: bool,
+    pub busy: bool,
+    pub revision: Option<u64>,
+    pub capacity_bytes: u64,
+    pub data_faults: Vec<DataFault>,
+    pub fault_history: Vec<DataFaultEvent>,
+}
+impl CardState {
+    /// A session without an SD card.
+    pub fn unsupported() -> Self {
+        Self {
+            supported: false,
+            present: false,
+            protected: false,
+            busy: false,
+            revision: None,
+            capacity_bytes: 0,
+            data_faults: vec![],
+            fault_history: vec![],
+        }
+    }
+}
+/// Card state with the FAT tree of one revision.
+#[derive(Clone, Debug, serde::Serialize)]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+pub struct CardTree {
+    #[serde(flatten)]
+    pub state: CardState,
+    pub entries: Vec<fat::CardEntry>,
+}
 
 impl Session {
-    pub fn card_state(&self, name: &str) -> Result<Value, String> {
+    pub fn card_state(&self, name: &str) -> Result<CardState, String> {
         let contacts = self.contacts.get(name).ok_or("no SD host with that name")?;
-        self.board.inspect_capability::<dyn CardSlot, _>(self.node(name)?, |host| Ok(json!({
-            "supported": true, "present": contacts.present(), "protected": contacts.protected(), "busy": host.busy(),
-            "revision": host.card().revision(), "capacity_bytes": host.card().sectors() as u64 * 512,
-            "data_faults": host.data_faults(), "fault_history": host.fault_history(),
-        })))
+        self.board
+            .inspect_capability::<dyn CardSlot, _>(self.node(name)?, |host| {
+                Ok(CardState {
+                    supported: true,
+                    present: contacts.present(),
+                    protected: contacts.protected(),
+                    busy: host.busy(),
+                    revision: Some(host.card().revision()),
+                    capacity_bytes: host.card().sectors() as u64 * 512,
+                    data_faults: host.data_faults().to_vec(),
+                    fault_history: host.fault_history().to_vec(),
+                })
+            })
     }
     /// Declare a data CRC failure on the card's data lines for later transfers.
     pub fn card_data_fault(&mut self, name: &str, fault: DataFault) -> Result<(), String> {
@@ -24,13 +68,14 @@ impl Session {
         self.board
             .edit_capability::<dyn CardSlot, _>(self.node(name)?, |host| host.clear_data_faults())
     }
-    pub fn card_tree(&self, name: &str, revision: Option<u64>) -> Result<Value, String> {
+    pub fn card_tree(&self, name: &str, revision: Option<u64>) -> Result<CardTree, String> {
         let entries = self
             .board
             .inspect_capability::<dyn CardSlot, _>(self.node(name)?, |host| fat::Reader::new(host.readable_card(revision)?)?.tree())?;
-        let mut state = self.card_state(name)?;
-        state["entries"] = serde_json::to_value(entries).map_err(|e| e.to_string())?;
-        Ok(state)
+        Ok(CardTree {
+            state: self.card_state(name)?,
+            entries,
+        })
     }
     pub fn card_read(
         &self,

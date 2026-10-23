@@ -819,7 +819,7 @@ impl Builder<'_> {
                 irq,
                 dma_irq,
                 ram_bytes,
-            } => { let options: fujimod_emulator_parts_io::usb_endpoint::Options = crate::decode(options)?; Box::new(usb_endpoint::Endpoint::new(
+            } => { let options: fujimod_emulator_parts_io::usb_endpoint::EndpointOptions = crate::decode(options)?; Box::new(usb_endpoint::Endpoint::new(
                 options,
                 usb_endpoint::Wiring {
                     irq: line(irq)?,

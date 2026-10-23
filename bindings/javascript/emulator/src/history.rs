@@ -1,11 +1,14 @@
 //! Same-owner keyframe IDs and presentation state owned by this transport.
-use super::session::Session;
+use super::{
+    results::{Checkpoint as CheckpointResult, ErrorReport, InputLog, Point},
+    session::Session,
+};
 use fujimod_emulator::session::{
     checkpoint::Snapshot,
     history::{Boundary, Entry, History as CoreHistory, Input},
 };
 use fujimod_emulator_devices::graphics::scanout::Frame;
-use serde_json::{Value, json};
+use serde_json::json;
 use std::{
     collections::{BTreeMap, VecDeque},
     sync::Arc,
@@ -30,9 +33,6 @@ struct Log {
     owner: u32,
     generation: u64,
     entries: Vec<Entry>,
-}
-fn boundary(value: Boundary) -> Value {
-    json!({"tick":value.tick.to_string(),"instructions":value.instructions.iter().map(u64::to_string).collect::<Vec<_>>()})
 }
 
 #[derive(Clone)]
@@ -69,7 +69,7 @@ impl History {
     }
 }
 impl Session {
-    pub(super) fn error_report(&mut self) -> Result<Value, String> {
+    pub fn error_report(&mut self) -> Result<ErrorReport, String> {
         let mut report = self.core.board.state();
         let mut rejected = Vec::new();
         let live = if self.failed {
@@ -121,17 +121,20 @@ impl Session {
             match encoded {
                 Ok(bytes) => {
                     report["snapshot"] = json!({"source":source,"tick":saved.now().to_string(),"instructions":saved.instruction_counts().iter().map(u64::to_string).collect::<Vec<_>>(),"rejected":rejected});
-                    self.result_bytes = bytes;
-                    return Ok(
-                        json!({"report":report,"snapshot":{"offset":0,"length":self.result_bytes.len()}}),
-                    );
+                    return Ok(ErrorReport {
+                        report,
+                        snapshot: Some(bytes),
+                    });
                 }
                 Err(error) => rejected
                     .push(json!({"source":source,"tick":saved.now().to_string(),"error":error})),
             }
         }
         report["snapshot"] = json!({"unavailable":true,"rejected":rejected});
-        Ok(json!({"report":report}))
+        Ok(ErrorReport {
+            report,
+            snapshot: None,
+        })
     }
     pub(super) fn presentation(&self) -> Presentation {
         let order = self.next_capture_order();
@@ -154,11 +157,9 @@ impl Session {
     }
     pub(super) fn restored(&mut self) {
         self.failed = self.core.board.state()["failure"].is_string();
-        self.scene_upload.clear();
-        self.scene_dimensions = None;
         self.collect_frames();
     }
-    pub(super) fn checkpoint(&mut self, handle: u32) -> Result<Value, String> {
+    pub fn checkpoint(&mut self) -> Result<CheckpointResult, String> {
         let next = self
             .history
             .as_ref()
@@ -172,14 +173,14 @@ impl Session {
             .map(|c| &c.core);
         let saved = self.core.checkpoint(previous)?;
         let presentation = self.presentation();
-        let id = format!("{handle}:{}:{next}", self.generation);
-        let mut result = json!({"id":id,"tick":saved.now().to_string(),"instructions":saved.instruction_counts().iter().map(u64::to_string).collect::<Vec<_>>()});
+        let id = format!("{}:{}:{next}", self.owner, self.generation);
+        let point = Point::new(saved.now(), saved.instruction_counts());
         if self.history.is_none() {
             self.history = Some(History::new()?);
         }
         let history = self.history.as_mut().expect("initialized history");
         history.checkpoints.push_back(Checkpoint {
-            id,
+            id: id.clone(),
             core: saved,
             presentation,
         });
@@ -195,14 +196,12 @@ impl Session {
         {
             history.checkpoints.pop_front();
         }
-        result["retainedIds"] = json!(
-            history
-                .checkpoints
-                .iter()
-                .map(|c| c.id.clone())
-                .collect::<Vec<_>>()
-        );
-        Ok(result)
+        Ok(CheckpointResult {
+            id,
+            tick: point.tick,
+            instructions: point.instructions,
+            retained_ids: history.checkpoints.iter().map(|c| c.id.clone()).collect(),
+        })
     }
     pub(super) fn mark_input(&mut self, input: &Input) -> Result<(), String> {
         let order = self.next_capture_order();
@@ -232,7 +231,7 @@ impl Session {
             None => CoreHistory::new(1, DEVICE_BYTE_LIMIT)?.apply(&mut self.core, input),
         }
     }
-    pub(super) fn restore_checkpoint(&mut self, id: &str) -> Result<Value, String> {
+    pub fn restore_checkpoint(&mut self, id: &str) -> Result<Point, String> {
         let history = self
             .history
             .as_mut()
@@ -247,9 +246,9 @@ impl Session {
         self.powered_on = saved.presentation.powered_on;
         history.branch()?;
         self.restored();
-        Ok(boundary(Boundary::capture(&self.core)))
+        Ok(Boundary::capture(&self.core).into())
     }
-    pub(super) fn undo(&mut self) -> Result<Value, String> {
+    pub fn undo(&mut self) -> Result<Point, String> {
         let history = self.history.as_mut().ok_or("no retained Undo keyframe")?;
         let presentation = history
             .marks
@@ -261,9 +260,9 @@ impl Session {
         self.frames = presentation.frames;
         self.powered_on = presentation.powered_on;
         self.restored();
-        Ok(boundary(restored))
+        Ok(restored.into())
     }
-    pub(super) fn rollback(&mut self, tick: u64) -> Result<Value, String> {
+    pub fn rollback(&mut self, tick: u64) -> Result<Point, String> {
         let history = self
             .history
             .as_mut()
@@ -278,9 +277,9 @@ impl Session {
         self.powered_on = history.marks[index].powered_on;
         history.marks.truncate(index + 1);
         self.restored();
-        Ok(boundary(restored))
+        Ok(restored.into())
     }
-    pub(super) fn replay(&mut self, handle: u32, bytes: &[u8]) -> Result<Value, String> {
+    pub fn replay(&mut self, bytes: &[u8]) -> Result<Point, String> {
         if bytes.is_empty() || bytes.len() > 64 << 20 {
             return Err("input log must contain CBOR and fit within 64 MiB".into());
         }
@@ -290,7 +289,7 @@ impl Session {
         if log.schema != 1 || !input.is_empty() {
             return Err("invalid input log schema or trailing bytes".into());
         }
-        if log.owner != handle || log.generation != self.generation {
+        if log.owner != self.owner || log.generation != self.generation {
             return Err("input log belongs to another session".into());
         }
         if log.entries.len() > 4096 {
@@ -310,21 +309,25 @@ impl Session {
         }
         history.branch()?;
         self.restored();
-        Ok(boundary(Boundary::capture(&self.core)))
+        Ok(Boundary::capture(&self.core).into())
     }
-    pub(super) fn history_log(&mut self, handle: u32) -> Result<Value, String> {
+    pub fn history_log(&self) -> Result<InputLog, String> {
         let entries = self.history.as_ref().map_or(&[][..], |h| h.core.entries());
+        let mut log = Vec::new();
         ciborium::into_writer(
             &LogView {
                 schema: 1,
-                owner: handle,
+                owner: self.owner,
                 generation: self.generation,
                 entries,
             },
-            &mut self.result_bytes,
+            &mut log,
         )
         .map_err(|e| format!("input log encode: {e}"))?;
-        Ok(json!({"format":"session-input-log-cbor","schema":1,"entries":entries.len()}))
+        Ok(InputLog {
+            log,
+            entries: entries.len(),
+        })
     }
 }
 
@@ -407,10 +410,7 @@ mod tests {
     fn coalesced_marks_keep_frames_aligned_through_eviction_undo_and_restore() {
         let mut session = session(ExecutionPolicy::Interactive);
         frame(&mut session, 1);
-        let checkpoint = session.checkpoint(1).unwrap()["id"]
-            .as_str()
-            .unwrap()
-            .to_owned();
+        let checkpoint = session.checkpoint().unwrap().id;
         let first_tick = session.core.board.now();
         for i in 0..36 {
             session.run(first_tick + (i + 1) * 10).unwrap();
@@ -449,7 +449,7 @@ mod tests {
     fn exact_automatic_marks_keep_each_presented_boundary() {
         let mut session = session(ExecutionPolicy::Exact);
         frame(&mut session, 1);
-        session.checkpoint(1).unwrap();
+        session.checkpoint().unwrap();
         for i in 0..3 {
             session.run((i + 1) * 10).unwrap();
             frame(&mut session, i + 2);
@@ -464,7 +464,7 @@ mod tests {
     fn report_selects_the_latest_capture_when_inputs_do_not_advance_the_guest() {
         let mut session = session(ExecutionPolicy::Interactive);
         frame(&mut session, 1);
-        session.checkpoint(1).unwrap();
+        session.checkpoint().unwrap();
         session
             .mark_input(&Input::Run {
                 instructions: 0,
@@ -474,27 +474,24 @@ mod tests {
             })
             .unwrap();
         frame(&mut session, 2);
-        session.checkpoint(1).unwrap();
+        session.checkpoint().unwrap();
         session.failed = true;
         let report = session.error_report().unwrap();
-        assert_eq!(report["report"]["snapshot"]["source"], "checkpoint");
-        let restored = Session::load_snapshot(&session.result_bytes).unwrap();
+        assert_eq!(report.report["snapshot"]["source"], "checkpoint");
+        let restored = Session::load_snapshot(report.snapshot.as_ref().unwrap()).unwrap();
         assert_eq!(restored.frames[&0].sequence, 2);
     }
     #[test]
     fn report_selection_follows_the_current_branch_after_rewind() {
         let mut session = session(ExecutionPolicy::Interactive);
-        let cold = session.checkpoint(1).unwrap()["id"]
-            .as_str()
-            .unwrap()
-            .to_owned();
+        let cold = session.checkpoint().unwrap().id;
         session.run(20).unwrap();
-        session.checkpoint(1).unwrap();
+        session.checkpoint().unwrap();
         session.restore_checkpoint(&cold).unwrap();
         session.run(10).unwrap();
         session.failed = true;
         let report = session.error_report().unwrap();
-        assert_eq!(report["report"]["snapshot"]["source"], "history");
-        assert_eq!(report["report"]["snapshot"]["tick"], "0");
+        assert_eq!(report.report["snapshot"]["source"], "history");
+        assert_eq!(report.report["snapshot"]["tick"], "0");
     }
 }

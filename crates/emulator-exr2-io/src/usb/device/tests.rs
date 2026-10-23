@@ -4,7 +4,7 @@ const CORE: u64 = super::super::CORE as u64;
 const PHY: u64 = super::super::PHY as u64;
 fn model(endpoints: bool) -> (UsbController, Level) {
     let cable = Level::new(false);
-    let options = endpoints.then_some(usb_endpoint::Options {
+    let options = endpoints.then_some(usb_endpoint::EndpointOptions {
         transfer_ticks: 4,
         packet_bytes: 64,
         dma_limit: 1024,

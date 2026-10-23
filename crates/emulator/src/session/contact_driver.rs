@@ -19,6 +19,65 @@ pub struct Pose {
     pub ready: Vec<Check>,
     pub expected: Vec<Check>,
 }
+/// One host-visible control in the session's input catalog.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+pub struct ControlInput {
+    pub id: String,
+    pub label: String,
+    pub kind: String,
+    pub supported: bool,
+    /// Why an unsupported control is unavailable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", tsify(optional))]
+    pub unavailable: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", tsify(optional))]
+    pub positions: Option<Vec<ControlChoice>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", tsify(optional))]
+    pub initial: Option<String>,
+    /// Rotary controls accept relative steps.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", tsify(optional))]
+    pub relative: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", tsify(optional))]
+    pub width: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", tsify(optional))]
+    pub height: Option<u16>,
+    /// Shutter stages after the released pose.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", tsify(optional))]
+    pub stages: Option<Vec<ControlChoice>>,
+}
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+pub struct ControlChoice {
+    pub id: String,
+    pub label: String,
+}
+/// Host input queue progress.
+#[derive(Clone, Debug, serde::Serialize)]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+pub struct QueueState {
+    pub pending: usize,
+    pub active: Option<ActiveTransition>,
+    #[cfg_attr(feature = "typescript", tsify(type = "Record<string, string>"))]
+    pub requested: BTreeMap<String, String>,
+    pub completed: u64,
+}
+#[derive(Clone, Debug, serde::Serialize)]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+pub struct ActiveTransition {
+    pub id: String,
+    pub position: String,
+    /// Guest tick as a decimal string.
+    pub started: String,
+}
 #[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Actuator {
@@ -32,7 +91,7 @@ pub struct Actuator {
 pub struct Spec {
     pub poll_ticks: u64,
     pub max_phase_ticks: u64,
-    pub catalog: Vec<serde_json::Value>,
+    pub catalog: Vec<ControlInput>,
     pub actuators: Vec<Actuator>,
     #[serde(default)]
     pub interfaces: Vec<Interface>,
@@ -203,12 +262,8 @@ impl Driver {
         }
         let mut ids = BTreeSet::new();
         for input in &spec.catalog {
-            let id = input["id"].as_str().ok_or("catalog input requires an id")?;
-            if !ids.insert(id)
-                || input["label"].as_str().is_none()
-                || input["supported"].as_bool().is_none()
-                || input["supported"] == true && !names.contains(id)
-            {
+            let id = input.id.as_str();
+            if !ids.insert(id) || input.supported && !names.contains(id) {
                 return Err("catalog identities differ from physical contacts".into());
             }
         }
@@ -414,8 +469,17 @@ impl Driver {
         }
         Ok(())
     }
-    pub fn state(&self) -> serde_json::Value {
-        serde_json::json!({"pending":self.pending.len(),"active":self.active.as_ref().map(|a| serde_json::json!({"id":a.id,"position":a.position,"started":a.started.to_string()})),"requested":self.requested,"completed":self.completed})
+    pub fn state(&self) -> QueueState {
+        QueueState {
+            pending: self.pending.len(),
+            active: self.active.as_ref().map(|a| ActiveTransition {
+                id: a.id.clone(),
+                position: a.position.clone(),
+                started: a.started.to_string(),
+            }),
+            requested: self.requested.clone(),
+            completed: self.completed,
+        }
     }
     pub fn fingerprint(&self) -> Result<serde_json::Value, String> {
         serde_json::to_value(self).map_err(|e| e.to_string())

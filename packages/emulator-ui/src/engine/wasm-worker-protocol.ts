@@ -1,5 +1,5 @@
-import type { CardFile, EngineConfig, ReplayStep, Scene } from './api';
-import type { BootInput, CardReadOptions, TouchPhase } from 'fujimod/emulator';
+import type { CardFile, CardReadOptions, EngineConfig, ReplayStep, Scene } from './api';
+import type { BootInput, TouchPhase } from 'fujimod/emulator';
 import type { AssetProgress } from './download-progress';
 import type { EngineFault } from './fault';
 import type { CameraPerformance } from './performance';

@@ -1,9 +1,21 @@
 //! Host electrical transitions through the checked device graph.
 use super::Session;
+use super::contact_driver::{ControlChoice, ControlInput, QueueState};
 use fujimod_emulator_devices::parts::pins::Pin;
 use fujimod_emulator_devices::parts::switch_panel::{Signal, Spec, SwitchPanel};
 use std::collections::BTreeMap;
 use fujimod_emulator_devices::capability::{AnalogInputs, SerialStatus, TouchPanel};
+
+/// Host-visible controls and their current positions.
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+pub struct ControlState {
+    pub inputs: Vec<ControlInput>,
+    #[cfg_attr(feature = "typescript", tsify(type = "Record<string, string>"))]
+    pub positions: BTreeMap<String, String>,
+    pub input_queue: Option<QueueState>,
+}
 
 impl Session {
     pub fn adc_samples(&self, node: &str) -> Result<Vec<u16>, String> {
@@ -146,19 +158,48 @@ impl Session {
         self.controls = Some(next);
         Ok(())
     }
-    pub fn control_state(&self) -> Result<serde_json::Value, String> {
+    pub fn control_state(&self) -> Result<ControlState, String> {
         let panel = self
             .controls
             .as_ref()
             .ok_or("physical controls are not connected")?;
-        let inputs = self.contact_driver.as_ref().map(|d| d.spec.catalog.clone()).unwrap_or_else(||
-            panel.spec().controls.iter().map(|c| serde_json::json!({"id":c.id,"label":c.label,"kind":c.kind,
-                "supported":c.unavailable.is_none(),"initial":c.initial,
-                "positions":c.positions.iter().map(|p|serde_json::json!({"id":p,"label":p})).collect::<Vec<_>>()})).collect());
-        Ok(
-            serde_json::json!({"inputs":inputs,"positions":panel.positions(),
-            "inputQueue":self.contact_driver.as_ref().map(|d|d.state())}),
-        )
+        let inputs = self
+            .contact_driver
+            .as_ref()
+            .map(|d| d.spec.catalog.clone())
+            .unwrap_or_else(|| {
+                panel
+                    .spec()
+                    .controls
+                    .iter()
+                    .map(|c| ControlInput {
+                        id: c.id.clone(),
+                        label: c.label.clone(),
+                        kind: c.kind.clone(),
+                        supported: c.unavailable.is_none(),
+                        unavailable: c.unavailable.clone(),
+                        positions: Some(
+                            c.positions
+                                .iter()
+                                .map(|p| ControlChoice {
+                                    id: p.clone(),
+                                    label: p.clone(),
+                                })
+                                .collect(),
+                        ),
+                        initial: Some(c.initial.clone()),
+                        relative: None,
+                        width: None,
+                        height: None,
+                        stages: None,
+                    })
+                    .collect()
+            });
+        Ok(ControlState {
+            inputs,
+            positions: panel.positions().clone(),
+            input_queue: self.contact_driver.as_ref().map(|d| d.state()),
+        })
     }
 }
 

@@ -103,8 +103,8 @@ try {
   await engine.insertCard(true);
   check((await engine.cardState()).present, 'Card insertion failed.');
   const log = await engine.history();
-  result.history = { format: log.format, entries: log.entries, bytes: log.bytes.length };
-  check(log.entries > 0 && log.bytes.length > 0, 'Native history is empty.');
+  result.history = { entries: log.entries, bytes: log.log.length };
+  check(log.entries > 0 && log.log.length > 0, 'Native history is empty.');
   await engine.rollback(10);
   result.undo = await engine.profile(0);
   check(

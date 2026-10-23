@@ -3,6 +3,9 @@ declare const Module: Record<string, unknown>;
 declare const wasmMemory: WebAssembly.Memory;
 declare const wasmTable: WebAssembly.Table;
 declare const HEAPU8: Uint8Array;
+declare const _uc_embedder_tci_wasm_load: WebAssembly.ImportValue;
+declare const _uc_embedder_tci_wasm_store: WebAssembly.ImportValue;
+declare const _uc_embedder_tci_wasm_call: WebAssembly.ImportValue;
 declare function addToLibrary(library: Record<string, unknown>): void;
 
 addToLibrary({
@@ -16,6 +19,12 @@ addToLibrary({
     }
   },
   unicorn_jit_host_install__sig: 'iiiii',
+  // Unicorn's TCI exports that generated modules import as env.load/store/helper.
+  unicorn_jit_host_install__deps: [
+    'uc_embedder_tci_wasm_load',
+    'uc_embedder_tci_wasm_store',
+    'uc_embedder_tci_wasm_call',
+  ],
   unicorn_jit_host_install: function (
     pointer: number,
     length: number,
@@ -28,9 +37,9 @@ addToLibrary({
         env: {
           memory: wasmMemory,
           table: wasmTable,
-          load: Module['_uc_embedder_tci_wasm_load'] as WebAssembly.ImportValue,
-          store: Module['_uc_embedder_tci_wasm_store'] as WebAssembly.ImportValue,
-          helper: Module['_uc_embedder_tci_wasm_call'] as WebAssembly.ImportValue,
+          load: _uc_embedder_tci_wasm_load,
+          store: _uc_embedder_tci_wasm_store,
+          helper: _uc_embedder_tci_wasm_call,
         },
       });
       const view = new DataView(wasmMemory.buffer),

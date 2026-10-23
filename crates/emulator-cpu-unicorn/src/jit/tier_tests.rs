@@ -131,7 +131,7 @@ fn invariant(tier: &State) {
 fn cancels_pending_generations_before_publication() {
     let mut host = Fake::default();
     let mut tier = State::new(
-        Options {
+        JitOptions {
             batch_size: 2,
             ..Default::default()
         },
@@ -156,7 +156,7 @@ fn cancels_pending_generations_before_publication() {
 fn reuses_only_exact_function_bytes_after_generation_retirement() {
     let mut host = Fake::default();
     let mut tier = State::new(
-        Options {
+        JitOptions {
             batch_size: 1,
             max_functions: 1,
             ..Default::default()
@@ -190,7 +190,7 @@ fn reuses_only_exact_function_bytes_after_generation_retirement() {
 fn capacity_refusal_keeps_tci_then_reuses_retired_table_capacity() {
     let mut host = Fake::default();
     let mut tier = State::new(
-        Options {
+        JitOptions {
             batch_size: 1,
             max_functions: 1,
             ..Default::default()
@@ -214,7 +214,7 @@ fn capacity_refusal_keeps_tci_then_reuses_retired_table_capacity() {
 fn duplicate_cached_bodies_release_one_module_reference() {
     let mut host = Fake::default();
     let mut tier = State::new(
-        Options {
+        JitOptions {
             batch_size: 2,
             ..Default::default()
         },
@@ -237,7 +237,7 @@ fn duplicate_cached_bodies_release_one_module_reference() {
 fn install_failure_releases_pending_bytes_and_never_publishes_a_tb() {
     let mut host = Fake::default();
     let mut tier = State::new(
-        Options {
+        JitOptions {
             batch_size: 2,
             ..Default::default()
         },
@@ -268,7 +268,7 @@ fn install_failure_releases_pending_bytes_and_never_publishes_a_tb() {
 fn byte_budget_refusal_does_not_install_an_oversized_batch() {
     let mut host = Fake::default();
     let mut tier = State::new(
-        Options {
+        JitOptions {
             batch_size: 1,
             max_bytes: 65536,
             ..Default::default()
@@ -293,7 +293,7 @@ fn byte_budget_refusal_does_not_install_an_oversized_batch() {
 fn engine_flush_retires_only_its_generations_and_rebuilds_metadata() {
     let mut host = Fake::default();
     let mut tier = State::new(
-        Options {
+        JitOptions {
             batch_size: 1,
             ..Default::default()
         },
@@ -317,7 +317,7 @@ fn engine_flush_retires_only_its_generations_and_rebuilds_metadata() {
 fn unsupported_and_duplicate_offers_never_install_stale_code() {
     let mut host = Fake::default();
     let mut tier = State::new(
-        Options {
+        JitOptions {
             batch_size: 1,
             ..Default::default()
         },
@@ -343,7 +343,7 @@ fn rejects_option_bounds_before_allocating_host_resources() {
     let mut host = Fake::default();
     assert!(
         State::new(
-            Options {
+            JitOptions {
                 max_functions: 0,
                 ..Default::default()
             },
@@ -354,19 +354,19 @@ fn rejects_option_bounds_before_allocating_host_resources() {
     assert_eq!(host.next, 1);
     assert!(host.modules.is_empty());
     for options in [
-        Options {
+        JitOptions {
             threshold: 0,
             ..Default::default()
         },
-        Options {
+        JitOptions {
             batch_size: 65,
             ..Default::default()
         },
-        Options {
+        JitOptions {
             max_bytes: 65535,
             ..Default::default()
         },
-        Options {
+        JitOptions {
             max_bytes: (128 << 20) + 1,
             ..Default::default()
         },
@@ -378,7 +378,7 @@ fn rejects_option_bounds_before_allocating_host_resources() {
 #[test]
 fn public_tier_owns_one_import_environment() {
     let mut tier = Tier::new(
-        Options {
+        JitOptions {
             batch_size: 1,
             ..Default::default()
         },
@@ -396,7 +396,7 @@ fn public_tier_owns_one_import_environment() {
 fn table_pressure_evicts_oldest_cached_function_instead_of_lowest_slot() {
     let mut host = Fake::default();
     let mut tier = State::new(
-        Options {
+        JitOptions {
             batch_size: 1,
             max_functions: 3,
             ..Default::default()
@@ -423,7 +423,7 @@ fn table_pressure_evicts_oldest_cached_function_instead_of_lowest_slot() {
 fn reuses_relocated_body_with_current_generation_exit_token() {
     let mut host = Fake::default();
     let mut tier = State::new(
-        Options {
+        JitOptions {
             batch_size: 1,
             ..Default::default()
         },

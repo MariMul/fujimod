@@ -1160,15 +1160,13 @@ impl Board {
             .map_err(error)
     }
     fn card_state(&self, name: &str) -> PyResult<String> {
-        Ok(self.session()?.card_state(name).map_err(error)?.to_string())
+        serde_json::to_string(&self.session()?.card_state(name).map_err(error)?)
+            .map_err(|e| error(e.to_string()))
     }
     #[pyo3(signature = (name, revision=None))]
     fn card_tree(&self, name: &str, revision: Option<u64>) -> PyResult<String> {
-        Ok(self
-            .session()?
-            .card_tree(name, revision)
-            .map_err(error)?
-            .to_string())
+        serde_json::to_string(&self.session()?.card_tree(name, revision).map_err(error)?)
+            .map_err(|e| error(e.to_string()))
     }
     #[pyo3(signature = (name, path, revision=None, max_bytes=67108864))]
     fn card_read<'py>(

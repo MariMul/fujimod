@@ -1,5 +1,5 @@
 use super::*;
-use crate::session::contact_driver::{Actuator, Check, Pose, Spec as DriverSpec};
+use crate::session::contact_driver::{Actuator, Check, ControlInput, Pose, Spec as DriverSpec};
 use fujimod_emulator_cpu::{Register, arm};
 use fujimod_emulator_devices::parts::switch_panel::{Case, Circuit, Control, Signal, Spec};
 use fujimod_emulator_devices::scene::{Frame, FramePixels, SensorFrames};
@@ -47,7 +47,19 @@ fn session() -> Session {
         .configure_contact_driver(DriverSpec {
             poll_ticks: 1,
             max_phase_ticks: 1000,
-            catalog: vec![serde_json::json!({"id":"menu","label":"MENU/OK","supported":true})],
+            catalog: vec![ControlInput {
+                id: "menu".into(),
+                label: "MENU/OK".into(),
+                kind: "button".into(),
+                supported: true,
+                unavailable: None,
+                positions: None,
+                initial: None,
+                relative: None,
+                width: None,
+                height: None,
+                stages: None,
+            }],
             actuators: vec![Actuator {
                 id: "menu".into(),
                 momentary: true,

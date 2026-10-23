@@ -1,16 +1,22 @@
 //! Cold power boundaries and portable committed storage for an owned camera.
 //! CPU contexts and pending device operations never enter the durable format.
-use super::session::Session;
+use super::{results::SavedMedia, session::Session};
 use fujimod_emulator::session::durable::Media;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
 
 pub(super) const MAX_DURABLE: usize = 256 << 20;
-#[derive(Default, Deserialize)]
+/// A control held while the camera powers on.
+#[derive(Default, Deserialize, tsify::Tsify)]
 #[serde(deny_unknown_fields)]
-pub(super) struct BootInput {
+#[tsify(hashmap_as_object, missing_as_null)]
+pub struct BootInput {
     pub id: String,
+    #[serde(default)]
+    #[tsify(optional)]
     pub stage: Option<String>,
+    #[serde(default)]
+    #[tsify(optional)]
     pub position: Option<String>,
 }
 #[derive(Serialize, Deserialize)]
@@ -45,16 +51,18 @@ impl Session {
             media: Media::capture(&self.core, &m.storage)?,
         })
     }
-    pub(super) fn save_durable(&mut self) -> Result<serde_json::Value, String> {
+    pub fn save_durable(&self) -> Result<SavedMedia, String> {
         let saved = self.durable()?;
         let mut bytes = Vec::new();
         ciborium::into_writer(&saved, &mut bytes).map_err(|e| e.to_string())?;
         if bytes.len() > MAX_DURABLE {
             return Err("durable storage exceeds 256 MiB".into());
         }
-        let result = serde_json::json!({"format":"camera-media-cbor","schema":1,"durable":{"offset":0,"length":bytes.len()},"poweredOn":saved.powered_on,"positions":saved.positions});
-        self.result_bytes = bytes;
-        Ok(result)
+        Ok(SavedMedia {
+            durable: bytes,
+            positions: saved.positions,
+            powered_on: saved.powered_on,
+        })
     }
     pub(super) fn restore_durable(&mut self, bytes: &[u8]) -> Result<(), String> {
         if bytes.is_empty() || bytes.len() > MAX_DURABLE {
@@ -222,9 +230,6 @@ impl Session {
         }
         self.history = None;
         self.failed = false;
-        self.error.clear();
-        self.scene_upload.clear();
-        self.scene_dimensions = None;
         self.powered_on = saved.powered_on;
         self.generation = generation;
         Ok(())

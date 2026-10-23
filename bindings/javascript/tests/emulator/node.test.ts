@@ -19,20 +19,11 @@ test('Node loader resolves a module file and its adjacent Wasm binary', async ()
       modulePath,
       `export default async ({ wasmBinary }) => {
         if (wasmBinary.byteLength !== 4) throw Error('adjacent binary was not loaded');
-        return {
-          HEAPU8: new Uint8Array(64),
-          _camera_alloc: () => 8, _camera_free: () => {}, _camera_create: () => 1,
-          _camera_session_create: () => 1,
-    _camera_prepared_session_create: () => 1, _camera_snapshot_create: () => 1, _camera_command: () => 0,
-          _camera_scene_buffer: () => 0, _camera_scene_commit: () => 0,
-          _camera_destroy: () => 0, _camera_run_until: () => 0, _camera_input: () => 0,
-          _camera_status: () => 0, _camera_frame: () => 1, _camera_error: () => 0,
-          tcgJitStats: () => ({ enabled: false }),
-        };
+        return { configure: () => {}, Camera: class {} };
       };\n`,
     );
     const loaded = await loadNodeModule(modulePath);
-    assert.equal(loaded.HEAPU8.byteLength, 64);
+    assert.equal(typeof loaded.configure, 'function');
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

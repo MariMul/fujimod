@@ -2,7 +2,8 @@
 
 The web app has one engine: the standalone Rust WebAssembly module, owned by a
 module worker. `createEngine(onError)` exposes the typed Engine API. All CPU,
-device, control, card, scene and history operations cross the versioned C ABI.
+device, control, card, scene and history operations are methods of the generated
+`Camera` binding.
 The production input table comes from the native `state.inputs` result.
 
 `wasm.json` selects the module, binary, checked graph, guest tick rate, initial
@@ -48,8 +49,8 @@ inputs from the archive. Loading defaults to paused replay mode. Select
 input is applied while loading. The runtime validates the archive schema, binary
 hashes, execution topology, processor model, clocks and device configuration.
 
-The JavaScript binding exposes `EmulatorSession.loadSnapshot(bytes)` and the
-`export_snapshot` command. Node callers can use `openSnapshot(modulePath, snapshotPath)`.
+The JavaScript binding exposes `Camera.fromSnapshot(bytes)` and
+`Camera.exportSnapshot()`. Node callers can use `openSnapshot(modulePath, snapshotPath)`.
 The development route `/__wasm-snapshot` verifies a report archive against fresh
 worker restoration and continued execution. Its browser check downloads the file,
 closes the source page, opens `/__wasm-snapshot?load`, and loads the file from disk

@@ -4,16 +4,29 @@ import type { CameraPerformance } from './performance';
 import type { EngineFault } from './fault';
 import type {
   BootInput,
-  CardReadOptions,
   CardState,
   CardTree,
-  Checkpoint,
-  Connection,
-  EngineFingerprint,
-  Input,
+  ControlInput,
+  Fingerprint,
+  InputLog,
+  Point,
   TouchPhase,
 } from 'fujimod/emulator';
 export type { EngineFault } from './fault';
+export interface CardReadOptions {
+  revision?: number;
+  maxBytes?: number;
+}
+/** A retained restore point. */
+export type Checkpoint = Point & { id: string };
+/** An external connection the engine reports for display. */
+export interface Connection {
+  id: string;
+  label: string;
+  connection: 'connected' | 'disconnected' | 'unknown';
+  support: 'modeled' | 'partial' | 'unmodeled';
+  limits: string;
+}
 /** The only emulator contract used by the web app. All scheduling is engine-owned. */
 /** Frames are borrowed only during the synchronous listener call. */
 export type Frame = {
@@ -48,25 +61,19 @@ export interface EngineConfig {
   /** Cold boot with a fixed RTC; replay mode advances only through replay(). */
   execution?: { mode: 'live' | 'replay'; clockSeconds2000?: number };
 }
-export interface ReplayLog {
-  format: 'session-input-log-cbor';
-  schema: 1;
-  entries: number;
-  bytes: Uint8Array;
-}
 export interface Engine {
   exportSnapshot(): Promise<Uint8Array>;
   loadSnapshot(
     bytes: Uint8Array,
     config: EngineConfig,
     progress: LoadingProgress,
-  ): Promise<Input[]>;
+  ): Promise<ControlInput[]>;
   checkpoint(): Promise<Checkpoint>;
   restoreCheckpoint(id: string): Promise<void>;
   undo(): Promise<Record<string, string>>;
-  history(): Promise<ReplayLog>;
+  history(): Promise<InputLog>;
   replayHistory(bytes: Uint8Array): Promise<void>;
-  fingerprint(): Promise<EngineFingerprint>;
+  fingerprint(): Promise<Fingerprint>;
   prepare(config: EngineConfig): void;
   saveCamera(): Promise<void>;
   cameraSaves(
@@ -83,7 +90,7 @@ export interface Engine {
     config: EngineConfig,
     progress: LoadingProgress,
     media?: BootMedia,
-  ): Promise<Input[]>;
+  ): Promise<ControlInput[]>;
   /** Restart with these files merged into existing media; matching paths are replaced. */
   restartWithCardFiles(files: CardFile[], progress: LoadingProgress): Promise<void>;
   formatCard(progress: LoadingProgress): Promise<void>;
