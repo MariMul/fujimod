@@ -2,7 +2,7 @@
 use fujimod_emulator_devices::exr2::{clock, gpio, irq, isp, pulse};
 use fujimod_emulator_devices::parts::hdmi_sink::HdmiSink;
 use fujimod_emulator_devices::parts::lens_bridge;
-use fujimod_emulator_parts_storage::sd_card::Card;
+use fujimod_emulator_devices::parts::sd_card::Card;
 use fujimod_emulator_devices::scene::{ImageFrames, SensorFramesHandle, StatisticsFrames};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -17,7 +17,7 @@ pub struct Inputs {
     pub statistics: BTreeMap<String, StatisticsFrames>,
     pub sensors: BTreeMap<String, SensorFramesHandle>,
     pub cards: BTreeMap<String, Card>,
-    pub nands: BTreeMap<String, fujimod_emulator_parts_storage::nand::Nand>,
+    pub nands: BTreeMap<String, fujimod_emulator_devices::parts::nand::Nand>,
     pub files: BTreeMap<String, Vec<(String, Vec<u8>)>>,
 }
 

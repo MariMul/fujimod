@@ -34,6 +34,71 @@ impl Board {
         observe(state.bus.device::<T>(id)?)
     }
 
+    /// A device capability while processors are stopped.
+    pub fn inspect_capability<C: fujimod_emulator_devices::capability::Capability + ?Sized, R>(
+        &self,
+        id: usize,
+        observe: impl FnOnce(&C) -> Result<R, String>,
+    ) -> Result<R, String> {
+        let state = self.state.try_borrow().map_err(|_| "board is executing")?;
+        self.track_device_read(id);
+        let device = state.bus.device_dyn(id)?;
+        observe(C::of(device).ok_or_else(|| missing_capability::<C>(device))?)
+    }
+
+    pub fn edit_capability<C: fujimod_emulator_devices::capability::Capability + ?Sized, R>(
+        &mut self,
+        id: usize,
+        edit: impl FnOnce(&mut C) -> Result<R, String>,
+    ) -> Result<R, String> {
+        let result = {
+            let mut state = self
+                .state
+                .try_borrow_mut()
+                .map_err(|_| "board is executing")?;
+            let device = state.bus.device_dyn_mut(id)?;
+            let message = missing_capability::<C>(device);
+            edit(C::of_mut(device).ok_or(message)?)
+        };
+        self.inputs_changed(id)?;
+        result
+    }
+
+    /// An external input through a device capability; see `device_input`.
+    pub fn capability_input<C: fujimod_emulator_devices::capability::Capability + ?Sized, R>(
+        &mut self,
+        id: usize,
+        input: impl FnOnce(&mut C, &mut fujimod_emulator_devices::Cx<'_>) -> Result<R, String>,
+    ) -> Result<R, String> {
+        let result = {
+            let mut state = self
+                .state
+                .try_borrow_mut()
+                .map_err(|_| "board is executing")?;
+            state.with_host(&self.cpus, |bus, host| {
+                let device = bus.device_dyn_mut(id)?;
+                let message = missing_capability::<C>(device);
+                let capability = C::of_mut(device).ok_or(message)?;
+                let mut cx = fujimod_emulator_devices::Cx::new(host, usize::MAX, 0, id);
+                let result = input(capability, &mut cx);
+                Ok(match cx.take_refusal() {
+                    Some(error) => Err(error),
+                    None => result,
+                })
+            })
+        }
+        .and_then(|result| result);
+        let refresh = self.inputs_changed(id);
+        result.and_then(|value| refresh.map(|()| value))
+    }
+
+    /// A device's diagnostic state while processors are stopped.
+    pub fn device_save(&self, id: usize) -> Result<serde_json::Value, String> {
+        let state = self.state.try_borrow().map_err(|_| "board is executing")?;
+        self.track_device_read(id);
+        Ok(state.bus.device_dyn(id)?.save())
+    }
+
     pub fn edit_device<T: Device, R>(
         &mut self,
         id: usize,
@@ -79,4 +144,8 @@ impl Board {
         let refresh = self.inputs_changed(id);
         result.and_then(|value| refresh.map(|()| value))
     }
+}
+
+fn missing_capability<C: ?Sized>(device: &dyn Device) -> String {
+    format!("{} has no {} capability", device.name(), std::any::type_name::<C>())
 }

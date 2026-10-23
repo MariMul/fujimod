@@ -5,7 +5,7 @@
 mod edit;
 pub use edit::merge;
 
-use fujimod_emulator_parts_storage::sd_card::{Card, Options as CardOptions};
+use fujimod_emulator_devices::parts::sd_card::{Card, Options as CardOptions};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 

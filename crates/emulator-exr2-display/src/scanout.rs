@@ -189,16 +189,7 @@ impl Compositor {
     }
 }
 
-use super::state::{State as S, sha256};
-#[derive(Clone, Debug)]
-pub struct Frame {
-    pub raw: Vec<u8>,
-    pub rgb: Option<Vec<u8>>,
-    pub png: Option<Vec<u8>>,
-    pub state: S,
-    pub width: usize,
-    pub height: usize,
-}
+use fujimod_emulator_devices::exr2::scanout_frame::{Frame, State as S, sha256};
 /// The board RAM callback and screenshot-only color/image encoders. The
 /// Host inspection never writes RAM here (`write_bytes` is accepted but unused).
 pub trait ScanoutHost {

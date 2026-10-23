@@ -17,7 +17,6 @@ members = [
   "crates/emulator-devices",
   "crates/emulator-parts-io",
   "crates/emulator-parts-controls",
-  "crates/emulator-parts-storage",
   "crates/emulator-parts-sensor",
   "crates/emulator-parts-lens",
   "crates/emulator-storage",
@@ -70,7 +69,6 @@ fujimod-emulator = { path = "crates/emulator", version = "0.1.0" }
 fujimod-emulator-devices = { path = "crates/emulator-devices", version = "0.1.0" }
 fujimod-emulator-parts-io = { path = "crates/emulator-parts-io", version = "0.1.0" }
 fujimod-emulator-parts-controls = { path = "crates/emulator-parts-controls", version = "0.1.0" }
-fujimod-emulator-parts-storage = { path = "crates/emulator-parts-storage", version = "0.1.0" }
 fujimod-emulator-parts-sensor = { path = "crates/emulator-parts-sensor", version = "0.1.0" }
 fujimod-emulator-parts-lens = { path = "crates/emulator-parts-lens", version = "0.1.0" }
 fujimod-emulator-storage = { path = "crates/emulator-storage", version = "0.1.0" }

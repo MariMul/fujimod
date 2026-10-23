@@ -55,9 +55,9 @@ pub struct Changes {
 }
 impl Nand {
     fn immutable_identity(&self) -> serde_json::Value {
-        serde_json::json!({"options":self.options,"base":fujimod_emulator_devices::fingerprint::bytes(&self.base),
-            "overlays":self.overlays.iter().map(|o|(o.offset,fujimod_emulator_devices::fingerprint::bytes(&o.bytes))).collect::<Vec<_>>(),
-            "spare":self.spare.iter().map(|(row,bytes)|(row,fujimod_emulator_devices::fingerprint::bytes(bytes))).collect::<Vec<_>>()})
+        serde_json::json!({"options":self.options,"base":crate::fingerprint::bytes(&self.base),
+            "overlays":self.overlays.iter().map(|o|(o.offset,crate::fingerprint::bytes(&o.bytes))).collect::<Vec<_>>(),
+            "spare":self.spare.iter().map(|(row,bytes)|(row,crate::fingerprint::bytes(bytes))).collect::<Vec<_>>()})
     }
     pub fn changes(&self) -> Changes {
         Changes {
@@ -87,7 +87,7 @@ impl Nand {
         medium.written_spare = changes.written_spare.clone();
         Ok(medium)
     }
-    pub fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+    pub fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
         let state = Snapshot {
             options: self.options.clone(),
             overlays: self.overlays.iter().map(|o| o.offset).collect(),
@@ -98,9 +98,9 @@ impl Nand {
         let blobs = std::iter::once(self.base.clone())
             .chain(self.overlays.iter().map(|o| o.bytes.clone()))
             .collect();
-        Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode("nand-medium", &state)?.with_blobs(blobs))
+        Ok(crate::checkpoint::Checkpoint::encode("nand-medium", &state)?.with_blobs(blobs))
     }
-    pub fn from_checkpoint(saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<Self, String> {
+    pub fn from_checkpoint(saved: &crate::checkpoint::Checkpoint) -> Result<Self, String> {
         let state: Snapshot = saved.decode("nand-medium")?;
         if saved.blobs().len() != state.overlays.len() + 1 {
             return Err("NAND immutable blob count differs".into());
@@ -140,11 +140,11 @@ impl Nand {
     pub fn fingerprint(&self) -> serde_json::Value {
         let pages = |data: &BTreeMap<u32, Vec<u8>>| {
             data.iter()
-                .map(|(row, bytes)| (*row, fujimod_emulator_devices::fingerprint::bytes(bytes)))
+                .map(|(row, bytes)| (*row, crate::fingerprint::bytes(bytes)))
                 .collect::<Vec<_>>()
         };
-        serde_json::json!({"options":self.options,"base":fujimod_emulator_devices::fingerprint::bytes(&self.base),
-            "overlays":self.overlays.iter().map(|o|(o.offset,fujimod_emulator_devices::fingerprint::bytes(&o.bytes))).collect::<Vec<_>>(),
+        serde_json::json!({"options":self.options,"base":crate::fingerprint::bytes(&self.base),
+            "overlays":self.overlays.iter().map(|o|(o.offset,crate::fingerprint::bytes(&o.bytes))).collect::<Vec<_>>(),
             "spare":pages(&self.spare),"pages":pages(&self.pages),"written_spare":pages(&self.written_spare)})
     }
     pub fn new(
@@ -520,7 +520,7 @@ mod tests {
     }
     #[test]
     fn checkpoint_nand_shares_immutable_image_and_restores_programmed_pages() {
-        use fujimod_emulator_devices::checkpoint::Checkpoint;
+        use crate::checkpoint::Checkpoint;
         let base: Arc<[u8]> = vec![255; 65536].into();
         let mut medium = Nand::new(
             Options {

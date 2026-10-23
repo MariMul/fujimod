@@ -6,6 +6,7 @@
 //! unsupported operations return explicit refusals.
 
 pub mod bus;
+pub mod capability;
 pub mod checkpoint;
 pub mod compression;
 pub mod dma;

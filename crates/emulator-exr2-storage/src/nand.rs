@@ -2,7 +2,7 @@
 //! Data/OOB placement, clean ECC and virtual latency are declared inputs;
 //! opaque update bytes never select commands or authorize completion.
 use fujimod_emulator_devices::{Cx, Device};
-use fujimod_emulator_parts_storage::nand::Nand;
+use fujimod_emulator_devices::parts::nand::Nand;
 use serde::{Deserialize, Serialize};
 
 const BASE: u64 = 0xfff52000;
@@ -542,6 +542,12 @@ impl NandController {
     }
 }
 impl Device for NandController {
+    fn nand_store(&self) -> Option<&(dyn fujimod_emulator_devices::capability::NandStore + 'static)> {
+        Some(self)
+    }
+    fn nand_store_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::NandStore + 'static)> {
+        Some(self)
+    }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             self.name(),
@@ -715,3 +721,12 @@ impl Device for NandController {
 }
 #[cfg(test)]
 mod tests;
+
+impl fujimod_emulator_devices::capability::NandStore for NandController {
+    fn medium(&self) -> &fujimod_emulator_devices::parts::nand::Nand {
+        NandController::medium(self)
+    }
+    fn retain(&mut self, medium: fujimod_emulator_devices::parts::nand::Nand) -> std::result::Result<(), String> {
+        NandController::retain(self, medium)
+    }
+}

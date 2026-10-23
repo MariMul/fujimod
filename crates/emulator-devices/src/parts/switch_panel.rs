@@ -2,7 +2,7 @@
 //! positions to electrical levels; no scanner records, firmware state or UI
 //! callbacks participate. Shared ladders and compound switches are one circuit.
 //! Unlisted contact combinations refuse before any electrical level changes.
-use fujimod_emulator_devices::parts::pins::Pin;
+use crate::parts::pins::Pin;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 

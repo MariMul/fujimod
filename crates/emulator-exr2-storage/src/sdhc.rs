@@ -2,10 +2,11 @@
 //! and UHS refuse. Latencies and card identity are declared inputs.
 //! SDMA writes bytes before status and IRQ; boundaries require W1C/resume.
 use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine};
-use fujimod_emulator_parts_storage::sd_card::Card;
+use fujimod_emulator_devices::parts::sd_card::Card;
 use fujimod_emulator_ip::sdhci::Clocks;
 use serde::{Deserialize, Serialize};
 use fujimod_emulator_devices::parts::card_contacts::Contacts;
+use fujimod_emulator_devices::exr2::sd_faults::{DataDirection, DataFault, DataFaultEvent};
 
 pub const BASE: u64 = 0xfff50000;
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -24,34 +25,6 @@ pub struct Options {
     pub clock_ticks: u64,
     pub rca: u16,
     pub ram_bytes: u64,
-}
-/// Direction of a multi-block data transfer on the card's data lines.
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum DataDirection {
-    Read,
-    Write,
-}
-/// An external data CRC failure on the card's data lines. It never selects a
-/// filesystem result: the host reports SDHCI data CRC error status and the
-/// guest's own recovery runs.
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct DataFault {
-    pub direction: DataDirection,
-    /// Sector whose transfer fails; `None` selects each transfer's first sector.
-    pub sector: Option<u32>,
-    /// Sectors after `sector` that still transfer before the failure.
-    pub after_sectors: u32,
-    /// Matching multi-block transfers that fail, firmware retries included.
-    pub occurrences: u32,
-}
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct DataFaultEvent {
-    pub command: u8,
-    pub sector: u32,
-    pub transferred: usize,
 }
 const MAX_DATA_FAULTS: usize = 32;
 const DATA_CRC_ERROR: u16 = 0x20;
@@ -321,7 +294,7 @@ impl SdHost {
         self.card = card;
         Ok(())
     }
-    pub fn files(&self, revision: Option<u64>) -> Result<fujimod_emulator_storage::fat::Reader<'_>, String> {
+    pub fn readable_card(&self, revision: Option<u64>) -> Result<&Card, String> {
         if !self.contacts.present() {
             return Err("No SD card inserted".into());
         }
@@ -331,7 +304,7 @@ impl SdHost {
         if revision.is_some_and(|r| r != self.card.revision()) {
             return Err("SD medium revision changed".into());
         }
-        fujimod_emulator_storage::fat::Reader::new(&self.card)
+        Ok(&self.card)
     }
     fn signal(&self, cx: &mut Cx<'_>) -> Result<(), String> {
         self.irq.drive(cx, self.regs.asserted())
@@ -988,6 +961,12 @@ struct Snapshot {
     fault_history: Vec<DataFaultEvent>,
 }
 impl Device for SdHost {
+    fn card_slot(&self) -> Option<&(dyn fujimod_emulator_devices::capability::CardSlot + 'static)> {
+        Some(self)
+    }
+    fn card_slot_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::CardSlot + 'static)> {
+        Some(self)
+    }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         #[derive(Serialize)]
         struct View<'a> {
@@ -1197,7 +1176,7 @@ impl Device for SdHost {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_parts_storage::sd_card;
+    use fujimod_emulator_devices::parts::sd_card;
     use fujimod_emulator_devices::test_host::ram::{Effect, Ram};
     fn host(protocol: Protocol) -> SdHost {
         SdHost::new(
@@ -1568,5 +1547,38 @@ mod tests {
         due(&mut m, &mut h);
         assert!(h.effects.contains(&Effect::Write(0x40001000, 512)));
         assert_eq!(&h.bytes[0x1000..0x1200], &[0x7b; 512]);
+    }
+}
+
+impl fujimod_emulator_devices::capability::CardSlot for SdHost {
+    fn card(&self) -> &fujimod_emulator_devices::parts::sd_card::Card {
+        SdHost::card(self)
+    }
+    fn busy(&self) -> bool {
+        SdHost::busy(self)
+    }
+    fn readable_card(&self, revision: Option<u64>) -> std::result::Result<&fujimod_emulator_devices::parts::sd_card::Card, String> {
+        SdHost::readable_card(self, revision)
+    }
+    fn replace_card(&mut self, card: fujimod_emulator_devices::parts::sd_card::Card) -> std::result::Result<fujimod_emulator_devices::parts::sd_card::Card, String> {
+        SdHost::replace_card(self, card)
+    }
+    fn retain_card(&mut self, card: fujimod_emulator_devices::parts::sd_card::Card) -> std::result::Result<(), String> {
+        SdHost::retain_card(self, card)
+    }
+    fn initialize_revision(&mut self, revision: u64) -> std::result::Result<(), String> {
+        SdHost::initialize_revision(self, revision)
+    }
+    fn inject_data_fault(&mut self, fault: DataFault) -> std::result::Result<(), String> {
+        SdHost::inject_data_fault(self, fault)
+    }
+    fn clear_data_faults(&mut self) -> std::result::Result<(), String> {
+        SdHost::clear_data_faults(self)
+    }
+    fn data_faults(&self) -> &[DataFault] {
+        SdHost::data_faults(self)
+    }
+    fn fault_history(&self) -> &[DataFaultEvent] {
+        SdHost::fault_history(self)
     }
 }

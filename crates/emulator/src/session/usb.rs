@@ -1,20 +1,19 @@
 //! Opaque external USB bus transactions on the native controller.
 use super::Session;
 use fujimod_emulator_devices::Cx;
-use fujimod_emulator_parts_io::usb_endpoint::Endpoint;
-use fujimod_emulator_exr2_io::usb::UsbController;
+use fujimod_emulator_devices::capability::{UsbPort};
 impl Session {
     fn usb_input<R>(
         &mut self,
         name: &str,
-        input: impl FnOnce(&mut Endpoint, &mut Cx<'_>) -> Result<R, String>,
+        input: impl FnOnce(&mut dyn UsbPort, &mut Cx<'_>) -> Result<R, String>,
     ) -> Result<R, String> {
         self.board
-            .device_input::<UsbController, _>(self.node(name)?, |controller, cx| {
+            .capability_input::<dyn UsbPort, _>(self.node(name)?, |controller, cx| {
                 if !controller.cable_connected() {
                     return Err("USB bus cable is disconnected".into());
                 }
-                input(controller.endpoint_mut()?, cx)
+                input(controller, cx)
             })
     }
     pub fn usb_reset(&mut self, name: &str) -> Result<(), String> {
@@ -33,6 +32,6 @@ impl Session {
         self.usb_input(name, |port, cx| port.host_in_token(cx, endpoint))
     }
     pub fn usb_status(&self, name: &str) -> Result<serde_json::Value, String> {
-        self.board.inspect_device::<UsbController,_>(self.node(name)?,|controller| Ok(serde_json::json!({"connected":controller.cable_connected(),"endpoint":controller.endpoint()?.bus_status()})))
+        self.board.inspect_capability::<dyn UsbPort, _>(self.node(name)?,|controller| Ok(serde_json::json!({"connected":controller.cable_connected(),"endpoint":controller.bus_status()?})))
     }
 }

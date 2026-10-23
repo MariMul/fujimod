@@ -9,7 +9,6 @@ pub mod formatter;
 mod pixel_tests;
 mod rectangles;
 pub mod scanout;
-pub mod state;
 pub mod timing;
 pub use device::Scanout;
 pub use formatter::Formatter;

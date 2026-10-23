@@ -1,7 +1,7 @@
 //! Host preparation of declared persistent inputs. Asset identity, placement,
 //! byte edits and journal layout come from explicit typed run inputs. No guest execution,
 //! camera transport or capture-pipeline module participates in preparation.
-use fujimod_emulator_parts_storage::nand::{Nand, Options as Geometry, Overlay, managed_tag};
+use fujimod_emulator_devices::parts::nand::{Nand, Options as Geometry, Overlay, managed_tag};
 use fujimod_catalog::persistent_inputs::{
     PersistentInputs, PersistentJournalAppend, PersistentPacket,
 };

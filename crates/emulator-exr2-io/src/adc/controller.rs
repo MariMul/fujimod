@@ -100,6 +100,12 @@ impl Converter {
     }
 }
 impl Device for Converter {
+    fn analog_inputs(&self) -> Option<&(dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
+        Some(self)
+    }
+    fn analog_inputs_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
+        Some(self)
+    }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &(&self.state, self.samples()))
     }
@@ -267,5 +273,17 @@ mod tests {
         adc.store(16, 0, 0x8000).unwrap();
         adc.advance(&mut Cx::new(&mut Clock(17), 0, 0, 0));
         assert_eq!(adc.state.registers[9], 0);
+    }
+}
+
+impl fujimod_emulator_devices::capability::AnalogInputs for Converter {
+    fn external_inputs(&self) -> fujimod_emulator_devices::parts::analog::Samples {
+        Converter::external_inputs(self)
+    }
+    fn samples(&self) -> Vec<u16> {
+        Converter::samples(self)
+    }
+    fn set_sample(&mut self, channel: usize, value: u16) -> std::result::Result<(), String> {
+        Converter::set_sample(self, channel, value)
     }
 }

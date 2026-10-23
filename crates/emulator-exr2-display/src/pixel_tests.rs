@@ -40,7 +40,7 @@ fn window(
         write(d, h, scanout::BASES[pipe] + o, v);
     }
 }
-fn observe(d: &Scanout, h: &TestHost, pipe: usize, pixels: bool) -> scanout::Frame {
+fn observe(d: &Scanout, h: &TestHost, pipe: usize, pixels: bool) -> fujimod_emulator_devices::exr2::scanout_frame::Frame {
     let mut read = |a: u64, n: usize| {
         Ok(h.ram[(a & 0x3fffffff) as usize..(a & 0x3fffffff) as usize + n].to_vec())
     };

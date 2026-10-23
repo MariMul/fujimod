@@ -129,7 +129,7 @@ impl Session {
             .controls
             .as_ref()
             .map(|p| {
-                fujimod_emulator_parts_controls::switch_panel::SwitchPanel::new(p.spec().clone())
+                fujimod_emulator_devices::parts::switch_panel::SwitchPanel::new(p.spec().clone())
             })
             .transpose()?;
         let mut poses = saved

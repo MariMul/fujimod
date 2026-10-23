@@ -1,6 +1,6 @@
 //! Committed external storage across cold reconstruction; no CPU/device context.
 use super::Session;
-use fujimod_emulator_parts_storage::{nand, sd_card::Card};
+use fujimod_emulator_devices::parts::{nand, sd_card::Card};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

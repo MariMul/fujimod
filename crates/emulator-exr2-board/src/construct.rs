@@ -13,7 +13,7 @@ use fujimod_emulator_devices::{Device, bus::InterruptLine, graph::Mapping};
 use fujimod_emulator_parts_io::{audio_sink::AudioSink, usb_endpoint};
 use fujimod_emulator_parts_controls::{encoder::Encoder, gpio_contact_response::GpioContactResponse};
 use fujimod_emulator_parts_lens::{lens::{LensUnit, bridge::Bridge}, stabilizer::Stabilizer};
-use fujimod_emulator_parts_storage::sd_card;
+use fujimod_emulator_devices::parts::sd_card;
 use fujimod_emulator_parts_io::wifi_module::WifiModule;
 use fujimod_emulator_parts_sensor::sensor::Sensor;
 use fujimod_emulator_storage::fat;
@@ -747,7 +747,7 @@ impl Builder<'_> {
                 irq,
             } => { let options: fujimod_emulator_exr2_storage::sdhc::Options = crate::decode(options)?; 
                 let card = match card {
-                    Card::Blank { options } => { let options: fujimod_emulator_parts_storage::sd_card::Options = crate::decode(options)?; sd_card::Card::new(options)? },
+                    Card::Blank { options } => { let options: fujimod_emulator_devices::parts::sd_card::Options = crate::decode(options)?; sd_card::Card::new(options)? },
                     Card::Formatted { options, files } => { let options: fujimod_emulator_storage::fat::Options = crate::decode(options)?; fat::format(
                         &options,
                         resources

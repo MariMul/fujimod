@@ -1,18 +1,15 @@
 //! Persistent NAND is external to the powered controller and its pending work.
 use super::Session;
-use fujimod_emulator_exr2_storage::nand::NandController;
-use fujimod_emulator_parts_storage::nand::Nand;
+use fujimod_emulator_devices::parts::nand::Nand;
+use fujimod_emulator_devices::capability::{NandStore};
 impl Session {
     pub fn nand_state(&self, name: &str) -> Result<serde_json::Value, String> {
-        self.board
-            .inspect_device::<NandController, _>(self.node(name)?, |controller| {
-                Ok(fujimod_emulator_devices::Device::save(controller))
-            })
+        self.board.device_save(self.node(name)?)
     }
 
     pub fn nand_medium(&self, name: &str) -> Result<Nand, String> {
         self.board
-            .inspect_device::<NandController, _>(self.node(name)?, |controller| {
+            .inspect_capability::<dyn NandStore, _>(self.node(name)?, |controller| {
                 Ok(controller.medium().clone())
             })
     }
@@ -21,7 +18,7 @@ impl Session {
             return Err("retaining NAND requires an unexecuted board".into());
         }
         self.board
-            .edit_device::<NandController, _>(self.node(name)?, |controller| {
+            .edit_capability::<dyn NandStore, _>(self.node(name)?, |controller| {
                 controller.retain(medium)
             })
     }

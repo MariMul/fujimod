@@ -291,6 +291,12 @@ impl Bus {
         any.downcast_ref()
             .ok_or_else(|| "device has a different type".into())
     }
+    pub fn device_dyn(&self, id: usize) -> Result<&dyn Device, String> {
+        Ok(&*self.windows.get(id).ok_or("no such device")?.device)
+    }
+    pub fn device_dyn_mut(&mut self, id: usize) -> Result<&mut dyn Device, String> {
+        Ok(&mut *self.windows.get_mut(id).ok_or("no such device")?.device)
+    }
     pub fn device_mut<T: Device>(&mut self, id: usize) -> Result<&mut T, String> {
         let node = self.windows.get_mut(id).ok_or("no such device")?;
         let any: &mut dyn std::any::Any = &mut *node.device;

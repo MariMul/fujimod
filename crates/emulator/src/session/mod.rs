@@ -18,11 +18,12 @@ use crate::board::Board;
 use fujimod_emulator_devices::parts::card_contacts::Contacts;
 use fujimod_emulator_exr2_plan::Resources;
 use std::collections::BTreeMap;
+use fujimod_emulator_devices::capability::{HdmiOutput, SerialStatus};
 
 pub struct Session {
     pub definition: serde_json::Value,
     pub board: Board,
-    pub controls: Option<fujimod_emulator_parts_controls::switch_panel::SwitchPanel>,
+    pub controls: Option<fujimod_emulator_devices::parts::switch_panel::SwitchPanel>,
     pub contact_driver: Option<contact_driver::Driver>,
     pub resources: Resources,
     /// XP5 external controls and GPIO inputs, when this board uses XP5 devices.
@@ -34,7 +35,7 @@ pub struct Session {
         BTreeMap<
             (String, usize, bool),
             fujimod_recording::cache::CaptureCache<
-                Option<std::sync::Arc<fujimod_emulator_exr2_display::scanout::Frame>>,
+                Option<std::sync::Arc<fujimod_emulator_devices::exr2::scanout_frame::Frame>>,
             >,
         >,
     >,
@@ -85,7 +86,7 @@ impl Session {
                 },
             )?;
         self.board
-            .device_input::<fujimod_emulator_exr2_io::hdmi::Transmitter, _>(
+            .capability_input::<dyn HdmiOutput, _>(
                 transmitter_id,
                 |device, cx| {
                     device.set_connected(cx, connected);
@@ -115,12 +116,7 @@ impl Session {
             )
     }
     pub fn serial_state(&self, name: &str) -> Result<serde_json::Value, String> {
-        use fujimod_emulator_devices::Device;
-        self.board
-            .inspect_device::<fujimod_emulator_exr2_serial::spi::SpiController, _>(
-                self.node(name)?,
-                |serial| Ok(serial.save()),
-            )
+        self.board.device_save(self.node(name)?)
     }
     pub fn serial_status_input(
         &mut self,
@@ -130,7 +126,7 @@ impl Session {
         value: u8,
     ) -> Result<(), String> {
         self.board
-            .edit_device::<fujimod_emulator_exr2_serial::spi::SpiController, _>(
+            .edit_capability::<dyn SerialStatus, _>(
                 self.node(name)?,
                 |serial| serial.status_input(route, register, value),
             )

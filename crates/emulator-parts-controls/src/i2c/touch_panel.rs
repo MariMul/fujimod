@@ -1,5 +1,6 @@
 //! A timed touch part attached to the primary bus's prefixed-register endpoint.
-use crate::touch_controller::{ContactInput, TouchController};
+use fujimod_emulator_devices::parts::touch_input::ContactInput;
+use crate::touch_controller::TouchController;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

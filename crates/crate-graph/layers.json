@@ -24,7 +24,6 @@
       "fujimod-emulator-parts-io",
       "fujimod-emulator-parts-lens",
       "fujimod-emulator-parts-sensor",
-      "fujimod-emulator-parts-storage",
       "fujimod-emulator-storage",
       "fujimod-emulator-xp4",
       "fujimod-emulator-xp5"
@@ -71,17 +70,10 @@
   "remaining": {
     "model_dependencies": {
       "fujimod-emulator": [
-        "fujimod-emulator-exr2-display",
-        "fujimod-emulator-exr2-i2c",
-        "fujimod-emulator-exr2-io",
-        "fujimod-emulator-exr2-serial",
-        "fujimod-emulator-exr2-storage",
         "fujimod-emulator-ip",
         "fujimod-emulator-ip-arm",
         "fujimod-emulator-ip-dmp",
         "fujimod-emulator-parts-controls",
-        "fujimod-emulator-parts-io",
-        "fujimod-emulator-parts-storage",
         "fujimod-emulator-storage",
         "fujimod-emulator-xp4",
         "fujimod-emulator-xp5"
@@ -103,19 +95,12 @@
         "fujimod-emulator-parts-io",
         "fujimod-emulator-parts-lens",
         "fujimod-emulator-parts-sensor",
-        "fujimod-emulator-parts-storage",
         "fujimod-emulator-storage"
-      ],
-      "fujimod-emulator-exr2-plan": [
-        "fujimod-emulator-parts-storage"
       ],
       "fujimod-python": [
         "fujimod-emulator-exr2-display",
         "fujimod-emulator-exr2-gpu",
-        "fujimod-emulator-exr2-io",
         "fujimod-emulator-graphics",
-        "fujimod-emulator-parts-controls",
-        "fujimod-emulator-parts-storage",
         "fujimod-emulator-storage"
       ]
     },

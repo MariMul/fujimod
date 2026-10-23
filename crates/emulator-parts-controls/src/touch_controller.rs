@@ -5,25 +5,12 @@
 //! Only timed external contacts and completed bus reads drive this part.
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use fujimod_emulator_devices::parts::touch_input::{ContactInput, Phase};
 
 pub const REPORT_HZ: u64 = 100;
 const QUEUE_LIMIT: usize = 4096;
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
-pub enum Phase {
-    Down,
-    Move,
-    Up,
-}
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-pub struct ContactInput {
-    pub tick: u64,
-    pub contact: usize,
-    pub phase: Phase,
-    pub x: u16,
-    pub y: u16,
-}
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
 struct Contact {

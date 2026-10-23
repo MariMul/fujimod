@@ -137,7 +137,7 @@ impl ResourceSnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_parts_storage::sd_card;
+    use fujimod_emulator_devices::parts::sd_card;
     use fujimod_emulator_devices::scene::FramePixels;
 
     fn resources() -> Resources {

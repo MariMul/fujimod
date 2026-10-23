@@ -1,7 +1,6 @@
 //! Native scanout registers and reset deadlines. Host rendering is observational.
-use super::scanout::{
-    self, BackdropProfile, Compositor, Frame, GraphicsProfile, RectangleComposition, ScanoutHost,
-};
+use super::scanout::{self, BackdropProfile, Compositor, GraphicsProfile, RectangleComposition, ScanoutHost};
+use fujimod_emulator_devices::exr2::scanout_frame::Frame;
 use fujimod_emulator_devices::{Action, Cx, Device, Record};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -165,6 +164,12 @@ impl Scanout {
     }
 }
 impl Device for Scanout {
+    fn scanout_source(&self) -> Option<&(dyn fujimod_emulator_devices::capability::ScanoutSource + 'static)> {
+        Some(self)
+    }
+    fn scanout_source_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::ScanoutSource + 'static)> {
+        Some(self)
+    }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             self.name(),
@@ -593,5 +598,29 @@ mod tests {
         assert_eq!(reads.get(), 2);
         assert_eq!(d.next_deadline(0), None);
         assert!(host.effects.is_empty());
+    }
+}
+
+impl fujimod_emulator_devices::capability::ScanoutSource for Scanout {
+    fn metadata(&self) -> serde_json::Value {
+        Scanout::metadata(self)
+    }
+    fn frame(
+        &self,
+        instance: usize,
+        pixels: bool,
+        read: &mut dyn FnMut(u64, usize) -> std::result::Result<Vec<u8>, String>,
+        diagnostic_hashes: bool,
+    ) -> std::result::Result<Option<fujimod_emulator_devices::exr2::scanout_frame::Frame>, String> {
+        Scanout::frame(self, instance, pixels, &mut Observation { read, diagnostic_hashes })
+    }
+    fn main_frame(
+        &self,
+        instance: usize,
+        pixels: bool,
+        read: &mut dyn FnMut(u64, usize) -> std::result::Result<Vec<u8>, String>,
+        diagnostic_hashes: bool,
+    ) -> std::result::Result<Option<fujimod_emulator_devices::exr2::scanout_frame::Frame>, String> {
+        Scanout::main_frame(self, instance, pixels, &mut Observation { read, diagnostic_hashes })
     }
 }

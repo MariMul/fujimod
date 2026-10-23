@@ -265,7 +265,7 @@ impl Resources {
             card.validate()?;
         }
         for v in saved.nands.values() {
-            fujimod_emulator_parts_storage::nand::Nand::from_checkpoint(v)?;
+            fujimod_emulator_devices::parts::nand::Nand::from_checkpoint(v)?;
         }
         Ok(())
     }
@@ -292,7 +292,7 @@ impl Resources {
             .map(|(k, v)| {
                 Ok((
                     k.clone(),
-                    fujimod_emulator_parts_storage::nand::Nand::from_checkpoint(v)?,
+                    fujimod_emulator_devices::parts::nand::Nand::from_checkpoint(v)?,
                 ))
             })
             .collect::<Result<_, String>>()?;

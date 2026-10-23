@@ -211,6 +211,12 @@ enum Kind {
 }
 
 impl Device for Transmitter {
+    fn hdmi_output(&self) -> Option<&(dyn fujimod_emulator_devices::capability::HdmiOutput + 'static)> {
+        Some(self)
+    }
+    fn hdmi_output_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::HdmiOutput + 'static)> {
+        Some(self)
+    }
     fujimod_emulator_devices::checkpoint_fields!(state: State, sink: HdmiSink);
     fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
         Ok(self.save())
@@ -505,5 +511,11 @@ mod tests {
                 .restore(&json!({"state":{},"sink":{},"edid_ticks":2}))
                 .is_err()
         );
+    }
+}
+
+impl fujimod_emulator_devices::capability::HdmiOutput for Transmitter {
+    fn set_connected(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, connected: bool) {
+        Transmitter::set_connected(self, cx, connected)
     }
 }

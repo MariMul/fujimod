@@ -1,7 +1,8 @@
 //! X70 EXR II controller register models and profiles.
-
 pub mod clock;
 pub mod gpio;
 pub mod irq;
 pub mod isp;
 pub mod pulse;
+pub mod scanout_frame;
+pub mod sd_faults;

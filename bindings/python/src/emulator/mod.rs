@@ -131,7 +131,7 @@ impl Sha256 {
 fn sha256_many(values: Vec<Bound<'_, PyBytes>>) -> Vec<String> {
     values
         .iter()
-        .map(|value| fujimod_emulator_exr2_display::state::sha256(value.as_bytes()))
+        .map(|value| fujimod_emulator_devices::exr2::scanout_frame::sha256(value.as_bytes()))
         .collect()
 }
 

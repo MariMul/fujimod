@@ -1,7 +1,8 @@
 //! Declared grayscale and signed-chroma composition laws. Rasterization is
 //! limited to the implemented rectangle shapes.
-use super::scanout::{Frame, Pipe, RectangleComposition};
-use super::state::State as S;
+use fujimod_emulator_devices::exr2::scanout_frame::Frame;
+use super::scanout::{Pipe, RectangleComposition};
+use fujimod_emulator_devices::exr2::scanout_frame::State as S;
 use fujimod_emulator_devices::record::Result;
 use sha2::{Digest, Sha256};
 

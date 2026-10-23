@@ -30,7 +30,7 @@ impl I2cController {
     pub fn admit_touch(
         &self,
         now: u64,
-        script: &[fujimod_emulator_parts_controls::touch_controller::ContactInput],
+        script: &[fujimod_emulator_devices::parts::touch_input::ContactInput],
     ) -> Result<(), String> {
         let mut panel = self
             .engine
@@ -43,7 +43,7 @@ impl I2cController {
     pub fn touch(
         &mut self,
         now: u64,
-        script: &[fujimod_emulator_parts_controls::touch_controller::ContactInput],
+        script: &[fujimod_emulator_devices::parts::touch_input::ContactInput],
     ) -> Result<(), String> {
         self.engine
             .parts
@@ -261,6 +261,12 @@ impl I2cController {
     }
 }
 impl Device for I2cController {
+    fn touch_panel(&self) -> Option<&(dyn fujimod_emulator_devices::capability::TouchPanel + 'static)> {
+        Some(self)
+    }
+    fn touch_panel_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::TouchPanel + 'static)> {
+        Some(self)
+    }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         let bridge = self
             .bridge
@@ -438,5 +444,17 @@ impl Device for I2cController {
     fn save(&self) -> serde_json::Value {
         serde_json::json!({"engine": self.engine, "due": self.due,
             "cable": self.cable.as_ref().map(fujimod_emulator_devices::signals::Level::high)})
+    }
+}
+
+impl fujimod_emulator_devices::capability::TouchPanel for I2cController {
+    fn touch_period(&self) -> std::result::Result<u64, String> {
+        I2cController::touch_period(self)
+    }
+    fn admit_touch(&self, now: u64, script: &[fujimod_emulator_devices::parts::touch_input::ContactInput]) -> std::result::Result<(), String> {
+        I2cController::admit_touch(self, now, script)
+    }
+    fn touch(&mut self, now: u64, script: &[fujimod_emulator_devices::parts::touch_input::ContactInput]) -> std::result::Result<(), String> {
+        I2cController::touch(self, now, script)
     }
 }

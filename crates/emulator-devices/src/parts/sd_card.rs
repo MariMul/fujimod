@@ -27,7 +27,7 @@ mod sector_bytes {
     ) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeMap;
         #[derive(Serialize)]
-        struct Bytes<'a>(#[serde(with = "fujimod_emulator_devices::checkpoint::bytes")] &'a [u8]);
+        struct Bytes<'a>(#[serde(with = "crate::checkpoint::bytes")] &'a [u8]);
         let mut map = serializer.serialize_map(Some(sectors.len()))?;
         for (address, bytes) in sectors {
             map.serialize_entry(address, &Bytes(bytes))?;
@@ -267,7 +267,7 @@ mod tests {
         let payload: Vec<u8> = (0..=255).cycle().take(1024).collect();
         card.write_bytes(512, &payload).unwrap();
         let before = serde_json::to_value(&card).unwrap();
-        let saved = fujimod_emulator_devices::checkpoint::Checkpoint::encode("card", &card).unwrap();
+        let saved = crate::checkpoint::Checkpoint::encode("card", &card).unwrap();
         assert!(saved.bytes() < 1200);
         let mut restored: Card = saved.decode("card").unwrap();
         assert_eq!(serde_json::to_value(&restored).unwrap(), before);

@@ -1,4 +1,5 @@
-//! Ordered metadata values; no runtime or image-format dependency.
+//! Scanout frames and their ordered metadata values; no runtime or image-format
+//! dependency.
 #[derive(Clone, Debug, PartialEq)]
 pub enum State {
     None,
@@ -57,4 +58,14 @@ impl State {
             Self::Dict(v) => J::Object(v.iter().map(|(k,v)|(k.clone(),v.json())).collect()),
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct Frame {
+    pub raw: Vec<u8>,
+    pub rgb: Option<Vec<u8>>,
+    pub png: Option<Vec<u8>>,
+    pub state: State,
+    pub width: usize,
+    pub height: usize,
 }

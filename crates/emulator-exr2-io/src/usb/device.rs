@@ -49,6 +49,12 @@ impl UsbController {
     }
 }
 impl Device for UsbController {
+    fn usb_port(&self) -> Option<&(dyn fujimod_emulator_devices::capability::UsbPort + 'static)> {
+        Some(self)
+    }
+    fn usb_port_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::UsbPort + 'static)> {
+        Some(self)
+    }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         let children = self
             .endpoint
@@ -163,3 +169,27 @@ impl Device for UsbController {
 
 #[cfg(test)]
 mod tests;
+
+impl fujimod_emulator_devices::capability::UsbPort for UsbController {
+    fn cable_connected(&self) -> bool {
+        UsbController::cable_connected(self)
+    }
+    fn bus_status(&self) -> std::result::Result<serde_json::Value, String> {
+        Ok(self.endpoint()?.bus_status())
+    }
+    fn host_reset(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>) -> std::result::Result<(), String> {
+        self.endpoint_mut()?.host_reset(cx)
+    }
+    fn host_setup(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, packet: &[u8]) -> std::result::Result<(), String> {
+        self.endpoint_mut()?.host_setup(cx, packet)
+    }
+    fn host_out(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, endpoint: u8, packet: &[u8]) -> std::result::Result<(), String> {
+        self.endpoint_mut()?.host_out(cx, endpoint, packet)
+    }
+    fn host_in(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, endpoint: u8, size: usize) -> std::result::Result<Vec<u8>, String> {
+        self.endpoint_mut()?.host_in(cx, endpoint, size)
+    }
+    fn host_in_token(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, endpoint: u8) -> std::result::Result<(), String> {
+        self.endpoint_mut()?.host_in_token(cx, endpoint)
+    }
+}

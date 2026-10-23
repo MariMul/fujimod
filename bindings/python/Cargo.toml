@@ -17,7 +17,7 @@ emulator = [
     "dep:cc",
     "dep:fujimod-emulator",
     "dep:fujimod-emulator-cpu",
-    "dep:fujimod-emulator-devices", "dep:fujimod-emulator-parts-controls", "dep:fujimod-emulator-parts-storage", "dep:fujimod-emulator-storage", "dep:fujimod-emulator-graphics", "dep:fujimod-emulator-exr2-io", "dep:fujimod-emulator-exr2-gpu", "dep:fujimod-emulator-exr2-display",
+    "dep:fujimod-emulator-devices", "dep:fujimod-emulator-storage", "dep:fujimod-emulator-graphics", "dep:fujimod-emulator-exr2-gpu", "dep:fujimod-emulator-exr2-display",
     "dep:fujimod-emulator-exr2-plan",
     "dep:pkg-config",
     "dep:sha2",
@@ -26,11 +26,8 @@ emulator = [
 testing = ["fujimod-usb/testing", "fujimod-remote/testing"]
 
 [dependencies]
-fujimod-emulator-parts-controls = { path = "../../crates/emulator-parts-controls", optional = true }
-fujimod-emulator-parts-storage = { path = "../../crates/emulator-parts-storage", optional = true }
 fujimod-emulator-storage = { path = "../../crates/emulator-storage", optional = true }
 fujimod-emulator-graphics = { path = "../../crates/emulator-graphics", optional = true }
-fujimod-emulator-exr2-io = { path = "../../crates/emulator-exr2-io", optional = true }
 fujimod-emulator-exr2-gpu = { path = "../../crates/emulator-exr2-gpu", optional = true }
 fujimod-emulator-exr2-display = { path = "../../crates/emulator-exr2-display", optional = true }
 fujimod-remote = { workspace = true, default-features = false, features = ["ff80"] }

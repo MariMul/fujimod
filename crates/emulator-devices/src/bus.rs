@@ -238,6 +238,55 @@ impl<'a> Cx<'a> {
 /// A register-level device behind one or more address windows.
 pub trait Device: Send + std::any::Any {
     fn name(&self) -> &'static str;
+    // Capabilities the model offers sessions (`crate::capability`).
+    fn analog_inputs(&self) -> Option<&(dyn crate::capability::AnalogInputs + 'static)> {
+        None
+    }
+    fn analog_inputs_mut(&mut self) -> Option<&mut (dyn crate::capability::AnalogInputs + 'static)> {
+        None
+    }
+    fn serial_status(&self) -> Option<&(dyn crate::capability::SerialStatus + 'static)> {
+        None
+    }
+    fn serial_status_mut(&mut self) -> Option<&mut (dyn crate::capability::SerialStatus + 'static)> {
+        None
+    }
+    fn touch_panel(&self) -> Option<&(dyn crate::capability::TouchPanel + 'static)> {
+        None
+    }
+    fn touch_panel_mut(&mut self) -> Option<&mut (dyn crate::capability::TouchPanel + 'static)> {
+        None
+    }
+    fn hdmi_output(&self) -> Option<&(dyn crate::capability::HdmiOutput + 'static)> {
+        None
+    }
+    fn hdmi_output_mut(&mut self) -> Option<&mut (dyn crate::capability::HdmiOutput + 'static)> {
+        None
+    }
+    fn usb_port(&self) -> Option<&(dyn crate::capability::UsbPort + 'static)> {
+        None
+    }
+    fn usb_port_mut(&mut self) -> Option<&mut (dyn crate::capability::UsbPort + 'static)> {
+        None
+    }
+    fn nand_store(&self) -> Option<&(dyn crate::capability::NandStore + 'static)> {
+        None
+    }
+    fn nand_store_mut(&mut self) -> Option<&mut (dyn crate::capability::NandStore + 'static)> {
+        None
+    }
+    fn card_slot(&self) -> Option<&(dyn crate::capability::CardSlot + 'static)> {
+        None
+    }
+    fn card_slot_mut(&mut self) -> Option<&mut (dyn crate::capability::CardSlot + 'static)> {
+        None
+    }
+    fn scanout_source(&self) -> Option<&(dyn crate::capability::ScanoutSource + 'static)> {
+        None
+    }
+    fn scanout_source_mut(&mut self) -> Option<&mut (dyn crate::capability::ScanoutSource + 'static)> {
+        None
+    }
     /// Optional side-effect-free 32-bit reads for one register window. This
     /// query is observational: it must not settle time or change modeled
     /// state. Interactive runtimes may bypass `read` only while the declaration

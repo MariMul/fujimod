@@ -38,7 +38,7 @@ fn model(small: bool) -> NandController {
     NandController::new(
         Options { erase_ticks: 64 },
         Nand::new(
-            fujimod_emulator_parts_storage::nand::Options {
+            fujimod_emulator_devices::parts::nand::Options {
                 bytes: 0x40000,
                 page_bytes: if small { 512 } else { 2048 },
                 pages_per_block: if small { 32 } else { 64 },

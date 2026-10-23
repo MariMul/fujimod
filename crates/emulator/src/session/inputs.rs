@@ -1,21 +1,21 @@
 //! Host electrical transitions through the checked device graph.
 use super::Session;
-use fujimod_emulator_exr2_io::adc::controller::Converter;
 use fujimod_emulator_devices::parts::pins::Pin;
-use fujimod_emulator_parts_controls::switch_panel::{Signal, Spec, SwitchPanel};
+use fujimod_emulator_devices::parts::switch_panel::{Signal, Spec, SwitchPanel};
 use std::collections::BTreeMap;
+use fujimod_emulator_devices::capability::{AnalogInputs, SerialStatus, TouchPanel};
 
 impl Session {
     pub fn adc_samples(&self, node: &str) -> Result<Vec<u16>, String> {
         self.board
-            .inspect_device::<Converter, _>(self.node(node)?, |adc| Ok(adc.samples().to_vec()))
+            .inspect_capability::<dyn AnalogInputs, _>(self.node(node)?, |adc| Ok(adc.samples().to_vec()))
     }
     pub fn set_adc_samples(&mut self, node: &str, samples: &[u16]) -> Result<(), String> {
         if samples.len() != self.adc_samples(node)?.len() {
             return Err("ADC input channel count differs".into());
         }
         self.board
-            .edit_device::<Converter, _>(self.node(node)?, |adc| {
+            .edit_capability::<dyn AnalogInputs, _>(self.node(node)?, |adc| {
                 for (channel, &value) in samples.iter().enumerate() {
                     adc.set_sample(channel, value)?;
                 }
@@ -58,7 +58,7 @@ impl Session {
                     ..
                 } => {
                     self.board
-                        .inspect_device::<fujimod_emulator_exr2_serial::spi::SpiController, _>(
+                        .inspect_capability::<dyn SerialStatus, _>(
                             self.node(node)?,
                             |serial| serial.status_value(*route, *register).map(|_| ()),
                         )?;
@@ -93,7 +93,7 @@ impl Session {
                     value,
                 } => {
                     self.board
-                        .edit_device::<fujimod_emulator_exr2_serial::spi::SpiController, _>(
+                        .edit_capability::<dyn SerialStatus, _>(
                             self.node(node)?,
                             |serial| {
                                 let old = serial.status_value(*route, *register)?;
@@ -109,7 +109,7 @@ impl Session {
         }
         for (node, changes) in analog {
             self.board
-                .edit_device::<Converter, _>(self.node(node)?, |adc| {
+                .edit_capability::<dyn AnalogInputs, _>(self.node(node)?, |adc| {
                     for &(channel, value) in &changes {
                         adc.set_sample(channel, value)?;
                     }
@@ -166,10 +166,10 @@ impl Session {
     pub fn admit_touch(
         &self,
         node: &str,
-        script: &[fujimod_emulator_parts_controls::touch_controller::ContactInput],
+        script: &[fujimod_emulator_devices::parts::touch_input::ContactInput],
     ) -> Result<(), String> {
         self.board
-            .inspect_device::<fujimod_emulator_exr2_i2c::I2cController, _>(
+            .inspect_capability::<dyn TouchPanel, _>(
                 self.node(node)?,
                 |bus| bus.admit_touch(self.board.now(), script),
             )
@@ -177,11 +177,11 @@ impl Session {
     pub fn touch(
         &mut self,
         node: &str,
-        script: &[fujimod_emulator_parts_controls::touch_controller::ContactInput],
+        script: &[fujimod_emulator_devices::parts::touch_input::ContactInput],
     ) -> Result<(), String> {
         let now = self.board.now();
         self.board
-            .edit_device::<fujimod_emulator_exr2_i2c::I2cController, _>(self.node(node)?, |bus| {
+            .edit_capability::<dyn TouchPanel, _>(self.node(node)?, |bus| {
                 bus.touch(now, script)
             })
     }
@@ -216,12 +216,12 @@ impl Session {
     ) -> Result<
         (
             String,
-            Vec<fujimod_emulator_parts_controls::touch_controller::ContactInput>,
+            Vec<fujimod_emulator_devices::parts::touch_input::ContactInput>,
         ),
         String,
     > {
         use super::contact_driver::Interface;
-        use fujimod_emulator_parts_controls::touch_controller::{ContactInput, Phase};
+        use fujimod_emulator_devices::parts::touch_input::{ContactInput, Phase};
         let (node, width, height, offsets) = self
             .contact_driver
             .as_ref()
@@ -258,7 +258,7 @@ impl Session {
         if phase == "tap" {
             let period = self
                 .board
-                .inspect_device::<fujimod_emulator_exr2_i2c::I2cController, _>(
+                .inspect_capability::<dyn TouchPanel, _>(
                     self.node(node)?,
                     |bus| bus.touch_period(),
                 )?;

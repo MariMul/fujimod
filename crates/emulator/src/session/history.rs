@@ -2,7 +2,7 @@
 //! Instruction counts disambiguate inputs within one guest tick at high ratios.
 use super::{Session, checkpoint::Snapshot};
 use fujimod_emulator_cpu::ExecutionPolicy;
-use fujimod_emulator_parts_controls::touch_controller::ContactInput;
+use fujimod_emulator_devices::parts::touch_input::ContactInput;
 use fujimod_emulator_devices::scene::{Frame, StatisticsCadence};
 use std::{collections::VecDeque, sync::Arc};
 
@@ -105,7 +105,7 @@ pub enum Input {
     },
     CardInsert {
         node: String,
-        medium: fujimod_emulator_parts_storage::sd_card::Card,
+        medium: fujimod_emulator_devices::parts::sd_card::Card,
         present: bool,
         protected: bool,
     },

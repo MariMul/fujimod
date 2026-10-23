@@ -274,6 +274,12 @@ impl SpiController {
     }
 }
 impl Device for SpiController {
+    fn serial_status(&self) -> Option<&(dyn fujimod_emulator_devices::capability::SerialStatus + 'static)> {
+        Some(self)
+    }
+    fn serial_status_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::SerialStatus + 'static)> {
+        Some(self)
+    }
     fn checkpoint(&self) -> std::result::Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         Ok(
             fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.active)?.with_children(
@@ -374,5 +380,14 @@ impl Device for SpiController {
             .iter()
             .filter_map(|c| c.next_deadline(now))
             .min()
+    }
+}
+
+impl fujimod_emulator_devices::capability::SerialStatus for SpiController {
+    fn status_value(&self, route: usize, register: u8) -> std::result::Result<u8, String> {
+        SpiController::status_value(self, route, register)
+    }
+    fn status_input(&mut self, route: usize, register: u8, value: u8) -> std::result::Result<(), String> {
+        SpiController::status_input(self, route, register, value)
     }
 }

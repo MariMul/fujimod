@@ -1,6 +1,7 @@
 //! Observational scanout through the native register model and physical RAM.
 use super::Session;
-use fujimod_emulator_exr2_display::{Scanout, device::Observation, scanout::Frame};
+use fujimod_emulator_devices::exr2::scanout_frame::Frame;
+use fujimod_emulator_devices::capability::{ScanoutSource};
 impl Session {
     /// Reuse a presentation only after rechecking registers and every source byte.
     /// No event, guest instruction or architectural state participates in this memo.
@@ -11,7 +12,7 @@ impl Session {
         diagnostics: bool,
     ) -> Result<Option<std::sync::Arc<Frame>>, String> {
         self.board
-            .inspect_device::<Scanout, _>(self.node(name)?, |scanout| {
+            .inspect_capability::<dyn ScanoutSource, _>(self.node(name)?, |scanout| {
                 let key = serde_json::to_vec(&scanout.metadata()).map_err(|e| e.to_string())?;
                 let mut caches = self.recording_frames.borrow_mut();
                 let cache = caches
@@ -29,10 +30,8 @@ impl Session {
                             .frame(
                                 instance,
                                 true,
-                                &mut Observation {
-                                    read,
-                                    diagnostic_hashes: diagnostics,
-                                },
+                                read,
+                                diagnostics,
                             )
                             .map(|frame| frame.map(std::sync::Arc::new))
                     },
@@ -41,7 +40,7 @@ impl Session {
     }
     pub fn scanout_state(&self, name: &str) -> Result<serde_json::Value, String> {
         self.board
-            .inspect_device::<Scanout, _>(self.node(name)?, |scanout| Ok(scanout.metadata()))
+            .inspect_capability::<dyn ScanoutSource, _>(self.node(name)?, |scanout| Ok(scanout.metadata()))
     }
 
     pub fn scanout(
@@ -52,7 +51,7 @@ impl Session {
         diagnostic_hashes: bool,
     ) -> Result<Option<Frame>, String> {
         self.board
-            .inspect_device::<Scanout, _>(self.node(name)?, |scanout| {
+            .inspect_capability::<dyn ScanoutSource, _>(self.node(name)?, |scanout| {
                 let mut read = |address, count| {
                     let mut bytes = vec![0; count];
                     self.board.read_physical(address, &mut bytes)?;
@@ -61,10 +60,8 @@ impl Session {
                 scanout.frame(
                     instance,
                     pixels,
-                    &mut Observation {
-                        read: &mut read,
-                        diagnostic_hashes,
-                    },
+                    &mut read,
+                    diagnostic_hashes,
                 )
             })
     }
@@ -76,7 +73,7 @@ impl Session {
         diagnostic_hashes: bool,
     ) -> Result<Option<Frame>, String> {
         self.board
-            .inspect_device::<Scanout, _>(self.node(name)?, |scanout| {
+            .inspect_capability::<dyn ScanoutSource, _>(self.node(name)?, |scanout| {
                 let mut read = |address, count| {
                     let mut bytes = vec![0; count];
                     self.board.read_physical(address, &mut bytes)?;
@@ -85,10 +82,8 @@ impl Session {
                 scanout.main_frame(
                     instance,
                     pixels,
-                    &mut Observation {
-                        read: &mut read,
-                        diagnostic_hashes,
-                    },
+                    &mut read,
+                    diagnostic_hashes,
                 )
             })
     }
