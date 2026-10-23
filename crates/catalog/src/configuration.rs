@@ -768,7 +768,6 @@ pub struct Exr2RunInputs {
     pub first_start: Option<RunFirstStart>,
     /// The settings the camera starts with. Absent, the flash holds what the
     /// update installs.
-    #[cfg_attr(feature = "typescript", serde(default))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings: Option<RunPowerOnSettings>,
 }
