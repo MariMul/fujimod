@@ -28,7 +28,7 @@ explicitly refuses image-backed starts until a software backend is available.
 The target-rate, quantizer and GOP mappings define the software compression
 approximation; they do not reproduce silicon rate control or identical
 compressed bytes. The supported register mode is checked before input is
-read. Crop/field modes, alternate codec commands, overlapping/unmapped DMA,
+read. Crop/field modes, alternate-stream `4000` starts, overlapping/unmapped DMA,
 invalid geometry and frames larger than a ring bank refuse. Other coefficient
 or program uploads do not authorize an encoding mode.
 

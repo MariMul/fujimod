@@ -252,7 +252,6 @@ impl VideoEncoder {
                 self.set(0x4a4, self.r(0x4a4) & !32);
                 Ok(())
             }
-            0x4000 if self.r(0x400) == 0 && self.r(0xc24) == 0 => self.notice(cx.now(), 1 << 9),
             0x8000 => self.encode(cx),
             0x2000 => {
                 if self.state.pending.is_some() {

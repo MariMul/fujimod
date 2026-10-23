@@ -34,12 +34,10 @@ fn parameter_domains_and_raw_video_refusals() {
     assert_eq!(d.next_deadline(0), None);
     assert!(h.effects.is_empty());
     write(&mut d, &mut h, 0xfff60400, 0);
-    write(&mut d, &mut h, 0xfff60c00, 0x4000);
-    advance(&mut d, &mut h, 1);
-    assert!(h.irqs.is_empty());
-    advance(&mut d, &mut h, 2);
-    assert_eq!(read(&mut d, &mut h, 0xfff60c24), 512);
+    // Alternate-stream starts have no compression implementation.
     let mut cx = h.cx();
     d.write(&mut cx, 0xfff60c00, 4, 0x4000);
-    assert!(cx.refusal().is_some());
+    assert!(cx.refusal().unwrap().contains("unsupported command"));
+    assert_eq!(d.next_deadline(0), None);
+    assert!(h.effects.is_empty());
 }
