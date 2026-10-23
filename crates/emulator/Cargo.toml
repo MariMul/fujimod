@@ -17,6 +17,8 @@ path = "src/bin/fujimod-emulator.rs"
 [[bin]]
 name = "fujimod-emulator-worker"
 path = "src/bin/fujimod-emulator-worker.rs"
+# No unit tests; `cargo test` need not compile the worker.
+test = false
 
 [features]
 host-profile = ["dep:libc"]
