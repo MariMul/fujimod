@@ -59,7 +59,8 @@ fn main() {
             ("Firmware", "first-start.generated.json") => "FirstStart",
             ("Firmware", "bulk.generated.json") => "Bulk",
             ("Firmware", "settings.generated.json") => "Settings",
-            ("Firmware", "progress.generated.json") => "Progress",
+            // Bring-up progress is website data, not an emulator input.
+            ("Firmware", "progress.generated.json") => continue,
             ("Body", "body.json") | ("Firmware", "firmware.json") => kind,
             ("Body" | "Firmware", _) => panic!("unknown catalog document {}", path.display()),
             _ => kind,
