@@ -211,8 +211,10 @@
       "basis": "Explicit synthetic focus knots in the alternate configuration banks selected by stock offset mapper 0x694928: logical 0x1b800 maps by +0xab00 or +0xea00. Same positive decreasing inputs as the unmapped bank; no measured lens calibration."
     }
   ],
+  "profile": null,
   "settings": {
     "debug": {
+      "store": "bank",
       "offset": 247,
       "values": {
         "off": [
