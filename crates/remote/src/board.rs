@@ -1,8 +1,6 @@
 //! In-process board transport. Execution yields between bounded, watched windows.
 use crate::{backend::Backend, connection::Connection, *};
-use fujimod_emulator::session::{
-    Session, checkpoint::Snapshot as Checkpoint, contact_driver::Actuator,
-};
+use fujimod_emulator::session::{Session, checkpoint::Snapshot as Checkpoint};
 
 /// Access is scoped to stopped-board calls, so language owners can retain a board.
 pub trait SessionOwner {
@@ -77,18 +75,6 @@ impl<S: SessionOwner> Connection<BoardBackend<S>> {
         }
         Ok(())
     }
-}
-/// The driver actuator a control's press drives: its own contact, or the
-/// press member of a dial or ring whose motion has separate contacts.
-fn actuator<'a>(actuators: &'a [Actuator], id: &str) -> Result<&'a Actuator> {
-    actuators
-        .iter()
-        .find(|a| a.id == id)
-        .or_else(|| {
-            let member = format!("{id}.press");
-            actuators.iter().find(|a| a.id == member)
-        })
-        .ok_or_else(|| format!("No physical actuator for {id}"))
 }
 fn tracked<T>(
     session: &Session,
@@ -171,7 +157,12 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
                     if driver.busy() {
                         return Err("Board contact queue is busy".into());
                     }
-                    let actuator = actuator(&driver.spec.actuators, id)?;
+                    let actuator = driver
+                        .spec
+                        .actuators
+                        .iter()
+                        .find(|a| a.id == id)
+                        .ok_or_else(|| format!("No physical actuator for {id}"))?;
                     let pose = match &input.state {
                         InputState::Position(position) => {
                             actuator.states.iter().find(|p| &p.position == position)
@@ -185,8 +176,8 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
                             .get(usize::from(input.state == InputState::Pressed)),
                     }
                     .ok_or("Physical input pose is absent")?;
-                    let (actuator, position) = (actuator.id.clone(), pose.position.clone());
-                    s.set_position(&actuator, &position)
+                    let position = pose.position.clone();
+                    s.set_position(id, &position)
                 }
             })
         })
@@ -217,7 +208,12 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
                     .ok_or("Physical acknowledgment driver is absent")?;
                 let id = input.control.id();
                 // input() resolved aliases; the live panel position identifies the pose.
-                let actuator = actuator(&driver.spec.actuators, id)?;
+                let actuator = driver
+                    .spec
+                    .actuators
+                    .iter()
+                    .find(|a| a.id == id)
+                    .ok_or_else(|| format!("No checked actuator for {id}"))?;
                 let pose = match &input.state {
                     InputState::Position(position) => {
                         actuator.states.iter().find(|p| &p.position == position)
