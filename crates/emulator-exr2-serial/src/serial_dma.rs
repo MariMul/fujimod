@@ -4,7 +4,8 @@
 use fujimod_emulator_devices::bus::InterruptLine;
 use fujimod_emulator_devices::dma::Direction;
 use crate::{dma::{peripheral, routing}, spi::byte_fifo};
-use fujimod_emulator_devices::parts::{serial::{InputLevel, Wire}, x_mount_link};
+use fujimod_emulator_parts_io::serial::{InputLevel, Wire};
+use fujimod_emulator_parts_lens::x_mount_link;
 use fujimod_emulator_devices::{Cx, Device, graph::Mapping};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

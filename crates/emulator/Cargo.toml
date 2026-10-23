@@ -11,6 +11,9 @@ name = "fujimod_emulator"
 crate-type = ["rlib"]
 
 [dependencies]
+fujimod-emulator-parts-io = { path = "../../crates/emulator-parts-io" }
+fujimod-emulator-parts-controls = { path = "../../crates/emulator-parts-controls" }
+fujimod-emulator-parts-storage = { path = "../../crates/emulator-parts-storage" }
 fujimod-emulator-storage = { path = "../../crates/emulator-storage" }
 fujimod-emulator-ip = { path = "../../crates/emulator-ip" }
 fujimod-emulator-ip-dmp = { path = "../../crates/emulator-ip-dmp" }

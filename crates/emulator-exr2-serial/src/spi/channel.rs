@@ -3,7 +3,8 @@
 //! A channel owns its endpoint. Only polled configurations are supported;
 //! IRQ/DMA configurations refuse. The shared controller owns route channel
 //! instances and enforces exclusive use of the physical shifter and RX FIFO.
-use fujimod_emulator_devices::parts::{pins::{Pins, Selection}, spi::{Endpoint, Shift}};
+use fujimod_emulator_devices::parts::pins::{Pins, Selection};
+use fujimod_emulator_parts_io::spi::{Endpoint, Shift};
 use fujimod_emulator_devices::{Cx, Device};
 use serde::Deserialize;
 use std::collections::VecDeque;

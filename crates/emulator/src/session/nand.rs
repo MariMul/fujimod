@@ -1,7 +1,7 @@
 //! Persistent NAND is external to the powered controller and its pending work.
 use super::Session;
 use fujimod_emulator_exr2_storage::nand::NandController;
-use fujimod_emulator_devices::parts::nand::Nand;
+use fujimod_emulator_parts_storage::nand::Nand;
 impl Session {
     pub fn nand_state(&self, name: &str) -> Result<serde_json::Value, String> {
         self.board

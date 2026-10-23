@@ -90,7 +90,7 @@ impl Projection {
             readouts: Mutex::new(Vec::new()),
         })
     }
-    pub(crate) fn spec(&self) -> &Spec {
+    pub fn spec(&self) -> &Spec {
         &self.spec
     }
     pub fn focus(&self) -> Result<f64, String> {
@@ -287,7 +287,7 @@ impl Projection {
     }
     /// Project only the source coordinates consumed by this declared readout.
     /// The immutable projection law also serves other samples and inspection.
-    pub(crate) fn prepare_readout(
+    pub fn prepare_readout(
         &self,
         frame: &mut ExposedFrame,
         shift: f64,

@@ -68,7 +68,7 @@ struct Graph {
     watch_pcs: Vec<u64>,
     card: Option<Card>,
     scene_input: Option<Scene>,
-    controls: Option<fujimod_emulator_devices::parts::switch_panel::Spec>,
+    controls: Option<fujimod_emulator_parts_controls::switch_panel::Spec>,
     contact_driver: Option<fujimod_emulator::session::contact_driver::Spec>,
     preview: Option<Preview>,
 }
@@ -174,7 +174,7 @@ struct BrowserFields {
     boot_inputs: Vec<super::lifecycle::BootInput>,
     card: Option<Card>,
     scene_input: Option<Scene>,
-    controls: Option<fujimod_emulator_devices::parts::switch_panel::Spec>,
+    controls: Option<fujimod_emulator_parts_controls::switch_panel::Spec>,
     contact_driver: Option<fujimod_emulator::session::contact_driver::Spec>,
     preview: Option<Preview>,
 }
@@ -207,7 +207,7 @@ struct Attachments {
     card: Option<Card>,
     scene: Option<Scene>,
     preview: Option<Preview>,
-    controls: Option<fujimod_emulator_devices::parts::switch_panel::Spec>,
+    controls: Option<fujimod_emulator_parts_controls::switch_panel::Spec>,
     contact_driver: Option<fujimod_emulator::session::contact_driver::Spec>,
     storage: fujimod_emulator::session::durable::Spec,
     identity: [u8; 32],

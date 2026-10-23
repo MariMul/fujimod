@@ -1,6 +1,6 @@
 //! Host preparation bindings. Media algorithms and the session stay in Rust.
 use super::{CardMedium, NandMedium, error, json};
-use fujimod_emulator_devices::parts::sd_card;
+use fujimod_emulator_parts_storage::sd_card;
 use fujimod_emulator_storage::{fat, inputs::PreparePersistentInputs};
 use pyo3::{
     prelude::*,
@@ -110,7 +110,7 @@ impl NandMedium {
     ) -> PyResult<Self> {
         let overlays = overlays
             .into_iter()
-            .map(|(offset, bytes)| fujimod_emulator_devices::parts::nand::Overlay {
+            .map(|(offset, bytes)| fujimod_emulator_parts_storage::nand::Overlay {
                 offset,
                 bytes: bytes.into(),
             })

@@ -18,6 +18,7 @@ path = "src/bin/fujimod-emulator-worker.rs"
 test = false
 
 [dependencies]
+fujimod-emulator-parts-controls = { path = "../../crates/emulator-parts-controls" }
 fujimod-emulator-ip-arm = { path = "../../crates/emulator-ip-arm" }
 fujimod-emulator-graphics = { path = "../../crates/emulator-graphics" }
 fujimod-emulator-xp5 = { path = "../../crates/emulator-xp5" }

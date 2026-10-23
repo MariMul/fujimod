@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use fujimod_emulator_devices::parts::resistor_keys::*;
+use fujimod_emulator_parts_controls::resistor_keys::*;
 use crate::gpio::{Pins, SharedPins};
 
 fn options() -> Options {

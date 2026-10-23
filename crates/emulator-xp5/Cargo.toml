@@ -11,6 +11,7 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+fujimod-emulator-parts-io.workspace = true
 fujimod-emulator-ip.workspace = true
 fujimod-emulator-ip-dmp.workspace = true
 fujimod-emulator-ip-arm.workspace = true
@@ -27,3 +28,6 @@ sha2 = { version = "0.10", features = ["asm-aarch64"] }
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
+
+[dev-dependencies]
+fujimod-emulator-parts-controls.workspace = true

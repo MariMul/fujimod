@@ -208,7 +208,7 @@ impl ExposedFrame {
     fn mosaic_gain(&self) -> f64 {
         mosaic_gain(self.exposure, self.aperture_squared)
     }
-    pub(crate) fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
+    pub fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
         let response: Vec<u16> = self.response.iter().flatten().copied().collect();
         Ok(crate::checkpoint::Checkpoint::encode(
             "exposed-frame",
@@ -230,7 +230,7 @@ impl ExposedFrame {
         .with_children(vec![self.frame.checkpoint()?])
         .with_blobs(self.filtered.iter().map(Filtered::materialize).collect()))
     }
-    pub(crate) fn from_checkpoint(saved: &crate::checkpoint::Checkpoint) -> Result<Self, String> {
+    pub fn from_checkpoint(saved: &crate::checkpoint::Checkpoint) -> Result<Self, String> {
         let (
             exposure,
             aperture_squared,

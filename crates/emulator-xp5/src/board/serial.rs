@@ -1,5 +1,5 @@
 //! Checked board wiring for serial controllers and their attached parts.
-use fujimod_emulator_devices::parts::{power_controller::PowerController, serial::Endpoint, serial_calibration::CalibrationRegisters};
+use fujimod_emulator_parts_io::{power_controller::PowerController, serial::Endpoint, serial_calibration::CalibrationRegisters};
 use crate::{gpio::SharedPins, spi::{Attachment, Select, Spi}};
 use serde::Deserialize;
 
@@ -48,11 +48,11 @@ fn attachments(connections: Vec<Connection>) -> Result<Vec<Attachment>, String> 
                 Part::BisConfigurationRegisters {
                     revision,
                     idle_high,
-                } => Box::new(fujimod_emulator_devices::parts::bis_configuration::Registers::new(
+                } => Box::new(fujimod_emulator_parts_io::bis_configuration::Registers::new(
                     revision, idle_high,
                 )?),
                 Part::Lsm6dsConfigurationRegisters => {
-                    Box::new(fujimod_emulator_devices::parts::lsm6ds::Registers::default())
+                    Box::new(fujimod_emulator_parts_io::lsm6ds::Registers::default())
                 }
             };
             Ok(Attachment::new(connection.select, endpoint))
@@ -62,7 +62,7 @@ fn attachments(connections: Vec<Connection>) -> Result<Vec<Attachment>, String> 
 pub(super) fn gpio_wire(
     pins: SharedPins,
     connections: Vec<Connection>,
-) -> Result<Box<dyn fujimod_emulator_devices::parts::serial::Wire>, String> {
+) -> Result<Box<dyn fujimod_emulator_parts_io::serial::Wire>, String> {
     Ok(Box::new(crate::spi::GpioWire::new(
         pins,
         attachments(connections)?,

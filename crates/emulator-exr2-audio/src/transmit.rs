@@ -5,7 +5,8 @@
 //! Disabled transmitters have no polling timer. The owning audio register
 //! block and DMA channel share a device, so a guest format write wakes it.
 use super::SerialAudio;
-use fujimod_emulator_devices::{Cx, Device, exr2::isp::{Irq, dma::IrqRoutes}, parts::audio_sink::AudioSink};
+use fujimod_emulator_devices::{Cx, Device, exr2::isp::{Irq, dma::IrqRoutes}};
+use fujimod_emulator_parts_io::audio_sink::AudioSink;
 use fujimod_emulator_exr2_serial::dma::audio::BASE;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -303,7 +304,7 @@ mod tests {
         let mut d = Transmitter::new(
             options,
             [
-                AudioSink::new(fujimod_emulator_devices::parts::audio_sink::Options { connected: true }),
+                AudioSink::new(fujimod_emulator_parts_io::audio_sink::Options { connected: true }),
                 AudioSink::default(),
             ],
             routes,

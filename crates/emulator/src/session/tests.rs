@@ -240,7 +240,7 @@ fn scene_rgb_prepares_only_the_next_sensor_exposure() {
 
 #[test]
 fn physical_controls_validate_every_target_and_change_only_external_electrical_inputs() {
-    use fujimod_emulator_devices::parts::switch_panel::{Case, Circuit, Control, Signal, Spec};
+    use fujimod_emulator_parts_controls::switch_panel::{Case, Circuit, Control, Signal, Spec};
     let mut session = card_session();
     let signals = |node: &str, value| {
         vec![Signal::Analog {

@@ -1,7 +1,8 @@
 //! EXR II SD0 at FFF50000. SDHC default speed is modeled; MMC, erase, tuning,
 //! and UHS refuse. Latencies and card identity are declared inputs.
 //! SDMA writes bytes before status and IRQ; boundaries require W1C/resume.
-use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine, parts::sd_card::Card};
+use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine};
+use fujimod_emulator_parts_storage::sd_card::Card;
 use fujimod_emulator_ip::sdhci::Clocks;
 use serde::{Deserialize, Serialize};
 use std::sync::{
@@ -1225,7 +1226,8 @@ impl Device for SdHost {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_devices::{parts::sd_card, test_host::ram::{Effect, Ram}};
+    use fujimod_emulator_parts_storage::sd_card;
+    use fujimod_emulator_devices::test_host::ram::{Effect, Ram};
     fn host(protocol: Protocol) -> SdHost {
         SdHost::new(
             Options {

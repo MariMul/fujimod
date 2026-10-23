@@ -4,7 +4,7 @@
 //! and frame duration are explicit model laws.
 //! The attached wire supplies received bits. No lens protocol is built in.
 use fujimod_emulator_devices::dma::{Direction, Port, Request, SharedPort};
-use fujimod_emulator_devices::parts::serial::{Frame, Wire};
+use fujimod_emulator_parts_io::serial::{Frame, Wire};
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

@@ -1,9 +1,9 @@
 //! Explicit peer wires and external scene/media inputs, never CPU state.
 use fujimod_emulator_devices::exr2::{clock, gpio, irq, isp, pulse};
-use fujimod_emulator_devices::{
-    parts::{hdmi_sink::HdmiSink, lens::bridge, sd_card::Card},
-    scene::{ImageFrames, SensorFramesHandle, StatisticsFrames},
-};
+use fujimod_emulator_parts_io::hdmi_sink::HdmiSink;
+use fujimod_emulator_parts_lens::lens::bridge;
+use fujimod_emulator_parts_storage::sd_card::Card;
+use fujimod_emulator_devices::scene::{ImageFrames, SensorFramesHandle, StatisticsFrames};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::{Arc, Mutex},
@@ -17,7 +17,7 @@ pub struct Inputs {
     pub statistics: BTreeMap<String, StatisticsFrames>,
     pub sensors: BTreeMap<String, SensorFramesHandle>,
     pub cards: BTreeMap<String, Card>,
-    pub nands: BTreeMap<String, fujimod_emulator_devices::parts::nand::Nand>,
+    pub nands: BTreeMap<String, fujimod_emulator_parts_storage::nand::Nand>,
     pub files: BTreeMap<String, Vec<(String, Vec<u8>)>>,
 }
 
@@ -133,7 +133,7 @@ pub struct Resources {
     pub image_users: BTreeMap<String, BTreeSet<usize>>,
     pub gpio: BTreeMap<String, gpio::Pads>,
     pub pulses: BTreeMap<String, pulse::PulsePins>,
-    pub encoders: BTreeMap<String, fujimod_emulator_devices::parts::encoder::EncoderInput>,
+    pub encoders: BTreeMap<String, fujimod_emulator_parts_controls::encoder::EncoderInput>,
     pub hdmi_sinks: BTreeMap<String, HdmiSink>,
     pub controllers: BTreeMap<String, irq::Inputs>,
     pub clocks: BTreeMap<String, clock::Output>,
@@ -219,7 +219,7 @@ impl Resources {
     pub fn encoder(
         &self,
         name: &str,
-    ) -> Result<fujimod_emulator_devices::parts::encoder::EncoderInput, String> {
+    ) -> Result<fujimod_emulator_parts_controls::encoder::EncoderInput, String> {
         self.encoders
             .get(name)
             .cloned()

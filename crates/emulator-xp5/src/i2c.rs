@@ -1,7 +1,7 @@
 //! I2C1 battery/power clients. Address36 is the gauge;66/68 retain
 //! power-control writes.
 //! Other addresses NACK. No device identity or unsolicited ID is invented.
-use fujimod_emulator_devices::parts::power_controller::FuelGauge;
+use fujimod_emulator_parts_io::power_controller::FuelGauge;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

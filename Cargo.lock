@@ -3461,6 +3461,9 @@ dependencies = [
  "fujimod-emulator-ip",
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-ip-dmp",
+ "fujimod-emulator-parts-controls",
+ "fujimod-emulator-parts-io",
+ "fujimod-emulator-parts-storage",
  "fujimod-emulator-storage",
  "fujimod-emulator-xp4",
  "fujimod-emulator-xp5",
@@ -3485,6 +3488,7 @@ dependencies = [
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-graphics",
  "fujimod-emulator-ip-arm",
+ "fujimod-emulator-parts-controls",
  "fujimod-emulator-xp5",
  "fujimod-workspace-hack",
  "serde",
@@ -3556,6 +3560,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-serial",
+ "fujimod-emulator-parts-io",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -3580,6 +3585,11 @@ dependencies = [
  "fujimod-emulator-exr2-storage",
  "fujimod-emulator-exr2-system",
  "fujimod-emulator-ip",
+ "fujimod-emulator-parts-controls",
+ "fujimod-emulator-parts-io",
+ "fujimod-emulator-parts-lens",
+ "fujimod-emulator-parts-sensor",
+ "fujimod-emulator-parts-storage",
  "fujimod-emulator-storage",
  "fujimod-workspace-hack",
  "serde",
@@ -3636,6 +3646,8 @@ name = "fujimod-emulator-exr2-i2c"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-parts-controls",
+ "fujimod-emulator-parts-lens",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -3646,6 +3658,7 @@ name = "fujimod-emulator-exr2-io"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-parts-io",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -3658,6 +3671,7 @@ dependencies = [
  "fujimod-catalog",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-codecs",
+ "fujimod-emulator-parts-sensor",
  "fujimod-workspace-hack",
  "openh264",
  "serde",
@@ -3680,6 +3694,11 @@ dependencies = [
  "fujimod-emulator-exr2-serial",
  "fujimod-emulator-exr2-storage",
  "fujimod-emulator-exr2-system",
+ "fujimod-emulator-parts-controls",
+ "fujimod-emulator-parts-io",
+ "fujimod-emulator-parts-lens",
+ "fujimod-emulator-parts-sensor",
+ "fujimod-emulator-parts-storage",
  "fujimod-emulator-storage",
  "fujimod-workspace-hack",
  "serde",
@@ -3691,6 +3710,8 @@ name = "fujimod-emulator-exr2-serial"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-parts-io",
+ "fujimod-emulator-parts-lens",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -3702,6 +3723,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-ip",
+ "fujimod-emulator-parts-storage",
  "fujimod-emulator-storage",
  "fujimod-workspace-hack",
  "serde",
@@ -3734,6 +3756,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-ip-arm",
+ "fujimod-emulator-parts-io",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -3744,6 +3767,7 @@ name = "fujimod-emulator-ip-arm"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-parts-io",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -3772,9 +3796,65 @@ dependencies = [
  "fujimod-emulator-exr2-plan",
  "fujimod-emulator-graphics",
  "fujimod-emulator-ip-arm",
+ "fujimod-emulator-parts-controls",
  "fujimod-emulator-storage",
  "fujimod-emulator-xp5",
  "fujimod-firmware",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "fujimod-emulator-parts-controls"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-parts-io"
+version = "0.1.0"
+dependencies = [
+ "ciborium",
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-parts-lens"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-parts-io",
+ "fujimod-workspace-hack",
+ "libm",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-parts-sensor"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "libm",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-parts-storage"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -3787,6 +3867,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-catalog",
  "fujimod-emulator-devices",
+ "fujimod-emulator-parts-storage",
  "fujimod-settings",
  "fujimod-workspace-hack",
  "serde",
@@ -3815,6 +3896,8 @@ dependencies = [
  "fujimod-emulator-ip",
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-ip-dmp",
+ "fujimod-emulator-parts-controls",
+ "fujimod-emulator-parts-io",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -3870,6 +3953,9 @@ dependencies = [
  "fujimod-emulator-exr2-io",
  "fujimod-emulator-exr2-plan",
  "fujimod-emulator-graphics",
+ "fujimod-emulator-parts-controls",
+ "fujimod-emulator-parts-lens",
+ "fujimod-emulator-parts-storage",
  "fujimod-emulator-storage",
  "fujimod-firmware",
  "fujimod-recording",

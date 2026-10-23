@@ -291,7 +291,7 @@ fn fingerprint_observes_cable_admission_and_bridge_without_settling_work() {
         .unwrap()
     };
     let cable = fujimod_emulator_devices::signals::Level::new(false);
-    let bridge = fujimod_emulator_devices::parts::lens::bridge::Registers::default();
+    let bridge = fujimod_emulator_parts_lens::lens::bridge::Registers::default();
     let wiring = || Wiring {
         controllers: controllers.clone(),
         cable: Some(cable.clone()),
@@ -318,7 +318,7 @@ fn fingerprint_observes_cable_admission_and_bridge_without_settling_work() {
 
 #[test]
 fn touch_reports_use_wire_reads_irq_masks_and_exact_deadlines_and_restore_in_flight() {
-    use fujimod_emulator_devices::parts::touch_controller::{ContactInput, Phase};
+    use fujimod_emulator_parts_controls::touch_controller::{ContactInput, Phase};
     let mut host = Services::default();
     let (mut units, controllers) = controllers(&mut host, 101);
     let options=serde_json::from_value(json!({"base":0xfff85000u32,"irq":101,"modes":[1,9],"transfer_ticks":4,

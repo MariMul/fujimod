@@ -5,7 +5,7 @@
 //! model does not create samples, transfer deadlines, or completion IRQs.
 pub mod receive;
 pub mod transmit;
-use fujimod_emulator_devices::parts::audio_sink::AudioSink;
+use fujimod_emulator_parts_io::audio_sink::AudioSink;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -331,7 +331,7 @@ mod tests {
         let mut model = SerialAudio::new(
             Options::default(),
             [
-                AudioSink::new(fujimod_emulator_devices::parts::audio_sink::Options { connected: true }),
+                AudioSink::new(fujimod_emulator_parts_io::audio_sink::Options { connected: true }),
                 AudioSink::default(),
             ],
         );
@@ -355,7 +355,7 @@ mod tests {
         let mut model = SerialAudio::new(
             Options::default(),
             [
-                AudioSink::new(fujimod_emulator_devices::parts::audio_sink::Options { connected: true }),
+                AudioSink::new(fujimod_emulator_parts_io::audio_sink::Options { connected: true }),
                 AudioSink::default(),
             ],
         );
@@ -367,7 +367,7 @@ mod tests {
         let mut restored = SerialAudio::new(
             Options::default(),
             [
-                AudioSink::new(fujimod_emulator_devices::parts::audio_sink::Options { connected: true }),
+                AudioSink::new(fujimod_emulator_parts_io::audio_sink::Options { connected: true }),
                 AudioSink::default(),
             ],
         );

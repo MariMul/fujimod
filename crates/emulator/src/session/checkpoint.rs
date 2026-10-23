@@ -3,7 +3,7 @@
 use super::Session;
 use crate::board::keyframe::Keyframe;
 use fujimod_emulator_exr2_plan::ResourceSnapshot;
-use fujimod_emulator_devices::parts::switch_panel::SwitchPanel;
+use fujimod_emulator_parts_controls::switch_panel::SwitchPanel;
 mod portable;
 
 pub struct Snapshot {

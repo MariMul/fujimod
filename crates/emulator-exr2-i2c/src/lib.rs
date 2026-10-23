@@ -12,7 +12,8 @@
 //! completion. The frontend declares external replies; no firmware/task state
 //! is an input. Strict and discovery execution policy belongs to the runtime.
 
-use fujimod_emulator_devices::{Unsupported, WordMap, parts::i2c::BusParts};
+use fujimod_emulator_devices::{Unsupported, WordMap};
+use fujimod_emulator_parts_controls::i2c::BusParts;
 use std::collections::BTreeMap;
 mod device;
 mod options;

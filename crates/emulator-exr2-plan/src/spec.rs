@@ -9,7 +9,12 @@ use fujimod_emulator_exr2_gpu::{self as gpu};
 use fujimod_emulator_exr2_i2c::{self as i2c};
 use fujimod_emulator_exr2_codecs::{jpeg, lz};
 use fujimod_emulator_exr2_storage::{nand, sdhc, sdio};
-use fujimod_emulator_devices::{bus::InterruptLine, graph::Mapping, parts::{audio_sink, command_data_output, contact_actuator, encoder, gpio_contact_response, hdmi_sink, lens, sd_card, sensor, spi as spi_parts, stabilizer, usb_endpoint, wifi_module}};
+use fujimod_emulator_devices::{bus::InterruptLine, graph::Mapping};
+use fujimod_emulator_parts_io::{audio_sink, command_data_output, hdmi_sink, spi as spi_parts, usb_endpoint};
+use fujimod_emulator_parts_controls::{contact_actuator, encoder, gpio_contact_response};
+use fujimod_emulator_parts_lens::{lens, stabilizer};
+use fujimod_emulator_parts_storage::{sd_card, wifi_module};
+use fujimod_emulator_parts_sensor::sensor;
 use fujimod_emulator_storage::fat;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -99,7 +104,7 @@ pub struct Sensor {
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum SensorControls {
     Xtrans16 {
-        options: fujimod_emulator_devices::parts::xtrans16::Options,
+        options: fujimod_emulator_parts_sensor::xtrans16::Options,
         calibration: fujimod_emulator_devices::imaging::exposure::Calibration,
         exposure: String,
         aperture: String,
@@ -202,7 +207,7 @@ pub enum Model {
     },
     SerialAudioTransmitter {
         options: audio::transmit::Options,
-        sinks: [fujimod_emulator_devices::parts::audio_sink::Options; 2],
+        sinks: [fujimod_emulator_parts_io::audio_sink::Options; 2],
         routes: String,
     },
     SerialDmaLink {
@@ -211,7 +216,7 @@ pub enum Model {
     },
     XMountLens {
         transport: fujimod_emulator_exr2_serial::serial_dma::Options,
-        configuration: fujimod_emulator_devices::parts::x_mount_link::Configuration,
+        configuration: fujimod_emulator_parts_lens::x_mount_link::Configuration,
         startup_ticks: u64,
         pins: fujimod_emulator_exr2_serial::x_mount_connector::Options,
         gpio: String,

@@ -109,7 +109,8 @@ impl Device for Adc {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_devices::{parts::{pins::{DriveInput, Pin}, resistor_keys::{InitialLevel, KeySamples, Layout, Options, ResistorKeys}}, test_host::recording::RecordingHost};
+    use fujimod_emulator_devices::{parts::pins::{DriveInput, Pin}, test_host::recording::RecordingHost};
+    use fujimod_emulator_parts_controls::resistor_keys::{InitialLevel, KeySamples, Layout, Options, ResistorKeys};
     use crate::gpio::Pins;
     #[test]
     fn adc_reads_declared_external_levels_without_firmware_ram() {

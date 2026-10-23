@@ -1,7 +1,8 @@
 //! NAND at FFF52000. Register-selected PIO/DMA and completion IRQ80 only.
 //! Data/OOB placement, clean ECC and virtual latency are declared inputs;
 //! opaque update bytes never select commands or authorize completion.
-use fujimod_emulator_devices::{Cx, Device, parts::nand::Nand};
+use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_parts_storage::nand::Nand;
 use serde::{Deserialize, Serialize};
 
 const BASE: u64 = 0xfff52000;

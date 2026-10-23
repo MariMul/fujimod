@@ -7,7 +7,8 @@ use fujimod_emulator::board::{
     factory,
 };
 use fujimod_emulator_cpu::{Model, Register, arm, timeline::Ratio};
-use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, graphics::scanout::Frame, parts::{controls::Source, pins::DriveInput, resistor_keys::{Key, Options as ResistorKeysOptions, ResistorKeys}}};
+use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, graphics::scanout::Frame, parts::{controls::Source, pins::DriveInput}};
+use fujimod_emulator_parts_controls::resistor_keys::{Key, Options as ResistorKeysOptions, ResistorKeys};
 use fujimod_emulator_graphics::raster::PixelOrder;
 use fujimod_emulator_xp5::{board, display, gpio, panel_clock};
 use serde::Deserialize;

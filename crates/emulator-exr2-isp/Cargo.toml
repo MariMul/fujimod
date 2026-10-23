@@ -14,6 +14,7 @@ doctest = false
 videotoolbox-tests = []
 
 [dependencies]
+fujimod-emulator-parts-sensor.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-catalog.workspace = true
 serde = { workspace = true, features = ["derive", "rc"] }

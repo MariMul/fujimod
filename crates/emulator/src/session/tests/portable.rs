@@ -1,10 +1,8 @@
 use super::*;
 use crate::session::contact_driver::{Actuator, Check, Pose, Spec as DriverSpec};
 use fujimod_emulator_cpu::{Register, arm};
-use fujimod_emulator_devices::{
-    parts::switch_panel::{Case, Circuit, Control, Signal, Spec},
-    scene::{Frame, FramePixels, SensorFrames},
-};
+use fujimod_emulator_parts_controls::switch_panel::{Case, Circuit, Control, Signal, Spec};
+use fujimod_emulator_devices::scene::{Frame, FramePixels, SensorFrames};
 use std::sync::{Arc, Mutex};
 
 fn session() -> Session {

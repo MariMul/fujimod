@@ -1,6 +1,6 @@
 use super::*;
 use fujimod_emulator_ip_arm::pl022::{Clock, Controller};
-use fujimod_emulator_devices::parts::serial::Unconnected;
+use fujimod_emulator_parts_io::serial::Unconnected;
 use fujimod_emulator_devices::test_host::recording::RecordingHost;
 
 const BASE: u64 = 0x100000;

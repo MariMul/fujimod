@@ -1,6 +1,6 @@
 use super::*;
 use fujimod_emulator_devices::test_host::{TestHost, read, write};
-use fujimod_emulator_devices::parts::serial::{Frame, Wire};
+use fujimod_emulator_parts_io::serial::{Frame, Wire};
 fn pad(port: u8, pin: u8, mux: u32) -> Pad {
     Pad {
         pin: Pin { port, pin },

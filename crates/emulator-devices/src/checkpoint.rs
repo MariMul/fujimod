@@ -308,37 +308,4 @@ mod tests {
         advance(&mut clock, &mut host, 5);
         assert!(output.ready());
     }
-    #[test]
-    fn checkpoint_nand_shares_immutable_image_and_restores_programmed_pages() {
-        use crate::parts::nand::{Nand, Options};
-        let base: Arc<[u8]> = vec![255; 65536].into();
-        let mut medium = Nand::new(
-            Options {
-                bytes: 65536,
-                page_bytes: 512,
-                pages_per_block: 32,
-                spare_bytes: 16,
-            },
-            base.clone(),
-            vec![],
-            Default::default(),
-        )
-        .unwrap();
-        medium
-            .program(3, &vec![0x55; 512], &vec![0x33; 16])
-            .unwrap();
-        let state = medium.fingerprint();
-        let saved = medium.checkpoint().unwrap();
-        let envelope = Checkpoint::encode("medium-keyframe", &saved).unwrap();
-        let decoded: Checkpoint = envelope.decode("medium-keyframe").unwrap();
-        assert_eq!(
-            Nand::from_checkpoint(&decoded).unwrap().fingerprint(),
-            state
-        );
-        assert!(Arc::ptr_eq(&base, &saved.blobs()[0]));
-        medium.erase(0).unwrap();
-        medium = Nand::from_checkpoint(&saved).unwrap();
-        assert_eq!(medium.fingerprint(), state);
-        assert!(Arc::ptr_eq(&base, &medium.checkpoint().unwrap().blobs()[0]));
-    }
 }

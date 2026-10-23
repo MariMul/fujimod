@@ -18,7 +18,8 @@ use fujimod_catalog::{
     soc::{ApplicationHardware, InterruptControllerHardware},
 };
 use fujimod_emulator_cpu::{Register, arm64};
-use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, parts::{controls::{Controls, Source}, pins::DriveInput, resistor_keys::{Options as ResistorKeysOptions, ResistorKeys}}};
+use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, parts::{controls::{Controls, Source}, pins::DriveInput}};
+use fujimod_emulator_parts_controls::resistor_keys::{Options as ResistorKeysOptions, ResistorKeys};
 use fujimod_emulator_ip_arm::{generic_timer, gicv3::Gic};
 use fujimod_emulator_xp5::board as xp5_board;
 use serde_json::Value;

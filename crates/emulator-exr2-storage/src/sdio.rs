@@ -1,6 +1,7 @@
 //! EXR II SDIO host1, FFF51000. Owns a one-function part; no memory outside
 //! the programmed SDMA extent is inspected. Timing is declared.
-use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine, parts::wifi_module::{Operation, Protocol, WifiModule}};
+use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine};
+use fujimod_emulator_parts_storage::wifi_module::{Operation, Protocol, WifiModule};
 use fujimod_emulator_ip::sdhci::Clocks;
 use crate::sdhc::Registers;
 use serde::{Deserialize, Serialize};
@@ -474,7 +475,8 @@ impl Device for SdioHost {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_devices::{parts::wifi_module, test_host::ram::{Effect, Ram}};
+    use fujimod_emulator_parts_storage::wifi_module;
+    use fujimod_emulator_devices::test_host::ram::{Effect, Ram};
     fn model(protocol: Protocol) -> SdioHost {
         SdioHost::new(
             Options {

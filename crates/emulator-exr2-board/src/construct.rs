@@ -9,7 +9,12 @@ use fujimod_emulator_exr2_gpu::{self as gpu};
 use fujimod_emulator_exr2_i2c::{self as i2c};
 use fujimod_emulator_exr2_codecs::{jpeg, lz};
 use fujimod_emulator_exr2_storage::{nand, sdhc, sdio};
-use fujimod_emulator_devices::{Device, bus::InterruptLine, graph::Mapping, parts::{audio_sink::AudioSink, encoder::Encoder, gpio_contact_response::GpioContactResponse, lens::{LensUnit, bridge::Bridge}, sd_card, sensor::Sensor, stabilizer::Stabilizer, usb_endpoint, wifi_module::WifiModule}};
+use fujimod_emulator_devices::{Device, bus::InterruptLine, graph::Mapping};
+use fujimod_emulator_parts_io::{audio_sink::AudioSink, usb_endpoint};
+use fujimod_emulator_parts_controls::{encoder::Encoder, gpio_contact_response::GpioContactResponse};
+use fujimod_emulator_parts_lens::{lens::{LensUnit, bridge::Bridge}, stabilizer::Stabilizer};
+use fujimod_emulator_parts_storage::{sd_card, wifi_module::WifiModule};
+use fujimod_emulator_parts_sensor::sensor::Sensor;
 use fujimod_emulator_storage::fat;
 use fujimod_emulator_exr2_plan::{
     AdapterFactory, BuiltBoard, Card, CoreInterrupts, Model, Resources, SerialEndpoint, Wire,
@@ -112,8 +117,8 @@ impl Builder<'_> {
         endpoint: SerialEndpoint,
         resources: &mut Resources,
         id: usize,
-    ) -> Result<Box<dyn fujimod_emulator_devices::parts::spi::Endpoint>, String> {
-        use fujimod_emulator_devices::parts::spi::{FixedInput, Panel, RegisterFile};
+    ) -> Result<Box<dyn fujimod_emulator_parts_io::spi::Endpoint>, String> {
+        use fujimod_emulator_parts_io::spi::{FixedInput, Panel, RegisterFile};
         Ok(match endpoint {
             SerialEndpoint::LensUnit {
                 options,
@@ -126,7 +131,7 @@ impl Builder<'_> {
             } => {
                 let mut lens = LensUnit::new(
                     *options,
-                    fujimod_emulator_devices::parts::lens::Wiring {
+                    fujimod_emulator_parts_lens::lens::Wiring {
                         pulses: resources.pulses(&pulses)?,
                         gpio: Box::new(resources.pads(&gpio)?),
                         completion: [line(completion[0])?, line(completion[1])?],
@@ -154,7 +159,7 @@ impl Builder<'_> {
             SerialEndpoint::Registers { options } => Box::new(RegisterFile::new(options)?),
             SerialEndpoint::Panel { options } => Box::new(Panel::new(options)),
             SerialEndpoint::CommandDataOutput { options } => Box::new(
-                fujimod_emulator_devices::parts::command_data_output::CommandDataOutput::new(
+                fujimod_emulator_parts_io::command_data_output::CommandDataOutput::new(
                     options,
                 )?,
             ),
@@ -191,9 +196,9 @@ impl Builder<'_> {
                         "contact actuator requires GPIO input pads and no register aperture".into(),
                     );
                 }
-                Box::new(fujimod_emulator_devices::parts::contact_actuator::ContactActuator::new(
+                Box::new(fujimod_emulator_parts_controls::contact_actuator::ContactActuator::new(
                     options,
-                    fujimod_emulator_devices::parts::contact_actuator::Wiring {
+                    fujimod_emulator_parts_controls::contact_actuator::Wiring {
                         pins: Box::new(resources.pads(&gpio)?),
                     },
                 )?)
@@ -658,7 +663,7 @@ impl Builder<'_> {
             }
             Model::GpioContactResponse { options, gpio } => Box::new(GpioContactResponse::new(
                 options,
-                fujimod_emulator_devices::parts::gpio_contact_response::Wiring {
+                fujimod_emulator_parts_controls::gpio_contact_response::Wiring {
                     pins: Box::new(resources.pads(&gpio)?),
                 },
             )?),
@@ -669,7 +674,7 @@ impl Builder<'_> {
             } => {
                 let encoder = Encoder::new(
                     options,
-                    fujimod_emulator_devices::parts::encoder::Wiring {
+                    fujimod_emulator_parts_controls::encoder::Wiring {
                         gpio: Box::new(resources.pads(&gpio)?),
                         counter: counter.map(|n| resources.pulses(&n)).transpose()?,
                     },
@@ -685,7 +690,7 @@ impl Builder<'_> {
                 clock_irq,
             } => Box::new(Bridge::new(
                 options,
-                fujimod_emulator_devices::parts::lens::bridge::Wiring {
+                fujimod_emulator_parts_lens::lens::bridge::Wiring {
                     registers: wire!(resources, id, registers, BridgeRegisters),
                     pulses: resources.pulses(&pulses)?,
                     gpio: resources.pads(&gpio)?,
@@ -714,7 +719,7 @@ impl Builder<'_> {
             )?),
             Model::Formatter { options } => Box::new(formatter::Formatter::new(options)?),
             Model::HdmiSink { options } => {
-                let input = fujimod_emulator_devices::parts::hdmi_sink::Input::new(options)?;
+                let input = fujimod_emulator_parts_io::hdmi_sink::Input::new(options)?;
                 resources.hdmi_sinks.insert(name.to_owned(), input.sink());
                 Box::new(input)
             }
@@ -856,7 +861,7 @@ impl Builder<'_> {
                         {
                             let exposure = wire!(resources, id, exposure, Exposure);
                             let aperture = wire!(resources, id, aperture, Aperture);
-                            let mut controls = fujimod_emulator_devices::parts::xtrans16::Sensor::new(
+                            let mut controls = fujimod_emulator_parts_sensor::xtrans16::Sensor::new(
                                 options,
                                 exposure.clone(),
                                 aperture.clone(),

@@ -22,7 +22,7 @@ use std::collections::BTreeMap;
 pub struct Session {
     pub definition: serde_json::Value,
     pub board: Board,
-    pub controls: Option<fujimod_emulator_devices::parts::switch_panel::SwitchPanel>,
+    pub controls: Option<fujimod_emulator_parts_controls::switch_panel::SwitchPanel>,
     pub contact_driver: Option<contact_driver::Driver>,
     pub resources: Resources,
     /// XP5 external controls and GPIO inputs, when this board uses XP5 devices.
@@ -77,7 +77,7 @@ impl Session {
         let sink_id = self.node(sink)?;
         let transmitter_id = self.node(transmitter)?;
         self.board
-            .device_input::<fujimod_emulator_devices::parts::hdmi_sink::Input, _>(
+            .device_input::<fujimod_emulator_parts_io::hdmi_sink::Input, _>(
                 sink_id,
                 |input, _| {
                     input.set_connected(connected);

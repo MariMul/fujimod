@@ -1,7 +1,7 @@
 //! XP5 polled SPI controller. GPIO selection routes wire frames to attached
 //! parts; FIFO readiness follows serial clock edges on the guest timeline.
 use super::gpio::SharedPins;
-use fujimod_emulator_devices::parts::serial::{Endpoint, Frame};
+use fujimod_emulator_parts_io::serial::{Endpoint, Frame};
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -67,7 +67,7 @@ impl GpioWire {
         })
     }
 }
-impl fujimod_emulator_devices::parts::serial::Wire for GpioWire {
+impl fujimod_emulator_parts_io::serial::Wire for GpioWire {
     fn begin(&mut self, frame: Frame) -> Result<u64, String> {
         if self.state.active.is_some() {
             return Err("serial wire already shifting".into());
@@ -461,7 +461,7 @@ impl Device for Spi {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_devices::parts::{power_controller::PowerController, serial_calibration::CalibrationRegisters};
+    use fujimod_emulator_parts_io::{power_controller::PowerController, serial_calibration::CalibrationRegisters};
     use crate::gpio::{Gpio, Pins};
     use fujimod_emulator_devices::test_host::recording::RecordingHost;
     const BASE: u64 = 0xff910000;

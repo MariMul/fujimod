@@ -11,6 +11,7 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+fujimod-emulator-parts-io.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-exr2-serial.workspace = true
 serde_json = "1"

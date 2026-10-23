@@ -1,7 +1,8 @@
 //! Host electrical transitions through the checked device graph.
 use super::Session;
 use fujimod_emulator_exr2_io::adc::controller::Converter;
-use fujimod_emulator_devices::parts::{pins::Pin, switch_panel::{Signal, Spec, SwitchPanel}};
+use fujimod_emulator_devices::parts::pins::Pin;
+use fujimod_emulator_parts_controls::switch_panel::{Signal, Spec, SwitchPanel};
 use std::collections::BTreeMap;
 
 impl Session {
@@ -165,7 +166,7 @@ impl Session {
     pub fn admit_touch(
         &self,
         node: &str,
-        script: &[fujimod_emulator_devices::parts::touch_controller::ContactInput],
+        script: &[fujimod_emulator_parts_controls::touch_controller::ContactInput],
     ) -> Result<(), String> {
         self.board
             .inspect_device::<fujimod_emulator_exr2_i2c::I2cController, _>(
@@ -176,7 +177,7 @@ impl Session {
     pub fn touch(
         &mut self,
         node: &str,
-        script: &[fujimod_emulator_devices::parts::touch_controller::ContactInput],
+        script: &[fujimod_emulator_parts_controls::touch_controller::ContactInput],
     ) -> Result<(), String> {
         let now = self.board.now();
         self.board
@@ -215,12 +216,12 @@ impl Session {
     ) -> Result<
         (
             String,
-            Vec<fujimod_emulator_devices::parts::touch_controller::ContactInput>,
+            Vec<fujimod_emulator_parts_controls::touch_controller::ContactInput>,
         ),
         String,
     > {
         use super::contact_driver::Interface;
-        use fujimod_emulator_devices::parts::touch_controller::{ContactInput, Phase};
+        use fujimod_emulator_parts_controls::touch_controller::{ContactInput, Phase};
         let (node, width, height, offsets) = self
             .contact_driver
             .as_ref()

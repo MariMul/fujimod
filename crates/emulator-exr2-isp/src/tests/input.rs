@@ -216,8 +216,8 @@ fn physical_sensor_latch_and_both_input_sources_share_one_edge() {
     let mut w = input_wiring();
     w.frame_period = Some(Arc::new(Mutex::new(10)));
     w.sensor = Some(
-        fujimod_emulator_devices::parts::sensor::Sensor::new(
-            fujimod_emulator_devices::parts::sensor::Options {
+        fujimod_emulator_parts_sensor::sensor::Sensor::new(
+            fujimod_emulator_parts_sensor::sensor::Options {
                 width: 2,
                 height: 1,
                 image_area: [0, 0, 2, 1],
@@ -266,8 +266,8 @@ fn sensor_frames_after_a_drive_mode_change_raise_no_edge() {
     )));
     let wire = Arc::new(Mutex::new(Exposure::default()));
     let iris = Arc::new(Mutex::new(8.));
-    let mut sensor = fujimod_emulator_devices::parts::sensor::Sensor::new(
-        fujimod_emulator_devices::parts::sensor::Options {
+    let mut sensor = fujimod_emulator_parts_sensor::sensor::Sensor::new(
+        fujimod_emulator_parts_sensor::sensor::Options {
             width: 2,
             height: 1,
             image_area: [0, 0, 2, 1],
@@ -282,8 +282,8 @@ fn sensor_frames_after_a_drive_mode_change_raise_no_edge() {
     sensor
         .attach_controls(
             Box::new(
-                fujimod_emulator_devices::parts::xtrans16::Sensor::new(
-                    fujimod_emulator_devices::parts::xtrans16::Options {
+                fujimod_emulator_parts_sensor::xtrans16::Sensor::new(
+                    fujimod_emulator_parts_sensor::xtrans16::Options {
                         pixel_clock_hz: 33_000_000,
                         shutter: None,
                         rolling_references: vec![],
@@ -344,8 +344,8 @@ fn register_sources_can_explicitly_follow_a_synthetic_sensor_without_input_enabl
     )));
     let mut w = input_wiring();
     w.sensor = Some(
-        fujimod_emulator_devices::parts::sensor::Sensor::new(
-            fujimod_emulator_devices::parts::sensor::Options {
+        fujimod_emulator_parts_sensor::sensor::Sensor::new(
+            fujimod_emulator_parts_sensor::sensor::Options {
                 width: 2,
                 height: 1,
                 image_area: [0, 0, 2, 1],
@@ -434,8 +434,8 @@ fn raw_sensor_freezes_frame_packs12_preserves_padding_and_waits_for_ack() {
     let frames = std::sync::Arc::new(std::sync::Mutex::new(SensorFrames::new(
         Frame::new(2, 1, FramePixels::Raw16(vec![0x123, 0xabc])).unwrap(),
     )));
-    let sensor = fujimod_emulator_devices::parts::sensor::Sensor::new(
-        fujimod_emulator_devices::parts::sensor::Options {
+    let sensor = fujimod_emulator_parts_sensor::sensor::Sensor::new(
+        fujimod_emulator_parts_sensor::sensor::Options {
             width: 2,
             height: 1,
             image_area: [0, 0, 2, 1],
@@ -547,8 +547,8 @@ fn raw_window_input(
     )));
     let mut w = input_wiring();
     w.sensor = Some(
-        fujimod_emulator_devices::parts::sensor::Sensor::new(
-            fujimod_emulator_devices::parts::sensor::Options {
+        fujimod_emulator_parts_sensor::sensor::Sensor::new(
+            fujimod_emulator_parts_sensor::sensor::Options {
                 width: 8,
                 height: 4,
                 image_area: [0, 0, 8, 4],
@@ -1290,8 +1290,8 @@ fn raw_window_crops_sensor_coordinates_and_preserves_aligned_row_padding() {
         let frames = std::sync::Arc::new(std::sync::Mutex::new(SensorFrames::new(
             Frame::new(6, 4, FramePixels::Raw16((0..24).collect())).unwrap(),
         )));
-        let sensor = fujimod_emulator_devices::parts::sensor::Sensor::new(
-            fujimod_emulator_devices::parts::sensor::Options {
+        let sensor = fujimod_emulator_parts_sensor::sensor::Sensor::new(
+            fujimod_emulator_parts_sensor::sensor::Options {
                 width: 6,
                 height: 4,
                 image_area: [0, 0, 6, 4],

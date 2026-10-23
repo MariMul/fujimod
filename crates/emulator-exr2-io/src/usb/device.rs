@@ -1,7 +1,8 @@
 //! Register-level USB core, PHY and optional endpoint engine on one physical
 //! controller. Endpoint ownership is explicit and precedes startup controls.
 use super::UsbStartup;
-use fujimod_emulator_devices::{Action, Cx, Device, Value, parts::usb_endpoint, signals::Level};
+use fujimod_emulator_devices::{Action, Cx, Device, Value, signals::Level};
+use fujimod_emulator_parts_io::usb_endpoint;
 use serde::Deserialize;
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

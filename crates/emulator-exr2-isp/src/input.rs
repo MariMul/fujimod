@@ -14,7 +14,7 @@ use fujimod_emulator_devices::imaging::{
     film::Film,
     raw::{Cfa, Packing, RawView},
 };
-use fujimod_emulator_devices::parts::sensor::Sensor;
+use fujimod_emulator_parts_sensor::sensor::Sensor;
 use fujimod_emulator_devices::scene::FrameEdge;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};

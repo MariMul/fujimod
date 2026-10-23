@@ -1,5 +1,5 @@
 use super::*;
-use fujimod_emulator_devices::parts::serial::Unconnected;
+use fujimod_emulator_parts_io::serial::Unconnected;
 use fujimod_emulator_devices::test_host::recording::RecordingHost;
 const BASE: u64 = 0x100000;
 
@@ -214,7 +214,7 @@ fn explicit_fixed_wire_input_is_sampled_only_after_the_programmed_frame() {
                 ticks_per_second: 1_000_000_000,
             },
             vec![],
-            Box::new(fujimod_emulator_devices::parts::serial::InputLevel(high)),
+            Box::new(fujimod_emulator_parts_io::serial::InputLevel(high)),
         )
         .unwrap();
         let mut h = RecordingHost::default();

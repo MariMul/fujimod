@@ -720,7 +720,7 @@ impl Board {
         self.session_mut()?
             .touch(
                 node,
-                &json::<Vec<fujimod_emulator_devices::parts::touch_controller::ContactInput>>(
+                &json::<Vec<fujimod_emulator_parts_controls::touch_controller::ContactInput>>(
                     script,
                 )?,
             )
@@ -1292,9 +1292,9 @@ impl Board {
 }
 
 #[pyclass(module = "fujimod._native.emulator")]
-pub struct CardMedium(fujimod_emulator_devices::parts::sd_card::Card);
+pub struct CardMedium(fujimod_emulator_parts_storage::sd_card::Card);
 #[pyclass(module = "fujimod._native.emulator")]
-pub struct NandMedium(fujimod_emulator_devices::parts::nand::Nand);
+pub struct NandMedium(fujimod_emulator_parts_storage::nand::Nand);
 
 pub(super) use context::DeviceContext;
 pub(super) use storage::{normalize_card_files, persistent_packet};

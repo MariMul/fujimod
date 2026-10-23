@@ -1,7 +1,7 @@
 //! Declarative external NAND inputs shared by native and browser frontends.
 //! Preparation verifies declared asset windows before constructing a medium.
 use super::inputs::{PreparePersistentInputs, tag_managed_blocks};
-use fujimod_emulator_devices::parts::nand::{Nand, Options, Overlay};
+use fujimod_emulator_parts_storage::nand::{Nand, Options, Overlay};
 use serde::Deserialize;
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -276,7 +276,7 @@ mod tests {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum CardInput {
     Sparse {
-        options: fujimod_emulator_devices::parts::sd_card::Options,
+        options: fujimod_emulator_parts_storage::sd_card::Options,
         sectors: Vec<(u32, String)>,
     },
     Committed {
@@ -287,18 +287,18 @@ impl CardInput {
     pub fn build(
         self,
         loaded: &BTreeMap<String, Vec<u8>>,
-    ) -> Result<fujimod_emulator_devices::parts::sd_card::Card, String> {
+    ) -> Result<fujimod_emulator_parts_storage::sd_card::Card, String> {
         let (options, sectors) = match self {
             Self::Committed { image } => {
                 let bytes = loaded.get(&image).ok_or("Missing committed card asset")?;
-                let card: fujimod_emulator_devices::parts::sd_card::Card =
+                let card: fujimod_emulator_parts_storage::sd_card::Card =
                     serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
                 card.validate()?;
                 return Ok(card);
             }
             Self::Sparse { options, sectors } => (options, sectors),
         };
-        let mut card = fujimod_emulator_devices::parts::sd_card::Card::new(options)?;
+        let mut card = fujimod_emulator_parts_storage::sd_card::Card::new(options)?;
         let mut seen = std::collections::BTreeSet::new();
         for (lba, source) in sectors {
             if !seen.insert(lba) {
@@ -319,7 +319,7 @@ mod card_tests {
     use super::*;
     #[test]
     fn committed_card_input_preserves_revision_and_sparse_allocation_bound() {
-        let mut card = fujimod_emulator_devices::parts::sd_card::Card::new(fujimod_emulator_devices::parts::sd_card::Options {
+        let mut card = fujimod_emulator_parts_storage::sd_card::Card::new(fujimod_emulator_parts_storage::sd_card::Options {
             sectors: 0x800000,
             max_dirty_sectors: 2,
         })

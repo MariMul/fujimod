@@ -2,7 +2,7 @@
 use super::{Channel, Phase, Profile, ReceiveCommand, Registers, RxKind};
 use fujimod_emulator_devices::record::Result;
 use fujimod_emulator_devices::{Action, Record, Value};
-use fujimod_emulator_devices::parts::i2c as parts;
+use fujimod_emulator_parts_controls::i2c as parts;
 
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct RouteBank {
