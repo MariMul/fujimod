@@ -70,6 +70,35 @@
       "basis": "Internal version."
     },
     {
+      "offset": 1036,
+      "bytes": [
+        2,
+        3,
+        88,
+        232,
+        2,
+        3,
+        88,
+        232,
+        2,
+        3,
+        88,
+        232,
+        2,
+        3,
+        88,
+        232
+      ],
+      "basis": "Declared synthetic panel timing counters: stock display_engine_load_configuration (0x960824) reads four pairs through table 0xb643b4 at 0x40c..0x41b. Each pair is 1000 by 600, within the 12-bit register fields and positive so configured-clocked phases have a complete counter input. Not measured panel timing."
+    },
+    {
+      "offset": 4174,
+      "bytes": [
+        1
+      ],
+      "basis": "Declared synthetic display timing control bit: stock 0x960824 maps bit 0 of key 0x104e to timing control bit 16. Not a measured panel setting."
+    },
+    {
       "offset": 4536,
       "bytes": [
         229,
@@ -101,6 +130,48 @@
         0
       ],
       "basis": "Explicit synthetic proximity-controller configuration using the fallback byte column of the checked 27-row stock table 0xb1e104. Getter 0x96aa2c normally reads these configuration offsets. Includes the supported E5 command; zeros are not valid command bytes. These are declared external inputs, not an executed defaults routine. Shared with the X-E2S family; the X70 bank carries the same field."
+    },
+    {
+      "offset": 14294,
+      "bytes": [
+        100,
+        0,
+        50,
+        0,
+        200,
+        0,
+        150,
+        0,
+        44,
+        1,
+        250,
+        0,
+        144,
+        1,
+        94,
+        1,
+        244,
+        1,
+        194,
+        1,
+        88,
+        2,
+        38,
+        2,
+        188,
+        2,
+        138,
+        2,
+        32,
+        3,
+        238,
+        2,
+        132,
+        3,
+        82,
+        3
+      ],
+      "basis": "Declared synthetic ADC8 key ladder intervals: nine 28-byte stock records at 0xb636b0..0xb63790 use U16 upper/lower tags 0x37d6..0x37f8. Intervals 50..100 through 850..900 are disjoint and exclude released level 1023. Not measured resistor calibration."
     },
     {
       "offset": 38929,
