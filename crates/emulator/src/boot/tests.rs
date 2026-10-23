@@ -1,4 +1,5 @@
 use super::*;
+use fujimod_catalog::configuration::Exr2RunScene;
 
 #[test]
 fn clock_override_updates_the_device_clock_and_requires_one_rtc() {

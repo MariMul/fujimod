@@ -3,8 +3,12 @@
 use super::Session;
 use crate::board::keyframe::Keyframe;
 use fujimod_emulator_devices::{exr2::board::ResourceSnapshot, parts::switch_panel::SwitchPanel};
+mod portable;
 
 pub struct Snapshot {
+    definition: serde_json::Value,
+    nodes: std::collections::BTreeMap<String, usize>,
+    contacts: Vec<String>,
     pub(crate) board: Keyframe,
     resources: ResourceSnapshot,
     xp5: bool,
@@ -28,6 +32,9 @@ impl Session {
         let resources = self.resources.checkpoint()?;
         let board = self.board.checkpoint(previous.map(|p| &p.board))?;
         Ok(Snapshot {
+            definition: self.definition.clone(),
+            nodes: self.nodes.clone(),
+            contacts: self.contacts.keys().cloned().collect(),
             board,
             resources,
             xp5: self.xp5.is_some(),
@@ -36,14 +43,12 @@ impl Session {
         })
     }
     pub fn restore(&mut self, saved: &Snapshot) -> Result<(), String> {
-        if saved.xp5 != self.xp5.is_some() {
-            return Err("checkpoint XP5 session resources differ".into());
-        }
-        self.resources.validate_checkpoint(&saved.resources)?;
+        self.validate_snapshot(saved)?;
         self.board.restore_keyframe(&saved.board)?;
         self.resources.restore_checkpoint(&saved.resources)?;
         self.controls = saved.controls.clone();
         self.contact_driver = saved.contact_driver.clone();
+        self.recording_frames.borrow_mut().clear();
         Ok(())
     }
 }

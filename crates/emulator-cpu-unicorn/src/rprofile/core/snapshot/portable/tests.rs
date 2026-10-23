@@ -147,6 +147,57 @@ fn decode_binds_external_host_addresses_only_after_the_receiving_mapping_matches
 }
 
 #[test]
+fn portable_mapping_identity_is_independent_of_host_allocation_adjacency() {
+    use fujimod_emulator_cpu::memory::Backing;
+    struct Processor {
+        cpu: Core,
+        _backing: Vec<Backing>,
+    }
+    fn mapped(split: bool) -> Processor {
+        let cpu = processor(Options::default());
+        let backing = if split {
+            vec![
+                Backing::aligned_zeros(0x1000, 4096).unwrap(),
+                Backing::aligned_zeros(0x1000, 4096).unwrap(),
+            ]
+        } else {
+            vec![Backing::aligned_zeros(0x2000, 4096).unwrap()]
+        };
+        for i in 0..2 {
+            let pointer = if split {
+                backing[i].as_ptr()
+            } else {
+                unsafe { backing[0].as_ptr().add(i * 0x1000) }
+            };
+            unsafe {
+                cpu.map_physical(
+                    0x8000 + i as u64 * 0x1000,
+                    0x8000 + i as u64 * 0x1000,
+                    0x1000,
+                    3,
+                    NonNull::new(pointer).unwrap(),
+                )
+            }
+            .unwrap();
+        }
+        Processor {
+            cpu,
+            _backing: backing,
+        }
+    }
+    let source = mapped(false);
+    set(&source.cpu, arm::CORE[0], 37);
+    let bytes = source.cpu.snapshot(None).unwrap().export().unwrap();
+    let target = mapped(true);
+    let imported = target.cpu.import_snapshot(&bytes).unwrap();
+    target.cpu.restore(imported.as_ref()).unwrap();
+    assert_eq!(
+        source.cpu.fingerprint().unwrap(),
+        target.cpu.fingerprint().unwrap()
+    );
+}
+
+#[test]
 fn whole_domain_rebinding_preserves_exclusives_and_later_aba_writes_invalidate_them() {
     struct Processor {
         cpu: Core,

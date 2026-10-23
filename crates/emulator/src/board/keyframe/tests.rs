@@ -50,7 +50,10 @@ impl Device for PendingDma {
         self.completions.push((cx.now(), token));
     }
 }
-fn board() -> Board {
+pub(super) fn board() -> Board {
+    board_mode(bus::Mode::Strict)
+}
+pub(super) fn board_mode(mode: bus::Mode) -> Board {
     let processors = (0..2)
         .map(|core| Processor {
             model: Model::CortexR5F,
@@ -145,7 +148,7 @@ fn board() -> Board {
         decoders: vec![],
         instructions_per_tick: Ratio::new(3, 2).unwrap(),
     };
-    let mut bus = Bus::new(bus::Mode::Strict);
+    let mut bus = Bus::new(mode);
     bus.register(0x8000000, 4, Box::<PendingDma>::default())
         .unwrap();
     let mut board = graph

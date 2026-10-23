@@ -30,6 +30,8 @@ struct Slot {
     selected: usize,
     pending: Option<usize>,
 }
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct Checkpoint {
     slots: Vec<(usize, Option<usize>)>,
     failure: Option<String>,

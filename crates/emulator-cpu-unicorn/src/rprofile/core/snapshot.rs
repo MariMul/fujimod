@@ -136,7 +136,7 @@ impl Execution {
             "clock":self.clock.get().map(|c|serde_json::json!({"now":c.now,"phase":c.phase,"ratio":c.ratio.parts()})),
             "execution_policy":self.policy.get().name(),
             "tcm":memory,"irq":self.irq.get(),"reservation":reservation.map(|r|(r.address,r.size)),
-            "mappings":maps.iter().map(|m|(m.address,m.physical,m.bytes,m.permissions)).collect::<Vec<_>>() }),
+            "mappings":portable::maps_description(&maps) }),
         )
     }
     fn checkpoint_boundary(&self) -> Result<(), String> {

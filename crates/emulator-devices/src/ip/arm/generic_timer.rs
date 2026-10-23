@@ -2,7 +2,7 @@
 //! Arm 102379, "The processor timers". Counter/control observations are pure.
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Clock {
     pub counter_hz: u64,

@@ -62,8 +62,24 @@ impl Snapshot for Imported {
         encode(&self.state)
     }
 }
-fn map(map: &Mapping) -> Map {
-    (map.address, map.physical, map.bytes, map.permissions)
+pub(super) fn maps_description(maps: &[Mapping]) -> Vec<Map> {
+    let mut description: Vec<Map> = Vec::new();
+    for map in maps {
+        if let Some(last) = description.last_mut()
+            && last.0 + last.2 as u64 == map.address
+            && last.3 == map.permissions
+            && match (last.1, map.physical) {
+                (Some(a), Some(b)) => a + last.2 as u64 == b,
+                (None, None) => true,
+                _ => false,
+            }
+        {
+            last.2 += map.bytes;
+        } else {
+            description.push((map.address, map.physical, map.bytes, map.permissions));
+        }
+    }
+    description
 }
 fn exception(value: arm::Exception) -> (u8, u32) {
     use arm::Exception::*;
@@ -157,7 +173,7 @@ pub(super) fn export(saved: &Saved) -> Result<Vec<u8>, String> {
         policy: policy.name().into(),
         pmu: *pmu,
         tcm,
-        maps: maps.iter().map(map).collect(),
+        maps: maps_description(maps),
         mmio: mmio.clone(),
         reservation: reservation.to_bytes(),
         ring: ring.to_vec(),
@@ -185,9 +201,7 @@ impl Imported {
             return Err("unknown R-profile snapshot format".into());
         }
         let maps = e.checkpoint_maps();
-        if (binding && state.maps != maps.iter().map(map).collect::<Vec<_>>())
-            || state.mmio != e.checkpoint_mmio()
-        {
+        if (binding && state.maps != maps_description(&maps)) || state.mmio != e.checkpoint_mmio() {
             return Err("R-profile snapshot external memory/MMIO geometry differs".into());
         }
         let context = e.cpu.import_snapshot(&state.context)?;

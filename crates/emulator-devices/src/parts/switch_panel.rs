@@ -27,7 +27,7 @@ pub enum Signal {
         value: u8,
     },
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Control {
     pub id: String,
@@ -37,28 +37,54 @@ pub struct Control {
     pub initial: String,
     pub unavailable: Option<String>,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Case {
     pub positions: Vec<String>,
     pub signals: Vec<Signal>,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Circuit {
     pub controls: Vec<String>,
     pub cases: Vec<Case>,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Spec {
     pub controls: Vec<Control>,
     pub circuits: Vec<Circuit>,
 }
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct SwitchPanel {
     spec: Spec,
     positions: BTreeMap<String, String>,
+}
+impl<'de> Deserialize<'de> for SwitchPanel {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct State {
+            spec: Spec,
+            positions: BTreeMap<String, String>,
+        }
+        let state = State::deserialize(deserializer)?;
+        let mut panel = Self::new(state.spec).map_err(serde::de::Error::custom)?;
+        if panel.positions.keys().ne(state.positions.keys())
+            || panel
+                .spec
+                .controls
+                .iter()
+                .any(|c| !c.positions.contains(&state.positions[&c.id]))
+        {
+            return Err(serde::de::Error::custom(
+                "switch snapshot positions differ from its circuit",
+            ));
+        }
+        panel.positions = state.positions;
+        panel.signals().map_err(serde::de::Error::custom)?;
+        Ok(panel)
+    }
 }
 impl SwitchPanel {
     pub fn new(spec: Spec) -> Result<Self, String> {

@@ -3,9 +3,11 @@ use fujimod_emulator_devices::graph::{Mapping, validate_mappings};
 use fujimod_emulator_devices::bus::{FastReadValue, FastReadWord};
 use fujimod_emulator_devices::{Cx, Device, Host};
 use serde_json::{Value, json};
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
+mod checkpoint;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Mode {
     Strict,
     Discovery,
@@ -23,13 +25,14 @@ struct Window {
     device: Box<dyn Device>,
     native_dependencies: Vec<usize>,
 }
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Site {
     pub address: Option<u64>,
     pub pc: u64,
-    pub kind: &'static str,
+    pub kind: Cow<'static, str>,
     pub device: Option<usize>,
-    pub phase: &'static str,
+    pub phase: Cow<'static, str>,
     pub cpu: Option<usize>,
     pub size: Option<u8>,
     pub write: Option<bool>,
@@ -37,13 +40,14 @@ struct Site {
     pub message: String,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Unknown {
     first: usize,
     count: u64,
     tick: u64,
     pcs: Vec<u64>,
-    model: Option<&'static str>,
+    model: Option<Cow<'static, str>>,
     reads: u64,
     writes: u64,
     sizes: BTreeSet<u8>,
@@ -52,18 +56,20 @@ struct Unknown {
     values_omitted: u64,
     reasons: BTreeSet<String>,
 }
-#[derive(Clone, serde::Serialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Transaction {
     pub cpu: usize,
     pub pc: u64,
     pub address: u64,
     pub size: u8,
-    pub operation: &'static str,
+    pub operation: Cow<'static, str>,
     pub value: u64,
     pub accepted: bool,
     pub tick: u64,
 }
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TransactionRange {
     begin: u64,
     end: u64,
@@ -75,7 +81,8 @@ pub struct TransactionBatch {
     pub omitted: u64,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Transactions {
     limit: usize,
     rows: Vec<Transaction>,
@@ -106,7 +113,10 @@ pub struct Bus {
     visited: Vec<u64>,
     wake_generation: u64,
 }
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct Checkpoint {
+    #[serde(skip)]
     devices: Vec<fujimod_emulator_devices::checkpoint::Checkpoint>,
     windows: Vec<(Vec<Mapping>, Vec<usize>)>,
     mode: Mode,
@@ -400,7 +410,7 @@ impl Bus {
         let row = self.unknown.entry(site.clone()).or_insert_with(|| Unknown {
             first,
             tick,
-            model,
+            model: model.map(Into::into),
             ..Unknown::default()
         });
         if row.count == 0 {
@@ -441,7 +451,7 @@ impl Bus {
         if !self.continue_refusals {
             return Err(reason);
         }
-        site.kind = "model-refusal";
+        site.kind = "model-refusal".into();
         site.message = reason;
         let id = site.device.expect("a modeled refusal has an owning device");
         let device = &self.windows[id].device;
@@ -683,7 +693,7 @@ impl Bus {
                     pc,
                     address,
                     size,
-                    operation: if value.is_some() { "write" } else { "read" },
+                    operation: if value.is_some() { "write" } else { "read" }.into(),
                     value: value.unwrap_or_else(|| result.as_ref().copied().unwrap_or(0)),
                     accepted: result.is_ok(),
                     tick: host.now(),
@@ -791,9 +801,9 @@ impl Bus {
                     self.skip_refusal(
                         host.now(),
                         Site {
-                            kind: "",
+                            kind: "".into(),
                             device: Some(id),
-                            phase,
+                            phase: phase.into(),
                             cpu: Some(cpu),
                             pc,
                             address: Some(address),
@@ -831,9 +841,9 @@ impl Bus {
             self.record_frontier(
                 host.now(),
                 Site {
-                    kind: "unmodeled-mmio",
+                    kind: "unmodeled-mmio".into(),
                     device: index,
-                    phase: if value.is_some() { "write" } else { "read" },
+                    phase: if value.is_some() { "write" } else { "read" }.into(),
                     cpu: Some(cpu),
                     pc,
                     address: Some(address),
@@ -889,9 +899,9 @@ impl Bus {
             self.skip_refusal(
                 host.now(),
                 Site {
-                    kind: "",
+                    kind: "".into(),
                     device: Some(device),
-                    phase: if token.is_some() { "event" } else { "deadline" },
+                    phase: if token.is_some() { "event" } else { "deadline" }.into(),
                     cpu: None,
                     pc: 0,
                     address: None,
@@ -941,9 +951,9 @@ impl Bus {
                         self.skip_refusal(
                             host.now(),
                             Site {
-                                kind: "",
+                                kind: "".into(),
                                 device: Some(id),
-                                phase: "dependency",
+                                phase: "dependency".into(),
                                 cpu: None,
                                 pc: 0,
                                 address: None,
@@ -1237,7 +1247,7 @@ mod tests {
             (rows[0].cpu, rows[0].pc, rows[0].address, rows[0].value),
             (1, 0x20, 0x1000, 5)
         );
-        assert_eq!((rows[1].operation, rows[1].value), ("write", 19));
+        assert_eq!((rows[1].operation.as_ref(), rows[1].value), ("write", 19));
         assert!(!rows[2].accepted);
         assert_eq!(observed.transactions().0.len(), 3);
         observed.observe_transactions(None);

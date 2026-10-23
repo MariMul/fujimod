@@ -8,15 +8,15 @@ use fujimod_emulator_devices::ip::arm::nvic::Nvic;
 use fujimod_emulator_cpu::{Access, Cpu, Register, arm, exclusive};
 use serde_json::{Value, json};
 
-#[derive(Clone, Copy)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     pub clock_hz: u64,
     pub board_ticks_per_second: u64,
     pub vector_base: u32,
 }
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct MemoryView {
     pub address: u64,
     pub physical: u64,
@@ -41,8 +41,11 @@ pub(super) enum Entry {
     Emulated,
     Wait,
 }
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct Checkpoint {
+    config: Config,
+    views: Vec<MemoryView>,
     nvic: Nvic,
     levels: [u32; 8],
     needs_reset: bool,
@@ -74,9 +77,26 @@ fn set(cpu: &dyn Cpu, r: Register, v: u32) -> Result<(), String> {
     super::set(cpu, r, v as u64)
 }
 impl Profile {
+    pub(super) fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        if saved.config != self.config
+            || saved.views != self.views
+            || saved.nvic.clock_hz != self.nvic.clock_hz
+            || saved.nvic.enabled.len() != self.nvic.enabled.len()
+            || saved.nvic.pending.len() != self.nvic.pending.len()
+            || saved.nvic.priority.len() != self.nvic.priority.len()
+            || saved
+                .nvic
+                .active
+                .iter()
+                .any(|id| usize::from(*id) >= saved.nvic.priority.len())
+        {
+            return Err("M-profile snapshot configuration/state differs".into());
+        }
+        Ok(())
+    }
     pub(super) fn checkpoint(&self) -> Checkpoint {
         let Self {
-            config: _,
+            config,
             nvic,
             levels,
             needs_reset,
@@ -85,10 +105,12 @@ impl Profile {
             dwt_anchor,
             domain: _,
             owner: _,
-            views: _,
+            views,
             alias_write,
         } = self;
         Checkpoint {
+            config: *config,
+            views: views.clone(),
             nvic: nvic.clone(),
             levels: *levels,
             needs_reset: *needs_reset,

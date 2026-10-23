@@ -4,6 +4,7 @@
 //! Register law: Arm IHI0069H.b, chapters4 and12; no program state is visible.
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+mod checkpoint;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 struct Line {
@@ -577,6 +578,9 @@ impl Gic {
     pub fn restore(&mut self, value: &Value) -> Result<(), String> {
         let s: State =
             serde_json::from_value(value.clone()).map_err(|e| format!("GICv3 checkpoint: {e}"))?;
+        self.restore_state(s)
+    }
+    fn restore_state(&mut self, s: State) -> Result<(), String> {
         let cores = self.state.affinities.len();
         let lines = self.state.shared.len();
         if s.affinities != self.state.affinities
@@ -734,6 +738,13 @@ mod tests {
         let mut restored = Gic::new(vec![0, 1], 512).unwrap();
         restored.restore(&saved).unwrap();
         assert_eq!(restored.save(), saved);
+        // Durable decoding reconstructs the derived eligibility cache as well.
+        let encoded = crate::checkpoint::Checkpoint::encode("gic", &g).unwrap();
+        let mut decoded: Gic = encoded.decode("gic").unwrap();
+        assert_eq!(decoded.save(), saved);
+        assert_eq!(decoded.pins(0).unwrap(), (false, true));
+        assert_eq!(decoded.pins(1).unwrap(), (false, false));
+        assert_eq!(decoded.system(1, 0xc65b, None).unwrap(), 0x40);
         assert_eq!(restored.pins(0).unwrap(), (false, true));
         assert_eq!(restored.pins(1).unwrap(), (false, false));
         assert_eq!(restored.system(1, 0xc65b, None).unwrap(), 0x40);

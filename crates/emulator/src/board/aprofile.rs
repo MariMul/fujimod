@@ -5,12 +5,14 @@ use fujimod_emulator_devices::ip::arm::{
 };
 use serde_json::{Value, json};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CortexA53 {
     pub cores: usize,
     pub peripheral_base: u64,
 }
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     pub clock: Clock,
     pub physical_irq: u32,
@@ -18,7 +20,8 @@ pub struct Config {
     pub pmu_hz: u64,
     pub implementation: Option<CortexA53>,
 }
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Profile {
     config: Config,
     physical: Timer,
@@ -27,7 +30,8 @@ pub struct Profile {
     pmu: Pmu,
     implementation: cortex_a53::Registers,
 }
-#[derive(Clone, Default)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Pmu {
     control: u32,
     enabled: bool,
@@ -149,6 +153,13 @@ impl Pmu {
     }
 }
 impl Profile {
+    pub(super) fn validate_checkpoint(&self, saved: &Self, now: u64) -> Result<(), String> {
+        if self.config != saved.config || saved.pmu.anchor > now {
+            return Err("A-profile snapshot configuration or clock differs".into());
+        }
+        saved.config.clock.validate()?;
+        Ok(())
+    }
     pub fn new(config: Config) -> Result<Self, String> {
         config.clock.validate()?;
         if !(16..32).contains(&config.physical_irq)

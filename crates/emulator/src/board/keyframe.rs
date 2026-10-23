@@ -3,9 +3,14 @@
 use super::*;
 use fujimod_emulator_cpu::{Snapshot as CpuSnapshot, exclusive::Monitors};
 use std::collections::BTreeMap;
+mod portable;
 
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Saved {
+    #[serde(with = "portable::policy")]
     execution_policy: ExecutionPolicy,
+    #[serde(with = "portable::timeline")]
     timeline: Timeline,
     interrupt_changed: Vec<bool>,
     released: Vec<bool>,
@@ -22,6 +27,7 @@ struct Saved {
     error: Option<String>,
     records: Vec<Record>,
     console: Vec<String>,
+    #[serde(with = "portable::frames")]
     frames: BTreeMap<usize, fujimod_emulator_devices::graphics::scanout::Frame>,
     outputs: BTreeMap<usize, Value>,
     mprofile: Vec<Option<mprofile::Checkpoint>>,
@@ -50,6 +56,8 @@ pub struct Keyframe {
     hooks: Vec<(usize, HookId)>,
     mmio: Vec<(usize, u64, usize)>,
     controllers: Vec<Option<usize>>,
+    observations: Vec<(usize, Vec<u64>)>,
+    durable_blocker: Option<String>,
 }
 impl Keyframe {
     pub fn encoded_device_bytes(&self) -> usize {
@@ -188,6 +196,17 @@ impl State {
     }
 }
 impl Board {
+    fn durable_blocker(&self) -> Option<String> {
+        if self.continuation.is_some()
+            || self.read_set.try_borrow().map_or(true, |r| r.is_some())
+            || self.isolated_core.get().is_some()
+            || !self.discovery_stub_contexts.is_empty()
+        {
+            Some("durable snapshots require a whole-board session without an installed execution harness".into())
+        } else {
+            None
+        }
+    }
     fn keyframe_owner(&self, saved: &Keyframe) -> Result<(), String> {
         if !Weak::ptr_eq(&saved.owner, &Rc::downgrade(&self.state)) {
             return Err("keyframe belongs to a different board".into());
@@ -239,6 +258,8 @@ impl Board {
                 .iter()
                 .map(|c| c.as_ref().map(|c| c.device))
                 .collect(),
+            observations: self.observation_topology(),
+            durable_blocker: self.durable_blocker(),
         })
     }
     pub fn restore_keyframe(&mut self, saved: &Keyframe) -> Result<(), String> {
@@ -249,6 +270,7 @@ impl Board {
             .map_err(|_| "keyframe requires a stopped board")?;
         state.checkpoint_boundary()?;
         if saved.hooks != self.hooks
+            || saved.observations != self.observation_topology()
             || saved.mmio != self.mmio
             || saved.controllers
                 != state
@@ -273,6 +295,16 @@ impl Board {
         state.memory.validate_checkpoint(&saved.memory)?;
         state.memory.rearm(&self.cpus)?;
         state.decoders.validate_checkpoint(&saved.decoders)?;
+        for (profile, saved_profile) in state.mprofile.iter().zip(&saved.saved.mprofile) {
+            if let (Some(profile), Some(saved_profile)) = (profile, saved_profile) {
+                profile.validate_checkpoint(saved_profile)?;
+            }
+        }
+        for (profile, saved_profile) in state.aprofile.iter().zip(&saved.saved.aprofile) {
+            if let (Some(profile), Some(saved_profile)) = (profile, saved_profile) {
+                profile.validate_checkpoint(saved_profile, saved.now())?;
+            }
+        }
         state
             .exclusive
             .lock()

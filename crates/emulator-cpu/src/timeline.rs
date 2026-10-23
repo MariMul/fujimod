@@ -122,6 +122,18 @@ impl Timeline {
     pub fn ratio(&self) -> Ratio {
         self.ratio
     }
+    pub fn validate_targets(&self, devices: usize, processors: usize) -> Result<(), String> {
+        for event in &self.queue {
+            let valid = match event.0.target {
+                Target::DeviceEvent(id) | Target::DeviceDeadline(id) => id < devices,
+                Target::ProcessorDeadline(id) => id < processors,
+            };
+            if !valid {
+                return Err("timeline snapshot targets an absent device/processor".into());
+            }
+        }
+        Ok(())
+    }
     pub fn next_event(&self) -> Option<Event> {
         self.queue.peek().map(|e| e.0)
     }

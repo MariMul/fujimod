@@ -9,7 +9,7 @@ use std::{
     rc::{Rc, Weak},
 };
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 pub(super) struct Entries(BTreeMap<(usize, u64), Value>);
 pub(super) struct Watch {
     state: Weak<RefCell<State>>,
@@ -79,6 +79,12 @@ unsafe fn entered(pc: u64, _: u32, data: *mut c_void) {
     );
 }
 impl Board {
+    pub(super) fn observation_topology(&self) -> Vec<(usize, Vec<u64>)> {
+        self.watches
+            .iter()
+            .map(|w| (w.core, w.addresses.clone()))
+            .collect()
+    }
     /// Observe selected instruction entries once per processor. Host inspection
     /// never installs a replacement instruction or authorizes device effects.
     pub fn watch_pcs(&mut self, addresses: &[u64]) -> Result<(), String> {

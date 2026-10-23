@@ -686,6 +686,7 @@ mod tests {
                 numerator: 24,
                 denominator: 1,
             },
+            None,
         )
         .unwrap();
         assert_eq!(graph.mappings.len(), 1);
@@ -711,7 +712,7 @@ mod tests {
             numerator: 24,
             denominator: 1,
         };
-        let graph = assemble(&selection, rate).unwrap();
+        let graph = assemble(&selection, rate, None).unwrap();
         let decoder = &graph.decoders[0];
         assert_eq!(decoder.initial, 0);
         assert_eq!(decoder.choices.len(), 2);
@@ -720,7 +721,7 @@ mod tests {
         assert_eq!(decoder.choices[1].dma[0].physical, 0);
 
         selection.soc.decoders[0].initial = selection.soc.decoders[0].choices[1].selection.clone();
-        let graph = assemble(&selection, rate).unwrap();
+        let graph = assemble(&selection, rate, None).unwrap();
         let decoder = &graph.decoders[0];
         assert_eq!(decoder.initial, 1);
         assert_eq!(decoder.choices.len(), 2);

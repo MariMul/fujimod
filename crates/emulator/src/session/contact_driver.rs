@@ -4,49 +4,41 @@
 use super::Session;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-#[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Check {
     pub address: u64,
     pub bytes: Vec<u8>,
     /// Optional physical RAM address of a little-endian 32-bit base pointer.
     pub pointer: Option<u64>,
 }
-#[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Pose {
     pub position: String,
     pub ready: Vec<Check>,
     pub expected: Vec<Check>,
 }
-#[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Actuator {
     pub id: String,
     pub momentary: bool,
     /// Ordered contact stages; the first is the released pose for a button.
     pub states: Vec<Pose>,
 }
-#[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Spec {
     pub poll_ticks: u64,
     pub max_phase_ticks: u64,
     pub catalog: Vec<serde_json::Value>,
     pub actuators: Vec<Actuator>,
-    #[cfg_attr(feature = "serde", serde(default))]
+    #[serde(default)]
     pub interfaces: Vec<Interface>,
 }
-#[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(
-    feature = "serde",
-    serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)
-)]
+#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Interface {
     Rotary {
         id: String,
@@ -68,15 +60,15 @@ impl Interface {
         }
     }
 }
-#[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Transition {
     id: String,
     position: String,
     started: u64,
 }
-#[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Driver {
     pub spec: Spec,
     pending: VecDeque<Transition>,
@@ -85,6 +77,31 @@ pub struct Driver {
     completed: u64,
 }
 impl Driver {
+    pub(crate) fn validate_checkpoint(&self, saved: &Self, now: u64) -> Result<(), String> {
+        if self.spec != saved.spec
+            || saved.pending.len() + usize::from(saved.active.is_some()) + saved.requested.len()
+                > 64
+        {
+            return Err("host input snapshot policy or queue differs".into());
+        }
+        for transition in saved.active.iter().chain(&saved.pending) {
+            if transition.started > now {
+                return Err("host input snapshot starts after its board clock".into());
+            }
+            saved.pose(transition)?;
+        }
+        for (id, position) in &saved.requested {
+            if !saved
+                .actuator(id)?
+                .states
+                .iter()
+                .any(|s| &s.position == position)
+            {
+                return Err("host input snapshot requested pose is absent".into());
+            }
+        }
+        Ok(())
+    }
     pub fn new(session: &Session, spec: Spec) -> Result<Self, String> {
         let panel = session
             .controls
@@ -401,14 +418,7 @@ impl Driver {
         serde_json::json!({"pending":self.pending.len(),"active":self.active.as_ref().map(|a| serde_json::json!({"id":a.id,"position":a.position,"started":a.started.to_string()})),"requested":self.requested,"completed":self.completed})
     }
     pub fn fingerprint(&self) -> Result<serde_json::Value, String> {
-        #[cfg(feature = "serde")]
-        {
-            serde_json::to_value(self).map_err(|e| e.to_string())
-        }
-        #[cfg(not(feature = "serde"))]
-        {
-            Err("contact driver fingerprint requires serde".into())
-        }
+        serde_json::to_value(self).map_err(|e| e.to_string())
     }
 }
 impl Session {
