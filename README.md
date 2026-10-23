@@ -48,10 +48,12 @@ CI fails when the crate is out of date. `fujimod-unicorn-sys` compiles the
 Unicorn C archive with no features, so every feature set, test and binary of
 the CPU backend shares one archive per profile.
 
-`cargo build --profile iterate` builds optimized code that rebuilds in seconds:
-FujiMod crates at opt-level 2 without LTO, incremental, with dependencies fully
-optimized. It runs about 5% slower than `--release`, which keeps ThinLTO for
-timings and published wheels. `scripts/python_extension.py` uses `iterate`.
+Development uses two profiles: `cargo test` builds the default debug profile,
+and every optimized local build (`--release`, `scripts/python_extension.py`,
+the emulator worker) shares `release`, which rebuilds in seconds: FujiMod
+crates at opt-level 2 without LTO, incremental, with dependencies fully
+optimized. `--profile dist` adds ThinLTO for published wheels and the web
+emulator; it runs about 5% faster and links for about 40 seconds longer.
 
 The core also builds for WebUSB. See the USB crate's
 [Wasm checks](crates/usb/README.md#wasm-core-checks) for the JS-runtime tests;

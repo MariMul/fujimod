@@ -9,7 +9,6 @@ pub mod discovery;
 pub mod factory;
 pub mod harness;
 mod host;
-#[cfg(feature = "host-profile")]
 mod host_profile;
 mod interactive;
 pub mod keyframe;
@@ -416,7 +415,6 @@ impl Board {
     pub fn now(&self) -> u64 {
         self.state.borrow().timeline.now()
     }
-    #[cfg(feature = "host-profile")]
     /// Begin host observations while all processors are stopped.
     pub fn start_host_profile(&self) -> Result<(), String> {
         let baseline = self
@@ -426,7 +424,6 @@ impl Board {
             .collect::<Result<_, _>>()?;
         self.state.borrow_mut().bus.start_host_profile(baseline)
     }
-    #[cfg(feature = "host-profile")]
     /// Observe phase costs while all processors are stopped after a board run.
     pub fn host_profile(&self) -> Value {
         self.state
@@ -656,11 +653,9 @@ impl Board {
         if end <= start {
             return Ok(());
         }
-        #[cfg(feature = "host-profile")]
         let profile_run = self.state.borrow_mut().bus.profile_begin_run();
         let result = self.run_inner(until, Some(end), pause_after, quantum);
         self.state.borrow_mut().clock_limit = None;
-        #[cfg(feature = "host-profile")]
         self.state.borrow_mut().bus.profile_finish_run(profile_run);
         if let Err(error) = &result {
             self.state.borrow_mut().fail(error.clone());
@@ -849,7 +844,6 @@ impl Board {
             // or runnable-peer turn; those boundaries end the stable window.
             cpu.set_loop_window(self.state.borrow().loop_window())?;
             let pc = scalar(&**cpu, Register::Pc)?;
-            #[cfg(feature = "host-profile")]
             let profile_engine = self.state.borrow().bus.profile_begin_engine();
             let result = cpu.run(Run {
                 begin: if cpu.model() == fujimod_emulator_cpu::Model::CortexM4
@@ -868,7 +862,6 @@ impl Board {
                 instructions: Some(budget),
             });
             let mut s = self.state.borrow_mut();
-            #[cfg(feature = "host-profile")]
             s.bus.profile_finish_engine(core, profile_engine);
             s.active_slice = None;
             s.sync(&**cpu, core)?;

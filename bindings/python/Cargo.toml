@@ -24,7 +24,6 @@ emulator = [
     "dep:sha2",
     "fujimod-remote/board",
 ]
-host-profile = ["emulator", "fujimod-emulator/host-profile"]
 testing = ["fujimod-usb/testing", "fujimod-remote/testing"]
 
 [dependencies]

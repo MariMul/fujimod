@@ -1098,11 +1098,9 @@ impl Board {
         )
         .map_err(|e| error(e.to_string()))
     }
-    #[cfg(feature = "host-profile")]
     fn start_host_profile(&self) -> PyResult<()> {
         self.board()?.start_host_profile().map_err(error)
     }
-    #[cfg(feature = "host-profile")]
     fn host_profile(&self) -> PyResult<String> {
         serde_json::to_string(&self.board()?.host_profile()).map_err(|e| error(e.to_string()))
     }

@@ -90,7 +90,6 @@ struct Transactions {
     ranges: Option<Vec<TransactionRange>>,
 }
 pub struct Bus {
-    #[cfg(feature = "host-profile")]
     host_profile: Option<super::host_profile::Profile>,
     transactions: Option<Transactions>,
     continuation: Option<std::rc::Rc<std::cell::RefCell<super::continuation::Stops>>>,
@@ -315,7 +314,6 @@ impl Bus {
     }
     pub fn new(mode: Mode) -> Self {
         Self {
-            #[cfg(feature = "host-profile")]
             host_profile: None,
             transactions: None,
             continuation: None,
@@ -335,7 +333,6 @@ impl Bus {
             wake_generation: 0,
         }
     }
-    #[cfg(feature = "host-profile")]
     pub(super) fn start_host_profile(
         &mut self,
         baseline: Vec<super::host_profile::CpuCounters>,
@@ -343,21 +340,17 @@ impl Bus {
         self.host_profile = Some(super::host_profile::Profile::new(baseline)?);
         Ok(())
     }
-    #[cfg(feature = "host-profile")]
     pub(super) fn profile_begin_run(&mut self) -> Option<super::host_profile::Stamp> {
         self.host_profile.as_mut().map(|p| p.begin_run())
     }
-    #[cfg(feature = "host-profile")]
     pub(super) fn profile_finish_run(&mut self, stamp: Option<super::host_profile::Stamp>) {
         if let (Some(p), Some(stamp)) = (&mut self.host_profile, stamp) {
             p.finish_run(stamp);
         }
     }
-    #[cfg(feature = "host-profile")]
     pub(super) fn profile_begin_engine(&self) -> Option<super::host_profile::Stamp> {
         self.host_profile.as_ref().map(|p| p.start())
     }
-    #[cfg(feature = "host-profile")]
     pub(super) fn profile_finish_engine(
         &mut self,
         core: usize,
@@ -367,7 +360,6 @@ impl Bus {
             p.record_engine(core, stamp);
         }
     }
-    #[cfg(feature = "host-profile")]
     pub(super) fn host_profile(
         &self,
         counters: impl FnOnce() -> Vec<Result<super::host_profile::CpuCounters, String>>,
@@ -377,7 +369,6 @@ impl Bus {
             .map(|p| p.report(|id| self.windows[id].device.name(), &counters()))
             .unwrap_or(Value::Null)
     }
-    #[cfg(feature = "host-profile")]
     fn record_host_time(
         &mut self,
         id: usize,
@@ -739,7 +730,6 @@ impl Bus {
         let mut continuation = None;
         if let Some(id) = index {
             let publication = self.publication_before(id);
-            #[cfg(feature = "host-profile")]
             let started = self.host_profile.as_ref().map(|p| p.start());
             self.touch(id);
             let device = &mut self.windows[id].device;
@@ -784,7 +774,6 @@ impl Bus {
                 }
                 Ok(supported)
             })();
-            #[cfg(feature = "host-profile")]
             self.record_host_time(
                 id,
                 if value.is_some() {
@@ -878,7 +867,6 @@ impl Bus {
             .deadline(device, host.now())
             .is_some_and(|t| t <= host.now());
         let w = &mut self.windows[device];
-        #[cfg(feature = "host-profile")]
         let started = self.host_profile.as_ref().map(|p| p.start());
         let mut cx = Cx::new(host, usize::MAX, 0, device);
         if let Some(token) = token {
@@ -889,7 +877,6 @@ impl Bus {
         let outcome = Self::outcome(&mut cx);
         drop(cx);
         self.publication_after(device, publication);
-        #[cfg(feature = "host-profile")]
         self.record_host_time(
             device,
             if token.is_some() { "event" } else { "deadline" },
@@ -940,12 +927,10 @@ impl Bus {
                     .is_some_and(|t| t <= host.now())
                 {
                     let mut cx = Cx::new(host, usize::MAX, 0, id);
-                    #[cfg(feature = "host-profile")]
                     let started = self.host_profile.as_ref().map(|p| p.start());
                     self.windows[id].device.advance(&mut cx);
                     let outcome = Self::outcome(&mut cx);
                     drop(cx);
-                    #[cfg(feature = "host-profile")]
                     self.record_host_time(id, "dependency", started);
                     if outcome != Ok(true) {
                         self.skip_refusal(
@@ -1256,7 +1241,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "host-profile")]
     fn host_profiling_is_observational_and_never_enters_guest_state() {
         let mut plain = Bus::new(Mode::Strict);
         let mut observed = Bus::new(Mode::Strict);

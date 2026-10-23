@@ -1,9 +1,9 @@
 """Build the Python extension and install it only after it loads.
 
-`maturin develop` overwrites the package's `_native.abi3.so` in place, so a
-failed, partial or reduced-feature build breaks every process that shares the
-checkout. This builds a wheel in a temporary directory, loads its extension in
-a fresh interpreter, requires every default-feature module, and then renames it
+Writing the extension in place would let a failed, partial or reduced-feature
+build break every process that shares the checkout. This builds it with Cargo's
+release profile (the profile every optimized local build shares), loads it in a
+fresh interpreter, requires every default-feature module, and then renames it
 over the installed file. A build that fails any step leaves the installed
 extension untouched. The running environment gets the same `fujimod.pth`
 source-path file an editable install writes.
@@ -11,13 +11,12 @@ source-path file an editable install writes.
     uv run --locked python scripts/python_extension.py
 """
 
+import json
 import os
 import shutil
 import site
 import subprocess
 import sys
-import tempfile
-import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,44 +34,50 @@ if missing:
 """
 
 
-def main() -> None:
-    maturin = shutil.which("maturin")
-    if maturin is None:
-        raise SystemExit("maturin is not installed; run through `uv run --locked`")
-    with tempfile.TemporaryDirectory(
-        prefix="python-extension-", dir=ROOT / "target"
-    ) as work:
-        subprocess.run(
-            [
-                maturin,
-                "build",
-                "--profile",
-                "iterate",
-                "--manifest-path",
-                "bindings/python/Cargo.toml",
-                "--features",
-                "testing",
-                "--locked",
-                "--out",
-                work,
-            ],
-            cwd=ROOT,
-            check=True,
-        )
-        wheels = list(Path(work).glob("*.whl"))
-        if len(wheels) != 1:
-            raise SystemExit(f"expected one wheel, found {len(wheels)}")
-        candidate = PACKAGE / f"._native.new-{os.getpid()}.abi3.so"
-        try:
-            with zipfile.ZipFile(wheels[0]) as wheel, candidate.open("wb") as out:
-                out.write(wheel.read("fujimod/" + NAME))
-            candidate.chmod(0o755)
-            subprocess.run(
-                [sys.executable, "-c", CHECK, str(candidate), *MODULES], check=True
+def build() -> Path:
+    """Build the extension library and return its path."""
+    built = subprocess.run(
+        [
+            "cargo",
+            "build",
+            "--release",
+            "--locked",
+            "--manifest-path",
+            "bindings/python/Cargo.toml",
+            "--lib",
+            "--features",
+            "testing",
+            "--message-format=json-render-diagnostics",
+        ],
+        cwd=ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    for line in built.stdout.splitlines():
+        message = json.loads(line)
+        if (
+            message.get("reason") == "compiler-artifact"
+            and "cdylib" in message["target"]["crate_types"]
+        ):
+            return Path(
+                next(f for f in message["filenames"] if f.endswith((".dylib", ".so")))
             )
-            os.replace(candidate, PACKAGE / NAME)
-        finally:
-            candidate.unlink(missing_ok=True)
+    raise SystemExit("cargo built no extension library")
+
+
+def main() -> None:
+    library = build()
+    candidate = PACKAGE / f"._native.new-{os.getpid()}.abi3.so"
+    try:
+        shutil.copyfile(library, candidate)
+        candidate.chmod(0o755)
+        subprocess.run(
+            [sys.executable, "-c", CHECK, str(candidate), *MODULES], check=True
+        )
+        os.replace(candidate, PACKAGE / NAME)
+    finally:
+        candidate.unlink(missing_ok=True)
     (Path(site.getsitepackages()[0]) / "fujimod.pth").write_text(
         str(PACKAGE.parent) + "\n"
     )

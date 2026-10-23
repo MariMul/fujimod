@@ -1,7 +1,3 @@
-[build-system]
-requires = ["maturin>=1.15,<2"]
-build-backend = "maturin"
-
 [project]
 name = "fujimod"
 version = "0.1.0"
@@ -13,60 +9,6 @@ license-files = ["NOTICE"]
 [project.optional-dependencies]
 test = ["pytest>=9", "pytest-asyncio>=1"]
 walkthroughs = ["pillow>=12.3.0"]
-
-[tool.maturin]
-profile = "release"
-module-name = "fujimod._native"
-python-source = "python"
-
-[tool.uv]
-# Rebuild local installs when either the binding or its Rust implementation changes.
-cache-keys = [
-  { file = "../../crates/remote/Cargo.toml" },
-  { file = "../../crates/remote/src/**/*.rs" },
-  { file = "../../catalog/**/*.json" },
-  { file = "../../configurations/**/*.json" },
-  { file = "../../crates/recording/Cargo.toml" },
-  { file = "../../crates/recording/src/**/*.rs" },
-  { file = "../../crates/recording/assets/**/*.json" },
-  { file = "../../crates/firmware/Cargo.toml" },
-  { file = "../../crates/firmware/src/**/*.rs" },
-  { file = "pyproject.toml" },
-  { file = "NOTICE" },
-  { file = "Cargo.toml" },
-  { file = "build.rs" },
-  { file = "../generator/Cargo.toml" },
-  { file = "../generator/src/**/*.rs" },
-  { file = "src/**/*.rs" },
-  { file = "src/**/*.c" },
-  { file = "python/**/*.py" },
-  { file = "python/**/*.pyi" },
-  { file = "../../Cargo.toml" },
-  { file = "../../Cargo.lock" },
-  { file = "../../crates/corpus/Cargo.toml" },
-  { file = "../../crates/corpus/src/**/*.rs" },
-  { file = "../../crates/usb-proxy/Cargo.toml" },
-  { file = "../../crates/usb-proxy/src/**/*.rs" },
-  { file = "../../crates/usb/Cargo.toml" },
-  { file = "../../crates/catalog/Cargo.toml" },
-  { file = "../../crates/catalog/build.rs" },
-  { file = "../../crates/catalog/src/**/*.rs" },
-  { file = "../../crates/emulator/Cargo.toml" },
-  { file = "../../crates/emulator/src/**/*.rs" },
-  { file = "../../crates/emulator-devices/Cargo.toml" },
-  { file = "../../crates/emulator-devices/src/**/*.rs" },
-  { file = "../../crates/emulator-cpu/Cargo.toml" },
-  { file = "../../crates/emulator-cpu/src/**/*.rs" },
-  { file = "../../crates/emulator-cpu-unicorn/Cargo.toml" },
-  { file = "../../crates/emulator-cpu-unicorn/src/**/*.rs" },
-  { file = "../../crates/emulator-cpu-unicorn/sys/Cargo.toml" },
-  { file = "../../crates/emulator-cpu-unicorn/sys/build.rs" },
-  { file = "../../crates/emulator-cpu-hvf/Cargo.toml" },
-  { file = "../../crates/emulator-cpu-hvf/src/**/*.rs" },
-  { file = "../../crates/usb/src/**/*.rs" },
-  { file = "../../crates/mod-install/Cargo.toml" },
-  { file = "../../crates/mod-install/src/**/*.rs" },
-]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

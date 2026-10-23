@@ -48,10 +48,8 @@ the target while avoiding receive-queue flooding. This is a transport ceiling,
 not a guarantee of USB-device bandwidth. USB operations remain ordered and
 serialized, with the existing ownership, completion-unknown and no-retry rules.
 
-Python installs use the release profile by default, including editable builds
-and `maturin develop`, so ordinary tools use optimized transport code. An
-explicit `--profile dev` still selects a debug build; see the
-[Maturin configuration reference](https://www.maturin.rs/config).
+The Python extension builds with the release profile
+(`scripts/python_extension.py`), so ordinary tools use optimized transport code.
 
 ## Measurement limits
 

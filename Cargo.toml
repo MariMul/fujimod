@@ -77,45 +77,39 @@ futures-channel = "0.3"
 # fast as one unit did and cut an emulator-device rebuild from about 1,040 to
 # 260 CPU seconds; ThinLTO keeps cross-crate inlining (without it the boot took
 # 7% more CPU). CI's rust-cache disables incremental compilation.
+# Every optimized local build: `cargo build --release`, the Python extension,
+# and the worker share this one set of artifacts. FujiMod crates use
+# opt-level 2 without LTO and with incremental compilation, dependencies
+# opt-level 3. A device edit rebuilds the X70 boot binary in about 9 CPU
+# seconds; ThinLTO would add about 40 seconds of linking to each build for a
+# boot about 5% faster.
 [profile.release]
-lto = "thin"
-codegen-units = 16
-incremental = true
-
-# Optimized development builds: FujiMod crates at opt-level 2 without LTO and
-# with incremental compilation, dependencies at opt-level 3. A device edit
-# rebuilds the X70 boot binary in about 9 CPU seconds instead of 260 for
-# release; the boot runs about 5% slower. Use release for timings and wheels.
-[profile.iterate]
-inherits = "release"
 opt-level = 2
 lto = "off"
 codegen-units = 256
 incremental = true
 
-[profile.iterate.package."*"]
+[profile.release.package."*"]
 opt-level = 3
 
-# Optimized native profiling without selecting Cargo's release profile.
-# Tests retain the default development assertions and overflow checks.
-[profile.performance]
-inherits = "dev"
+# Published artifacts only (wheels, the web emulator): ThinLTO.
+[profile.dist]
+inherits = "release"
 opt-level = 3
-debug = 0
-debug-assertions = false
-overflow-checks = false
+lto = "thin"
 codegen-units = 16
-lto = "off"
-incremental = false
 
 # Build executables stay unstripped; distribution profiles apply to libraries.
 [profile.release.build-override]
 strip = "none"
 
 [profile.simulation-web]
-inherits = "release"
+inherits = "dist"
 incremental = false
 opt-level = "s"
 codegen-units = 1
 lto = "thin"
 strip = "debuginfo"
+
+[profile.simulation-web.package."*"]
+opt-level = "s"

@@ -16,13 +16,14 @@ run('cargo', [
   'build',
   '-p',
   'fujimod-javascript',
-  '--release',
+  '--profile',
+  'dist',
   '--target',
   'wasm32-unknown-unknown',
   ...(testing ? ['--features', 'testing'] : []),
 ]);
 run(process.env.WASM_BINDGEN ?? join(root, 'target/tooling/bin/wasm-bindgen'), [
-  join(target, 'wasm32-unknown-unknown/release/fujimod_javascript.wasm'),
+  join(target, 'wasm32-unknown-unknown/dist/fujimod_javascript.wasm'),
   '--target',
   'web',
   '--out-dir',

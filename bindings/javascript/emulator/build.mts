@@ -169,7 +169,8 @@ export function buildPlan(selected: BuildOptions, source: NodeJS.ProcessEnv): Bu
     'build',
     '--locked',
     '-j2',
-    '--release',
+    '--profile',
+    'dist',
     '--lib',
     '--target',
     'wasm32-unknown-emscripten',
@@ -197,7 +198,7 @@ export function buildPlan(selected: BuildOptions, source: NodeJS.ProcessEnv): Bu
   const cmakeBuild = ['ninja', '-j2', '-C', unicorn, 'unicorn'];
   const link = [
     'emcc',
-    join(target, 'wasm32-unknown-emscripten/release/libfujimod_emulator_javascript.a'),
+    join(target, 'wasm32-unknown-emscripten/dist/libfujimod_emulator_javascript.a'),
     '-o',
     join(out, 'camera.mjs'),
     '-O3',

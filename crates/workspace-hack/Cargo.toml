@@ -185,7 +185,6 @@ web-sys = { version = "0.3", features = ["AddEventListenerOptions", "BinaryType"
 [target.wasm32-unknown-emscripten.dependencies]
 futures-sink = { version = "0.3" }
 js-sys = { version = "0.3" }
-libc = { version = "0.2" }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 wasm-bindgen = { version = "0.2" }
 web-sys = { version = "0.3", features = ["AddEventListenerOptions", "BinaryType", "Blob", "CloseEvent", "CloseEventInit", "Document", "ErrorEvent", "FileReader", "History", "HtmlHeadElement", "Location", "MessageEvent", "Navigator", "ProgressEvent", "Usb", "UsbAlternateInterface", "UsbConfiguration", "UsbConnectionEvent", "UsbControlTransferParameters", "UsbDevice", "UsbDeviceFilter", "UsbDeviceRequestOptions", "UsbDirection", "UsbInTransferResult", "UsbInterface", "UsbOutTransferResult", "UsbRecipient", "UsbRequestType", "UsbTransferStatus", "WebSocket", "Window", "WorkerGlobalScope", "WorkerNavigator"] }
@@ -193,7 +192,6 @@ web-sys = { version = "0.3", features = ["AddEventListenerOptions", "BinaryType"
 [target.wasm32-unknown-emscripten.build-dependencies]
 futures-sink = { version = "0.3" }
 js-sys = { version = "0.3" }
-libc = { version = "0.2" }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = ["visit-mut"] }
 wasm-bindgen = { version = "0.2" }

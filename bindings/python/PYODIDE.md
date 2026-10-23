@@ -22,8 +22,9 @@ node bindings/python/scripts/build-web-wheel.ts
 The wheel builder uses the pinned Node toolchain. It creates the `fujimod` distribution
 with the `py3-none-pyemscripten_2026_0_wasm32` tag in `target/web-wheels/`, for
 Pyodide 314.x. It does not ship a desktop binary or claim desktop compatibility.
-Native wheels are built with maturin from the same package. Keep the Python
-wheel and JavaScript package from the same version together.
+Native Python uses the same package with the extension that
+`scripts/python_extension.py` builds. Keep the Python wheel and JavaScript
+package from the same version together.
 
 After loading Pyodide, initialize and register the JavaScript package:
 

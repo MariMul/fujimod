@@ -1,23 +1,24 @@
 # FujiMod Python package
 
-This directory builds the `fujimod` Python distribution. PyO3 source lives in
+This directory holds the `fujimod` Python package. PyO3 source lives in
 `src/`; the USB implementation lives in the workspace's `crates/usb/`.
-Python source lives in `python/fujimod/` inside this same distribution. Native
-wheels include the compiled `fujimod._native` extension; Pyodide uses the same
-public `fujimod.usb` namespace through the [WebUSB adapter](PYODIDE.md).
+Python source lives in `python/fujimod/`. Native Python loads the compiled
+`fujimod._native` extension; Pyodide uses the same public `fujimod.usb`
+namespace through the [WebUSB adapter](PYODIDE.md).
 
-Build from the repository root with maturin:
+Build and install the extension from the repository root:
 
 ```sh
-maturin build --manifest-path bindings/python/Cargo.toml --out target/wheels
+uv run --locked python scripts/python_extension.py
 ```
 
-Install the wheel in the consuming project's uv environment. Source consumers
-can use `uv add /path/to/fujimod/bindings/python` and rebuild after Rust changes.
+It compiles `fujimod._native` with Cargo's release profile, checks that it
+loads, replaces `python/fujimod/_native.abi3.so` and puts `python/` on the
+environment's path. Rerun it after Rust changes.
 
 ## Native execution
 
-Native wheels also expose `fujimod.emulator`. For a resolved graph, build a
+The native extension also exposes `fujimod.emulator`. For a resolved graph, build a
 `Definition` from its execution graph, device plan and identified assets, then
 pass the matching bytes to `make_board`. Declared images are loaded into mapped
 memory before execution.
@@ -191,9 +192,8 @@ releases host resources without issuing C4 or cleanup. Its terminal state is
 `Abandoned`, and all further I/O is rejected. Abandoning cannot stop firmware
 execution. Close or cancel an owned range reader with `await reader.aclose()`.
 
-For Python protocol/ownership tests, build an instrumented wheel with
-`maturin build --manifest-path bindings/python/Cargo.toml --features testing`.
-Install it in the test environment, then run `pytest bindings/python/tests`.
+Python protocol/ownership tests use the `testing` feature, which
+`scripts/python_extension.py` builds in; then run `pytest bindings/python/tests`.
 These tests replay scripted USB exchanges through the production Rust session,
 including streaming, ownership, protocol errors and disconnects. The `testing`
 module is excluded from ordinary builds. No test opens a camera. Tests also cover

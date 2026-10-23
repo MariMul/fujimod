@@ -9,6 +9,11 @@ fn main() {
         .to_path_buf();
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     fujimod_bindgen::Api::build(&root, &out);
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+        // The interpreter that loads the extension provides Python's symbols.
+        println!("cargo:rustc-cdylib-link-arg=-undefined");
+        println!("cargo:rustc-cdylib-link-arg=dynamic_lookup");
+    }
     println!("cargo:rerun-if-changed=build.rs");
 }
 
