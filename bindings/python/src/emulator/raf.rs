@@ -23,7 +23,7 @@ pub(crate) fn raf_radiance_rgb<'py>(
                         let sx = usize::from(scene.crop_left) + x * 6 + dx;
                         let sy = usize::from(scene.crop_top) + y * 6 + dy;
                         let c = usize::from(scene.cfa[sy % 6][sx % 6]);
-                        sums[c] += f64::from(scene.radiance[sy * scene.width as usize + sx]);
+                        sums[c] += f64::from(scene.radiance(sy * scene.width as usize + sx));
                         counts[c] += 1;
                     }
                 }

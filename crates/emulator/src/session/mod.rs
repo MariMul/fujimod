@@ -277,22 +277,23 @@ impl Session {
     /// Install a RAF's visible crop as mosaic radiance. Its recorded exposure
     /// is the normalization, so a later exposure scales the sensor counts.
     pub fn sensor_raf(&self, name: &str, bytes: &[u8]) -> Result<(), String> {
-        use fujimod_emulator_devices::scene::{Frame, read_raf};
-        let input = self
-            .resources
+        use fujimod_emulator_devices::scene::Frame;
+        self.sensor_frame(name, std::sync::Arc::new(Frame::from_raf_bytes(bytes)?))
+    }
+    /// Install shared immutable sensor pixels without retaining source file bytes.
+    pub fn sensor_frame(
+        &self,
+        name: &str,
+        frame: std::sync::Arc<fujimod_emulator_devices::scene::Frame>,
+    ) -> Result<(), String> {
+        self.resources
             .inputs
             .sensors
             .get(name)
-            .ok_or("no such sensor input")?;
-        if bytes.len() > 64 << 20 {
-            return Err("sensor RAF input exceeds 64 MiB".into());
-        }
-        let scene = read_raf(std::io::Cursor::new(bytes)).map_err(|e| e.to_string())?;
-        let frame = Frame::from_raf(&scene)?;
-        input
+            .ok_or("no such sensor input")?
             .lock()
             .map_err(|_| "sensor input is poisoned")?
-            .set_frame(frame);
+            .current = frame;
         Ok(())
     }
 }

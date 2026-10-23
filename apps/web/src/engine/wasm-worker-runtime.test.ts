@@ -505,3 +505,31 @@ test('portable snapshots load into a fresh worker without a cold boot and report
     assert.deepEqual(new Uint8Array(result.snapshot), new Uint8Array([0xa1, 0x01]));
   }
 });
+
+test('RAF uploads are parsed once and not retained for cold boot or power cycles', async () => {
+  const f = setup();
+  const scene = { raf: new Uint8Array([82, 65, 70]) };
+  const boot = await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+    scene,
+  });
+  assert.equal(boot.type, 'reply');
+  assert.equal(f.calls.filter((call) => call.action === 'scene_raf').length, 1);
+  // Later power cycles use the native owner's installed immutable frame.
+  scene.raf.fill(0);
+  assert.equal((await f.send({ action: 'power_cycle', inputs: [] })).type, 'reply');
+  assert.equal((await f.send({ action: 'power', on: false })).type, 'reply');
+  assert.equal((await f.send({ action: 'power', on: true })).type, 'reply');
+  assert.equal(f.calls.filter((call) => call.action === 'scene_raf').length, 1);
+  assert.deepEqual(f.calls.find((call) => call.action === 'scene_raf')!.bytes, [82, 65, 70]);
+  assert.equal(
+    (await f.send({ action: 'scene', scene: { raf: new Uint8Array([1, 2]) } })).type,
+    'reply',
+  );
+  assert.equal((await f.send({ action: 'power_cycle', inputs: [] })).type, 'reply');
+  assert.equal(f.calls.filter((call) => call.action === 'scene_raf').length, 2);
+});

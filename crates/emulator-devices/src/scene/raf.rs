@@ -42,13 +42,15 @@ pub struct RafScene {
     /// White level (clipping point): 16383 for 14-bit (2^14 - 1).
     pub white: u16,
     /// Per-site relative scene radiance at native sensor resolution.
-    /// Row-major, one f32 per sensor site.
+    /// Row-major black-subtracted counts, one u16 per sensor site.
     /// Normalized: (raw - black) / (exposure_time / f_number² × sensor_gain),
     /// where sensor_gain = ISO/200 × DR_factor:
     /// - DR100: factor = 1.0
     /// - DR200: factor = 0.5 (effective gain half the displayed ISO)
     /// - DR400: factor = 0.25 (effective gain quarter the displayed ISO)
-    pub radiance: Vec<f32>,
+    pub counts: Vec<u16>,
+    /// Original exposure normalization; `radiance(index)` applies the f32 rounding.
+    pub norm: f64,
     /// Exposure parameters from EXIF/TIFF.
     pub exposure: RecordedExposure,
     /// Crop top offset in pixels (from FujiIFD tag 0x0110 RawImageCropTopLeft).
@@ -59,6 +61,13 @@ pub struct RafScene {
     pub crop_height: u16,
     /// Cropped image width in pixels (from FujiIFD tag 0x0111 RawImageCroppedSize).
     pub crop_width: u16,
+}
+
+impl RafScene {
+    #[inline(always)]
+    pub fn radiance(&self, index: usize) -> f32 {
+        (f64::from(self.counts[index]) / self.norm) as f32
+    }
 }
 
 /// Linear RGB preview: 6×6 bins of per-color average radiance.
@@ -425,8 +434,8 @@ pub fn read_raf<R: Read + Seek>(mut file: R) -> io::Result<RafScene> {
     let jpeg_read = file.read(&mut jpeg_buf)?;
     let exif_metadata = parse_exif(&jpeg_buf[..jpeg_read])?;
 
-    // Compute per-site radiance.
-    let radiance = compute_radiance(&raw_samples, black_level, &exif_metadata);
+    // Retain black-subtracted counts and the original radiance normalization.
+    let (counts, norm) = compute_counts(raw_samples, black_level, &exif_metadata);
 
     Ok(RafScene {
         width: 4992,
@@ -434,7 +443,8 @@ pub fn read_raf<R: Read + Seek>(mut file: R) -> io::Result<RafScene> {
         cfa: XTRANS,
         black: [black_level; 3], // Assume equal across channels for X70.
         white: 16383,            // 14-bit: (1<<14)-1.
-        radiance,
+        counts,
+        norm,
         exposure: exif_metadata,
         crop_top,
         crop_left,
@@ -443,12 +453,12 @@ pub fn read_raf<R: Read + Seek>(mut file: R) -> io::Result<RafScene> {
     })
 }
 
-/// Compute per-site relative scene radiance from raw samples.
-fn compute_radiance(
-    raw_samples: &[u16],
+/// Remove the black offset in place and retain the exposure normalization.
+fn compute_counts(
+    mut raw_samples: Vec<u16>,
     black_level: u16,
     exposure: &RecordedExposure,
-) -> Vec<f32> {
+) -> (Vec<u16>, f64) {
     // Sensor gain = ISO / 200 × DR_factor:
     // - DR100: factor = 1.0
     // - DR200: factor = 0.5
@@ -464,15 +474,10 @@ fn compute_radiance(
     let f_squared = exposure.f_number * exposure.f_number;
     let norm = exposure.seconds / (f_squared * sensor_gain);
 
-    raw_samples
-        .iter()
-        .map(|&raw| {
-            // Normalize: (raw - black) / norm.
-            let black = black_level as f64;
-            let value = (raw as f64 - black).max(0.0) / norm;
-            value as f32
-        })
-        .collect()
+    for raw in &mut raw_samples {
+        *raw = raw.saturating_sub(black_level);
+    }
+    (raw_samples, norm)
 }
 
 /// Convert per-site radiance to linear RGB preview.
@@ -497,7 +502,7 @@ pub fn raf_to_radiance_rgb(scene: &RafScene) -> RafRadianceRgb {
             let cell_idx = cell_y * cell_width + cell_x;
 
             if color < 3 && cell_idx < rgb_cells.len() {
-                rgb_cells[cell_idx][color] += scene.radiance[sample_idx];
+                rgb_cells[cell_idx][color] += scene.radiance(sample_idx);
                 color_counts[cell_idx][color] += 1;
             }
         }
@@ -788,6 +793,35 @@ mod tests {
     use std::io::Cursor;
 
     #[test]
+    fn compact_counts_keep_black_clamping_and_exposure_normalization_exact() {
+        let raw: Vec<_> = (0..=u16::MAX).collect();
+        for dr in [100, 200, 400] {
+            let exposure = RecordedExposure {
+                seconds: 1. / 800.,
+                f_number: 9.,
+                iso: 800,
+                dynamic_range: dr,
+            };
+            let (counts, norm) = compute_counts(raw.clone(), 1024, &exposure);
+            let gain = (f64::from(exposure.iso) / 200.)
+                * match dr {
+                    200 => 0.5,
+                    400 => 0.25,
+                    _ => 1.,
+                };
+            let original_norm = exposure.seconds / (exposure.f_number * exposure.f_number * gain);
+            assert_eq!(norm.to_bits(), original_norm.to_bits());
+            for (&raw, count) in raw.iter().zip(counts) {
+                let original = ((f64::from(raw) - 1024.).max(0.) / original_norm) as f32;
+                assert_eq!(
+                    ((f64::from(count) / norm) as f32).to_bits(),
+                    original.to_bits()
+                );
+            }
+        }
+    }
+
+    #[test]
     fn synthetic_raf_basic() {
         // Create a minimal synthetic RAF to test parsing.
         let mut raf_data = Vec::new();
@@ -989,7 +1023,7 @@ mod tests {
             // Validate basic structure.
             assert_eq!(scene.width, 4992, "Expected width 4992");
             assert_eq!(scene.height, 3296, "Expected height 3296");
-            assert_eq!(scene.radiance.len(), (4992 * 3296) as usize);
+            assert_eq!(scene.counts.len(), (4992 * 3296) as usize);
             assert_eq!(scene.cfa, XTRANS, "CFA pattern mismatch");
             assert_eq!(scene.black[0], 1023, "Expected black level 1023");
             assert_eq!(scene.white, 16383, "Expected white level 16383");
@@ -1037,9 +1071,9 @@ mod tests {
                 for x in visible_x_start..visible_x_end {
                     let color = scene.cfa[y % 6][x % 6] as usize;
                     let idx = y * scene.width as usize + x;
-                    if color < 3 && idx < scene.radiance.len() {
+                    if color < 3 && idx < scene.counts.len() {
                         let raw_count =
-                            scene.radiance[idx] as f64 * norm + scene.black[color] as f64;
+                            scene.radiance(idx) as f64 * norm + scene.black[color] as f64;
                         color_raw_sums[color] += raw_count;
                         color_raw_counts[color] += 1;
                     }

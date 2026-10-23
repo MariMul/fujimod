@@ -18,6 +18,7 @@ def test_default_scene_is_verified_and_reused():
 def test_default_raf_retains_linear_color_in_its_visible_sensor_crop():
     width, height, data = emulator.raf_radiance_rgb(scenes.default_scene_raf().read_bytes())
     assert (width, height) == (816, 544)
+    assert sha256(data).hexdigest() == "2eef6e993795ee33fa7ad33c577fca92a1a690f5cbc12b3a9e39673d8da2af70"
     assert len(data) == width * height * 3 * 4
     samples = struct.unpack(f'<{width*height*3}f', data)
     assert all(math.isfinite(value) and value >= 0 for value in samples)

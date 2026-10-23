@@ -145,8 +145,32 @@ pub(crate) mod shared_bytes {
         s.serialize_bytes(bytes)
     }
     pub fn deserialize<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Arc<[u8]>, D::Error> {
-        use serde::Deserialize;
-        Ok(Vec::<u8>::deserialize(d)?.into())
+        struct Bytes;
+        impl<'de> serde::de::Visitor<'de> for Bytes {
+            type Value = Arc<[u8]>;
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("shared bytes")
+            }
+            fn visit_bytes<E: serde::de::Error>(self, bytes: &[u8]) -> Result<Self::Value, E> {
+                Ok(bytes.into())
+            }
+            fn visit_byte_buf<E: serde::de::Error>(self, bytes: Vec<u8>) -> Result<Self::Value, E> {
+                Ok(bytes.into())
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut bytes = Vec::new();
+                while let Some(byte) = seq.next_element::<u8>()? {
+                    bytes.push(byte);
+                }
+                Ok(bytes.into())
+            }
+        }
+        // Internally tagged input records buffer CBOR byte strings before
+        // decoding the frame; accept that byte representation as well as JSON.
+        d.deserialize_byte_buf(Bytes)
     }
 }
 
@@ -238,8 +262,8 @@ mod tests {
         );
     }
     use super::*;
-    use crate::{exr2::clock, test_host::*};
     use crate::{Device, Record, Value};
+    use crate::{exr2::clock, test_host::*};
     #[test]
     fn checkpoint_records_keep_owned_labels_and_value_variants() {
         let original = Record::new(

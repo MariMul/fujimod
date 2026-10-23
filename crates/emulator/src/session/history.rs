@@ -2,7 +2,10 @@
 //! Instruction counts disambiguate inputs within one guest tick at high ratios.
 use super::{Session, checkpoint::Snapshot};
 use fujimod_emulator_cpu::ExecutionPolicy;
-use fujimod_emulator_devices::{parts::touch_controller::ContactInput, scene::StatisticsCadence};
+use fujimod_emulator_devices::{
+    parts::touch_controller::ContactInput,
+    scene::{Frame, StatisticsCadence},
+};
 use std::{collections::VecDeque, sync::Arc};
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -83,7 +86,7 @@ pub enum Input {
     },
     SensorRaf {
         source: String,
-        bytes: Vec<u8>,
+        frame: Arc<Frame>,
     },
     SensorRaw16 {
         source: String,
@@ -136,8 +139,17 @@ impl Input {
             Self::Logic { wire, .. } => wire.capacity(),
             Self::Rgb { source, bytes, .. }
             | Self::SensorRgb { source, bytes, .. }
-            | Self::SensorRaf { source, bytes }
             | Self::SensorRaw16 { source, bytes, .. } => source.capacity() + bytes.capacity(),
+            Self::SensorRaf { source, frame } => source
+                .capacity()
+                .saturating_add(size_of::<Frame>())
+                .saturating_add(match &frame.pixels {
+                    fujimod_emulator_devices::scene::FramePixels::Rgb24(bytes) => bytes.len(),
+                    fujimod_emulator_devices::scene::FramePixels::Raw16(words) => words.len() * 2,
+                    fujimod_emulator_devices::scene::FramePixels::Mosaic { radiance, .. } => {
+                        radiance.bytes().len()
+                    }
+                }),
             Self::SensorImage { source } | Self::Analytic { source } => source.capacity(),
             Self::CardFormat {
                 node,
@@ -211,7 +223,7 @@ impl Input {
                 height,
                 bytes,
             } => session.sensor_raw16(source, *width, *height, bytes),
-            Self::SensorRaf { source, bytes } => session.sensor_raf(source, bytes),
+            Self::SensorRaf { source, frame } => session.sensor_frame(source, frame.clone()),
             Self::SensorImage { source } => session.sensor_image(source),
             Self::Analytic { source } => session.analytic(source),
             Self::CardFormat {

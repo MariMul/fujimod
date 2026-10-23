@@ -202,7 +202,9 @@ impl Session {
                 let node = scene.node.clone();
                 self.apply_marked_input(Input::SensorRaf {
                     source: sensor,
-                    bytes: bytes.to_vec(),
+                    frame: std::sync::Arc::new(
+                        fujimod_emulator_devices::scene::Frame::from_raf_bytes(bytes)?,
+                    ),
                 })?;
                 self.apply_input(Input::SensorImage { source: images })?;
                 self.apply_input(Input::Wake { node })?;

@@ -20,9 +20,10 @@ pub enum FramePixels {
 enum PixelKind {
     Rgb24,
     Raw16,
-    Mosaic(Cfa),
+    Mosaic { cfa: Cfa, norm: f64 },
 }
 #[derive(Serialize, Deserialize)]
+#[serde(try_from = "FrameState")]
 pub struct Frame {
     pub width: usize,
     pub height: usize,
@@ -33,6 +34,26 @@ pub struct Frame {
     /// Mosaic cell means, derived once from the immutable pixels.
     #[serde(skip)]
     sites: OnceLock<MosaicSites>,
+}
+/// Decoded input records use the same validation as live sensor installation.
+#[derive(Deserialize)]
+struct FrameState {
+    width: usize,
+    height: usize,
+    pixels: FramePixels,
+    #[serde(default = "daylight_white")]
+    white_luminance: f64,
+}
+impl TryFrom<FrameState> for Frame {
+    type Error = String;
+    fn try_from(state: FrameState) -> Result<Self, Self::Error> {
+        if !state.white_luminance.is_finite() || state.white_luminance <= 0. {
+            return Err("sensor frame white luminance must be finite and positive".into());
+        }
+        let mut frame = Self::new(state.width, state.height, state.pixels)?;
+        frame.white_luminance = state.white_luminance;
+        Ok(frame)
+    }
 }
 fn daylight_white() -> f64 {
     10000.
@@ -56,7 +77,11 @@ impl Frame {
                         cfa: b,
                         radiance: y,
                     },
-                ) => a == b && Arc::ptr_eq(x.bytes(), y.bytes()),
+                ) => {
+                    a == b
+                        && x.norm.to_bits() == y.norm.to_bits()
+                        && Arc::ptr_eq(x.bytes(), y.bytes())
+                }
                 _ => false,
             }
     }
@@ -80,7 +105,7 @@ impl Frame {
                 serde_json::json!({"kind":"raw16","contents":crate::fingerprint::words16(samples)})
             }
             FramePixels::Mosaic { cfa, radiance } => {
-                serde_json::json!({"kind":"mosaic","cfa":cfa,"contents":crate::fingerprint::float32s(radiance.bytes())})
+                serde_json::json!({"kind":"mosaic","cfa":cfa,"contents":crate::fingerprint::float32s(radiance.values())})
             }
         };
         serde_json::json!({"width":self.width,"height":self.height,"white_luminance":self.white_luminance,"pixels":pixels})
@@ -96,9 +121,13 @@ impl Frame {
                     .collect::<Vec<_>>()
                     .into(),
             ),
-            FramePixels::Mosaic { cfa, radiance } => {
-                (PixelKind::Mosaic(*cfa), radiance.bytes().clone())
-            }
+            FramePixels::Mosaic { cfa, radiance } => (
+                PixelKind::Mosaic {
+                    cfa: *cfa,
+                    norm: radiance.norm,
+                },
+                radiance.bytes().clone(),
+            ),
         };
         Ok(crate::checkpoint::Checkpoint::encode(
             "sensor-frame",
@@ -112,7 +141,7 @@ impl Frame {
         let bytes_per_site = match kind {
             PixelKind::Rgb24 => 3,
             PixelKind::Raw16 => 2,
-            PixelKind::Mosaic(_) => 4,
+            PixelKind::Mosaic { .. } => 2,
         };
         if width == 0
             || height == 0
@@ -135,9 +164,9 @@ impl Frame {
                     .map(|b| u16::from_le_bytes([b[0], b[1]]))
                     .collect(),
             ),
-            PixelKind::Mosaic(cfa) => FramePixels::Mosaic {
+            PixelKind::Mosaic { cfa, norm } => FramePixels::Mosaic {
                 cfa,
-                radiance: Radiance::from_bytes(saved.blobs()[0].clone())?,
+                radiance: Radiance::from_bytes(saved.blobs()[0].clone(), norm)?,
             },
         };
         let mut frame = Self::new(width, height, pixels)?;
@@ -156,7 +185,13 @@ impl Frame {
                 if cfa.iter().flatten().any(|c| *c > 2) {
                     return Err("mosaic CFA colors must be 0, 1 or 2".into());
                 }
-                if radiance.values().any(|v| !v.is_finite() || v < 0.) {
+                if !radiance.bytes().len().is_multiple_of(2) {
+                    return Err("mosaic counts must be whole u16 samples".into());
+                }
+                if !radiance.norm.is_finite()
+                    || radiance.norm <= 0.
+                    || radiance.values().any(|v| !v.is_finite())
+                {
                     return Err("mosaic radiance must be finite and nonnegative".into());
                 }
                 radiance.len()
@@ -173,13 +208,20 @@ impl Frame {
             sites: OnceLock::new(),
         })
     }
+    pub fn from_raf_bytes(bytes: &[u8]) -> Result<Self, String> {
+        if bytes.len() > 64 << 20 {
+            return Err("sensor RAF input exceeds 64 MiB".into());
+        }
+        let scene = super::raf::read_raf(std::io::Cursor::new(bytes)).map_err(|e| e.to_string())?;
+        Self::from_raf(&scene)
+    }
     /// The RAF's visible crop as a mosaic frame. The CFA pattern is re-phased
     /// to the crop origin, so sites keep their physical colors.
     pub fn from_raf(scene: &RafScene) -> Result<Self, String> {
         let (full_width, full_height) = (scene.width as usize, scene.height as usize);
         let (left, top) = (scene.crop_left as usize, scene.crop_top as usize);
         let (width, height) = (scene.crop_width as usize, scene.crop_height as usize);
-        if scene.radiance.len() != full_width * full_height
+        if scene.counts.len() != full_width * full_height
             || width == 0
             || height == 0
             || left + width > full_width
@@ -190,14 +232,14 @@ impl Frame {
         let cfa = std::array::from_fn(|y| {
             std::array::from_fn(|x| scene.cfa[(y + top) % 6][(x + left) % 6])
         });
-        let mut bytes = Vec::with_capacity(width * height * 4);
+        let mut bytes = Vec::with_capacity(width * height * 2);
         for y in top..top + height {
             let row = y * full_width + left;
-            for value in &scene.radiance[row..row + width] {
+            for value in &scene.counts[row..row + width] {
                 bytes.extend_from_slice(&value.to_le_bytes());
             }
         }
-        let radiance = Radiance::from_bytes(bytes.into())?;
+        let radiance = Radiance::from_bytes(bytes.into(), scene.norm)?;
         Self::new(width, height, FramePixels::Mosaic { cfa, radiance })
     }
 }
@@ -243,6 +285,111 @@ impl SensorFrames {
 mod tests {
     use super::*;
     #[test]
+    fn mosaic_normalization_is_validated_and_changes_pixel_identity() {
+        let counts = Radiance::from_counts([0, u16::MAX], 1.);
+        for norm in [
+            0.,
+            -1.,
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::MIN_POSITIVE,
+        ] {
+            let invalid = Frame::new(
+                2,
+                1,
+                FramePixels::Mosaic {
+                    cfa: [[0; 6]; 6],
+                    radiance: Radiance::from_bytes(counts.bytes().clone(), norm).unwrap(),
+                },
+            );
+            assert!(invalid.is_err(), "norm {norm}");
+        }
+        let frame = Frame::new(
+            2,
+            1,
+            FramePixels::Mosaic {
+                cfa: [[0; 6]; 6],
+                radiance: counts.clone(),
+            },
+        )
+        .unwrap();
+        let other = Frame::new(
+            2,
+            1,
+            FramePixels::Mosaic {
+                cfa: [[0; 6]; 6],
+                radiance: Radiance::from_bytes(counts.bytes().clone(), 2.).unwrap(),
+            },
+        )
+        .unwrap();
+        assert!(!frame.same_pixels(&other));
+        assert_ne!(frame.fingerprint(), other.fingerprint());
+        let mut odd = serde_json::to_value(&frame).unwrap();
+        odd["pixels"]["Mosaic"]["radiance"]["counts"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!(0));
+        assert!(serde_json::from_value::<Frame>(odd).is_err());
+        let mut encoded = serde_json::to_value(&frame).unwrap();
+        encoded["pixels"]["Mosaic"]["radiance"]["norm"] = serde_json::json!(0.);
+        assert!(serde_json::from_value::<Frame>(encoded).is_err());
+        let corrupt = crate::checkpoint::Checkpoint::encode(
+            "sensor-frame",
+            &(
+                2usize,
+                1usize,
+                10000.,
+                PixelKind::Mosaic {
+                    cfa: [[0u8; 6]; 6],
+                    norm: 0.,
+                },
+            ),
+        )
+        .unwrap()
+        .with_blobs(vec![counts.bytes().clone()]);
+        assert!(Frame::from_checkpoint(&corrupt).is_err());
+    }
+
+    #[test]
+    fn raf_crop_preserves_count_values_normalization_and_cfa_phase() {
+        let scene = RafScene {
+            width: 11,
+            height: 8,
+            cfa: std::array::from_fn(|y| std::array::from_fn(|x| ((x + y) % 3) as u8)),
+            black: [1024; 3],
+            white: 16383,
+            counts: (0..88).map(|i| i * 719).collect(),
+            norm: 1. / 64800.,
+            exposure: super::super::raf::RecordedExposure {
+                seconds: 1. / 800.,
+                f_number: 9.,
+                iso: 200,
+                dynamic_range: 100,
+            },
+            crop_top: 2,
+            crop_left: 3,
+            crop_height: 5,
+            crop_width: 7,
+        };
+        let frame = Frame::from_raf(&scene).unwrap();
+        let FramePixels::Mosaic { cfa, radiance } = &frame.pixels else {
+            panic!("mosaic");
+        };
+        assert_eq!(radiance.bytes().len(), 7 * 5 * 2);
+        assert_eq!(radiance.norm.to_bits(), scene.norm.to_bits());
+        for y in 0..5 {
+            for x in 0..7 {
+                assert_eq!(cfa[y % 6][x % 6], scene.cfa[(y + 2) % 6][(x + 3) % 6]);
+                assert_eq!(
+                    radiance.get(y * 7 + x).to_bits(),
+                    scene.radiance((y + 2) * 11 + x + 3).to_bits()
+                );
+            }
+        }
+    }
+
+    #[test]
     fn frame_edge_freezes_external_input() {
         let mut s = SensorFrames::new(Frame::new(2, 1, FramePixels::Raw16(vec![1, 2])).unwrap());
         assert_eq!(s.latch(5).unwrap(), FrameEdge { index: 1, tick: 5 });
@@ -262,7 +409,7 @@ mod tests {
             [1, 1, 2, 1, 1, 0],
             [1, 1, 0, 1, 1, 2],
         ];
-        let radiance = Radiance::from_values((0..21).map(|i| i as f32 * 0.5));
+        let radiance = Radiance::from_counts(0..21, 2.);
         let frame = Frame::new(
             7,
             3,
@@ -273,6 +420,8 @@ mod tests {
         )
         .unwrap();
         let saved = frame.checkpoint().unwrap();
+        assert_eq!(saved.blobs()[0].len(), 21 * 2);
+        assert!(Arc::ptr_eq(&saved.blobs()[0], radiance.bytes()));
         let restored = Frame::from_checkpoint(&saved).unwrap();
         assert_eq!(restored.fingerprint(), frame.fingerprint());
         // The restore shares the radiance buffer, so optical caches still match.
@@ -297,7 +446,7 @@ mod tests {
                 1,
                 FramePixels::Mosaic {
                     cfa: [[3; 6]; 6],
-                    radiance: Radiance::from_values([1.])
+                    radiance: Radiance::from_counts([1], 1.)
                 }
             )
             .is_err()
@@ -308,7 +457,7 @@ mod tests {
                 1,
                 FramePixels::Mosaic {
                     cfa: [[0; 6]; 6],
-                    radiance: Radiance::from_values([f32::NAN])
+                    radiance: Radiance::from_counts([1], f64::NAN)
                 }
             )
             .is_err()
@@ -319,7 +468,7 @@ mod tests {
                 1,
                 FramePixels::Mosaic {
                     cfa: [[0; 6]; 6],
-                    radiance: Radiance::from_values([-1.])
+                    radiance: Radiance::from_counts([1], -1.)
                 }
             )
             .is_err()

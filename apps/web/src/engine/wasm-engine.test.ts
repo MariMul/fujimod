@@ -209,7 +209,7 @@ test('the X70 boots and restores its default with original RAF bytes', async () 
     assert.deepEqual(message.request, { action: 'scene', scene: { raf: bytes } });
     f.resolve();
     await restore;
-    assert.equal(urls.length, 1);
+    assert.equal(urls.length, 2);
   } finally {
     globalThis.fetch = original;
     f.engine.dispose();

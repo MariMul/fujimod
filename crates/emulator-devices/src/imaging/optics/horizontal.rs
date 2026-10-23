@@ -31,20 +31,25 @@ impl Plane {
     ) -> Self {
         let mut pixels = Vec::with_capacity(coordinates.xs.len() * (end - begin));
         for y in begin..end {
+            let row = scene.row(y);
             for &x in &coordinates.xs {
-                pixels.push(scene.horizontal(x, y, radius, 0));
+                pixels.push(row.horizontal(x, radius, 0));
             }
         }
+        let first_row = scene.row(0);
         let first = coordinates
             .xs
             .iter()
-            .map(|&x| scene.horizontal(x, 0, radius, 0))
+            .map(|&x| first_row.horizontal(x, radius, 0))
             .collect();
+        let last_row = scene.row(scene.dimensions[1] - 1);
         let last = coordinates
             .xs
             .iter()
-            .map(|&x| scene.horizontal(x, scene.dimensions[1] - 1, radius, 0))
+            .map(|&x| last_row.horizontal(x, radius, 0))
             .collect();
+        drop(first_row);
+        drop(last_row);
         Self {
             scene,
             coordinates,

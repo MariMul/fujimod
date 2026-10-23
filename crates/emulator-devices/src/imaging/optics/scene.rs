@@ -1,5 +1,5 @@
 use crate::scene::{Frame, FramePixels};
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 /// Immutable scene irradiance. Row prefixes are independent of the lens,
 /// exposure and readout window; each scene is linearized once per projection.
@@ -35,17 +35,8 @@ impl Scene {
                 })
             }
             FramePixels::Mosaic { .. } => {
-                let sites = frame.mosaic().ok_or("mosaic scene has no site radiance")?;
-                let scale = if sites.max > 0. {
-                    65535. / f64::from(sites.max)
-                } else {
-                    0.
-                };
-                prefix_sums(dimensions, |x, y| {
-                    sites
-                        .site(x, y)
-                        .map(|v| libm::rint(f64::from(v) * scale).clamp(0., 65535.) as u16)
-                })
+                frame.mosaic().ok_or("mosaic scene has no site radiance")?;
+                Vec::new()
             }
             FramePixels::Raw16(_) => {
                 return Err("optical scenes need RGB or mosaic radiance".into());
@@ -63,40 +54,42 @@ impl Scene {
         let [width, height] = dimensions;
         let [sw, sh] = self.dimensions;
         let mut prefix = vec![[0u32; 3]; (width + 1) * height];
+        let mut source_y = 0;
+        let mut source_row = self.row(source_y);
+        let mut colors = vec![[0u64; 3]; width];
         for y in 0..height {
             let top = y * sh;
             let bottom = (y + 1) * sh;
-            let mut sum = [0u32; 3];
-            for x in 0..width {
-                let left = x * sw;
-                let right = (x + 1) * sw;
-                let mut color = [0u64; 3];
-                for sy in top / height..bottom.div_ceil(height) {
-                    let wy = bottom.min((sy + 1) * height) - top.max(sy * height);
-                    let row = sy * (sw + 1);
+            colors.fill([0; 3]);
+            for sy in top / height..bottom.div_ceil(height) {
+                if sy != source_y {
+                    source_row = self.row(sy);
+                    source_y = sy;
+                }
+                let row = &source_row.prefix;
+                let wy = bottom.min((sy + 1) * height) - top.max(sy * height);
+                for (x, color) in colors.iter_mut().enumerate() {
+                    let left = x * sw;
+                    let right = (x + 1) * sw;
                     let first = left / width;
                     let last = (right - 1) / width;
                     for c in 0..3 {
                         let horizontal = if first == last {
-                            u64::from(self.prefix[row + first + 1][c] - self.prefix[row + first][c])
-                                * sw as u64
+                            u64::from(row[first + 1][c] - row[first][c]) * sw as u64
                         } else {
-                            let a = u64::from(
-                                self.prefix[row + first + 1][c] - self.prefix[row + first][c],
-                            );
-                            let b = u64::from(
-                                self.prefix[row + last + 1][c] - self.prefix[row + last][c],
-                            );
+                            let a = u64::from(row[first + 1][c] - row[first][c]);
+                            let b = u64::from(row[last + 1][c] - row[last][c]);
                             a * ((first + 1) * width - left) as u64
                                 + b * (right - last * width) as u64
-                                + u64::from(
-                                    self.prefix[row + last][c] - self.prefix[row + first + 1][c],
-                                ) * width as u64
+                                + u64::from(row[last][c] - row[first + 1][c]) * width as u64
                         };
                         color[c] += horizontal * wy as u64;
                     }
                 }
-                let area = (sw * sh) as u64;
+            }
+            let mut sum = [0u32; 3];
+            let area = (sw * sh) as u64;
+            for (x, color) in colors.iter().enumerate() {
                 for c in 0..3 {
                     sum[c] += ((color[c] + area / 2) / area) as u32;
                 }
@@ -111,16 +104,50 @@ impl Scene {
     }
     #[inline(always)]
     pub fn linear(&self, x: usize, y: usize) -> [u16; 3] {
-        let row = y * (self.dimensions[0] + 1);
-        std::array::from_fn(|c| (self.prefix[row + x + 1][c] - self.prefix[row + x][c]) as u16)
+        if self.prefix.is_empty() {
+            let sites = self.frame.mosaic().expect("mosaic scene");
+            let scale = if sites.max > 0. {
+                65535. / f64::from(sites.max)
+            } else {
+                0.
+            };
+            sites
+                .site(x, y)
+                .map(|v| libm::rint(f64::from(v) * scale).clamp(0., 65535.) as u16)
+        } else {
+            let row = y * (self.dimensions[0] + 1);
+            std::array::from_fn(|c| (self.prefix[row + x + 1][c] - self.prefix[row + x][c]) as u16)
+        }
     }
-    #[inline(always)]
+    pub fn stores_prefixes(&self) -> bool {
+        !self.prefix.is_empty()
+    }
+    /// Borrow stored prefixes, or compute only this mosaic row.
+    pub fn row(&self, y: usize) -> Row<'_> {
+        let width = self.dimensions[0];
+        let prefix = if self.prefix.is_empty() {
+            Cow::Owned(prefix_sums([width, 1], |x, _| self.linear(x, y)))
+        } else {
+            Cow::Borrowed(&self.prefix[y * (width + 1)..(y + 1) * (width + 1)])
+        };
+        Row { prefix }
+    }
     pub fn horizontal(&self, x: usize, y: usize, radius: usize, fraction: u32) -> [u16; 3] {
         if radius == 0 && fraction == 0 {
             return self.linear(x, y);
         }
-        let width = self.dimensions[0];
-        let row = &self.prefix[y * (width + 1)..(y + 1) * (width + 1)];
+        self.row(y).horizontal(x, radius, fraction)
+    }
+}
+
+pub(super) struct Row<'a> {
+    prefix: Cow<'a, [[u32; 3]]>,
+}
+impl Row<'_> {
+    #[inline(always)]
+    pub fn horizontal(&self, x: usize, radius: usize, fraction: u32) -> [u16; 3] {
+        let row = &self.prefix;
+        let width = row.len() - 1;
         let inner = Span::new(x, width, radius);
         let outer = Span::new(x, width, radius + 1);
         let mut result = [0; 3];
@@ -218,6 +245,101 @@ mod tests {
         ))
         .unwrap()
     }
+    #[test]
+    fn computed_mosaic_rows_match_dense_optics_bins_and_checkpoint_restore() {
+        use super::super::readout::{Coordinates, project_axes};
+        use crate::scene::mosaic::Radiance;
+        let [width, height] = [13, 8];
+        let cfa = std::array::from_fn(|y| std::array::from_fn(|x| ((x + 2 * y) % 3) as u8));
+        let counts: Vec<u16> = (0..width * height)
+            .map(|i| (i * 2357 % 65536) as u16)
+            .collect();
+        let norm = 1. / 64800.;
+        let frame = Arc::new(
+            Frame::new(
+                width,
+                height,
+                FramePixels::Mosaic {
+                    cfa,
+                    radiance: Radiance::from_counts(counts.iter().copied(), norm),
+                },
+            )
+            .unwrap(),
+        );
+        // Independent reconstruction of the former full-resolution f32 scene.
+        let values: Vec<_> = counts
+            .iter()
+            .map(|&v| (f64::from(v) / norm) as f32)
+            .collect();
+        let max = values.iter().copied().fold(0f32, f32::max);
+        let dense = Scene {
+            frame: frame.clone(),
+            dimensions: [width, height],
+            prefix: prefix_sums([width, height], |x, y| {
+                let mut sum = [0f64; 3];
+                let mut count = [0u32; 3];
+                for sy in y / 6 * 6..((y / 6 + 1) * 6).min(height) {
+                    for sx in x / 6 * 6..((x / 6 + 1) * 6).min(width) {
+                        let c = usize::from(cfa[sy % 6][sx % 6]);
+                        sum[c] += f64::from(values[sy * width + sx]);
+                        count[c] += 1;
+                    }
+                }
+                let own = usize::from(cfa[y % 6][x % 6]);
+                std::array::from_fn(|c| {
+                    let v = if c == own {
+                        values[y * width + x]
+                    } else if count[c] == 0 {
+                        0.
+                    } else {
+                        (sum[c] / f64::from(count[c])) as f32
+                    };
+                    libm::rint(f64::from(v) * (65535. / f64::from(max))).clamp(0., 65535.) as u16
+                })
+            }),
+        };
+        let saved = frame.checkpoint().unwrap();
+        let restored = Arc::new(Frame::from_checkpoint(&saved).unwrap());
+        assert!(restored.same_pixels(&frame));
+        for frame in [frame, restored] {
+            let scene = Scene::new(frame).unwrap();
+            assert!(scene.prefix.is_empty());
+            assert!(!scene.stores_prefixes());
+            for y in 0..height {
+                for x in 0..width {
+                    assert_eq!(scene.linear(x, y), dense.linear(x, y));
+                    for radius in [0, 1, 5, 20] {
+                        for fraction in [0, 1, 32768, 65535] {
+                            assert_eq!(
+                                scene.horizontal(x, y, radius, fraction),
+                                dense.horizontal(x, y, radius, fraction)
+                            );
+                        }
+                    }
+                }
+            }
+            for dimensions in [[1, 1], [7, 3], [13, 8], [17, 11]] {
+                let binned = scene.binned(dimensions);
+                assert!(binned.stores_prefixes());
+                assert_eq!(binned.prefix, dense.binned(dimensions).prefix);
+            }
+            let sparse = Coordinates::new([width, height], [23, 17], [3, 2, 15, 12]).unwrap();
+            // Widely separated rows exercise disjoint sliding windows too.
+            let separated = Coordinates::new([width, height], [3, 2], [0, 0, 3, 2]).unwrap();
+            for coordinates in [Coordinates::full([width, height]), sparse, separated] {
+                for radius in [[0, 0], [1, 0], [0, 3], [2, 4], [20, 15]] {
+                    for fraction in [[0, 0], [1, 65535], [32768, 16384]] {
+                        assert_eq!(
+                            project_axes(&scene, &coordinates, radius, fraction),
+                            project_axes(&dense, &coordinates, radius, fraction),
+                            "radius {radius:?} fraction {fraction:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn binning_integrates_linear_light_and_preserves_flat_fields() {
         let flat = rgb(vec![91; 7 * 5 * 3], [7, 5]);

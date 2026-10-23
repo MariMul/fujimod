@@ -18,9 +18,22 @@ pub fn words16(words: &[u16]) -> serde_json::Value {
     serde_json::json!({"words":words.len(),"sha256":format!("{:x}",hash.finalize())})
 }
 
-/// Hash little-endian 32-bit floats by their stored bytes.
-pub fn float32s(bytes: &[u8]) -> serde_json::Value {
+/// Hash reconstructed 32-bit floats in canonical little-endian order with
+/// bounded scratch, independent of the sensor's storage representation.
+pub fn float32s(values: impl IntoIterator<Item = f32>) -> serde_json::Value {
     let mut hash = Sha256::new();
-    hash.update(bytes);
-    serde_json::json!({"floats":bytes.len()/4,"sha256":format!("{:x}",hash.finalize())})
+    let mut bytes = [0u8; 4096];
+    let mut used = 0;
+    let mut count = 0;
+    for value in values {
+        bytes[used..used + 4].copy_from_slice(&value.to_le_bytes());
+        used += 4;
+        count += 1;
+        if used == bytes.len() {
+            hash.update(bytes);
+            used = 0;
+        }
+    }
+    hash.update(&bytes[..used]);
+    serde_json::json!({"floats":count,"sha256":format!("{:x}",hash.finalize())})
 }

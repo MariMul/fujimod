@@ -834,3 +834,68 @@ fn automatic_history_admits_one_oversized_input_and_expires_its_old_prefix() {
     assert!(history.entries().is_empty());
     assert_eq!(sensor.lock().unwrap().current.white_luminance, 250.);
 }
+
+#[test]
+fn raf_history_and_replay_share_the_installed_frame_and_checkpoint_counts() {
+    use super::history::{History, Input};
+    use fujimod_emulator_devices::scene::{Frame, FramePixels, SensorFrames, mosaic::Radiance};
+    use std::sync::{Arc, Mutex};
+    let mut session = card_session();
+    let input = Arc::new(Mutex::new(SensorFrames::new(
+        Frame::new(1, 1, FramePixels::Rgb24(vec![0; 3].into())).unwrap(),
+    )));
+    session
+        .resources
+        .inputs
+        .sensors
+        .insert("sensor".into(), input.clone());
+    let saved = session.checkpoint(None).unwrap();
+    let frame = Arc::new(
+        Frame::new(
+            7,
+            3,
+            FramePixels::Mosaic {
+                cfa: std::array::from_fn(|y| std::array::from_fn(|x| ((x + y) % 3) as u8)),
+                radiance: Radiance::from_counts((0..21).map(|i| i * 1777), 1. / 64800.),
+            },
+        )
+        .unwrap(),
+    );
+    let mut history = History::new(2, 128 << 20).unwrap();
+    history
+        .apply(
+            &mut session,
+            Input::SensorRaf {
+                source: "sensor".into(),
+                frame: frame.clone(),
+            },
+        )
+        .unwrap();
+    assert!(Arc::ptr_eq(&input.lock().unwrap().current, &frame));
+    let Input::SensorRaf {
+        frame: retained, ..
+    } = &history.entries()[0].input
+    else {
+        panic!("RAF input");
+    };
+    assert!(Arc::ptr_eq(retained, &frame));
+    let straight = session.fingerprint().unwrap();
+    let encoded =
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode("raf-history", &history.entries())
+            .unwrap();
+    let replay: Vec<super::history::Entry> = encoded.decode("raf-history").unwrap();
+    session.restore(&saved).unwrap();
+    History::replay(&mut session, &replay).unwrap();
+    let Input::SensorRaf {
+        frame: replayed, ..
+    } = &replay[0].input
+    else {
+        panic!("RAF input");
+    };
+    assert!(Arc::ptr_eq(&input.lock().unwrap().current, replayed));
+    assert_eq!(session.fingerprint().unwrap(), straight);
+    let current = session.checkpoint(None).unwrap();
+    session.restore(&saved).unwrap();
+    session.restore(&current).unwrap();
+    assert!(input.lock().unwrap().current.same_pixels(replayed));
+}

@@ -386,11 +386,19 @@ pub(super) fn project(
     // Select the sample source once per projection, leaving each pixel loop
     // specialized for either cached means or the original scratch path.
     match horizontal {
-        Some(prepared) => project_sampled(scene, coordinates, radius, fraction, |column, _, y| {
-            prepared.sample(column, y)
-        }),
-        None => project_sampled(scene, coordinates, radius, fraction, |_, x, y| {
-            scene.horizontal(x, y, radius, fraction)
+        Some(prepared) => project_sampled(
+            scene,
+            coordinates,
+            radius,
+            fraction,
+            |y, xs, offset, out| {
+                for (column, value) in out.iter_mut().take(xs.len()).enumerate() {
+                    *value = prepared.sample(offset + column, y);
+                }
+            },
+        ),
+        None => project_sampled(scene, coordinates, radius, fraction, |y, xs, _, out| {
+            horizontal_row(scene, y, xs, radius, fraction, out);
         }),
     }
 }
@@ -422,11 +430,40 @@ pub(super) fn project_prepared_axes(
             coordinates,
             radius[1],
             fraction[1],
-            |column, _, y| prepared.sample(column, y),
+            |y, xs, offset, out| {
+                for (column, value) in out.iter_mut().take(xs.len()).enumerate() {
+                    *value = prepared.sample(offset + column, y);
+                }
+            },
         ),
-        None => project_sampled(scene, coordinates, radius[1], fraction[1], |_, x, y| {
-            scene.horizontal(x, y, radius[0], fraction[0])
-        }),
+        None => project_sampled(
+            scene,
+            coordinates,
+            radius[1],
+            fraction[1],
+            |y, xs, _, out| {
+                horizontal_row(scene, y, xs, radius[0], fraction[0], out);
+            },
+        ),
+    }
+}
+fn horizontal_row(
+    scene: &Scene,
+    y: usize,
+    xs: &[usize],
+    radius: usize,
+    fraction: u32,
+    out: &mut [[u16; 3]],
+) {
+    if radius == 0 && fraction == 0 {
+        for (&x, value) in xs.iter().zip(out) {
+            *value = scene.linear(x, y);
+        }
+    } else {
+        let row = scene.row(y);
+        for (&x, value) in xs.iter().zip(out) {
+            *value = row.horizontal(x, radius, fraction);
+        }
     }
 }
 fn project_sampled(
@@ -434,8 +471,11 @@ fn project_sampled(
     coordinates: &Coordinates,
     radius: usize,
     fraction: u32,
-    sample: impl Fn(usize, usize, usize) -> [u16; 3],
+    sample: impl Fn(usize, &[usize], usize, &mut [[u16; 3]]),
 ) -> Vec<[u16; 3]> {
+    if !scene.stores_prefixes() {
+        return project_rows(scene, coordinates, radius, fraction, sample);
+    }
     let mut result = vec![[0; 3]; coordinates.xs.len() * coordinates.ys.len()];
     if coordinates.xs.is_empty() {
         return result;
@@ -452,20 +492,17 @@ fn project_sampled(
     for (block, xs) in coordinates.xs.chunks(LANES).enumerate() {
         prefix[0] = [[0; 3]; LANES];
         for y in begin..end {
-            for (lane, &x) in xs.iter().enumerate() {
-                let value = sample(block * LANES + lane, x, y);
+            let mut values = [[0; 3]; LANES];
+            sample(y, xs, block * LANES, &mut values);
+            for (lane, value) in values.iter().take(xs.len()).enumerate() {
                 prefix[y - begin + 1][lane] =
                     std::array::from_fn(|c| prefix[y - begin][lane][c] + u64::from(value[c]));
             }
         }
-        let first: [[u16; 3]; LANES] = std::array::from_fn(|lane| {
-            xs.get(lane)
-                .map_or([0; 3], |&x| sample(block * LANES + lane, x, 0))
-        });
-        let last: [[u16; 3]; LANES] = std::array::from_fn(|lane| {
-            xs.get(lane)
-                .map_or([0; 3], |&x| sample(block * LANES + lane, x, height - 1))
-        });
+        let mut first = [[0; 3]; LANES];
+        let mut last = [[0; 3]; LANES];
+        sample(0, xs, block * LANES, &mut first);
+        sample(height - 1, xs, block * LANES, &mut last);
         for (row, &y) in coordinates.ys.iter().enumerate() {
             let inner = Span::new(y, height, radius);
             let outer = Span::new(y, height, radius + 1);
@@ -498,4 +535,89 @@ fn project_sampled(
         }
     }
     result
+}
+
+/// Sweep computed mosaic rows across all selected columns. Sliding vertical
+/// sums recompute departing rows rather than retaining a full horizontal plane.
+/// Scratch stays proportional to one source row and the selected columns.
+fn project_rows(
+    scene: &Scene,
+    coordinates: &Coordinates,
+    radius: usize,
+    fraction: u32,
+    sample: impl Fn(usize, &[usize], usize, &mut [[u16; 3]]),
+) -> Vec<[u16; 3]> {
+    let width = coordinates.xs.len();
+    let height = scene.dimensions[1];
+    let mut result = vec![[0; 3]; width * coordinates.ys.len()];
+    if width == 0 || coordinates.ys.is_empty() {
+        return result;
+    }
+    let mut first = vec![[0; 3]; width];
+    let mut last = vec![[0; 3]; width];
+    sample(0, &coordinates.xs, 0, &mut first);
+    sample(height - 1, &coordinates.xs, 0, &mut last);
+    let mut scratch = vec![[0; 3]; width];
+    let mut inner = MovingSum::new(width);
+    let mut outer = MovingSum::new(width);
+    for (row, &y) in coordinates.ys.iter().enumerate() {
+        let a = Span::new(y, height, radius);
+        let b = Span::new(y, height, radius + 1);
+        let mut sample_row = |sy, values: &mut [[u16; 3]]| sample(sy, &coordinates.xs, 0, values);
+        inner.advance(a, &mut scratch, &mut sample_row);
+        if fraction != 0 {
+            outer.advance(b, &mut scratch, &mut sample_row);
+        }
+        for x in 0..width {
+            result[row * width + x] = std::array::from_fn(|c| {
+                let mean = a.mean(0, inner.sums[x][c], first[x][c], last[x][c]);
+                let other = if fraction == 0 {
+                    mean
+                } else {
+                    b.mean(0, outer.sums[x][c], first[x][c], last[x][c])
+                };
+                blend(mean, fraction, other)
+            });
+        }
+    }
+    result
+}
+struct MovingSum {
+    span: Option<Span>,
+    sums: Vec<[u64; 3]>,
+}
+impl MovingSum {
+    fn new(width: usize) -> Self {
+        Self {
+            span: None,
+            sums: vec![[0; 3]; width],
+        }
+    }
+    fn advance(
+        &mut self,
+        next: Span,
+        scratch: &mut [[u16; 3]],
+        sample: &mut impl FnMut(usize, &mut [[u16; 3]]),
+    ) {
+        if let Some(old) = self.span {
+            for y in old.first..next.first.min(old.last) {
+                sample(y, scratch);
+                for (sum, value) in self.sums.iter_mut().zip(scratch.iter()) {
+                    for c in 0..3 {
+                        sum[c] -= u64::from(value[c]);
+                    }
+                }
+            }
+        }
+        let begin = self.span.map_or(next.first, |old| old.last.max(next.first));
+        for y in begin..next.last {
+            sample(y, scratch);
+            for (sum, value) in self.sums.iter_mut().zip(scratch.iter()) {
+                for c in 0..3 {
+                    sum[c] += u64::from(value[c]);
+                }
+            }
+        }
+        self.span = Some(next);
+    }
 }

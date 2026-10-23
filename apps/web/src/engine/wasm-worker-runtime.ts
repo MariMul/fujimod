@@ -300,8 +300,8 @@ export class WasmWorkerRuntime {
         );
         return;
       case 'scene':
-        this.scene = request.scene ?? undefined;
         s.scene(request.scene);
+        this.scene = request.scene && 'rgb' in request.scene ? request.scene : undefined;
         return;
       case 'power':
         if (this.state?.poweredOn === request.on) return;
@@ -474,7 +474,7 @@ export class WasmWorkerRuntime {
     if (this.session) throw Error('Wasm worker already booted.');
     this.config = config;
     const saved = config.camera ? await this.cameras.saved(config.camera.id) : undefined;
-    this.scene = scene;
+    this.scene = scene && 'rgb' in scene ? scene : undefined;
     this.send({ type: 'progress', message: 'Loading Wasm runtime…' });
     const { session, manifest, identity, loadTimings } = await this.prepare(config.bundle);
     this.loadTimings = loadTimings;
@@ -572,6 +572,10 @@ export class WasmWorkerRuntime {
       message: 'Booting camera…',
       assets: [loadingStep('build', 'complete'), loadingStep('boot', 'loading')],
     });
+    if (scene && 'raf' in scene) {
+      session.scene(scene);
+      scene = undefined;
+    }
     await this.coldBoot(config.bootInputs);
     this.send({
       type: 'progress',

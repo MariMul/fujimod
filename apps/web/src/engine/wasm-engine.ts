@@ -89,10 +89,10 @@ export class WasmEngine implements Engine {
   private sceneInput = false;
   private firmwareId?: string;
   private loadDefaultScene(): Promise<Scene> {
-    return (this.defaultScene ??=
-      this.firmwareId === 'x70-110'
-        ? loadRafScene()
-        : loadImageScene(new URL('./assets/default-scene.png', import.meta.url)));
+    if (this.firmwareId === 'x70-110') return loadRafScene();
+    return (this.defaultScene ??= loadImageScene(
+      new URL('./assets/default-scene.png', import.meta.url),
+    ));
   }
   private booted = false;
   private presentedFrames = 0;
@@ -270,6 +270,7 @@ export class WasmEngine implements Engine {
       { action: 'boot', dat, config: this.absolute(config), files, scene, seedIdentity },
       [dat],
     );
+    if (this.selectedScene === scene && scene && 'raf' in scene) this.selectedScene = null;
     this.booted = true;
     return inputs;
   }
@@ -377,6 +378,7 @@ export class WasmEngine implements Engine {
     const image = scene ?? (await this.loadDefaultScene());
     if (this.selectedScene !== scene) return;
     await this.rpc({ action: 'scene', scene: image });
+    if (this.selectedScene === scene && scene && 'raf' in scene) this.selectedScene = null;
   }
   powerChanges(listener: (on: boolean) => void) {
     if (this.latestPower !== undefined) listener(this.latestPower);

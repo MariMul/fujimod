@@ -6,47 +6,52 @@ use std::sync::Arc;
 
 pub type Cfa = [[u8; 6]; 6];
 
-/// Per-site radiance as little-endian `f32` values in one shared buffer: the
-/// layout checkpoints store, so a checkpoint and its restore share the pixels
-/// without copying and the frame keeps its pixel identity.
+/// Black-subtracted sensor counts in one shared little-endian buffer. The
+/// normalization reconstructs the original f32 radiance exactly. Checkpoints
+/// share this buffer with their restores to preserve pixel identity.
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct Radiance(#[serde(with = "crate::checkpoint::shared_bytes")] Arc<[u8]>);
+pub struct Radiance {
+    #[serde(with = "crate::checkpoint::shared_bytes")]
+    counts: Arc<[u8]>,
+    pub norm: f64,
+}
 
 impl Radiance {
-    pub fn from_values(values: impl IntoIterator<Item = f32>) -> Self {
-        let values = values.into_iter();
-        let mut bytes = Vec::with_capacity(values.size_hint().0 * 4);
-        for value in values {
-            bytes.extend_from_slice(&value.to_le_bytes());
+    pub fn from_counts(counts: impl IntoIterator<Item = u16>, norm: f64) -> Self {
+        let counts = counts.into_iter();
+        let mut bytes = Vec::with_capacity(counts.size_hint().0 * 2);
+        for count in counts {
+            bytes.extend_from_slice(&count.to_le_bytes());
         }
-        Self(bytes.into())
+        Self {
+            counts: bytes.into(),
+            norm,
+        }
     }
-    /// Little-endian `f32` bytes, as stored in checkpoints.
-    pub fn from_bytes(bytes: Arc<[u8]>) -> Result<Self, String> {
-        if bytes.len() % 4 != 0 {
-            return Err("radiance bytes are not whole f32 values".into());
+    /// Little-endian u16 counts, as stored in checkpoints.
+    pub fn from_bytes(counts: Arc<[u8]>, norm: f64) -> Result<Self, String> {
+        if !counts.len().is_multiple_of(2) {
+            return Err("radiance bytes are not whole u16 counts".into());
         }
-        Ok(Self(bytes))
+        Ok(Self { counts, norm })
     }
     pub fn bytes(&self) -> &Arc<[u8]> {
-        &self.0
+        &self.counts
     }
     pub fn len(&self) -> usize {
-        self.0.len() / 4
+        self.counts.len() / 2
     }
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.counts.is_empty()
     }
     #[inline(always)]
     pub fn get(&self, index: usize) -> f32 {
-        let at = index * 4;
-        f32::from_le_bytes(self.0[at..at + 4].try_into().expect("four radiance bytes"))
+        let at = index * 2;
+        let count = u16::from_le_bytes([self.counts[at], self.counts[at + 1]]);
+        (f64::from(count) / self.norm) as f32
     }
     pub fn values(&self) -> impl Iterator<Item = f32> + '_ {
-        self.0
-            .chunks_exact(4)
-            .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        (0..self.len()).map(|i| self.get(i))
     }
 }
 
@@ -114,5 +119,33 @@ impl MosaicSites {
             values[own] = self.radiance.get(y * self.width + x);
         }
         values
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn counts_reconstruct_every_u16_with_the_original_float_rounding() {
+        for norm in [1., 2., 1. / 800. / 81., 0.123456789, 1e-12, 1e12] {
+            let radiance = Radiance::from_counts(0..=u16::MAX, norm);
+            assert_eq!(radiance.bytes().len(), 65536 * 2);
+            for (raw, value) in (0..=u16::MAX).zip(radiance.values()) {
+                let original = (f64::from(raw) / norm) as f32;
+                assert_eq!(value.to_bits(), original.to_bits());
+                assert_eq!(radiance.get(usize::from(raw)).to_bits(), original.to_bits());
+            }
+            let original: Vec<_> = (0..=u16::MAX)
+                .flat_map(|raw| ((f64::from(raw) / norm) as f32).to_le_bytes())
+                .collect();
+            let identity = crate::fingerprint::float32s(radiance.values());
+            assert_eq!(identity["floats"], 65536);
+            assert_eq!(
+                identity["sha256"],
+                crate::fingerprint::bytes(&original)["sha256"]
+            );
+        }
+        assert!(Radiance::from_bytes(Arc::from([0u8]), 1.).is_err());
     }
 }

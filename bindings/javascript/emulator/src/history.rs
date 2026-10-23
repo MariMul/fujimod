@@ -360,6 +360,50 @@ mod tests {
         );
     }
     #[test]
+    fn cold_power_keeps_shared_mosaic_input_without_raf_bytes() {
+        use fujimod_emulator_devices::scene::{
+            Frame as SensorFrame, FramePixels, SensorFrames, mosaic::Radiance,
+        };
+        use std::sync::Mutex;
+        let mut session = session(ExecutionPolicy::Interactive);
+        let sensor = Arc::new(Mutex::new(SensorFrames::new(
+            SensorFrame::new(1, 1, FramePixels::Rgb24(vec![0; 3].into())).unwrap(),
+        )));
+        session
+            .core
+            .resources
+            .inputs
+            .sensors
+            .insert("sensor".into(), sensor.clone());
+        session.reset_image = Some(Arc::new(session.core.checkpoint(None).unwrap()));
+        let frame = Arc::new(
+            SensorFrame::new(
+                7,
+                3,
+                FramePixels::Mosaic {
+                    cfa: [[1; 6]; 6],
+                    radiance: Radiance::from_counts(0..21, 2.),
+                },
+            )
+            .unwrap(),
+        );
+        session
+            .apply_marked_input(Input::SensorRaf {
+                source: "sensor".into(),
+                frame: frame.clone(),
+            })
+            .unwrap();
+        let fingerprint = frame.fingerprint();
+        session.power(false).unwrap();
+        assert!(Arc::ptr_eq(&sensor.lock().unwrap().current, &frame));
+        session.power(true).unwrap();
+        session.power_cycle(&[]).unwrap();
+        let current = sensor.lock().unwrap().current.clone();
+        assert!(Arc::ptr_eq(&current, &frame));
+        assert_eq!(current.fingerprint(), fingerprint);
+    }
+
+    #[test]
     fn coalesced_marks_keep_frames_aligned_through_eviction_undo_and_restore() {
         let mut session = session(ExecutionPolicy::Interactive);
         frame(&mut session, 1);
