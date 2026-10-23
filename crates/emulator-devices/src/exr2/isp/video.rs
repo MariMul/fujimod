@@ -1,40 +1,335 @@
-//! FFF60000 H.264 sequence registers. The modeled configuration uses the
-//! FFF604/60B/60C/60D/60E fields: C00 bit11 initializes, bits14/15 start,
-//! and C24 bit9 reports a sequence-start notice on IRQ75 after two declared
-//! virtual ticks for an unconfigured sequence. A start with a programmed
-//! image input requires frame compression, bitstream DMA and completion;
-//! those operations refuse until modeled.
+//! Register-driven FFF60000 AVC encoder. Packed YYCbCr DMA is compressed by
+//! the software codec, then committed to the two programmed bitstream banks
+//! before status/IRQ publication. The declared clock is 64 luma samples/tick
+//! (setup/stop: two ticks), independent of host encoder speed.
+use super::dma::physical;
 use super::{Irq, due, word};
-use crate::{Cx, Device};
-use serde::Deserialize;
+use crate::{
+    Cx, Device,
+    checkpoint::Checkpoint,
+    imaging::h264::{self, Codec, Config},
+};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[derive(Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {}
 
-pub struct VideoEncoder {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct Pending {
+    deadline: u64,
+    writes: Vec<(u64, usize)>,
+    cursor: u32,
+    bank: u32,
+    bits: u32,
+    flags: u32,
+}
+#[derive(Serialize, Deserialize)]
+struct State {
     r: Vec<u32>,
+    pending: Option<Pending>,
+    finish_requested: bool,
+    irq_sent: bool,
+    config: Option<Config>,
+    frames: u64,
+    output_bytes: u64,
+    history_lengths: Vec<usize>,
+    payload_length: usize,
+}
+pub struct VideoEncoder {
+    state: State,
     irq: Irq,
-    pending: Option<u64>,
-    started: bool,
+    payload: Arc<[u8]>,
+    history: Vec<Arc<[u8]>>,
+    codec: Option<Codec>,
 }
 impl VideoEncoder {
     pub fn new(_: Options, irq: Irq) -> Result<Self, String> {
         Ok(Self {
-            r: vec![0; 0xf00 / 4],
+            state: State {
+                r: vec![0; 0xf00 / 4],
+                pending: None,
+                finish_requested: false,
+                irq_sent: false,
+                config: None,
+                frames: 0,
+                output_bytes: 0,
+                history_lengths: Vec::new(),
+                payload_length: 0,
+            },
             irq,
-            pending: None,
-            started: false,
+            payload: Arc::from([]),
+            history: Vec::new(),
+            codec: None,
         })
+    }
+    fn r(&self, offset: usize) -> u32 {
+        self.state.r[offset / 4]
+    }
+    fn set(&mut self, offset: usize, value: u32) {
+        self.state.r[offset / 4] = value;
     }
     fn valid(o: usize) -> bool {
         matches!(o,0x400..=0x408|0x440|0x444|0x490..=0x4a4|0x4ac..=0x4b8|0x4c4|0x4c8|0x4fc|0xb00|0xb04|0xb08|0xb6c|0xb74..=0xb80|0xbd0..=0xbe0|0xc00|0xc20|0xc24|0xc80..=0xc9c|0xca8|0xcbc|0xd00..=0xd28|0xd44..=0xd7c|0xd88|0xd8c|0xdc8|0xdcc|0xde0|0xe00..=0xe24|0xe30..=0xe50|0xe58..=0xef0)
     }
+    fn configuration(&self) -> Result<Config, String> {
+        // Admit the progressive packed-input path. Scaling, cropped/field
+        // input, alternate codecs, auxiliary image prediction and uploaded
+        // codec programs have no corresponding software implementation.
+        for (o, mask, value) in [
+            (0xe00, !0x7ff, 0),
+            (0xe04, !0x7ff, 0x2000),
+            (0xe18, u32::MAX, 0),
+            (0xe1c, u32::MAX, 0),
+            (0xe38, u32::MAX, 0x8000),
+            (0xe3c, u32::MAX, 0),
+            (0xe40, u32::MAX, 0),
+            (0xe44, u32::MAX, 4),
+            (0xe48, u32::MAX, 0x400),
+            (0xe94, u32::MAX, 0x348),
+            (0xea0, u32::MAX, 0x100),
+            (0x440, u32::MAX, 0),
+            (0x444, u32::MAX, 0),
+            (0x4fc, u32::MAX, 0),
+        ] {
+            if self.r(o) & mask != value {
+                return Err(format!(
+                    "H.264 unsupported mode register {o:#x}={:#x}",
+                    self.r(o)
+                ));
+            }
+        }
+        for (index, value) in self.state.r.iter().enumerate() {
+            let offset = index * 4;
+            if *value != 0
+                && !matches!(offset,
+                0x400..=0x408 | 0x490..=0x4a4 | 0x4ac | 0xbd0..=0xbe0 |
+                0xc20 | 0xc24 | 0xca8 | 0xd88 | 0xd8c |
+                0xe00..=0xe14 | 0xe20 | 0xe24 | 0xe30 | 0xe34 | 0xe38 |
+                0xe44 | 0xe48 | 0xe94 | 0xea0)
+            {
+                return Err(format!("H.264 unsupported register {offset:#x}={value:#x}"));
+            }
+        }
+        let rate = match self.r(0xe0c) {
+            23 => 24,
+            29 => 30,
+            59 => 60,
+            rate => rate,
+        };
+        let config = Config {
+            width: (self.r(0xe00) & 0x7ff) as usize,
+            height: (self.r(0xe04) & 0x7ff) as usize,
+            frames_per_second: rate,
+            bitrate: self
+                .r(0xe08)
+                .checked_mul(1024)
+                .ok_or("H.264 bitrate overflow")?,
+            max_qp: u8::try_from(self.r(0xe10)).map_err(|_| "H.264 QP range")?,
+            gop: self.r(0xe34) as usize,
+        };
+        config.validate()?;
+        Ok(config)
+    }
+    fn notice(&mut self, now: u64, flags: u32) -> Result<(), String> {
+        if self.state.pending.is_some() {
+            return Err("H.264 command while busy or interrupt unacknowledged".into());
+        }
+        self.state.pending = Some(Pending {
+            deadline: due(now, 2)?,
+            writes: Vec::new(),
+            cursor: self.r(0x4ac),
+            bank: (self.r(0x4a4) >> 5) & 1,
+            bits: 0,
+            flags,
+        });
+        Ok(())
+    }
+    fn encode(&mut self, cx: &Cx<'_>) -> Result<(), String> {
+        if self.state.pending.is_some() {
+            return Err("H.264 frame submitted while busy".into());
+        }
+        let config = self.configuration()?;
+        if self.state.config.is_some_and(|c| c != config) {
+            return Err("H.264 sequence configuration changed without initialization".into());
+        }
+        if self.r(0x4a4) & 0x1c != 0x1c {
+            return Err("H.264 requires both bitstream banks enabled".into());
+        }
+        let sizes = [self.r(0x494) as usize, self.r(0x49c) as usize];
+        let bases = [
+            physical(self.r(0x490) as u64, sizes[0])?,
+            physical(self.r(0x498) as u64, sizes[1])?,
+        ];
+        if sizes.iter().any(|n| n % 4 != 0)
+            || bases.iter().any(|n| n % 4 != 0)
+            || bases[0] < bases[1] + sizes[1] as u64 && bases[1] < bases[0] + sizes[0] as u64
+        {
+            return Err("H.264 bitstream banks overlap or are unaligned".into());
+        }
+        let length = config.width * config.height * 2;
+        let source = physical(self.r(0x400) as u64, length)?;
+        if bases
+            .iter()
+            .zip(sizes)
+            .any(|(base, size)| source < base + size as u64 && *base < source + length as u64)
+        {
+            return Err("H.264 input overlaps bitstream output".into());
+        }
+        let packed = cx.ram_bytes(source, length)?;
+        let planar: Arc<[u8]> = h264::planar_420(config.width, config.height, &packed)?.into();
+        // Each bounded GOP starts with a fresh IDR and constant parameter-set
+        // IDs. Replaying only these owned inputs reconstructs the exact codec.
+        if self.history.len() == config.gop {
+            self.history.clear();
+            self.codec = None;
+        }
+        if self.codec.is_none() {
+            self.codec = Some(Codec::new(config, &self.history)?);
+        }
+        let mut payload = self.codec.as_mut().unwrap().encode(config, &planar)?;
+        let bits = u32::try_from(payload.len() * 8).map_err(|_| "H.264 frame size overflow")?;
+        payload.resize(payload.len().next_multiple_of(4), 0);
+        if payload.len() > *sizes.iter().min().unwrap() {
+            return Err("H.264 frame exceeds one bitstream bank".into());
+        }
+        let mut bank = ((self.r(0x4a4) >> 5) & 1) as usize;
+        let mut cursor = self.r(0x4ac) as usize;
+        if cursor >= sizes[bank] {
+            return Err("H.264 output cursor outside ring".into());
+        }
+        let mut writes = Vec::new();
+        let mut remaining = payload.len();
+        let mut flags = 1 << 12;
+        while remaining > 0 {
+            let n = remaining.min(sizes[bank] - cursor);
+            writes.push((bases[bank] + cursor as u64, n));
+            remaining -= n;
+            cursor += n;
+            if cursor == sizes[bank] {
+                bank ^= 1;
+                cursor = 0;
+                flags |= 1 << 9;
+            }
+        }
+        // Read both destination spans now to refuse an unmapped DMA before
+        // accepting work; the runtime independently validates every due write.
+        for (address, length) in &writes {
+            cx.ram_bytes(*address, *length)?;
+        }
+        self.state.pending = Some(Pending {
+            deadline: due(cx.now(), (config.width * config.height).div_ceil(64) as u64)?,
+            writes,
+            cursor: cursor as u32,
+            bank: bank as u32,
+            bits,
+            flags,
+        });
+        self.payload = payload.into();
+        self.history.push(planar);
+        self.state.config = Some(config);
+        self.state.payload_length = self.payload.len();
+        self.state.history_lengths = self.history.iter().map(|b| b.len()).collect();
+        Ok(())
+    }
+    fn command(&mut self, cx: &Cx<'_>, value: u32) -> Result<(), String> {
+        match value {
+            0 => Ok(()),
+            0x800 => {
+                self.state.pending = None;
+                self.state.finish_requested = false;
+                self.state.irq_sent = false;
+                self.state.config = None;
+                self.codec = None;
+                self.history.clear();
+                self.payload = Arc::from([]);
+                self.state.history_lengths.clear();
+                self.state.payload_length = 0;
+                self.set(0x4ac, 0);
+                self.set(0xc20, 0);
+                self.set(0xc24, 0);
+                self.set(0x4a4, self.r(0x4a4) & !32);
+                Ok(())
+            }
+            0x4000 if self.r(0x400) == 0 && self.r(0xc24) == 0 => self.notice(cx.now(), 1 << 9),
+            0x8000 => self.encode(cx),
+            0x2000 => {
+                if self.state.pending.is_some() {
+                    self.state.finish_requested = true;
+                    Ok(())
+                } else {
+                    self.notice(cx.now(), 1 << 15)
+                }
+            }
+            0x1000 => self.notice(cx.now(), 1 << 14),
+            _ => Err(format!("H.264 unsupported command {value:#x}")),
+        }
+    }
+    fn decoded(&self, saved: &Checkpoint) -> Result<State, String> {
+        let s: State = saved.decode(self.name())?;
+        if s.r.len() != 0xf00 / 4
+            || saved.blobs().len() != s.history_lengths.len() + 1
+            || saved.blobs()[0].len() != s.payload_length
+            || saved.blobs()[1..]
+                .iter()
+                .zip(&s.history_lengths)
+                .any(|(b, n)| b.len() != *n)
+            || s.config.is_none() && !s.history_lengths.is_empty()
+        {
+            return Err("H.264 checkpoint sizes differ".into());
+        }
+        if let Some(pending) = &s.pending {
+            let total = pending
+                .writes
+                .iter()
+                .try_fold(0usize, |n, (_, size)| n.checked_add(*size));
+            if pending.writes.len() > 2
+                || pending.bank > 1
+                || pending.flags & !((1 << 9) | (1 << 12) | (1 << 14) | (1 << 15)) != 0
+                || !pending.writes.is_empty() && total != Some(s.payload_length)
+            {
+                return Err("H.264 checkpoint pending DMA differs".into());
+            }
+            for (address, size) in &pending.writes {
+                physical(*address, *size)?;
+            }
+        }
+        if let Some(c) = s.config {
+            c.validate()?;
+            if s.history_lengths.len() > c.gop
+                || s.history_lengths.iter().any(|n| *n != c.frame_bytes())
+            {
+                return Err("H.264 checkpoint GOP differs".into());
+            }
+        }
+        Ok(s)
+    }
 }
 impl Device for VideoEncoder {
-    crate::checkpoint_fields!(r: Vec<u32>, pending: Option<u64>, started: bool);
     fn name(&self) -> &'static str {
         "exr2-isp-video-encoder"
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        let mut blobs = vec![self.payload.clone()];
+        blobs.extend(self.history.iter().cloned());
+        Ok(Checkpoint::encode(self.name(), &self.state)?.with_blobs(blobs))
+    }
+    fn validate_checkpoint(&self, s: &Checkpoint) -> Result<(), String> {
+        self.decoded(s).map(|_| ())
+    }
+    fn restore_checkpoint(&mut self, s: &Checkpoint) -> Result<(), String> {
+        self.state = self.decoded(s)?;
+        self.payload = s.blobs()[0].clone();
+        self.history = s.blobs()[1..].to_vec();
+        self.codec = None;
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<serde_json::Value, String> {
+        Ok(
+            serde_json::json!({"state":self.state,"payload":crate::fingerprint::bytes(&self.payload),
+            "history":self.history.iter().map(|b|crate::fingerprint::bytes(b)).collect::<Vec<_>>()}),
+        )
     }
     fn read(&mut self, cx: &mut Cx<'_>, a: u64, s: u8) -> u64 {
         let Some(o) = word(cx, a, s, 0xfff60000, 0xf00) else {
@@ -44,7 +339,7 @@ impl Device for VideoEncoder {
             cx.unmodeled();
             return 0;
         }
-        self.r[o / 4] as u64
+        self.r(o) as u64
     }
     fn write(&mut self, cx: &mut Cx<'_>, a: u64, s: u8, v: u64) {
         let Some(o) = word(cx, a, s, 0xfff60000, 0xf00) else {
@@ -54,44 +349,67 @@ impl Device for VideoEncoder {
             cx.unmodeled();
             return;
         }
+        let v = v as u32;
         if o == 0xc24 {
-            self.r[o / 4] &= !(v as u32);
+            self.set(o, self.r(o) & !v);
+            self.state.irq_sent = false;
             return;
         }
         if o == 0xc00 {
-            match v {
-                0 | 0x800 => self.r[o / 4] = 0,
-                0x4000 | 0x8000 => {
-                    if self.r[0x400 / 4] != 0 {
-                        cx.fail(
-                            "H.264 frame compression, bitstream DMA and completion are unmodeled",
-                        );
-                        return;
-                    }
-                    if self.started || self.pending.is_some() {
-                        cx.fail("H.264 frame encoding is unmodeled");
-                        return;
-                    }
-                    match due(cx.now(), 2) {
-                        Ok(d) => self.pending = Some(d),
-                        Err(e) => cx.fail(e),
-                    }
-                }
-                _ => cx.fail("H.264 compression command is unmodeled"),
+            if let Err(e) = self.command(cx, v) {
+                cx.fail(e);
             }
-        } else {
-            self.r[o / 4] = v as u32;
+            return;
         }
+        if o == 0x4a4 {
+            self.set(o, (v & !32) | (self.r(o) & 32));
+            return;
+        }
+        self.set(o, v);
     }
-    fn next_deadline(&self, _: u64) -> Option<u64> {
-        self.pending
+    fn next_deadline(&self, now: u64) -> Option<u64> {
+        if self.r(0xc24) != 0 && !self.state.irq_sent {
+            return Some(now);
+        }
+        self.state.pending.as_ref().map(|p| p.deadline)
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
-        if self.pending.is_some_and(|d| cx.now() >= d) {
-            self.r[0xc20 / 4] = 4;
-            self.r[0xc24 / 4] |= 1 << 9;
-            self.pending = None;
-            self.started = true;
+        if self
+            .state
+            .pending
+            .as_ref()
+            .is_some_and(|p| cx.now() >= p.deadline)
+        {
+            let p = self.state.pending.take().unwrap();
+            let mut offset = 0;
+            for (address, length) in &p.writes {
+                if let Err(e) = cx.ram_write(*address, &self.payload[offset..offset + length]) {
+                    cx.fail(e);
+                    return;
+                }
+                offset += length;
+            }
+            if !p.writes.is_empty() {
+                self.state.frames += 1;
+                self.state.output_bytes += u64::from(p.bits.div_ceil(8));
+                self.set(0x4ac, p.cursor);
+                self.set(0x4a4, (self.r(0x4a4) & !32) | (p.bank << 5));
+                self.set(0xd88, p.bits & 65535);
+                self.set(0xd8c, p.bits >> 16);
+            }
+            self.set(0xc20, 4);
+            self.set(0xc24, self.r(0xc24) | p.flags);
+            self.state.irq_sent = false;
+            if self.state.finish_requested {
+                self.state.finish_requested = false;
+                if let Err(e) = self.notice(cx.now(), 1 << 15) {
+                    cx.fail(e);
+                    return;
+                }
+            }
+        }
+        if self.r(0xc24) != 0 && !self.state.irq_sent {
+            self.state.irq_sent = true;
             if let Err(e) = self.irq.raise(cx) {
                 cx.fail(e);
             }
@@ -101,17 +419,7 @@ impl Device for VideoEncoder {
         self.advance(cx)
     }
     fn save(&self) -> serde_json::Value {
-        serde_json::json!((&self.r, &self.pending, self.started))
-    }
-    fn restore(&mut self, v: &serde_json::Value) -> Result<(), String> {
-        let (r, p, s): (Vec<u32>, Option<u64>, bool) =
-            serde_json::from_value(v.clone()).map_err(|e| e.to_string())?;
-        if r.len() != self.r.len() {
-            return Err("video register bank size".into());
-        }
-        self.r = r;
-        self.pending = p;
-        self.started = s;
-        Ok(())
+        serde_json::json!({"frames":self.state.frames,"output_bytes":self.state.output_bytes,
+            "registers":self.state.r,"pending":self.state.pending,"gop_frames":self.history.len()})
     }
 }

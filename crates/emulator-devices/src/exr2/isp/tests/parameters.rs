@@ -27,11 +27,10 @@ fn parameter_domains_and_raw_video_refusals() {
     }
     assert_eq!(d.next_deadline(0), None);
     assert!(h.effects.is_empty());
-    // A real main-image submission cannot be accepted as a setup notice.
-    // Its frame completion and bitstream writes have no device model yet.
+    // A main-image submission must validate its mode and DMA configuration.
     let mut cx = h.cx();
     d.write(&mut cx, 0xfff60c00, 4, 0x8000);
-    assert!(cx.refusal().unwrap().contains("frame compression"));
+    assert!(cx.refusal().unwrap().contains("H.264"));
     assert_eq!(d.next_deadline(0), None);
     assert!(h.effects.is_empty());
     write(&mut d, &mut h, 0xfff60400, 0);

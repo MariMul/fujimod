@@ -13,6 +13,7 @@ pub mod analysis;
 pub mod film;
 pub mod frame;
 pub mod jpeg;
+pub mod h264;
 pub mod packed_color;
 mod parallel;
 pub mod raw;
