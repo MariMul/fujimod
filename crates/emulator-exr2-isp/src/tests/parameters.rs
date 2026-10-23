@@ -1,3 +1,4 @@
+use fujimod_emulator_exr2_isp_input::*;
 use fujimod_emulator_devices::exr2::isp::*;
 use crate::*;
 use fujimod_emulator_devices::test_host::*;

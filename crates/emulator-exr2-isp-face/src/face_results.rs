@@ -12,7 +12,7 @@ use serde_json::Value;
 use std::collections::{BTreeMap, VecDeque};
 use fujimod_emulator_devices::exr2::isp::options::face_results::Profile;
 
-pub const BASE: u64 = super::face_detector::BASE;
+pub const BASE: u64 = crate::face_detector::BASE;
 pub const LATENCY: u64 = 400_000;
 const HISTORY: usize = 64;
 

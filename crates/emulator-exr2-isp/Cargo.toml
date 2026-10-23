@@ -14,7 +14,6 @@ doctest = false
 videotoolbox-tests = []
 
 [dependencies]
-fujimod-emulator-parts-sensor.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-catalog.workspace = true
 serde = { workspace = true, features = ["derive", "rc"] }
@@ -28,4 +27,5 @@ openh264 = "=0.9.3"
 unsafe_op_in_unsafe_fn = "deny"
 
 [dev-dependencies]
+fujimod-emulator-exr2-isp-input.workspace = true
 fujimod-emulator-exr2-codecs.workspace = true

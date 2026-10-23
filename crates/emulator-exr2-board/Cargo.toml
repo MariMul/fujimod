@@ -11,6 +11,8 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+fujimod-emulator-exr2-isp-face.workspace = true
+fujimod-emulator-exr2-isp-input.workspace = true
 fujimod-emulator-parts-io.workspace = true
 fujimod-emulator-parts-controls.workspace = true
 fujimod-emulator-parts-sensor.workspace = true

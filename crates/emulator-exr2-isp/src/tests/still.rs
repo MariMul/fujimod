@@ -1,6 +1,5 @@
 use fujimod_emulator_devices::exr2::isp::*;
 use crate::*;
-use super::input::cfa;
 use fujimod_emulator_devices::test_host::*;
 use fujimod_emulator_devices::Device;
 #[test]

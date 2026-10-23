@@ -3598,6 +3598,8 @@ dependencies = [
  "fujimod-emulator-exr2-i2c",
  "fujimod-emulator-exr2-io",
  "fujimod-emulator-exr2-isp",
+ "fujimod-emulator-exr2-isp-face",
+ "fujimod-emulator-exr2-isp-input",
  "fujimod-emulator-exr2-plan",
  "fujimod-emulator-exr2-serial",
  "fujimod-emulator-exr2-storage",
@@ -3687,9 +3689,31 @@ dependencies = [
  "fujimod-catalog",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-codecs",
- "fujimod-emulator-parts-sensor",
+ "fujimod-emulator-exr2-isp-input",
  "fujimod-workspace-hack",
  "openh264",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-isp-face"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-isp-input"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-isp",
+ "fujimod-emulator-parts-sensor",
+ "fujimod-workspace-hack",
  "serde",
  "serde_json",
 ]

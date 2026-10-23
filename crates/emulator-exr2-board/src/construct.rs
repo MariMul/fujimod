@@ -895,9 +895,9 @@ impl Builder<'_> {
                 let memory_outputs = memory_outputs
                     .map(|name| Ok(wire!(resources, id, name, MemoryOutputs)))
                     .transpose()?;
-                Box::new(fujimod_emulator_exr2_isp::ImageInput::new(
+                Box::new(fujimod_emulator_exr2_isp_input::input::ImageInput::new(
                     options,
-                    fujimod_emulator_exr2_isp::input::Wiring {
+                    fujimod_emulator_exr2_isp_input::input::Wiring {
                         frame_period: frame_period
                             .map(|name| Ok(wire!(resources, id, name, FramePeriod)))
                             .transpose()?,
@@ -990,12 +990,12 @@ impl Builder<'_> {
                 options,
                 wire!(resources, id, bank, Parameters),
             )?),
-            Model::RawConversion { options } => Box::new(fujimod_emulator_exr2_isp::RawConversion::new(options, ())?),
+            Model::RawConversion { options } => Box::new(fujimod_emulator_exr2_isp_input::raw::RawConversion::new(options, ())?),
             Model::Prefilter { options, irq } => {
-                Box::new(fujimod_emulator_exr2_isp::Prefilter::new(options, route(irq)?)?)
+                Box::new(fujimod_emulator_exr2_isp_input::raw::Prefilter::new(options, route(irq)?)?)
             }
             Model::RawStatistics { options, irq } => {
-                Box::new(fujimod_emulator_exr2_isp::RawStatistics::new(options, route(irq)?)?)
+                Box::new(fujimod_emulator_exr2_isp_input::raw::RawStatistics::new(options, route(irq)?)?)
             }
             Model::StillProcessor { options, irq } => {
                 Box::new(fujimod_emulator_exr2_isp::StillProcessor::new(options, route(irq)?)?)
@@ -1023,10 +1023,10 @@ impl Builder<'_> {
             Model::JpegDecoder { options, irq } => { let options: fujimod_emulator_exr2_codecs::jpeg::decoder::Options = crate::decode(options)?; 
                 Box::new(jpeg::Decoder::new(options, route(irq)?)?)
             }
-            Model::Block11000 { options } => Box::new(fujimod_emulator_exr2_isp::Block11000::new(options)?),
-            Model::FaceDetector { options } => Box::new(fujimod_emulator_exr2_isp::FaceDetector::new(options)),
+            Model::Block11000 { options } => Box::new(fujimod_emulator_exr2_isp_input::block11000::Block11000::new(options)?),
+            Model::FaceDetector { options } => Box::new(fujimod_emulator_exr2_isp_face::face_detector::FaceDetector::new(options)),
             Model::FaceResults { profile, routes } => {
-                Box::new(fujimod_emulator_exr2_isp::face_results::FaceResults::new(
+                Box::new(fujimod_emulator_exr2_isp_face::face_results::FaceResults::new(
                     profile,
                     wire!(resources, id, routes, IrqRoutes),
                 ))

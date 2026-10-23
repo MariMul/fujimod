@@ -150,3 +150,8 @@ pub fn film_words() -> Vec<u32> {
     r[0x204 / 4] = 256;
     r
 }
+
+/// A 6x6 color filter pattern for image input and still processor tests.
+pub fn cfa() -> Vec<u8> {
+    (0..36).map(|i| (i % 3) as u8).collect()
+}

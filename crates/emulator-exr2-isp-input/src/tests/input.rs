@@ -1,10 +1,8 @@
+use fujimod_emulator_exr2_isp::{OutputChannel, output};
 use crate::*;
 use fujimod_emulator_devices::Device;
 use fujimod_emulator_devices::exr2::isp::*;
 use fujimod_emulator_devices::test_host::*;
-pub(super) fn cfa() -> Vec<u8> {
-    (0..36).map(|i| (i % 3) as u8).collect()
-}
 fn input_options() -> fujimod_emulator_devices::exr2::isp::options::input::Options {
     fujimod_emulator_devices::exr2::isp::options::input::Options {
         reset_ticks: 2,
