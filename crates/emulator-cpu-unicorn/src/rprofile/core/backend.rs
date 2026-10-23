@@ -478,12 +478,8 @@ impl Cpu for Core {
             .checked_add(1)
             .ok_or("R-profile hook identity overflow")?;
         let native = match hook {
-            Hook::Instruction { .. } => {
-                e.cpu.invalidate_code(None)?;
-                None
-            }
-            Hook::Block { .. } => {
-                e.cpu.invalidate_code(None)?;
+            Hook::Instruction { range, .. } | Hook::Block { range, .. } => {
+                self.retranslate(range)?;
                 None
             }
             // Observe only after backend-owned architectural entry. The
@@ -528,11 +524,8 @@ impl Cpu for Core {
         let observers = e.observers.borrow();
         let observer = observers.get(&hook.key).ok_or("unknown R-profile hook")?;
         match observer.hook {
-            Hook::Instruction { .. } => {
-                e.cpu.invalidate_code(None)?;
-            }
-            Hook::Block { .. } => {
-                e.cpu.invalidate_code(None)?;
+            Hook::Instruction { range, .. } | Hook::Block { range, .. } => {
+                self.retranslate(range)?;
             }
             Hook::Exception { .. } => (),
             _ => {
@@ -604,5 +597,34 @@ impl Cpu for Core {
             self.execution.synchronization_barriers.get(),
         );
         Ok(counters)
+    }
+}
+
+/// Above this many pages one full flush is cheaper than page invalidations.
+const RETRANSLATE_PAGES: usize = 4096;
+
+impl Core {
+    /// Discard the translations a code observer over `range` changes. The
+    /// translator consults observers per instruction address, so a bounded
+    /// observer changes only code translated from its own pages; flushing the
+    /// whole cache for it re-translates all firmware on every watch.
+    fn retranslate(&self, range: HookRange) -> Result<(), String> {
+        let e = &self.execution;
+        let pages = match range {
+            HookRange::Inclusive { begin, end } => {
+                e.memory
+                    .owned_code_pages(e.id.get(), begin, end.saturating_add(1))
+            }
+            HookRange::All => None,
+        };
+        match pages {
+            Some(pages) if pages.len() <= RETRANSLATE_PAGES => {
+                for page in pages {
+                    e.cpu.invalidate_code(Some((page, page + 4096)))?;
+                }
+                Ok(())
+            }
+            _ => e.cpu.invalidate_code(None),
+        }
     }
 }

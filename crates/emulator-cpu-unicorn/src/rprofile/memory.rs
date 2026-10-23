@@ -534,6 +534,23 @@ impl Memory {
         }
         self.apply_watches()
     }
+    /// The 4 KiB pages of `[begin, end)` that hold this core's owned memory,
+    /// or None when part of the range has none: translated code can come
+    /// only from owned memory, so a bounded observer re-translates just these.
+    pub(super) fn owned_code_pages(&self, core: usize, begin: u64, end: u64) -> Option<Vec<u64>> {
+        let s = self.state();
+        let mut pages = vec![];
+        let bytes = end.checked_sub(begin)? as usize;
+        for chunk in Chunks::new(&s.views, core, begin, bytes, true).ok()? {
+            chunk.ok()?;
+        }
+        let mut page = begin & !4095;
+        while page < end {
+            pages.push(page);
+            page += 4096;
+        }
+        Some(pages)
+    }
     pub(super) fn note_code(
         &self,
         core: usize,
