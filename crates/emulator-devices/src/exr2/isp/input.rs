@@ -487,6 +487,7 @@ impl ImageInput {
             }
             return Err(e);
         }
+        outputs.active_destinations = outputs.destinations;
         outputs.active = true;
         s.readback_due = Some(due(
             cx.now(),
@@ -608,10 +609,18 @@ impl ImageInput {
         } else {
             v
         };
+        if o == 4 {
+            self.publish_input_route();
+        }
         if matches!(o, 0x28 | 0x2c) {
             self.publish_grid()?;
         }
         self.sync_clocks(cx.now())
+    }
+    fn publish_input_route(&self) {
+        if let Some(outputs) = &self.wiring.memory_outputs {
+            outputs.lock().unwrap().raw_input = self.state.r[1] & 1 != 0;
+        }
     }
     fn publish_grid(&self) -> Result<(), String> {
         if let Some(grid) = &self.wiring.statistics_grid {
@@ -810,6 +819,7 @@ impl ImageInput {
                 return Err("RAW readback EOF precedes output DMA".into());
             }
             outputs.active = false;
+            outputs.active_destinations = [None; 2];
             self.state.readback_due = None;
             self.state.r[0] |= 2;
             self.wiring.readback_irq.raise(cx)?;
@@ -868,6 +878,7 @@ impl Device for ImageInput {
             sensor.restore_checkpoint(&saved.children()[0])?;
         }
         self.state = state;
+        self.publish_input_route();
         self.publish_grid()?;
         self.cfa = cfa;
         self.film = film;

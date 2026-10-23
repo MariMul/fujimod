@@ -275,7 +275,7 @@ impl OutputChannel {
             for route in routes {
                 self.wiring.routes.validate(route)?;
             }
-            let targets = outputs.destinations;
+            let targets = outputs.active_destinations;
             for transfer in &mut outputs.transfers {
                 transfer.write(cx)?;
             }
@@ -305,6 +305,14 @@ impl OutputChannel {
             return Ok(());
         }
         self.seen_frame = edge.index;
+        if self
+            .wiring
+            .memory_outputs
+            .as_ref()
+            .is_some_and(|wire| wire.lock().unwrap().raw_input)
+        {
+            return Ok(());
+        }
         if self.registers[0] != 0x10001 {
             return Ok(());
         }
@@ -496,7 +504,7 @@ impl Device for OutputChannel {
         let result: Result<(), String> = (|| {
             let o = self.offset(address, size)?;
             let v = u32::try_from(value).map_err(|_| "output word exceeds 32 bits")?;
-            if matches!(o, 0 | 0xb0 | 0xb4 | 0xc0 | 0xc4)
+            if o == 0
                 && v != self.registers[o / 4]
                 && self.wiring.memory_outputs.as_ref().is_some_and(|w| {
                     let output = w.lock().unwrap();

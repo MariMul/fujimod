@@ -948,6 +948,28 @@ fn raw_readback_flows_through_both_output_channels_before_eof() {
     wiring.parameters = Some(bank);
     wiring.memory_outputs = Some(memory.clone());
     let mut input = ImageInput::new(input_options(), wiring).unwrap();
+    // RAW transport consumes sensor edges without reserving the direct image
+    // outputs. Those banks remain available for channel4 memory readback.
+    write(&mut input, &mut h, 0xfff10004, 0x10001);
+    frames
+        .publish(crate::scene::FrameEdge { index: 1, tick: 0 }, &[7; 32])
+        .unwrap();
+    advance(&mut a, &mut h, 0);
+    advance(&mut b, &mut h, 0);
+    assert!(h.effects.is_empty());
+    assert!(
+        memory
+            .lock()
+            .unwrap()
+            .destinations
+            .iter()
+            .all(Option::is_some)
+    );
+    let saved = input.checkpoint().unwrap();
+    write(&mut input, &mut h, 0xfff10004, 0);
+    assert!(!memory.lock().unwrap().raw_input);
+    input.restore_checkpoint(&saved).unwrap();
+    assert!(memory.lock().unwrap().raw_input);
     for (offset, value) in [
         (0x394, 0x1000000),
         (0x398, 6 << 16),
@@ -962,6 +984,16 @@ fn raw_readback_flows_through_both_output_channels_before_eof() {
         write(&mut input, &mut h, 0xfff10000 + offset, value);
     }
     assert_eq!(a.next_deadline(0), Some(0));
+    // Repeating the current geometry is an idempotent register write even
+    // while the memory input is filling the latched output raster.
+    write(&mut a, &mut h, 0xfff120b0, (5 << 16) | 7);
+    write(&mut b, &mut h, 0xfff130c4, 16);
+    // Destination registers stage the next frame. The current transfer and
+    // its output reservation keep the addresses sampled at START.
+    h.ram[0xb000..0xb100].fill(0xa5);
+    h.ram[0xc000..0xc100].fill(0xa5);
+    write(&mut a, &mut h, 0xfff120c0, 0xb000);
+    write(&mut b, &mut h, 0xfff130c0, 0xc000);
     advance(&mut a, &mut h, 0);
     advance(&mut b, &mut h, 0);
     assert_eq!(a.next_deadline(0), Some(7));
@@ -971,6 +1003,8 @@ fn raw_readback_flows_through_both_output_channels_before_eof() {
     assert_eq!(h.effects.len(), 14);
     assert!(h.effects[..12].iter().all(|e| *e == "dma"));
     assert_eq!(h.effects[12..], ["irq", "irq"]);
+    assert_eq!(&h.ram[0xb000..0xb100], &[0xa5; 256]);
+    assert_eq!(&h.ram[0xc000..0xc100], &[0xa5; 256]);
     for address in [0x9000, 0xa000] {
         for row in 0..6 {
             assert_ne!(
@@ -996,6 +1030,8 @@ fn raw_readback_flows_through_both_output_channels_before_eof() {
     advance(&mut a, &mut h, 8);
     advance(&mut a, &mut h, 15);
     advance(&mut input, &mut h, 16);
+    assert_ne!(&h.ram[0xb000..0xb010], &[0xa5; 16]);
+    assert_ne!(&h.ram[0xc000..0xc010], &[0xa5; 16]);
     assert_eq!(
         h.irqs,
         [(0, 44), (0, 45), (0, 38), (1, 44), (1, 45), (0, 38)]
