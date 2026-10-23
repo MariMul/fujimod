@@ -11,6 +11,13 @@ use fujimod_emulator_devices::graph::{DeviceGraph, Node as GraphNode, validate_m
 use fujimod_emulator_exr2_plan::{AdapterFactory, BuiltBoard, Model, Plan, Resources, Wire};
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Decode a model's options, which plans carry as JSON for the model crate to read.
+pub(crate) fn decode<T: serde::de::DeserializeOwned>(
+    value: impl std::borrow::Borrow<serde_json::Value>,
+) -> Result<T, String> {
+    serde_json::from_value(value.borrow().clone()).map_err(|e| format!("EXR II model options: {e}"))
+}
+
 /// Make `Plan::build` construct boards with this crate. Final crates call
 /// this before building any EXR II board.
 pub fn register_board_builder() {
@@ -192,7 +199,7 @@ fn build(
             // deadline. Wake the shared coordinator when any is accessed.
             // DMA consolidation remaps these edges below.
             direct_dependencies.extend((0..4).map(|offset| (id + 4, id + offset)));
-        } else if let Model::SerialDmaLink { options, input } = node.model {
+        } else if let Model::SerialDmaLink { options, input } = node.model { let options: fujimod_emulator_exr2_serial::serial_dma::Options = crate::decode(options)?; let input: fujimod_emulator_exr2_serial::serial_dma::Input = crate::decode(input)?; 
             let devices = fujimod_emulator_exr2_serial::serial_dma::Nodes::new(options, input)?;
             let expected: BTreeSet<_> = devices
                 .windows()

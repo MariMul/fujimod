@@ -128,7 +128,7 @@ impl Builder<'_> {
                 position,
                 optics,
                 focus,
-            } => {
+            } => { let options: Box<fujimod_emulator_parts_lens::lens::Options> = crate::decode(options)?; 
                 let mut lens = LensUnit::new(
                     *options,
                     fujimod_emulator_parts_lens::lens::Wiring {
@@ -155,15 +155,15 @@ impl Builder<'_> {
                 }
                 Box::new(lens)
             }
-            SerialEndpoint::Stabilizer { options } => Box::new(Stabilizer::new(options, ())?),
-            SerialEndpoint::Registers { options } => Box::new(RegisterFile::new(options)?),
-            SerialEndpoint::Panel { options } => Box::new(Panel::new(options)),
-            SerialEndpoint::CommandDataOutput { options } => Box::new(
+            SerialEndpoint::Stabilizer { options } => { let options: fujimod_emulator_parts_lens::stabilizer::Options = crate::decode(options)?; Box::new(Stabilizer::new(options, ())?) },
+            SerialEndpoint::Registers { options } => { let options: fujimod_emulator_parts_io::spi::RegisterOptions = crate::decode(options)?; Box::new(RegisterFile::new(options)?) },
+            SerialEndpoint::Panel { options } => { let options: fujimod_emulator_parts_io::spi::PanelOptions = crate::decode(options)?; Box::new(Panel::new(options)) },
+            SerialEndpoint::CommandDataOutput { options } => { let options: fujimod_emulator_parts_io::command_data_output::Options = crate::decode(options)?; Box::new(
                 fujimod_emulator_parts_io::command_data_output::CommandDataOutput::new(
                     options,
                 )?,
-            ),
-            SerialEndpoint::Fixed { options } => Box::new(FixedInput::new(options)?),
+            ) },
+            SerialEndpoint::Fixed { options } => { let options: fujimod_emulator_parts_io::spi::FixedOptions = crate::decode(options)?; Box::new(FixedInput::new(options)?) },
         })
     }
     pub fn device(self, model: Model) -> Result<Box<dyn Device>, String> {
@@ -190,7 +190,7 @@ impl Builder<'_> {
             return Err(format!("{name} has incorrect MMIO/non-MMIO ownership"));
         }
         Ok(match model {
-            Model::ContactActuator { options, gpio } => {
+            Model::ContactActuator { options, gpio } => { let options: fujimod_emulator_parts_controls::contact_actuator::Options = crate::decode(options)?; 
                 if !windows.is_empty() || options.contacts.iter().any(|pin| pin.port >= 16) {
                     return Err(
                         "contact actuator requires GPIO input pads and no register aperture".into(),
@@ -208,7 +208,7 @@ impl Builder<'_> {
                 options,
                 base,
                 controllers: names,
-            } => {
+            } => { let options: fujimod_emulator_exr2_codecs::lz::Options = crate::decode(options)?; 
                 if windows.len() != 1 || windows[0].base != base || windows[0].size != 0x100 {
                     return Err("decompressor requires its complete register window".into());
                 }
@@ -224,7 +224,7 @@ impl Builder<'_> {
                 options,
                 base,
                 routes,
-            } => {
+            } => { let options: fujimod_emulator_exr2_serial::dma::memory::Options = crate::decode(options)?; 
                 if base.checked_add(0x304).is_none()
                     || windows.len() != 2
                     || windows[0].base != base
@@ -257,7 +257,7 @@ impl Builder<'_> {
                 options,
                 cable,
                 endpoints,
-            } => {
+            } => { let options: fujimod_emulator_exr2_io::usb::Options = crate::decode(options)?; let endpoints: Option<fujimod_emulator_parts_io::usb_endpoint::Wiring> = crate::decode(endpoints)?; 
                 if windows.len() != 2
                     || windows[0].base != 0xfff54000
                     || windows[0].size != 0x1000
@@ -281,7 +281,7 @@ impl Builder<'_> {
                     },
                 )?)
             }
-            Model::Scanout { options } => {
+            Model::Scanout { options } => { let options: fujimod_emulator_exr2_display::device::Options = crate::decode(options)?; 
                 let expected = [0xfff6b000, 0xfff6e000];
                 if windows.len() != 2
                     || windows
@@ -293,7 +293,7 @@ impl Builder<'_> {
                 }
                 Box::new(fujimod_emulator_exr2_display::Scanout::new(options)?)
             }
-            Model::SerialAudioReceiver { options, routes } => {
+            Model::SerialAudioReceiver { options, routes } => { let options: fujimod_emulator_exr2_audio::receive::Options = crate::decode(options)?; 
                 let expected = [
                     (dma::audio::BASE, 0x40),
                     (audio::BASES[0], 0x1000),
@@ -318,7 +318,7 @@ impl Builder<'_> {
                 options,
                 sinks,
                 routes,
-            } => {
+            } => { let options: fujimod_emulator_exr2_audio::transmit::Options = crate::decode(options)?; let sinks: [fujimod_emulator_parts_io::audio_sink::Options; 2] = crate::decode(sinks)?; 
                 let expected = [
                     (dma::audio::BASE, 0x40),
                     (audio::BASES[0], 0x1000),
@@ -350,7 +350,7 @@ impl Builder<'_> {
                 pins,
                 gpio,
                 controllers: names,
-            } => {
+            } => { let transport: fujimod_emulator_exr2_serial::serial_dma::Options = crate::decode(transport)?; let configuration: fujimod_emulator_parts_lens::x_mount_link::Configuration = crate::decode(configuration)?; let pins: fujimod_emulator_exr2_serial::x_mount_connector::Options = crate::decode(pins)?; 
                 let device = fujimod_emulator_exr2_serial::x_mount_connector::XMountLens::new(
                     transport,
                     configuration,
@@ -368,7 +368,7 @@ impl Builder<'_> {
                 }
                 Box::new(device)
             }
-            Model::SerialDma { options } => {
+            Model::SerialDma { options } => { let options: fujimod_emulator_exr2_serial::dma::audio::Options = crate::decode(options)?; 
                 if windows.len() != 1
                     || windows[0].base != dma::audio::BASE
                     || windows[0].size != 0x40
@@ -391,7 +391,7 @@ impl Builder<'_> {
                 controllers: names,
                 cable,
                 bridge,
-            } => {
+            } => { let options: fujimod_emulator_exr2_i2c::Options = crate::decode(options)?; 
                 if windows.len() != 1
                     || windows[0].base != u64::from(options.base)
                     || windows[0].size != 0x40
@@ -416,7 +416,7 @@ impl Builder<'_> {
             Model::VectorGpu {
                 options,
                 controllers: names,
-            } => {
+            } => { let options: fujimod_emulator_exr2_gpu::Options = crate::decode(options)?; 
                 if windows.len() != 1
                     || windows[0].base != gpu::BASE
                     || windows[0].size != gpu::SIZE
@@ -432,14 +432,14 @@ impl Builder<'_> {
                     },
                 )?)
             }
-            Model::Nand { options, medium } => Box::new(nand::NandController::new(
+            Model::Nand { options, medium } => { let options: fujimod_emulator_exr2_storage::nand::Options = crate::decode(options)?; Box::new(nand::NandController::new(
                 options,
                 resources
                     .inputs
                     .nands
                     .remove(&medium)
                     .ok_or_else(|| format!("missing NAND input {medium}"))?,
-            )?),
+            )?) },
             Model::ExternalFrames {
                 options,
                 sensor_clock,
@@ -517,7 +517,7 @@ impl Builder<'_> {
                 options,
                 clock,
                 controllers,
-            } => {
+            } => { let options: fujimod_emulator_exr2_display::timing::Options = crate::decode(options)?; 
                 let clock = resources.clock(&clock)?;
                 let controllers = self::controllers(built, controllers)?;
                 Box::new(timing::DisplayTiming::new(
@@ -529,13 +529,13 @@ impl Builder<'_> {
                     },
                 )?)
             }
-            Model::Dram { options } => Box::new(dram::Controller::new(options, dram::Wiring)?),
-            Model::DramPhy { options } => Box::new(dram::Phy::new(options, dram::Wiring)?),
-            Model::Reset { options } => Box::new(reset::Reset::new(options, reset::Wiring)?),
+            Model::Dram { options } => { let options: fujimod_emulator_exr2_system::dram::Options = crate::decode(options)?; Box::new(dram::Controller::new(options, dram::Wiring)?) },
+            Model::DramPhy { options } => { let options: fujimod_emulator_exr2_system::dram::Options = crate::decode(options)?; Box::new(dram::Phy::new(options, dram::Wiring)?) },
+            Model::Reset { options } => { let options: fujimod_emulator_exr2_system::reset::Options = crate::decode(options)?; Box::new(reset::Reset::new(options, reset::Wiring)?) },
             Model::Timers {
                 options,
                 controllers,
-            } => {
+            } => { let options: fujimod_emulator_exr2_system::timer::Options = crate::decode(options)?; 
                 let controllers = self::controllers(built, controllers)?;
                 Box::new(timer::Timers::new(
                     options,
@@ -549,14 +549,14 @@ impl Builder<'_> {
                 options,
                 core,
                 request,
-            } => Box::new(core_release::CoreRelease::new(
+            } => { let options: fujimod_emulator_exr2_system::core_release::Options = crate::decode(options)?; Box::new(core_release::CoreRelease::new(
                 options,
                 core_release::Wiring {
                     core,
                     request: wire!(resources, id, request, SoftwarePulse),
                 },
-            )?),
-            Model::Block98000 { options, wiring } => {
+            )?) },
+            Model::Block98000 { options, wiring } => { let options: fujimod_emulator_exr2_system::boot::Options = crate::decode(options)?; let wiring: fujimod_emulator_exr2_system::boot::Wiring = crate::decode(wiring)?; 
                 Box::new(boot::Block98000::new(options, wiring)?)
             }
             Model::Clocks { options } => {
@@ -612,7 +612,7 @@ impl Builder<'_> {
                 });
                 Box::new(controller)
             }
-            Model::Adc { options } => Box::new(adc::controller::Converter::new(options)?),
+            Model::Adc { options } => { let options: fujimod_emulator_exr2_io::adc::controller::Options = crate::decode(options)?; Box::new(adc::controller::Converter::new(options)?) },
             Model::Gpio { options, irqs } => {
                 for route in &irqs {
                     for &output in &route.outputs {
@@ -635,7 +635,7 @@ impl Builder<'_> {
                 options,
                 gpio,
                 endpoint,
-            } => {
+            } => { let options: fujimod_emulator_exr2_serial::spi::channel::Options = crate::decode(options)?; 
                 let endpoint = Self::endpoint(endpoint, resources, id)?;
                 Box::new(spi::channel::SerialChannel::new(
                     options,
@@ -651,7 +651,7 @@ impl Builder<'_> {
                     .map(|route| {
                         let endpoint = Self::endpoint(route.endpoint, resources, id)?;
                         spi::channel::SerialChannel::new(
-                            route.options,
+                            crate::decode(route.options)?,
                             spi::channel::Wiring {
                                 pins: Box::new(resources.pads(&route.gpio)?),
                                 endpoint,
@@ -661,17 +661,17 @@ impl Builder<'_> {
                     .collect::<Result<Vec<_>, String>>()?;
                 Box::new(spi::SpiController::new(channels)?)
             }
-            Model::GpioContactResponse { options, gpio } => Box::new(GpioContactResponse::new(
+            Model::GpioContactResponse { options, gpio } => { let options: fujimod_emulator_parts_controls::gpio_contact_response::Options = crate::decode(options)?; Box::new(GpioContactResponse::new(
                 options,
                 fujimod_emulator_parts_controls::gpio_contact_response::Wiring {
                     pins: Box::new(resources.pads(&gpio)?),
                 },
-            )?),
+            )?) },
             Model::Encoder {
                 options,
                 gpio,
                 counter,
-            } => {
+            } => { let options: fujimod_emulator_parts_controls::encoder::Options = crate::decode(options)?; 
                 let encoder = Encoder::new(
                     options,
                     fujimod_emulator_parts_controls::encoder::Wiring {
@@ -688,7 +688,7 @@ impl Builder<'_> {
                 pulses,
                 gpio,
                 clock_irq,
-            } => Box::new(Bridge::new(
+            } => { let options: fujimod_emulator_parts_lens::lens::bridge::Options = crate::decode(options)?; Box::new(Bridge::new(
                 options,
                 fujimod_emulator_parts_lens::lens::bridge::Wiring {
                     registers: wire!(resources, id, registers, BridgeRegisters),
@@ -696,15 +696,15 @@ impl Builder<'_> {
                     gpio: resources.pads(&gpio)?,
                     clock_irq: line(clock_irq)?,
                 },
-            )?),
+            )?) },
             Model::Block86000 { options } => Box::new(pulse::block86000::Block86000::new(options)),
-            Model::Companion { options } => Box::new(companion::ProgramUpload::new(options)?),
+            Model::Companion { options } => { let options: fujimod_emulator_exr2_companion::companion::Options = crate::decode(options)?; Box::new(companion::ProgramUpload::new(options)?) },
             Model::Fe80Processing {
                 transport,
                 options,
                 frames,
                 routes,
-            } => Box::new(fujimod_emulator_exr2_companion::companion_processing::Processing::new(
+            } => { let transport: fujimod_emulator_exr2_companion::companion::Options = crate::decode(transport)?; let options: fujimod_emulator_exr2_companion::companion_processing::Options = crate::decode(options)?; Box::new(fujimod_emulator_exr2_companion::companion_processing::Processing::new(
                 transport,
                 options,
                 fujimod_emulator_exr2_companion::companion_processing::Wiring {
@@ -716,9 +716,9 @@ impl Builder<'_> {
                         .ok_or_else(|| format!("missing FE80 frame clock {frames}"))?,
                     routes: wire!(resources, id, routes, IrqRoutes),
                 },
-            )?),
-            Model::Formatter { options } => Box::new(formatter::Formatter::new(options)?),
-            Model::HdmiSink { options } => {
+            )?) },
+            Model::Formatter { options } => { let options: fujimod_emulator_exr2_display::formatter::Options = crate::decode(options)?; Box::new(formatter::Formatter::new(options)?) },
+            Model::HdmiSink { options } => { let options: fujimod_emulator_parts_io::hdmi_sink::Options = crate::decode(options)?; 
                 let input = fujimod_emulator_parts_io::hdmi_sink::Input::new(options)?;
                 resources.hdmi_sinks.insert(name.to_owned(), input.sink());
                 Box::new(input)
@@ -727,14 +727,14 @@ impl Builder<'_> {
                 options,
                 sink,
                 hot_plug,
-            } => Box::new(hdmi::Transmitter::new(
+            } => { let options: fujimod_emulator_exr2_io::hdmi::transmitter::Options = crate::decode(options)?; Box::new(hdmi::Transmitter::new(
                 options,
                 resources.hdmi_sink(&sink)?,
                 hdmi::transmitter::Wiring {
                     hot_plug: line(hot_plug)?,
                 },
-            )?),
-            Model::SerialAudio { options, sinks } => {
+            )?) },
+            Model::SerialAudio { options, sinks } => { let options: fujimod_emulator_exr2_audio::Options = crate::decode(options)?; let sinks: [fujimod_emulator_parts_io::audio_sink::Options; 2] = crate::decode(sinks)?; 
                 Box::new(audio::SerialAudio::new(options, sinks.map(AudioSink::new)))
             }
             Model::SdHost {
@@ -744,17 +744,17 @@ impl Builder<'_> {
                 present,
                 protected,
                 irq,
-            } => {
+            } => { let options: fujimod_emulator_exr2_storage::sdhc::Options = crate::decode(options)?; 
                 let card = match card {
-                    Card::Blank { options } => sd_card::Card::new(options)?,
-                    Card::Formatted { options, files } => fat::format(
+                    Card::Blank { options } => { let options: fujimod_emulator_parts_storage::sd_card::Options = crate::decode(options)?; sd_card::Card::new(options)? },
+                    Card::Formatted { options, files } => { let options: fujimod_emulator_storage::fat::Options = crate::decode(options)?; fat::format(
                         &options,
                         resources
                             .inputs
                             .files
                             .get(&files)
                             .ok_or_else(|| format!("missing card files input {files}"))?,
-                    )?,
+                    )? },
                     Card::Retained { input } => resources
                         .inputs
                         .cards
@@ -806,26 +806,26 @@ impl Builder<'_> {
                 options,
                 module,
                 irq,
-            } => Box::new(sdio::SdioHost::new(
+            } => { let options: fujimod_emulator_exr2_storage::sdio::Options = crate::decode(options)?; let module: fujimod_emulator_parts_storage::wifi_module::Options = crate::decode(module)?; Box::new(sdio::SdioHost::new(
                 options,
                 sdio::Wiring {
                     module: WifiModule::new(module)?,
                     irq: line(irq)?,
                 },
-            )?),
+            )?) },
             Model::UsbEndpoints {
                 options,
                 irq,
                 dma_irq,
                 ram_bytes,
-            } => Box::new(usb_endpoint::Endpoint::new(
+            } => { let options: fujimod_emulator_parts_io::usb_endpoint::Options = crate::decode(options)?; Box::new(usb_endpoint::Endpoint::new(
                 options,
                 usb_endpoint::Wiring {
                     irq: line(irq)?,
                     dma_irq: line(dma_irq)?,
                     ram_bytes,
                 },
-            )?),
+            )?) },
             Model::ImageInput {
                 options,
                 phase_irqs,
@@ -842,7 +842,7 @@ impl Builder<'_> {
                 let sensor = sensor
                     .map(|s| {
                         let mut sensor = Sensor::new(
-                            s.options,
+                            crate::decode(s.options)?,
                             resources
                                 .inputs
                                 .sensors
@@ -862,7 +862,7 @@ impl Builder<'_> {
                             let exposure = wire!(resources, id, exposure, Exposure);
                             let aperture = wire!(resources, id, aperture, Aperture);
                             let mut controls = fujimod_emulator_parts_sensor::xtrans16::Sensor::new(
-                                options,
+                                crate::decode(options)?,
                                 exposure.clone(),
                                 aperture.clone(),
                             )?;
@@ -1015,11 +1015,11 @@ impl Builder<'_> {
                 options,
                 irq,
                 stream,
-            } => Box::new(jpeg::Encoder::new(
+            } => { let options: fujimod_emulator_exr2_codecs::jpeg::encoder::Options = crate::decode(options)?; Box::new(jpeg::Encoder::new(
                 options,
                 (route(irq)?, wire!(resources, id, stream, Stream)),
-            )?),
-            Model::JpegDecoder { options, irq } => {
+            )?) },
+            Model::JpegDecoder { options, irq } => { let options: fujimod_emulator_exr2_codecs::jpeg::decoder::Options = crate::decode(options)?; 
                 Box::new(jpeg::Decoder::new(options, route(irq)?)?)
             }
             Model::Block11000 { options } => Box::new(fujimod_emulator_exr2_isp::Block11000::new(options)?),

@@ -87,7 +87,7 @@ impl Plan {
             .filter(|n| n.boot_entries.contains(&self.boot_entry))
         {
             if let Model::CoreRelease { options, core, .. } = &node.model {
-                if released.get(*core) != Some(&options.released) {
+                if released.get(*core).copied() != options["released"].as_bool() {
                     return Err("core release reset state disagrees with execution graph".into());
                 }
             }
@@ -101,17 +101,18 @@ impl Plan {
             .filter(|n| n.boot_entries.contains(&self.boot_entry))
         {
             if let Model::Block98000 { options, wiring } = &node.model {
-                let decoder = decoders
-                    .get(wiring.decoder)
+                let decoder = wiring["decoder"]
+                    .as_u64()
+                    .and_then(|d| decoders.get(d as usize))
                     .ok_or("boot control has no memory decoder")?;
-                if wiring
-                    .selections
-                    .iter()
-                    .any(|s| s.choice >= decoder.choices)
-                    || !wiring
-                        .selections
-                        .iter()
-                        .any(|s| s.word == options.selection_reset && s.choice == decoder.initial)
+                let selections = wiring["selections"]
+                    .as_array()
+                    .ok_or("boot control has no selections")?;
+                let choice = |s: &serde_json::Value| s["choice"].as_u64().map(|c| c as usize);
+                if selections.iter().any(|s| choice(s).is_none_or(|c| c >= decoder.choices))
+                    || !selections.iter().any(|s| {
+                        s["word"] == options["selection_reset"] && choice(s) == Some(decoder.initial)
+                    })
                 {
                     return Err(
                         "boot control selections disagree with execution memory decoder".into(),

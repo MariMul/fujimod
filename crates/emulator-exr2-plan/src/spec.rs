@@ -1,21 +1,5 @@
-use fujimod_emulator_exr2_io::{adc, hdmi, usb};
-use fujimod_emulator_exr2_audio::{self as audio};
-use fujimod_emulator_exr2_system::{boot, core_release, dram, reset, timer};
 use fujimod_emulator_devices::exr2::{clock, gpio, irq, isp, pulse};
-use fujimod_emulator_exr2_companion::companion;
-use fujimod_emulator_exr2_display::{device as scanout, formatter, timing};
-use fujimod_emulator_exr2_serial::{dma, spi};
-use fujimod_emulator_exr2_gpu::{self as gpu};
-use fujimod_emulator_exr2_i2c::{self as i2c};
-use fujimod_emulator_exr2_codecs::{jpeg, lz};
-use fujimod_emulator_exr2_storage::{nand, sdhc, sdio};
 use fujimod_emulator_devices::{bus::InterruptLine, graph::Mapping};
-use fujimod_emulator_parts_io::{audio_sink, command_data_output, hdmi_sink, spi as spi_parts, usb_endpoint};
-use fujimod_emulator_parts_controls::{contact_actuator, encoder, gpio_contact_response};
-use fujimod_emulator_parts_lens::{lens, stabilizer};
-use fujimod_emulator_parts_storage::{sd_card, wifi_module};
-use fujimod_emulator_parts_sensor::sensor;
-use fujimod_emulator_storage::fat;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
@@ -83,10 +67,10 @@ pub struct Adapter {
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum Card {
     Blank {
-        options: sd_card::Options,
+        options: serde_json::Value,
     },
     Formatted {
-        options: fat::Options,
+        options: serde_json::Value,
         files: String,
     },
     Retained {
@@ -96,7 +80,7 @@ pub enum Card {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Sensor {
-    pub options: sensor::Options,
+    pub options: serde_json::Value,
     pub frames: String,
     pub controls: Option<SensorControls>,
 }
@@ -104,7 +88,7 @@ pub struct Sensor {
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum SensorControls {
     Xtrans16 {
-        options: fujimod_emulator_parts_sensor::xtrans16::Options,
+        options: serde_json::Value,
         calibration: fujimod_emulator_devices::imaging::exposure::Calibration,
         exposure: String,
         aperture: String,
@@ -117,7 +101,7 @@ pub enum SensorControls {
 pub enum SerialEndpoint {
     #[serde(rename = "lens-unit")]
     LensUnit {
-        options: Box<lens::Options>,
+        options: serde_json::Value,
         pulses: String,
         gpio: String,
         completion: [InterruptLine; 2],
@@ -126,19 +110,19 @@ pub enum SerialEndpoint {
         focus: Option<FocusAxis>,
     },
     Stabilizer {
-        options: stabilizer::Options,
+        options: serde_json::Value,
     },
     Registers {
-        options: spi_parts::RegisterOptions,
+        options: serde_json::Value,
     },
     Panel {
-        options: spi_parts::PanelOptions,
+        options: serde_json::Value,
     },
     CommandDataOutput {
-        options: command_data_output::Options,
+        options: serde_json::Value,
     },
     Fixed {
-        options: spi_parts::FixedOptions,
+        options: serde_json::Value,
     },
 }
 #[derive(Deserialize)]
@@ -157,7 +141,7 @@ pub struct FocusAxis {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SerialRoute {
-    pub options: spi::channel::Options,
+    pub options: serde_json::Value,
     pub gpio: String,
     pub endpoint: SerialEndpoint,
 }
@@ -181,12 +165,12 @@ pub enum Model {
         gpio: String,
     },
     Lz {
-        options: lz::Options,
+        options: serde_json::Value,
         base: u64,
         controllers: Vec<String>,
     },
     MemoryDma {
-        options: dma::memory::Options,
+        options: serde_json::Value,
         base: u64,
         routes: String,
     },
@@ -194,53 +178,54 @@ pub enum Model {
         words: Vec<(u64, u64)>,
     },
     Usb {
-        options: usb::Options,
+        options: serde_json::Value,
         cable: String,
-        endpoints: Option<usb_endpoint::Wiring>,
+        #[serde(default)]
+        endpoints: serde_json::Value,
     },
     Scanout {
-        options: scanout::Options,
+        options: serde_json::Value,
     },
     SerialAudioReceiver {
-        options: audio::receive::Options,
+        options: serde_json::Value,
         routes: String,
     },
     SerialAudioTransmitter {
-        options: audio::transmit::Options,
-        sinks: [fujimod_emulator_parts_io::audio_sink::Options; 2],
+        options: serde_json::Value,
+        sinks: serde_json::Value,
         routes: String,
     },
     SerialDmaLink {
-        options: fujimod_emulator_exr2_serial::serial_dma::Options,
-        input: fujimod_emulator_exr2_serial::serial_dma::Input,
+        options: serde_json::Value,
+        input: serde_json::Value,
     },
     XMountLens {
-        transport: fujimod_emulator_exr2_serial::serial_dma::Options,
-        configuration: fujimod_emulator_parts_lens::x_mount_link::Configuration,
+        transport: serde_json::Value,
+        configuration: serde_json::Value,
         startup_ticks: u64,
-        pins: fujimod_emulator_exr2_serial::x_mount_connector::Options,
+        pins: serde_json::Value,
         gpio: String,
         controllers: Vec<String>,
     },
     SerialDma {
-        options: dma::audio::Options,
+        options: serde_json::Value,
     },
     ImageCombination {
         options: fujimod_emulator_devices::exr2::isp::options::combination::Options,
         irq: isp::Irq,
     },
     I2c {
-        options: i2c::Options,
+        options: serde_json::Value,
         controllers: Vec<String>,
         cable: Option<String>,
         bridge: Option<String>,
     },
     VectorGpu {
-        options: gpu::Options,
+        options: serde_json::Value,
         controllers: Vec<String>,
     },
     Nand {
-        options: nand::Options,
+        options: serde_json::Value,
         medium: String,
     },
     ExternalFrames {
@@ -255,23 +240,23 @@ pub enum Model {
         frame_period: Option<String>,
     },
     DisplayTiming {
-        options: timing::Options,
+        options: serde_json::Value,
         clock: String,
         controllers: Vec<String>,
     },
     Dram {
-        options: dram::Options,
+        options: serde_json::Value,
     },
     DramPhy {
-        options: dram::Options,
+        options: serde_json::Value,
     },
     Reset {
-        options: reset::Options,
+        options: serde_json::Value,
     },
     #[serde(rename = "block-98000")]
     Block98000 {
-        options: boot::Options,
-        wiring: boot::Wiring,
+        options: serde_json::Value,
+        wiring: serde_json::Value,
     },
     Clocks {
         options: clock::Options,
@@ -285,24 +270,24 @@ pub enum Model {
         software: Vec<SoftwareOutput>,
     },
     CoreRelease {
-        options: core_release::Options,
+        options: serde_json::Value,
         core: usize,
         request: String,
     },
     #[serde(rename = "exr2-system-timers")]
     Timers {
-        options: timer::Options,
+        options: serde_json::Value,
         controllers: Vec<String>,
     },
     Adc {
-        options: adc::controller::Options,
+        options: serde_json::Value,
     },
     Gpio {
         options: gpio::Options,
         irqs: Vec<gpio::InputIrq>,
     },
     ContactActuator {
-        options: contact_actuator::Options,
+        options: serde_json::Value,
         gpio: String,
     },
     #[serde(rename = "exr2-pulse")]
@@ -311,7 +296,7 @@ pub enum Model {
         irqs: [Option<InterruptLine>; 12],
     },
     SerialChannel {
-        options: spi::channel::Options,
+        options: serde_json::Value,
         gpio: String,
         endpoint: SerialEndpoint,
     },
@@ -319,17 +304,17 @@ pub enum Model {
         routes: Vec<SerialRoute>,
     },
     GpioContactResponse {
-        options: gpio_contact_response::Options,
+        options: serde_json::Value,
         gpio: String,
     },
     Encoder {
-        options: encoder::Options,
+        options: serde_json::Value,
         gpio: String,
         counter: Option<String>,
     },
     #[serde(rename = "i2c-motor-bridge")]
     I2cMotorBridge {
-        options: lens::bridge::Options,
+        options: serde_json::Value,
         registers: String,
         pulses: String,
         gpio: String,
@@ -339,31 +324,31 @@ pub enum Model {
         options: pulse::block86000::Options,
     },
     Companion {
-        options: companion::Options,
+        options: serde_json::Value,
     },
     Fe80Processing {
-        transport: companion::Options,
-        options: fujimod_emulator_exr2_companion::companion_processing::Options,
+        transport: serde_json::Value,
+        options: serde_json::Value,
         frames: String,
         routes: String,
     },
     Formatter {
-        options: formatter::Options,
+        options: serde_json::Value,
     },
     Hdmi {
-        options: hdmi::transmitter::Options,
+        options: serde_json::Value,
         sink: String,
         hot_plug: InterruptLine,
     },
     HdmiSink {
-        options: hdmi_sink::Options,
+        options: serde_json::Value,
     },
     SerialAudio {
-        options: audio::Options,
-        sinks: [audio_sink::Options; 2],
+        options: serde_json::Value,
+        sinks: serde_json::Value,
     },
     SdHost {
-        options: sdhc::Options,
+        options: serde_json::Value,
         card: Card,
         pins: Option<CardPins>,
         present: bool,
@@ -371,12 +356,12 @@ pub enum Model {
         irq: InterruptLine,
     },
     SdioHost {
-        options: sdio::Options,
-        module: wifi_module::Options,
+        options: serde_json::Value,
+        module: serde_json::Value,
         irq: InterruptLine,
     },
     UsbEndpoints {
-        options: usb_endpoint::Options,
+        options: serde_json::Value,
         irq: InterruptLine,
         dma_irq: InterruptLine,
         ram_bytes: u64,
@@ -452,12 +437,12 @@ pub enum Model {
         irq: isp::Irq,
     },
     JpegEncoder {
-        options: jpeg::encoder::Options,
+        options: serde_json::Value,
         irq: isp::Irq,
         stream: String,
     },
     JpegDecoder {
-        options: jpeg::decoder::Options,
+        options: serde_json::Value,
         irq: isp::Irq,
     },
     Block11000 {
