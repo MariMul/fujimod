@@ -15,6 +15,9 @@ members = [
   "crates/emulator-cpu-unicorn",
   "crates/emulator-cpu-unicorn/sys",
   "crates/emulator-devices",
+  "crates/emulator-xp4-io",
+  "crates/emulator-xp4-display",
+  "crates/emulator-xp4-storage",
   "crates/emulator-xp5-board",
   "crates/emulator-xp5-io",
   "crates/emulator-xp5-display",
@@ -39,7 +42,6 @@ members = [
   "crates/emulator-exr2-gpu",
   "crates/emulator-exr2-i2c",
   "crates/emulator-exr2-display",
-  "crates/emulator-xp4",
   "crates/emulator-exr2-isp",
   "crates/emulator-exr2-board",
   "crates/emulator-exr2-plan",
@@ -71,6 +73,9 @@ fujimod-simulation = { path = "crates/simulation", version = "0.1.0" }
 fujimod-catalog = { path = "crates/catalog", version = "0.1.0" }
 fujimod-emulator = { path = "crates/emulator", version = "0.1.0" }
 fujimod-emulator-devices = { path = "crates/emulator-devices", version = "0.1.0" }
+fujimod-emulator-xp4-io = { path = "crates/emulator-xp4-io", version = "0.1.0" }
+fujimod-emulator-xp4-display = { path = "crates/emulator-xp4-display", version = "0.1.0" }
+fujimod-emulator-xp4-storage = { path = "crates/emulator-xp4-storage", version = "0.1.0" }
 fujimod-emulator-xp5-board = { path = "crates/emulator-xp5-board", version = "0.1.0" }
 fujimod-emulator-xp5-io = { path = "crates/emulator-xp5-io", version = "0.1.0" }
 fujimod-emulator-xp5-display = { path = "crates/emulator-xp5-display", version = "0.1.0" }
@@ -95,7 +100,6 @@ fujimod-emulator-exr2-audio = { path = "crates/emulator-exr2-audio", version = "
 fujimod-emulator-exr2-gpu = { path = "crates/emulator-exr2-gpu", version = "0.1.0" }
 fujimod-emulator-exr2-i2c = { path = "crates/emulator-exr2-i2c", version = "0.1.0" }
 fujimod-emulator-exr2-display = { path = "crates/emulator-exr2-display", version = "0.1.0" }
-fujimod-emulator-xp4 = { path = "crates/emulator-xp4", version = "0.1.0" }
 fujimod-emulator-exr2-isp = { path = "crates/emulator-exr2-isp", version = "0.1.0" }
 fujimod-emulator-exr2-board = { path = "crates/emulator-exr2-board", version = "0.1.0" }
 fujimod-emulator-exr2-plan = { path = "crates/emulator-exr2-plan", version = "0.1.0" }

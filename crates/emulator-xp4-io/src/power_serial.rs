@@ -1,6 +1,6 @@
 //! Bounded physical power-controller SPI register protocol, not a CPU harness.
 //! 10a09fc clocks a 24-bit frame; 10a1d40 supplies the six-bit register address.
-use super::{gpio::SharedPins, rtc::Counter, spi::Input};
+use crate::{gpio::SharedPins, rtc::Counter, spi::Input};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 /// Direct stop/load/start law over the shared counter.

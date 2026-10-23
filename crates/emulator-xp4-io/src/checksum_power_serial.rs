@@ -1,10 +1,6 @@
 //! Four-byte power-peer frames: seven-bit register, write flag, data and checksum.
 //! Fixed inputs, inert disables, stored registers and an RTC law are declared.
-use super::{
-    gpio::SharedPins,
-    rtc::{StagedClock, StagedConfig},
-    spi::Input,
-};
+use crate::{gpio::SharedPins, rtc::{StagedClock, StagedConfig}, spi::Input};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -461,7 +457,7 @@ mod tests {
             commit_value: 0x202,
             valid_mask: 2,
             retained_valid_mask: 1,
-            strobe: super::super::rtc::StrobeWindow {
+            strobe: crate::rtc::StrobeWindow {
                 mask: 0x200,
                 set_through_ticks: 2,
                 clear_from_ticks: 5,

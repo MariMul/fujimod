@@ -25,7 +25,9 @@
       "fujimod-emulator-parts-lens",
       "fujimod-emulator-parts-sensor",
       "fujimod-emulator-storage",
-      "fujimod-emulator-xp4",
+      "fujimod-emulator-xp4-display",
+      "fujimod-emulator-xp4-io",
+      "fujimod-emulator-xp4-storage",
       "fujimod-emulator-xp5-display",
       "fujimod-emulator-xp5-imaging",
       "fujimod-emulator-xp5-io",
@@ -79,7 +81,9 @@
         "fujimod-emulator-ip-dmp",
         "fujimod-emulator-parts-controls",
         "fujimod-emulator-storage",
-        "fujimod-emulator-xp4"
+        "fujimod-emulator-xp4-display",
+        "fujimod-emulator-xp4-io",
+        "fujimod-emulator-xp4-storage"
       ],
       "fujimod-emulator-exr2-board": [
         "fujimod-emulator-exr2-audio",

@@ -13,7 +13,6 @@ crate-type = ["staticlib", "rlib"]
 
 [dependencies]
 fujimod-emulator-xp5-board.workspace = true
-fujimod-emulator-xp5-io.workspace = true
 fujimod-emulator-xp5-display.workspace = true
 fujimod-emulator-parts-controls.workspace = true
 fujimod-emulator-storage.workspace = true

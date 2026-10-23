@@ -1,17 +1,4 @@
-//! XP4 register models, bounded to observed peripheral interfaces.
-//! Addresses and IRQ routing are explicit SoC inputs, never software-derived.
-pub mod adc;
-pub mod checksum_power_serial;
-pub mod gpio;
-pub mod lcdc;
-pub mod movdc;
-pub mod power_serial;
-pub mod requests;
-pub mod rtc;
-pub mod spi;
-pub mod storage;
-pub mod temperature;
-pub mod usb_phy;
+//! XP4 decrementing interval counters with guest-programmed reloads.
 /// Decrementing interval counters with guest-programmed reloads.
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -135,6 +122,7 @@ impl IntervalTimers {
         Err(format!("Unsupported XP4 timer offset {offset:#x}"))
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

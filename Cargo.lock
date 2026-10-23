@@ -3469,7 +3469,9 @@ dependencies = [
  "fujimod-emulator-ip-dmp",
  "fujimod-emulator-parts-controls",
  "fujimod-emulator-storage",
- "fujimod-emulator-xp4",
+ "fujimod-emulator-xp4-display",
+ "fujimod-emulator-xp4-io",
+ "fujimod-emulator-xp4-storage",
  "fujimod-emulator-xp5-board",
  "fujimod-recording",
  "fujimod-settings",
@@ -3797,7 +3799,6 @@ dependencies = [
  "fujimod-emulator-storage",
  "fujimod-emulator-xp5-board",
  "fujimod-emulator-xp5-display",
- "fujimod-emulator-xp5-io",
  "fujimod-firmware",
  "fujimod-workspace-hack",
  "js-sys",
@@ -3875,7 +3876,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "fujimod-emulator-xp4"
+name = "fujimod-emulator-xp4-display"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
@@ -3884,6 +3885,26 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "fujimod-emulator-xp4-io"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-xp4-storage"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
