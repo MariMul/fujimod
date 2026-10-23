@@ -137,19 +137,92 @@ fn ring_crossing_status_ack_and_finish_are_clocked() {
         clip.len().next_multiple_of(4) as u64 - 16
     );
     assert_eq!(read(&mut d, &mut h, 0xfff60c24), (1 << 9) | (1 << 12));
-    let irqs = h.irqs.len();
     write(&mut d, &mut h, 0xfff60c24, 1 << 9);
-    assert_eq!(d.next_deadline(h.now), Some(h.now));
-    let now = h.now;
-    advance(&mut d, &mut h, now);
-    assert_eq!(h.irqs.len(), irqs + 1);
+    assert_eq!(d.next_deadline(h.now), None);
+    assert_eq!(h.levels.get(&(0, 75)), Some(&true));
     write(&mut d, &mut h, 0xfff60c24, 1 << 12);
+    assert_eq!(h.levels.get(&(0, 75)), Some(&false));
     write(&mut d, &mut h, 0xfff60c00, 0x2000);
     let deadline = d.next_deadline(h.now).unwrap();
     advance(&mut d, &mut h, deadline - 1);
     assert_eq!(read(&mut d, &mut h, 0xfff60c24), 0);
     advance_from_checkpoint(&mut d, &mut h, deadline);
     assert_eq!(read(&mut d, &mut h, 0xfff60c24), 1 << 15);
+}
+
+#[test]
+fn partial_status_ack_holds_the_controller_level_through_clear_and_eoi() {
+    use crate::exr2::irq;
+    let mut h = TestHost::new();
+    let mut d = configured(&mut h);
+    input(&mut h, false);
+    write(&mut d, &mut h, 0xfff604ac, (SIZE - 16) as u32);
+    frame(&mut d, &mut h);
+    let pins = irq::Inputs::default();
+    let mut controller = irq::InterruptController::new(
+        irq::Options {
+            arbitration: irq::Arbitration::ActiveBitmap,
+        },
+        irq::Wiring {
+            base: 0x1000,
+            inputs: pins.clone(),
+            enables: None,
+            software: vec![],
+        },
+    )
+    .unwrap();
+    write(&mut controller, &mut h, 0x1400 + 75 * 4, 0x6000);
+    write(&mut controller, &mut h, 0x1800 + 75 * 4, 3);
+    write(&mut controller, &mut h, 0x1088, 1 << 11);
+    pins.level(75, h.levels[&(0, 75)]).unwrap();
+    let now = h.now;
+    advance(&mut controller, &mut h, now);
+    assert!(pins.irq());
+    assert_eq!(read(&mut controller, &mut h, 0x1200), 0x6000);
+    write(&mut d, &mut h, 0xfff60c24, 1 << 9);
+    assert!(h.levels[&(0, 75)]);
+    write(&mut controller, &mut h, 0x1128, 1 << 11);
+    write(&mut controller, &mut h, 0x1200, 0);
+    assert!(
+        pins.irq(),
+        "The remaining frame bit must retrigger after EOI"
+    );
+    assert_eq!(read(&mut controller, &mut h, 0x1200), 0x6000);
+    write(&mut d, &mut h, 0xfff60c24, 1 << 12);
+    pins.level(75, h.levels[&(0, 75)]).unwrap();
+    advance(&mut controller, &mut h, now);
+    write(&mut controller, &mut h, 0x1128, 1 << 11);
+    write(&mut controller, &mut h, 0x1200, 0);
+    assert!(!pins.irq());
+}
+
+#[test]
+fn bank_release_preserves_the_other_bank_and_refuses_an_unreleased_wrap() {
+    let mut h = TestHost::new();
+    let mut d = configured(&mut h);
+    let mut decoder = Decoder::new().unwrap();
+    input(&mut h, false);
+    write(&mut d, &mut h, 0xfff604ac, (SIZE - 16) as u32);
+    assert!(decoder.decode(&frame(&mut d, &mut h)).unwrap().is_some());
+    write(&mut d, &mut h, 0xfff60c24, 0xffff);
+    write(&mut d, &mut h, 0xfff604a4, 0x14);
+    input(&mut h, true);
+    let bytes = frame(&mut d, &mut h);
+    let picture = decoder.decode(&bytes).unwrap().unwrap();
+    assert!((picture.y()[8] as i16 - 200).abs() < 12);
+    write(&mut d, &mut h, 0xfff60c24, 0xffff);
+    write(&mut d, &mut h, 0xfff604ac, (SIZE - 4) as u32);
+    assert!(decoder.decode(&frame(&mut d, &mut h)).unwrap().is_some());
+    assert_eq!(read(&mut d, &mut h, 0xfff604a4) & 32, 0);
+    write(&mut d, &mut h, 0xfff60c24, 0xffff);
+    write(&mut d, &mut h, 0xfff604a4, 0x10);
+    write(&mut d, &mut h, 0xfff604ac, (SIZE - 4) as u32);
+    let effects = h.effects.len();
+    let mut cx = h.cx();
+    d.write(&mut cx, 0xfff60c00, 4, 0x8000);
+    assert!(cx.refusal().unwrap().contains("has not been released"));
+    assert_eq!(h.effects.len(), effects);
+    assert_eq!(d.next_deadline(h.now), None);
 }
 #[test]
 fn restored_gop_produces_identical_successor_bytes() {
@@ -224,10 +297,7 @@ fn start_latches_input_and_destinations_and_queues_finish() {
         .unwrap();
     assert!((image.y()[8] as i16 - 40).abs() < 12);
     assert!(h.ram[0x40000..0x40000 + length].iter().all(|b| *b == 0));
-    assert_eq!(read(&mut d, &mut h, 0xfff60c24), (1 << 9) | (1 << 12));
-    write(&mut d, &mut h, 0xfff60c24, 1 << 9);
-    assert_eq!(d.next_deadline(h.now), Some(deadline));
-    advance(&mut d, &mut h, deadline);
+    // The initial frame did not cross a bank, so it has no bank notice.
     assert_eq!(read(&mut d, &mut h, 0xfff60c24), 1 << 12);
     write(&mut d, &mut h, 0xfff60c24, 1 << 12);
     assert_eq!(d.next_deadline(h.now), Some(deadline + 2));

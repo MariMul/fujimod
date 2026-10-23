@@ -6,6 +6,7 @@ pub(crate) struct TestHost {
     pub ram: Vec<u8>,
     pub effects: Vec<&'static str>,
     pub irqs: Vec<(usize, u32)>,
+    pub levels: std::collections::BTreeMap<(usize, u32), bool>,
 }
 impl TestHost {
     pub fn new() -> Self {
@@ -27,6 +28,16 @@ impl Host for TestHost {
     fn raise_irq(&mut self, c: usize, l: u32) -> Result<(), String> {
         self.effects.push("irq");
         self.irqs.push((c, l));
+        Ok(())
+    }
+    fn set_core_irq(&mut self, core: usize, line: u32, high: bool) -> Result<(), String> {
+        let previous = self.levels.insert((core, line), high).unwrap_or(false);
+        if previous != high {
+            self.effects.push(if high { "irq" } else { "irq-low" });
+            if high {
+                self.irqs.push((core, line));
+            }
+        }
         Ok(())
     }
     fn ram_read(&self, a: u64, out: &mut [u8]) -> Result<(), String> {

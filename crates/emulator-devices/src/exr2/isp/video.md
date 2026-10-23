@@ -31,7 +31,7 @@ skipped frames refuse.
 | --- | --- |
 | `400` | Packed input DMA address, tightly packed two bytes per luma sample |
 | `490/494`, `498/49C` | First/second bitstream base and byte capacity |
-| `4A4` bits 2/3/4 | First/second/common output enables |
+| `4A4` bits 2/3/4 | Release first/second output bank; common output enable |
 | `4A4` bit 5 | Current output bank, read-only |
 | `4AC` | Running byte offset in the current bank |
 | `C00` | `800` initialize; `8000` encode; `1000` pause; `2000` finish |
@@ -51,12 +51,17 @@ read. Crop/field modes, alternate-stream `4000` starts, overlapping/unmapped DMA
 invalid geometry and frames larger than a ring bank refuse. Other coefficient
 or program uploads do not authorize an encoding mode.
 
+Each bank begins available after release. Filling it consumes its availability;
+releasing that bank leaves the other bank available for the in-flight stream.
+An access unit that would enter an unreleased bank refuses before output DMA.
+
 All input is latched at START. Compression runs without guest effects. A due
 virtual deadline writes the encoded bytes, zero-pads only to a word boundary,
 updates the cursor and exact bit count, then raises the configured IRQ. A
-frame can cross from either bank into the other. The first accepted frame and
-each crossing set the bank-start status. Acknowledging one of several pending status bits schedules another
-IRQ at the current virtual tick. Early advancement is inert. The declared
+frame can cross from either bank into the other; crossing sets the bank-start
+status. The interrupt level remains high while any status bit is pending, so
+the controller re-pends it after a partial acknowledgment and end of interrupt.
+Acknowledging the last bit lowers the line. Early advancement is inert. The declared
 throughput is 64 luma samples per virtual tick; setup, pause and finish take
 two ticks. These are model clocks, independent of host elapsed time.
 

@@ -1,5 +1,5 @@
 //! Register-driven FFF60000 AVC encoder. Packed YYCbCr DMA is compressed by
-//! the software codec, then committed to the two programmed bitstream banks
+//! the selected host codec, then committed to the two programmed bitstream banks
 //! before status/IRQ publication. The declared clock is 64 luma samples/tick
 //! (setup/stop: two ticks), independent of host encoder speed.
 use super::dma::physical;
@@ -30,7 +30,8 @@ struct State {
     r: Vec<u32>,
     pending: Option<Pending>,
     finish_requested: bool,
-    irq_sent: bool,
+    irq_level: bool,
+    bank_available: [bool; 2],
     config: Option<Config>,
     parameter_sets: Vec<u8>,
     frames: u64,
@@ -54,7 +55,8 @@ impl VideoEncoder {
                 r: vec![0; 0xf00 / 4],
                 pending: None,
                 finish_requested: false,
-                irq_sent: false,
+                irq_level: false,
+                bank_available: [false; 2],
                 config: None,
                 parameter_sets: Vec::new(),
                 frames: 0,
@@ -158,8 +160,8 @@ impl VideoEncoder {
         if self.state.config.is_some_and(|c| c != config) {
             return Err("H.264 sequence configuration changed without initialization".into());
         }
-        if self.r(0x4a4) & 0x1c != 0x1c {
-            return Err("H.264 requires both bitstream banks enabled".into());
+        if self.r(0x4a4) & 0x10 == 0 {
+            return Err("H.264 bitstream output is disabled".into());
         }
         let sizes = [self.r(0x494) as usize, self.r(0x49c) as usize];
         let bases = [
@@ -206,22 +208,21 @@ impl VideoEncoder {
             return Err("H.264 output cursor outside ring".into());
         }
         let mut writes = Vec::new();
+        let mut available = self.state.bank_available;
         let mut remaining = payload.len();
-        // The first accepted access unit starts the initial output bank, just
-        // as a wrap starts the next bank. Publish its bytes before either
-        // notice; ACK of the bank-start bit leaves the frame notice pending.
-        let mut flags = (1 << 12)
-            | if self.state.config.is_none() {
-                1 << 9
-            } else {
-                0
-            };
+        // Offset zero alone is not a crossing. The bank notice identifies a
+        // wrap within this access unit, independently of frame completion.
+        let mut flags = 1 << 12;
         while remaining > 0 {
+            if !available[bank] {
+                return Err("H.264 bitstream bank has not been released".into());
+            }
             let n = remaining.min(sizes[bank] - cursor);
             writes.push((bases[bank] + cursor as u64, n));
             remaining -= n;
             cursor += n;
             if cursor == sizes[bank] {
+                available[bank] = false;
                 bank ^= 1;
                 cursor = 0;
                 flags |= 1 << 9;
@@ -241,6 +242,7 @@ impl VideoEncoder {
             flags,
         });
         self.state.parameter_sets = parameter_sets;
+        self.state.bank_available = available;
         self.payload = payload.into();
         self.history.push(planar);
         self.state.config = Some(config);
@@ -254,7 +256,6 @@ impl VideoEncoder {
             0x800 => {
                 self.state.pending = None;
                 self.state.finish_requested = false;
-                self.state.irq_sent = false;
                 self.state.config = None;
                 self.state.parameter_sets.clear();
                 self.codec = None;
@@ -266,6 +267,7 @@ impl VideoEncoder {
                 self.set(0xc20, 0);
                 self.set(0xc24, 0);
                 self.set(0x4a4, self.r(0x4a4) & !32);
+                self.state.bank_available = [self.r(0x4a4) & 4 != 0, self.r(0x4a4) & 8 != 0];
                 Ok(())
             }
             0x8000 => self.encode(cx),
@@ -281,6 +283,14 @@ impl VideoEncoder {
             _ => Err(format!("H.264 unsupported command {value:#x}")),
         }
     }
+    fn publish_irq(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
+        let high = self.r(0xc24) != 0;
+        if high != self.state.irq_level {
+            cx.set_core_irq(self.irq.core, self.irq.line, high)?;
+            self.state.irq_level = high;
+        }
+        Ok(())
+    }
     fn decoded(&self, saved: &Checkpoint) -> Result<State, String> {
         let s: State = saved.decode(self.name())?;
         if s.backend != self.state.backend {
@@ -293,6 +303,7 @@ impl VideoEncoder {
         }
         if s.parameter_sets.len() > 88
             || s.r.len() != 0xf00 / 4
+            || s.irq_level != (s.r[0xc24 / 4] != 0)
             || saved.blobs().len() != s.history_lengths.len() + 1
             || saved.blobs()[0].len() != s.payload_length
             || saved.blobs()[1..]
@@ -385,23 +396,34 @@ impl Device for VideoEncoder {
         let v = v as u32;
         if o == 0xc24 {
             self.set(o, self.r(o) & !v);
-            self.state.irq_sent = false;
+            if let Err(error) = self.publish_irq(cx) {
+                cx.fail(error);
+            }
             return;
         }
         if o == 0xc00 {
-            if let Err(e) = self.command(cx, v) {
-                cx.fail(e);
+            if let Err(error) = self.command(cx, v).and_then(|()| self.publish_irq(cx)) {
+                cx.fail(error);
             }
             return;
         }
         if o == 0x4a4 {
+            if v & !0x3d != 0 {
+                cx.fail("H.264 unsupported bitstream bank control bits");
+                return;
+            }
+            // Each set bit returns that bank to the encoder. A zero does
+            // not revoke the other bank while an access unit is in flight.
+            for (index, available) in self.state.bank_available.iter_mut().enumerate() {
+                *available |= v & (4 << index) != 0;
+            }
             self.set(o, (v & !32) | (self.r(o) & 32));
             return;
         }
         self.set(o, v);
     }
     fn next_deadline(&self, now: u64) -> Option<u64> {
-        if self.r(0xc24) != 0 && !self.state.irq_sent {
+        if (self.r(0xc24) != 0) != self.state.irq_level {
             return Some(now);
         }
         self.state.pending.as_ref().map(|p| p.deadline)
@@ -439,7 +461,6 @@ impl Device for VideoEncoder {
             }
             self.set(0xc20, 4);
             self.set(0xc24, self.r(0xc24) | p.flags);
-            self.state.irq_sent = false;
             if self.state.finish_requested {
                 self.state.finish_requested = false;
                 if let Err(e) = self.notice(cx.now(), 1 << 15) {
@@ -448,11 +469,8 @@ impl Device for VideoEncoder {
                 }
             }
         }
-        if self.r(0xc24) != 0 && !self.state.irq_sent {
-            self.state.irq_sent = true;
-            if let Err(e) = self.irq.raise(cx) {
-                cx.fail(e);
-            }
+        if let Err(error) = self.publish_irq(cx) {
+            cx.fail(error);
         }
     }
     fn event(&mut self, cx: &mut Cx<'_>, _: u64) {
