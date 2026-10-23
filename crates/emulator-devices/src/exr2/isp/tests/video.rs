@@ -8,7 +8,16 @@ const FIRST: usize = 0x20000;
 const SECOND: usize = 0x30000;
 const SIZE: usize = 0x10000;
 fn configured(h: &mut TestHost) -> VideoEncoder {
-    let mut d = VideoEncoder::new(video::Options {}, Irq { core: 0, line: 75 }).unwrap();
+    configured_backend(
+        h,
+        fujimod_catalog::construction::VideoEncoderBackend::Software,
+    )
+}
+fn configured_backend(
+    h: &mut TestHost,
+    backend: fujimod_catalog::construction::VideoEncoderBackend,
+) -> VideoEncoder {
+    let mut d = VideoEncoder::new(video::Options { backend }, Irq { core: 0, line: 75 }).unwrap();
     for (o, v) in [
         (0xe00, 64),
         (0xe04, 0x2000 | 32),
@@ -51,7 +60,17 @@ fn frame(d: &mut VideoEncoder, h: &mut TestHost) -> Vec<u8> {
     advance(d, h, deadline - 1);
     assert_eq!(h.ram, before);
     assert_eq!(h.effects.len(), effects);
-    advance_from_checkpoint(d, h, deadline);
+    if d.save()["backend"] == "software" {
+        advance_from_checkpoint(d, h, deadline);
+    } else {
+        assert!(
+            d.checkpoint()
+                .err()
+                .unwrap()
+                .contains("cannot replay identically")
+        );
+        advance(d, h, deadline);
+    }
     let n = ((read(d, h, 0xfff60d88) | (read(d, h, 0xfff60d8c) << 16)) / 8) as usize;
     let base = if bank == 0 { FIRST } else { SECOND };
     let first = n.min(SIZE - start);
@@ -76,6 +95,13 @@ fn encoded_clip_decodes_pixels_p_frames_and_gop_restarts() {
         if i == 0 {
             first = bytes.clone();
             assert_eq!(&bytes[..5], &[0, 0, 0, 1, 0x67]);
+        }
+        if i == 3 {
+            assert_eq!(
+                bytes[4] & 31,
+                5,
+                "Later IDRs reuse the initial parameter sets"
+            );
         }
         if i == 1 {
             assert_ne!(bytes, first);
@@ -203,4 +229,35 @@ fn start_latches_input_and_destinations_and_queues_finish() {
     assert_eq!(d.next_deadline(h.now), Some(deadline + 2));
     advance(&mut d, &mut h, deadline + 2);
     assert_eq!(read(&mut d, &mut h, 0xfff60c24), 1 << 15);
+}
+
+#[test]
+fn backend_selection_is_explicit() {
+    assert!(serde_json::from_str::<video::Options>("{}").is_err());
+    assert!(serde_json::from_str::<video::Options>(r#"{"backend":"automatic"}"#).is_err());
+}
+
+#[test]
+#[cfg(all(target_os = "macos", feature = "videotoolbox-tests"))]
+fn hardware_backend_obeys_dma_clock_and_decodes_real_frames() {
+    let mut h = TestHost::new();
+    let mut d = configured_backend(
+        &mut h,
+        fujimod_catalog::construction::VideoEncoderBackend::Videotoolbox,
+    );
+    let mut decoder = Decoder::new().unwrap();
+    for i in 0..4 {
+        input(&mut h, i % 2 == 1);
+        let bytes = frame(&mut d, &mut h);
+        let image = decoder.decode(&bytes).unwrap().unwrap();
+        assert_eq!(image.dimensions(), (64, 32));
+        let value = if i % 2 == 0 { 40 } else { 200 };
+        assert!((image.y()[8] as i16 - value).abs() < 16);
+        assert_eq!(d.save()["backend"], "videotoolbox");
+        write(&mut d, &mut h, 0xfff60c24, 0xffff);
+    }
+    write(&mut d, &mut h, 0xfff60c00, 0x2000);
+    let deadline = d.next_deadline(h.now).unwrap();
+    advance(&mut d, &mut h, deadline);
+    assert!(d.checkpoint().is_ok());
 }

@@ -780,6 +780,7 @@ class ConstructionModelVariant26(TypedDict, total=False):
 class ConstructionModelVariant27(TypedDict, total=False):
     irq: Required[ConstructionCore]
     kind: Required[Literal["video-encoder"]]
+    options: Required[VideoEncoderOptions]
 
 
 class ConstructionModelVariant28(TypedDict, total=False):
@@ -3667,6 +3668,7 @@ class RunFactoryOptions(TypedDict, total=False):
     spi0_input_profile: NotRequired[RunSpi0InputProfile | None]
     storage_profile: NotRequired[RunStorageProfile | None]
     user_journals: NotRequired[RunUserJournals | None]
+    video_encoder_backend: NotRequired[VideoEncoderBackend | None]
     wifi_sdio_profile: NotRequired[RunWifiSdioProfile | None]
     wifi_sdio_transfer_ticks: NotRequired[int | None]
 
@@ -4650,6 +4652,13 @@ class UpdateRange(TypedDict, total=False):
     address: Required[int]
     sha256: Required[str]
     size: Required[int]
+
+
+type VideoEncoderBackend = Literal["videotoolbox", "software"]
+
+
+class VideoEncoderOptions(TypedDict, total=False):
+    backend: Required[VideoEncoderBackend]
 
 
 type VideoLayout = Literal["yycbcr422"]

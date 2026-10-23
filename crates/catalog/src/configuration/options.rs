@@ -12,6 +12,9 @@ use serde::{Deserialize, Serialize};
 )]
 #[derive(Default)]
 pub struct RunFactoryOptions {
+    /// Explicit H.264 backend; absence selects the local platform default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub video_encoder_backend: Option<crate::construction::VideoEncoderBackend>,
     /// Selected auxiliary control profile. Absence preserves the base selection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auxiliary_control_profile: Option<RunAuxiliaryControlProfile>,

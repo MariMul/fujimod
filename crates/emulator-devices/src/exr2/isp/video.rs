@@ -12,9 +12,8 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-#[derive(Clone, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Options {}
+use fujimod_catalog::construction::VideoEncoderBackend as Backend;
+pub use fujimod_catalog::construction::VideoEncoderOptions as Options;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Pending {
@@ -27,11 +26,13 @@ struct Pending {
 }
 #[derive(Serialize, Deserialize)]
 struct State {
+    backend: Backend,
     r: Vec<u32>,
     pending: Option<Pending>,
     finish_requested: bool,
     irq_sent: bool,
     config: Option<Config>,
+    parameter_sets: Vec<u8>,
     frames: u64,
     output_bytes: u64,
     history_lengths: Vec<usize>,
@@ -45,14 +46,17 @@ pub struct VideoEncoder {
     codec: Option<Codec>,
 }
 impl VideoEncoder {
-    pub fn new(_: Options, irq: Irq) -> Result<Self, String> {
+    pub fn new(options: Options, irq: Irq) -> Result<Self, String> {
+        h264::validate_backend(options.backend)?;
         Ok(Self {
             state: State {
+                backend: options.backend,
                 r: vec![0; 0xf00 / 4],
                 pending: None,
                 finish_requested: false,
                 irq_sent: false,
                 config: None,
+                parameter_sets: Vec::new(),
                 frames: 0,
                 output_bytes: 0,
                 history_lengths: Vec::new(),
@@ -186,9 +190,11 @@ impl VideoEncoder {
             self.codec = None;
         }
         if self.codec.is_none() {
-            self.codec = Some(Codec::new(config, &self.history)?);
+            self.codec = Some(Codec::new(self.state.backend, config, &self.history)?);
         }
-        let mut payload = self.codec.as_mut().unwrap().encode(config, &planar)?;
+        let encoded = self.codec.as_mut().unwrap().encode(config, &planar)?;
+        let (mut payload, parameter_sets) =
+            h264::transport_frame(&encoded, &self.state.parameter_sets)?;
         let bits = u32::try_from(payload.len() * 8).map_err(|_| "H.264 frame size overflow")?;
         payload.resize(payload.len().next_multiple_of(4), 0);
         if payload.len() > *sizes.iter().min().unwrap() {
@@ -226,6 +232,7 @@ impl VideoEncoder {
             bits,
             flags,
         });
+        self.state.parameter_sets = parameter_sets;
         self.payload = payload.into();
         self.history.push(planar);
         self.state.config = Some(config);
@@ -241,6 +248,7 @@ impl VideoEncoder {
                 self.state.finish_requested = false;
                 self.state.irq_sent = false;
                 self.state.config = None;
+                self.state.parameter_sets.clear();
                 self.codec = None;
                 self.history.clear();
                 self.payload = Arc::from([]);
@@ -267,14 +275,24 @@ impl VideoEncoder {
     }
     fn decoded(&self, saved: &Checkpoint) -> Result<State, String> {
         let s: State = saved.decode(self.name())?;
-        if s.r.len() != 0xf00 / 4
+        if s.backend != self.state.backend {
+            return Err("H.264 checkpoint backend differs".into());
+        }
+        if s.backend == Backend::Videotoolbox && !s.history_lengths.is_empty() {
+            return Err(
+                "Active VideoToolbox sequences cannot replay identically; select software".into(),
+            );
+        }
+        if s.parameter_sets.len() > 88
+            || s.r.len() != 0xf00 / 4
             || saved.blobs().len() != s.history_lengths.len() + 1
             || saved.blobs()[0].len() != s.payload_length
             || saved.blobs()[1..]
                 .iter()
                 .zip(&s.history_lengths)
                 .any(|(b, n)| b.len() != *n)
-            || s.config.is_none() && !s.history_lengths.is_empty()
+            || s.config.is_none() && (!s.history_lengths.is_empty() || !s.parameter_sets.is_empty())
+            || s.config.is_some() && s.parameter_sets.is_empty()
         {
             return Err("H.264 checkpoint sizes differ".into());
         }
@@ -310,6 +328,11 @@ impl Device for VideoEncoder {
         "exr2-isp-video-encoder"
     }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
+        if self.state.backend == Backend::Videotoolbox && !self.history.is_empty() {
+            return Err(
+                "Active VideoToolbox sequences cannot replay identically; select software".into(),
+            );
+        }
         let mut blobs = vec![self.payload.clone()];
         blobs.extend(self.history.iter().cloned());
         Ok(Checkpoint::encode(self.name(), &self.state)?.with_blobs(blobs))
@@ -325,6 +348,9 @@ impl Device for VideoEncoder {
         Ok(())
     }
     fn fingerprint(&self) -> Result<serde_json::Value, String> {
+        if self.state.backend == Backend::Videotoolbox && !self.history.is_empty() {
+            return Err("Active VideoToolbox sequences have no identical replay fingerprint; select software".into());
+        }
         Ok(
             serde_json::json!({"state":self.state,"payload":crate::fingerprint::bytes(&self.payload),
             "history":self.history.iter().map(|b|crate::fingerprint::bytes(b)).collect::<Vec<_>>()}),
@@ -396,6 +422,13 @@ impl Device for VideoEncoder {
                 self.set(0xd88, p.bits & 65535);
                 self.set(0xd8c, p.bits >> 16);
             }
+            if p.flags & (1 << 15) != 0 {
+                self.codec = None;
+                self.history.clear();
+                self.state.history_lengths.clear();
+                self.state.config = None;
+                self.state.parameter_sets.clear();
+            }
             self.set(0xc20, 4);
             self.set(0xc24, self.r(0xc24) | p.flags);
             self.state.irq_sent = false;
@@ -418,7 +451,7 @@ impl Device for VideoEncoder {
         self.advance(cx)
     }
     fn save(&self) -> serde_json::Value {
-        serde_json::json!({"frames":self.state.frames,"output_bytes":self.state.output_bytes,
+        serde_json::json!({"backend":self.state.backend,"frames":self.state.frames,"output_bytes":self.state.output_bytes,
             "registers":self.state.r,"pending":self.state.pending,"gop_frames":self.history.len()})
     }
 }

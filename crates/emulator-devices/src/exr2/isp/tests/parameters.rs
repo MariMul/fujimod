@@ -16,7 +16,13 @@ fn parameter_domains_and_raw_video_refusals() {
     let mut cx = h.cx();
     d.read(&mut cx, 0xfff42000, 4);
     assert!(cx.refusal().is_some());
-    let mut d = VideoEncoder::new(video::Options {}, Irq { core: 0, line: 75 }).unwrap();
+    let mut d = VideoEncoder::new(
+        video::Options {
+            backend: fujimod_catalog::construction::VideoEncoderBackend::Software,
+        },
+        Irq { core: 0, line: 75 },
+    )
+    .unwrap();
     for (address, pointer) in [
         (0xfff60400, 0x45123450),
         (0xfff60404, 0x46234560),

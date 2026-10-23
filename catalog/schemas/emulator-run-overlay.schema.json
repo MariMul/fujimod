@@ -1314,6 +1314,17 @@
           ],
           "description": "Selected user journals. Absence preserves the base selection."
         },
+        "video_encoder_backend": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VideoEncoderBackend"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit H.264 backend; absence selects the local platform default."
+        },
         "wifi_sdio_profile": {
           "anyOf": [
             {
@@ -3266,6 +3277,14 @@
       "description": "Closed selection for wifi sdio profile.",
       "enum": [
         "declared-wifi-sdio-one-function-enumeration-unmeasured"
+      ],
+      "type": "string"
+    },
+    "VideoEncoderBackend": {
+      "description": "Explicit H.264 compression implementation, selected before construction.",
+      "enum": [
+        "videotoolbox",
+        "software"
       ],
       "type": "string"
     }

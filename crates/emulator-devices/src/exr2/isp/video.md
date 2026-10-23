@@ -1,12 +1,31 @@
 # AVC encoder
 
 `VideoEncoder` consumes aligned register writes and packed Y0,Y1,Cb,Cr
-input DMA. It averages adjacent chroma rows to planar 8-bit 4:2:0 and uses
-[OpenH264](https://github.com/ralfbiedert/openh264-rs) for real Baseline AVC
-compression. Cargo builds the BSD-2-Clause codec from its locked sources.
-Wrapper 0.9.3 supports the workspace's Rust 1.88 minimum; the locked native
-backend is `openh264-sys2` 0.9.9. Native targets support encoding; Wasm
-explicitly refuses image-backed starts until a software backend is available.
+input DMA. It averages adjacent chroma rows to planar 8-bit 4:2:0. The
+required `options.backend` selects exactly one compression implementation:
+
+- `videotoolbox`: macOS VideoToolbox with hardware acceleration **required**,
+  real-time encoding and frame reordering disabled. Native pixel buffers
+  receive the same luma/chroma samples as software. Hardware initialization
+  and encode failures refuse; there is no software fallback.
+- `software`: the BSD-2-Clause [rusty_h264 encoder](https://github.com/Remade-With-Rust/rusty_h264),
+  with scalar Rust, libm and explicit streaming Baseline configuration.
+  Default SIMD, environment tuning and process-wide allocator features are
+  disabled. The same implementation builds for native hosts and Wasm.
+
+The native X70 run configuration selects this through
+`preset.factory_options.video_encoder_backend`. Its local platform default
+is `videotoolbox` on macOS and `software` elsewhere. CI, Wasm exports, sealed
+rehearsals and recorded walkthroughs select `software` explicitly before
+board construction. The resolved graph and device receipts retain the backend.
+
+Both implementations share the input conversion, admission checks,
+bitstream-ring writes, status fields, virtual deadlines and interrupt logic.
+Only compression differs. Backend output is normalized to initial Annex B
+SPS/PPS and one coded slice per frame. Identical parameter sets repeated at
+later IDRs are omitted; changed parameter sets refuse. Optional SEI, AUD and
+filler are omitted. Unsupported parameter-set sizes, multiple slices and
+skipped frames refuse.
 
 | Offset | Modeled meaning |
 | --- | --- |
@@ -41,14 +60,22 @@ IRQ at the current virtual tick. Early advancement is inert. The declared
 throughput is 64 luma samples per virtual tick; setup, pause and finish take
 two ticks. These are model clocks, independent of host elapsed time.
 
-GOPs start with a fresh IDR and constant SPS/PPS IDs. Single-threaded encoding
-with scene-change, background and adaptive-quantization decisions disabled
-makes checkpoint reconstruction repeatable. Checkpoints share immutable
-binary input blobs for only the current GOP (at most 120 frames), plus any
-pending encoded payload. Restore lazily rebuilds the host codec by replaying
-those inputs, without reading guest memory or replaying guest effects.
+GOPs start with a fresh IDR and constant SPS/PPS IDs. Software checkpoints
+share immutable binary input blobs for only the current GOP (at most 120
+frames), plus any pending encoded payload. Restore lazily rebuilds the host
+codec by replaying those inputs, without reading guest memory or replaying
+guest effects. Active VideoToolbox sequences refuse exact checkpoints and
+fingerprints: identical replay requires selecting software at construction.
+Completed sequences release host codec state, so later checkpoints can proceed.
 
 The colocated video tests decode an eight-frame DMA clip across P frames and
 GOP restarts, check decoded luma/chroma, compare restored successor bytes,
 cross ring boundaries, check exact deadlines and DMA-before-IRQ order, and
 refuse invalid modes and spans without publishing a completion.
+
+The local hardware regression is explicitly selected with
+`cargo test -p fujimod-emulator-devices --features videotoolbox-tests --lib exr2::isp::tests`.
+Ordinary CI runs the software tests. The `h264_fingerprint` example and
+`scripts/ci/test-h264-wasm.ts` compare all 256 SHA bits of a generated eight-frame
+software stream between native and Wasm; its optional native output can also
+be decoded by an independent AVC decoder.

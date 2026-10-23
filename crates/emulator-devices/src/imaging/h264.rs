@@ -1,7 +1,6 @@
-//! Pure software H.264 compression. No guest memory, time or device effects.
-//! OpenH264 is BSD-2-Clause: https://github.com/ralfbiedert/openh264-rs.
-//! The 0.9.3 wrapper retains Rust 1.88 compatibility; newer wrappers require
-//! Rust 1.89 through `wide`. The locked source backend is built by Cargo.
+//! Host compression backends. No guest memory, clocks or device effects.
+//! Software uses scalar Rust and libm; VideoToolbox requires hardware encoding.
+pub use fujimod_catalog::construction::VideoEncoderBackend as Backend;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -37,104 +36,182 @@ impl Config {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-pub struct Codec(openh264::encoder::Encoder);
-#[cfg(target_arch = "wasm32")]
-pub struct Codec;
+pub fn validate_backend(backend: Backend) -> Result<(), String> {
+    if backend == Backend::Videotoolbox && !cfg!(target_os = "macos") {
+        return Err(
+            "VideoToolbox H.264 requires macOS; select software in the run configuration".into(),
+        );
+    }
+    Ok(())
+}
+
+pub enum Codec {
+    Software(Box<rusty_h264_encoder::Encoder>),
+    #[cfg(target_os = "macos")]
+    Videotoolbox(videotoolbox::Encoder),
+}
+#[cfg(target_os = "macos")]
+mod videotoolbox;
 
 impl Codec {
-    pub fn new(config: Config, history: &[Arc<[u8]>]) -> Result<Self, String> {
+    pub fn new(backend: Backend, config: Config, history: &[Arc<[u8]>]) -> Result<Self, String> {
         config.validate()?;
-        #[cfg(target_arch = "wasm32")]
-        {
-            let _ = history;
-            Err("software H.264 compression is unavailable on this target".into())
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            use openh264::encoder::{
-                BitRate, Complexity, Encoder, EncoderConfig, FrameRate, Profile, QpRange,
-                RateControlMode,
-            };
-            let settings = EncoderConfig::new()
-                .bitrate(BitRate::from_bps(config.bitrate))
-                .max_frame_rate(FrameRate::from_hz(config.frames_per_second as f32))
-                .rate_control_mode(RateControlMode::Bitrate)
-                .profile(Profile::Baseline)
-                .complexity(Complexity::Low)
-                .qp(QpRange::new(1, config.max_qp))
-                .skip_frames(false)
-                .num_threads(1)
-                .scene_change_detect(false)
-                .adaptive_quantization(false)
-                .background_detection(false);
-            let mut codec = Self(
-                Encoder::with_api_config(openh264::OpenH264API::from_source(), settings)
-                    .map_err(|e| format!("H.264 encoder initialization: {e}"))?,
-            );
-            for frame in history {
-                codec.encode(config, frame)?;
+        validate_backend(backend)?;
+        let mut codec = match backend {
+            Backend::Software => {
+                let mut settings =
+                    rusty_h264_encoder::EncoderConfig::baseline(config.width, config.height);
+                settings.level_idc = 42;
+                settings.qp = config.max_qp;
+                settings.gop_size = config.gop as u32;
+                settings.min_keyint = 0;
+                settings.bitrate = config.bitrate;
+                settings.framerate = config.frames_per_second as f32;
+                settings.aq_strength = 0.0;
+                settings.i_qp_offset = 0;
+                Self::Software(Box::new(
+                    rusty_h264_encoder::Encoder::new(settings)
+                        .map_err(|e| format!("software H.264 initialization: {e}"))?,
+                ))
             }
-            Ok(codec)
+            Backend::Videotoolbox => {
+                if !history.is_empty() {
+                    return Err("VideoToolbox codec state cannot replay identically".into());
+                }
+                #[cfg(target_os = "macos")]
+                {
+                    Self::Videotoolbox(videotoolbox::Encoder::new(config)?)
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    return Err("VideoToolbox H.264 requires macOS".into());
+                }
+            }
+        };
+        for frame in history {
+            codec.encode(config, frame)?;
         }
+        Ok(codec)
     }
     pub fn encode(&mut self, config: Config, frame: &[u8]) -> Result<Vec<u8>, String> {
         if frame.len() != config.frame_bytes() {
             return Err("H.264 planar input size differs".into());
         }
-        #[cfg(target_arch = "wasm32")]
-        {
-            Err("software H.264 compression is unavailable on this target".into())
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let y = config.width * config.height;
-            let input = openh264::formats::YUVSlices::new(
-                (&frame[..y], &frame[y..y + y / 4], &frame[y + y / 4..]),
-                (config.width, config.height),
-                (config.width, config.width / 2, config.width / 2),
-            );
-            let stream = self
-                .0
-                .encode(&input)
-                .map_err(|e| format!("H.264 encode: {e}"))?;
-            let mut out = Vec::new();
-            // Normalize start codes without changing any encoded NAL payload.
-            // Only the supported single-layer AVC parameter sets and slices
-            // may enter the DMA ring (no SVC, SEI, AUD or filler packets).
-            for i in 0..stream.num_layers() {
-                let layer = stream.layer(i).ok_or("H.264 missing layer")?;
-                for j in 0..layer.nal_count() {
-                    let nal = layer.nal_unit(j).ok_or("H.264 missing NAL")?;
-                    let n = if nal.starts_with(&[0, 0, 0, 1]) {
-                        4
-                    } else if nal.starts_with(&[0, 0, 1]) {
-                        3
-                    } else {
-                        return Err("H.264 backend omitted Annex B prefix".into());
-                    };
-                    let payload = nal
-                        .get(n..)
-                        .filter(|v| !v.is_empty())
-                        .ok_or("empty H.264 NAL")?;
-                    match payload[0] & 31 {
-                        7 if payload.len() <= 64 => (),
-                        8 if payload.len() <= 16 => (),
-                        1 | 5 => (),
-                        _ => return Err(
-                            "H.264 backend produced unsupported NAL type or parameter-set length"
-                                .into(),
-                        ),
-                    }
-                    out.extend_from_slice(&[0, 0, 0, 1]);
-                    out.extend_from_slice(payload);
-                }
+        let stream = match self {
+            Self::Software(encoder) => {
+                let y = config.width * config.height;
+                let input = rusty_h264_common::YuvPlanes {
+                    width: config.width,
+                    height: config.height,
+                    y: &frame[..y],
+                    u: &frame[y..y + y / 4],
+                    v: &frame[y + y / 4..],
+                    stride_y: config.width,
+                    stride_c: config.width / 2,
+                };
+                encoder
+                    .encode_planes(&input)
+                    .map_err(|e| format!("software H.264 encode: {e}"))?
             }
-            if out.is_empty() {
-                return Err("H.264 backend skipped a frame".into());
-            }
-            Ok(out)
+            #[cfg(target_os = "macos")]
+            Self::Videotoolbox(encoder) => encoder.encode(config, frame)?,
+        };
+        normalize(&stream)
+    }
+}
+
+/// Normalize the actual AVC output to one SPS/PPS/slice access unit. Optional
+/// SEI, access-unit delimiters and filler carry no image samples and are omitted.
+/// Multiple slices cannot be represented by the supported length-prefix writer.
+fn normalize(stream: &[u8]) -> Result<Vec<u8>, String> {
+    fn prefix(s: &[u8]) -> usize {
+        if s.starts_with(&[0, 0, 0, 1]) {
+            4
+        } else if s.starts_with(&[0, 0, 1]) {
+            3
+        } else {
+            0
         }
+    }
+    let mut out = Vec::new();
+    let mut i = 0;
+    let mut slices = 0;
+    while i < stream.len() {
+        let n = prefix(&stream[i..]);
+        if n == 0 {
+            return Err("H.264 backend omitted Annex B prefix".into());
+        }
+        let start = i + n;
+        let mut end = start;
+        while end < stream.len() && prefix(&stream[end..]) == 0 {
+            end += 1;
+        }
+        let payload = stream
+            .get(start..end)
+            .filter(|p| !p.is_empty())
+            .ok_or("empty H.264 NAL")?;
+        match payload[0] & 31 {
+            7 if payload.len() <= 64 => (),
+            8 if payload.len() <= 16 => (),
+            1 | 5 => {
+                slices += 1;
+            }
+            6 | 9 | 12 => {
+                i = end;
+                continue;
+            }
+            _ => {
+                return Err(
+                    "H.264 backend produced unsupported NAL type or parameter-set length".into(),
+                );
+            }
+        }
+        out.extend_from_slice(&[0, 0, 0, 1]);
+        out.extend_from_slice(payload);
+        i = end;
+    }
+    if slices != 1 {
+        return Err("H.264 backend must emit exactly one coded slice per frame".into());
+    }
+    Ok(out)
+}
+
+/// The register transport publishes SPS/PPS once at sequence start. Later
+/// IDRs reuse those parameter-set IDs; identical repeated headers are omitted.
+/// A backend changing its parameter sets within a sequence must refuse.
+pub(crate) fn transport_frame(
+    stream: &[u8],
+    previous: &[u8],
+) -> Result<(Vec<u8>, Vec<u8>), String> {
+    let starts: Vec<usize> = stream
+        .windows(4)
+        .enumerate()
+        .filter_map(|(i, v)| (v == [0, 0, 0, 1]).then_some(i))
+        .collect();
+    let mut parameters = Vec::new();
+    let mut picture = Vec::new();
+    for (index, start) in starts.iter().copied().enumerate() {
+        let end = starts.get(index + 1).copied().unwrap_or(stream.len());
+        let nal = &stream[start..end];
+        let kind = *nal.get(4).ok_or("empty AVC transport NAL")? & 31;
+        if matches!(kind, 7 | 8) {
+            parameters.extend_from_slice(nal);
+        } else {
+            picture.extend_from_slice(nal);
+        }
+    }
+    if picture.is_empty() || previous.is_empty() && parameters.is_empty() {
+        return Err("H.264 transport lacks a picture or initial parameter sets".into());
+    }
+    if !previous.is_empty() && !parameters.is_empty() && previous != parameters {
+        return Err("H.264 backend changed parameter sets within a sequence".into());
+    }
+    if previous.is_empty() {
+        let mut initial = parameters.clone();
+        initial.extend(picture);
+        Ok((initial, parameters))
+    } else {
+        Ok((picture, previous.to_vec()))
     }
 }
 

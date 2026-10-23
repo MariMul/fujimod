@@ -2863,19 +2863,24 @@
         },
         {
           "additionalProperties": false,
-          "description": "H.264 configuration and sequence-start controller.",
+          "description": "H.264 image compression and addressed bitstream DMA.",
           "properties": {
             "irq": {
               "$ref": "#/$defs/ConstructionCore",
-              "description": "Sequence notice interrupt."
+              "description": "Bitstream completion interrupt."
             },
             "kind": {
               "const": "video-encoder",
               "type": "string"
+            },
+            "options": {
+              "$ref": "#/$defs/VideoEncoderOptions",
+              "description": "Compression implementation selected by the run configuration."
             }
           },
           "required": [
             "kind",
+            "options",
             "irq"
           ],
           "type": "object"
@@ -16928,6 +16933,27 @@
         "address",
         "size",
         "sha256"
+      ],
+      "type": "object"
+    },
+    "VideoEncoderBackend": {
+      "description": "Explicit H.264 compression implementation, selected before construction.",
+      "enum": [
+        "videotoolbox",
+        "software"
+      ],
+      "type": "string"
+    },
+    "VideoEncoderOptions": {
+      "additionalProperties": false,
+      "description": "Compression backend selection; register and DMA behavior is shared.",
+      "properties": {
+        "backend": {
+          "$ref": "#/$defs/VideoEncoderBackend"
+        }
+      },
+      "required": [
+        "backend"
       ],
       "type": "object"
     },

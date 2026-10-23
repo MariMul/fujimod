@@ -2033,6 +2033,17 @@
           ],
           "description": "Selected user journals. Absence preserves the base selection."
         },
+        "video_encoder_backend": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VideoEncoderBackend"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit H.264 backend; absence selects the local platform default."
+        },
         "wifi_sdio_profile": {
           "anyOf": [
             {
@@ -4596,6 +4607,14 @@
           "type": "string"
         }
       ]
+    },
+    "VideoEncoderBackend": {
+      "description": "Explicit H.264 compression implementation, selected before construction.",
+      "enum": [
+        "videotoolbox",
+        "software"
+      ],
+      "type": "string"
     }
   },
   "$id": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",

@@ -489,6 +489,22 @@ pub enum Endpoint {
     },
 }
 
+/// Explicit H.264 compression implementation, selected before construction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
+pub enum VideoEncoderBackend {
+    Videotoolbox,
+    Software,
+}
+
+/// Compression backend selection; register and DMA behavior is shared.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct VideoEncoderOptions {
+    pub backend: VideoEncoderBackend,
+}
+
 /// Closed ConstructionModel implementation and its hardware connections.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", deny_unknown_fields)]
@@ -697,10 +713,12 @@ pub enum ConstructionModel {
         /// routes.
         routes: String,
     },
-    /// H.264 configuration and sequence-start controller.
+    /// H.264 image compression and addressed bitstream DMA.
     #[serde(rename = "video-encoder")]
     VideoEncoder {
-        /// Sequence notice interrupt.
+        /// Compression implementation selected by the run configuration.
+        options: VideoEncoderOptions,
+        /// Bitstream completion interrupt.
         irq: Core,
     },
     /// parameters hardware.

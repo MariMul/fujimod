@@ -6,6 +6,9 @@ rust-version = "1.88"
 publish = false
 description = "Camera processor device models with guest virtual time and explicit hardware inputs."
 
+[features]
+videotoolbox-tests = []
+
 [lib]
 name = "fujimod_emulator_devices"
 
@@ -21,6 +24,8 @@ libm = "0.2"
 zune-jpeg = { version = "0.5", default-features = false, features = ["std"] }
 zune-core = { version = "0.5", default-features = false, features = ["std"] }
 ciborium = "0.2.2"
+rusty_h264-encoder = { version = "=0.16.1", default-features = false, features = ["libm"] }
+rusty_h264-common = { version = "=0.16.1", default-features = false, features = ["libm"] }
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
@@ -28,5 +33,10 @@ unsafe_op_in_unsafe_fn = "deny"
 [target.'cfg(target_arch = "aarch64")'.dependencies]
 sha2 = { version = "0.10", features = ["asm-aarch64"] }
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 openh264 = "=0.9.3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-cf = { version = "0.11", default-features = false, features = ["cm", "cv", "iosurface"] }
+futures-lite = "2"
+videotoolbox = { version = "0.21", features = ["async"] }
