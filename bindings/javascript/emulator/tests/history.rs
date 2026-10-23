@@ -271,7 +271,7 @@ fn error_report_exports_a_healthy_retained_point_without_changing_the_failed_ses
     source.core.board.finish().unwrap();
     let mut loaded = load_snapshot(&bytes);
     let status = status_of(&loaded);
-    assert_eq!(status.failed, false);
+    assert!(!status.failed);
     assert_eq!(status.ticks, 0);
     assert_eq!(loaded.run(1).unwrap_err(), original_error);
     loaded.core.board.finish().unwrap();
@@ -839,7 +839,7 @@ fn raw_usb_commands_preserve_opaque_packets_and_never_run_the_guest() {
     let state = status_of(&handle);
     assert_eq!(state.ticks, 0);
     assert_eq!(state.instructions, 0);
-    assert_eq!(state.failed, false);
+    assert!(!state.failed);
     handle.core.board.finish().unwrap();
 }
 

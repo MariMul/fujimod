@@ -54,6 +54,8 @@ pub struct DisabledStatistics {
 #[derive(Serialize, Tsify)]
 #[serde(untagged)]
 #[tsify(hashmap_as_object, missing_as_null)]
+// A short-lived report converted to JavaScript at once; boxing buys nothing.
+#[allow(clippy::large_enum_variant)]
 pub enum JitStatistics {
     Disabled(DisabledStatistics),
     Enabled(Statistics),
