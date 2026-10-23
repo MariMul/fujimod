@@ -35,14 +35,24 @@ A crate below the final layer depends on a model or assembly crate only when it
 constructs that model. Tests that need assembled boards live in, or depend on,
 an assembly crate.
 
+Cargo cannot tell an edit to a model's behavior from an edit to its interface,
+so anything that names a model's options rebuilds with it. A model's options,
+wiring and shared handle types therefore live in the interface layer (or a
+small options crate per family), named by plans, boot code and sessions; the
+implementation crate is named only by assembly and final crates.
+
 ## Stages
 
 Each stage keeps every build and test working and records the cost of a device
 edit before and after.
 
 1. Final crates: the Python module and the binaries move into their own crates.
-2. EXR II: plan types and board assembly become separate crates; the emulator
-   builds boards through an installed assembler.
+2. EXR II: the ISP options, wiring and handle types the board names move into
+   the devices crate's `exr2::isp` interface module. `fujimod-emulator-exr2-board`
+   splits into a plan crate (`Plan`, `Resources`, `Wire`, validation) and the
+   assembly crate (`construct`, DMA consolidation, building an `Assembly`).
+   `Plan::build` calls the assembler the final crates install, so an ISP edit
+   rebuilds the ISP crate, the assembly crate and the final crates only.
 3. Models leave `fujimod-emulator-devices` family by family, XP4 and XP5 first,
    imaging, scene and ISP last.
 4. Binding functions that call model code directly move next to those models.
