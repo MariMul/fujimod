@@ -184,6 +184,7 @@ class Board:
         settings: str | PathLike[str] | None = None,
         clock_seconds_2000: int | None = None,
         preferred_languages: Sequence[str] = (),
+        camera: str | PathLike[str] | None = None,
     ) -> Self:
         """Boot a catalog runtime from files selected by the caller.
 
@@ -204,6 +205,10 @@ class Board:
 
         ``preferred_languages`` supplies BCP 47 tags in preference order for
         stock first-start setup.
+
+        ``camera`` is a camera directory holding the ``nand-<section>.bin.zst``
+        files a configuration's power-on settings name, such as
+        ``catalog/bodies/x70/cameras/reference``.
         """
         configuration_id = cls._identifier(configuration_id, "configuration_id")
         if isinstance(overlays, (str, bytes)) or not isinstance(overlays, Sequence):
@@ -217,6 +222,7 @@ class Board:
         boot_rom = cls._input_path(boot_rom, "boot_rom")
         nand = None if nand is None else cls._input_path(nand, "nand")
         settings = None if settings is None else cls._input_path(settings, "settings")
+        camera = None if camera is None else fspath(camera)
         if isinstance(preferred_languages, (str, bytes)) or not isinstance(preferred_languages, Sequence):
             raise TypeError("preferred_languages must be a sequence of BCP 47 tags")
         if any(not isinstance(tag, str) for tag in preferred_languages):
@@ -235,6 +241,7 @@ class Board:
             settings=settings,
             clock_seconds_2000=clock_seconds_2000,
             preferred_languages=list(preferred_languages),
+            camera=camera,
         )
         quantum = native.boot_quantum
         if type(quantum) is not int or quantum < 1:

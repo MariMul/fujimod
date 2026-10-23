@@ -60,6 +60,7 @@ class emulator:
             settings: str | PathLike[str] | None = None,
             clock_seconds_2000: int | None = None,
             preferred_languages: Sequence[str] = ...,
+            camera: str | PathLike[str] | None = None,
         ) -> emulator.Board: ...
         def boot_to_rec(
             self, /, instruction_limit: SupportsIndex = ...
