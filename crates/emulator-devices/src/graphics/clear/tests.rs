@@ -171,3 +171,28 @@ fn malformed_or_unsupported_state_refuses_before_any_rendering() {
     assert!(parse_clear(&path, &fill, 32768, 32768, None, None).is_err());
     assert!(path_descriptor(&[0; 16], 32768, 32768).is_err());
 }
+
+#[test]
+fn a_fill_with_a_partially_written_ramp_filter_state_is_refused() {
+    let (path, fill) = lists();
+    let mut rewritten = Vec::new();
+    // Only the low halfword of the inactive ramp/filter state is written.
+    for pair in fill_state().chunks_exact(2) {
+        let (index, lanes) = (
+            pair[0] & 0xffff,
+            if pair[0] & 0xffff == 0x16c { 3 } else { 15 },
+        );
+        write(&mut rewritten, index, lanes, pair[1]);
+    }
+    let prefix = fill_state().len();
+    rewritten.extend_from_slice(&fill[prefix..]);
+    while rewritten.last() == Some(&0) {
+        rewritten.pop();
+    }
+    let error = parse_clear(&path, &align(rewritten), 32768, 32768, None, None).unwrap_err();
+    assert!(
+        error.0.contains("unsupported mask, paint or sampler state"),
+        "{}",
+        error.0
+    );
+}
