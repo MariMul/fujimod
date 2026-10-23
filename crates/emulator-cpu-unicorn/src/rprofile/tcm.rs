@@ -3,16 +3,14 @@
 use fujimod_emulator_cpu::memory::Backing;
 use std::cell::Cell;
 
-#[derive(Clone, Copy, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(Clone, Copy, Default, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BankOptions {
     pub bytes: usize,
     pub reset: u32,
 }
-#[derive(Clone, Copy, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(Clone, Copy, Default, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Options {
     pub btcm: BankOptions,
     pub atcm: BankOptions,

@@ -1,13 +1,13 @@
 //! Hardware parameters shared by application-profile SoC records.
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Additional hardware parameters whose meaning depends on the processor family.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -148,9 +148,10 @@ impl SocHardware {
 }
 
 /// A producer output connected to an input of the programmable interrupt controller.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -166,9 +167,10 @@ pub struct ControllerInterruptInput {
 }
 
 /// Family-specific application-processor identification.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -200,9 +202,10 @@ pub enum ApplicationHardware {
 }
 
 /// Cache capacities declared for an application processor.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -218,9 +221,10 @@ pub struct CacheGeometry {
 }
 
 /// ARM generic interrupt-controller interfaces.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -250,9 +254,10 @@ pub enum InterruptControllerHardware {
 }
 
 /// A companion processor's hardware clock and mailbox endpoints.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -272,9 +277,10 @@ pub struct CompanionHardware {
 }
 
 /// Mailbox indices used by a companion processor link.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -294,9 +300,10 @@ pub struct CompanionMailbox {
 }
 
 /// Hardware parameters for a named SoC register block.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -346,7 +353,8 @@ pub enum BlockHardware {
 }
 
 /// Picture-plane pixel packing declared by a display controller.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(
     feature = "typescript",
@@ -359,7 +367,8 @@ pub enum PictureLayout {
 }
 
 /// Video-plane pixel packing declared by a display controller.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
 #[cfg_attr(
     feature = "typescript",

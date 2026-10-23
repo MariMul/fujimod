@@ -1,20 +1,21 @@
 //! Declared hardware profiles selected independently from run inputs.
 
 use crate::parts::Pin;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// An explicitly empty device-reference set.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareEmpty")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareEmpty"))]
 pub struct Empty {}
 
 /// Declared attachments facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwarePartAssemblies")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwarePartAssemblies"))]
 pub struct PartAssemblies {
     /// Declared contact actuators.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -27,9 +28,10 @@ pub struct PartAssemblies {
 }
 
 /// Declared card contacts facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareCardContacts")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareCardContacts"))]
 pub struct CardContacts {
     /// Declared basis.
     pub basis: String,
@@ -40,9 +42,10 @@ pub struct CardContacts {
 }
 
 /// Declared signals facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareConnectionSignal")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareConnectionSignal"))]
 pub struct ConnectionSignal {
     /// Declared active level.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -66,9 +69,10 @@ pub struct ConnectionSignal {
 }
 
 /// Declared connections facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareConnectionSupport")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareConnectionSupport"))]
 pub struct ConnectionSupport {
     /// Declared id.
     pub id: String,
@@ -83,9 +87,10 @@ pub struct ConnectionSupport {
 }
 
 /// Declared command targets facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareCommandTarget")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareCommandTarget"))]
 pub struct CommandTarget {
     /// Declared address.
     pub address: u64,
@@ -106,9 +111,10 @@ pub struct CommandTarget {
 }
 
 /// Declared sensor facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareBusSensor")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareBusSensor"))]
 pub struct BusSensor {
     /// Declared address.
     pub address: u64,
@@ -119,9 +125,10 @@ pub struct BusSensor {
 }
 
 /// Declared status targets facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareStatusTarget")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareStatusTarget"))]
 pub struct StatusTarget {
     /// Declared address.
     pub address: u64,
@@ -136,9 +143,10 @@ pub struct StatusTarget {
 }
 
 /// Declared control bus0 facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwarePrimaryControlBus")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwarePrimaryControlBus"))]
 pub struct PrimaryControlBus {
     /// Declared basis.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -158,9 +166,10 @@ pub struct PrimaryControlBus {
 }
 
 /// Declared control bus1 replies facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareSecondaryBusRegisters")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareSecondaryBusRegisters"))]
 pub struct SecondaryBusRegisters {
     /// Declared pwic address.
     pub pwic_address: u64,
@@ -186,9 +195,10 @@ pub struct SecondaryBusRegisters {
 }
 
 /// Declared control bus1 facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareSecondaryControlBus")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareSecondaryControlBus"))]
 pub struct SecondaryControlBus {
     /// Declared basis.
     pub basis: String,
@@ -201,9 +211,10 @@ pub struct SecondaryControlBus {
 }
 
 /// Declared display timing facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareDisplayTiming")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDisplayTiming"))]
 pub struct DisplayTiming {
     /// Declared basis.
     pub basis: String,
@@ -216,9 +227,10 @@ pub struct DisplayTiming {
 }
 
 /// Declared fe80 facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareFe80")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareFe80"))]
 pub struct Fe80 {
     /// Declared basis.
     pub basis: String,
@@ -229,9 +241,10 @@ pub struct Fe80 {
 }
 
 /// Declared input processing facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareInputProcessing")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareInputProcessing"))]
 pub struct InputProcessing {
     /// Declared basis.
     pub basis: String,
@@ -240,9 +253,10 @@ pub struct InputProcessing {
 }
 
 /// Declared spi1 serial facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareSpi1Serial")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareSpi1Serial"))]
 pub struct Spi1Serial {
     /// Declared basis.
     pub basis: String,
@@ -255,9 +269,10 @@ pub struct Spi1Serial {
 }
 
 /// Declared stabilizer facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareStabilizer")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareStabilizer"))]
 pub struct Stabilizer {
     /// Declared basis.
     pub basis: String,
@@ -268,9 +283,10 @@ pub struct Stabilizer {
 }
 
 /// Declared usb facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareUsb")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareUsb"))]
 pub struct Usb {
     /// Declared basis.
     pub basis: String,
@@ -285,9 +301,10 @@ pub struct Usb {
 }
 
 /// Declared window analysis facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareWindowAnalysis")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareWindowAnalysis"))]
 pub struct WindowAnalysis {
     /// Declared basis.
     pub basis: String,
@@ -298,9 +315,10 @@ pub struct WindowAnalysis {
 }
 
 /// Declared controllers facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareControllerModels")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareControllerModels"))]
 pub struct ControllerModels {
     /// Declared control bus0.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -332,9 +350,10 @@ pub struct ControllerModels {
 }
 
 /// Declared encoders options facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareEncoderTiming")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareEncoderTiming"))]
 pub struct EncoderTiming {
     /// Declared phase ticks.
     pub phase_ticks: u64,
@@ -345,9 +364,10 @@ pub struct EncoderTiming {
 }
 
 /// Declared encoders facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareEncoder")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareEncoder"))]
 pub struct Encoder {
     /// Declared counter.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -359,9 +379,10 @@ pub struct Encoder {
 }
 
 /// Declared dependencies facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareDeviceDependency")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDeviceDependency"))]
 pub struct DeviceDependency {
     /// Declared kind.
     pub kind: DeviceKind,
@@ -372,9 +393,10 @@ pub struct DeviceDependency {
 }
 
 /// Declared models facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareDeviceModel")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDeviceModel"))]
 pub struct DeviceModel {
     /// Nodes absorbed by this composed hardware model.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -388,9 +410,10 @@ pub struct DeviceModel {
 }
 
 /// Declared model choices facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareDeviceChoices")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDeviceChoices"))]
 pub struct DeviceChoices {
     /// Declared models.
     pub models: BTreeMap<String, DeviceModel>,
@@ -399,7 +422,8 @@ pub struct DeviceChoices {
 }
 
 /// Declared devices facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct DeviceNode {
     /// Declared boot entries.
@@ -417,7 +441,8 @@ pub struct DeviceNode {
 }
 
 /// Declared graph facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct DeviceGraph {
     /// Declared attachment order.
@@ -432,18 +457,20 @@ pub struct DeviceGraph {
 }
 
 /// Declared af extraction facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareAfExtraction")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareAfExtraction"))]
 pub struct AfExtraction {
     /// Declared profile.
     pub profile: String,
 }
 
 /// Declared projection facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareProjection")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareProjection"))]
 pub struct Projection {
     /// Declared focal length mm.
     pub focal_length_mm: f64,
@@ -458,9 +485,10 @@ pub struct Projection {
 }
 
 /// Declared rolling references facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareRollingReference")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareRollingReference"))]
 pub struct RollingReference {
     /// Declared horizontal.
     pub horizontal: u64,
@@ -473,18 +501,20 @@ pub struct RollingReference {
 }
 
 /// Declared shutter facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareShutter")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareShutter"))]
 pub struct Shutter {
     /// Declared closing delay seconds.
     pub closing_delay_seconds: Vec<Vec<f64>>,
 }
 
 /// Declared radiometry facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareRadiometry")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareRadiometry"))]
 pub struct Radiometry {
     /// Declared pixel clock hz.
     pub pixel_clock_hz: u64,
@@ -505,9 +535,10 @@ pub struct Radiometry {
 }
 
 /// Declared capture color facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareCaptureColor")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareCaptureColor"))]
 pub struct CaptureColor {
     /// Declared basis.
     pub basis: String,
@@ -531,9 +562,10 @@ pub struct CaptureColor {
 }
 
 /// Declared optics facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareOptics")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareOptics"))]
 pub struct Optics {
     /// Declared maximum radius.
     pub maximum_radius: u64,
@@ -544,9 +576,10 @@ pub struct Optics {
 }
 
 /// Declared fe80 processing options facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareFe80ProcessingOptions")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareFe80ProcessingOptions"))]
 pub struct Fe80ProcessingOptions {
     /// Declared irq.
     pub irq: u64,
@@ -555,9 +588,10 @@ pub struct Fe80ProcessingOptions {
 }
 
 /// Declared fe80 processing facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareFe80Processing")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareFe80Processing"))]
 pub struct Fe80Processing {
     /// Declared arithmetic.
     pub arithmetic: String,
@@ -574,9 +608,10 @@ pub struct Fe80Processing {
 }
 
 /// Declared focus axis facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareFocusAxis")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareFocusAxis"))]
 pub struct FocusAxis {
     /// Declared infinity position.
     pub infinity_position: i64,
@@ -587,9 +622,10 @@ pub struct FocusAxis {
 }
 
 /// Declared contrast facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareContrast")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareContrast"))]
 pub struct Contrast {
     /// Declared kind.
     pub kind: String,
@@ -598,18 +634,20 @@ pub struct Contrast {
 }
 
 /// Declared face detector facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareFaceDetector")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareFaceDetector"))]
 pub struct FaceDetector {
     /// Declared mode.
     pub mode: String,
 }
 
 /// Declared focus imaging optics facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareFocusImagingOptics")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareFocusImagingOptics"))]
 pub struct FocusImagingOptics {
     /// Declared maximum radius.
     pub maximum_radius: u64,
@@ -620,9 +658,10 @@ pub struct FocusImagingOptics {
 }
 
 /// Declared raster facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareRaster")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareRaster"))]
 pub struct Raster {
     /// Declared height.
     pub height: u64,
@@ -633,9 +672,10 @@ pub struct Raster {
 }
 
 /// Declared focus imaging facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareFocusImaging")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareFocusImaging"))]
 pub struct FocusImaging {
     /// Declared basis.
     pub basis: String,
@@ -668,9 +708,10 @@ pub struct FocusImaging {
 }
 
 /// Declared iris mechanics facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareIrisMechanics")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareIrisMechanics"))]
 pub struct IrisMechanics {
     /// Declared boundary.
     pub boundary: String,
@@ -679,9 +720,10 @@ pub struct IrisMechanics {
 }
 
 /// Declared iris optics facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareIrisOptics")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareIrisOptics"))]
 pub struct IrisOptics {
     /// Declared output.
     pub output: String,
@@ -690,9 +732,10 @@ pub struct IrisOptics {
 }
 
 /// Declared sensor capture facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareSensorCapture")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareSensorCapture"))]
 pub struct SensorCapture {
     /// Declared cfa origin.
     pub cfa_origin: Vec<u64>,
@@ -707,9 +750,10 @@ pub struct SensorCapture {
 }
 
 /// Declared imaging facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareImaging")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareImaging"))]
 pub struct Imaging {
     /// Declared af extraction.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -738,9 +782,10 @@ pub struct Imaging {
 }
 
 /// Declared core facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareCore")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareCore"))]
 pub struct Core {
     /// Declared core.
     pub core: u64,
@@ -749,9 +794,10 @@ pub struct Core {
 }
 
 /// Declared outputs facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareInterruptOutput")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareInterruptOutput"))]
 pub struct InterruptOutput {
     #[serde(rename = "Core")]
     /// Declared Core.
@@ -759,9 +805,10 @@ pub struct InterruptOutput {
 }
 
 /// Declared pin interrupts facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwarePinInterrupt")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwarePinInterrupt"))]
 pub struct PinInterrupt {
     /// Declared edge.
     pub edge: String,
@@ -772,9 +819,10 @@ pub struct PinInterrupt {
 }
 
 /// Declared preview activity facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwarePreviewActivity")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwarePreviewActivity"))]
 pub struct PreviewActivity {
     /// Declared high.
     pub high: bool,
@@ -783,9 +831,10 @@ pub struct PreviewActivity {
 }
 
 /// Declared touch facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareTouch")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareTouch"))]
 pub struct Touch {
     /// Declared core.
     pub core: u64,
@@ -798,7 +847,8 @@ pub struct Touch {
 }
 
 /// Declared body profile facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct BodyProfile {
     /// Firmware descriptor order of body devices; `sensor` refers to the installed sensor endpoint.
@@ -863,9 +913,10 @@ pub struct BodyProfile {
 }
 
 /// Declared boot rom facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareBootRom")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareBootRom"))]
 pub struct BootRom {
     /// Declared basis.
     pub basis: String,
@@ -876,9 +927,10 @@ pub struct BootRom {
 }
 
 /// Declared discovery mmio facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareDiscoveryWindow")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDiscoveryWindow"))]
 pub struct DiscoveryWindow {
     /// Declared address.
     pub address: u64,
@@ -889,9 +941,10 @@ pub struct DiscoveryWindow {
 }
 
 /// Declared instructions per tick facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareInstructionRate")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareInstructionRate"))]
 pub struct InstructionRate {
     /// Declared denominator.
     pub denominator: u64,
@@ -900,9 +953,10 @@ pub struct InstructionRate {
 }
 
 /// Declared private mmio facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareCoreWindow")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareCoreWindow"))]
 pub struct CoreWindow {
     /// Declared address.
     pub address: u64,
@@ -911,9 +965,10 @@ pub struct CoreWindow {
 }
 
 /// Declared adc facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareAdc")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareAdc"))]
 pub struct Adc {
     /// Declared base.
     pub base: u64,
@@ -926,9 +981,10 @@ pub struct Adc {
 }
 
 /// Declared register maps control bus0 facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwarePrimaryBusRegisters")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwarePrimaryBusRegisters"))]
 pub struct PrimaryBusRegisters {
     /// Declared base.
     pub base: u64,
@@ -941,9 +997,13 @@ pub struct PrimaryBusRegisters {
 }
 
 /// Declared register maps control bus1 facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareSecondaryBusRegistersAddress")]
+#[cfg_attr(
+    feature = "schema",
+    schemars(rename = "HardwareSecondaryBusRegistersAddress")
+)]
 pub struct SecondaryBusRegistersAddress {
     /// Declared base.
     pub base: u64,
@@ -952,9 +1012,10 @@ pub struct SecondaryBusRegistersAddress {
 }
 
 /// Declared control requests facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareControlRequests")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareControlRequests"))]
 pub struct ControlRequests {
     /// Declared ack ticks.
     pub ack_ticks: u64,
@@ -965,9 +1026,10 @@ pub struct ControlRequests {
 }
 
 /// Declared decompressor facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareDecompressor")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDecompressor"))]
 pub struct Decompressor {
     /// Declared base.
     pub base: u64,
@@ -980,9 +1042,10 @@ pub struct Decompressor {
 }
 
 /// Declared dma facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareDma")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDma"))]
 pub struct Dma {
     /// Declared base.
     pub base: u64,
@@ -1001,9 +1064,10 @@ pub struct Dma {
 }
 
 /// Declared dmp facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareDmp")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDmp"))]
 pub struct Dmp {
     /// Declared base.
     pub base: u64,
@@ -1016,9 +1080,10 @@ pub struct Dmp {
 }
 
 /// Declared gic facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareGic")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareGic"))]
 pub struct Gic {
     /// Declared basis.
     pub basis: String,
@@ -1031,9 +1096,10 @@ pub struct Gic {
 }
 
 /// Declared gpio facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareGpio")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareGpio"))]
 pub struct Gpio {
     /// Declared base.
     pub base: u64,
@@ -1044,9 +1110,10 @@ pub struct Gpio {
 }
 
 /// Declared input buffer facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareInputBuffer")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareInputBuffer"))]
 pub struct InputBuffer {
     /// Declared bank size.
     pub bank_size: u64,
@@ -1063,9 +1130,10 @@ pub struct InputBuffer {
 }
 
 /// Declared register maps imaging facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareImagingRegisters")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareImagingRegisters"))]
 pub struct ImagingRegisters {
     /// Declared basis.
     pub basis: String,
@@ -1088,9 +1156,10 @@ pub struct ImagingRegisters {
 }
 
 /// Declared interrupts facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareInterrupts")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareInterrupts"))]
 pub struct Interrupts {
     /// Declared bases.
     pub bases: Vec<u64>,
@@ -1099,9 +1168,10 @@ pub struct Interrupts {
 }
 
 /// Declared routes facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareTimerRoute")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareTimerRoute"))]
 pub struct TimerRoute {
     /// Declared channel.
     pub channel: u64,
@@ -1110,9 +1180,10 @@ pub struct TimerRoute {
 }
 
 /// Declared interval timer facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareIntervalTimer")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareIntervalTimer"))]
 pub struct IntervalTimer {
     /// Declared base.
     pub base: u64,
@@ -1125,9 +1196,10 @@ pub struct IntervalTimer {
 }
 
 /// Declared io groups facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareIoGroups")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareIoGroups"))]
 pub struct IoGroups {
     /// Declared base.
     pub base: u64,
@@ -1136,9 +1208,10 @@ pub struct IoGroups {
 }
 
 /// Declared lcdc facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareLcdc")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareLcdc"))]
 pub struct Lcdc {
     /// Declared base.
     pub base: u64,
@@ -1157,18 +1230,20 @@ pub struct Lcdc {
 }
 
 /// Declared loader dma facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareLoaderDma")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareLoaderDma"))]
 pub struct LoaderDma {
     /// Declared base.
     pub base: u64,
 }
 
 /// Declared movdc facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareMovdc")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareMovdc"))]
 pub struct Movdc {
     /// Declared base.
     pub base: u64,
@@ -1179,9 +1254,10 @@ pub struct Movdc {
 }
 
 /// Declared sd host clocks facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareSdHostClocks")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareSdHostClocks"))]
 pub struct SdHostClocks {
     /// Declared basis.
     pub basis: String,
@@ -1192,9 +1268,10 @@ pub struct SdHostClocks {
 }
 
 /// Declared serial flash facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareSerialFlash")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareSerialFlash"))]
 pub struct SerialFlash {
     /// Declared aperture.
     pub aperture: u64,
@@ -1213,9 +1290,10 @@ pub struct SerialFlash {
 }
 
 /// Declared spi facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareSpi")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareSpi"))]
 pub struct Spi {
     /// Declared base.
     pub base: u64,
@@ -1226,9 +1304,10 @@ pub struct Spi {
 }
 
 /// Declared register maps usb facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareUsbRegisters")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareUsbRegisters"))]
 pub struct UsbRegisters {
     /// Declared basis.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1244,9 +1323,10 @@ pub struct UsbRegisters {
 }
 
 /// Declared register maps facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareRegisterLayouts")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterLayouts"))]
 pub struct RegisterLayouts {
     /// Declared adc.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1316,9 +1396,10 @@ pub struct RegisterLayouts {
 }
 
 /// Declared reset release facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareResetRelease")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareResetRelease"))]
 pub struct ResetRelease {
     /// Qualification of the release mechanism for this firmware.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1337,9 +1418,10 @@ pub struct ResetRelease {
 }
 
 /// Declared atcm facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareAtcm")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareAtcm"))]
 pub struct Atcm {
     /// Declared basis.
     pub basis: String,
@@ -1352,9 +1434,10 @@ pub struct Atcm {
 }
 
 /// Declared tcm facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareTcm")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareTcm"))]
 pub struct Tcm {
     /// Declared atcm.
     pub atcm: Atcm,
@@ -1363,9 +1446,10 @@ pub struct Tcm {
 }
 
 /// Declared diagnostic headers facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareDiagnosticHeaders")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDiagnosticHeaders"))]
 pub struct DiagnosticHeaders {
     /// Declared address.
     pub address: u64,
@@ -1376,9 +1460,10 @@ pub struct DiagnosticHeaders {
 }
 
 /// Declared images facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareBootImage")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareBootImage"))]
 pub struct BootImage {
     /// Declared address.
     pub address: u64,
@@ -1391,9 +1476,10 @@ pub struct BootImage {
 }
 
 /// Declared nand layouts facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareNandBootLayout")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareNandBootLayout"))]
 pub struct NandBootLayout {
     /// Declared basis.
     pub basis: String,
@@ -1406,9 +1492,10 @@ pub struct NandBootLayout {
 }
 
 /// Declared update boot facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareUpdateBoot")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareUpdateBoot"))]
 pub struct UpdateBoot {
     /// Declared diagnostic headers.
     pub diagnostic_headers: Vec<DiagnosticHeaders>,
@@ -1419,9 +1506,10 @@ pub struct UpdateBoot {
 }
 
 /// Declared windows options facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareBlockParameters")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareBlockParameters"))]
 pub struct BlockParameters {
     /// Declared command latency us.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1444,9 +1532,10 @@ pub struct BlockParameters {
 }
 
 /// Declared windows facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareRegisterWindow")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterWindow"))]
 pub struct RegisterWindow {
     /// Declared attachment.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1466,7 +1555,8 @@ pub struct RegisterWindow {
 }
 
 /// Declared soc profile facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct SocProfile {
     /// Qualification of the declared processor cache capacities.
@@ -1517,7 +1607,8 @@ pub struct SocProfile {
 }
 
 /// Device implementations selected by a declared hardware graph.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum DeviceKind {
     /// Optional removable-card controller.
     SDCardController,
@@ -1692,9 +1783,10 @@ impl DeviceGraph {
 }
 
 /// A checked word at a secondary processor release destination.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "HardwareResetCheck")]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareResetCheck"))]
 pub struct ResetCheck {
     /// Address of the expected word.
     pub address: u64,

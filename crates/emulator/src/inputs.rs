@@ -9,12 +9,8 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(
-    feature = "serde",
-    serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)
-)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum Location {
     File { path: PathBuf },
     Window { path: PathBuf, offset: u64 },

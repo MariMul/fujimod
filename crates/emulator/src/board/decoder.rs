@@ -7,14 +7,14 @@ use fujimod_emulator_cpu::Cpu;
 use serde_json::{Value, json};
 use std::{ptr::NonNull, rc::Rc};
 
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Choice {
     pub processors: Vec<MemoryMap>,
     pub dma: Vec<BusMapping>,
 }
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Decoder {
     pub initial: usize,
     pub choices: Vec<Choice>,

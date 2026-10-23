@@ -3,7 +3,7 @@
 use super::*;
 use fujimod_emulator_devices::checkpoint::Checkpoint as Encoded;
 use serde::{Deserialize, Serialize};
-#[cfg(all(test, feature = "worker"))]
+#[cfg(test)]
 mod tests;
 
 const KIND: &str = "board-keyframe-v1";

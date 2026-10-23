@@ -1,9 +1,9 @@
 //! Closed startup inputs and scheduling limits for native device models.
 //! Physical windows, IRQ wiring and device dependencies belong to hardware profiles.
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -94,7 +94,8 @@ pub enum RunNativeDeviceInputs {
 }
 
 /// Closed NativeExr2InterruptControllerInputsArbitration selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -106,7 +107,8 @@ pub enum NativeExr2InterruptControllerInputsArbitration {
 }
 
 /// Declared NativeExr2InterruptControllerInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -118,7 +120,8 @@ pub struct NativeExr2InterruptControllerInputs {
 }
 
 /// Declared NativeExr2SystemTimersInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -130,7 +133,8 @@ pub struct NativeExr2SystemTimersInputs {
 }
 
 /// Declared NativeCoreReleaseInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -142,7 +146,8 @@ pub struct NativeCoreReleaseInputs {
 }
 
 /// Declared NativeGpioInputsOutputLevelsItemPin startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -155,7 +160,8 @@ pub struct NativeGpioInputsOutputLevelsItemPin {
 }
 
 /// Declared NativeGpioInputsOutputLevelsItem startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -168,7 +174,8 @@ pub struct NativeGpioInputsOutputLevelsItem {
 }
 
 /// Declared NativeGpioInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -181,7 +188,8 @@ pub struct NativeGpioInputs {
 }
 
 /// Declared NativeSpiControllerInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -191,7 +199,8 @@ pub struct NativeGpioInputs {
 pub struct NativeSpiControllerInputs {}
 
 /// Declared NativeDramInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -201,7 +210,8 @@ pub struct NativeSpiControllerInputs {}
 pub struct NativeDramInputs {}
 
 /// Declared NativeDramPhyInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -211,7 +221,8 @@ pub struct NativeDramInputs {}
 pub struct NativeDramPhyInputs {}
 
 /// Declared NativeResetInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -221,7 +232,8 @@ pub struct NativeDramPhyInputs {}
 pub struct NativeResetInputs {}
 
 /// Declared NativeClocksInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -234,7 +246,8 @@ pub struct NativeClocksInputs {
 }
 
 /// Declared NativeBlock98000Inputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -247,7 +260,8 @@ pub struct NativeBlock98000Inputs {
 }
 
 /// Declared NativeSdhciClocksInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -257,7 +271,8 @@ pub struct NativeBlock98000Inputs {
 pub struct NativeSdhciClocksInputs {}
 
 /// Declared NativeAdcInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -270,7 +285,8 @@ pub struct NativeAdcInputs {
 }
 
 /// Closed NativeStatisticsInputsClockKind selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -282,7 +298,8 @@ pub enum NativeStatisticsInputsClockKind {
 }
 
 /// Declared NativeStatisticsInputsClock startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -295,7 +312,8 @@ pub struct NativeStatisticsInputsClock {
 }
 
 /// Declared NativeStatisticsInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -311,7 +329,8 @@ pub struct NativeStatisticsInputs {
 }
 
 /// Closed NativeOutputChannelInputsClockKind selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -323,7 +342,8 @@ pub enum NativeOutputChannelInputsClockKind {
 }
 
 /// Declared NativeOutputChannelInputsClock startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -336,7 +356,8 @@ pub struct NativeOutputChannelInputsClock {
 }
 
 /// Closed NativeOutputChannelInputsGeometry selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -348,7 +369,8 @@ pub enum NativeOutputChannelInputsGeometry {
 }
 
 /// Declared NativeOutputChannelInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -362,7 +384,8 @@ pub struct NativeOutputChannelInputs {
 }
 
 /// Closed NativeFaceDetectorInputsMode selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -374,7 +397,8 @@ pub enum NativeFaceDetectorInputsMode {
 }
 
 /// Declared NativeFaceDetectorInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -386,7 +410,8 @@ pub struct NativeFaceDetectorInputs {
 }
 
 /// Closed NativePhaseDetectionInputsArithmetic selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -398,7 +423,8 @@ pub enum NativePhaseDetectionInputsArithmetic {
 }
 
 /// Declared NativePhaseDetectionInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -412,7 +438,8 @@ pub struct NativePhaseDetectionInputs {
 }
 
 /// Declared NativeExternalFramesInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -424,7 +451,8 @@ pub struct NativeExternalFramesInputs {
 }
 
 /// Declared NativeSdioHostInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -439,7 +467,8 @@ pub struct NativeSdioHostInputs {
 }
 
 /// Declared NativeNandInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -451,7 +480,8 @@ pub struct NativeNandInputs {
 }
 
 /// Closed NativeLzInputsResize selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -463,7 +493,8 @@ pub enum NativeLzInputsResize {
 }
 
 /// Declared NativeLzInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -476,7 +507,8 @@ pub struct NativeLzInputs {
 }
 
 /// Declared NativeMemoryDmaInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -486,7 +518,8 @@ pub struct NativeLzInputs {
 pub struct NativeMemoryDmaInputs {}
 
 /// Declared NativeSerialDmaInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -499,7 +532,8 @@ pub struct NativeSerialDmaInputs {
 }
 
 /// Declared NativeUsbInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -511,7 +545,8 @@ pub struct NativeUsbInputs {
 }
 
 /// Declared NativePowerInputsSpi0SelectionPin startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -524,7 +559,8 @@ pub struct NativePowerInputsSpi0SelectionPin {
 }
 
 /// Declared NativePowerInputsSpi0Selection startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -537,7 +573,8 @@ pub struct NativePowerInputsSpi0Selection {
 }
 
 /// Declared NativePowerInputsSpi0PresencePin startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -550,7 +587,8 @@ pub struct NativePowerInputsSpi0PresencePin {
 }
 
 /// Declared NativePowerInputsSpi0Presence startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -563,7 +601,8 @@ pub struct NativePowerInputsSpi0Presence {
 }
 
 /// Declared NativePowerInputsSpi0 startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -577,7 +616,8 @@ pub struct NativePowerInputsSpi0 {
 }
 
 /// Declared NativePowerInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -591,7 +631,8 @@ pub struct NativePowerInputs {
 }
 
 /// Declared NativeSerialAudioInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -601,7 +642,8 @@ pub struct NativePowerInputs {
 pub struct NativeSerialAudioInputs {}
 
 /// Declared NativeExr2PulseInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -617,7 +659,8 @@ pub struct NativeExr2PulseInputs {
 }
 
 /// Declared NativeFe80ProcessingInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -630,7 +673,8 @@ pub struct NativeFe80ProcessingInputs {
 }
 
 /// Closed NativeImageInputInputsCommand selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -642,7 +686,8 @@ pub enum NativeImageInputInputsCommand {
 }
 
 /// Closed NativeImageInputInputsPhaseAck selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -654,7 +699,8 @@ pub enum NativeImageInputInputsPhaseAck {
 }
 
 /// Closed NativeImageInputInputsClockMode selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -666,7 +712,8 @@ pub enum NativeImageInputInputsClockMode {
 }
 
 /// Closed NativeImageInputInputsClockSourceKind selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -678,7 +725,8 @@ pub enum NativeImageInputInputsClockSourceKind {
 }
 
 /// Declared NativeImageInputInputsClockSource startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -692,7 +740,8 @@ pub struct NativeImageInputInputsClockSource {
 }
 
 /// Declared NativeImageInputInputsClock startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -707,7 +756,8 @@ pub struct NativeImageInputInputsClock {
 }
 
 /// Declared NativeImageInputInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -729,7 +779,8 @@ pub struct NativeImageInputInputs {
 }
 
 /// Declared NativeBlock11000InputsControlModeClearbit0ack startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -741,7 +792,8 @@ pub struct NativeBlock11000InputsControlModeClearbit0ack {
 }
 
 /// Declared NativeBlock11000InputsControlMode startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -754,7 +806,8 @@ pub struct NativeBlock11000InputsControlMode {
 }
 
 /// Declared NativeBlock11000Inputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -766,7 +819,8 @@ pub struct NativeBlock11000Inputs {
 }
 
 /// Declared NativeParametersInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -776,7 +830,8 @@ pub struct NativeBlock11000Inputs {
 pub struct NativeParametersInputs {}
 
 /// Declared NativeHdmiSinkInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -789,7 +844,8 @@ pub struct NativeHdmiSinkInputs {
 }
 
 /// Declared NativeHdmiInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -799,7 +855,8 @@ pub struct NativeHdmiSinkInputs {
 pub struct NativeHdmiInputs {}
 
 /// Declared NativeBlock86000Inputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -809,7 +866,8 @@ pub struct NativeHdmiInputs {}
 pub struct NativeBlock86000Inputs {}
 
 /// Closed NativeVectorGpuInputsCopyProfile selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -821,7 +879,8 @@ pub enum NativeVectorGpuInputsCopyProfile {
 }
 
 /// Closed NativeVectorGpuInputsClearProfile selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -833,7 +892,8 @@ pub enum NativeVectorGpuInputsClearProfile {
 }
 
 /// Declared NativeVectorGpuInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -852,7 +912,8 @@ pub struct NativeVectorGpuInputs {
 }
 
 /// Closed NativeScanoutInputsPacking selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -864,7 +925,8 @@ pub enum NativeScanoutInputsPacking {
 }
 
 /// Closed NativeScanoutInputsMatrix selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -876,7 +938,8 @@ pub enum NativeScanoutInputsMatrix {
 }
 
 /// Closed NativeScanoutInputsGraphicsProfile selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -888,7 +951,8 @@ pub enum NativeScanoutInputsGraphicsProfile {
 }
 
 /// Closed NativeScanoutInputsBackdropProfile selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -900,7 +964,8 @@ pub enum NativeScanoutInputsBackdropProfile {
 }
 
 /// Closed NativeScanoutInputsRectangleProfile selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -912,7 +977,8 @@ pub enum NativeScanoutInputsRectangleProfile {
 }
 
 /// Declared NativeScanoutInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -931,7 +997,8 @@ pub struct NativeScanoutInputs {
 }
 
 /// Closed NativeDisplayTimingInputsMode selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -943,7 +1010,8 @@ pub enum NativeDisplayTimingInputsMode {
 }
 
 /// Declared NativeDisplayTimingInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -957,7 +1025,8 @@ pub struct NativeDisplayTimingInputs {
 }
 
 /// Declared NativeFormatterInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -969,7 +1038,8 @@ pub struct NativeFormatterInputs {
 }
 
 /// Closed NativeImageCombinationInputsArithmetic selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -981,7 +1051,8 @@ pub enum NativeImageCombinationInputsArithmetic {
 }
 
 /// Closed NativeImageCombinationInputsClockKind selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -993,7 +1064,8 @@ pub enum NativeImageCombinationInputsClockKind {
 }
 
 /// Declared NativeImageCombinationInputsClock startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -1006,7 +1078,8 @@ pub struct NativeImageCombinationInputsClock {
 }
 
 /// Declared NativeImageCombinationInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -1020,7 +1093,8 @@ pub struct NativeImageCombinationInputs {
 }
 
 /// Declared NativeEncoderInputsPinsItem startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -1033,7 +1107,8 @@ pub struct NativeEncoderInputsPinsItem {
 }
 
 /// Declared NativeEncoderInputs startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -1047,7 +1122,8 @@ pub struct NativeEncoderInputs {
 }
 
 /// Control-bus startup model selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -1059,7 +1135,8 @@ pub struct NativeControlBusInputs {
     pub transfer_ticks: u64,
     pub profile: NativeControlBusProfile,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1073,7 +1150,8 @@ pub enum NativeControlBusProfile {
 }
 
 /// External raw-NAND scene selection; geometry must match the selected medium.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -1088,7 +1166,8 @@ pub enum RunNandSceneInput {
         spare: Vec<RunNandAssetPlacement>,
     },
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -1101,7 +1180,8 @@ pub struct RunNandGeometry {
     pub pages_per_block: u32,
     pub spare_bytes: u32,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -1114,7 +1194,8 @@ pub struct RunNandAssetPlacement {
 }
 
 /// Native USB endpoint queue limits and transfer cadence.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",

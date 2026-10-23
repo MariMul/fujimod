@@ -6,7 +6,7 @@ mod analysis;
 mod binary;
 mod decode;
 mod emit;
-#[cfg(all(target_os = "emscripten", feature = "serde"))]
+#[cfg(target_os = "emscripten")]
 pub mod emscripten;
 pub mod ir;
 mod layout;

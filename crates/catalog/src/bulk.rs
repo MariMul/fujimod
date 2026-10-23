@@ -4,13 +4,13 @@
 //! stock routine prepares. The document names that routine's kind, the
 //! transfer state it uses, the stock code that must match before any bulk
 //! read, probes compared against slow reads, and named capture scopes.
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub const BULK_SCHEMA_URI: &str = "https://fujimod.com/schemas/bulk.generated.schema.json";
 
 /// Located bulk-read mechanism and capture scopes for one firmware.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -49,7 +49,8 @@ pub struct FirmwareBulk {
 }
 
 /// The stock routine that prepares the E1 source.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "mechanism", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
 pub enum BulkSource {
@@ -97,7 +98,8 @@ pub enum BulkSource {
 }
 
 /// An address range.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
 pub struct BulkRange {
@@ -118,7 +120,8 @@ impl BulkRange {
 }
 
 /// Stock code bytes identified by their SHA-256.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
 pub struct CodeCheck {
@@ -134,7 +137,8 @@ pub struct CodeCheck {
 
 /// Ranges captured together, such as a quick scope while a control is held
 /// and a full scope once per session.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
 pub struct CaptureScope {
@@ -147,7 +151,8 @@ pub struct CaptureScope {
 }
 
 /// A named address range.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
 pub struct NamedRange {

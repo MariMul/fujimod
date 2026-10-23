@@ -47,6 +47,11 @@ jobs:
       - run: mise run rust-format-check
       - if: ${{ !cancelled() }}
         run: mise run rust-check
+      - name: Check the generated workspace-hack crate
+        if: ${{ !cancelled() }}
+        run: |
+          cargo install cargo-hakari --version 0.9.39 --locked
+          mise run rust-hack-check
 
   javascript-quality:
     name: TypeScript lint, format and types

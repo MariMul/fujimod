@@ -21,7 +21,6 @@ emulator = [
     "dep:fujimod-emulator-devices",
     "dep:pkg-config",
     "dep:sha2",
-    "fujimod-emulator/serde",
     "fujimod-remote/board",
 ]
 host-profile = ["emulator", "fujimod-emulator/host-profile"]
@@ -46,6 +45,7 @@ futures-lite.workspace = true
 futures-channel.workspace = true
 nusb.workspace = true
 sha2 = { workspace = true, optional = true }
+fujimod-workspace-hack.workspace = true
 
 [build-dependencies]
 fujimod-bindgen = { path = "../generator" }

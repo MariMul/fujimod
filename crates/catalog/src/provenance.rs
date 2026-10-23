@@ -1,6 +1,5 @@
 //! Caller-supplied evidence notes and qualified input identities.
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -9,7 +8,8 @@ pub const ANNOTATIONS_SCHEMA_URI: &str =
     "https://fujimod.com/schemas/catalog-annotations.generated.schema.json";
 
 /// Evidence that accompanies catalog records without changing their public identities.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct CatalogAnnotations {
     /// Schema identity.
@@ -22,7 +22,8 @@ pub struct CatalogAnnotations {
 }
 
 /// Text evidence and explicitly qualified inputs for one source record.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct SourceAnnotations {
     /// Logical record and optional execution profile qualified by these notes.
@@ -62,7 +63,8 @@ pub struct SourceAnnotations {
 }
 
 /// A complete source inventory retained independently of its execution projection.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct SourceDocument {
     /// Caller-selected source location.
@@ -74,7 +76,8 @@ pub struct SourceDocument {
 }
 
 /// Formats of retained source evidence.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub enum SourceDocumentFormat {
     /// Located observations and their proof spans.
@@ -82,7 +85,8 @@ pub enum SourceDocumentFormat {
 }
 
 /// Recorded prose or a list of prose citations.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(untagged)]
 pub enum TextNote {
     /// One recorded qualification.
@@ -92,7 +96,8 @@ pub enum TextNote {
 }
 
 /// A firmware slice identified without embedding executable contents.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct FirmwareBlob {
     /// Byte offset in the installed flash image.
@@ -104,7 +109,8 @@ pub struct FirmwareBlob {
 }
 
 /// An explicit input-file slice supplied by the caller.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct InputAssetLocation {
     /// Input-file location.
@@ -114,7 +120,8 @@ pub struct InputAssetLocation {
 }
 
 /// A caller-selected firmware manifest, optionally hash-qualified.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct InputManifest {
     /// Manifest location supplied by the caller.
@@ -125,7 +132,8 @@ pub struct InputManifest {
 }
 
 /// A synthetic signature placed in a configuration block.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct StorageSignature {
     /// Destination offset within the configuration block.
@@ -135,7 +143,8 @@ pub struct StorageSignature {
 }
 
 /// Logical record selected independently of a document location.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct AnnotationSubject {
     /// Reference record category.
@@ -148,7 +157,8 @@ pub struct AnnotationSubject {
 }
 
 /// Reference categories that accept supplemental evidence.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum AnnotationKind {
     /// System on chip.

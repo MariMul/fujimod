@@ -60,8 +60,12 @@ to hashed build artifacts. Open catalogs can leave options unnamed; consumers
 must refuse an unresolved named option instead of inventing a name.
 
 Schemas are generated from these Rust types with
-`cargo run -p fujimod-catalog --bin catalog-schemas -- --write`. New remote
-schema filenames include `.generated`; `--check` verifies committed copies.
+`cargo run -p fujimod-catalog --features schema --bin catalog-schemas -- --write`.
+New remote schema filenames include `.generated`; `--check` verifies committed
+copies. Only the `schema` feature compiles the JSON Schema implementations, so
+emulator and binding builds skip them: derive with
+`#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]` and write
+schema attributes as `#[cfg_attr(feature = "schema", schemars(...))]`.
 
 Hardware profiles preserve qualified device graphs and controller settings while
 reference records continue to own identity, memory, and physical attachments.

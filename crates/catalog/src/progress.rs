@@ -3,14 +3,14 @@
 //! Each stage holds the latest recorded result of that stage for the firmware.
 //! A result whose inputs changed since it was recorded is `stale` and does not
 //! count as progress.
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub const PROGRESS_SCHEMA_URI: &str = "https://fujimod.com/schemas/progress.generated.schema.json";
 
 /// Bring-up progress toward FujiMod on one firmware.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct FirmwareProgress {
     /// Schema identifying the generated document.
@@ -31,7 +31,8 @@ pub struct FirmwareProgress {
 }
 
 /// Bring-up stages, grouped as emulator, camera, mods and SD card.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ProgressStages {
     /// Firmware unpacked, analyzed and its static facts located.
@@ -55,7 +56,8 @@ pub struct ProgressStages {
 }
 
 /// Latest result of one stage.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub enum StageProgress {
     Pass,
@@ -66,7 +68,8 @@ pub enum StageProgress {
 }
 
 /// Latest walkthrough result of one mod.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub enum ModProgress {
     Pass,

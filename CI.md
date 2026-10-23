@@ -33,6 +33,8 @@ the repository's branch rules to enforce it on merges.
 - Rust uses rustfmt and the standard [Clippy](https://doc.rust-lang.org/clippy/)
   lint set across every workspace target and feature, with warnings denied.
   Pedantic/restriction lints are not enabled wholesale.
+- `rust-hack-check` fails when the generated `fujimod-workspace-hack` crate no
+  longer matches the dependency graph; `rust-hack` regenerates it.
 
 No violation baselines, changed-lines-only filters or test-file typing exemptions
 are used. `python-typecheck` builds the JavaScript binding and generates Python

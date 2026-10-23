@@ -214,7 +214,6 @@ fn symlink_escape_and_non_regular_sources_refuse() {
     );
 }
 
-#[cfg(feature = "serde")]
 #[test]
 fn unknown_location_kinds_and_fields_refuse() {
     for json in [

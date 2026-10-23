@@ -9,12 +9,8 @@ use std::{
     sync::Arc,
 };
 
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(
-    feature = "serde",
-    serde(default, deny_unknown_fields, rename_all = "camelCase")
-)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
 pub struct Options {
     pub threshold: u32,
     pub batch_size: usize,
@@ -63,9 +59,8 @@ pub trait Host {
     fn configure(&mut self, threshold: u32, dispatcher: u32) -> Result<(), String>;
     fn now_millis(&self) -> f64;
 }
-#[derive(Clone, Default, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[derive(Clone, Default, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Stats {
     pub offered: u64,
     pub compiled: u64,

@@ -3,15 +3,13 @@
 pub mod card;
 pub mod checkpoint;
 pub mod contact_driver;
-#[cfg(feature = "serde")]
 pub mod durable;
 pub mod history;
 pub mod inputs;
 pub mod nand;
-#[cfg(feature = "serde")]
 pub mod preparation;
 pub mod scanout;
-#[cfg(all(test, feature = "worker"))]
+#[cfg(test)]
 mod tests;
 pub mod usb;
 pub mod xp5;

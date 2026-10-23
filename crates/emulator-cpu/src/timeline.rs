@@ -11,7 +11,6 @@ pub struct Ratio {
     numerator: u64,
     denominator: u64,
 }
-#[cfg(feature = "serde")]
 impl<'de> serde::Deserialize<'de> for Ratio {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let (numerator, denominator) =

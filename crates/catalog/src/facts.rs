@@ -1,10 +1,10 @@
 //! Physical controls and generated firmware input/observation facts.
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// A published manual and the pages used to identify controls.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -21,7 +21,8 @@ pub struct ManualReference {
 }
 
 /// Firmware interpretation of a control outside the key scanner.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -76,7 +77,8 @@ pub enum ControlInterface {
 }
 
 /// Firmware scanner predicates used for digital keys.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -98,7 +100,8 @@ pub enum GpioScanner {
 }
 
 /// Closed firmware scanner predicate discriminator from the scanner row.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -139,7 +142,8 @@ impl ScannerInputKind {
 }
 
 /// Checked identity and predicate operands stored in one scanner record.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -160,7 +164,8 @@ pub struct ScannerRecordWitness {
 }
 
 /// A firmware scanner state reader.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -181,7 +186,8 @@ pub struct ScannerReader {
 }
 
 /// A firmware table used to scan physical input predicates.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -202,7 +208,8 @@ pub struct ScannerTable {
 }
 
 /// Native firmware event names and the identity of their source table.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -221,7 +228,8 @@ pub struct NativeKeyNames {
 }
 
 /// One named native firmware event.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -238,7 +246,8 @@ pub struct NativeKeyName {
 }
 
 /// An identified firmware address range without its contents.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -255,7 +264,8 @@ pub struct AddressIdentity {
 }
 
 /// A configuration block addressed directly or through a firmware pointer.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -276,7 +286,8 @@ pub enum ConfigurationLocation {
 }
 
 /// Firmware UI mode numbers beyond the REC and setup modes used by boot.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -291,7 +302,8 @@ pub struct AdditionalUiModes {
 }
 
 /// Firmware key identities used to navigate menus.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",

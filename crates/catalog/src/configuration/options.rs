@@ -1,10 +1,10 @@
 //! Closed emulator policy selections, independent of input file locations.
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -187,9 +187,10 @@ pub struct RunFactoryOptions {
 }
 
 /// Synthetic FAT card formatting parameters.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -202,9 +203,10 @@ pub struct RunCardFormat {
 }
 
 /// A bounded external binary input identified independently of its location.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -217,9 +219,10 @@ pub struct RunBinaryInput {
 }
 
 /// Synthetic HDMI cable and display-identification input.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -232,7 +235,8 @@ pub struct RunHdmiSink {
 }
 
 /// Closed selection for auxiliary control profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -244,7 +248,8 @@ pub enum RunAuxiliaryControlProfile {
 }
 
 /// Closed selection for backdrop profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -256,7 +261,8 @@ pub enum RunBackdropProfile {
 }
 
 /// Closed selection for clear profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -268,7 +274,8 @@ pub enum RunClearProfile {
 }
 
 /// Closed selection for control bus profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -280,7 +287,8 @@ pub enum RunControlBusProfile {
 }
 
 /// Closed selection for copy profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -292,7 +300,8 @@ pub enum RunCopyProfile {
 }
 
 /// Closed selection for counter input profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -304,7 +313,8 @@ pub enum RunCounterInputProfile {
 }
 
 /// Closed selection for entry.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -316,7 +326,8 @@ pub enum RunEntry {
 }
 
 /// Closed selection for face register mode.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -328,7 +339,8 @@ pub enum RunFaceRegisterMode {
 }
 
 /// Closed selection for graphics profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -340,7 +352,8 @@ pub enum RunGraphicsProfile {
 }
 
 /// Closed selection for histogram profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -352,7 +365,8 @@ pub enum RunHistogramProfile {
 }
 
 /// Closed selection for image work data profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -366,7 +380,8 @@ pub enum RunImageWorkDataProfile {
 }
 
 /// Closed selection for image work stop profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -380,7 +395,8 @@ pub enum RunImageWorkStopProfile {
 }
 
 /// Closed selection for input event profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -396,7 +412,8 @@ pub enum RunInputEventProfile {
 }
 
 /// Closed selection for input phase profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -412,7 +429,8 @@ pub enum RunInputPhaseProfile {
 }
 
 /// Closed selection for input processing profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -428,7 +446,8 @@ pub enum RunInputProcessingProfile {
 }
 
 /// Closed selection for irq tie profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -440,7 +459,8 @@ pub enum RunIrqTieProfile {
 }
 
 /// Closed selection for jpeg decode profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -452,7 +472,8 @@ pub enum RunJpegDecodeProfile {
 }
 
 /// Closed selection for lens response profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -464,7 +485,8 @@ pub enum RunLensResponseProfile {
 }
 
 /// Closed selection for mcu profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -478,7 +500,8 @@ pub enum RunMcuProfile {
 }
 
 /// Closed selection for movrsz profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -490,7 +513,8 @@ pub enum RunMovrszProfile {
 }
 
 /// Closed selection for phase profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -502,7 +526,8 @@ pub enum RunPhaseProfile {
 }
 
 /// Closed selection for producer data profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -517,7 +542,8 @@ pub enum RunProducerDataProfile {
 }
 
 /// Closed selection for producer stop profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -529,7 +555,8 @@ pub enum RunProducerStopProfile {
 }
 
 /// Closed selection for pulse timer profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -541,7 +568,8 @@ pub enum RunPulseTimerProfile {
 }
 
 /// Closed selection for rectangle profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -555,7 +583,8 @@ pub enum RunRectangleProfile {
 }
 
 /// Closed selection for sd card profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -567,7 +596,8 @@ pub enum RunSdCardProfile {
 }
 
 /// Closed selection for secondary bus profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -582,7 +612,8 @@ pub enum RunSecondaryBusProfile {
 }
 
 /// Closed selection for settings.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -596,7 +627,8 @@ pub enum RunSettings {
 }
 
 /// Closed selection for spi0 input profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -608,7 +640,8 @@ pub enum RunSpi0InputProfile {
 }
 
 /// Closed selection for storage profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -627,7 +660,8 @@ pub enum RunStorageProfile {
 }
 
 /// Closed selection for wifi sdio profile.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -715,7 +749,8 @@ impl RunFactoryOptions {
 }
 
 /// Selection of externally supplied persistent user journals.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
 #[serde(rename_all = "kebab-case")]
 pub enum RunUserJournals {
@@ -724,7 +759,8 @@ pub enum RunUserJournals {
 }
 
 /// Named policy inputs that a preset explicitly clears before selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
 #[serde(rename_all = "snake_case")]
 pub enum RunClearedOption {
@@ -738,7 +774,8 @@ pub enum RunClearedOption {
 }
 
 /// Explicit constructor policy selected by a run.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -750,7 +787,8 @@ pub enum RunFaceStopProfile {
 }
 
 /// Explicit constructor policy selected by a run.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -762,7 +800,8 @@ pub enum RunLensContinuationProfile {
 }
 
 /// External PCM supplied by the selected run, independent of guest execution.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
 pub enum RunAudioInputProfile {

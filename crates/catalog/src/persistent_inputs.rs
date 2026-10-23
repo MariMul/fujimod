@@ -1,11 +1,11 @@
 //! Explicit, identity-checked persistent inputs supplied for a run.
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 /// Declared source windows and selected placements, independent of file locations.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct PersistentInputs {
     /// Source window identities and explicit normalization edits.
@@ -14,7 +14,8 @@ pub struct PersistentInputs {
     pub sets: BTreeMap<String, PersistentSet>,
 }
 /// A bounded source window verified before and after normalization.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct PersistentAsset {
     /// Exact source window length in bytes.
@@ -27,7 +28,8 @@ pub struct PersistentAsset {
     pub patches: Vec<PersistentPatch>,
 }
 /// An explicit byte edit within a source window.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct PersistentPatch {
     /// Byte offset within the source window.
@@ -36,7 +38,8 @@ pub struct PersistentPatch {
     pub bytes: Vec<u8>,
 }
 /// External NAND and MCU state selected together by identity.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct PersistentSet {
     /// NAND main-area windows and their optional managed block tags.
@@ -47,7 +50,8 @@ pub struct PersistentSet {
     pub mcu_packet: Option<PersistentPacket>,
 }
 /// Place a bounded source window into the selected body's NAND.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct PersistentPlacement {
     /// Source asset identity.
@@ -62,7 +66,8 @@ pub struct PersistentPlacement {
     pub managed_index: Option<u16>,
 }
 /// Explicit journal-record construction and destination.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct PersistentJournalAppend {
     /// Source record asset identity.
@@ -83,7 +88,8 @@ pub struct PersistentJournalAppend {
     pub physical_offset: u64,
 }
 /// A complete packet or a bounded source window, never a file path.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum PersistentPacket {
     /// Explicit packet bytes.

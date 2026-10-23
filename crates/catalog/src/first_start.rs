@@ -1,5 +1,4 @@
 //! Generated stock first-start menu facts for one firmware.
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -7,7 +6,8 @@ pub const FIRST_START_SCHEMA_URI: &str =
     "https://fujimod.com/schemas/first-start.generated.schema.json";
 
 /// Stock language rows and the calendar editor observation layout.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -41,7 +41,8 @@ pub struct FirstStartMenu {
 }
 
 /// One offered stock language and its stored preference value.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",

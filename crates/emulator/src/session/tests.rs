@@ -580,7 +580,6 @@ fn card_insertion_refuses_full_gpio_queue_before_replacing_media() {
     );
 }
 
-#[cfg(feature = "serde")]
 #[test]
 fn sensor_radiance_is_retained_by_serialized_input_history_and_undo() {
     use super::history::{Entry, History, Input};

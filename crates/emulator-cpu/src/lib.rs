@@ -23,16 +23,15 @@ pub enum Architecture {
     Arm32,
     Arm64,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
 pub enum Model {
-    #[cfg_attr(feature = "serde", serde(rename = "cortex-r5f"))]
+    #[serde(rename = "cortex-r5f")]
     CortexR5F,
-    #[cfg_attr(feature = "serde", serde(rename = "cortex-a7"))]
+    #[serde(rename = "cortex-a7")]
     CortexA7,
-    #[cfg_attr(feature = "serde", serde(rename = "cortex-m4"))]
+    #[serde(rename = "cortex-m4")]
     CortexM4,
-    #[cfg_attr(feature = "serde", serde(rename = "armv8a"))]
+    #[serde(rename = "armv8a")]
     ArmV8A,
 }
 impl Model {
@@ -56,13 +55,11 @@ pub struct HookId {
     pub owner: Identity,
     pub key: usize,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
 pub enum Diagnostic {
     ExceptionSyndrome,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
 pub enum Register {
     Diagnostic(Diagnostic),
     Arm32(arm::Register),

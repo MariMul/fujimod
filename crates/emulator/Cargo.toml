@@ -6,22 +6,19 @@ rust-version = "1.88"
 publish = false
 
 [lib]
+doctest = false
 name = "fujimod_emulator"
 crate-type = ["rlib"]
 
 [[bin]]
 name = "fujimod-emulator"
 path = "src/bin/fujimod-emulator.rs"
-required-features = ["serde"]
 
 [[bin]]
 name = "fujimod-emulator-worker"
 path = "src/bin/fujimod-emulator-worker.rs"
-required-features = ["worker"]
 
 [features]
-serde = ["fujimod-emulator-cpu/serde", "fujimod-emulator-cpu-unicorn/serde"]
-worker = ["serde", "dep:sha2"]
 host-profile = ["dep:libc"]
 default = []
 
@@ -34,13 +31,14 @@ fujimod-emulator-cpu-unicorn = { path = "../emulator-cpu-unicorn" }
 fujimod-catalog = { path = "../catalog" }
 serde_json = "1"
 toml = "0.9"
-sha2 = { version = "0.10", optional = true }
+sha2 = "0.10"
+fujimod-workspace-hack.workspace = true
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-sha2 = { version = "0.10", features = ["asm-aarch64"], optional = true }
+sha2 = { version = "0.10", features = ["asm-aarch64"] }
 
 [target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
 fujimod-emulator-cpu-hvf = { path = "../emulator-cpu-hvf" }

@@ -3,7 +3,6 @@
 //! The records contain device facts and named references. They never contain
 //! another record's filename or an input asset's location.
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -15,7 +14,8 @@ pub const BODY_SCHEMA_URI: &str = "https://fujimod.com/schemas/body.schema.json"
 pub const FIRMWARE_SCHEMA_URI: &str = "https://fujimod.com/schemas/firmware.schema.json";
 
 /// A processor architecture described by a system-on-chip record.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
     feature = "typescript",
@@ -30,9 +30,10 @@ pub enum ProcessorArchitecture {
 }
 
 /// A named system-on-chip record.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -248,9 +249,10 @@ impl Soc {
 }
 
 /// A processor core and its hardware reset state.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -275,7 +277,8 @@ pub struct ProcessorCore {
 }
 
 /// A processor core model supported by the current catalog.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(
     feature = "typescript",
@@ -294,9 +297,10 @@ pub enum ProcessorModel {
 }
 
 /// An initial value for an architectural register.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -310,7 +314,8 @@ pub struct RegisterValue {
 }
 
 /// Architectural registers explicitly initialized by a catalog record.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
     feature = "typescript",
@@ -329,9 +334,10 @@ pub enum ProcessorRegister {
 }
 
 /// M-profile processor identification state.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -345,9 +351,10 @@ pub struct MProfileState {
 }
 
 /// R-profile processor identification and TCM state.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -363,9 +370,10 @@ pub struct RProfileState {
 }
 
 /// A tightly coupled memory reset state.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -379,9 +387,10 @@ pub struct TcmState {
 }
 
 /// A memory region provided by a SoC.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -399,9 +408,10 @@ pub struct MemoryRegion {
 }
 
 /// A memory extent with no repeated body-specific capacity.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -415,7 +425,8 @@ pub enum RegionSize {
 }
 
 /// Memory technologies exposed by the SoC.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
     feature = "typescript",
@@ -434,9 +445,10 @@ pub enum MemoryKind {
 }
 
 /// A named register or address block.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -461,7 +473,8 @@ pub struct SocBlock {
 }
 
 /// Hardware block categories represented in the catalog.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(
     feature = "typescript",
@@ -502,9 +515,10 @@ pub enum SocBlockKind {
 }
 
 /// A routed interrupt line.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -523,9 +537,10 @@ pub struct InterruptRoute {
 }
 
 /// A SoC clock domain.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -543,9 +558,10 @@ pub struct ClockDomain {
 }
 
 /// A processor address-space mapping.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -567,9 +583,10 @@ pub struct AddressMapping {
 }
 
 /// A DMA address-space mapping.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -589,9 +606,10 @@ pub struct DmaMapping {
 }
 
 /// A selectable SoC address decoder.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -607,9 +625,10 @@ pub struct AddressDecoder {
 }
 
 /// The processor and DMA routes selected by a decoder state.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -623,9 +642,10 @@ pub struct DecoderSelection {
 }
 
 /// A named alternate decoder state.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -639,9 +659,10 @@ pub struct DecoderChoice {
 }
 
 /// A per-core view into a named SoC block.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -661,9 +682,10 @@ pub struct PeripheralMapping {
 }
 
 /// Hardware state applied when a SoC leaves reset.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -678,9 +700,10 @@ pub struct SocReset {
 }
 
 /// A secondary-core release condition.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -698,9 +721,10 @@ pub struct CoreRelease {
 }
 
 /// A CP15 or CP14 coprocessor register write during reset.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -728,9 +752,10 @@ pub struct CoprocessorWrite {
 }
 
 /// A named camera body and its physical components.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -922,9 +947,10 @@ impl Body {
 }
 
 /// A body-specific mapped RAM extent.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -942,9 +968,10 @@ pub struct BodyRamRegion {
 }
 
 /// NAND geometry installed in a camera body or storage part.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -962,9 +989,10 @@ pub struct NandGeometry {
 }
 
 /// A camera sensor assembly.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -981,9 +1009,10 @@ pub struct SensorAssembly {
 }
 
 /// Control-bus route for one physical part installed in a camera body.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1002,9 +1031,10 @@ pub struct ControlBusAttachment {
 }
 
 /// Sensor image and timing geometry.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1024,9 +1054,10 @@ pub struct SensorRaster {
 
 /// Radiometric, timing and projection facts of an image sensor. Each value is a
 /// declared catalog input; its basis is recorded in the part document.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1052,9 +1083,10 @@ pub struct SensorRadiometry {
 }
 
 /// One rolling-readout reference of an image sensor.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1072,9 +1104,10 @@ pub struct SensorRollingReference {
 }
 
 /// Lens projection onto an image sensor, as an ideal thin-lens approximation.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1092,7 +1125,8 @@ pub struct SensorProjection {
 }
 
 /// Image-circle illumination model of a sensor projection.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(
     feature = "typescript",
@@ -1107,9 +1141,10 @@ pub enum SensorIllumination {
 }
 
 /// A sensor's physical control-bus connection.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1123,9 +1158,10 @@ pub struct SensorControlInterface {
 }
 
 /// A body lens assembly.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1154,9 +1190,10 @@ pub struct LensAssembly {
 }
 
 /// A body connection attached to one lens motor's home-switch input.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1170,9 +1207,10 @@ pub struct LensHomeConnection {
 }
 
 /// Aperture positions and their optical output.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1188,9 +1226,10 @@ pub struct IrisOptics {
 }
 
 /// An aperture mechanism position and f-number.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1204,7 +1243,8 @@ pub struct AperturePosition {
 }
 
 /// Named optical quantities exposed by a lens assembly.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
     feature = "typescript",
@@ -1219,9 +1259,10 @@ pub enum OpticalQuantity {
 }
 
 /// A focus-axis model.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1237,9 +1278,10 @@ pub struct FocusAxis {
 }
 
 /// A body display assembly.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1256,9 +1298,10 @@ pub struct DisplayAssembly {
 }
 
 /// A body-specific attachment for a microcontroller part.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1280,9 +1323,10 @@ pub struct MicrocontrollerAssembly {
 }
 
 /// A body-specific attachment for a power-control part.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1302,9 +1346,10 @@ pub struct PowerControlAssembly {
 }
 
 /// A body-specific attachment for a removable-card slot part.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1326,7 +1371,8 @@ pub struct CardSlotAssembly {
 }
 
 /// Display orientation relative to the camera body.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
     feature = "typescript",
@@ -1343,9 +1389,10 @@ pub enum DisplayOrientation {
 }
 
 /// A physical body connection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1361,7 +1408,8 @@ pub struct BodyConnection {
 }
 
 /// Physical connection categories.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(
     feature = "typescript",
@@ -1398,9 +1446,10 @@ pub enum ConnectionKind {
 }
 
 /// One electrical signal exposed by a body connection.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1435,7 +1484,8 @@ pub enum ConnectionSignal {
 }
 
 /// Named control signals carried by SoC blocks.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
     feature = "typescript",
@@ -1454,9 +1504,10 @@ pub enum BlockSignal {
 }
 
 /// A physical wire between a body connection, part, or SoC block.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1472,7 +1523,8 @@ pub struct BodyWiring {
 }
 
 /// Named physical wire types.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
     feature = "typescript",
@@ -1503,9 +1555,10 @@ pub enum WireSignal {
 }
 
 /// A physical control-bus device installed in a camera body.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1525,9 +1578,10 @@ pub struct ControlBusChip {
 }
 
 /// A reusable physical or protocol component referenced by a body.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1652,9 +1706,10 @@ impl Part {
 }
 
 /// A closed set of reusable physical part models.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1772,7 +1827,8 @@ pub enum PartModel {
 }
 
 /// A supported lens serial protocol.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(
     feature = "typescript",
@@ -1791,7 +1847,8 @@ pub enum LensProtocol {
 }
 
 /// Lens command response after a stop request.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum LensStopResponse {
     /// Report stopped only after the current movement settles.
@@ -1799,9 +1856,10 @@ pub enum LensStopResponse {
 }
 
 /// A clocking mode declared by a lens protocol.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 pub enum LensClockMode {
     /// Use a fixed clock selected by the body attachment.
     Fixed,
@@ -1825,9 +1883,10 @@ pub enum LensClockMode {
 }
 
 /// A pulse interface required by an optical mechanism.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1848,9 +1907,10 @@ pub struct PulseInterface {
 }
 
 /// One lens motor and its physical response limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1871,9 +1931,10 @@ pub struct LensMotor {
 }
 
 /// A lens home-switch input.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1888,7 +1949,8 @@ pub struct HomeSwitch {
 }
 
 /// Position comparison used by a lens home switch.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum HomeSwitchSide {
     /// Home is asserted above the threshold.
@@ -1898,7 +1960,8 @@ pub enum HomeSwitchSide {
 }
 
 /// A motor's pulse-counter channel and divider.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct LensMotorCounter {
     /// Motor index within the part.
@@ -1910,9 +1973,10 @@ pub struct LensMotorCounter {
 }
 
 /// An optional encoder attached to a physical part.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1930,9 +1994,10 @@ pub struct PartEncoder {
 }
 
 /// A zoom mechanism's travel and pulse settings.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1957,9 +2022,10 @@ pub struct ZoomMechanism {
 }
 
 /// A pin drive position and its resulting contact states.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1973,9 +2039,10 @@ pub struct ContactPosition {
 }
 
 /// A serial bus route to a physical endpoint.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1998,7 +2065,8 @@ pub struct SerialRoute {
 }
 
 /// Serial output endpoint categories.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
     feature = "typescript",
@@ -2017,9 +2085,10 @@ pub enum SerialOutputKind {
 }
 
 /// A range of registers exposed by a physical component.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -2035,9 +2104,10 @@ pub struct RegisterRange {
 }
 
 /// An SPI status register initialized by a physical control part.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -2051,9 +2121,10 @@ pub struct StatusRegister {
 }
 
 /// A firmware content identity.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -2088,9 +2159,10 @@ pub(crate) fn validate_sha256(digest: &str) -> Result<(), String> {
 }
 
 /// A named firmware version and the content identities needed to run it.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -2203,9 +2275,10 @@ impl Firmware {
 }
 
 /// A verified boot ROM image and its load address.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -2219,9 +2292,10 @@ pub struct BootRomIdentity {
 }
 
 /// The flash layout used to install a firmware update.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -2240,9 +2314,10 @@ pub struct FirmwareInstallation {
 }
 
 /// A firmware loader entry and the named sections it validates.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -2256,9 +2331,10 @@ pub struct FirmwareLoaderValidation {
 }
 
 /// A mapped firmware image section identified by address and content digest.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -2279,9 +2355,10 @@ pub struct FirmwareImageSection {
 }
 
 /// Generated firmware facts that inform state observation and initial setup.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -2314,9 +2391,10 @@ pub struct FirmwareGeneratedFacts {
 }
 
 /// Firmware addresses used by a supported run observer.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -2342,9 +2420,10 @@ pub struct FirmwareObservation {
 }
 
 /// Addresses used to check REC readiness.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -2366,9 +2445,10 @@ pub struct ReadinessAddresses {
 }
 
 /// All resolved reference records for one body and firmware selection.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -3164,7 +3244,8 @@ fn bundled_documents() -> impl Iterator<Item = (ReferenceKind, &'static str, &'s
 }
 
 /// Explicit selection of SoC and body hardware profiles.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",

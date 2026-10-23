@@ -358,5 +358,5 @@ impl Board {
     }
 }
 
-#[cfg(all(test, feature = "worker"))]
+#[cfg(test)]
 mod tests;

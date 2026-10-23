@@ -13,6 +13,7 @@ pub mod persistent_inputs;
 pub mod progress;
 pub mod reference;
 pub mod remote;
+#[cfg(feature = "schema")]
 pub mod schema;
 pub mod service;
 pub mod soc;

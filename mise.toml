@@ -48,6 +48,14 @@ run = "cargo test --workspace --all-features --locked"
 [tasks.rust-check]
 run = "cargo clippy --workspace --all-targets --all-features -- -D warnings"
 
+[tasks.rust-hack]
+description = "Regenerate the workspace-hack crate after dependency changes"
+run = ["cargo hakari generate", "cargo hakari manage-deps --yes"]
+
+[tasks.rust-hack-check]
+description = "Check that the workspace-hack crate matches the dependency graph"
+run = ["cargo hakari generate --diff", "cargo hakari manage-deps --dry-run", "cargo hakari verify"]
+
 [tasks.rust-wasm-test]
 run = 'PATH="$PWD/target/tooling/bin:$PATH" cargo test -p fujimod-usb --target wasm32-unknown-unknown --features testing --lib --test wasm_core'
 

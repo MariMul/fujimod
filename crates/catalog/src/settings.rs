@@ -6,14 +6,14 @@
 //! tables in the update, the fields every valid bank and record carries, and
 //! the named settings a run may request. It holds addresses, sizes and hashes;
 //! bank and record bytes are built from the update.
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub const SETTINGS_SCHEMA_URI: &str = "https://fujimod.com/schemas/settings.generated.schema.json";
 
 /// Located settings bank and named settings for one firmware.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -48,7 +48,8 @@ pub struct FirmwareSettings {
 /// The stock user profile: a sixteen-byte header kept by the power controller
 /// and journal records in managed flash blocks. Firmware that finds no valid
 /// header and records resets the profile to its defaults at startup.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -65,7 +66,8 @@ pub struct SettingsProfile {
 
 /// One journal record: stock defaults and fixed bytes, sealed with one parity
 /// bit per data word and an XOR checksum of the data words in its last four bytes.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
 pub struct ProfileRecord {
@@ -86,7 +88,8 @@ pub struct ProfileRecord {
 }
 
 /// A method-4 encoded section of the installed flash image.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
 pub struct SettingsSource {
@@ -101,7 +104,8 @@ pub struct SettingsSource {
 }
 
 /// The flash blocks holding the settings bank.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
 pub struct SettingsBank {
@@ -120,7 +124,8 @@ pub struct SettingsBank {
 }
 
 /// Bytes at a firmware address in the decoded update, identified by SHA-256.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
 pub struct UpdateRange {
@@ -133,7 +138,8 @@ pub struct UpdateRange {
 }
 
 /// Bytes written at a bank or record offset.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
 pub struct SettingsField {
@@ -146,7 +152,8 @@ pub struct SettingsField {
 }
 
 /// A setting a run requests by name, such as `debug` or `language`.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",

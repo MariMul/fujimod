@@ -1,5 +1,7 @@
 //! Version-pinned Unicorn backend. Raw handles, register IDs and extension
 //! calls are confined here; observers receive architectural execution events.
+// Links the static Unicorn archive that `ffi` binds.
+use fujimod_unicorn_sys as _;
 pub mod rprofile;
 #[cfg(test)]
 mod test_support;

@@ -1,6 +1,5 @@
 //! Architectural ARM registers; no execution-library numbering.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
 pub enum Register {
     R(u8),
     Cpsr,
@@ -39,9 +38,8 @@ pub const CORE: [super::Register; 16] = [
     super::Register::Arm32(Register::R(14)),
     super::Register::Arm32(Register::R(15)),
 ];
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Coprocessor {
     pub cp: u32,
     pub opc1: u32,
@@ -51,9 +49,8 @@ pub struct Coprocessor {
     pub secure: u32,
     pub wide: bool,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SystemRegister {
     pub op0: u8,
     pub op1: u8,

@@ -1,19 +1,20 @@
 //! Firmware source identities, boot layouts and persistent-storage formats.
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// An explicitly empty device-reference set.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareEmpty")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareEmpty"))]
 pub struct Empty {}
 
 /// Declared flash slices facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareFlashSlices")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareFlashSlices"))]
 pub struct FlashSlices {
     /// Declared address.
     pub address: u64,
@@ -28,18 +29,20 @@ pub struct FlashSlices {
 }
 
 /// Declared units facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareUnits")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareUnits"))]
 pub struct Units {
     /// Declared unit.
     pub unit: String,
 }
 
 /// Declared boot layout facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareBootLayout")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareBootLayout"))]
 pub struct BootLayout {
     /// Declared flash slices.
     pub flash_slices: Vec<FlashSlices>,
@@ -48,9 +51,10 @@ pub struct BootLayout {
 }
 
 /// Declared regs facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareRegs")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareRegs"))]
 pub struct Regs {
     /// Declared x19.
     pub x19: u64,
@@ -61,9 +65,10 @@ pub struct Regs {
 }
 
 /// Declared sysregs facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareSysregs")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareSysregs"))]
 pub struct Sysregs {
     #[serde(rename = "CPACR_EL1")]
     /// Declared CPACR EL1.
@@ -92,9 +97,10 @@ pub struct Sysregs {
 }
 
 /// Declared cpu facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareCpu")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareCpu"))]
 pub struct Cpu {
     /// Declared cpsr.
     pub cpsr: u64,
@@ -111,9 +117,10 @@ pub struct Cpu {
 }
 
 /// Declared descriptor facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareDescriptor")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareDescriptor"))]
 pub struct Descriptor {
     /// Declared address.
     pub address: u64,
@@ -126,9 +133,10 @@ pub struct Descriptor {
 }
 
 /// Declared fe80 programs facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareFe80Programs")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareFe80Programs"))]
 pub struct Fe80Programs {
     /// Declared basis.
     pub basis: String,
@@ -144,18 +152,20 @@ pub struct Fe80Programs {
 }
 
 /// Declared fixture layouts facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareFixtureLayouts")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareFixtureLayouts"))]
 pub struct FixtureLayouts {
     /// Declared status.
     pub status: String,
 }
 
 /// Declared flash image facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareFlashImage")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareFlashImage"))]
 pub struct FlashImage {
     /// Declared dat origin.
     pub dat_origin: u64,
@@ -164,9 +174,13 @@ pub struct FlashImage {
 }
 
 /// Declared gic redistributor initial facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareGicRedistributorInitial")]
+#[cfg_attr(
+    feature = "schema",
+    schemars(rename = "FirmwareGicRedistributorInitial")
+)]
 pub struct GicRedistributorInitial {
     /// Declared core.
     pub core: u64,
@@ -179,9 +193,13 @@ pub struct GicRedistributorInitial {
 }
 
 /// Declared persistent inputs geometry facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwarePersistentInputsGeometry")]
+#[cfg_attr(
+    feature = "schema",
+    schemars(rename = "FirmwarePersistentInputsGeometry")
+)]
 pub struct PersistentInputsGeometry {
     /// Declared bytes.
     pub bytes: u64,
@@ -194,9 +212,10 @@ pub struct PersistentInputsGeometry {
 }
 
 /// Declared persistent inputs facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwarePersistentInputs")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwarePersistentInputs"))]
 pub struct PersistentInputs {
     /// Declared assets.
     pub assets: BTreeMap<String, PersistentAssetLayout>,
@@ -207,9 +226,10 @@ pub struct PersistentInputs {
 }
 
 /// Declared preload facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwarePreload")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwarePreload"))]
 pub struct Preload {
     /// Declared address.
     pub address: u64,
@@ -237,9 +257,10 @@ pub struct Preload {
 }
 
 /// Declared sdio inputs facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareSdioInputs")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareSdioInputs"))]
 pub struct SdioInputs {
     /// Declared firmware bytes.
     pub firmware_bytes: u64,
@@ -250,9 +271,10 @@ pub struct SdioInputs {
 }
 
 /// Declared usb interrupt tables facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareUsbInterruptTables")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareUsbInterruptTables"))]
 pub struct UsbInterruptTables {
     /// Declared address.
     pub address: u64,
@@ -267,7 +289,8 @@ pub struct UsbInterruptTables {
 }
 
 /// Declared firmware profile facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct FirmwareProfile {
     /// Firmware-qualified secondary-core release mechanism.
@@ -336,9 +359,10 @@ pub struct FirmwareProfile {
 }
 
 /// Declared final version bytes facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareFinalVersionBytes")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareFinalVersionBytes"))]
 pub struct FinalVersionBytes {
     /// Declared offset.
     pub offset: u64,
@@ -347,9 +371,13 @@ pub struct FinalVersionBytes {
 }
 
 /// Declared configurationdefaults output facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareConfigurationdefaultsOutput")]
+#[cfg_attr(
+    feature = "schema",
+    schemars(rename = "FirmwareConfigurationdefaultsOutput")
+)]
 pub struct ConfigurationdefaultsOutput {
     /// Declared address.
     pub address: u64,
@@ -358,9 +386,10 @@ pub struct ConfigurationdefaultsOutput {
 }
 
 /// Declared table facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareTable")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareTable"))]
 pub struct Table {
     /// Declared address.
     pub address: u64,
@@ -377,9 +406,10 @@ pub struct Table {
 }
 
 /// Declared configuration defaults facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareConfigurationDefaults")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareConfigurationDefaults"))]
 pub struct ConfigurationDefaults {
     /// Declared builder entry.
     pub builder_entry: u64,
@@ -406,9 +436,10 @@ pub struct ConfigurationDefaults {
 }
 
 /// Declared descriptors facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareDescriptors")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareDescriptors"))]
 pub struct Descriptors {
     /// Declared address.
     pub address: u64,
@@ -425,9 +456,10 @@ pub struct Descriptors {
 }
 
 /// Declared control bus tables facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareControlBusTables")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareControlBusTables"))]
 pub struct ControlBusTables {
     /// Declared descriptors.
     pub descriptors: Descriptors,
@@ -438,9 +470,10 @@ pub struct ControlBusTables {
 }
 
 /// Declared remapping facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareRemapping")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareRemapping"))]
 pub struct Remapping {
     /// Declared delta.
     pub delta: u64,
@@ -453,9 +486,10 @@ pub struct Remapping {
 }
 
 /// Declared synthetic byte fields facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareSyntheticByteFields")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareSyntheticByteFields"))]
 pub struct SyntheticByteFields {
     /// Declared basis.
     pub basis: String,
@@ -468,9 +502,10 @@ pub struct SyntheticByteFields {
 }
 
 /// Declared synthetic scalar bytes facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareSyntheticScalarBytes")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareSyntheticScalarBytes"))]
 pub struct SyntheticScalarBytes {
     /// Declared basis.
     pub basis: String,
@@ -483,18 +518,20 @@ pub struct SyntheticScalarBytes {
 }
 
 /// Declared synthetic signature facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareSyntheticSignature")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareSyntheticSignature"))]
 pub struct SyntheticSignature {
     /// Declared offset.
     pub offset: u64,
 }
 
 /// Declared cfgdata facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareCfgdata")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareCfgdata"))]
 pub struct Cfgdata {
     /// Declared address.
     pub address: u64,
@@ -520,9 +557,10 @@ pub struct Cfgdata {
 }
 
 /// Declared configuration banks facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareConfigurationBanks")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareConfigurationBanks"))]
 pub struct ConfigurationBanks {
     /// Declared cfg offset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -535,9 +573,10 @@ pub struct ConfigurationBanks {
 }
 
 /// Declared custom defaults facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareCustomDefaults")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareCustomDefaults"))]
 pub struct CustomDefaults {
     /// Declared entry view.
     pub entry_view: String,
@@ -552,9 +591,10 @@ pub struct CustomDefaults {
 }
 
 /// Declared storagelayout geometry facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareStoragelayoutGeometry")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareStoragelayoutGeometry"))]
 pub struct StoragelayoutGeometry {
     /// Declared blocks.
     pub blocks: u64,
@@ -567,9 +607,10 @@ pub struct StoragelayoutGeometry {
 }
 
 /// Declared header facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareHeader")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareHeader"))]
 pub struct Header {
     /// Declared checksum offset.
     pub checksum_offset: u64,
@@ -580,9 +621,10 @@ pub struct Header {
 }
 
 /// Declared default copies facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareDefaultCopies")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareDefaultCopies"))]
 pub struct DefaultCopies {
     /// Declared offset.
     pub offset: u64,
@@ -591,9 +633,10 @@ pub struct DefaultCopies {
 }
 
 /// Declared nondefault edits facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareNondefaultEdits")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareNondefaultEdits"))]
 pub struct NondefaultEdits {
     /// Declared mask.
     pub mask: u64,
@@ -604,9 +647,10 @@ pub struct NondefaultEdits {
 }
 
 /// Declared record facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareRecord")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareRecord"))]
 pub struct Record {
     /// Declared protected bytes.
     pub protected_bytes: u64,
@@ -615,9 +659,10 @@ pub struct Record {
 }
 
 /// Declared record copies facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareRecordCopies")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareRecordCopies"))]
 pub struct RecordCopies {
     /// Declared payload offset.
     pub payload_offset: u64,
@@ -628,9 +673,10 @@ pub struct RecordCopies {
 }
 
 /// Declared journals facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareJournals")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareJournals"))]
 pub struct Journals {
     /// Declared bank rows.
     pub bank_rows: Vec<u64>,
@@ -662,9 +708,10 @@ pub struct Journals {
 }
 
 /// Declared managed facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareManaged")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareManaged"))]
 pub struct Managed {
     /// Declared banks view.
     pub banks_view: String,
@@ -675,9 +722,10 @@ pub struct Managed {
 }
 
 /// Declared raw records facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareRawRecords")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareRawRecords"))]
 pub struct RawRecords {
     /// Declared bank rows.
     pub bank_rows: Vec<u64>,
@@ -696,9 +744,10 @@ pub struct RawRecords {
 }
 
 /// Declared storagelayout record facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareStoragelayoutRecord")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareStoragelayoutRecord"))]
 pub struct StoragelayoutRecord {
     /// Declared empty fill.
     pub empty_fill: u64,
@@ -713,9 +762,10 @@ pub struct StoragelayoutRecord {
 }
 
 /// Declared storage layout facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwareStorageLayout")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareStorageLayout"))]
 pub struct StorageLayout {
     /// Declared cfgdata.
     pub cfgdata: Cfgdata,
@@ -749,7 +799,8 @@ pub struct StorageLayout {
 }
 
 /// Located firmware layouts grouped by stable profile and view identity.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct FirmwareLayouts {
     /// Boot and device layout profiles for this firmware.
@@ -759,14 +810,15 @@ pub struct FirmwareLayouts {
 }
 
 /// Closed layout families retained by the firmware catalog.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(
     tag = "kind",
     content = "data",
     rename_all = "snake_case",
     deny_unknown_fields
 )]
-#[schemars(rename = "FirmwareFirmwareView")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareFirmwareView"))]
 pub enum FirmwareView {
     /// Firmware configuration-default builder and its source identities.
     ConfigurationDefaults(ConfigurationDefaults),
@@ -777,9 +829,10 @@ pub enum FirmwareView {
 }
 
 /// Hash-qualified source asset before placement in persistent storage.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "FirmwarePersistentAssetLayout")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwarePersistentAssetLayout"))]
 pub struct PersistentAssetLayout {
     /// Offset of the source window within the supplied file.
     pub file_offset: u64,

@@ -7,6 +7,9 @@ repository.workspace = true
 publish.workspace = true
 description = "Camera workflows composed from fujimod-usb operations: service mode, mod install"
 
+[lib]
+doctest = false
+
 [features]
 service-capture = ["dep:serde", "dep:serde_json"]
 
@@ -16,6 +19,7 @@ fujimod-usb.workspace = true
 thiserror.workspace = true
 serde = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true, optional = true }
+fujimod-workspace-hack.workspace = true
 
 [[example]]
 name = "service_capture_plan"

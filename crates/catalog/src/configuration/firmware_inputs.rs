@@ -1,12 +1,12 @@
 //! Identity checks and declared nonvolatile input construction for a run.
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub const RUN_FIRMWARE_INPUTS_SCHEMA_URI: &str =
     "https://fujimod.com/schemas/emulator-firmware-inputs.generated.schema.json";
 
 /// A caller-supplied recipe with no embedded firmware contents or input paths.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct RunFirmwareInputs {
     #[serde(rename = "$schema")]
@@ -26,19 +26,22 @@ pub struct RunFirmwareInputs {
 }
 
 /// The USB firmware entry points whose immutable bytes qualify the input recipe.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct UsbFirmwareChecks {
     pub usb_irq_wiring: UsbIrqChecks,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct UsbIrqChecks {
     pub views: Vec<RunSourceCheck>,
 }
 
 /// A named and hashed immutable source range; contains no source bytes.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct RunSourceCheck {
     pub name: String,
@@ -47,14 +50,16 @@ pub struct RunSourceCheck {
     pub sha256: String,
     pub sampling: RunSourceSampling,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub enum RunSourceSampling {
     ImmutableSource,
 }
 
 /// A checked synthetic NAND byte input, never a RAM patch.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct NandByteInput {
     pub offset: u64,
@@ -64,7 +69,8 @@ pub struct NandByteInput {
 }
 
 /// Settings requested by name; the firmware's catalog settings layout encodes them.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct RunSettingsInput {
     /// The scene NAND that holds the settings bank.
@@ -72,7 +78,8 @@ pub struct RunSettingsInput {
     /// Setting name to value name, such as `debug: on`.
     pub requested: std::collections::BTreeMap<String, String>,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum UsbManifestSelection {
     Exr2 { node: String },
@@ -134,7 +141,8 @@ mod tests {
 }
 
 /// Caller-owned locations for optional factory inputs, kept outside run policy.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct RunFactoryInputs {
     #[serde(rename = "$schema")]

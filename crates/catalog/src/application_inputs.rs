@@ -1,6 +1,5 @@
 //! Closed external inputs and scenes for application-profile camera runs.
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -16,9 +15,10 @@ fn ids<'a>(values: impl IntoIterator<Item = &'a str>) -> Result<(), String> {
 }
 
 /// Explicit application-profile input state, separate from reference hardware.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -209,9 +209,10 @@ impl ApplicationRunInputs {
 }
 
 /// External values supplied to one application-profile SoC block.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -255,9 +256,10 @@ impl ApplicationBlockInput {
 }
 
 /// One explicitly initialized GPIO output word.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -271,7 +273,8 @@ pub struct GpioOutputWord {
 }
 
 /// Source of the nonvolatile backing supplied by a run.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
     feature = "typescript",
@@ -284,9 +287,10 @@ pub enum ApplicationFlashSource {
 }
 
 /// An explicit byte overlay on the run's supplied flash backing.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -300,9 +304,10 @@ pub struct FlashSeed {
 }
 
 /// Initial values supplied to one installed serial endpoint.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -345,9 +350,10 @@ impl ApplicationPartInput {
 }
 
 /// One initial word-sized endpoint register.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -361,9 +367,10 @@ pub struct RegisterWord {
 }
 
 /// Explicit functional timing supplied to named blocks or parts.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -396,7 +403,8 @@ pub enum ApplicationTiming {
 }
 
 /// Device operation to which a run's functional delay applies.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
     feature = "typescript",
@@ -421,9 +429,10 @@ pub enum TimingOperation {
 }
 
 /// External frame and statistics inputs for an application-profile run.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -499,9 +508,10 @@ impl ApplicationRunScene {
 }
 
 /// Uniform image data supplied to command-driven imaging work.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -515,9 +525,10 @@ pub struct ApplicationCommandImageInput {
 }
 
 /// A periodic external frame source for one or more declared blocks.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -537,9 +548,10 @@ pub struct ApplicationFrameInput {
 }
 
 /// A uniform statistics scene supplied to one imaging block.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),

@@ -12,7 +12,7 @@ fn main() {
         println!("cargo:rerun-if-env-changed=CAMERA_UNICORN_STATIC_DIR");
         return;
     }
-    let source = PathBuf::from("vendor/unicorn");
+    let source = PathBuf::from("../vendor/unicorn");
     if !source.join("CMakeLists.txt").is_file() {
         panic!("the pinned Unicorn source submodule is not initialized");
     }
@@ -54,9 +54,5 @@ fn main() {
         println!("cargo:rustc-link-lib=m");
         println!("cargo:rustc-link-lib=pthread");
     }
-    println!("cargo:rerun-if-changed=vendor/unicorn");
-    println!("cargo:rerun-if-changed=vendor/unicorn/CMakeLists.txt");
-    println!("cargo:rerun-if-changed=vendor/unicorn/cmake");
-    println!("cargo:rerun-if-changed=vendor/unicorn/include");
-    println!("cargo:rerun-if-changed=vendor/unicorn/qemu");
+    println!("cargo:rerun-if-changed=../vendor/unicorn");
 }

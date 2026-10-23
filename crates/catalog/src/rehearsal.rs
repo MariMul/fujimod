@@ -1,18 +1,19 @@
 //! Qualified emulator rehearsal facts supplied explicitly by callers.
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// An explicitly empty device-reference set.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "RehearsalEmpty")]
+#[cfg_attr(feature = "schema", schemars(rename = "RehearsalEmpty"))]
 pub struct Empty {}
 
 /// Declared capture facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "RehearsalCapture")]
+#[cfg_attr(feature = "schema", schemars(rename = "RehearsalCapture"))]
 pub struct Capture {
     /// Declared address.
     pub address: u64,
@@ -25,9 +26,10 @@ pub struct Capture {
 }
 
 /// Declared configuration facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "RehearsalConfiguration")]
+#[cfg_attr(feature = "schema", schemars(rename = "RehearsalConfiguration"))]
 pub struct Configuration {
     /// Declared address.
     pub address: u64,
@@ -44,9 +46,10 @@ pub struct Configuration {
 }
 
 /// Declared callback table facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "RehearsalCallbackTable")]
+#[cfg_attr(feature = "schema", schemars(rename = "RehearsalCallbackTable"))]
 pub struct CallbackTable {
     /// Declared address.
     pub address: u64,
@@ -57,9 +60,10 @@ pub struct CallbackTable {
 }
 
 /// Declared code checks facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "RehearsalCodeChecks")]
+#[cfg_attr(feature = "schema", schemars(rename = "RehearsalCodeChecks"))]
 pub struct CodeChecks {
     /// Declared address.
     pub address: u64,
@@ -72,9 +76,10 @@ pub struct CodeChecks {
 }
 
 /// Declared manifest facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "RehearsalManifest")]
+#[cfg_attr(feature = "schema", schemars(rename = "RehearsalManifest"))]
 pub struct Manifest {
     /// Declared path.
     pub path: String,
@@ -83,9 +88,10 @@ pub struct Manifest {
 }
 
 /// Declared output state facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "RehearsalOutputState")]
+#[cfg_attr(feature = "schema", schemars(rename = "RehearsalOutputState"))]
 pub struct OutputState {
     /// Declared address.
     pub address: u64,
@@ -96,9 +102,10 @@ pub struct OutputState {
 }
 
 /// Declared payloads facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "RehearsalPayloads")]
+#[cfg_attr(feature = "schema", schemars(rename = "RehearsalPayloads"))]
 pub struct Payloads {
     /// Declared address.
     pub address: u64,
@@ -114,9 +121,10 @@ pub struct Payloads {
 }
 
 /// Declared pointer context facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "RehearsalPointerContext")]
+#[cfg_attr(feature = "schema", schemars(rename = "RehearsalPointerContext"))]
 pub struct PointerContext {
     /// Declared address.
     pub address: u64,
@@ -129,9 +137,10 @@ pub struct PointerContext {
 }
 
 /// Declared quiet facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "RehearsalQuiet")]
+#[cfg_attr(feature = "schema", schemars(rename = "RehearsalQuiet"))]
 pub struct Quiet {
     /// Declared address.
     pub address: u64,
@@ -144,9 +153,10 @@ pub struct Quiet {
 }
 
 /// Declared region precondition facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "RehearsalRegionPrecondition")]
+#[cfg_attr(feature = "schema", schemars(rename = "RehearsalRegionPrecondition"))]
 pub struct RegionPrecondition {
     /// Declared basis.
     pub basis: String,
@@ -157,9 +167,10 @@ pub struct RegionPrecondition {
 }
 
 /// Declared state words facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "RehearsalStateWords")]
+#[cfg_attr(feature = "schema", schemars(rename = "RehearsalStateWords"))]
 pub struct StateWords {
     /// Declared address.
     pub address: u64,
@@ -175,9 +186,10 @@ pub struct StateWords {
 }
 
 /// Declared guard facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "RehearsalGuard")]
+#[cfg_attr(feature = "schema", schemars(rename = "RehearsalGuard"))]
 pub struct Guard {
     /// Declared address.
     pub address: u64,
@@ -206,9 +218,10 @@ pub struct Guard {
 }
 
 /// Declared identity facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "RehearsalIdentity")]
+#[cfg_attr(feature = "schema", schemars(rename = "RehearsalIdentity"))]
 pub struct Identity {
     /// Declared internal versions.
     pub internal_versions: Vec<String>,
@@ -219,9 +232,10 @@ pub struct Identity {
 }
 
 /// Declared review facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(rename = "RehearsalReview")]
+#[cfg_attr(feature = "schema", schemars(rename = "RehearsalReview"))]
 pub struct Review {
     /// Declared evidence.
     pub evidence: Vec<String>,
@@ -232,7 +246,8 @@ pub struct Review {
 }
 
 /// Declared rehearsal facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Rehearsal {
     /// Document version.

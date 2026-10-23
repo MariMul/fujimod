@@ -4,7 +4,6 @@ pub mod arm32;
 pub mod arm64;
 use super::{Board, scalar};
 use fujimod_emulator_cpu::{Access, Cpu, Hook, HookId, HookRange, Register, arm};
-#[cfg(feature = "serde")]
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
@@ -15,17 +14,15 @@ use std::{
 };
 
 type Span = (u64, u64);
-#[derive(serde::Serialize)]
-#[cfg_attr(feature = "serde", derive(Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(serde::Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Alias {
     pub address: u64,
     pub physical: u64,
     pub size: u64,
 }
-#[derive(serde::Serialize)]
-#[cfg_attr(feature = "serde", derive(Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(serde::Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Memory {
     pub aliases: Vec<Alias>,
     /// Select store starts. Architectural CPU/bus checks still validate the
@@ -70,8 +67,8 @@ impl Memory {
             .map_or(address, |alias| alias.physical + address - alias.address)
     }
 }
-#[cfg_attr(feature = "serde", derive(Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Options {
     pub core: usize,
     pub inject_interrupts: bool,

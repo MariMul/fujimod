@@ -9,8 +9,8 @@ pub enum Engine {
     Unicorn,
     Hypervisor,
 }
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Processor {
     pub model: Model,
     pub registers: Vec<(Register, u64)>,
@@ -18,14 +18,14 @@ pub struct Processor {
     pub mprofile: Option<super::mprofile::Config>,
     pub rprofile: Option<fujimod_emulator_cpu_unicorn::rprofile::core::Options>,
 }
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Ram {
     pub base: u64,
     pub size: usize,
 }
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MemoryMap {
     pub core: usize,
@@ -34,16 +34,16 @@ pub struct MemoryMap {
     pub size: usize,
     pub permissions: u32,
 }
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Peripheral {
     pub core: usize,
     pub address: u64,
     pub physical: u64,
     pub size: usize,
 }
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Graph {
     pub processors: Vec<Processor>,
     pub ram: Vec<Ram>,

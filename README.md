@@ -39,6 +39,15 @@ cargo test --workspace --all-features
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
 
+Every member depends on `fujimod-workspace-hack`, which
+[cargo-hakari](https://docs.rs/cargo-hakari) generates so that any package
+selection builds third-party crates with the same features and reuses one
+compiled copy. After adding or changing a dependency, run `mise run rust-hack`
+(install the tool with `cargo install cargo-hakari --version 0.9.39 --locked`);
+CI fails when the crate is out of date. `fujimod-unicorn-sys` compiles the
+Unicorn C archive with no features, so every feature set, test and binary of
+the CPU backend shares one archive per profile.
+
 The core also builds for WebUSB. See the USB crate's
 [Wasm checks](crates/usb/README.md#wasm-core-checks) for the JS-runtime tests;
 the [JavaScript package](bindings/javascript/README.md) provides typed browser

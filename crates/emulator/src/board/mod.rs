@@ -25,7 +25,7 @@ mod schedule;
 mod schedule_tests;
 #[cfg(test)]
 mod tests;
-#[cfg(all(test, feature = "serde"))]
+#[cfg(test)]
 mod workers_tests;
 pub mod xp4;
 use bus::Bus;

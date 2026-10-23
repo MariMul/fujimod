@@ -6,7 +6,9 @@ use std::path::PathBuf;
 fn main() {
     let mode = env::args().nth(1).unwrap_or_else(|| "--check".into());
     if mode != "--check" && mode != "--write" {
-        eprintln!("usage: cargo run -p fujimod-catalog --bin catalog-schemas -- [--check|--write]");
+        eprintln!(
+            "usage: cargo run -p fujimod-catalog --features schema --bin catalog-schemas -- [--check|--write]"
+        );
         std::process::exit(2);
     }
     let package = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("package directory"));

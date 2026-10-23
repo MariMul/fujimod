@@ -5,7 +5,6 @@
 //! do not own hardware maps, reference-document paths, firmware bytes, or
 //! caller input paths.
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -26,9 +25,10 @@ pub const RUN_OVERLAY_SCHEMA_URI: &str =
 include!(concat!(env!("OUT_DIR"), "/bundled_configurations.rs"));
 
 /// A validated, named run configuration for one resolved body and firmware.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -67,7 +67,7 @@ pub struct RunConfiguration {
     pub overlays: Vec<String>,
     /// Browser camera attachments declared by a selected overlay.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[schemars(default)]
+    #[cfg_attr(feature = "schema", schemars(default))]
     #[cfg_attr(feature = "typescript", tsify(type = "RunBrowserCamera | null"))]
     pub browser_camera: Option<RunBrowserCamera>,
     /// Explicit device policy and startup selections for this run.
@@ -445,9 +445,10 @@ impl RunConfiguration {
 }
 
 /// A run configuration and the hardware and firmware identities it resolves.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -636,9 +637,10 @@ impl ResolvedConfiguration {
 }
 
 /// A supported firmware start entry.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -654,7 +656,8 @@ pub enum RunStart {
 }
 
 /// Intended operation selected by a run configuration.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
     feature = "typescript",
@@ -675,9 +678,10 @@ pub enum RunPurpose {
 }
 
 /// Closed instruction-derived timebase ratio for a run.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -704,9 +708,10 @@ impl RunInstructionRate {
 }
 
 /// Model-specific synthetic startup inputs applied to resolved hardware.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -732,9 +737,10 @@ impl RunInputs {
 }
 
 /// Synthetic EXR2 startup inputs applied to resolved blocks and parts.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -847,9 +853,10 @@ impl Exr2RunInputs {
 }
 
 /// Policy for navigating and accepting stock first-start setup.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -880,9 +887,10 @@ impl RunFirstStart {
 }
 
 /// GPIO input block and semantic external states for the base run.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -903,9 +911,10 @@ pub struct RunGpioInputs {
 }
 
 /// Initial output-latch value for one GPIO signal in a body connection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -921,9 +930,10 @@ pub struct RunGpioOutputState {
 }
 
 /// Initial state of a physical key or body control connection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -937,9 +947,10 @@ pub struct RunKeyState {
 }
 
 /// Initial phase for a body-backed quadrature encoder.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -953,9 +964,10 @@ pub struct RunEncoderInput {
 }
 
 /// Initial state of a physical body connection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -969,9 +981,10 @@ pub struct RunConnectionState {
 }
 
 /// ADC block and reset sample vector.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -985,9 +998,10 @@ pub struct RunAdcInputs {
 }
 
 /// Power-controller reset values.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1005,9 +1019,10 @@ pub struct RunPowerInput {
 }
 
 /// MCU packet, serial clock and RTC start state.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1023,9 +1038,10 @@ pub struct RunMcuInput {
 }
 
 /// RTC values supplied at the start of a run.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1052,9 +1068,10 @@ impl RunRtcInput {
 }
 
 /// Initial serial-register values for one resolved physical part.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1068,9 +1085,10 @@ pub struct RunSerialRegisters {
 }
 
 /// One synthetic external serial register value.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1094,9 +1112,10 @@ fn validate_register_values(values: &[RunRegisterValue]) -> Result<(), String> {
 }
 
 /// Initial USB cable state.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1110,9 +1129,10 @@ pub struct RunUsbInput {
 }
 
 /// Initial removable-card state.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1128,9 +1148,10 @@ pub struct RunCardInput {
 }
 
 /// Browser camera attachments: a virtual card, still-capture policy and LCD preview cadence.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1157,9 +1178,10 @@ impl RunBrowserCamera {
 }
 
 /// The browser's external scene input for the image sensor.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1180,9 +1202,10 @@ impl RunBrowserSensor {
 }
 
 /// A virtual FAT card geometry declared for one browser camera.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1214,7 +1237,8 @@ impl RunVirtualCard {
 }
 
 /// Card filesystems a virtual card can declare.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "lowercase", deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -1227,7 +1251,8 @@ pub enum RunCardFilesystem {
 }
 
 /// Still-capture policy identities a browser camera can select.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -1240,9 +1265,10 @@ pub enum RunStillCapture {
 }
 
 /// LCD preview statistics cadence, in frames.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1278,9 +1304,10 @@ impl RunPreview {
 }
 
 /// A named, typed change to one run configuration.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1344,9 +1371,10 @@ impl RunOverlay {
 }
 
 /// The closed set of changes supported by run overlays.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1368,9 +1396,10 @@ pub enum RunOverlayChange {
 }
 
 /// Startup policy and synthetic external inputs selected together.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1523,7 +1552,8 @@ impl RunPreset {
 }
 
 /// Named device observed by a firmware readiness monitor.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     feature = "typescript",
@@ -1536,9 +1566,10 @@ pub struct RunObserver {
 }
 
 /// A declared electrical startup input.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1552,7 +1583,8 @@ pub struct RunPadLevel {
 }
 
 /// Execution eligibility carried by a run selection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
 pub enum RunExecutionScope {
     #[serde(rename = "emulator-only")]
@@ -1564,9 +1596,10 @@ pub enum RunExecutionScope {
 }
 
 /// Execution policy selected by the run configuration.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1584,7 +1617,8 @@ pub struct RunExecution {
 }
 
 /// A supported run execution mode.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
     feature = "typescript",
@@ -1597,7 +1631,8 @@ pub enum RunExecutionMode {
 }
 
 /// A supported processor execution backend.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
     feature = "typescript",
@@ -1612,9 +1647,10 @@ pub enum RunEngine {
 }
 
 /// Model-specific scene inputs and the devices that consume them.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1651,9 +1687,10 @@ impl RunScene {
 }
 
 /// Generated scene assets and the devices that consume them on EXR2 bodies.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1721,9 +1758,10 @@ impl Exr2RunScene {
 }
 
 /// A generated run-scene input asset.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1753,9 +1791,10 @@ impl GeneratedSceneAsset {
 }
 
 /// The named image sources used by the run scene.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1767,9 +1806,10 @@ pub struct RunImages {
 }
 
 /// A live-view image source and its raster layout.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1787,9 +1827,10 @@ pub struct RunImage {
 }
 
 /// The named statistics sources used by the run scene.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),
@@ -1801,9 +1842,10 @@ pub struct RunStatistics {
 }
 
 /// One statistics asset span.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     feature = "typescript",
     derive(tsify::Tsify),

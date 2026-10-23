@@ -5,8 +5,7 @@ use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_devices::{parts::touch_controller::ContactInput, scene::StatisticsCadence};
 use std::{collections::VecDeque, sync::Arc};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Boundary {
     pub tick: u64,
     pub instructions: Vec<u64>,
@@ -19,12 +18,8 @@ impl Boundary {
         }
     }
 }
-#[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(
-    feature = "serde",
-    serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)
-)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Input {
     Run {
         instructions: u64,
@@ -222,8 +217,7 @@ impl Input {
         }
     }
 }
-#[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Entry {
     pub before: Boundary,
     pub input: Input,

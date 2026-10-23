@@ -1,15 +1,16 @@
 # Unicorn CPU backend
 
-This crate builds the pinned Unicorn source as a static ARM archive during
-Cargo builds and links the archive into each executable or extension. There is
-no runtime Unicorn library selection. Initialize the source submodule once in a
-fresh checkout:
+Its `sys/` crate, `fujimod-unicorn-sys`, builds the pinned Unicorn source as a
+static ARM archive during Cargo builds and links the archive into each
+executable or extension. It has no features, so the archive is compiled once
+per profile. There is no runtime Unicorn library selection. Initialize the
+source submodule once in a fresh checkout:
 
 ```sh
 git submodule update --init -- crates/emulator-cpu-unicorn/vendor/unicorn
 ```
 
-The crate's build script configures CMake and builds the archive automatically.
+The sys crate's build script configures CMake and builds the archive automatically.
 The build requires CMake 3.24 or newer and a native C compiler. Configuration
 starts with a fresh CMake cache so compiler changes cannot discard the ARM-only
 selection. The build refuses a cache that selects other guest architectures.

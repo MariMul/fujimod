@@ -32,9 +32,8 @@ mod tcm_tests;
 #[cfg(test)]
 mod tests;
 
-#[derive(Clone, Copy, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(Clone, Copy, Default, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Options {
     pub cp14_identity: u32,
     pub tcm: super::tcm::Options,
