@@ -20,6 +20,7 @@ mod backend;
 mod exclusive;
 mod loops;
 mod mapping;
+mod observers;
 mod pmu;
 mod run;
 mod snapshot;
@@ -97,8 +98,7 @@ pub(super) struct Execution {
     observers: RefCell<BTreeMap<usize, Observer>>,
     pending_stores: RefCell<Vec<StorePublication>>,
     next_observer: Cell<usize>,
-    instruction_observers: Cell<usize>,
-    block_observers: Cell<usize>,
+    observer_index: RefCell<observers::Index>,
     at_block: Cell<bool>,
     at_instruction: Cell<bool>,
 }
@@ -200,8 +200,7 @@ impl Core {
             observers: RefCell::new(BTreeMap::new()),
             pending_stores: RefCell::new(Vec::new()),
             next_observer: Cell::new(0),
-            instruction_observers: Cell::new(0),
-            block_observers: Cell::new(0),
+            observer_index: RefCell::new(observers::Index::default()),
             at_block: Cell::new(false),
             at_instruction: Cell::new(false),
         });
@@ -218,6 +217,9 @@ impl Core {
         let data = Rc::as_ptr(&e).cast_mut().cast();
         // Core owns all callback lifetimes. No callback can retain a mutable
         // state borrow while calling into a device or a user observer.
+        // These hooks implement architectural entry, accounting and coherence.
+        // Passive instruction/block/store observers reuse them; the translation
+        // and watched-page filters keep unrelated guest accesses in native code.
         unsafe {
             e.cpu.translation_hooks(Some(TranslationHooks {
                 classify,
@@ -440,10 +442,11 @@ impl Execution {
             return Ok(());
         }
         let callbacks: Vec<_> = self
-            .observers
+            .observer_index
             .borrow()
-            .values()
-            .filter_map(|observer| match observer.hook {
+            .synchronization
+            .iter()
+            .filter_map(|(_, hook)| match *hook {
                 Hook::Synchronization { callback, data } => Some((callback, data)),
                 _ => None,
             })
@@ -456,17 +459,20 @@ impl Execution {
     fn classify(&self, address: u64, word: u32) -> Result<Translation, String> {
         let watch = self.memory.note_code(self.id.get(), address, 4)?;
         Ok(Translation {
-            instruction: if self.instruction_observers.get() != 0
-                && self.observers.borrow().values().any(|observer| {
-                    matches!(observer.hook, Hook::Instruction { range, .. } if includes(range, address))
-                })
-                || special(word) || self.loop_candidate(address, word)
+            instruction: if !self
+                .observer_index
+                .borrow()
+                .instructions
+                .at(address)
+                .is_empty()
+                || special(word)
+                || self.loop_candidate(address, word)
             {
                 InstructionDisposition::ObserveAndEndBlock
             } else {
                 InstructionDisposition::Execute
             },
-            observe_block: watch || self.block_observers.get() != 0,
+            observe_block: watch || !self.observer_index.borrow().blocks.at(address).is_empty(),
         })
     }
     fn block(&self, block: Block) -> Result<(), String> {
@@ -485,14 +491,8 @@ impl Execution {
     fn publish_stores(&self) -> Result<(), String> {
         let stores = std::mem::take(&mut *self.pending_stores.borrow_mut());
         for store in stores {
-            for observer in self.observers.borrow().values() {
-                if let Hook::CompletedStore {
-                    callback,
-                    data,
-                    range,
-                } = observer.hook
-                    && includes(range, store.address)
-                {
+            for (_, hook) in self.observer_index.borrow().stores.at(store.address) {
+                if let Hook::CompletedStore { callback, data, .. } = *hook {
                     unsafe { callback(store.access, store.address, store.size, store.value, data) };
                 }
             }
@@ -511,14 +511,8 @@ impl Execution {
             self.reset_budget();
             return self.cpu.stop();
         }
-        for observer in self.observers.borrow().values() {
-            if let Hook::Block {
-                callback,
-                data,
-                range,
-            } = observer.hook
-                && includes(range, block.address)
-            {
+        for (_, hook) in self.observer_index.borrow().blocks.at(block.address) {
+            if let Hook::Block { callback, data, .. } = *hook {
                 unsafe {
                     callback(block, data);
                 }
@@ -595,14 +589,8 @@ impl Execution {
         result
     }
     fn execute_observed(&self, address: u64, size: u32) -> Result<(), String> {
-        for observer in self.observers.borrow().values() {
-            if let Hook::Instruction {
-                callback,
-                data,
-                range,
-            } = observer.hook
-                && includes(range, address)
-            {
+        for (_, hook) in self.observer_index.borrow().instructions.at(address) {
+            if let Hook::Instruction { callback, data, .. } = *hook {
                 unsafe {
                     callback(address, size, data);
                 }
@@ -769,12 +757,6 @@ impl Execution {
         Ok(())
     }
 }
-fn includes(range: HookRange, address: u64) -> bool {
-    match range {
-        HookRange::All => true,
-        HookRange::Inclusive { begin, end } => (begin..=end).contains(&address),
-    }
-}
 fn atomic(word: u32) -> bool {
     word & 0x0f90_0fff == 0x0190_0f9f || word & 0x0f90_0ff0 == 0x0180_0f90 || word == 0xf57f_f01f
 }
@@ -867,9 +849,7 @@ unsafe fn store(access: Access, address: u64, size: i32, value: i64, data: *mut 
         if e.memory.guest_store(e.id.get(), address, size as usize)? {
             e.cpu.request_restart()?;
         }
-        if e.observers.borrow().values().any(|observer| {
-            matches!(observer.hook, Hook::CompletedStore { range, .. } if includes(range, address))
-        }) {
+        if !e.observer_index.borrow().stores.at(address).is_empty() {
             e.pending_stores.borrow_mut().push(StorePublication {
                 access,
                 address,

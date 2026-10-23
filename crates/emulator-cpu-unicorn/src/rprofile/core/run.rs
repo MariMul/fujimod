@@ -74,8 +74,8 @@ impl Core {
 
 impl Execution {
     pub(super) fn observe_exception(&self, exception: arm::Exception) {
-        for observer in self.observers.borrow().values() {
-            if let Hook::Exception { callback, data } = observer.hook {
+        for (_, hook) in &self.observer_index.borrow().exceptions {
+            if let Hook::Exception { callback, data } = *hook {
                 unsafe {
                     callback(exception, data);
                 }

@@ -480,13 +480,10 @@ impl Cpu for Core {
         let native = match hook {
             Hook::Instruction { .. } => {
                 e.cpu.invalidate_code(None)?;
-                e.instruction_observers
-                    .set(e.instruction_observers.get() + 1);
                 None
             }
             Hook::Block { .. } => {
                 e.cpu.invalidate_code(None)?;
-                e.block_observers.set(e.block_observers.get() + 1);
                 None
             }
             // Observe only after backend-owned architectural entry. The
@@ -516,6 +513,7 @@ impl Cpu for Core {
         e.observers
             .borrow_mut()
             .insert(key, Observer { hook, native });
+        e.observer_index.borrow_mut().insert(key, hook);
         e.next_observer.set(next);
         Ok(HookId {
             owner: self.identity(),
@@ -532,12 +530,9 @@ impl Cpu for Core {
         match observer.hook {
             Hook::Instruction { .. } => {
                 e.cpu.invalidate_code(None)?;
-                e.instruction_observers
-                    .set(e.instruction_observers.get() - 1);
             }
             Hook::Block { .. } => {
                 e.cpu.invalidate_code(None)?;
-                e.block_observers.set(e.block_observers.get() - 1);
             }
             Hook::Exception { .. } => (),
             _ => {
@@ -546,6 +541,9 @@ impl Cpu for Core {
                 }
             }
         }
+        e.observer_index
+            .borrow_mut()
+            .remove(hook.key, observer.hook);
         drop(observers);
         e.observers.borrow_mut().remove(&hook.key);
         Ok(())

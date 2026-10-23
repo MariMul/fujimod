@@ -136,15 +136,13 @@ impl Execution {
                 if load {
                     // Software LDREX is a guest read, just like a backend
                     // load. Host/DMA inspection never enters these hooks.
-                    for observer in self.observers.borrow().values() {
+                    for (_, hook) in self.observer_index.borrow().reads.at(target) {
                         if let Hook::Memory {
                             callback,
                             data,
                             read: true,
-                            range,
                             ..
-                        } = observer.hook
-                            && includes(range, target)
+                        } = *hook
                         {
                             unsafe {
                                 callback(Access::Read, target, 4, 0, data);
@@ -182,15 +180,13 @@ impl Execution {
                         // Successful software exclusives pass through the same explicit
                         // memory observers as native guest stores. No failed STREX store
                         // is reported. Observers may stop before a declared store bound.
-                        for observer in self.observers.borrow().values() {
+                        for (_, hook) in self.observer_index.borrow().writes.at(target) {
                             if let Hook::Memory {
                                 callback,
                                 data,
                                 write: true,
-                                range,
                                 ..
-                            } = observer.hook
-                                && includes(range, target)
+                            } = *hook
                             {
                                 unsafe {
                                     callback(Access::Write, target, 4, value as i64, data);
