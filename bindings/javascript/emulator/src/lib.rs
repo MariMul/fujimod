@@ -269,21 +269,11 @@ impl Camera {
         self.with(|s| s.input(key, pressed, at))
     }
     pub fn status(&self) -> Status {
-        let s = &self.session;
-        Status {
-            ticks: s.core.board.now(),
-            instructions: s.core.board.instruction_counts().iter().sum(),
-            failed: s.failed,
-        }
+        self.session.status()
     }
     /// The latest presented frame of `output`, or `undefined` before the first.
     pub fn frame(&mut self, output: usize) -> Result<Option<Frame>, Failure> {
-        self.with(|s| {
-            s.observe_frame(output)?;
-            Ok(s.frames.get(&output).map(|frame| Frame {
-                frame: frame.clone(),
-            }))
-        })
+        self.with(|s| Ok(s.frame(output)?.map(|frame| Frame { frame })))
     }
     /// Show RGB888 pixels, tightly packed and top row first, as the scene.
     #[wasm_bindgen(js_name = setScene)]

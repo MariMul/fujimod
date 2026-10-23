@@ -24,13 +24,13 @@ pub struct Options {
 }
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
 pub enum CardEntryKind {
     File,
     Directory,
 }
 #[derive(Clone, Debug, Serialize)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
 pub struct CardEntry {
     pub name: String,
     pub path: String,

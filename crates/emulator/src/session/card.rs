@@ -7,7 +7,7 @@ use fujimod_emulator_storage::fat;
 
 /// SD card contacts and host controller state.
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
 pub struct CardState {
     pub supported: bool,
     pub present: bool,
@@ -35,7 +35,7 @@ impl CardState {
 }
 /// Card state with the FAT tree of one revision.
 #[derive(Clone, Debug, serde::Serialize)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
 pub struct CardTree {
     #[serde(flatten)]
     pub state: CardState,

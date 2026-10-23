@@ -4,7 +4,19 @@ use fujimod_emulator_devices::graphics::scanout::Frame;
 use std::sync::Arc;
 
 impl Session {
-    pub(super) fn observe_frame(&mut self, output: usize) -> Result<(), String> {
+    pub fn status(&self) -> super::Status {
+        super::Status {
+            ticks: self.core.board.now(),
+            instructions: self.core.board.instruction_counts().iter().sum(),
+            failed: self.failed,
+        }
+    }
+    /// The latest presented frame of `output`, or `None` before the first.
+    pub fn frame(&mut self, output: usize) -> Result<Option<Arc<Frame>>, String> {
+        self.observe_frame(output)?;
+        Ok(self.frames.get(&output).cloned())
+    }
+    fn observe_frame(&mut self, output: usize) -> Result<(), String> {
         if !self.powered_on {
             return Ok(());
         }

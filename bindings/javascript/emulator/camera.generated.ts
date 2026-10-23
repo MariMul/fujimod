@@ -465,6 +465,10 @@ export interface ModuleOptions {
 export interface Preview {
     ticksPerSecond: string;
     frames: number;
+    /**
+     * The preview clock's complete saved device state.
+     */
+    state: Record<string, unknown>;
 }
 
 export interface Profile {

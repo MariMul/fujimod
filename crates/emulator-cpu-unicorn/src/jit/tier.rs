@@ -11,7 +11,7 @@ use std::{
 
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "camelCase")]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
 pub struct JitOptions {
     pub threshold: u32,
     pub batch_size: usize,
@@ -62,7 +62,7 @@ pub trait Host {
 }
 #[derive(Clone, Default, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
 pub struct Stats {
     pub offered: u64,
     pub compiled: u64,
@@ -84,7 +84,7 @@ pub struct Stats {
 /// Browser tier counters published to the host.
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
 pub struct Statistics {
     #[cfg_attr(feature = "typescript", tsify(type = "true"))]
     pub enabled: bool,

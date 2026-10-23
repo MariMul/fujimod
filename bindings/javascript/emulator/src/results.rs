@@ -92,6 +92,9 @@ pub struct Fingerprint {
 pub struct Preview {
     pub ticks_per_second: String,
     pub frames: u64,
+    /// The preview clock's complete saved device state.
+    #[tsify(type = "Record<string, unknown>")]
+    pub state: serde_json::Value,
 }
 #[derive(Serialize, Tsify)]
 #[tsify(hashmap_as_object, missing_as_null)]

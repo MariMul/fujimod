@@ -224,11 +224,11 @@ export function testCameraModule(shared = false) {
     }
     preview() {
       record('preview');
-      return { ticksPerSecond: '12000000', frames: Number(ticks / 1200000n) };
+      return { ticksPerSecond: '12000000', frames: Number(ticks / 1200000n), state: {} };
     }
     previewState() {
       record('preview_state');
-      return { ticksPerSecond: '12000000', frames: Number(ticks / 1200000n) };
+      return { ticksPerSecond: '12000000', frames: Number(ticks / 1200000n), state: {} };
     }
     checkpoint() {
       record('checkpoint');

@@ -22,7 +22,7 @@ pub struct Pose {
 /// One host-visible control in the session's input catalog.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
 pub struct ControlInput {
     pub id: String,
     pub label: String,
@@ -55,14 +55,14 @@ pub struct ControlInput {
 }
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
 pub struct ControlChoice {
     pub id: String,
     pub label: String,
 }
 /// Host input queue progress.
 #[derive(Clone, Debug, serde::Serialize)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
 pub struct QueueState {
     pub pending: usize,
     pub active: Option<ActiveTransition>,
@@ -71,7 +71,7 @@ pub struct QueueState {
     pub completed: u64,
 }
 #[derive(Clone, Debug, serde::Serialize)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(missing_as_null))]
+#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
 pub struct ActiveTransition {
     pub id: String,
     pub position: String,

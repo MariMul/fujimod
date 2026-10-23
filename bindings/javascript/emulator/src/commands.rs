@@ -182,6 +182,7 @@ impl Session {
             frames: state["frames"]
                 .as_u64()
                 .ok_or("preview state has no frame count")?,
+            state,
         })
     }
     pub fn device_workers(&mut self, count: Option<usize>) -> Result<DeviceWorkers, String> {
