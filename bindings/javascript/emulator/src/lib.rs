@@ -229,18 +229,13 @@ impl Camera {
         if boot_rom.is_empty() {
             return Err(Failure::host("prepared session requires a boot ROM"));
         }
-        if camera.is_some_and(|sections| !sections.is_empty()) {
-            return Err(Failure::host(
-                "prepared sessions do not accept camera NAND sections yet",
-            ));
-        }
         Self::new(Session::create_prepared(
             request.as_bytes(),
             update,
             boot_rom,
             nand,
             settings,
-            &[],
+            camera.as_deref().unwrap_or_default(),
             policy()?,
         ))
     }
