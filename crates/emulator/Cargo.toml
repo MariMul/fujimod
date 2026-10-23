@@ -15,6 +15,7 @@ fujimod-emulator-parts-io = { path = "../../crates/emulator-parts-io" }
 fujimod-emulator-parts-controls = { path = "../../crates/emulator-parts-controls" }
 fujimod-emulator-parts-storage = { path = "../../crates/emulator-parts-storage" }
 fujimod-emulator-storage = { path = "../../crates/emulator-storage" }
+fujimod-settings = { path = "../../crates/settings" }
 fujimod-emulator-ip = { path = "../../crates/emulator-ip" }
 fujimod-emulator-ip-dmp = { path = "../../crates/emulator-ip-dmp" }
 fujimod-emulator-ip-arm = { path = "../../crates/emulator-ip-arm" }

@@ -314,6 +314,9 @@ impl Session {
                 settings,
                 clock_seconds_2000: request.clock_seconds2000,
                 preferred_languages: request.preferred_languages,
+                // Camera sections are not part of a browser request; a run
+                // that declares a camera refuses to open without them.
+                camera: BTreeMap::new(),
             },
         )?;
         core.board.set_execution_policy(policy)?;

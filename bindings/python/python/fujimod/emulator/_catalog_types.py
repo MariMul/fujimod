@@ -3784,6 +3784,7 @@ class RunInputsVariant0(TypedDict, total=False):
     mcu: Required[RunMcuInput]
     power: Required[RunPowerInput]
     serial_registers: Required[list[RunSerialRegisters]]
+    settings: NotRequired[RunPowerOnSettings | None]
     usb: Required[RunUsbInput]
 
 
@@ -4230,6 +4231,11 @@ class RunPowerInput(TypedDict, total=False):
     part_id: Required[str]
     powered_on: Required[bool]
     spi_status: Required[list[RunRegisterValue]]
+
+
+class RunPowerOnSettings(TypedDict, total=False):
+    camera: NotRequired[str | None]
+    requested: Required[dict[str, str]]
 
 
 class RunPreset(TypedDict, total=False):

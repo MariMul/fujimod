@@ -766,6 +766,48 @@ pub struct Exr2RunInputs {
     /// Policy for accepting a firmware first-start prompt, when needed.
     #[cfg_attr(feature = "typescript", serde(default))]
     pub first_start: Option<RunFirstStart>,
+    /// The settings the camera starts with. Absent, the flash holds what the
+    /// update installs.
+    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<RunPowerOnSettings>,
+}
+
+/// A camera's settings at power-on: its settings bank, the firmware's default
+/// user settings and the named changes a run requests.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct RunPowerOnSettings {
+    /// The body's camera whose NAND sections the run supplies for the settings
+    /// bank (`catalog/bodies/<body>/cameras/<camera>`). Absent, the bank is
+    /// built from the update's defaults table.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera: Option<String>,
+    /// Requested settings by name and value name, such as `setup: done`.
+    pub requested: BTreeMap<String, String>,
+}
+
+impl RunPowerOnSettings {
+    fn validate(&self) -> Result<(), String> {
+        if let Some(camera) = &self.camera {
+            crate::emulator::validate_id(camera)?;
+        }
+        if self.requested.len() > 64 {
+            return Err("run settings request too many changes".into());
+        }
+        for (name, value) in &self.requested {
+            crate::emulator::validate_id(name)?;
+            crate::emulator::validate_id(value)?;
+        }
+        Ok(())
+    }
 }
 
 impl Exr2RunInputs {
@@ -844,6 +886,9 @@ impl Exr2RunInputs {
         crate::emulator::validate_id(&self.card.connection_id)?;
         if !self.card.present && self.card.write_protected {
             return Err("an absent run card cannot be write protected".into());
+        }
+        if let Some(settings) = &self.settings {
+            settings.validate()?;
         }
         if let Some(first_start) = &self.first_start {
             first_start.validate()?;

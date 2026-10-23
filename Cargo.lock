@@ -3477,6 +3477,7 @@ dependencies = [
  "fujimod-emulator-xp4",
  "fujimod-emulator-xp5",
  "fujimod-recording",
+ "fujimod-settings",
  "fujimod-workspace-hack",
  "libc",
  "serde",

@@ -68,7 +68,13 @@ pub struct Options {
     pub clock_seconds_2000: Option<u32>,
     /// Preferred BCP 47 language tags, in caller order.
     pub preferred_languages: Vec<String>,
+    /// Directory of the camera's zstd-compressed NAND sections
+    /// (`nand-<section>.bin.zst`), for a run whose settings name a camera.
+    pub camera: Option<PathBuf>,
 }
+
+/// Largest compressed camera NAND section accepted from the caller.
+const CAMERA_SECTION_MAX_BYTES: u64 = 16 << 20;
 
 #[derive(Clone)]
 struct Rom {
@@ -712,6 +718,8 @@ pub struct InputBytes {
     pub clock_seconds_2000: Option<u32>,
     /// Preferred BCP 47 language tags, in caller order.
     pub preferred_languages: Vec<String>,
+    /// The camera's zstd-compressed NAND sections by section name.
+    pub camera: BTreeMap<String, Vec<u8>>,
 }
 
 /// Largest NAND input accepted from the caller: a 256 MiB image.
@@ -765,8 +773,37 @@ pub fn open(options: Options) -> Result<Session, String> {
             .transpose()?,
         clock_seconds_2000: options.clock_seconds_2000,
         preferred_languages: options.preferred_languages,
+        camera: options
+            .camera
+            .as_deref()
+            .map(|directory| camera_sections(&prepared, directory))
+            .transpose()?
+            .unwrap_or_default(),
     };
     open_prepared(prepared, inputs)
+}
+
+/// The camera's compressed NAND sections in `directory`: one
+/// `nand-<section>.bin.zst` per section of the firmware's settings layout that
+/// the camera holds. A section the camera leaves empty has no file.
+fn camera_sections(prepared: &Prepared, directory: &Path) -> Result<BTreeMap<String, Vec<u8>>, String> {
+    let layout = prepared
+        .resolved
+        .reference
+        .settings
+        .as_ref()
+        .ok_or("selected firmware has no settings layout")?;
+    let mut sections = BTreeMap::new();
+    for section in &layout.sections {
+        let path = directory.join(format!("nand-{}.bin.zst", section.name));
+        if path.exists() {
+            sections.insert(section.name.clone(), read(&path, CAMERA_SECTION_MAX_BYTES)?);
+        }
+    }
+    if sections.is_empty() {
+        return Err(format!("{} holds no camera NAND sections", directory.display()));
+    }
+    Ok(sections)
 }
 
 /// Construct an unexecuted strict board from a prepared run and byte inputs.
@@ -799,6 +836,7 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
         settings,
         clock_seconds_2000,
         preferred_languages,
+        camera,
     } = inputs;
     session_definition["inputs"]["preferred_languages"] = json!(preferred_languages);
     session_definition["inputs"]["clock_seconds_2000"] = json!(clock_seconds_2000);
@@ -835,6 +873,53 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
     if let Some(packet_bytes) = &settings {
         settings_packet(&mut devices, &prepared.mcu, packet_bytes)?;
     }
+    let declared = match prepared.resolved.configuration.inputs.as_ref() {
+        Some(RunInputs::Exr2(inputs)) => inputs.settings.clone(),
+        _ => None,
+    };
+    let mut header_applied = false;
+    match &declared {
+        Some(declared) => {
+            if nand.is_some() || settings.is_some() {
+                return Err("a run that declares its settings takes no NAND image or settings packet".into());
+            }
+            let layout = prepared
+                .resolved
+                .reference
+                .settings
+                .as_ref()
+                .ok_or("selected firmware has no settings layout")?;
+            match (&declared.camera, camera.is_empty()) {
+                (Some(id), true) => {
+                    return Err(format!("this run boots the body's {id} camera: supply its NAND sections"));
+                }
+                (None, false) => return Err("this run boots no camera, but camera sections were supplied".into()),
+                _ => {}
+            }
+            // The power controller keeps the user profile's header; the
+            // camera's sections only change the settings bank.
+            let built = fujimod_settings::build(layout, &assets["nand_base"], &declared.requested, None)?;
+            if let Some(profile) = built.profile {
+                settings_packet(&mut devices, &prepared.mcu, &profile.header)?;
+                header_applied = true;
+            }
+            let mut names = BTreeMap::new();
+            for (section, bytes) in camera {
+                let name = format!("camera_{section}");
+                if assets.insert(name.clone(), bytes).is_some() {
+                    return Err("camera section asset repeats a run asset".into());
+                }
+                names.insert(section, name);
+            }
+            let nand = &mut scene["nands"]["nand"];
+            *nand = json!({"kind": "settings", "options": nand["options"], "base": "nand_base",
+                "layout": layout, "requested": declared.requested, "camera": names});
+        }
+        None if !camera.is_empty() => {
+            return Err("this run declares no settings, but camera sections were supplied".into());
+        }
+        None => {}
+    }
     if let Some(bytes) = nand {
         let nand = &mut scene["nands"]["nand"];
         let main_bytes = nand["options"]["bytes"]
@@ -864,7 +949,7 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
     }
     let graph = prepared.execution;
     graph.validate()?;
-    let plan = if settings.is_some() || clock_seconds_2000.is_some() {
+    let plan = if settings.is_some() || header_applied || clock_seconds_2000.is_some() {
         Plan::parse(&serde_json::to_vec(&devices).map_err(|e| e.to_string())?)?
     } else {
         prepared.plan

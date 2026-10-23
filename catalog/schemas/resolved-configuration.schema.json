@@ -18219,6 +18219,17 @@
               },
               "type": "array"
             },
+            "settings": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RunPowerOnSettings"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The settings the camera starts with. Absent, the flash holds what the\nupdate installs."
+            },
             "usb": {
               "$ref": "#/$defs/RunUsbInput",
               "description": "Initial USB cable state."
@@ -19693,6 +19704,30 @@
         "powered_on",
         "boot_reply",
         "spi_status"
+      ],
+      "type": "object"
+    },
+    "RunPowerOnSettings": {
+      "additionalProperties": false,
+      "description": "A camera's settings at power-on: its settings bank, the firmware's default\nuser settings and the named changes a run requests.",
+      "properties": {
+        "camera": {
+          "description": "The body's camera whose NAND sections the run supplies for the settings\nbank (`catalog/bodies/<body>/cameras/<camera>`). Absent, the bank is\nbuilt from the update's defaults table.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "requested": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Requested settings by name and value name, such as `setup: done`.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "requested"
       ],
       "type": "object"
     },

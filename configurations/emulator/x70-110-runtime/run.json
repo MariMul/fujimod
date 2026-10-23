@@ -218,11 +218,12 @@
       "present": false,
       "write_protected": false
     },
-    "first_start": {
-      "key_id": "EXE_M",
-      "hold_ticks": 3600000,
-      "settle_ticks": 20000000,
-      "max_presses": 4
+    "settings": {
+      "camera": "reference",
+      "requested": {
+        "language": "en",
+        "setup": "done"
+      }
     }
   },
   "scene": {

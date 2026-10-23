@@ -3,9 +3,12 @@ use fujimod_emulator::boot::{self, Options};
 use fujimod_emulator_cpu::ExecutionPolicy;
 use std::{collections::BTreeMap, ffi::OsString, path::PathBuf, process::ExitCode};
 
-const HELP: &str = "Usage: fujimod-emulator boot --configuration ID \\\n  --update UPDATE.DAT --boot-rom ROM.BIN \\\n  [--overlay ID] [--nand IMAGE] [--settings MCU.BIN] [--screenshot LCD.PNG] \\\n  [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\n\
+const HELP: &str = "Usage: fujimod-emulator boot --configuration ID \\\n  --update UPDATE.DAT --boot-rom ROM.BIN [--camera DIR] \\\n  [--overlay ID] [--nand IMAGE] [--settings MCU.BIN] [--screenshot LCD.PNG] \\\n  [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\n\
 Boot configuration: x70-110-rec. The ROM dump is required.\n\
-Without --nand or --settings, persistent settings start blank.\n\
+x70-110-rec starts from the reference camera's settings bank with setup done;\n\
+--camera names its directory of nand-<section>.bin.zst sections\n\
+(catalog/bodies/x70/cameras/reference).\n\
+A run that declares no settings takes --nand or --settings instead.\n\
 NAND accepts a committed image or 128 MiB main-area image without OOB/spare.\n\
 Settings accepts a sixteen-byte MCU persistent packet.\n\
 First-start menus are accepted through MENU/OK ADC input.\n\
@@ -37,6 +40,7 @@ fn parse(
             "--boot-rom",
             "--nand",
             "--settings",
+            "--camera",
             "--screenshot",
             "--instruction-limit",
             "--execution-policy",
@@ -96,11 +100,13 @@ fn parse(
         settings: None,
         clock_seconds_2000: None,
         preferred_languages,
+        camera: None,
     };
     let options = Options {
         nand: values.remove("--nand").map(PathBuf::from),
         settings: values.remove("--settings").map(PathBuf::from),
         clock_seconds_2000,
+        camera: values.remove("--camera").map(PathBuf::from),
         ..options
     };
     let screenshot = values.remove("--screenshot").map(PathBuf::from);

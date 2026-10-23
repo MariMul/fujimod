@@ -1,6 +1,11 @@
 use super::*;
 use fujimod_catalog::configuration::Exr2RunScene;
 
+/// The reference X70's NAND sections in the catalog.
+fn reference_camera() -> PathBuf {
+    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../catalog/bodies/x70/cameras/reference"))
+}
+
 #[test]
 fn clock_override_updates_the_device_clock_and_requires_one_rtc() {
     let mut plan = json!({"nodes":[{"endpoint":{"clock":{
@@ -148,9 +153,9 @@ fn checked_run_configuration_selects_runtime_and_supplies_scene_and_quantum() {
     assert_eq!(json["overlays"], serde_json::json!([]));
     assert_eq!(json["resolved"]["reference"]["body"]["id"], "x70");
     assert!(json["inputs"]["mcu"]["route"].is_number());
-    assert_eq!(json["inputs"]["first_start"]["key_id"], "EXE_M");
-    assert_eq!(json["inputs"]["first_start"]["hold_ticks"], 3_600_000);
-    assert_eq!(json["inputs"]["first_start"]["settle_ticks"], 20_000_000);
+    let settings = &json["resolved"]["configuration"]["inputs"]["settings"];
+    assert_eq!(settings["camera"], "reference");
+    assert_eq!(settings["requested"]["setup"], "done");
 }
 
 #[test]
@@ -510,6 +515,7 @@ fn shipped_preparation_opens_the_same_board_as_selected_files() {
             settings: None,
             clock_seconds_2000: None,
             preferred_languages: vec![],
+            camera: Some(reference_camera()),
         })
         .unwrap(),
     );
@@ -525,6 +531,7 @@ fn shipped_preparation_opens_the_same_board_as_selected_files() {
         settings: None,
         clock_seconds_2000: None,
         preferred_languages: vec![],
+        camera: camera_sections(&restored, &reference_camera()).unwrap(),
     };
     let shipped = snapshot(open_prepared(restored, inputs).unwrap());
     assert_eq!(shipped, direct);
@@ -558,6 +565,7 @@ fn input_bytes_are_refused_before_any_board_when_they_differ_from_the_prepared_i
         settings: None,
         clock_seconds_2000: None,
         preferred_languages: vec![],
+        camera: BTreeMap::new(),
     };
     let error = open_prepared(prepared, inputs).err().unwrap();
     assert!(error.starts_with("update:"), "{error}");
