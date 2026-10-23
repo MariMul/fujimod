@@ -613,7 +613,7 @@ impl Core {
         let pages = match range {
             HookRange::Inclusive { begin, end } => {
                 e.memory
-                    .owned_code_pages(e.id.get(), begin, end.saturating_add(1))
+                    .translated_pages(e.id.get(), begin, end.saturating_add(1))
             }
             HookRange::All => None,
         };

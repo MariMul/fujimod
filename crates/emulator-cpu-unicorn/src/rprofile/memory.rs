@@ -534,22 +534,28 @@ impl Memory {
         }
         self.apply_watches()
     }
-    /// The 4 KiB pages of `[begin, end)` that hold this core's owned memory,
-    /// or None when part of the range has none: translated code can come
-    /// only from owned memory, so a bounded observer re-translates just these.
-    pub(super) fn owned_code_pages(&self, core: usize, begin: u64, end: u64) -> Option<Vec<u64>> {
+    /// The 4 KiB guest pages of `[begin, end)` that hold translated code, or
+    /// None when part of the range has no owned memory (code there is not
+    /// tracked). A bounded code observer re-translates just these pages.
+    pub(super) fn translated_pages(&self, core: usize, begin: u64, end: u64) -> Option<Vec<u64>> {
         let s = self.state();
-        let mut pages = vec![];
         let bytes = end.checked_sub(begin)? as usize;
+        let mut guest = begin;
+        let mut pages = std::collections::BTreeSet::new();
         for chunk in Chunks::new(&s.views, core, begin, bytes, true).ok()? {
-            chunk.ok()?;
+            let (pointer, length) = chunk.ok()?;
+            let mut host = pointer & !4095;
+            while host < pointer + length {
+                if s.pages.contains_key(&host) {
+                    let low = guest + (host.max(pointer) - pointer) as u64;
+                    let high = guest + ((host + 4096).min(pointer + length) - pointer) as u64;
+                    pages.extend(((low & !4095)..high).step_by(4096));
+                }
+                host += 4096;
+            }
+            guest += length as u64;
         }
-        let mut page = begin & !4095;
-        while page < end {
-            pages.push(page);
-            page += 4096;
-        }
-        Some(pages)
+        Some(pages.into_iter().collect())
     }
     pub(super) fn note_code(
         &self,
