@@ -298,6 +298,12 @@ class emulator:
             rgb: bytes,
             white_luminance: SupportsFloat | SupportsIndex,
         ) -> None: ...
+        def sensor_raf(
+            self,
+            /,
+            name: str,
+            raf: bytes,
+        ) -> None: ...
         def serial_state(self, /, node: str) -> str: ...
         def serial_status_input(
             self,

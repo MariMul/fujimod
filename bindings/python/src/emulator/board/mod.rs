@@ -1135,6 +1135,9 @@ impl Board {
             .sensor_raw16(name, width, height, raw16)
             .map_err(error)
     }
+    fn sensor_raf(&self, name: &str, raf: &[u8]) -> PyResult<()> {
+        self.session()?.sensor_raf(name, raf).map_err(error)
+    }
     fn card_initialize_revision(&mut self, name: &str, revision: u64) -> PyResult<()> {
         self.session_mut()?
             .initialize_card_revision(name, revision)

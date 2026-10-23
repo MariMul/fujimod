@@ -262,7 +262,8 @@ fn invalid_readout_geometry_refuses_before_changing_the_exposure() {
 #[test]
 fn vectorizable_response_rounding_matches_canonical_full_precision() {
     let dimensions = [256, 256];
-    let scene = Arc::new(scene::Scene::new(vec![0; 256 * 256 * 3].into(), dimensions));
+    let frame = Frame::new(256, 256, FramePixels::Rgb24(vec![0; 256 * 256 * 3].into())).unwrap();
+    let scene = Arc::new(scene::Scene::new(Arc::new(frame)).unwrap());
     let coordinates = Arc::new(readout::Coordinates::full(dimensions));
     // Every possible linear ADC input, including half-way quantization values,
     // underflow, saturation and finite scales whose intermediate overflows.

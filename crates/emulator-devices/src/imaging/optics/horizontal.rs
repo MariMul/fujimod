@@ -128,7 +128,7 @@ impl Cache {
         if self
             .entries
             .front()
-            .is_some_and(|p| !Arc::ptr_eq(&p.scene.source, &scene.source))
+            .is_some_and(|p| !p.scene.frame.same_pixels(&scene.frame))
         {
             self.entries.clear();
             self.pixels = 0;
@@ -242,11 +242,11 @@ impl Cache {
 mod tests {
     use super::super::readout::project;
     use super::*;
+    use crate::scene::{Frame, FramePixels};
     fn source() -> Arc<Scene> {
-        Arc::new(Scene::new(
-            (0..8 * 5 * 3).map(|i| (i * 79) as u8).collect(),
-            [8, 5],
-        ))
+        let bytes: Vec<u8> = (0..8 * 5 * 3).map(|i| (i * 79) as u8).collect();
+        let frame = Frame::new(8, 5, FramePixels::Rgb24(bytes.into())).unwrap();
+        Arc::new(Scene::new(Arc::new(frame)).unwrap())
     }
     #[test]
     fn cached_integer_means_preserve_every_fractional_box_pass_and_window() {

@@ -170,9 +170,16 @@ impl ExposedFrame {
                 .clamp(0., 16383.) as u16
             })
         });
-        let response_scale: [f64; 3] = std::array::from_fn(|c| {
-            scale * calibration.full_scale as f64 * 256. / calibration.reference_white[c] as f64
-        });
+        // Mosaic radiance has no photometric white or reference white: its
+        // counts are the RAF normalization scaled by the physical exposure.
+        // The largest site sets the scale, matching the optical scene's
+        // normalization, so both sampling laws share one count mapping.
+        let response_scale: [f64; 3] = match frame.mosaic() {
+            Some(sites) => [f64::from(sites.max) * mosaic_gain(exposure, aperture_squared); 3],
+            None => std::array::from_fn(|c| {
+                scale * calibration.full_scale as f64 * 256. / calibration.reference_white[c] as f64
+            }),
+        };
         if response_scale.iter().any(|v| !v.is_finite() || *v < 0.) {
             return Err("physical radiance exceeds finite sensor response".into());
         }
@@ -186,6 +193,11 @@ impl ExposedFrame {
             focus_shift_mm: None,
             filtered: None,
         })
+    }
+    /// Counts per unit of mosaic radiance: sensor counts = radiance × seconds /
+    /// f_number² × analog_gain, with aperture_squared = f_number².
+    fn mosaic_gain(&self) -> f64 {
+        mosaic_gain(self.exposure, self.aperture_squared)
     }
     pub(crate) fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
         let response: Vec<u16> = self.response.iter().flatten().copied().collect();
@@ -315,6 +327,13 @@ impl ExposedFrame {
                 std::array::from_fn(|c| self.response[c][p[(sy * f.width + sx) * 3 + c] as usize])
             }
             FramePixels::Raw16(p) => [p[sy * f.width + sx]; 3],
+            // Mosaic frames always carry their cell means; see `Frame::mosaic`.
+            FramePixels::Mosaic { .. } => f.mosaic().map_or([0; 3], |sites| {
+                let gain = self.mosaic_gain();
+                sites
+                    .site(sx, sy)
+                    .map(|v| libm::rint(f64::from(v) * gain).clamp(0., 16383.) as u16)
+            }),
         }
     }
     pub fn sample_dimensions(&self) -> [usize; 2] {
@@ -378,6 +397,10 @@ impl ExposedFrame {
     }
 }
 
+fn mosaic_gain(exposure: Exposure, aperture_squared: f64) -> f64 {
+    exposure.seconds * exposure.analog_gain / aperture_squared
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -413,5 +436,167 @@ mod tests {
         dark.white_luminance /= 2.;
         frames.lock().unwrap().set_frame(dark);
         assert_eq!(shot().sample(0, 0, [1, 1])[0], base);
+    }
+}
+
+#[cfg(test)]
+mod mosaic_tests {
+    use super::*;
+    use crate::scene::{Frame, read_raf};
+    /// X-Trans 6×6 CFA: 0 = R, 1 = G, 2 = B, as in a RAF's pattern.
+    const XTRANS: [[u8; 6]; 6] = [
+        [0, 2, 1, 2, 0, 1],
+        [1, 1, 0, 1, 1, 2],
+        [1, 1, 2, 1, 1, 0],
+        [2, 0, 1, 0, 2, 1],
+        [1, 1, 2, 1, 1, 0],
+        [1, 1, 0, 1, 1, 2],
+    ];
+    fn calibration() -> Calibration {
+        Calibration {
+            full_scale: 16383,
+            reference_white: [256; 3],
+            saturation_lux_seconds: 1.,
+            color_sample_weights: [2, 5, 2],
+        }
+    }
+    /// A mosaic whose radiance is the raw counts under the recorded exposure,
+    /// using the RAF normalization: radiance = counts / (seconds × gain / f²).
+    fn recorded_frame(width: usize, height: usize, raw: &[u16], recorded: Exposure) -> Arc<Frame> {
+        let norm = recorded.seconds * recorded.analog_gain / 81.;
+        let radiance: Vec<f32> = raw.iter().map(|&r| (f64::from(r) / norm) as f32).collect();
+        Arc::new(
+            Frame::new(
+                width,
+                height,
+                FramePixels::Mosaic {
+                    cfa: XTRANS,
+                    radiance: radiance.into(),
+                },
+            )
+            .unwrap(),
+        )
+    }
+    fn recorded() -> Exposure {
+        Exposure {
+            seconds: 1. / 800.,
+            analog_gain: 1.,
+        }
+    }
+    fn synthetic_raw(width: usize, height: usize) -> Vec<u16> {
+        (0..width * height)
+            .map(|i| (i * 2311 % 15000 + 1) as u16)
+            .collect()
+    }
+    #[test]
+    fn mosaic_frame_reproduces_its_recorded_counts_at_native_resolution() {
+        let (width, height) = (13, 8);
+        let raw = synthetic_raw(width, height);
+        let frame = recorded_frame(width, height, &raw, recorded());
+        let exposed = ExposedFrame::from_frame(frame, recorded(), 81., calibration()).unwrap();
+        for y in 0..height {
+            for x in 0..width {
+                let c = usize::from(XTRANS[y % 6][x % 6]);
+                assert_eq!(
+                    exposed.sample_source(x, y)[c],
+                    raw[y * width + x],
+                    "site ({x}, {y})"
+                );
+            }
+        }
+    }
+    #[test]
+    fn doubling_exposure_doubles_mosaic_counts_until_full_scale() {
+        let (width, height) = (13, 8);
+        let raw = synthetic_raw(width, height);
+        let frame = recorded_frame(width, height, &raw, recorded());
+        let doubled = Exposure {
+            seconds: 2. / 800.,
+            analog_gain: 1.,
+        };
+        let exposed = ExposedFrame::from_frame(frame, doubled, 81., calibration()).unwrap();
+        let mut clipped = 0;
+        for y in 0..height {
+            for x in 0..width {
+                let c = usize::from(XTRANS[y % 6][x % 6]);
+                let expected = (2 * raw[y * width + x]).min(16383);
+                clipped += usize::from(2 * raw[y * width + x] > 16383);
+                assert_eq!(exposed.sample_source(x, y)[c], expected, "site ({x}, {y})");
+            }
+        }
+        assert!(clipped > 0, "the test must reach full scale");
+    }
+    #[test]
+    fn stopping_down_from_f9_to_f4_5_multiplies_mosaic_counts_by_four() {
+        let (width, height) = (13, 8);
+        let raw = synthetic_raw(width, height);
+        let frame = recorded_frame(width, height, &raw, recorded());
+        let exposed = ExposedFrame::from_frame(frame, recorded(), 20.25, calibration()).unwrap();
+        for y in 0..height {
+            for x in 0..width {
+                let c = usize::from(XTRANS[y % 6][x % 6]);
+                assert_eq!(
+                    exposed.sample_source(x, y)[c],
+                    (4 * raw[y * width + x]).min(16383),
+                    "site ({x}, {y})"
+                );
+            }
+        }
+    }
+    #[test]
+    fn real_raf_sites_reproduce_their_raw_counts_after_black() {
+        let Ok(path) = std::env::var("FUJIMOD_TEST_RAF") else {
+            return;
+        };
+        let bytes = std::fs::read(&path).expect("read the test RAF");
+        let scene = read_raf(std::io::Cursor::new(&bytes)).expect("parse the test RAF");
+        let recorded = scene.exposure.clone();
+        assert_eq!((recorded.iso, recorded.dynamic_range), (800, 400));
+        // Analog gain relative to ISO 200 DR100, as the RAF normalization defines it.
+        let analog_gain = f64::from(recorded.iso) / 200.
+            * match recorded.dynamic_range {
+                200 => 0.5,
+                400 => 0.25,
+                _ => 1.,
+            };
+        assert_eq!(analog_gain, 1.);
+        let exposure = Exposure {
+            seconds: recorded.seconds,
+            analog_gain,
+        };
+        let frame = Frame::from_raf(&scene).expect("RAF crop as mosaic");
+        let FramePixels::Mosaic { cfa, .. } = &frame.pixels else {
+            panic!("RAF crop is a mosaic frame");
+        };
+        let cfa = *cfa;
+        let (width, height) = (frame.width, frame.height);
+        let (left, top) = (scene.crop_left as usize, scene.crop_top as usize);
+        let exposed = ExposedFrame::from_frame(
+            Arc::new(frame),
+            exposure,
+            recorded.f_number * recorded.f_number,
+            calibration(),
+        )
+        .unwrap();
+        // Read the file's raw plane directly: 2048 TIFF bytes follow the raw offset.
+        let raw_offset = u32::from_be_bytes([bytes[100], bytes[101], bytes[102], bytes[103]]);
+        let samples = raw_offset as usize + 2048;
+        let raw_at = |x: usize, y: usize| {
+            let at = samples + 2 * (y * scene.width as usize + x);
+            u16::from_le_bytes([bytes[at], bytes[at + 1]])
+        };
+        let black = scene.black[0];
+        let mut lit = 0;
+        for i in 0..400usize {
+            let sx = (i * 7919 + 13) % width;
+            let sy = (i * 104_729 + 7) % height;
+            let (x, y) = (sx + left, sy + top);
+            assert_eq!(cfa[sy % 6][sx % 6], scene.cfa[y % 6][x % 6], "crop phase");
+            let raw = raw_at(x, y).saturating_sub(black);
+            lit += usize::from(raw > 0);
+            let c = usize::from(cfa[sy % 6][sx % 6]);
+            assert_eq!(exposed.sample_source(sx, sy)[c], raw, "site ({x}, {y})");
+        }
+        assert!(lit > 100, "the sample must include lit sites");
     }
 }

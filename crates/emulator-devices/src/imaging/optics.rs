@@ -2,7 +2,7 @@
 //! Only the physical focus wire, iris, scene pixels, and optical dimensions enter
 //! this law. It supplies pixels to every sensor consumer, never an AF decision.
 use super::exposure::ExposedFrame;
-use crate::scene::FramePixels;
+use crate::scene::{Frame, FramePixels};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 pub type FocusHandle = Arc<Mutex<f64>>;
@@ -100,6 +100,19 @@ impl Projection {
         }
         Ok(value)
     }
+    /// The frame's full-resolution linear scene, retained when it fits the cache.
+    fn full_scene(&self, frame: &Arc<Frame>) -> Result<Arc<Scene>, String> {
+        let mut cache = self
+            .scene
+            .lock()
+            .map_err(|_| "optical scene cache poisoned")?;
+        if let Some(old) = cache.as_ref().filter(|old| old.frame.same_pixels(frame)) {
+            return Ok(old.clone());
+        }
+        let scene = Arc::new(Scene::new(frame.clone())?);
+        *cache = (frame.width * frame.height <= CACHE_PIXELS).then(|| scene.clone());
+        Ok(scene)
+    }
     pub(crate) fn prepare_binned_windows(
         &self,
         frame: &mut ExposedFrame,
@@ -107,38 +120,24 @@ impl Projection {
         grid: [usize; 2],
         windows: &[[usize; 4]],
     ) -> Result<(), String> {
-        let crate::scene::FramePixels::Rgb24(rgb) = &frame.frame.pixels else {
+        if !projects(&frame.frame) {
             return Ok(());
-        };
+        }
         let original = [frame.frame.width, frame.frame.height];
-        let scene = {
-            let mut cache = self
-                .scene
-                .lock()
-                .map_err(|_| "optical scene cache poisoned")?;
-            match cache.as_ref() {
-                Some(old) if Arc::ptr_eq(&old.source, rgb) && old.dimensions == original => {
-                    old.clone()
-                }
-                _ => {
-                    let scene = Arc::new(Scene::new(rgb.clone(), original));
-                    *cache = (original[0] * original[1] <= CACHE_PIXELS).then(|| scene.clone());
-                    scene
-                }
-            }
-        };
         let scene = if dimensions == original {
-            scene
+            self.full_scene(&frame.frame)?
         } else {
+            // A cached binned scene needs no full-resolution scene: a sensor
+            // frame larger than the scene cache is linearized once per size.
             let mut cache = self
                 .binned
                 .lock()
                 .map_err(|_| "binned scene cache poisoned")?;
-            cache.retain(|p| Arc::ptr_eq(&p.source, rgb));
+            cache.retain(|p| p.frame.same_pixels(&frame.frame));
             if let Some(old) = cache.iter().find(|p| p.dimensions == dimensions) {
                 old.clone()
             } else {
-                let binned = Arc::new(scene.binned(dimensions));
+                let binned = Arc::new(self.full_scene(&frame.frame)?.binned(dimensions));
                 let cost = dimensions[0] * dimensions[1];
                 while cache
                     .iter()
@@ -183,7 +182,7 @@ impl Projection {
             .readouts
             .lock()
             .map_err(|_| "optical readout cache poisoned")?;
-        cache.retain(|p| Arc::ptr_eq(&p.scene.source, &scene.source));
+        cache.retain(|p| p.scene.frame.same_pixels(&scene.frame));
         let found = cache.iter().position(|p| {
             Arc::ptr_eq(&p.scene, &scene)
                 && p.grid == grid
@@ -311,9 +310,9 @@ impl Projection {
                 _ => (),
             }
         }
-        let FramePixels::Rgb24(rgb) = &frame.frame.pixels else {
+        if !projects(&frame.frame) {
             return Ok(());
-        };
+        }
         let image_distance = match self.spec.relative_illumination {
             Illumination::Uniform => None,
             Illumination::CosineFourth => {
@@ -338,22 +337,7 @@ impl Projection {
             return Ok(());
         }
         let dimensions = [frame.frame.width, frame.frame.height];
-        let mut scene_cache = self
-            .scene
-            .lock()
-            .map_err(|_| "optical scene cache poisoned")?;
-        let scene = match &*scene_cache {
-            Some(old) if Arc::ptr_eq(&old.source, rgb) && old.dimensions == dimensions => {
-                old.clone()
-            }
-            _ => {
-                let scene = Arc::new(Scene::new(rgb.clone(), dimensions));
-                *scene_cache =
-                    (dimensions[0] * dimensions[1] <= CACHE_PIXELS).then(|| scene.clone());
-                scene
-            }
-        };
-        drop(scene_cache);
+        let scene = self.full_scene(&frame.frame)?;
         let mut prepared = self.prepared.lock().map_err(|_| "optical cache poisoned")?;
         let coordinates = match &*prepared {
             Some(old)
@@ -529,19 +513,25 @@ fn encode_response_coordinates(
     }
     pixels.into()
 }
-pub(crate) fn bin_exposure(frame: &mut ExposedFrame, dimensions: [usize; 2]) {
-    if let FramePixels::Rgb24(rgb) = &frame.frame.pixels {
-        let scene =
-            Scene::new(rgb.clone(), [frame.frame.width, frame.frame.height]).binned(dimensions);
-        let linear: Vec<_> = (0..dimensions[1])
-            .flat_map(|y| (0..dimensions[0]).map(move |x| (x, y)))
-            .map(|(x, y)| scene.linear(x, y))
-            .collect();
-        frame.filtered = Some(super::exposure::Filtered::Grid(
-            dimensions,
-            encode_response_rect(&linear, frame.response_scale, dimensions, [1., 1.], None),
-        ));
+pub(crate) fn bin_exposure(frame: &mut ExposedFrame, dimensions: [usize; 2]) -> Result<(), String> {
+    if !projects(&frame.frame) {
+        return Ok(());
     }
+    let scene = Scene::new(frame.frame.clone())?.binned(dimensions);
+    let linear: Vec<_> = (0..dimensions[1])
+        .flat_map(|y| (0..dimensions[0]).map(move |x| (x, y)))
+        .map(|(x, y)| scene.linear(x, y))
+        .collect();
+    frame.filtered = Some(super::exposure::Filtered::Grid(
+        dimensions,
+        encode_response_rect(&linear, frame.response_scale, dimensions, [1., 1.], None),
+    ));
+    Ok(())
+}
+/// RAW samples have no scene radiance and bypass the optical law. RGB and
+/// mosaic frames are projected through the same lens.
+fn projects(frame: &Frame) -> bool {
+    !matches!(frame.pixels, FramePixels::Raw16(_))
 }
 
 #[cfg(test)]

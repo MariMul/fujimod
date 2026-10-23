@@ -239,7 +239,7 @@ impl Image {
         if let Some(projection) = &self.projection {
             projection.prepare_binned_windows(&mut frame, dimensions, grid, windows)?
         } else {
-            super::optics::bin_exposure(&mut frame, dimensions)
+            super::optics::bin_exposure(&mut frame, dimensions)?
         }
         // Bound retained derived pixels; the immutable source is shared.
         let cost = dimensions[0] * dimensions[1];
@@ -723,7 +723,8 @@ mod tests {
                         crate::imaging::optics::bin_exposure(
                             &mut sampled,
                             [width.min(out_width), height.min(out_height)],
-                        );
+                        )
+                        .unwrap();
                     }
                     let mut film = Film::default();
                     film.update(|o| words[o / 4]).unwrap();

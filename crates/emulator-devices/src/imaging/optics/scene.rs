@@ -1,42 +1,61 @@
+use crate::scene::{Frame, FramePixels};
 use std::sync::Arc;
 
 /// Immutable scene irradiance. Row prefixes are independent of the lens,
 /// exposure and readout window; each scene is linearized once per projection.
+/// Linear values are 16-bit: sRGB frames use the sRGB curve, and mosaic frames
+/// are normalized to the frame's largest site radiance. The projection's
+/// response scale restores the exposure, so one scene serves every exposure.
 pub(super) struct Scene {
-    pub source: Arc<[u8]>,
+    /// Identity of the scene pixels, shared with every binned derivative.
+    pub frame: Arc<Frame>,
     pub dimensions: [usize; 2],
     prefix: Vec<[u32; 3]>,
 }
 impl Scene {
-    pub fn new(source: Arc<[u8]>, dimensions: [usize; 2]) -> Self {
-        let linear: [u16; 256] = std::array::from_fn(|i| {
-            let v = i as f64 / 255.;
-            let v = if v <= 0.04045 {
-                v / 12.92
-            } else {
-                libm::pow((v + 0.055) / 1.055, 2.4)
-            };
-            libm::rint(v * 65535.) as u16
-        });
-        let [width, height] = dimensions;
-        let mut prefix = vec![[0; 3]; (width + 1) * height];
-        for (row, pixels) in prefix
-            .chunks_exact_mut(width + 1)
-            .zip(source.chunks_exact(width * 3))
-        {
-            let mut sum = [0u32; 3];
-            for (out, rgb) in row[1..].iter_mut().zip(pixels.chunks_exact(3)) {
-                for c in 0..3 {
-                    sum[c] += u32::from(linear[rgb[c] as usize]);
-                }
-                *out = sum;
+    /// Scene irradiance of an RGB or mosaic frame. RAW samples have no scene
+    /// radiance and are never projected.
+    pub fn new(frame: Arc<Frame>) -> Result<Self, String> {
+        let dimensions = [frame.width, frame.height];
+        let prefix = match &frame.pixels {
+            FramePixels::Rgb24(bytes) => {
+                let linear: [u16; 256] = std::array::from_fn(|i| {
+                    let v = i as f64 / 255.;
+                    let v = if v <= 0.04045 {
+                        v / 12.92
+                    } else {
+                        libm::pow((v + 0.055) / 1.055, 2.4)
+                    };
+                    libm::rint(v * 65535.) as u16
+                });
+                let [width, _] = dimensions;
+                prefix_sums(dimensions, |x, y| {
+                    let at = (y * width + x) * 3;
+                    std::array::from_fn(|c| linear[bytes[at + c] as usize])
+                })
             }
-        }
-        Self {
-            source,
+            FramePixels::Mosaic { .. } => {
+                let sites = frame.mosaic().ok_or("mosaic scene has no site radiance")?;
+                let scale = if sites.max > 0. {
+                    65535. / f64::from(sites.max)
+                } else {
+                    0.
+                };
+                prefix_sums(dimensions, |x, y| {
+                    sites
+                        .site(x, y)
+                        .map(|v| libm::rint(f64::from(v) * scale).clamp(0., 65535.) as u16)
+                })
+            }
+            FramePixels::Raw16(_) => {
+                return Err("optical scenes need RGB or mosaic radiance".into());
+            }
+        };
+        Ok(Self {
+            frame,
             dimensions,
             prefix,
-        }
+        })
     }
     /// Integrate linear scene cells over each readout pixel before optical
     /// filtering. Integer overlap weights preserve a flat field exactly.
@@ -85,7 +104,7 @@ impl Scene {
             }
         }
         Self {
-            source: self.source.clone(),
+            frame: self.frame.clone(),
             dimensions,
             prefix,
         }
@@ -133,6 +152,22 @@ impl Scene {
         result
     }
 }
+/// Row prefix sums of linear values; the first column of each row is zero.
+fn prefix_sums(dimensions: [usize; 2], linear: impl Fn(usize, usize) -> [u16; 3]) -> Vec<[u32; 3]> {
+    let [width, height] = dimensions;
+    let mut prefix = vec![[0; 3]; (width + 1) * height];
+    for (y, row) in prefix.chunks_exact_mut(width + 1).enumerate() {
+        let mut sum = [0u32; 3];
+        for (x, out) in row[1..].iter_mut().enumerate() {
+            let value = linear(x, y);
+            for c in 0..3 {
+                sum[c] += u32::from(value[c]);
+            }
+            *out = sum;
+        }
+    }
+    prefix
+}
 /// A clamped box interval, shared across channels and readout columns.
 #[derive(Clone, Copy)]
 pub(super) struct Span {
@@ -172,9 +207,20 @@ pub(super) fn blend(inner: u64, fraction: u32, outer: u64) -> u16 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn rgb(bytes: Vec<u8>, dimensions: [usize; 2]) -> Scene {
+        Scene::new(Arc::new(
+            Frame::new(
+                dimensions[0],
+                dimensions[1],
+                FramePixels::Rgb24(bytes.into()),
+            )
+            .unwrap(),
+        ))
+        .unwrap()
+    }
     #[test]
     fn binning_integrates_linear_light_and_preserves_flat_fields() {
-        let flat = Scene::new(vec![91; 7 * 5 * 3].into(), [7, 5]);
+        let flat = rgb(vec![91; 7 * 5 * 3], [7, 5]);
         let small = flat.binned([3, 2]);
         for y in 0..2 {
             for x in 0..3 {
@@ -184,24 +230,21 @@ mod tests {
         let alternating: Vec<_> = (0..8 * 6)
             .flat_map(|i| [if i % 2 == 0 { 0 } else { 255 }; 3])
             .collect();
-        let scene = Scene::new(alternating.into(), [8, 6]);
+        let scene = rgb(alternating, [8, 6]);
         let small = scene.binned([4, 3]);
         for y in 0..3 {
             for x in 0..4 {
                 assert_eq!(small.linear(x, y), [32768; 3]);
             }
         }
-        assert_ne!(
-            small.linear(0, 0),
-            Scene::new(vec![128; 3].into(), [1, 1]).linear(0, 0)
-        );
+        assert_ne!(small.linear(0, 0), rgb(vec![128; 3], [1, 1]).linear(0, 0));
     }
     #[test]
     fn nonintegral_bins_match_independent_cell_overlap_integration() {
         let bytes: Vec<_> = (0..7 * 5 * 3)
             .map(|i| ((i * 71 + 23) % 256) as u8)
             .collect();
-        let scene = Scene::new(bytes.into(), [7, 5]);
+        let scene = rgb(bytes, [7, 5]);
         for dims in [[3, 2], [4, 3], [1, 1], [7, 5]] {
             let small = scene.binned(dims);
             for y in 0..dims[1] {

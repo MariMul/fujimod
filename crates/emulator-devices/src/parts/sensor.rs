@@ -623,6 +623,9 @@ impl Sensor {
             return Err("RAW capture has no completed physical exposure".into());
         }
         let frame = self.frames.lock().unwrap().latched.clone();
+        if matches!(frame.pixels, FramePixels::Mosaic { .. }) && self.radiometry.is_none() {
+            return Err("mosaic scene input needs a radiometric sensor exposure".into());
+        }
         Ok(FrozenReadout {
             width: self.width,
             height: self.height,
@@ -688,6 +691,20 @@ impl FrozenReadout {
                     }
                     self.black
                         .saturating_add(self.linear[c][p[(sy * f.width + sx) * 3 + c] as usize])
+                }
+                FramePixels::Mosaic { .. } => {
+                    let [left, top, width, height] = self.image_area;
+                    if x < left || x - left >= width || y < top || y - top >= height {
+                        return self.black;
+                    }
+                    // Mosaic radiance exists only under a radiometric exposure;
+                    // freezing a readout without one is refused.
+                    let c = self.cfa.color(x, y);
+                    self.black.saturating_add(
+                        self.exposed
+                            .as_ref()
+                            .map_or(0, |e| e.sample(x - left, y - top, [width, height])[c]),
+                    )
                 }
             }
         };
