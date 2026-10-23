@@ -79,7 +79,8 @@ fn fixture() -> (Vec<u8>, FirmwareInstallation, FirmwareSettings) {
 #[test]
 fn banks_take_stock_defaults_fields_and_requested_settings() {
     let (source, installation, layout) = fixture();
-    let mut update = Update::new(&source, &installation);
+    let flash = flash_image(&source, &installation).unwrap();
+    let mut update = Update::new(&flash, &installation);
     let requested = BTreeMap::from([("debug".into(), "on".into())]);
     let bank = build(&layout, &mut update, &requested).unwrap();
     assert_eq!((bank.first_block, bank.blocks, bank.logical_first), (931, 40, 41));
@@ -92,14 +93,15 @@ fn banks_take_stock_defaults_fields_and_requested_settings() {
 #[test]
 fn unknown_settings_and_changed_updates_refuse() {
     let (source, installation, layout) = fixture();
-    let mut update = Update::new(&source, &installation);
+    let flash = flash_image(&source, &installation).unwrap();
+    let mut update = Update::new(&flash, &installation);
     let unknown = BTreeMap::from([("language".into(), "en".into())]);
     assert!(build(&layout, &mut update, &unknown).unwrap_err().contains("language"));
     let value = BTreeMap::from([("debug".into(), "maybe".into())]);
     assert!(build(&layout, &mut update, &value).unwrap_err().contains("maybe"));
     let mut changed = fujimod_firmware::invert(&source);
     *changed.last_mut().unwrap() ^= 1;
-    let changed = fujimod_firmware::invert(&changed);
+    let changed = flash_image(&fujimod_firmware::invert(&changed), &installation).unwrap();
     let mut update = Update::new(&changed, &installation);
     assert!(build(&layout, &mut update, &BTreeMap::new()).is_err());
 }

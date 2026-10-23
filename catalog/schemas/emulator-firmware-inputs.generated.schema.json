@@ -33,6 +33,28 @@
       ],
       "type": "object"
     },
+    "RunSettingsInput": {
+      "additionalProperties": false,
+      "description": "Settings requested by name; the firmware's catalog settings layout encodes them.",
+      "properties": {
+        "nand": {
+          "description": "The scene NAND that holds the settings bank.",
+          "type": "string"
+        },
+        "requested": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Setting name to value name, such as `debug: on`.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "nand",
+        "requested"
+      ],
+      "type": "object"
+    },
     "RunSourceCheck": {
       "additionalProperties": false,
       "description": "A named and hashed immutable source range; contains no source bytes.",
@@ -71,108 +93,6 @@
         "immutable-source"
       ],
       "type": "string"
-    },
-    "UsbConfigurationField": {
-      "additionalProperties": false,
-      "properties": {
-        "basis": {
-          "type": "string"
-        },
-        "bytes": {
-          "description": "Explicit small external input, if supplied instead of stock defaults.",
-          "items": {
-            "format": "uint8",
-            "maximum": 255,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "offset": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "offset",
-        "basis"
-      ],
-      "type": "object"
-    },
-    "UsbConfigurationInput": {
-      "additionalProperties": false,
-      "description": "A firmware-qualified configuration-bank construction recipe.",
-      "properties": {
-        "bank": {
-          "items": {
-            "format": "uint32",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
-        "bank_descriptor": {
-          "$ref": "#/$defs/RunSourceCheck"
-        },
-        "code_checks": {
-          "items": {
-            "$ref": "#/$defs/RunSourceCheck"
-          },
-          "type": "array"
-        },
-        "configuration_bytes": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "defaults_table": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RunSourceCheck"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "fields": {
-          "items": {
-            "$ref": "#/$defs/UsbConfigurationField"
-          },
-          "type": "array"
-        },
-        "limits": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "logical_first": {
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "nand": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "nand",
-        "bank_descriptor",
-        "bank",
-        "logical_first",
-        "configuration_bytes",
-        "fields",
-        "limits",
-        "code_checks"
-      ],
-      "type": "object"
     },
     "UsbFirmwareChecks": {
       "additionalProperties": false,
@@ -234,16 +154,6 @@
       "description": "Stable schema identifier for this document.",
       "type": "string"
     },
-    "configuration_input": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/UsbConfigurationInput"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
     "firmware": {
       "$ref": "#/$defs/UsbFirmwareChecks"
     },
@@ -279,6 +189,17 @@
       "format": "uint32",
       "minimum": 0,
       "type": "integer"
+    },
+    "settings": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunSettingsInput"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Named camera settings written into the firmware's settings bank before boot."
     },
     "source_sha256": {
       "type": "string"

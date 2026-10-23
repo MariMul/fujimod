@@ -19,20 +19,26 @@ pub struct Bank {
     pub logical_first: u16,
 }
 
-/// Reads firmware addresses from an update by decoding the mapped section that
-/// holds them, once per section.
+/// The installed flash image of an update file: its bytes after
+/// `flash_offset`, inverted.
+pub fn flash_image(update: &[u8], installation: &FirmwareInstallation) -> Result<Vec<u8>, String> {
+    let offset = usize::try_from(installation.flash_offset).map_err(|_| "flash offset overflow")?;
+    let installed = update.get(offset..).ok_or("update is shorter than its flash offset")?;
+    Ok(fujimod_firmware::invert(installed))
+}
+
+/// Reads firmware addresses from an installed flash image by decoding the
+/// mapped section that holds them, once per section.
 pub struct Update<'a> {
-    source: &'a [u8],
+    flash: &'a [u8],
     installation: &'a FirmwareInstallation,
-    inverted: Option<Vec<u8>>,
     sections: HashMap<String, Vec<u8>>,
 }
 impl<'a> Update<'a> {
-    pub fn new(source: &'a [u8], installation: &'a FirmwareInstallation) -> Self {
+    pub fn new(flash: &'a [u8], installation: &'a FirmwareInstallation) -> Self {
         Self {
-            source,
+            flash,
             installation,
-            inverted: None,
             sections: HashMap::new(),
         }
     }
@@ -49,14 +55,11 @@ impl<'a> Update<'a> {
             let native = section
                 .native_flash_offset
                 .ok_or_else(|| format!("section {} has no flash offset", section.name))?;
-            let offset = usize::try_from(self.installation.flash_offset + native)
-                .map_err(|_| "update offset overflow")?;
-            let inverted = self
-                .inverted
-                .get_or_insert_with(|| fujimod_firmware::invert(self.source));
-            let stream = inverted
+            let offset = usize::try_from(native).map_err(|_| "flash offset overflow")?;
+            let stream = self
+                .flash
                 .get(offset..)
-                .ok_or_else(|| format!("section {} is outside the update", section.name))?;
+                .ok_or_else(|| format!("section {} is outside the flash image", section.name))?;
             let (mut bytes, _) =
                 fujimod_firmware::decompress(stream).map_err(|error| error.to_string())?;
             bytes.truncate(section.size as usize);

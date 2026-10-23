@@ -26,12 +26,11 @@ pub enum NandInput {
         base: String,
         assets: BTreeMap<String, String>,
     },
-    /// A settings bank built from the update file, with the requested named
-    /// settings, placed in its stock flash blocks before cold boot.
+    /// A settings bank built from the installed flash image (`base`) with the
+    /// requested named settings, placed in its stock flash blocks before cold boot.
     Settings {
         options: Options,
         base: String,
-        update: String,
         installation: fujimod_catalog::reference::FirmwareInstallation,
         layout: fujimod_catalog::settings::FirmwareSettings,
         requested: BTreeMap<String, String>,
@@ -98,12 +97,12 @@ impl NandInput {
             Self::Settings {
                 options,
                 base,
-                update,
                 installation,
                 layout,
                 requested,
             } => {
-                let mut source = fujimod_settings::Update::new(asset(&update)?, &installation);
+                let flash = asset(&base)?;
+                let mut source = fujimod_settings::Update::new(flash, &installation);
                 let bank = fujimod_settings::build(&layout, &mut source, &requested)?;
                 let block_bytes = options.page_bytes as u64 * options.pages_per_block as u64;
                 let mut bytes = vec![0xff; (u64::from(bank.blocks) * block_bytes) as usize];
@@ -125,7 +124,7 @@ impl NandInput {
                 )?;
                 Nand::new(
                     options,
-                    Arc::from(asset(&base)?.as_slice()),
+                    Arc::from(flash.as_slice()),
                     vec![Overlay {
                         offset,
                         bytes: Arc::from(bytes),
