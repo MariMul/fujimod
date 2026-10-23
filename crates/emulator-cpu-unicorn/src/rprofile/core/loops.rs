@@ -374,21 +374,17 @@ impl Execution {
             return Ok(false);
         }
         let start = target(address, word).unwrap();
-        if self
-            .observers
-            .borrow()
-            .values()
-            .any(|observer| match observer.hook {
-                Hook::Instruction { range, .. } | Hook::Block { range, .. } => match range {
-                    HookRange::All => true,
-                    HookRange::Inclusive { begin, end } => begin <= address && end >= start,
-                },
-                Hook::Memory { read: true, .. } => true,
-                _ => false,
-            })
+        // An observer on the loop's instructions or any read observer must see
+        // every iteration. The index answers by address instead of scanning
+        // every installed observer on each loop entry.
+        let index = self.observer_index.borrow();
+        if index.instructions.any_in(start, address)
+            || index.blocks.any_in(start, address)
+            || !index.reads.is_empty()
         {
             return Ok(false);
         }
+        drop(index);
         let Some(proof) = self.loop_proof(address, word) else {
             return Ok(false);
         };

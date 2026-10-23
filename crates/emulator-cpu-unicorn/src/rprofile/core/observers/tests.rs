@@ -175,3 +175,53 @@ fn range_index_matches_direct_filter_through_interleaved_mutations() {
         }
     }
 }
+
+#[test]
+fn removal_leaves_the_spans_a_whole_index_coalescing_would() {
+    // Deterministic pseudo-random installs and removals over overlapping ranges.
+    let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+    let mut next = |bound: u64| {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed % bound
+    };
+    let mut ranges = Ranges::default();
+    let mut live = vec![];
+    for key in 0..600 {
+        if live.len() > 8 && next(3) == 0 {
+            let (key, hook): (usize, Hook) = live.swap_remove(next(live.len() as u64) as usize);
+            let Hook::Instruction { range, .. } = hook else {
+                unreachable!()
+            };
+            ranges.remove(key, range);
+        } else {
+            let begin = next(256);
+            let hook = hook(begin, begin + next(64));
+            let Hook::Instruction { range, .. } = hook else {
+                unreachable!()
+            };
+            ranges.insert(key, hook, range);
+            live.push((key, hook));
+        }
+        // Coalesced: no empty first span and no span repeating the one before.
+        let spans: Vec<Vec<usize>> = ranges
+            .0
+            .values()
+            .map(|hooks| hooks.iter().map(|(key, _)| *key).collect())
+            .collect();
+        assert!(spans.first().is_none_or(|first| !first.is_empty()));
+        assert!(spans.windows(2).all(|pair| pair[0] != pair[1]));
+        for address in 0..330 {
+            let mut expected: Vec<usize> = live
+                .iter()
+                .filter(|(_, hook)| matches!(hook, Hook::Instruction { range: HookRange::Inclusive { begin, end }, .. } if (*begin..=*end).contains(&address)))
+                .map(|(key, _)| *key)
+                .collect();
+            expected.sort();
+            let mut found = keys(&ranges, address);
+            found.sort();
+            assert_eq!(found, expected, "address {address}");
+        }
+    }
+}

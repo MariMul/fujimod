@@ -14,6 +14,21 @@ impl Ranges {
             .map_or(&[], |(_, hooks)| hooks.as_slice())
     }
 
+    /// Whether any observer covers an address in `low..=high`.
+    pub fn any_in(&self, low: u64, high: u64) -> bool {
+        !self.at(low).is_empty()
+            || self
+                .0
+                .range(low.saturating_add(1)..=high)
+                .any(|(_, hooks)| !hooks.is_empty())
+    }
+
+    /// Whether any observer is installed; removal coalescing leaves no spans
+    /// once the last one is gone.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     fn split(&mut self, address: u64) {
         if !self.0.contains_key(&address) {
             let hooks = self.at(address).to_vec();
@@ -48,16 +63,27 @@ impl Ranges {
         for (_, hooks) in self.0.range_mut(begin..=end) {
             hooks.retain(|(id, _)| *id != key);
         }
-        // Coalesce spans after removal, including an empty leading span.
-        let mut previous = Vec::new();
-        self.0.retain(|_, hooks| {
-            let same = previous.len() == hooks.len()
-                && previous.iter().zip(hooks.iter()).all(|(a, (b, _))| a == b);
-            if !same {
-                previous = hooks.iter().map(|(key, _)| *key).collect();
+        // Spans are coalesced before the removal, so only the changed spans and
+        // their neighbors can now repeat the span before them (or, first in
+        // the map, be empty). Coalescing the whole map on every removal made
+        // each watch cost grow with every installed observer.
+        let low = self.0.range(..begin).next_back().map_or(begin, |(&a, _)| a);
+        let high = end.checked_add(1).unwrap_or(u64::MAX);
+        let mut previous: &[(usize, Hook)] =
+            self.0.range(..low).next_back().map_or(&[], |(_, h)| h);
+        let mut redundant = vec![];
+        for (&address, hooks) in self.0.range(low..=high) {
+            if previous.len() == hooks.len()
+                && previous.iter().zip(hooks).all(|((a, _), (b, _))| a == b)
+            {
+                redundant.push(address);
+            } else {
+                previous = hooks;
             }
-            !same
-        });
+        }
+        for address in redundant {
+            self.0.remove(&address);
+        }
     }
 }
 
