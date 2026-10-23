@@ -49,10 +49,12 @@ declare class Camera {
     static fromGraph(config: string, dat: Uint8Array): Camera;
     /**
      * Construct from a native prepared run. `request` is the JSON text of
-     * `{document, clockSeconds2000?, preferredLanguages?}`, where `document`
-     * is the exact JSON text of `{schema, prepared, browser}`.
+     * `{document, clockSeconds2000?, preferredLanguages?, camera?}`, where
+     * `document` is the exact JSON text of `{schema, prepared, browser}` and
+     * `camera` lists `[section, length]` pairs of the camera's compressed NAND
+     * sections, packed in that order in `camera`.
      */
-    static fromPrepared(request: string, update: Uint8Array, boot_rom: Uint8Array, nand?: Uint8Array | null, settings?: Uint8Array | null): Camera;
+    static fromPrepared(request: string, update: Uint8Array, boot_rom: Uint8Array, nand?: Uint8Array | null, settings?: Uint8Array | null, camera?: Uint8Array | null): Camera;
     /**
      * Construct from a typed processor/body/scenario document and verified firmware.
      */

@@ -8,6 +8,7 @@ import {
   type Camera,
   type EmulatorModule,
   type EmulatorModuleFactory,
+  type PreparedInputs,
 } from './module.ts';
 
 /** Load a generated module from disk and its adjacent Wasm binary. */
@@ -57,7 +58,9 @@ export async function openCamera(
  * Read a native prepared bundle directory: its manifest names the document,
  * boot ROM and the camera's compressed NAND sections beside it.
  */
-export async function readPreparedBundle(directory: string) {
+export async function readPreparedBundle(
+  directory: string,
+): Promise<{ document: string; inputs: PreparedInputs }> {
   const manifest: unknown = JSON.parse(await readFile(join(directory, 'wasm.json'), 'utf8'));
   const prepared: unknown =
     manifest !== null && typeof manifest === 'object' ? Reflect.get(manifest, 'prepared') : null;
