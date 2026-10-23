@@ -2,7 +2,7 @@
 //! NVIC state supplies IPSR because Unicorn exposes the architectural MRS/MSR
 //! view rather than a host setter for the processor's active exception.
 use fujimod_emulator_cpu::{Cpu, Register, arm};
-use fujimod_emulator_devices::ip::arm::nvic::Nvic;
+use fujimod_emulator_ip_arm::nvic::Nvic;
 fn r(n: u8) -> Register {
     Register::Arm32(arm::Register::R(n))
 }

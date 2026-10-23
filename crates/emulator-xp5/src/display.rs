@@ -3,7 +3,7 @@
 //! Register behavior and sampling limits are explicit in the scanout model.
 use super::osd;
 use super::panel_clock::Clocks;
-use fujimod_emulator_devices::graphics::raster::{self, PixelOrder, Plane};
+use fujimod_emulator_graphics::raster::{self, PixelOrder, Plane};
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

@@ -135,7 +135,7 @@ struct Gpio {
 #[serde(deny_unknown_fields)]
 pub(super) struct Card {
     pub node: String,
-    pub format: fujimod_emulator_devices::storage::fat::Options,
+    pub format: fujimod_emulator_storage::fat::Options,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

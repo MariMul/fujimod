@@ -51,9 +51,9 @@ struct Sensor {
 #[serde(deny_unknown_fields)]
 pub struct Spec {
     #[serde(default)]
-    nands: BTreeMap<String, fujimod_emulator_devices::storage::media::NandInput>,
+    nands: BTreeMap<String, fujimod_emulator_storage::media::NandInput>,
     #[serde(default)]
-    cards: BTreeMap<String, fujimod_emulator_devices::storage::media::CardInput>,
+    cards: BTreeMap<String, fujimod_emulator_storage::media::CardInput>,
     #[serde(default)]
     images: BTreeMap<String, Image>,
     #[serde(default)]

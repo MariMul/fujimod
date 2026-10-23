@@ -14,7 +14,6 @@ pub mod fingerprint;
 pub mod graph;
 pub mod graphics;
 pub mod imaging;
-pub mod ip;
 pub mod keyed_io;
 pub mod lz_osd;
 pub mod map;
@@ -23,7 +22,6 @@ pub mod math;
 pub mod record;
 pub mod scene;
 pub mod signals;
-pub mod storage;
 #[doc(hidden)]
 pub mod test_host;
 pub mod work;

@@ -4,7 +4,7 @@ mod cache_tests;
 #[cfg(test)]
 mod exclusive_tests;
 use crate::architecture::mprofile;
-use fujimod_emulator_devices::ip::arm::nvic::Nvic;
+use fujimod_emulator_ip_arm::nvic::Nvic;
 use fujimod_emulator_cpu::{Access, Cpu, Register, arm, exclusive};
 use serde_json::{Value, json};
 

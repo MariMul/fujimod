@@ -15,7 +15,7 @@ use fujimod_emulator_cpu::{
     Run, arm, memory::Backing,
 };
 use fujimod_emulator_cpu_unicorn::Library;
-use fujimod_emulator_devices::ip::arm::gicv2::Gic;
+use fujimod_emulator_ip_arm::gicv2::Gic;
 use fujimod_emulator_xp4::IntervalTimers;
 use std::{
     cell::{Cell, RefCell, UnsafeCell},
@@ -1112,7 +1112,7 @@ impl Session {
                 return Err("Invalid XP4 DWC3 wiring or functional latency".to_owned());
             }
             devices.get_or_insert_with(devices::Devices::empty).usb(
-                fujimod_emulator_devices::ip::usb::dwc3::Config {
+                fujimod_emulator_ip::usb::dwc3::Config {
                     base,
                     irq,
                     command_ticks,

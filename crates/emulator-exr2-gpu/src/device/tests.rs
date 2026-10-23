@@ -212,7 +212,7 @@ fn linear_copy_keeps_all_pixel_bytes_through_dma_completion() {
         for x in 0..w {
             let y = h - 1 - row;
             let pixel = [(x * 17) as u8, (y * 17) as u8, (x + y) as u8, 231];
-            let at = 128 + fujimod_emulator_devices::graphics::render::morton(w, x, y) * 4;
+            let at = 128 + fujimod_emulator_graphics::render::morton(w, x, y) * 4;
             host.bytes[at..at + 4].copy_from_slice(&pixel);
             expected.extend_from_slice(&pixel);
         }
@@ -245,7 +245,7 @@ fn linear_copy_keeps_all_pixel_bytes_through_dma_completion() {
 
 #[test]
 fn decoded_clear_preserves_pending_dma_deadline_restore_and_observational_reads() {
-    let (path, fill) = fujimod_emulator_devices::graphics::clear::fixtures::lists();
+    let (path, fill) = fujimod_emulator_graphics::clear::fixtures::lists();
     let mut options = options();
     options.ram_bytes = 32768;
     options.clear_profile = Some(Profile::GpuClearProfile);
@@ -296,7 +296,7 @@ fn decoded_clear_preserves_pending_dma_deadline_restore_and_observational_reads(
     assert_eq!(host.effects, [(1, IRQ.into())]);
     for y in 0..8 {
         for x in 0..8 {
-            let offset = 256 + fujimod_emulator_devices::graphics::render::morton(8, x, y) * 4;
+            let offset = 256 + fujimod_emulator_graphics::render::morton(8, x, y) * 4;
             let pixel = if (1..5).contains(&x) && (1..5).contains(&y) {
                 &[0x80, 0x40, 0x20, 0x10]
             } else {

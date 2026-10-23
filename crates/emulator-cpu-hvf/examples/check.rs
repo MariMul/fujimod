@@ -46,7 +46,7 @@ fn main() -> Result<(), String> {
             bus::{Bus, Mode},
             factory::*,
         };
-        use fujimod_emulator_devices::ip::arm::{generic_timer::Clock, gicv3::Gic};
+        use fujimod_emulator_ip_arm::{generic_timer::Clock, gicv3::Gic};
         let graph = |processors: Vec<Processor>| Graph {
             decoders: vec![],
             mappings: (0..processors.len())
@@ -315,7 +315,7 @@ fn main() -> Result<(), String> {
     // A framework-owned GIC injects the architectural pin before observation.
     // ICC accesses trap to that same model; no in-kernel GIC runs asynchronously.
     for group in [1, 0] {
-        use fujimod_emulator_devices::ip::arm::gicv3::Gic;
+        use fujimod_emulator_ip_arm::gicv3::Gic;
         let mut gic = Gic::new(vec![0], 512)?;
         gic.distributor(0, 4, Some(7))?;
         gic.redistributor(0, 0x14, 4, Some(0))?;
@@ -702,7 +702,7 @@ fn main() -> Result<(), String> {
             bus::{Bus, Mode},
             factory::*,
         };
-        use fujimod_emulator_devices::ip::arm::gicv3::Gic;
+        use fujimod_emulator_ip_arm::gicv3::Gic;
         use fujimod_emulator_devices::{Cx, Device};
         struct Deadline {
             due: Option<u64>,
@@ -851,7 +851,7 @@ fn main() -> Result<(), String> {
             factory::*,
             mprofile,
         };
-        use fujimod_emulator_devices::ip::arm::gicv3::Gic;
+        use fujimod_emulator_ip_arm::gicv3::Gic;
         use fujimod_emulator_xp5::mailbox::{Channel, Mailbox, Pins};
         use fujimod_emulator_devices::{Cx, Device};
         struct Reset;

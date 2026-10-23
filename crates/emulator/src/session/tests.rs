@@ -4,7 +4,8 @@ use crate::board::{
     bus::{Bus, Mode},
     factory,
 };
-use fujimod_emulator_devices::{bus::InterruptLine, storage::fat};
+use fujimod_emulator_devices::bus::InterruptLine;
+use fujimod_emulator_storage::fat;
 use fujimod_emulator_exr2_storage::sdhc::{self, SdHost};
 
 fn card_session() -> Session {

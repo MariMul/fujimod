@@ -67,7 +67,7 @@ struct CortexA53 {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Aprofile {
-    clock: fujimod_emulator_devices::ip::arm::generic_timer::Clock,
+    clock: fujimod_emulator_ip_arm::generic_timer::Clock,
     physical_irq: u32,
     virtual_irq: u32,
     pmu_hz: u64,
@@ -152,7 +152,7 @@ struct Gic {
 }
 impl Gic {
     fn runtime(self) -> Result<InterruptMap, String> {
-        let mut gic = fujimod_emulator_devices::ip::arm::gicv3::Gic::new(
+        let mut gic = fujimod_emulator_ip_arm::gicv3::Gic::new(
             self.affinities.clone(),
             self.lines,
         )?;
@@ -251,7 +251,7 @@ impl Scanout {
         for (slot, format) in config.raw_formats.iter_mut().zip(self.raw_formats) {
             *slot = format
                 .as_deref()
-                .map(fujimod_emulator_devices::graphics::raster::PixelOrder::parse)
+                .map(fujimod_emulator_graphics::raster::PixelOrder::parse)
                 .transpose()?;
         }
         Ok((self.base, config))

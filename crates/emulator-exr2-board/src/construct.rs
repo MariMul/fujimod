@@ -9,23 +9,8 @@ use fujimod_emulator_exr2_gpu::{self as gpu};
 use fujimod_emulator_exr2_i2c::{self as i2c};
 use fujimod_emulator_exr2_codecs::{jpeg, lz};
 use fujimod_emulator_exr2_storage::{nand, sdhc, sdio};
-use fujimod_emulator_devices::{
-    Device,
-    bus::InterruptLine,
-    graph::Mapping,
-    parts::{
-        audio_sink::AudioSink,
-        encoder::Encoder,
-        gpio_contact_response::GpioContactResponse,
-        lens::{LensUnit, bridge::Bridge},
-        sd_card,
-        sensor::Sensor,
-        stabilizer::Stabilizer,
-        usb_endpoint,
-        wifi_module::WifiModule,
-    },
-    storage::fat,
-};
+use fujimod_emulator_devices::{Device, bus::InterruptLine, graph::Mapping, parts::{audio_sink::AudioSink, encoder::Encoder, gpio_contact_response::GpioContactResponse, lens::{LensUnit, bridge::Bridge}, sd_card, sensor::Sensor, stabilizer::Stabilizer, usb_endpoint, wifi_module::WifiModule}};
+use fujimod_emulator_storage::fat;
 use fujimod_emulator_exr2_plan::{
     AdapterFactory, BuiltBoard, Card, CoreInterrupts, Model, Resources, SerialEndpoint, Wire,
 };
@@ -261,7 +246,7 @@ impl Builder<'_> {
                 {
                     return Err("SD clock-only nodes require their physical clock words".into());
                 }
-                Box::new(fujimod_emulator_devices::ip::sdhci::Clocks::new(&words)?)
+                Box::new(fujimod_emulator_ip::sdhci::Clocks::new(&words)?)
             }
             Model::Usb {
                 options,

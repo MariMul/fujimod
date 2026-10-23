@@ -2,7 +2,7 @@
 //! Devices receive physical RAM, guest time and IRQ lines, never CPU state.
 use super::Cluster;
 use fujimod_emulator_devices::graphics::scanout::Frame;
-use fujimod_emulator_devices::ip::usb::dwc3::{self, Dwc3};
+use fujimod_emulator_ip::usb::dwc3::{self, Dwc3};
 use fujimod_emulator_xp4::adc::Adc;
 use fujimod_emulator_xp4::storage::{self, DmaController, SerialFlashController};
 use fujimod_emulator_devices::{Cx, Device, Host, Record};
@@ -370,7 +370,7 @@ impl Devices {
         {
             return Err("Invalid or overlapping XP4 DMP wiring".into());
         }
-        let model = fujimod_emulator_devices::ip::dmp::smaph::Renderer::new(base, irq)?;
+        let model = fujimod_emulator_ip_dmp::smaph::Renderer::new(base, irq)?;
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + 0x3000, id));
@@ -415,7 +415,7 @@ impl Devices {
         }) {
             return Err("Overlapping SDHCI clock wiring".into());
         }
-        let model = fujimod_emulator_devices::ip::sdhci::Clocks::new(words)?;
+        let model = fujimod_emulator_ip::sdhci::Clocks::new(words)?;
         let id = self.models.len();
         self.windows
             .extend(words.iter().map(|&(address, _)| (address, address + 2, id)));

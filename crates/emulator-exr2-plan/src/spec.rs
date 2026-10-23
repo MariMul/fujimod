@@ -9,15 +9,8 @@ use fujimod_emulator_exr2_gpu::{self as gpu};
 use fujimod_emulator_exr2_i2c::{self as i2c};
 use fujimod_emulator_exr2_codecs::{jpeg, lz};
 use fujimod_emulator_exr2_storage::{nand, sdhc, sdio};
-use fujimod_emulator_devices::{
-    bus::InterruptLine,
-    graph::Mapping,
-    parts::{
-        audio_sink, command_data_output, contact_actuator, encoder, gpio_contact_response,
-        hdmi_sink, lens, sd_card, sensor, spi as spi_parts, stabilizer, usb_endpoint, wifi_module,
-    },
-    storage::fat,
-};
+use fujimod_emulator_devices::{bus::InterruptLine, graph::Mapping, parts::{audio_sink, command_data_output, contact_actuator, encoder, gpio_contact_response, hdmi_sink, lens, sd_card, sensor, spi as spi_parts, stabilizer, usb_endpoint, wifi_module}};
+use fujimod_emulator_storage::fat;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 

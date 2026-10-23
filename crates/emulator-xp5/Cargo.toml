@@ -11,6 +11,10 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+fujimod-emulator-ip.workspace = true
+fujimod-emulator-ip-dmp.workspace = true
+fujimod-emulator-ip-arm.workspace = true
+fujimod-emulator-graphics.workspace = true
 fujimod-emulator-devices.workspace = true
 sha2 = "0.10"
 serde_json = "1"

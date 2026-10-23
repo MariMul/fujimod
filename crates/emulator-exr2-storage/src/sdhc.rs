@@ -1,7 +1,8 @@
 //! EXR II SD0 at FFF50000. SDHC default speed is modeled; MMC, erase, tuning,
 //! and UHS refuse. Latencies and card identity are declared inputs.
 //! SDMA writes bytes before status and IRQ; boundaries require W1C/resume.
-use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine, ip::sdhci::Clocks, parts::sd_card::Card};
+use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine, parts::sd_card::Card};
+use fujimod_emulator_ip::sdhci::Clocks;
 use serde::{Deserialize, Serialize};
 use std::sync::{
     Arc,
@@ -348,7 +349,7 @@ impl SdHost {
         self.card = card;
         Ok(())
     }
-    pub fn files(&self, revision: Option<u64>) -> Result<fujimod_emulator_devices::storage::fat::Reader<'_>, String> {
+    pub fn files(&self, revision: Option<u64>) -> Result<fujimod_emulator_storage::fat::Reader<'_>, String> {
         if !self.contacts.present() {
             return Err("No SD card inserted".into());
         }
@@ -358,7 +359,7 @@ impl SdHost {
         if revision.is_some_and(|r| r != self.card.revision()) {
             return Err("SD medium revision changed".into());
         }
-        fujimod_emulator_devices::storage::fat::Reader::new(&self.card)
+        fujimod_emulator_storage::fat::Reader::new(&self.card)
     }
     fn signal(&self, cx: &mut Cx<'_>) -> Result<(), String> {
         self.irq.drive(cx, self.regs.asserted())

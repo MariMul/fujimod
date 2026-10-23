@@ -62,8 +62,8 @@ fn boot_decoder_wiring_changes_the_fingerprint_without_a_register_write() {
 }
 #[test]
 fn sdhci_clock_settling_input_is_complete_state_before_oscillation_starts() {
-    let a = fujimod_emulator_devices::ip::sdhci::Clocks::new(&[(0xfff5002c, 2)]).unwrap();
-    let b = fujimod_emulator_devices::ip::sdhci::Clocks::new(&[(0xfff5002c, 3)]).unwrap();
+    let a = fujimod_emulator_ip::sdhci::Clocks::new(&[(0xfff5002c, 2)]).unwrap();
+    let b = fujimod_emulator_ip::sdhci::Clocks::new(&[(0xfff5002c, 3)]).unwrap();
     assert_eq!(a.save()["clocks"], b.save()["clocks"]);
     assert_ne!(a.fingerprint().unwrap(), b.fingerprint().unwrap());
 }

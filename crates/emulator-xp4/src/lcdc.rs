@@ -2,7 +2,8 @@
 //! X-T3 010e4920 programs totals/porches; 010f6010 selects physical
 //! phase routes. The input pixel clock and phase law are explicit functional
 //! assumptions, not measured silicon timing. No guest software is inspected.
-use fujimod_emulator_devices::{graphics::{raster::{self, PixelOrder, Plane}, scanout::Frame}, Cx, Device};
+use fujimod_emulator_graphics::raster::{self, PixelOrder, Plane};
+use fujimod_emulator_devices::{graphics::scanout::Frame, Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};

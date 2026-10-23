@@ -32,12 +32,12 @@ struct Saved {
     outputs: BTreeMap<usize, Value>,
     mprofile: Vec<Option<mprofile::Checkpoint>>,
     aprofile: Vec<Option<aprofile::Profile>>,
-    implementation_cluster: fujimod_emulator_devices::ip::arm::cortex_a53::Registers,
+    implementation_cluster: fujimod_emulator_ip_arm::cortex_a53::Registers,
     unmodeled_system: BTreeMap<(usize, u16, u64), (u64, u64)>,
     processor_deadlines: Vec<Option<u64>>,
     processor_generations: Vec<u64>,
     code_run: Option<usize>,
-    gic: Option<fujimod_emulator_devices::ip::arm::gicv3::Gic>,
+    gic: Option<fujimod_emulator_ip_arm::gicv3::Gic>,
 }
 pub struct Keyframe {
     owner: Weak<RefCell<State>>,

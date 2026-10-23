@@ -5,7 +5,8 @@ use fujimod_emulator::board::{
     factory::*,
 };
 use fujimod_emulator_cpu::{Model, Register, timeline::Ratio};
-use fujimod_emulator_devices::{checkpoint::Checkpoint, ip::arm::gicv3::Gic};
+use fujimod_emulator_devices::checkpoint::Checkpoint;
+use fujimod_emulator_ip_arm::gicv3::Gic;
 fn board() -> Result<Board, String> {
     Graph {
         processors: vec![Processor {

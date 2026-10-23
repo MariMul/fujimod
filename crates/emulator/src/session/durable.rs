@@ -62,7 +62,7 @@ impl Media {
         if medium.protected {
             return Err("SD card is write protected".into());
         }
-        medium.card = fujimod_emulator_devices::storage::fat::merge(&medium.card, files)?;
+        medium.card = fujimod_emulator_storage::fat::merge(&medium.card, files)?;
         Ok(())
     }
     pub fn validate(&self, session: &Session, spec: &Spec) -> Result<(), String> {

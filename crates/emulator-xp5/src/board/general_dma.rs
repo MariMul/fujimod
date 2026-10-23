@@ -2,8 +2,8 @@
 use fujimod_emulator_devices::bus::InterruptLine;
 use fujimod_emulator_devices::dma::Direction;
 use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
-use fujimod_emulator_devices::ip::arm::pl022::{Clock, Controller};
-use fujimod_emulator_devices::ip::socionext::xdmac::{Connection, Pair};
+use fujimod_emulator_ip_arm::pl022::{Clock, Controller};
+use fujimod_emulator_ip::socionext::xdmac::{Connection, Pair};
 use fujimod_emulator_devices::parts::serial::{InputLevel, Unconnected, Wire};
 use crate::{dma_registers, general_dma::Global};
 use serde::Deserialize;

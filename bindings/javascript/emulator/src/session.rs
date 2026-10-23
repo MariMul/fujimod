@@ -7,7 +7,8 @@ use fujimod_emulator::board::{
     factory,
 };
 use fujimod_emulator_cpu::{Model, Register, arm, timeline::Ratio};
-use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, graphics::{raster::PixelOrder, scanout::Frame}, parts::{controls::Source, pins::DriveInput, resistor_keys::{Key, Options as ResistorKeysOptions, ResistorKeys}}};
+use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, graphics::scanout::Frame, parts::{controls::Source, pins::DriveInput, resistor_keys::{Key, Options as ResistorKeysOptions, ResistorKeys}}};
+use fujimod_emulator_graphics::raster::PixelOrder;
 use fujimod_emulator_xp5::{board, display, gpio, panel_clock};
 use serde::Deserialize;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
@@ -237,7 +238,7 @@ impl Session {
             .map(|g| {
                 Ok::<_, String>(InterruptMap {
                     cores: g.affinities.len(),
-                    gic: fujimod_emulator_devices::ip::arm::gicv3::Gic::new(g.affinities, g.lines)?,
+                    gic: fujimod_emulator_ip_arm::gicv3::Gic::new(g.affinities, g.lines)?,
                     distributor: g.distributor,
                     redistributor: g.redistributor,
                     stride: g.stride,

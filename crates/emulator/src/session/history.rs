@@ -102,7 +102,7 @@ pub enum Input {
     },
     CardFormat {
         node: String,
-        options: fujimod_emulator_devices::storage::fat::Options,
+        options: fujimod_emulator_storage::fat::Options,
         files: Vec<(String, Vec<u8>)>,
     },
     CardInsert {

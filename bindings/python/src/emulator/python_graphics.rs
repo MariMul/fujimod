@@ -6,7 +6,7 @@
 
 use crate::emulator::python_values::{DeviceRefusal, value_to_py};
 use fujimod_emulator_devices::Unsupported;
-use fujimod_emulator_devices::graphics::{batch, clear, init, regs::Registers, render};
+use fujimod_emulator_graphics::{batch, clear, init, regs::Registers, render};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList, PyTuple};
 use std::collections::HashMap;
@@ -111,7 +111,7 @@ fn draw_dict<'py>(py: Python<'py>, draw: &batch::Draw) -> PyResult<Bound<'py, Py
     Ok(d)
 }
 
-use fujimod_emulator_devices::graphics::cache::cached_coverage;
+use fujimod_emulator_graphics::cache::cached_coverage;
 
 /// A validated UI batch (`_ui_batch`'s draws and register banks).
 #[pyclass(module = "fujimod._native.emulator", unsendable)]
@@ -184,7 +184,7 @@ impl UiBatch {
     }
     /// A byte string identifying every draw field (render memo key).
     fn key<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        let key = fujimod_emulator_devices::graphics::cache::draws_key(&self.draws);
+        let key = fujimod_emulator_graphics::cache::draws_key(&self.draws);
         PyBytes::new(py, &key)
     }
     /// Render with the snapshots `reads()` asked for: `targets` maps address
@@ -333,7 +333,7 @@ pub fn ui_stream_draws(
     initial: Option<Bound<'_, PyDict>>,
 ) -> PyResult<usize> {
     let initial = registers(initial.as_ref())?;
-    fujimod_emulator_devices::graphics::stream::parse(&words, path, initial.as_ref())
+    fujimod_emulator_graphics::stream::parse(&words, path, initial.as_ref())
         .map(|(draws, _)| draws.len())
         .map_err(refusal)
 }
@@ -348,7 +348,7 @@ pub fn ui_stream_parse<'py>(
     initial: Option<&Bound<'py, PyDict>>,
 ) -> PyResult<(Bound<'py, PyList>, Bound<'py, PyDict>)> {
     let initial = registers(initial)?;
-    let (draws, bank) = fujimod_emulator_devices::graphics::stream::parse(&words, path, initial.as_ref())
+    let (draws, bank) = fujimod_emulator_graphics::stream::parse(&words, path, initial.as_ref())
         .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.0))?;
     let result = PyList::empty(py);
     for draw in draws {
