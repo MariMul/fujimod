@@ -69,9 +69,12 @@ wasm-bindgen-futures = "0.4"
 futures-channel = "0.3"
 
 # Native emulator builds use release optimization for the runtime library.
+# Sixteen codegen units boot the X70 firmware as fast as one did and cut an
+# emulator-device rebuild from about 1,040 to 650 CPU seconds; ThinLTO keeps
+# cross-crate inlining (without it the boot took 7% more CPU).
 [profile.release]
 lto = "thin"
-codegen-units = 1
+codegen-units = 16
 
 # Optimized native profiling without selecting Cargo's release profile.
 # Tests retain the default development assertions and overflow checks.
