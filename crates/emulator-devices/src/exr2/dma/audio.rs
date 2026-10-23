@@ -244,7 +244,7 @@ impl Device for SerialDma {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::exr2::isp::tests::support::{TestHost, advance, read, write};
+    use crate::test_host::{TestHost, advance, read, write};
     #[test]
     fn relocated_receive_waits_for_external_samples_and_has_no_timer_or_dma() {
         let mut host = TestHost::new();
@@ -358,7 +358,7 @@ mod tests {
 #[cfg(test)]
 mod large_ram_tests {
     use super::*;
-    use crate::exr2::isp::tests::support::{TestHost, read, write};
+    use crate::test_host::{TestHost, read, write};
 
     #[test]
     fn descriptor_bounds_follow_declared_ram_inside_the_physical_address_mask() {

@@ -155,7 +155,7 @@ impl Device for Phy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::exr2::isp::tests::support::{TestHost, advance, read, write};
+    use crate::test_host::{TestHost, advance, read, write};
     #[test]
     fn training_is_caused_by_the_phy_start_write_and_inspection_is_pure() {
         let mut host = TestHost::new();

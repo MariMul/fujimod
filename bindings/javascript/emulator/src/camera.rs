@@ -5,7 +5,7 @@ use fujimod_emulator::board::{
     bus::{Bus, Mode},
     factory,
 };
-use fujimod_emulator_devices::exr2::board::{MemoryChoices, Plan, RefuseAdapters, Resources};
+use fujimod_emulator_exr2_board::{MemoryChoices, Plan, RefuseAdapters, Resources};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, sync::Arc};
@@ -223,10 +223,7 @@ fn device_roles(plan: &Plan) -> Result<(Option<String>, Vec<String>), String> {
         .iter()
         .filter(|n| {
             n.boot_entries.contains(&plan.boot_entry)
-                && matches!(
-                    n.model,
-                    fujimod_emulator_devices::exr2::board::Model::Scanout { .. }
-                )
+                && matches!(n.model, fujimod_emulator_exr2_board::Model::Scanout { .. })
         })
         .map(|n| n.name.clone())
         .collect::<Vec<_>>();
@@ -240,10 +237,7 @@ fn device_roles(plan: &Plan) -> Result<(Option<String>, Vec<String>), String> {
         .iter()
         .filter(|n| {
             n.boot_entries.contains(&plan.boot_entry)
-                && matches!(
-                    n.model,
-                    fujimod_emulator_devices::exr2::board::Model::Nand { .. }
-                )
+                && matches!(n.model, fujimod_emulator_exr2_board::Model::Nand { .. })
         })
         .map(|n| n.name.clone())
         .collect();

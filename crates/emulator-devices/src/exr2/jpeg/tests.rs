@@ -1,9 +1,11 @@
 use super::*;
 use crate::Device;
-use crate::exr2::isp::{
-    Irq,
-    stream::{State, StreamHandle},
-    tests::support::{TestHost, advance, advance_from_checkpoint, read, write},
+use crate::{
+    exr2::isp::{
+        Irq,
+        stream::{State, StreamHandle},
+    },
+    test_host::{TestHost, advance, advance_from_checkpoint, read, write},
 };
 fn encoder(stream: StreamHandle) -> Encoder {
     Encoder::new(
@@ -86,62 +88,6 @@ fn memory_encode_reserves_prefix_and_decoder_publishes_pixels_before_irq() {
     assert_eq!(read(&mut decoder, &mut h, 0xfff63004), 0);
     advance(&mut decoder, &mut h, 17);
     assert_eq!(read(&mut decoder, &mut h, 0xfff63004), 0x10000);
-}
-#[test]
-fn warp_stream_requires_both_starts_and_releases_only_at_completion() {
-    use crate::exr2::isp::{Warp, warp};
-    let mut h = TestHost::new();
-    h.ram[0x8000..0x8100].fill(128);
-    let stream: StreamHandle = Default::default();
-    let mut w = Warp::new(
-        warp::Options {
-            completion_ticks: 5,
-            stop_ticks: 2,
-        },
-        (Irq { core: 0, line: 74 }, stream.clone()),
-    )
-    .unwrap();
-    let mut e = encoder(stream.clone());
-    configure(&mut e, &mut h, true);
-    {
-        let mut cx = h.cx();
-        e.write(&mut cx, 0xfff62000, 4, 5);
-        assert!(cx.refusal().is_some());
-    }
-    for (o, v) in [
-        (4, 0x40),
-        (0x10, 0x8000),
-        (0x14, 16),
-        (0x18, 8 << 16 | 16),
-        (0x20, 16),
-        (0x28, 8 << 16 | 16),
-        (0x40, 4096),
-        (0x44, 4096),
-        (0x4c, 0x10001),
-        (0x50, 7 << 16 | 15),
-        (0x54, 7 << 16 | 15),
-        (0x148, 0x21),
-        (0, 1),
-    ] {
-        write(&mut w, &mut h, 0xfff65000 + o, v);
-    }
-    assert_eq!(stream.lock().unwrap().state, State::Ready);
-    write(&mut e, &mut h, 0xfff62000, 5);
-    assert_eq!(stream.lock().unwrap().state, State::Claimed);
-    assert_eq!(stream.lock().unwrap().pixels.len(), 256);
-    {
-        let mut cx = h.cx();
-        w.write(&mut cx, 0xfff65000, 4, 0);
-        assert!(cx.refusal().is_some());
-    }
-    advance(&mut e, &mut h, 10);
-    assert_eq!(stream.lock().unwrap().state, State::Finished);
-    assert!(stream.lock().unwrap().pixels.is_empty());
-    assert_eq!(w.next_deadline(10), Some(10));
-    advance(&mut w, &mut h, 10);
-    assert_eq!(read(&mut w, &mut h, 0xfff65000), 0x10000);
-    assert_eq!(stream.lock().unwrap().state, State::Idle);
-    assert_eq!(h.irqs, [(0, 77)]);
 }
 #[test]
 fn encode_capacity_failure_does_not_claim_stream_or_write_ram() {
@@ -282,7 +228,6 @@ fn implicit_and_explicit_packed_input_modes_encode_the_same_addressed_pixels() {
 fn worker_codec_retains_exact_stream_bytes_error_state_and_completion() {
     crate::work::configure(2).unwrap();
     memory_encode_reserves_prefix_and_decoder_publishes_pixels_before_irq();
-    warp_stream_requires_both_starts_and_releases_only_at_completion();
     encode_capacity_failure_does_not_claim_stream_or_write_ram();
     programmed_restart_nine_reaches_the_real_codestream_and_decoder();
     implicit_and_explicit_packed_input_modes_encode_the_same_addressed_pixels();

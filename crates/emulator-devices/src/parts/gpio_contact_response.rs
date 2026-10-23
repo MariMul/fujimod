@@ -198,13 +198,10 @@ mod tests {
     use super::*;
     use crate::{
         bus::InterruptLine,
-        exr2::{
-            gpio::{
-                BASE, Edge, Gpio, InitialOutput, InputIrq, Options as GpioOptions,
-                Wiring as GpioWiring,
-            },
-            isp::tests::support::{TestHost, advance, write},
+        exr2::gpio::{
+            BASE, Edge, Gpio, InitialOutput, InputIrq, Options as GpioOptions, Wiring as GpioWiring,
         },
+        test_host::{TestHost, advance, write},
     };
 
     fn pin(port: u8, pin: u8) -> Pin {

@@ -752,7 +752,7 @@ impl crate::Device for DisplayTiming {
 #[cfg(test)]
 mod native_tests {
     use super::*;
-    use crate::exr2::isp::tests::support::{TestHost, advance, write};
+    use crate::test_host::{TestHost, advance, write};
     use crate::{
         Device,
         exr2::{clock, irq},

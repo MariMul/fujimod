@@ -1,9 +1,10 @@
 //! A scoped device capability. No Python object retains a runtime borrow.
 use fujimod_emulator_devices::{
     Cx,
-    exr2::{board::Resources, gpio::Pads, irq::Inputs, pulse::PulsePins},
+    exr2::{gpio::Pads, irq::Inputs, pulse::PulsePins},
     parts::pins::{Pin, Pins},
 };
+use fujimod_emulator_exr2_board::Resources;
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,

@@ -32,7 +32,7 @@ impl Reset {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::exr2::isp::tests::support::{TestHost, read, write};
+    use crate::test_host::{TestHost, read, write};
     #[test]
     fn reset_words_retain_guest_configuration_and_do_not_claim_cpu_or_clock_effects() {
         let mut host = TestHost::new();

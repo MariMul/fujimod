@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     bus::InterruptLine,
-    storage::test_host::{Effect, Ram},
+    test_host::ram::{Effect, Ram},
 };
 const CORE: u64 = super::super::CORE as u64;
 const PHY: u64 = super::super::PHY as u64;

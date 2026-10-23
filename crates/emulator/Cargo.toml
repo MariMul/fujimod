@@ -28,6 +28,7 @@ default = []
 fujimod-recording = { path = "../recording" }
 serde = { version = "1", features = ["derive"] }
 fujimod-emulator-devices = { path = "../emulator-devices" }
+fujimod-emulator-exr2-board = { path = "../emulator-exr2-board" }
 fujimod-emulator-cpu = { path = "../emulator-cpu" }
 fujimod-emulator-cpu-unicorn = { path = "../emulator-cpu-unicorn" }
 fujimod-catalog = { path = "../catalog" }

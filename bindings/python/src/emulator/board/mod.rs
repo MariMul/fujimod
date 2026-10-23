@@ -17,7 +17,7 @@ use fujimod_emulator::board::{
     factory,
 };
 use fujimod_emulator_cpu::{Register, arm};
-use fujimod_emulator_devices::exr2::board::{Plan, Resources};
+use fujimod_emulator_exr2_board::{Plan, Resources};
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
@@ -451,7 +451,7 @@ impl Board {
             &graph
                 .decoders
                 .iter()
-                .map(|d| fujimod_emulator_devices::exr2::board::MemoryChoices {
+                .map(|d| fujimod_emulator_exr2_board::MemoryChoices {
                     initial: d.initial,
                     choices: d.choices.len(),
                 })

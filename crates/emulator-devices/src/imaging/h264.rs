@@ -179,10 +179,7 @@ fn normalize(stream: &[u8]) -> Result<Vec<u8>, String> {
 /// The register transport publishes SPS/PPS once at sequence start. Later
 /// IDRs reuse those parameter-set IDs; identical repeated headers are omitted.
 /// A backend changing its parameter sets within a sequence must refuse.
-pub(crate) fn transport_frame(
-    stream: &[u8],
-    previous: &[u8],
-) -> Result<(Vec<u8>, Vec<u8>), String> {
+pub fn transport_frame(stream: &[u8], previous: &[u8]) -> Result<(Vec<u8>, Vec<u8>), String> {
     let starts: Vec<usize> = stream
         .windows(4)
         .enumerate()

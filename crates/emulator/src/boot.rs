@@ -40,7 +40,7 @@ use fujimod_catalog::{
     reference::PartModel,
 };
 use fujimod_emulator_cpu::arm::Coprocessor;
-use fujimod_emulator_devices::exr2::board::{MemoryChoices, Plan, RefuseAdapters, Resources};
+use fujimod_emulator_exr2_board::{MemoryChoices, Plan, RefuseAdapters, Resources};
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::{

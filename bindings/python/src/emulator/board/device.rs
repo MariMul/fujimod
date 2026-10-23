@@ -1,9 +1,6 @@
 use super::context::{DeviceContext, Scope};
-use fujimod_emulator_devices::{
-    Cx, Device,
-    exr2::board::{Adapter, AdapterFactory, Resources},
-    graph::Mapping,
-};
+use fujimod_emulator_devices::{Cx, Device, graph::Mapping};
+use fujimod_emulator_exr2_board::{Adapter, AdapterFactory, Resources};
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
     prelude::*,

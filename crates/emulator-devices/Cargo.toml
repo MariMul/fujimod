@@ -6,9 +6,6 @@ rust-version = "1.88"
 publish = false
 description = "Camera processor device models with guest virtual time and explicit hardware inputs."
 
-[features]
-videotoolbox-tests = []
-
 [lib]
 doctest = false
 name = "fujimod_emulator_devices"

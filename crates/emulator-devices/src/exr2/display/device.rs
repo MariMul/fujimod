@@ -319,7 +319,7 @@ impl ScanoutHost for Observation<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::exr2::isp::tests::support::{TestHost, advance, write};
+    use crate::test_host::{TestHost, advance, write};
     fn model() -> Scanout {
         model_with_ram(0x100000)
     }

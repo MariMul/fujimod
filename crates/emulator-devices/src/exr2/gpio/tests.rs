@@ -1,5 +1,5 @@
 use super::*;
-use crate::exr2::isp::tests::support::TestHost;
+use crate::test_host::TestHost;
 struct Model {
     gpio: Gpio,
     host: TestHost,
@@ -29,7 +29,7 @@ fn model() -> Model {
     }
 }
 fn write(m: &mut Model, port: u32, offset: u32, value: u32) {
-    crate::exr2::isp::tests::support::write(
+    crate::test_host::write(
         &mut m.gpio,
         &mut m.host,
         BASE + u64::from(port) * 64 + u64::from(offset),
@@ -37,7 +37,7 @@ fn write(m: &mut Model, port: u32, offset: u32, value: u32) {
     );
 }
 fn read(m: &mut Model, port: u32, offset: u32) -> u64 {
-    crate::exr2::isp::tests::support::read(
+    crate::test_host::read(
         &mut m.gpio,
         &mut m.host,
         BASE + u64::from(port) * 64 + u64::from(offset),

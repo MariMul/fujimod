@@ -1226,7 +1226,7 @@ mod tests {
     use super::*;
     use crate::{
         parts::sd_card,
-        storage::test_host::{Effect, Ram},
+        test_host::ram::{Effect, Ram},
     };
     fn host(protocol: Protocol) -> SdHost {
         SdHost::new(

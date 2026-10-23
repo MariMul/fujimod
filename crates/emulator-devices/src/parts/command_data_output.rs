@@ -84,7 +84,7 @@ impl Endpoint for CommandDataOutput {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::exr2::isp::tests::support::TestHost;
+    use crate::test_host::TestHost;
 
     #[test]
     fn binary_keyframe_resumes_a_partial_physical_packet() {

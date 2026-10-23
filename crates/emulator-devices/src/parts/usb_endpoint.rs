@@ -685,7 +685,7 @@ impl Device for Endpoint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::test_host::{Effect, Ram};
+    use crate::test_host::ram::{Effect, Ram};
     fn model() -> Endpoint {
         Endpoint::new(
             Options {

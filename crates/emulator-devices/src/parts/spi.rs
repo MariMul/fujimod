@@ -283,7 +283,7 @@ impl Endpoint for FixedInput {
 #[cfg(test)]
 mod input_tests {
     use super::*;
-    use crate::exr2::isp::tests::support::TestHost;
+    use crate::test_host::TestHost;
 
     #[test]
     fn clock_register_writes_set_the_running_counter_and_restore_exactly() {
@@ -408,7 +408,7 @@ mod input_tests {
 #[cfg(test)]
 mod panel_observation_tests {
     use super::*;
-    use crate::exr2::isp::tests::support::TestHost;
+    use crate::test_host::TestHost;
 
     #[test]
     fn panel_observes_only_completed_words_and_restores_the_bounded_history() {

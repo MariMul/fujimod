@@ -305,7 +305,7 @@ impl Device for Receiver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::exr2::isp::tests::support::{TestHost, advance, read, write};
+    use crate::test_host::{TestHost, advance, read, write};
     fn setup() -> (Receiver, TestHost) {
         let routes = IrqRoutes::default();
         routes.set(0x5c, Some(0)).unwrap();

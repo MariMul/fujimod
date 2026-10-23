@@ -42,10 +42,8 @@ fn card_session() -> Session {
     )
     .unwrap();
     let adc = bus.register(0xfff8a000, 0x60, Box::new(analog)).unwrap();
-    use fujimod_emulator_devices::{
-        exr2::{board::CardPins, gpio},
-        parts::pins::Pin,
-    };
+    use fujimod_emulator_exr2_board::CardPins;
+    use fujimod_emulator_devices::{exr2::gpio, parts::pins::Pin};
     let gpio = gpio::Gpio::new(
         gpio::Options {
             input_levels: [0; 16],

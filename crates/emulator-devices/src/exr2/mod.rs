@@ -2,7 +2,6 @@
 
 pub mod adc;
 pub mod audio;
-pub mod board;
 pub mod boot;
 pub mod clock;
 pub mod companion;
@@ -24,6 +23,7 @@ pub mod pulse;
 pub mod reset;
 pub mod sdhc;
 pub mod sdio;
+pub mod serial_dma;
 pub mod spi;
 pub mod timer;
 pub mod uart;

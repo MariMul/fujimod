@@ -1,6 +1,6 @@
 //! Channel 11: a 600-microsecond period uses 14400 ticks and IRQ31.
 use super::*;
-use crate::exr2::isp::tests::support::{TestHost, advance, write};
+use crate::test_host::{TestHost, advance, write};
 fn configured(core: usize, control: u32, period: u32) -> (PulseUnit, TestHost) {
     let mut irqs = [None; 12];
     irqs[11] = Some(InterruptLine::Core { core, line: 31 });

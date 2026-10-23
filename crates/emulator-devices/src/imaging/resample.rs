@@ -72,7 +72,7 @@ pub fn endpoint(
 /// Validated endpoint geometry. The pure row kernel cannot inspect registers,
 /// live memory or a stream; callers may run it on disjoint worker-owned rows.
 #[derive(Clone, Copy)]
-pub(crate) struct Endpoint {
+pub struct Endpoint {
     pitch: usize,
     dw: usize,
     dh: usize,
@@ -80,7 +80,7 @@ pub(crate) struct Endpoint {
     mode: u32,
 }
 impl Endpoint {
-    pub(crate) fn new(
+    pub fn new(
         source_bytes: usize,
         sw: usize,
         sh: usize,
@@ -114,7 +114,7 @@ impl Endpoint {
             mode,
         })
     }
-    pub(crate) fn render_rows(&self, source: &[u8], rows: std::ops::Range<usize>, out: &mut [u8]) {
+    pub fn render_rows(&self, source: &[u8], rows: std::ops::Range<usize>, out: &mut [u8]) {
         let Self {
             pitch,
             dw,

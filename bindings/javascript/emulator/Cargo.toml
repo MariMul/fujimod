@@ -17,6 +17,7 @@ fujimod-emulator = { workspace = true, default-features = false }
 fujimod-emulator-cpu.workspace = true
 fujimod-emulator-cpu-unicorn.workspace = true
 fujimod-emulator-devices.workspace = true
+fujimod-emulator-exr2-board.workspace = true
 fujimod-firmware.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true

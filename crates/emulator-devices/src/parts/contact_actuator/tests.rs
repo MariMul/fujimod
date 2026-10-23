@@ -1,6 +1,6 @@
 use super::*;
 use crate::bus::InterruptLine;
-use crate::exr2::{gpio, isp::tests::support::TestHost};
+use crate::{exr2::gpio, test_host::TestHost};
 fn model() -> (ContactActuator, gpio::Gpio, gpio::Pads, TestHost) {
     let mut levels = [0; 16];
     levels[0] = (1 << 9) | (1 << 6);

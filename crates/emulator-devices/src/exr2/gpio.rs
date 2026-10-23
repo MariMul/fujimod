@@ -373,7 +373,7 @@ impl Device for Gpio {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::exr2::isp::tests::support::{TestHost, read, write};
+    use crate::test_host::{TestHost, read, write};
     fn options() -> Options {
         Options {
             input_levels: [0xffff; 16],

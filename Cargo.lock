@@ -3450,6 +3450,7 @@ dependencies = [
  "fujimod-emulator-cpu-hvf",
  "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-board",
  "fujimod-recording",
  "fujimod-workspace-hack",
  "libc",
@@ -3517,6 +3518,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-emulator-exr2-board"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-isp",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-isp"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "openh264",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "fujimod-emulator-javascript"
 version = "0.1.0"
 dependencies = [
@@ -3525,6 +3549,7 @@ dependencies = [
  "fujimod-emulator-cpu",
  "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-board",
  "fujimod-firmware",
  "fujimod-workspace-hack",
  "serde",
@@ -3575,6 +3600,7 @@ dependencies = [
  "fujimod-emulator",
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-board",
  "fujimod-firmware",
  "fujimod-recording",
  "fujimod-remote",

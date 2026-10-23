@@ -103,7 +103,7 @@ pub struct ExposedFrame {
 impl ExposedFrame {
     /// Equality of the immutable inputs consumed by `sample`, independent of
     /// frame-edge numbering and physical metadata that do not change pixels.
-    pub(crate) fn same_samples(&self, other: &Self) -> bool {
+    pub fn same_samples(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.frame, &other.frame)
             && self.response == other.response
             && self.focus_shift_mm == other.focus_shift_mm
@@ -317,7 +317,7 @@ impl ExposedFrame {
             FramePixels::Raw16(p) => [p[sy * f.width + sx]; 3],
         }
     }
-    pub(crate) fn sample_dimensions(&self) -> [usize; 2] {
+    pub fn sample_dimensions(&self) -> [usize; 2] {
         match &self.filtered {
             Some(Filtered::Grid(dimensions, _) | Filtered::BinnedReadout(dimensions, _)) => {
                 *dimensions

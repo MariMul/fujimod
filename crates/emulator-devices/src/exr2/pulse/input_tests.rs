@@ -1,6 +1,6 @@
 //! Capture period measurement and running quadrature counter updates.
 use super::*;
-use crate::exr2::isp::tests::support::{TestHost, read, write};
+use crate::test_host::{TestHost, read, write};
 
 fn unit(quadrature: bool) -> PulseUnit {
     let mut irqs = [None; 12];

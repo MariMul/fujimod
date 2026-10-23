@@ -155,7 +155,7 @@ fn a_guest_reset_release_tightens_the_active_run_to_the_next_quantum_boundary() 
 
 #[test]
 fn native_software_interrupt_wiring_releases_the_declared_entry_at_the_existing_slice_boundary() {
-    use fujimod_emulator_devices::exr2::board::{Plan, RefuseAdapters, Resources};
+    use fujimod_emulator_exr2_board::{Plan, RefuseAdapters, Resources};
     use factory::{Engine, Graph, MemoryMap, Options, Peripheral, Processor, Ram};
     for pause in [None, Some(100), Some(137)] {
         let plan=Plan::parse(&serde_json::to_vec(&json!({

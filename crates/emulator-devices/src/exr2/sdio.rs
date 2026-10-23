@@ -480,7 +480,7 @@ mod tests {
     use super::*;
     use crate::{
         parts::wifi_module,
-        storage::test_host::{Effect, Ram},
+        test_host::ram::{Effect, Ram},
     };
     fn model(protocol: Protocol) -> SdioHost {
         SdioHost::new(

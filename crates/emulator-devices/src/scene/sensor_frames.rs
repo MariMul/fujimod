@@ -32,7 +32,7 @@ impl Frame {
         };
         serde_json::json!({"width":self.width,"height":self.height,"white_luminance":self.white_luminance,"pixels":pixels})
     }
-    pub(crate) fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
+    pub fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
         let raw = matches!(self.pixels, FramePixels::Raw16(_));
         let pixels = match &self.pixels {
             FramePixels::Rgb24(bytes) => bytes.clone(),
@@ -48,7 +48,7 @@ impl Frame {
         )?
         .with_blobs(vec![pixels]))
     }
-    pub(crate) fn from_checkpoint(saved: &crate::checkpoint::Checkpoint) -> Result<Self, String> {
+    pub fn from_checkpoint(saved: &crate::checkpoint::Checkpoint) -> Result<Self, String> {
         let (width, height, white, raw): (usize, usize, f64, bool) =
             saved.decode("sensor-frame")?;
         if width == 0

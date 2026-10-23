@@ -6,7 +6,7 @@ use super::{
 };
 use crate::{
     Device,
-    exr2::isp::tests::support::{TestHost, write},
+    test_host::{TestHost, write},
 };
 
 fn model() -> Scanout {

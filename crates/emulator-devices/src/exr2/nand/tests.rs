@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Host, Record, storage::test_host::Ram};
+use crate::{Host, Record, test_host::ram::Ram};
 use std::{collections::BTreeMap, sync::Arc};
 struct TestHost {
     ram: Ram,

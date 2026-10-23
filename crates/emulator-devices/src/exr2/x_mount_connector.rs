@@ -3,7 +3,8 @@
 //! Pad mux/direction/enable registers and interrupt sense registers are the
 //! only control inputs. Startup duration and electrical interpretation remain
 //! explicit inferred board inputs; no optical operation is qualified here.
-use super::{board::serial_dma, gpio, irq};
+use crate::exr2::serial_dma;
+use super::{gpio, irq};
 use crate::{
     Cx, Device,
     checkpoint::Checkpoint,

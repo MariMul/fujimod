@@ -8,7 +8,7 @@ pub enum ImageSource {
     Analytic,
     Sensor,
 }
-pub(crate) enum Pixels {
+pub enum Pixels {
     Packed(Arc<[u8]>),
     Sensor(Arc<crate::imaging::radiometric::Image>),
 }
@@ -74,7 +74,7 @@ impl Pixels {
         }
     }
 }
-pub(crate) struct ImageFrame {
+pub struct ImageFrame {
     pub edge: Option<FrameEdge>,
     pub layout: ImageLayout,
     pub pixels: Pixels,
@@ -93,7 +93,7 @@ struct ImageState {
 /// Shared output from a modeled image source. Retained keyframes share immutable
 /// bytes; publication copies only when an older image is still retained.
 #[derive(Clone)]
-pub struct ImageFrames(pub(crate) Arc<Mutex<ImageFrame>>);
+pub struct ImageFrames(pub Arc<Mutex<ImageFrame>>);
 impl ImageFrames {
     pub fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
         let frame = self.0.lock().map_err(|_| "image-frame poisoned")?;
@@ -258,14 +258,14 @@ pub struct StatisticsSpan {
     pub bytes: Vec<u8>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
-pub(crate) struct StatisticsFrame {
+pub struct StatisticsFrame {
     pub edge: Option<FrameEdge>,
     pub spans: Vec<StatisticsSpan>,
 }
 /// A fixed-layout bank input, including optional destination 9 (histogram).
 /// External producers update bytes in place before publishing the next edge.
 #[derive(Clone)]
-pub struct StatisticsFrames(pub(crate) Arc<Mutex<StatisticsFrame>>);
+pub struct StatisticsFrames(pub Arc<Mutex<StatisticsFrame>>);
 impl StatisticsFrames {
     pub fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
         crate::checkpoint::Checkpoint::encode(

@@ -24,6 +24,8 @@ pub mod record;
 pub mod scene;
 pub mod signals;
 pub mod storage;
+#[doc(hidden)]
+pub mod test_host;
 pub mod work;
 pub mod xp4;
 pub mod xp5;

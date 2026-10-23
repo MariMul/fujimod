@@ -43,12 +43,12 @@ pub struct Image {
 /// captured at one exposure edge; later scene, focus, exposure, or film writes
 /// cannot change this readout. Layout is fixed before the job leaves its owner.
 #[derive(Clone)]
-pub(crate) struct FrozenReadout {
+pub struct FrozenReadout {
     image: Arc<Image>,
     layout: ImageLayout,
 }
 impl FrozenReadout {
-    pub(crate) fn render(&self, workers: usize) -> Result<Arc<[u8]>, String> {
+    pub fn render(&self, workers: usize) -> Result<Arc<[u8]>, String> {
         self.image.render(self.layout, workers)
     }
 }
@@ -71,7 +71,7 @@ impl Renderer {
             previous: None,
         })
     }
-    pub(crate) fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
+    pub fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
         crate::checkpoint::Checkpoint::encode(
             "radiometric-renderer",
             &(self.calibration, self.projection.as_ref().map(|p| p.spec())),
@@ -151,14 +151,14 @@ impl Renderer {
     }
 }
 impl Image {
-    pub(crate) fn freeze(self: &Arc<Self>, layout: ImageLayout) -> Result<FrozenReadout, String> {
+    pub fn freeze(self: &Arc<Self>, layout: ImageLayout) -> Result<FrozenReadout, String> {
         layout.bytes()?;
         Ok(FrozenReadout {
             image: self.clone(),
             layout,
         })
     }
-    pub(crate) fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
+    pub fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
         Ok(crate::checkpoint::Checkpoint::encode(
             "radiometric-image",
             &(
@@ -169,7 +169,7 @@ impl Image {
         )?
         .with_children(vec![self.exposure.checkpoint()?]))
     }
-    pub(crate) fn from_checkpoint(saved: &crate::checkpoint::Checkpoint) -> Result<Self, String> {
+    pub fn from_checkpoint(saved: &crate::checkpoint::Checkpoint) -> Result<Self, String> {
         let (film, gain, projection): (Film, [u32; 3], Option<super::optics::Spec>) =
             saved.decode("radiometric-image")?;
         if saved.children().len() != 1
@@ -212,7 +212,7 @@ impl Image {
     pub(crate) fn measurement(&self, grid: [usize; 2]) -> Result<ExposedFrame, String> {
         self.measurement_windows(grid, &[[0, 0, grid[0], grid[1]]])
     }
-    pub(crate) fn measurement_windows(
+    pub fn measurement_windows(
         &self,
         grid: [usize; 2],
         windows: &[[usize; 4]],
@@ -277,7 +277,7 @@ impl Image {
             ((u64::from(raw[c]) * u64::from(self.gain[c])) >> 8).min(16383) as u16
         })
     }
-    pub(crate) fn render(&self, layout: ImageLayout, workers: usize) -> Result<Arc<[u8]>, String> {
+    pub fn render(&self, layout: ImageLayout, workers: usize) -> Result<Arc<[u8]>, String> {
         layout.bytes()?;
         {
             let cache = self
@@ -392,7 +392,7 @@ impl Image {
         }
         Ok(out)
     }
-    pub(crate) fn histogram(
+    pub fn histogram(
         &self,
         grid: [usize; 2],
         window: [usize; 4],
@@ -485,7 +485,7 @@ mod tests {
             analog_gain: 1.,
         }));
         let parameters = Arc::new(Mutex::new(Parameters {
-            words: crate::imaging::film::color_tests::words(),
+            words: crate::test_host::film_words(),
             film: Film::default(),
         }));
         let r = Renderer::new(
@@ -677,7 +677,7 @@ mod tests {
                         saturation_lux_seconds: 1.,
                         color_sample_weights: [8, 20, 8],
                     };
-                    let mut words = crate::imaging::film::color_tests::words();
+                    let mut words = crate::test_host::film_words();
                     words[0x200 / 4] = 257 | 193 << 16;
                     words[0x204 / 4] = 311;
                     let parameters = Arc::new(Mutex::new(Parameters {

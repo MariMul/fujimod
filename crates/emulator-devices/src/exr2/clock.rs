@@ -244,7 +244,7 @@ impl Device for Clocks {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::exr2::isp::tests::support::{TestHost, advance, read, write};
+    use crate::test_host::{TestHost, advance, read, write};
     fn clock() -> Clocks {
         Clocks::new(
             Options {

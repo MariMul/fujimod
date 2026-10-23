@@ -13,11 +13,8 @@ use fujimod_catalog::{
         SensorRadiometry, SocBlock, SocBlockKind,
     },
 };
-use fujimod_emulator_devices::{
-    exr2::board::{BootEntry, Model, Node, Plan, WireKind},
-    graph::Mapping as DeviceMapping,
-    parts::pins::Pin,
-};
+use fujimod_emulator_exr2_board::{BootEntry, Model, Node, Plan, WireKind};
+use fujimod_emulator_devices::{graph::Mapping as DeviceMapping, parts::pins::Pin};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 

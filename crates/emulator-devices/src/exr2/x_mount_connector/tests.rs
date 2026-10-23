@@ -1,5 +1,5 @@
 use super::*;
-use crate::exr2::isp::tests::support::{TestHost, read, write};
+use crate::test_host::{TestHost, read, write};
 use crate::parts::serial::{Frame, Wire};
 fn pad(port: u8, pin: u8, mux: u32) -> Pad {
     Pad {

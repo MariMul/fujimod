@@ -444,7 +444,7 @@ mod tests {
         }
     }
     use super::*;
-    use crate::exr2::isp::tests::support::{TestHost, advance, write};
+    use crate::test_host::{TestHost, advance, write};
     use crate::{Host, imaging::analysis::ImageLayout};
     fn fixture() -> (Processing, ImageFrames, TestHost) {
         let frames = ImageFrames::new(ImageLayout {

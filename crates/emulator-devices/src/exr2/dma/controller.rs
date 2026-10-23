@@ -305,10 +305,12 @@ impl Device for Controller {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::exr2::{
-        dma::{audio, memory},
-        isp::dma::IrqRoutes,
-        isp::tests::support::{TestHost, advance, read, write},
+    use crate::{
+        exr2::{
+            dma::{audio, memory},
+            isp::dma::IrqRoutes,
+        },
+        test_host::{TestHost, advance, read, write},
     };
 
     fn controller() -> Controller {

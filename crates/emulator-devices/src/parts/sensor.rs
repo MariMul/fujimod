@@ -362,7 +362,7 @@ pub struct Sensor {
 }
 /// A validated readout from one accepted exposure. It retains immutable image
 /// inputs, never the live sensor, controller, frame clock, or exposure handles.
-pub(crate) struct FrozenReadout {
+pub struct FrozenReadout {
     width: usize,
     height: usize,
     image_area: [usize; 4],
@@ -466,7 +466,7 @@ impl Sensor {
             projection: self.projection.as_ref().map(|p| p.spec().clone()),
         }
     }
-    pub(crate) fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
+    pub fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
         let mut children = Vec::new();
         if let Some(controls) = &self.controls {
             children.push(controls.checkpoint()?);
@@ -484,10 +484,7 @@ impl Sensor {
         )?
         .with_children(children))
     }
-    pub(crate) fn validate_checkpoint(
-        &self,
-        saved: &crate::checkpoint::Checkpoint,
-    ) -> Result<(), String> {
+    pub fn validate_checkpoint(&self, saved: &crate::checkpoint::Checkpoint) -> Result<(), String> {
         let Snapshot {
             configuration,
             controls,
@@ -509,7 +506,7 @@ impl Sensor {
         }
         Ok(())
     }
-    pub(crate) fn restore_checkpoint(
+    pub fn restore_checkpoint(
         &mut self,
         saved: &crate::checkpoint::Checkpoint,
     ) -> Result<(), String> {
@@ -530,7 +527,7 @@ impl Sensor {
         self.exposed = frame;
         Ok(())
     }
-    pub(crate) fn fingerprint(&self) -> serde_json::Value {
+    pub fn fingerprint(&self) -> serde_json::Value {
         let linear: Vec<u16> = self.linear.iter().flatten().copied().collect();
         serde_json::json!({"width":self.width,"height":self.height,"image_area":self.image_area,"cfa":self.cfa,"black":self.black,
             "linear":crate::fingerprint::words16(&linear),"radiometry":self.radiometry.as_ref().map(|r|r.0),"frames":self.frames.lock().unwrap().fingerprint(),
@@ -594,7 +591,7 @@ impl Sensor {
     pub fn readout_valid(&self) -> bool {
         self.readout_valid
     }
-    pub(crate) fn freeze_readout(
+    pub fn freeze_readout(
         &mut self,
         packing: Packing,
         [left, top, width, height]: [usize; 4],
@@ -662,7 +659,7 @@ impl FrozenReadout {
     /// Buffer row jobs supply a bounded partition and its exact staging span.
     /// All modeled geometry, projection, and exposure errors were checked on
     /// the owner before freezing; row arithmetic has no fallible live inputs.
-    pub(crate) fn write_rows(&self, rows: Range<usize>, out: &mut [u8]) {
+    pub fn write_rows(&self, rows: Range<usize>, out: &mut [u8]) {
         let [left, top, width, height] = self.window;
         let packing = self.packing;
         debug_assert!(rows.start <= rows.end && rows.end <= height);

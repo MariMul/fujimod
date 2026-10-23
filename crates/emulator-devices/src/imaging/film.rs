@@ -261,7 +261,7 @@ mod tests {
             (random >> 32) as u32
         };
         for bank in 0..32 {
-            let mut words = super::color_tests::words();
+            let mut words = crate::test_host::film_words();
             if bank != 0 {
                 for (i, word) in words.iter_mut().enumerate() {
                     if let Some(mask) = crate::exr2::isp::parameters::mask(i * 4) {
@@ -304,7 +304,7 @@ mod tests {
     }
     #[test]
     fn raster_memo_preserves_scalar_integer_colors_across_collisions() {
-        let words = super::color_tests::words();
+        let words = crate::test_host::film_words();
         let mut film = Film::default();
         film.update(|o| words[o / 4]).unwrap();
         let mut pixels = FilmPixels::new(&film);
@@ -458,32 +458,9 @@ impl RgbFilm {
 #[cfg(test)]
 pub(crate) mod color_tests {
     use super::*;
-    pub(crate) fn words() -> Vec<u32> {
-        let mut r = vec![0; 1024];
-        for o in (0x304..0x330).step_by(4) {
-            r[o / 4] = 512 | 512 << 16;
-        }
-        r[0x400 / 4] = 1024;
-        r[0x408 / 4] = 1024 << 16;
-        r[0x414 / 4] = 1024;
-        r[0x500 / 4] = 0x55555555;
-        r[0x504 / 4] = 5;
-        for i in 0..28 {
-            r[(0x508 + i / 2 * 4) / 4] |= ((i * 2048 / 3).min(16383) as u32) << (i % 2 * 16);
-        }
-        r[0x604 / 4] = 1024;
-        r[0x608 / 4] = 1024;
-        r[0x640 / 4] = 0xc0804000;
-        for o in (0x644..0x658).step_by(4) {
-            r[o / 4] = 256 << 16;
-        }
-        r[0x200 / 4] = 0x1000100;
-        r[0x204 / 4] = 256;
-        r
-    }
     #[test]
     fn neutral_matrix_tone_and_chroma() {
-        let r = words();
+        let r = crate::test_host::film_words();
         let mut f = Film::default();
         f.update(|o| r[o / 4]).unwrap();
         assert_eq!(f.develop([1024; 3]), [16, 128, 128]);
@@ -495,7 +472,7 @@ pub(crate) mod color_tests {
     }
     #[test]
     fn host_film_lut_crop_and_padding() {
-        let r = words();
+        let r = crate::test_host::film_words();
         let mut f = RgbFilm::default();
         f.update(|o| r[o / 4], Some([256; 3])).unwrap();
         assert_eq!(f.linear[0], 0);
