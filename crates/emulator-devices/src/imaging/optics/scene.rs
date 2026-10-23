@@ -93,8 +93,7 @@ impl Scene {
         let mut horizontal = vec![[0u64; 3]; width];
         let mut horizontal_y = None;
         let mut colors = vec![[0u64; 3]; width];
-        let area = Divisor::new((sw * sh) as u64);
-        let half = (sw * sh) as u64 / 2;
+        let area = (sw * sh) as u64;
         for (y, out) in prefix.chunks_exact_mut(width + 1).enumerate() {
             let top = y * sh;
             let bottom = (y + 1) * sh;
@@ -128,7 +127,7 @@ impl Scene {
             let mut sum = [0u32; 3];
             for (out, color) in out[1..].iter_mut().zip(&colors) {
                 for c in 0..3 {
-                    sum[c] += area.divide(color[c] + half) as u32;
+                    sum[c] += ((color[c] + area / 2) / area) as u32;
                 }
                 *out = sum;
             }
@@ -179,7 +178,7 @@ impl Scene {
         if radius == 0 && fraction == 0 {
             return self.linear(x, y);
         }
-        self.row(y).horizontal(x, BoxFilter::new(radius, fraction))
+        self.row(y).horizontal(x, radius, fraction)
     }
 }
 
@@ -188,16 +187,16 @@ pub(super) struct Row<'a> {
 }
 impl Row<'_> {
     #[inline(always)]
-    pub fn horizontal(&self, x: usize, filter: BoxFilter) -> [u16; 3] {
+    pub fn horizontal(&self, x: usize, radius: usize, fraction: u32) -> [u16; 3] {
         let row = &self.prefix;
         let width = row.len() - 1;
-        let inner = Span::new(x, width, filter.radius, filter.inner);
-        let outer = Span::new(x, width, filter.radius + 1, filter.outer);
+        let inner = Span::new(x, width, radius);
+        let outer = Span::new(x, width, radius + 1);
         let mut result = [0; 3];
         for c in 0..3 {
             let first = row[1][c] as u16;
             let last = (row[width][c] - row[width - 1][c]) as u16;
-            let a = if filter.radius == 0 {
+            let a = if radius == 0 {
                 u64::from(row[x + 1][c] - row[x][c])
             } else {
                 inner.mean(
@@ -207,7 +206,7 @@ impl Row<'_> {
                     last,
                 )
             };
-            let b = if filter.fraction == 0 {
+            let b = if fraction == 0 {
                 a
             } else {
                 outer.mean(
@@ -217,43 +216,44 @@ impl Row<'_> {
                     last,
                 )
             };
-            result[c] = blend(a, filter.fraction, b);
+            result[c] = blend(a, fraction, b);
         }
         result
     }
     /// `horizontal` at each of `xs`. Interior points, whose boxes need no
     /// edge extension, read their prefix differences directly.
     #[inline(always)]
-    pub fn horizontal_into(&self, xs: &[usize], filter: BoxFilter, out: &mut [[u16; 3]]) {
+    pub fn horizontal_into(
+        &self,
+        xs: &[usize],
+        radius: usize,
+        fraction: u32,
+        out: &mut [[u16; 3]],
+    ) {
         let row: &[[u32; 3]] = &self.prefix;
         let width = row.len() - 1;
-        let radius = filter.radius;
+        let (inner, outer) = (2 * radius as u64 + 1, 2 * radius as u64 + 3);
         for (&x, value) in xs.iter().zip(out) {
             *value = if x > radius && x + radius + 2 <= width {
-                let inner = (&row[x - radius], &row[x + radius + 1]);
+                let a = (&row[x - radius], &row[x + radius + 1]);
                 let mut result = [0; 3];
-                if filter.fraction == 0 {
+                if fraction == 0 {
                     for c in 0..3 {
-                        result[c] = filter
-                            .inner
-                            .divide(u64::from(inner.1[c] - inner.0[c]) + radius as u64)
-                            as u16;
+                        result[c] = ((u64::from(a.1[c] - a.0[c]) + radius as u64) / inner) as u16;
                     }
                 } else {
-                    let outer = (&row[x - radius - 1], &row[x + radius + 2]);
+                    let b = (&row[x - radius - 1], &row[x + radius + 2]);
                     for c in 0..3 {
-                        let a = filter
-                            .inner
-                            .divide(u64::from(inner.1[c] - inner.0[c]) + radius as u64);
-                        let b = filter
-                            .outer
-                            .divide(u64::from(outer.1[c] - outer.0[c]) + radius as u64 + 1);
-                        result[c] = blend(a, filter.fraction, b);
+                        result[c] = blend(
+                            (u64::from(a.1[c] - a.0[c]) + radius as u64) / inner,
+                            fraction,
+                            (u64::from(b.1[c] - b.0[c]) + radius as u64 + 1) / outer,
+                        );
                     }
                 }
                 result
             } else {
-                self.horizontal(x, filter)
+                self.horizontal(x, radius, fraction)
             };
         }
     }
@@ -274,25 +274,6 @@ fn prefix_sums(dimensions: [usize; 2], linear: impl Fn(usize, usize) -> [u16; 3]
     }
     prefix
 }
-/// A fractional box: the blend of the boxes of radius `radius` and
-/// `radius + 1`, with the divisors of their means.
-#[derive(Clone, Copy)]
-pub(super) struct BoxFilter {
-    pub radius: usize,
-    pub fraction: u32,
-    pub inner: Divisor,
-    pub outer: Divisor,
-}
-impl BoxFilter {
-    pub fn new(radius: usize, fraction: u32) -> Self {
-        Self {
-            radius,
-            fraction,
-            inner: Divisor::new(2 * radius as u64 + 1),
-            outer: Divisor::new(2 * radius as u64 + 3),
-        }
-    }
-}
 /// A clamped box interval, shared across channels and readout columns.
 #[derive(Clone, Copy)]
 pub(super) struct Span {
@@ -300,67 +281,23 @@ pub(super) struct Span {
     pub last: usize,
     before: u64,
     after: u64,
-    radius: u64,
-    count: Divisor,
+    count: u64,
 }
 impl Span {
-    /// `count` divides by the box size, `2 * radius + 1`.
     #[inline(always)]
-    pub fn new(point: usize, length: usize, radius: usize, count: Divisor) -> Self {
-        debug_assert_eq!(count.divisor(), 2 * radius as u64 + 1);
+    pub fn new(point: usize, length: usize, radius: usize) -> Self {
         Self {
             first: point.saturating_sub(radius),
             last: (point + radius + 1).min(length),
             before: radius.saturating_sub(point) as u64,
             after: (point + radius + 1).saturating_sub(length) as u64,
-            radius: radius as u64,
-            count,
+            count: (2 * radius + 1) as u64,
         }
     }
     #[inline(always)]
     pub fn mean(self, a: u64, b: u64, first: u16, last: u16) -> u64 {
-        // The rounding term is half the box size, `(2 * radius + 1) / 2`.
-        self.count.divide(
-            b - a + u64::from(first) * self.before + u64::from(last) * self.after + self.radius,
-        )
-    }
-}
-/// Exact quotients by one invariant divisor. A numerator `n` with
-/// `n * divisor < 2^64` multiplies by the rounded-up reciprocal
-/// `ceil(2^64 / divisor)` (Lemire, Kaser and Kurz, "Faster remainder by
-/// direct computation", 2019); larger numerators divide.
-#[derive(Clone, Copy)]
-pub(super) struct Divisor {
-    divisor: u64,
-    /// `ceil(2^64 / divisor)`, or zero for the divisor 1.
-    reciprocal: u64,
-    limit: u64,
-}
-impl Divisor {
-    pub fn new(divisor: u64) -> Self {
-        assert!(divisor > 0, "division by zero");
-        Self {
-            divisor,
-            reciprocal: (u64::MAX / divisor).wrapping_add(1),
-            limit: u64::MAX / divisor,
-        }
-    }
-    pub fn divisor(self) -> u64 {
-        self.divisor
-    }
-    /// `n / divisor`. With `reciprocal * divisor = 2^64 + r`, `0 <= r <
-    /// divisor`, and `n = q * divisor + s`, `n * reciprocal / 2^64 = q + (s +
-    /// n * r / 2^64) / divisor`, whose fraction stays below 1 when `n * r <
-    /// 2^64`.
-    #[inline(always)]
-    pub fn divide(self, n: u64) -> u64 {
-        if self.reciprocal == 0 {
-            n
-        } else if n <= self.limit {
-            ((u128::from(n) * u128::from(self.reciprocal)) >> 64) as u64
-        } else {
-            n / self.divisor
-        }
+        (b - a + u64::from(first) * self.before + u64::from(last) * self.after + self.count / 2)
+            / self.count
     }
 }
 

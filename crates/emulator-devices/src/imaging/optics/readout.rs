@@ -1,6 +1,6 @@
 use super::{
     encode_response,
-    scene::{BoxFilter, Scene, Span, blend},
+    scene::{Scene, Span, blend},
 };
 use std::sync::Arc;
 
@@ -397,12 +397,9 @@ pub(super) fn project(
                 }
             },
         ),
-        None => {
-            let filter = BoxFilter::new(radius, fraction);
-            project_sampled(scene, coordinates, radius, fraction, |y, xs, _, out| {
-                horizontal_row(scene, y, xs, filter, out);
-            })
-        }
+        None => project_sampled(scene, coordinates, radius, fraction, |y, xs, _, out| {
+            horizontal_row(scene, y, xs, radius, fraction, out);
+        }),
     }
 }
 pub(super) fn project_axes(
@@ -439,25 +436,29 @@ pub(super) fn project_prepared_axes(
                 }
             },
         ),
-        None => {
-            let filter = BoxFilter::new(radius[0], fraction[0]);
-            project_sampled(
-                scene,
-                coordinates,
-                radius[1],
-                fraction[1],
-                |y, xs, _, out| horizontal_row(scene, y, xs, filter, out),
-            )
-        }
+        None => project_sampled(
+            scene,
+            coordinates,
+            radius[1],
+            fraction[1],
+            |y, xs, _, out| horizontal_row(scene, y, xs, radius[0], fraction[0], out),
+        ),
     }
 }
-fn horizontal_row(scene: &Scene, y: usize, xs: &[usize], filter: BoxFilter, out: &mut [[u16; 3]]) {
-    if filter.radius == 0 && filter.fraction == 0 {
+fn horizontal_row(
+    scene: &Scene,
+    y: usize,
+    xs: &[usize],
+    radius: usize,
+    fraction: u32,
+    out: &mut [[u16; 3]],
+) {
+    if radius == 0 && fraction == 0 {
         for (&x, value) in xs.iter().zip(out) {
             *value = scene.linear(x, y);
         }
     } else {
-        scene.row(y).horizontal_into(xs, filter, out);
+        scene.row(y).horizontal_into(xs, radius, fraction, out);
     }
 }
 fn project_sampled(
@@ -470,64 +471,57 @@ fn project_sampled(
     if !scene.stores_prefixes() {
         return project_rows(scene, coordinates, radius, fraction, sample);
     }
-    let mut result = vec![[0; 3]; coordinates.xs.len() * coordinates.ys.len()];
-    if coordinates.xs.is_empty() {
-        return result;
-    }
-    let Some(&first_y) = coordinates.ys.first() else {
+    let width = coordinates.xs.len();
+    let mut result = vec![[0; 3]; width * coordinates.ys.len()];
+    let (Some(&first_y), Some(&last_y)) = (coordinates.ys.first(), coordinates.ys.last()) else {
         return result;
     };
-    let last_y = *coordinates.ys.last().unwrap();
-    const LANES: usize = 8;
+    if width == 0 {
+        return result;
+    }
     let height = scene.dimensions[1];
     let begin = first_y.saturating_sub(radius + 1);
     let end = (last_y + radius + 2).min(height);
-    let mut prefix = vec![[[0u64; 3]; LANES]; end - begin + 1];
-    let filter = BoxFilter::new(radius, fraction);
-    for (block, xs) in coordinates.xs.chunks(LANES).enumerate() {
-        prefix[0] = [[0; 3]; LANES];
-        for y in begin..end {
-            let mut values = [[0; 3]; LANES];
-            sample(y, xs, block * LANES, &mut values);
-            let (above, below) = prefix.split_at_mut(y - begin + 1);
-            let (above, below) = (&above[y - begin], &mut below[0]);
-            for lane in 0..xs.len() {
+    // Horizontal means of every row a vertical box reaches, each computed
+    // once and read in row order by sliding vertical sums.
+    let mut plane = vec![[0; 3]; width * (end - begin)];
+    for (y, row) in (begin..end).zip(plane.chunks_exact_mut(width)) {
+        sample(y, &coordinates.xs, 0, row);
+    }
+    let mut first = vec![[0; 3]; width];
+    let mut last = vec![[0; 3]; width];
+    sample(0, &coordinates.xs, 0, &mut first);
+    sample(height - 1, &coordinates.xs, 0, &mut last);
+    let row = |y: usize| &plane[(y - begin) * width..(y - begin + 1) * width];
+    let mut inner = MovingSum::new(width);
+    let mut outer = MovingSum::new(width);
+    for (&y, out) in coordinates.ys.iter().zip(result.chunks_exact_mut(width)) {
+        let a = Span::new(y, height, radius);
+        let b = Span::new(y, height, radius + 1);
+        inner.slide(a, row);
+        if fraction == 0 {
+            for (((out, sum), first), last) in
+                out.iter_mut().zip(&inner.sums).zip(&first).zip(&last)
+            {
                 for c in 0..3 {
-                    below[lane][c] = above[lane][c] + u64::from(values[lane][c]);
+                    out[c] = a.mean(0, sum[c], first[c], last[c]) as u16;
                 }
             }
-        }
-        let mut first = [[0; 3]; LANES];
-        let mut last = [[0; 3]; LANES];
-        sample(0, xs, block * LANES, &mut first);
-        sample(height - 1, xs, block * LANES, &mut last);
-        for (row, &y) in coordinates.ys.iter().enumerate() {
-            let inner = Span::new(y, height, radius, filter.inner);
-            let outer = Span::new(y, height, radius + 1, filter.outer);
-            for lane in 0..xs.len() {
-                let at = row * coordinates.xs.len() + block * LANES + lane;
+        } else {
+            outer.slide(b, row);
+            for ((((out, inner), outer), first), last) in out
+                .iter_mut()
+                .zip(&inner.sums)
+                .zip(&outer.sums)
+                .zip(&first)
+                .zip(&last)
+            {
                 for c in 0..3 {
-                    let a = if radius == 0 {
-                        prefix[y + 1 - begin][lane][c] - prefix[y - begin][lane][c]
-                    } else {
-                        inner.mean(
-                            prefix[inner.first - begin][lane][c],
-                            prefix[inner.last - begin][lane][c],
-                            first[lane][c],
-                            last[lane][c],
-                        )
-                    };
-                    let b = if fraction == 0 {
-                        a
-                    } else {
-                        outer.mean(
-                            prefix[outer.first - begin][lane][c],
-                            prefix[outer.last - begin][lane][c],
-                            first[lane][c],
-                            last[lane][c],
-                        )
-                    };
-                    result[at][c] = blend(a, fraction, b);
+                    out[c] = blend(
+                        a.mean(0, inner[c], first[c], last[c]),
+                        fraction,
+                        b.mean(0, outer[c], first[c], last[c]),
+                    );
                 }
             }
         }
@@ -558,10 +552,9 @@ fn project_rows(
     let mut scratch = vec![[0; 3]; width];
     let mut inner = MovingSum::new(width);
     let mut outer = MovingSum::new(width);
-    let filter = BoxFilter::new(radius, fraction);
     for (row, &y) in coordinates.ys.iter().enumerate() {
-        let a = Span::new(y, height, radius, filter.inner);
-        let b = Span::new(y, height, radius + 1, filter.outer);
+        let a = Span::new(y, height, radius);
+        let b = Span::new(y, height, radius + 1);
         let mut sample_row = |sy, values: &mut [[u16; 3]]| sample(sy, &coordinates.xs, 0, values);
         inner.advance(a, &mut scratch, &mut sample_row);
         if fraction != 0 {
@@ -591,6 +584,30 @@ impl MovingSum {
             span: None,
             sums: vec![[0; 3]; width],
         }
+    }
+    /// Move the window to `next`, reading retained rows.
+    fn slide<'a>(&mut self, next: Span, row: impl Fn(usize) -> &'a [[u16; 3]]) {
+        let add = |sums: &mut [[u64; 3]], y: usize, sign: bool| {
+            for (sum, value) in sums.iter_mut().zip(row(y)) {
+                for c in 0..3 {
+                    if sign {
+                        sum[c] += u64::from(value[c]);
+                    } else {
+                        sum[c] -= u64::from(value[c]);
+                    }
+                }
+            }
+        };
+        if let Some(old) = self.span {
+            for y in old.first..next.first.min(old.last) {
+                add(&mut self.sums, y, false);
+            }
+        }
+        let begin = self.span.map_or(next.first, |old| old.last.max(next.first));
+        for y in begin..next.last {
+            add(&mut self.sums, y, true);
+        }
+        self.span = Some(next);
     }
     fn advance(
         &mut self,

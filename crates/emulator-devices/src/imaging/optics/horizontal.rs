@@ -3,7 +3,7 @@
 //! columns and vertical halo; the vertical pass still rounds the blended means.
 use super::{
     readout::Coordinates,
-    scene::{BoxFilter, Scene, blend},
+    scene::{Scene, blend},
 };
 use std::{
     collections::VecDeque,
@@ -29,25 +29,24 @@ impl Plane {
         begin: usize,
         end: usize,
     ) -> Self {
-        let filter = BoxFilter::new(radius, 0);
         let mut pixels = Vec::with_capacity(coordinates.xs.len() * (end - begin));
         for y in begin..end {
             let row = scene.row(y);
             for &x in &coordinates.xs {
-                pixels.push(row.horizontal(x, filter));
+                pixels.push(row.horizontal(x, radius, 0));
             }
         }
         let first_row = scene.row(0);
         let first = coordinates
             .xs
             .iter()
-            .map(|&x| first_row.horizontal(x, filter))
+            .map(|&x| first_row.horizontal(x, radius, 0))
             .collect();
         let last_row = scene.row(scene.dimensions[1] - 1);
         let last = coordinates
             .xs
             .iter()
-            .map(|&x| last_row.horizontal(x, filter))
+            .map(|&x| last_row.horizontal(x, radius, 0))
             .collect();
         drop(first_row);
         drop(last_row);
