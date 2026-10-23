@@ -14,7 +14,7 @@ frames are `ExposedFrame::sample`, `Scene::linear`, `Scene::row`,
 
 ## Approach
 
-1. **Find what changes per frame.** `radiometric::Exposure::capture` reuses the previous
+1. **Find what changes per frame.** `radiometric::Renderer::capture` reuses the previous
    `Image` (and its cached renders and measurements) when the frame,
    exposure, aperture, focus shift, white-balance gain and film words are
    unchanged. Record which of these differ between consecutive live-view
