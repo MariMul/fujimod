@@ -17,7 +17,18 @@ pub(super) struct Loops {
     pub candidate_entries: Cell<u64>,
     pub proofs_attempted: Cell<u64>,
     pub proofs_failed_structural: Cell<u64>,
-    pub proofs_failed_runtime: Cell<u64>,
+    pub proofs_failed_window_inactive: Cell<u64>,
+    pub proofs_failed_memory_flush_pending: Cell<u64>,
+    pub proofs_failed_instruction_observer: Cell<u64>,
+    pub proofs_failed_block_observer: Cell<u64>,
+    pub proofs_failed_read_observer: Cell<u64>,
+    pub proofs_failed_loop_bytes_unavailable: Cell<u64>,
+    pub proofs_failed_cpsr_e_or_j: Cell<u64>,
+    pub proofs_failed_loop_condition_not_taken: Cell<u64>,
+    pub proofs_failed_loop_read_unavailable: Cell<u64>,
+    pub proofs_failed_iteration_model_unsupported: Cell<u64>,
+    pub proofs_failed_counter_at_boundary: Cell<u64>,
+    pub proofs_failed_budget_room: Cell<u64>,
     structural_failures: RefCell<BTreeMap<u64, Vec<u8>>>,
 }
 pub(super) struct Window<'a>(pub &'a Cell<bool>);
@@ -58,6 +69,15 @@ struct Proof {
 struct State {
     registers: [u32; 15],
     cpsr: u32,
+}
+
+#[derive(Clone, Copy)]
+enum AdvanceFailure {
+    BudgetRoom,
+    ConditionNotTaken,
+    ReadUnavailable,
+    IterationModelUnsupported,
+    CounterAtBoundary,
 }
 
 /// Only a direct, backward A32 B (never BL, BLX or the unconditional space).
@@ -271,17 +291,24 @@ impl Proof {
         state: State,
         cycles: u64,
         mut read: impl FnMut(u32, usize) -> Option<u32>,
-    ) -> Option<(State, u64, bool)> {
-        if cycles == 0 || !self.taken(state) {
-            return None;
+    ) -> Result<(State, u64, bool), AdvanceFailure> {
+        if cycles == 0 {
+            return Err(AdvanceFailure::BudgetRoom);
         }
-        let next = self.apply(state, &mut read)?;
+        if !self.taken(state) {
+            return Err(AdvanceFailure::ConditionNotTaken);
+        }
+        let next = self
+            .apply(state, &mut read)
+            .ok_or(AdvanceFailure::ReadUnavailable)?;
         // Fixed point of the complete architectural state. The read callback
         // proves that every addressed byte is stable for this entire window.
         if next == state {
-            return Some((state, cycles, false));
+            return Ok((state, cycles, false));
         }
-        let (counter, step, compare) = self.counter(state)?;
+        let (counter, step, compare) = self
+            .counter(state)
+            .ok_or(AdvanceFailure::IterationModelUnsupported)?;
         let value = state.registers[counter];
         let distance = if step < 0 {
             u64::from(value)
@@ -301,7 +328,7 @@ impl Proof {
             }
         }
         if limit == 0 {
-            return None;
+            return Err(AdvanceFailure::CounterAtBoundary);
         }
         let at = |n: u64| {
             let mut before = state;
@@ -321,7 +348,7 @@ impl Proof {
             }
             limit = low;
         }
-        Some((at(limit), limit, true))
+        Ok((at(limit), limit, true))
     }
 }
 
@@ -403,6 +430,9 @@ impl Execution {
         }
         None
     }
+    fn loop_runtime_failure(&self, counter: &Cell<u64>) {
+        counter.set(counter.get().saturating_add(1));
+    }
     pub(super) fn execute_loop(&self, address: u64, word: u32) -> Result<bool, String> {
         if self.loops.mode.get() == LoopMode::Disabled
             || target(address, word).is_none()
@@ -414,27 +444,28 @@ impl Execution {
         self.loops
             .candidate_entries
             .set(self.loops.candidate_entries.get().saturating_add(1));
-        if !self.loops.window.get() || self.memory.flush_pending() {
-            self.loops
-                .proofs_failed_runtime
-                .set(self.loops.proofs_failed_runtime.get().saturating_add(1));
+        if !self.loops.window.get() {
+            self.loop_runtime_failure(&self.loops.proofs_failed_window_inactive);
+            return Ok(false);
+        }
+        if self.memory.flush_pending() {
+            self.loop_runtime_failure(&self.loops.proofs_failed_memory_flush_pending);
             return Ok(false);
         }
         if self.loops.bypass.take() == Some(address) {
             return Ok(false);
         }
         let start = target(address, word).unwrap();
-        // An observer on the loop's instructions or any read observer must see
-        // every iteration. The index answers by address instead of scanning
-        // every installed observer on each loop entry.
+        // Instruction and block observers on the loop must see every
+        // iteration. The index answers by address instead of scanning every
+        // installed observer on each loop entry.
         let index = self.observer_index.borrow();
-        if index.instructions.any_in(start, address)
-            || index.blocks.any_in(start, address)
-            || !index.reads.is_empty()
-        {
-            self.loops
-                .proofs_failed_runtime
-                .set(self.loops.proofs_failed_runtime.get().saturating_add(1));
+        if index.instructions.any_in(start, address) {
+            self.loop_runtime_failure(&self.loops.proofs_failed_instruction_observer);
+            return Ok(false);
+        }
+        if index.blocks.any_in(start, address) {
+            self.loop_runtime_failure(&self.loops.proofs_failed_block_observer);
             return Ok(false);
         }
         drop(index);
@@ -442,9 +473,7 @@ impl Execution {
             .proofs_attempted
             .set(self.loops.proofs_attempted.get().saturating_add(1));
         let Some((start, bytes)) = self.loop_bytes(address, word) else {
-            self.loops
-                .proofs_failed_runtime
-                .set(self.loops.proofs_failed_runtime.get().saturating_add(1));
+            self.loop_runtime_failure(&self.loops.proofs_failed_loop_bytes_unavailable);
             return Ok(false);
         };
         let Some(proof) = Proof::decode(start, address, &bytes_to_words(&bytes)) else {
@@ -457,30 +486,51 @@ impl Execution {
                 .insert(address, bytes);
             return Ok(false);
         };
+        // A read observer cannot fire in a register-only loop. Keep the broad
+        // observer gate only for proofs whose body actually reads memory.
+        if proof.body.iter().any(|op| matches!(op, Op::Load { .. }))
+            && !self.observer_index.borrow().reads.is_empty()
+        {
+            self.loop_runtime_failure(&self.loops.proofs_failed_read_observer);
+            return Ok(false);
+        }
         let mut state = State {
             registers: [0; 15],
             cpsr: self.scalar(arm::CPSR)?,
         };
         if state.cpsr & ((1 << 9) | (1 << 24)) != 0 {
-            self.loops
-                .proofs_failed_runtime
-                .set(self.loops.proofs_failed_runtime.get().saturating_add(1));
+            self.loop_runtime_failure(&self.loops.proofs_failed_cpsr_e_or_j);
             return Ok(false);
         }
         for (r, value) in state.registers.iter_mut().enumerate() {
             *value = self.scalar(arm::CORE[r])?;
         }
         let room = self.cap.get().saturating_sub(self.count.get() - 1);
-        let Some((after, cycles, counted)) =
-            proof.advance(state, (room / proof.length()).max(1), |p, n| {
+        let (after, cycles, counted) =
+            match proof.advance(state, (room / proof.length()).max(1), |p, n| {
                 self.loop_read(p, n)
-            })
-        else {
-            self.loops
-                .proofs_failed_runtime
-                .set(self.loops.proofs_failed_runtime.get().saturating_add(1));
-            return Ok(false);
-        };
+            }) {
+                Ok(advanced) => advanced,
+                Err(reason) => {
+                    let counter = match reason {
+                        AdvanceFailure::BudgetRoom => &self.loops.proofs_failed_budget_room,
+                        AdvanceFailure::ConditionNotTaken => {
+                            &self.loops.proofs_failed_loop_condition_not_taken
+                        }
+                        AdvanceFailure::ReadUnavailable => {
+                            &self.loops.proofs_failed_loop_read_unavailable
+                        }
+                        AdvanceFailure::IterationModelUnsupported => {
+                            &self.loops.proofs_failed_iteration_model_unsupported
+                        }
+                        AdvanceFailure::CounterAtBoundary => {
+                            &self.loops.proofs_failed_counter_at_boundary
+                        }
+                    };
+                    self.loop_runtime_failure(counter);
+                    return Ok(false);
+                }
+            };
         let counter = if counted {
             &self.loops.counted_instructions
         } else {
@@ -488,9 +538,7 @@ impl Execution {
         };
         counter.set(counter.get().saturating_add(proof.length()));
         if self.loops.mode.get() != LoopMode::Accelerate || cycles * proof.length() > room {
-            self.loops
-                .proofs_failed_runtime
-                .set(self.loops.proofs_failed_runtime.get().saturating_add(1));
+            self.loop_runtime_failure(&self.loops.proofs_failed_budget_room);
             return Ok(false);
         }
         let skipped = cycles * proof.length();

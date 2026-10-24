@@ -591,7 +591,54 @@ impl Cpu for Core {
             "loop_proofs_failed_structural",
             l.proofs_failed_structural.get(),
         );
-        counters.insert("loop_proofs_failed_runtime", l.proofs_failed_runtime.get());
+        counters.insert(
+            "loop_proofs_failed_window_inactive",
+            l.proofs_failed_window_inactive.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_memory_flush_pending",
+            l.proofs_failed_memory_flush_pending.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_instruction_observer",
+            l.proofs_failed_instruction_observer.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_block_observer",
+            l.proofs_failed_block_observer.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_read_observer",
+            l.proofs_failed_read_observer.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_loop_bytes_unavailable",
+            l.proofs_failed_loop_bytes_unavailable.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_cpsr_e_or_j",
+            l.proofs_failed_cpsr_e_or_j.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_loop_condition_not_taken",
+            l.proofs_failed_loop_condition_not_taken.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_loop_read_unavailable",
+            l.proofs_failed_loop_read_unavailable.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_iteration_model_unsupported",
+            l.proofs_failed_iteration_model_unsupported.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_counter_at_boundary",
+            l.proofs_failed_counter_at_boundary.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_budget_room",
+            l.proofs_failed_budget_room.get(),
+        );
         counters.insert(
             "code_watch_block_hooks_elided",
             self.execution.code_watch_block_hooks_elided.get(),
@@ -609,8 +656,20 @@ impl Cpu for Core {
             self.execution.block_hook_thumb.get(),
         );
         counters.insert(
-            "block_hook_reason_budget_fallback",
-            self.execution.block_hook_budget_fallback.get(),
+            "block_hook_reason_budget_fallback_remaining_budget",
+            self.execution
+                .block_hook_budget_fallback_remaining_budget
+                .get(),
+        );
+        counters.insert(
+            "block_hook_reason_budget_fallback_accounting_ring",
+            self.execution
+                .block_hook_budget_fallback_accounting_ring
+                .get(),
+        );
+        counters.insert(
+            "block_hook_reason_budget_fallback_other",
+            self.execution.block_hook_budget_fallback_other.get(),
         );
         counters.insert(
             "block_hook_reason_other",

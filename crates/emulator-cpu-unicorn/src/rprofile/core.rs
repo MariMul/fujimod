@@ -95,7 +95,9 @@ pub(super) struct Execution {
     block_hook_executions: Cell<u64>,
     block_hook_block_observer: Cell<u64>,
     block_hook_thumb: Cell<u64>,
-    block_hook_budget_fallback: Cell<u64>,
+    block_hook_budget_fallback_remaining_budget: Cell<u64>,
+    block_hook_budget_fallback_accounting_ring: Cell<u64>,
+    block_hook_budget_fallback_other: Cell<u64>,
     block_hook_other: Cell<u64>,
     user_stop: Cell<bool>,
     irq: Cell<bool>,
@@ -203,7 +205,9 @@ impl Core {
             block_hook_executions: Cell::new(0),
             block_hook_block_observer: Cell::new(0),
             block_hook_thumb: Cell::new(0),
-            block_hook_budget_fallback: Cell::new(0),
+            block_hook_budget_fallback_remaining_budget: Cell::new(0),
+            block_hook_budget_fallback_accounting_ring: Cell::new(0),
+            block_hook_budget_fallback_other: Cell::new(0),
             block_hook_other: Cell::new(0),
             user_stop: Cell::new(false),
             irq: Cell::new(false),
@@ -517,10 +521,34 @@ impl Execution {
             self.block_hook_thumb
                 .set(self.block_hook_thumb.get().saturating_add(1));
         } else if self.policy.get() == ExecutionPolicy::Exact {
-            // ARM blocks with no block observer reach this callback when the
-            // native block budget could not admit the whole translated span.
-            self.block_hook_budget_fallback
-                .set(self.block_hook_budget_fallback.get().saturating_add(1));
+            // Attribute the inline accounting fallback to facts available at
+            // this boundary. The ring contains 64 outstanding span records.
+            let room = self.cap.get().saturating_sub(self.count.get());
+            if block.bytes != 0 && u64::from(block.bytes / 4) > room {
+                self.block_hook_budget_fallback_remaining_budget.set(
+                    self.block_hook_budget_fallback_remaining_budget
+                        .get()
+                        .saturating_add(1),
+                );
+            } else if self
+                .accounting()
+                .counters()
+                .1
+                .saturating_sub(self.settled_head.get())
+                >= 64
+            {
+                self.block_hook_budget_fallback_accounting_ring.set(
+                    self.block_hook_budget_fallback_accounting_ring
+                        .get()
+                        .saturating_add(1),
+                );
+            } else {
+                self.block_hook_budget_fallback_other.set(
+                    self.block_hook_budget_fallback_other
+                        .get()
+                        .saturating_add(1),
+                );
+            }
         } else {
             self.block_hook_other
                 .set(self.block_hook_other.get().saturating_add(1));
