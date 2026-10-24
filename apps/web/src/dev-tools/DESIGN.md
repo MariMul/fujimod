@@ -44,6 +44,15 @@ holder, and filters by layer and by camera.
 - The Connection layer holds connection events only (camera present or gone,
   sharing started or stopped, errors) and filters like every other layer.
 
+## Firmware identity
+
+Camera details resolve the service internal version through the catalog's
+firmware version map and display the public release when known. An internal
+version below that product's highest known version gets an official update
+link. Unmapped lower versions say they appear outdated; newer or unparseable
+versions do not get that inference. Simulated cameras display their version
+without a hardware update prompt.
+
 ## Exported files
 
 Binary data stays binary. Descriptive fields (identity, geometry, times) may

@@ -1,7 +1,9 @@
-import { Show, createSignal } from 'solid-js';
+import { Show, createMemo, createSignal } from 'solid-js';
+import { catalog } from 'fujimod';
 import type { Camera, CameraModel } from './camera-model';
 import { cameraState } from './CameraStrip';
 import { SegmentedControl } from '@fujimod/emulator-ui/ui/SegmentedControl';
+import { firmwareVersion } from './firmware-version';
 
 export function CameraDetails(props: { camera: Camera; model: CameraModel }) {
   const [copied, setCopied] = createSignal(false);
@@ -9,6 +11,12 @@ export function CameraDetails(props: { camera: Camera; model: CameraModel }) {
   const [sharingError, setSharingError] = createSignal('');
   const state = () => cameraState(props.camera);
   const identity = () => props.camera.identity;
+  const firmware = createMemo(() => {
+    const camera = identity();
+    return camera?.product && camera.internalVersion
+      ? firmwareVersion(camera, catalog.firmwareVersions())
+      : undefined;
+  });
   // "FUJIFILM X100V", without repeating a product that already names its maker.
   const product = () => {
     const maker = identity()?.manufacturer ?? identity()?.vendor;
@@ -53,7 +61,8 @@ export function CameraDetails(props: { camera: Camera; model: CameraModel }) {
           <Show when={identity()?.internalVersion}>
             <dt>Firmware</dt>
             <dd>
-              {identity()!.internalVersion}
+              {firmware()?.publicVersion ?? 'Unknown'}
+              <span class="wb-muted"> · internal {identity()!.internalVersion}</span>
               <Show when={identity()?.framework}>
                 <span class="wb-muted"> · framework {identity()!.framework}</span>
               </Show>
@@ -66,6 +75,24 @@ export function CameraDetails(props: { camera: Camera; model: CameraModel }) {
             </dd>
           </Show>
         </dl>
+      </Show>
+      <Show when={firmware()?.outdated && props.camera.transport !== 'simulated'}>
+        <div class="wb-firmware-update" role="status">
+          <p>
+            {firmware()?.publicVersion
+              ? 'Newer firmware is available.'
+              : 'Unknown firmware version appears to be outdated.'}
+          </p>
+          <p class="wb-muted">Latest known release: {firmware()!.latest.version}</p>
+          <a
+            class="wb-btn"
+            href={firmware()!.latest.download_url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Update to latest official firmware ↗
+          </a>
+        </div>
       </Show>
       <Show when={props.camera.remoteActivity?.progress}>
         {(progress) => (

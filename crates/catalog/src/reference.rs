@@ -2515,6 +2515,7 @@ pub struct ResolvedSelection {
 /// A checked, ID-indexed catalog of processor, part, body and firmware facts.
 #[derive(Clone, Debug, Default)]
 pub struct ReferenceCatalog {
+    firmware_versions: Vec<crate::firmware_versions::FirmwareVersion>,
     socs: BTreeMap<String, Soc>,
     parts: BTreeMap<String, Part>,
     bodies: BTreeMap<String, Body>,
@@ -2533,6 +2534,13 @@ impl ReferenceCatalog {
     pub fn load(root: impl AsRef<Path>) -> Result<Self, String> {
         let root = root.as_ref();
         let mut catalog = Self::default();
+        let versions = root.join("firmware-versions.generated.json");
+        if versions.exists() {
+            catalog.firmware_versions = crate::firmware_versions::FirmwareVersions::decode(
+                &fs::read(&versions).map_err(|e| e.to_string())?,
+            )?
+            .releases;
+        }
         for (path, bytes) in read_json_files(&root.join("soc"))? {
             let value: Soc = decode(&bytes, &path)?;
             value.validate(&value.id)?;
@@ -2556,6 +2564,7 @@ impl ReferenceCatalog {
     /// Load the normalized reference catalog compiled into this library.
     pub fn bundled() -> Result<Self, String> {
         let mut catalog = Self::default();
+        catalog.firmware_versions = crate::firmware_versions::FirmwareVersions::bundled()?.releases;
         for (kind, path, bytes) in bundled_documents() {
             match kind {
                 ReferenceKind::Soc => {
@@ -2648,6 +2657,11 @@ impl ReferenceCatalog {
     /// Every firmware identity, in identity order.
     pub fn firmware_ids(&self) -> impl Iterator<Item = &str> {
         self.firmwares.keys().map(String::as_str)
+    }
+
+    /// Public/internal release identities, including cameras without execution profiles.
+    pub fn firmware_versions(&self) -> &[crate::firmware_versions::FirmwareVersion] {
+        &self.firmware_versions
     }
 
     fn insert_document(
@@ -2775,6 +2789,31 @@ impl ReferenceCatalog {
     }
 
     fn validate_references(&self) -> Result<(), String> {
+        for release in &self.firmware_versions {
+            if let Some(firmware) = self.firmwares.get(&release.firmware_id) {
+                if release.version != firmware.version
+                    || firmware
+                        .update
+                        .as_ref()
+                        .is_none_or(|update| update.sha256 != release.update_sha256)
+                {
+                    return Err(format!(
+                        "firmware version map differs for {}",
+                        release.firmware_id
+                    ));
+                }
+            }
+            if let Some(bulk) = self.bulk.get(&release.firmware_id) {
+                if release.product != bulk.product
+                    || release.internal_version != bulk.internal_version
+                {
+                    return Err(format!(
+                        "bulk identity differs from firmware version map for {}",
+                        release.firmware_id
+                    ));
+                }
+            }
+        }
         self.validate_controls()?;
         for body in self.bodies.values() {
             if !self.socs.contains_key(&body.soc_id) {

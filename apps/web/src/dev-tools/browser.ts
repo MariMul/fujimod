@@ -63,6 +63,17 @@ try {
         isMobile: mobile,
         hasTouch: mobile,
       });
+      await context.addInitScript(() => {
+        Object.defineProperty(navigator, 'usb', {
+          configurable: true,
+          value: Object.assign(new EventTarget(), {
+            getDevices: async () => [],
+            requestDevice() {
+              throw Error('USB fixture has not been installed');
+            },
+          }),
+        });
+      });
       await context.grantPermissions(
         ['local-network-access', 'clipboard-read', 'clipboard-write'],
         { origin: new URL(url).origin },
@@ -92,7 +103,14 @@ try {
       await page.evaluate(async () => {
         window.consoleFixture = (
           (await import('/__test__/' + 'console.mjs')) as typeof import('./usb-fixture.ts')
-        ).installConsoleFixture();
+        ).installConsoleFixture({
+          1: 'FUJIFILM',
+          2: 'FUJIFILM',
+          4: 'X-T1',
+          8: '2.30',
+          16: 'CAMERA',
+          64: '1.00',
+        });
         // Debug mode off: on the ff80 link that can only mean service mode, like the
         // owner's X100V.
         window.consoleFixture.state.configuration.set('0:247', 0);
@@ -110,6 +128,12 @@ try {
         1,
       );
       await page.locator('.wb-state', { hasText: 'Idle' }).waitFor();
+      const update = page.locator('.wb-firmware-update');
+      assert.match(await update.innerText(), /Unknown firmware version appears to be outdated/);
+      assert.equal(
+        await update.getByRole('link').getAttribute('href'),
+        'https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t1/',
+      );
       await page.locator('.wb-service', { hasText: 'restores factory settings' }).waitFor();
       assert.equal(await page.locator('.wb-debug-state').innerText(), 'Debug mode: Off');
       assert.equal(await page.getByRole('button', { name: 'Disable debug mode' }).count(), 0);

@@ -1,11 +1,20 @@
 import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
-import { afterEach, expect, test, vi } from 'vite-plus/test';
+import { afterEach, beforeAll, expect, test, vi } from 'vite-plus/test';
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { initialize } from 'fujimod';
 import type { ToolSession } from '../camera-model';
 import { Wizard } from '../routes';
 import { Workbench } from '../Workbench';
 import { createTestCameraModel, testCamera } from '../test-camera-model';
 import type { DebugModeSession } from './operations';
+
+beforeAll(async () => {
+  await initialize({
+    module_or_path: await readFile(resolve('../../bindings/javascript/pkg/fujimod_bg.wasm')),
+  });
+});
 
 afterEach(() => vi.unstubAllGlobals());
 

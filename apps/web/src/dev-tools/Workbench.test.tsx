@@ -1,10 +1,19 @@
 import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
-import { afterEach, expect, test, vi } from 'vite-plus/test';
+import { afterEach, beforeAll, expect, test, vi } from 'vite-plus/test';
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { initialize } from 'fujimod';
 import { Workbench } from './Workbench';
 import { diagnosticBundle, emptyReadings } from './CameraTools';
 import { createTestCameraModel, testCamera } from './test-camera-model';
 import { Direction, Layer, Level } from './log';
+
+beforeAll(async () => {
+  await initialize({
+    module_or_path: await readFile(resolve('../../bindings/javascript/pkg/fujimod_bg.wasm')),
+  });
+});
 
 let cleanup: (() => void) | undefined;
 afterEach(() => {
@@ -24,6 +33,35 @@ const button = (host: HTMLElement, name: string) =>
   [...host.querySelectorAll('button')].find(
     (node) => (node.getAttribute('aria-label') ?? node.textContent?.trim()) === name,
   )!;
+
+test('firmware identity updates show public versions and a model-specific official update prompt', () => {
+  const fixture = createTestCameraModel({});
+  fixture.add(testCamera('camera', { identity: { product: 'X-T1', internalVersion: '2.30' } }));
+  const host = mount(fixture.model);
+  flush();
+  expect(host.querySelector('.wb-firmware-update')!.textContent).toContain(
+    'Unknown firmware version appears to be outdated.',
+  );
+  expect(host.querySelector<HTMLAnchorElement>('.wb-firmware-update a')!.href).toBe(
+    'https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t1/',
+  );
+  fixture.update('camera', (camera) => ({
+    ...camera,
+    identity: { product: 'X-T1', internalVersion: '2.39' },
+  }));
+  flush();
+  expect(host.querySelector('.wb-kv')!.textContent).toContain('5.52 · internal 2.39');
+  expect(host.querySelector('.wb-firmware-update')).toBeNull();
+  fixture.update('camera', (camera) => ({
+    ...camera,
+    identity: { product: 'X-M1', internalVersion: '1.61' },
+  }));
+  flush();
+  expect(host.querySelector('.wb-kv')!.textContent).toContain('1.01 · internal 1.61');
+  expect(host.querySelector('.wb-firmware-update')!.textContent).toContain(
+    'Newer firmware is available.',
+  );
+});
 
 test('the splash connects a camera and the workbench selects it', async () => {
   const test = createTestCameraModel({ next: () => testCamera('X100V') });

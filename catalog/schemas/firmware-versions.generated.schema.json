@@ -1,0 +1,74 @@
+{
+  "$defs": {
+    "FirmwareVersion": {
+      "additionalProperties": false,
+      "description": "One known firmware release, independent of emulation or bulk-read support.",
+      "properties": {
+        "download_url": {
+          "description": "Official camera firmware page with current releases and update instructions.",
+          "type": "string"
+        },
+        "firmware_id": {
+          "description": "Stable identity of the firmware release.",
+          "type": "string"
+        },
+        "internal_version": {
+          "description": "Internal version returned by the service interface for this release.",
+          "type": "string"
+        },
+        "product": {
+          "description": "Camera model reported by the service interface.",
+          "type": "string"
+        },
+        "update_sha256": {
+          "description": "SHA-256 of the official update from which the mapping was extracted.",
+          "type": "string"
+        },
+        "version": {
+          "description": "Public release version shown on Fujifilm's download page.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "firmware_id",
+        "product",
+        "version",
+        "internal_version",
+        "update_sha256",
+        "download_url"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/firmware-versions.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Generated mappings for known updates, including bodies without emulator profiles.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/firmware-versions.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "releases": {
+      "description": "Known releases. Internal versions are comparable only within one product.",
+      "items": {
+        "$ref": "#/$defs/FirmwareVersion"
+      },
+      "type": "array"
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "releases"
+  ],
+  "title": "FirmwareVersions",
+  "type": "object"
+}

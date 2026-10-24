@@ -9,6 +9,12 @@ use std::collections::BTreeMap;
 pub fn generated_documents() -> BTreeMap<&'static str, Value> {
     let mut documents = BTreeMap::new();
     documents.insert(
+        "firmware-versions.generated.schema.json",
+        schema::<fujimod_catalog::firmware_versions::FirmwareVersions>(
+            fujimod_catalog::firmware_versions::SCHEMA_URI,
+        ),
+    );
+    documents.insert(
         "emulator-factory-inputs.generated.schema.json",
         schema::<fujimod_catalog_run_inputs::RunFactoryInputs>(
             fujimod_catalog_run_inputs::RUN_FACTORY_INPUTS_SCHEMA_URI,
@@ -16,11 +22,15 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
     );
     documents.insert(
         "emulator-rehearsal.generated.schema.json",
-        schema::<fujimod_catalog::rehearsal::Rehearsal>(fujimod_catalog::rehearsal::REHEARSAL_SCHEMA_URI),
+        schema::<fujimod_catalog::rehearsal::Rehearsal>(
+            fujimod_catalog::rehearsal::REHEARSAL_SCHEMA_URI,
+        ),
     );
     documents.insert(
         "catalog-annotations.generated.schema.json",
-        schema::<fujimod_catalog::provenance::CatalogAnnotations>(fujimod_catalog::provenance::ANNOTATIONS_SCHEMA_URI),
+        schema::<fujimod_catalog::provenance::CatalogAnnotations>(
+            fujimod_catalog::provenance::ANNOTATIONS_SCHEMA_URI,
+        ),
     );
     documents.insert(
         "emulator-hardware-inputs.generated.schema.json",
@@ -46,11 +56,15 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
     );
     documents.insert(
         "progress.generated.schema.json",
-        schema::<fujimod_catalog::progress::FirmwareProgress>(fujimod_catalog::progress::PROGRESS_SCHEMA_URI),
+        schema::<fujimod_catalog::progress::FirmwareProgress>(
+            fujimod_catalog::progress::PROGRESS_SCHEMA_URI,
+        ),
     );
     documents.insert(
         "first-start.generated.schema.json",
-        schema::<fujimod_catalog::first_start::FirstStartMenu>(fujimod_catalog::first_start::FIRST_START_SCHEMA_URI),
+        schema::<fujimod_catalog::first_start::FirstStartMenu>(
+            fujimod_catalog::first_start::FIRST_START_SCHEMA_URI,
+        ),
     );
     documents.insert(
         "soc.schema.json",
@@ -66,7 +80,9 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
     );
     documents.insert(
         "firmware.schema.json",
-        schema::<fujimod_catalog::reference::Firmware>("https://fujimod.com/schemas/firmware.schema.json"),
+        schema::<fujimod_catalog::reference::Firmware>(
+            "https://fujimod.com/schemas/firmware.schema.json",
+        ),
     );
     documents.insert(
         "emulator-run-configuration.schema.json",
@@ -76,7 +92,9 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
     );
     documents.insert(
         "emulator-run-overlay.schema.json",
-        schema::<fujimod_catalog_configuration::RunOverlay>(fujimod_catalog_configuration::RUN_OVERLAY_SCHEMA_URI),
+        schema::<fujimod_catalog_configuration::RunOverlay>(
+            fujimod_catalog_configuration::RUN_OVERLAY_SCHEMA_URI,
+        ),
     );
     documents.insert(
         "resolved-selection.schema.json",

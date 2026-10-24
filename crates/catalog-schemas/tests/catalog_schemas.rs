@@ -38,7 +38,7 @@ fn reference_and_run_configuration_documents_validate_generated_schemas() {
         );
     }
 
-    let mut files = Vec::new();
+    let mut files = vec![catalog.join("firmware-versions.generated.json")];
     for layer in ["soc", "parts", "bodies", "firmware", "progress"] {
         files.extend(json_files(&catalog.join(layer)));
     }
@@ -105,6 +105,33 @@ fn bundled_reference_records_resolve_by_identity() {
         catalog
             .resolve(body, firmware)
             .unwrap_or_else(|error| panic!("{body} / {firmware}: {error}"));
+    }
+}
+
+#[test]
+fn firmware_versions_load_without_execution_profiles_and_agree_with_located_bulk_identities() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../catalog");
+    let disk = fujimod_catalog::ReferenceCatalog::load(&root).unwrap();
+    let bundled = fujimod_catalog::ReferenceCatalog::bundled().unwrap();
+    assert_eq!(disk.firmware_versions(), bundled.firmware_versions());
+    assert!(
+        bundled
+            .firmware_versions()
+            .iter()
+            .any(|v| v.firmware_id == "xh1-215")
+    );
+    for version in bundled.firmware_versions() {
+        if let Some(firmware) = bundled.firmware(&version.firmware_id) {
+            assert_eq!(version.version, firmware.version);
+            assert_eq!(
+                version.update_sha256,
+                firmware.update.as_ref().unwrap().sha256
+            );
+            if let Some(bulk) = bundled.resolve_firmware(&version.firmware_id).unwrap().bulk {
+                assert_eq!(version.product, bulk.product);
+                assert_eq!(version.internal_version, bulk.internal_version);
+            }
+        }
     }
 }
 

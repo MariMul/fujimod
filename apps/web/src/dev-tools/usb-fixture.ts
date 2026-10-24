@@ -1,6 +1,6 @@
 // Test-only WebUSB device. The page still uses production Wasm and nusb.
 import { installWebUsb } from '../../../../bindings/javascript/tests/webusb-fixture.ts';
-export function installConsoleFixture() {
+export function installConsoleFixture(identity: Readonly<Partial<Record<number, string>>> = {}) {
   const fixture = installWebUsb();
   fixture.iface.alternates[0].endpoints = [
     { endpointNumber: 1, direction: 'out', type: 'bulk', packetSize: 64 },
@@ -23,7 +23,7 @@ export function installConsoleFixture() {
     const bytes = new Uint8Array(data),
       view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     if (fixture.state.kind === 0xd0 && bytes.length >= 20 && view.getUint32(0, true) === 0x150000) {
-      const text = 'SYNTHETIC\0';
+      const text = `${identity[view.getUint32(16, true)] ?? 'SYNTHETIC'}\0`;
       const reply = new Uint8Array(16 + text.length * 2);
       const header = new DataView(reply.buffer);
       header.setUint32(0, 0x150000, true);

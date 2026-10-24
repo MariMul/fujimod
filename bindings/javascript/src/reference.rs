@@ -31,3 +31,11 @@ pub fn catalog_selections() -> Result<JsValue, JsValue> {
         .map_err(|error| fail(ErrorKind::Definition, &error.to_string()))?;
     js_sys::JSON::parse(&json)
 }
+
+/// Public/internal version mappings for every known update, independent of emulator support.
+#[wasm_bindgen(js_name=catalogFirmwareVersions, unchecked_return_type="FirmwareVersion[]")]
+pub fn catalog_firmware_versions() -> Result<JsValue, JsValue> {
+    let json = serde_json::to_string(bundled()?.firmware_versions())
+        .map_err(|error| fail(ErrorKind::Definition, &error.to_string()))?;
+    js_sys::JSON::parse(&json)
+}

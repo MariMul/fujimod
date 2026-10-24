@@ -113,6 +113,8 @@ function isServiceCommandError(error: unknown): error is ServiceCommandError {
 export const catalog = Object.freeze({
   /** Every bundled catalog firmware with its body, SoC, parts and generated facts. */
   selections: native.catalogSelections,
+  /** Public/internal release identities, including bodies without emulator support. */
+  firmwareVersions: native.catalogFirmwareVersions,
   FirmwareIdentity: native.FirmwareIdentity,
   DefinitionFailureKind: native.DefinitionFailureKind,
   isError: isDefinitionError,

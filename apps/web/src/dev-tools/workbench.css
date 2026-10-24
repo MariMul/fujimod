@@ -266,6 +266,24 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.wb-firmware-update {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--wb-amber);
+  border-radius: 5px;
+  color: var(--wb-amber);
+}
+.wb-firmware-update p {
+  margin: 0 0 8px;
+}
+.wb-firmware-update a {
+  height: auto;
+  min-height: 28px;
+  padding: 6px 8px;
+  color: var(--wb-text);
+  text-align: center;
+  text-decoration: none;
+}
 .wb-progress {
   height: 3px;
   background: var(--wb-line-2);

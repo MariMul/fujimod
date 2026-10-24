@@ -19,6 +19,14 @@ identical lens, sensor and control facts are not copied between bodies.
 Firmware identity includes its body and version; existing explicit
 firmware IDs remain selectors, never file locations.
 
+`firmware-versions.generated.json` maps service-interface product/internal
+versions to public release versions and official update pages. Each mapping is
+qualified by its update's SHA-256. The map covers known updates independently
+of hardware, emulation and bulk-read profiles and is exposed by
+`ReferenceCatalog::firmware_versions` and JavaScript's `catalog.firmwareVersions()`.
+Internal versions are ordered only within the same product; catalog validation
+rejects decreasing internal versions across known public releases.
+
 A body directory may contain only `controls.json`, without `body.json` or a
 hardware definition. `ReferenceCatalog::physical_controls` retrieves these
 standalone manuals. Documented positions and pushability remain available
