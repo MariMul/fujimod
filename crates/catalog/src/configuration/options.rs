@@ -12,6 +12,9 @@ use serde::{Deserialize, Serialize};
 )]
 #[derive(Default)]
 pub struct RunFactoryOptions {
+    /// Connect physical sensor frames using the selected clock source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sensor_frame_clock: Option<RunSensorFrameClock>,
     /// Explicit RAW-to-output DMA duration in virtual ticks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raw_readback_ticks: Option<u64>,
@@ -392,6 +395,20 @@ pub enum RunImageWorkStopProfile {
     StockIdleImageBanksBit0StopAckUnmeasured,
     #[serde(rename = "stock-initial-image-banks-bit0-stop-ack-unmeasured")]
     StockInitialImageBanksBit0StopAckUnmeasured,
+}
+
+/// Clock connection for an external physical sensor scene.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+#[serde(rename_all = "snake_case")]
+pub enum RunSensorFrameClock {
+    Sensor,
+    Periodic,
 }
 
 /// Closed selection for input event profile.

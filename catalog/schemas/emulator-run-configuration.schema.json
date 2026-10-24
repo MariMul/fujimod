@@ -2029,6 +2029,17 @@
           ],
           "description": "Selected secondary bus profile. Absence preserves the base selection."
         },
+        "sensor_frame_clock": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunSensorFrameClock"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Connect physical sensor frames using the selected clock source."
+        },
         "settings": {
           "anyOf": [
             {
@@ -4412,6 +4423,14 @@
           "type": "string"
         }
       ]
+    },
+    "RunSensorFrameClock": {
+      "description": "Clock connection for an external physical sensor scene.",
+      "enum": [
+        "sensor",
+        "periodic"
+      ],
+      "type": "string"
     },
     "RunSerialRegisters": {
       "additionalProperties": false,

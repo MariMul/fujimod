@@ -3761,6 +3761,7 @@ class RunFactoryOptions(TypedDict, total=False):
     sd_card_profile: NotRequired[RunSdCardProfile | None]
     sd_card_sectors: NotRequired[int | None]
     secondary_bus_profile: NotRequired[RunSecondaryBusProfile | None]
+    sensor_frame_clock: NotRequired[RunSensorFrameClock | None]
     settings: NotRequired[RunSettings | None]
     spi0_input_profile: NotRequired[RunSpi0InputProfile | None]
     storage_profile: NotRequired[RunStorageProfile | None]
@@ -4415,6 +4416,9 @@ type RunSdCardProfile = Literal["declared-blank-sdhc-default-speed-unmeasured"]
 type RunSecondaryBusProfile = Literal[
     "usbcharge-disconnected-pwic-startup-tagged"] | Literal["disabled",
 ]
+
+
+type RunSensorFrameClock = Literal["sensor", "periodic"]
 
 
 class RunSerialRegisters(TypedDict, total=False):
