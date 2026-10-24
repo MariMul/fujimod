@@ -1382,14 +1382,22 @@
           "upper": 1
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "serial_status",
+        "connection_id": "playback",
+        "endpoint": 9,
+        "register": 96,
+        "mask": 2,
+        "active_value": 0
+      }
     },
     {
       "id": "row-20",
       "event": 6,
       "debug_key": "POWER",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "power_button"
       },
       "scanner": {
         "index": 20,
@@ -1401,7 +1409,14 @@
           "upper": 1
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "serial_status",
+        "connection_id": "power",
+        "endpoint": 9,
+        "register": 96,
+        "mask": 1,
+        "active_value": 0
+      }
     },
     {
       "id": "row-21",

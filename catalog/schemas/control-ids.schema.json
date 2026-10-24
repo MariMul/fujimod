@@ -528,6 +528,53 @@
             "cycle_sign"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Contact reported as bits of a serial status register and tested by a scanner callback.",
+          "properties": {
+            "active_value": {
+              "description": "Masked status value while the input is active.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "connection_id": {
+              "description": "Body connection carrying the status bits.",
+              "type": "string"
+            },
+            "endpoint": {
+              "description": "Firmware serial endpoint selector.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "serial_status",
+              "type": "string"
+            },
+            "mask": {
+              "description": "Status bits tested by the firmware.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "register": {
+              "description": "Status register read by the firmware.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "endpoint",
+            "register",
+            "mask",
+            "active_value"
+          ],
+          "type": "object"
         }
       ]
     },

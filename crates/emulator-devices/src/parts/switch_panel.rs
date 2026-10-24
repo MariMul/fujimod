@@ -143,19 +143,21 @@ impl SwitchPanel {
                 }
                 let mut pins = BTreeSet::new();
                 for signal in &case.signals {
-                    let key = match signal {
+                    // A status register's bits are separate contacts; signals
+                    // write only their mask, so disjoint bits are independent.
+                    let keys = match signal {
                         Signal::Gpio { node, pin, .. } => {
                             pin.validate()?;
                             if pin.port >= 16 {
                                 return Err("input pad has no status word".into());
                             }
-                            format!("gpio:{node}:{}:{}", pin.port, pin.pin)
+                            vec![format!("gpio:{node}:{}:{}", pin.port, pin.pin)]
                         }
                         Signal::Analog { node, channel, .. } => {
                             if *channel >= 32 {
                                 return Err("analog input channel exceeds its bound".into());
                             }
-                            format!("analog:{node}:{channel}")
+                            vec![format!("analog:{node}:{channel}")]
                         }
                         Signal::SerialStatus {
                             node,
@@ -167,11 +169,16 @@ impl SwitchPanel {
                             if *mask == 0 || value & !mask != 0 {
                                 return Err("invalid serial status contact mask".into());
                             }
-                            format!("serial_status:{node}:{route}:{register}")
+                            (0..8)
+                                .filter(|bit| mask >> bit & 1 != 0)
+                                .map(|bit| format!("serial_status:{node}:{route}:{register}:{bit}"))
+                                .collect()
                         }
                     };
-                    if !pins.insert(key) {
-                        return Err("circuit drives a target more than once".into());
+                    for key in keys {
+                        if !pins.insert(key) {
+                            return Err("circuit drives a target more than once".into());
+                        }
                     }
                 }
                 if destinations.as_ref().is_some_and(|old| old != &pins) {
@@ -327,5 +334,57 @@ mod tests {
         let mut duplicate = spec();
         duplicate.circuits.push(duplicate.circuits[0].clone());
         assert!(SwitchPanel::new(duplicate).is_err());
+    }
+    fn status_buttons(masks: [u8; 2]) -> Spec {
+        let names = ["play", "power"];
+        Spec {
+            controls: names
+                .iter()
+                .map(|id| Control {
+                    id: (*id).into(),
+                    label: (*id).into(),
+                    kind: "button".into(),
+                    positions: vec!["released".into(), "pressed".into()],
+                    initial: "released".into(),
+                    unavailable: None,
+                })
+                .collect(),
+            circuits: names
+                .iter()
+                .zip(masks)
+                .map(|(id, mask)| Circuit {
+                    controls: vec![(*id).into()],
+                    cases: [("released", mask), ("pressed", 0)]
+                        .into_iter()
+                        .map(|(position, value)| Case {
+                            positions: vec![position.into()],
+                            signals: vec![Signal::SerialStatus {
+                                node: "spi".into(),
+                                route: 1,
+                                register: 0x60,
+                                mask,
+                                value,
+                            }],
+                        })
+                        .collect(),
+                })
+                .collect(),
+        }
+    }
+    #[test]
+    fn disjoint_status_bits_are_independent_contacts_but_shared_bits_refuse() {
+        let panel = SwitchPanel::new(status_buttons([2, 1])).unwrap();
+        let pressed = panel.transition("play", "pressed").unwrap();
+        assert_eq!(
+            pressed.signals().unwrap()[0],
+            Signal::SerialStatus {
+                node: "spi".into(),
+                route: 1,
+                register: 0x60,
+                mask: 2,
+                value: 0
+            }
+        );
+        assert!(SwitchPanel::new(status_buttons([3, 1])).is_err());
     }
 }

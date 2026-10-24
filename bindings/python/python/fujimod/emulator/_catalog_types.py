@@ -491,6 +491,7 @@ type ConnectionSignal = (
     | ConnectionSignalVariant2
     | ConnectionSignalVariant3
     | ConnectionSignalVariant4
+    | ConnectionSignalVariant5
 )
 
 
@@ -524,6 +525,13 @@ class ConnectionSignalVariant4(TypedDict, total=False):
     controller_id: Required[str]
     kind: Required[Literal["interrupt"]]
     line: Required[int]
+
+
+class ConnectionSignalVariant5(TypedDict, total=False):
+    block_id: Required[str]
+    kind: Required[Literal["serial_status"]]
+    mask: Required[int]
+    register: Required[int]
 
 
 class ConstructionActivity(TypedDict, total=False):
@@ -1378,6 +1386,7 @@ type ElectricalInput = (
     | ElectricalInputVariant1
     | ElectricalInputVariant2
     | ElectricalInputVariant3
+    | ElectricalInputVariant4
 )
 
 
@@ -1411,6 +1420,15 @@ class ElectricalInputVariant3(TypedDict, total=False):
     connection_id: Required[str]
     cycle_sign: Required[int]
     kind: Required[Literal["gpio_fixed_cycle"]]
+
+
+class ElectricalInputVariant4(TypedDict, total=False):
+    active_value: Required[int]
+    connection_id: Required[str]
+    endpoint: Required[int]
+    kind: Required[Literal["serial_status"]]
+    mask: Required[int]
+    register: Required[int]
 
 
 class EventTranslation(TypedDict, total=False):

@@ -231,7 +231,9 @@
       "manual_page": 19,
       "face": null,
       "icon": "playback",
-      "connection_ids": [],
+      "connection_ids": [
+        "playback"
+      ],
       "assignable": true,
       "default_function": "Displays pictures; holding it turns on the camera in playback mode.",
       "role": null,
@@ -252,13 +254,21 @@
       "manual_page": 19,
       "face": "ON/OFF",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "power"
+      ],
       "assignable": false,
       "default_function": "Turns the camera on or off.",
       "role": null,
       "mechanical": false,
-      "behavior": null,
-      "pushable": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "POWER"
+        }
+      },
+      "pushable": true,
       "positions": []
     },
     "selector": {

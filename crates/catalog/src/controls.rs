@@ -564,6 +564,19 @@ pub enum ElectricalInput {
         /// Sign of the physical phase cycle that produces this input's event.
         cycle_sign: i8,
     },
+    /// Contact reported as bits of a serial status register and tested by a scanner callback.
+    SerialStatus {
+        /// Body connection carrying the status bits.
+        connection_id: String,
+        /// Firmware serial endpoint selector.
+        endpoint: u32,
+        /// Status register read by the firmware.
+        register: u32,
+        /// Status bits tested by the firmware.
+        mask: u32,
+        /// Masked status value while the input is active.
+        active_value: u32,
+    },
 }
 
 /// Bounds of one accepted analog interval.
@@ -1246,7 +1259,8 @@ impl FirmwareControlIds {
                     ElectricalInput::Adc { connection_id, .. }
                     | ElectricalInput::Gpio { connection_id, .. }
                     | ElectricalInput::GpioQuadrature { connection_id, .. } => connection_id,
-                    ElectricalInput::GpioFixedCycle { connection_id, .. } => connection_id,
+                    ElectricalInput::GpioFixedCycle { connection_id, .. }
+                    | ElectricalInput::SerialStatus { connection_id, .. } => connection_id,
                 };
                 if !connections.contains(connection_id.as_str()) {
                     return Err(format!(
@@ -1294,9 +1308,24 @@ impl FirmwareControlIds {
                         input.id
                     ));
                 }
+                if let ElectricalInput::SerialStatus {
+                    register,
+                    mask,
+                    active_value,
+                    ..
+                } = electrical
+                    && (*register > 0x7f || *mask == 0 || *mask > 0xff || active_value & !mask != 0)
+                {
+                    return Err(format!(
+                        "input {} has an invalid serial status register or mask",
+                        input.id
+                    ));
+                }
                 if matches!(
                     electrical,
-                    ElectricalInput::Adc { .. } | ElectricalInput::Gpio { .. }
+                    ElectricalInput::Adc { .. }
+                        | ElectricalInput::Gpio { .. }
+                        | ElectricalInput::SerialStatus { .. }
                 ) && input.scanner.is_none()
                 {
                     return Err(format!(

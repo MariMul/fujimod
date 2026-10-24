@@ -1481,6 +1481,12 @@ pub enum ConnectionSignal {
     },
     /// Direct interrupt wire to a processor interrupt-controller input.
     Interrupt { controller_id: String, line: u32 },
+    /// Contact reported as bits of a register read through a serial controller.
+    SerialStatus {
+        block_id: String,
+        register: u8,
+        mask: u8,
+    },
 }
 
 /// Named control signals carried by SoC blocks.
@@ -3062,6 +3068,19 @@ impl ReferenceCatalog {
                         }
                         ConnectionSignal::Interrupt { controller_id, .. } => {
                             (controller_id, Some(SocBlockKind::InterruptController))
+                        }
+                        ConnectionSignal::SerialStatus {
+                            block_id,
+                            register,
+                            mask,
+                        } => {
+                            if *register > 0x7f || *mask == 0 {
+                                return Err(format!(
+                                    "body {} connection {} has an invalid serial status bit",
+                                    body.id, connection.id
+                                ));
+                            }
+                            (block_id, Some(SocBlockKind::SerialController))
                         }
                         ConnectionSignal::Gpio { .. } | ConnectionSignal::Adc { .. } => continue,
                     };

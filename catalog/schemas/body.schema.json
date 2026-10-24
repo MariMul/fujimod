@@ -623,6 +623,38 @@
             "line"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Contact reported as bits of a register read through a serial controller.",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "serial_status",
+              "type": "string"
+            },
+            "mask": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "register": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "register",
+            "mask"
+          ],
+          "type": "object"
         }
       ]
     },
