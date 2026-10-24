@@ -48,6 +48,9 @@ impl Frame {
     fn png<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         Ok(PyBytes::new(py, self.inner.png().map_err(error)?))
     }
+    fn pixels<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, self.inner.pixels())
+    }
     fn save(&self, path: PathBuf) -> PyResult<String> {
         self.inner.save(&path).map_err(error)
     }

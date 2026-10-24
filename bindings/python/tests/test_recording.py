@@ -28,6 +28,12 @@ class Source:
 
 
 class RecordingTests(unittest.TestCase):
+    def test_pixels_preserve_the_unencoded_rgb_raster(self) -> None:
+        pixels = bytes((10, 20, 30, 40, 50, 60))
+        frame = Frame.rgb(2, 1, pixels)
+        self.assertEqual(frame.pixels(), pixels)
+        self.assertEqual(Frame.from_png(frame.png()).pixels(), pixels)
+
     def test_screenshot_default_samples_just_the_start_and_never_requires_encoders(
         self,
     ) -> None:
