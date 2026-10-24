@@ -1,7 +1,7 @@
 //! Enum conversion and session adapters for the Rust service catalog.
 use super::*;
 use fujimod_python_service::{Codec, Definition, ServiceModes};
-use usb::app80::catalog as core;
+use fujimod_usb_app80::catalog as core;
 mod values {
     include!(concat!(env!("OUT_DIR"), "/service_values_python.rs"));
 }
@@ -54,7 +54,7 @@ impl CommandReply {
 #[pyclass(frozen, from_py_object, module = "fujimod.usb.app80")]
 #[derive(Clone)]
 pub(crate) struct Invocation {
-    pub(crate) inner: usb::operations::app80::Invocation,
+    pub(crate) inner: fujimod_usb_app80::operations::Invocation,
 }
 #[pymethods]
 impl Invocation {
@@ -76,13 +76,13 @@ impl Invocation {
 }
 #[pyclass(frozen, module = "fujimod.usb.app80")]
 struct Service {
-    inner: usb::operations::app80::Service,
+    inner: fujimod_usb_app80::operations::Service,
 }
 #[pymethods]
 impl Service {
     #[new]
     fn new(py: Python<'_>, definition: &Definition) -> PyResult<Self> {
-        usb::operations::app80::Service::new(definition.inner.clone())
+        fujimod_usb_app80::operations::Service::new(definition.inner.clone())
             .map(|inner| Self { inner })
             .map_err(|e| convert_error(py, e))
     }
@@ -122,8 +122,8 @@ impl Service {
             .map_err(|e| command_error(py, e))
     }
 }
-pub(crate) fn check_limit(limits: &FirmwareLimits, length: usize) -> PyResult<()> {
-    if (limits.configuration.get() as usize) < length {
+pub(crate) fn check_limit(configuration_limit: u32, length: usize) -> PyResult<()> {
+    if (configuration_limit as usize) < length {
         return Err(PyValueError::new_err(
             "session configuration limit cannot carry this service mailbox",
         ));

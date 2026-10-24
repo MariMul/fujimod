@@ -1,6 +1,6 @@
 //! Bind the selected firmware's codecs to its declared ff80 mailbox.
 use super::*;
-use crate::app80::catalog::{Catalog, Command, CommandError, CommandReply, PreparedCommand};
+use crate::catalog::{Catalog, Command, CommandError, CommandReply, PreparedCommand};
 use fujimod_catalog_service::{Definition, ServiceModes};
 
 #[derive(Clone, Debug)]
@@ -36,7 +36,7 @@ impl Service {
     }
     pub fn prepare_code(
         &self,
-        code: crate::app80::CommandCode,
+        code: crate::CommandCode,
         modes: ServiceModes,
         command: Command,
     ) -> std::result::Result<Invocation, CommandError> {
@@ -47,7 +47,7 @@ impl Service {
     }
     pub fn prepare_research(
         &self,
-        code: crate::app80::CommandCode,
+        code: crate::CommandCode,
         modes: ServiceModes,
         arguments: &[u8],
     ) -> std::result::Result<Invocation, CommandError> {

@@ -1089,6 +1089,7 @@ name = "fujimod"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog",
+ "fujimod-catalog-camera",
  "fujimod-catalog-configuration",
  "fujimod-catalog-service",
  "fujimod-emulator",
@@ -1098,6 +1099,7 @@ dependencies = [
  "fujimod-emulator-devices",
  "fujimod-remote",
  "fujimod-usb",
+ "fujimod-usb-app80",
  "fujimod-workflows",
  "fujimod-workspace-hack",
 ]
@@ -1145,6 +1147,17 @@ dependencies = [
  "sha2",
  "tsify",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-catalog-camera"
+version = "0.1.0"
+dependencies = [
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -1257,6 +1270,7 @@ dependencies = [
 name = "fujimod-catalog-service"
 version = "0.1.0"
 dependencies = [
+ "fujimod-catalog-camera",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -2126,8 +2140,10 @@ dependencies = [
  "fujimod-bindgen",
  "fujimod-catalog",
  "fujimod-catalog-bulk",
+ "fujimod-catalog-camera",
  "fujimod-catalog-service",
  "fujimod-usb",
+ "fujimod-usb-app80",
  "fujimod-usb-proxy",
  "fujimod-workflows",
  "fujimod-workspace-hack",
@@ -2153,6 +2169,19 @@ dependencies = [
  "nusb",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+]
+
+[[package]]
+name = "fujimod-python-app80"
+version = "0.1.0"
+dependencies = [
+ "fujimod-bindgen",
+ "fujimod-python-service",
+ "fujimod-python-usb",
+ "fujimod-usb",
+ "fujimod-usb-app80",
+ "fujimod-workspace-hack",
+ "pyo3",
 ]
 
 [[package]]
@@ -2248,6 +2277,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-models",
+ "fujimod-python-app80",
  "fujimod-python-boot",
  "fujimod-python-catalog",
  "fujimod-python-emulator",
@@ -2294,6 +2324,7 @@ name = "fujimod-python-service"
 version = "0.1.0"
 dependencies = [
  "fujimod-bindgen",
+ "fujimod-catalog-camera",
  "fujimod-catalog-service",
  "fujimod-workspace-hack",
  "pyo3",
@@ -2303,10 +2334,8 @@ dependencies = [
 name = "fujimod-python-usb"
 version = "0.1.0"
 dependencies = [
- "fujimod-bindgen",
- "fujimod-catalog-service",
+ "fujimod-catalog-camera",
  "fujimod-firmware",
- "fujimod-python-service",
  "fujimod-python-usb-lease",
  "fujimod-usb",
  "fujimod-workflows",
@@ -2391,7 +2420,6 @@ version = "0.1.0"
 dependencies = [
  "async-channel",
  "async-lock",
- "fujimod-catalog-service",
  "fujimod-usb-proxy",
  "fujimod-workspace-hack",
  "futures-lite",
@@ -2401,6 +2429,21 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "thiserror 2.0.21",
+ "wasm-bindgen-test",
+]
+
+[[package]]
+name = "fujimod-usb-app80"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-camera",
+ "fujimod-catalog-service",
+ "fujimod-usb",
+ "fujimod-workspace-hack",
+ "futures-lite",
+ "nusb",
+ "serde_json",
  "thiserror 2.0.21",
  "wasm-bindgen-test",
 ]
@@ -2443,7 +2486,7 @@ name = "fujimod-workflows"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog-bulk",
- "fujimod-catalog-service",
+ "fujimod-catalog-camera",
  "fujimod-usb",
  "fujimod-workspace-hack",
  "futures-lite",

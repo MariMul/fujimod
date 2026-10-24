@@ -11,9 +11,9 @@ fn definition_rejects_incomplete_capacity_or_address_before_io() {
 
 mod replay {
     use super::*;
-    use crate::{
+    use crate::CommandCode;
+    use fujimod_usb::{
         Error,
-        app80::CommandCode,
         ff80::SessionState,
         testing::{Exchange as E, Script},
     };
@@ -32,7 +32,7 @@ mod replay {
     fn opened_with_trace(
         steps: Vec<E>,
         budget: u32,
-        trace: Option<crate::trace::Trace>,
+        trace: Option<fujimod_usb::trace::Trace>,
     ) -> (Session, Script) {
         let mut open = envelope(0xc0, 8);
         open[10..12].fill(0);
@@ -114,7 +114,7 @@ mod replay {
     }
     #[test]
     fn trace_orders_app80_around_ff80_and_usb_with_exact_bytes() {
-        use crate::trace::{Action, Layer, Trace};
+        use fujimod_usb::trace::{Action, Layer, Trace};
         let request = Request::new(CommandCode(0x22), &[0xff]).unwrap();
         let result = [7; 33];
         let mut steps = write(0x81, request.arguments());
@@ -305,7 +305,8 @@ mod replay {
         ]
     }
     fn selected_service() -> Service {
-        use fujimod_catalog_service::{Definition, FirmwareIdentity};
+        use fujimod_catalog_service::Definition;
+        use fujimod_catalog_camera::FirmwareIdentity;
         let json = serde_json::json!({"schema":1,"firmware":{"id":"body-a-v1","model":"Synthetic","version":"1","sha256":"ab".repeat(32)},
           "mailbox":{"page":0,"offset":128,"configuration_limit":256},"entries":[
           {"code":34,"label":"save","codec":"flush_configuration","slots":[0],"enabled_modes":1,"next_mode":0,"firmware_kind":1,"handler":0,"parameter_table":0}]});
@@ -320,7 +321,7 @@ mod replay {
     }
     #[test]
     fn typed_save_awaits_publish_and_returns_status_one_without_polling() {
-        use crate::app80::catalog::{Command, ReplyValue, SaveStatus};
+        use crate::catalog::{Command, ReplyValue, SaveStatus};
         use fujimod_catalog_service::ServiceModes;
         let invocation = selected_service()
             .prepare(ServiceModes::new(1).unwrap(), Command::FlushConfiguration)
@@ -349,7 +350,7 @@ mod replay {
     }
     #[test]
     fn foreign_nested_reply_fences_the_session_after_completed_ff80_read() {
-        use crate::app80::catalog::Command;
+        use crate::catalog::Command;
         use fujimod_catalog_service::ServiceModes;
         let invocation = selected_service()
             .prepare(ServiceModes::new(1).unwrap(), Command::FlushConfiguration)

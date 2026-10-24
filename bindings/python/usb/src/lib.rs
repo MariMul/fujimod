@@ -31,10 +31,10 @@ pyo3::create_exception!(fujimod.usb, DeviceCommandError, UsbError);
 pyo3::create_exception!(fujimod.usb, ClosedSessionError, UsbError);
 pyo3::create_exception!(fujimod.usb, SessionBusyError, UsbError);
 
-fn nz(n: u32) -> PyResult<NonZeroU32> {
+pub fn nz(n: u32) -> PyResult<NonZeroU32> {
     NonZeroU32::new(n).ok_or_else(|| PyValueError::new_err("length/limit must be nonzero"))
 }
-fn convert_error(py: Python<'_>, error: usb::Error) -> PyErr {
+pub fn convert_error(py: Python<'_>, error: usb::Error) -> PyErr {
     let error = match error {
         usb::Error::TestPeer(source) => match source.downcast::<PyErr>() {
             Ok(error) => return *error,
@@ -514,9 +514,7 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     usb.add_submodule(&research)?;
     let tracing = tracing::module(py)?;
     usb.add_submodule(&tracing)?;
-    let app80 = app80::types_module(py)?;
-    asynchronous::register(py, &usb, &app80)?;
-    usb.add_submodule(&app80)?;
+    asynchronous::register(py, &usb)?;
     usb.add_class::<OffsetMode>()?;
     usb.add_class::<data::DataWindow>()?;
     m.add_submodule(&usb)?;
@@ -527,7 +525,6 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     modules.set_item("fujimod.usb", &usb)?;
     modules.set_item("fujimod.usb.research", &research)?;
     modules.set_item("fujimod.usb.tracing", &tracing)?;
-    modules.set_item("fujimod.usb.app80", &app80)?;
     {
         let testing = testing::module(py)?;
         usb.add_submodule(&testing)?;
@@ -536,8 +533,7 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-mod app80;
-mod asynchronous;
+pub mod asynchronous;
 mod data;
 mod firmware;
 mod research;

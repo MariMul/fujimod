@@ -252,7 +252,8 @@ mod tests {
         Catalog, Command, CommandCode, CommandError, PreparedCommand, Reply, ReplyValue,
     };
     use super::*;
-    use fujimod_catalog_service::{Definition, FirmwareIdentity, ServiceModes};
+    use fujimod_catalog_service::{Definition, ServiceModes};
+    use fujimod_catalog_camera::FirmwareIdentity;
 
     fn catalog(reverse: bool) -> Catalog {
         let layouts = [

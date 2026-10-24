@@ -63,6 +63,7 @@
     ],
     "library": [
       "fujimod",
+      "fujimod-python-app80",
       "fujimod-python-base",
       "fujimod-python-boot",
       "fujimod-python-catalog",
@@ -89,6 +90,7 @@
       "fujimod-bindgen",
       "fujimod-catalog",
       "fujimod-catalog-bulk",
+      "fujimod-catalog-camera",
       "fujimod-catalog-configuration",
       "fujimod-catalog-construction",
       "fujimod-catalog-content",
@@ -105,6 +107,7 @@
       "fujimod-recording",
       "fujimod-settings",
       "fujimod-usb",
+      "fujimod-usb-app80",
       "fujimod-usb-proxy",
       "fujimod-workflows",
       "fujimod-workspace-hack"

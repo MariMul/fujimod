@@ -1,7 +1,7 @@
 //! App80 service definitions loaded from caller-selected JSON data.
+use fujimod_catalog_camera::{Digest, FirmwareIdentity, IdentityError};
 use serde::Deserialize;
 
-pub mod camera;
 use std::num::NonZeroU32;
 
 #[derive(Debug, thiserror::Error)]
@@ -10,12 +10,8 @@ pub enum DefinitionError {
     Json(#[from] serde_json::Error),
     #[error("unsupported service definition schema {0}")]
     Schema(u32),
-    #[error("firmware identity fields must be nonempty")]
-    EmptyIdentity,
-    #[error("firmware digest must contain exactly 64 hexadecimal characters")]
-    InvalidDigest,
-    #[error("definition does not match the selected firmware id and digest")]
-    FirmwareMismatch,
+    #[error(transparent)]
+    Identity(#[from] IdentityError),
     #[error("service mode mask must be nonzero")]
     EmptyModes,
     #[error("App80 mailbox needs 33 bytes within its configuration limit and address space")]
@@ -28,51 +24,6 @@ pub enum DefinitionError {
     EmptyLabel,
 }
 
-/// SHA-256 identity, not an address or command selector.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Digest([u8; 32]);
-impl Digest {
-    pub fn parse(hex: &str) -> Result<Self, DefinitionError> {
-        if hex.len() != 64 || !hex.as_bytes().iter().all(u8::is_ascii_hexdigit) {
-            return Err(DefinitionError::InvalidDigest);
-        }
-        let mut bytes = [0; 32];
-        for (index, value) in bytes.iter_mut().enumerate() {
-            *value =
-                u8::from_str_radix(&hex[index * 2..index * 2 + 2], 16).expect("validated hex pair");
-        }
-        Ok(Self(bytes))
-    }
-    pub fn bytes(self) -> [u8; 32] {
-        self.0
-    }
-    pub fn hex(self) -> String {
-        self.0.iter().map(|byte| format!("{byte:02x}")).collect()
-    }
-}
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FirmwareIdentity {
-    id: String,
-    digest: Digest,
-}
-impl FirmwareIdentity {
-    pub fn new(id: impl Into<String>, sha256: &str) -> Result<Self, DefinitionError> {
-        let id = id.into();
-        if id.trim().is_empty() {
-            return Err(DefinitionError::EmptyIdentity);
-        }
-        Ok(Self {
-            id,
-            digest: Digest::parse(sha256)?,
-        })
-    }
-    pub fn id(&self) -> &str {
-        &self.id
-    }
-    pub fn digest(&self) -> Digest {
-        self.digest
-    }
-}
 /// Internal service-dispatch flags, distinct from camera UI and shooting modes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ServiceModes(NonZeroU32);
@@ -408,10 +359,10 @@ impl Definition {
         }
         let identity = FirmwareIdentity::new(raw.firmware.id, &raw.firmware.sha256)?;
         if &identity != expected {
-            return Err(DefinitionError::FirmwareMismatch);
+            return Err(IdentityError::FirmwareMismatch.into());
         }
         if raw.firmware.model.trim().is_empty() || raw.firmware.version.trim().is_empty() {
-            return Err(DefinitionError::EmptyIdentity);
+            return Err(IdentityError::EmptyIdentity.into());
         }
         let limit = NonZeroU32::new(raw.mailbox.configuration_limit)
             .filter(|limit| limit.get() >= 33)

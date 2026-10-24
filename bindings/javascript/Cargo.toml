@@ -20,7 +20,9 @@ futures-timer.workspace = true
 fujimod-workflows.workspace = true
 fujimod-catalog.workspace = true
 fujimod-catalog-bulk.workspace = true
+fujimod-catalog-camera.workspace = true
 fujimod-catalog-service.workspace = true
+fujimod-usb-app80.workspace = true
 nusb.workspace = true
 js-sys.workspace = true
 web-sys = { version = "0.3", features = ["UsbDevice"] }

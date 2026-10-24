@@ -35,6 +35,7 @@ fujimod-python-host-image = { path = "../host-image", optional = true }
 fujimod-python-recording = { path = "../recording" }
 fujimod-python-remote = { path = "../remote" }
 fujimod-python-usb = { path = "../usb" }
+fujimod-python-app80 = { path = "../app80" }
 fujimod-python-xp4 = { path = "../xp4", optional = true }
 fujimod-emulator-exr2-board = { path = "../../../crates/emulator-exr2-board", optional = true }
 pyo3.workspace = true

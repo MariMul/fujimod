@@ -94,7 +94,7 @@ impl From<ProtocolError> for Error {
     }
 }
 
-pub(crate) fn check_limit(requested: u32, limit: u32) -> Result<()> {
+pub fn check_limit(requested: u32, limit: u32) -> Result<()> {
     if requested > limit {
         Err(Error::LengthLimit { requested, limit })
     } else {

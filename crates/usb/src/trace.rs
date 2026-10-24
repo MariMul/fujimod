@@ -193,7 +193,7 @@ impl Trace {
         state.records.push_back(make(sequence));
         state.bytes += bytes;
     }
-    pub(crate) fn protocol(&self, layer: Layer, command: u32, data: &[u8]) -> ProtocolSpan {
+    pub fn protocol(&self, layer: Layer, command: u32, data: &[u8]) -> ProtocolSpan {
         let exchange = {
             let mut s = self.inner.lock().expect("trace mutex");
             let id = s.next_transfer;
@@ -241,7 +241,8 @@ impl Trace {
         }
     }
 }
-pub(crate) struct ProtocolSpan {
+/// A protocol exchange being traced; completing it records its result.
+pub struct ProtocolSpan {
     trace: Trace,
     exchange: u64,
     layer: Layer,
@@ -261,7 +262,7 @@ impl ProtocolSpan {
             })
         });
     }
-    pub(crate) fn complete<T>(mut self, result: &Result<T>, data: &[u8]) {
+    pub fn complete<T>(mut self, result: &Result<T>, data: &[u8]) {
         self.finished = true;
         self.record(data.len(), || match result {
             Ok(_) => Action::Completed {

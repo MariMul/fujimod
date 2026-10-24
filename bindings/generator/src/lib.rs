@@ -112,7 +112,7 @@ fn choice(item: &syn::ItemEnum) -> Option<Choice> {
 impl Api {
     pub fn read(root: &Path) -> Result<Self, String> {
         let mut sources = Vec::new();
-        let file = root.join("crates/usb/src/app80/catalog.rs");
+        let file = root.join("crates/usb-app80/src/catalog.rs");
         sources.push((
             file.clone(),
             fs::read_to_string(&file).map_err(|e| e.to_string())?,
@@ -354,7 +354,7 @@ impl Api {
     pub fn build(root: &Path, out: &Path) {
         println!(
             "cargo:rerun-if-changed={}",
-            root.join("crates/usb/src/app80").display()
+            root.join("crates/usb-app80/src").display()
         );
         println!(
             "cargo:rerun-if-changed={}",

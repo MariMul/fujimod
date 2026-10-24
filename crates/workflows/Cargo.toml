@@ -14,7 +14,7 @@ doctest = false
 service-capture = ["dep:serde", "dep:serde_json"]
 
 [dependencies]
-fujimod-catalog-service.workspace = true
+fujimod-catalog-camera.workspace = true
 fujimod-catalog-bulk.workspace = true
 fujimod-usb.workspace = true
 thiserror.workspace = true

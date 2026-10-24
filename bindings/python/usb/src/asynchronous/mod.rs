@@ -45,10 +45,12 @@ fn lock<T>(mutex: &Mutex<T>) -> PyResult<MutexGuard<'_, T>> {
         .lock()
         .map_err(|_| binding_error(BindingError::Poisoned))
 }
-fn bytes(data: impl AsRef<[u8]>) -> Py<PyBytes> {
+/// Python bytes of a native buffer.
+pub fn bytes(data: impl AsRef<[u8]>) -> Py<PyBytes> {
     Python::attach(|py| PyBytes::new(py, data.as_ref()).unbind())
 }
-type Operation<'a, T> = Pin<Box<dyn Future<Output = usb::Result<T>> + Send + 'a>>;
+/// A native ff80 operation borrowing the session for its lifetime.
+pub type Operation<'a, T> = Pin<Box<dyn Future<Output = usb::Result<T>> + Send + 'a>>;
 
 enum Slot {
     Open(Box<ff80::Session>),
@@ -80,6 +82,10 @@ pub struct AsyncSession {
     packet_bytes: u32,
 }
 impl AsyncSession {
+    /// The firmware's configuration command limit in bytes.
+    pub fn configuration_limit(&self) -> u32 {
+        self.limits.configuration.get()
+    }
     pub(super) fn new(native: ff80::Session, limits: FirmwareLimits) -> Self {
         Self {
             token: native.info().id,
@@ -88,7 +94,8 @@ impl AsyncSession {
             limits,
         }
     }
-    async fn with<T: Send>(
+    /// Run a native ff80 operation on the open session.
+    pub async fn with<T: Send>(
         &self,
         operation: impl for<'a> FnOnce(&'a mut ff80::Session) -> Operation<'a, T> + Send,
     ) -> PyResult<T> {
@@ -179,7 +186,6 @@ async fn interfaces(device: Device) -> PyResult<Vec<InterfaceSelection>> {
 pub(super) fn register(
     py: Python<'_>,
     module: &Bound<'_, PyModule>,
-    app80: &Bound<'_, PyModule>,
 ) -> PyResult<()> {
     module.add_class::<AsyncSession>()?;
     module.add_class::<sequence::CommandSequence>()?;
@@ -188,7 +194,7 @@ pub(super) fn register(
     module.add_function(wrap_pyfunction!(self::discover, module)?)?;
     module.add_function(wrap_pyfunction!(self::discover_proxy, module)?)?;
     module.add_function(wrap_pyfunction!(self::interfaces, module)?)?;
-    operations::register(py, module, app80)
+    operations::register(py, module)
 }
 
 /// Lease the open ff80 session of a Python `fujimod.usb.Session` to another binding crate.

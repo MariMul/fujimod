@@ -13,6 +13,7 @@ fn _native(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     fujimod_python_remote::register(py, module)?;
     fujimod_python_catalog::register(py, module)?;
     fujimod_python_usb::register(py, module)?;
+    fujimod_python_app80::register(py, module)?;
     #[cfg(feature = "emulator")]
     {
         fujimod_python_boot::register();

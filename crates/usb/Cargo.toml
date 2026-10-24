@@ -17,7 +17,6 @@ async-lock = "3"
 async-channel = "2"
 serde = { workspace = true, features = ["derive"] }
 fujimod-usb-proxy = { path = "../usb-proxy" }
-fujimod-catalog-service.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 futures-lite.workspace = true

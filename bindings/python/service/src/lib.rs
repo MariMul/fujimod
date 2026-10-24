@@ -1,4 +1,5 @@
 //! Language conversion for App80 service definitions; no USB operations.
+use fujimod_catalog_camera::IdentityError;
 use fujimod_catalog_service as core;
 use pyo3::{
     exceptions::PyValueError,
@@ -31,9 +32,15 @@ fn invalid(error: core::DefinitionError) -> PyErr {
             column: error.column(),
         },
         core::DefinitionError::Schema(schema) => DefinitionFailure::Schema { schema },
-        core::DefinitionError::EmptyIdentity => DefinitionFailure::EmptyIdentity {},
-        core::DefinitionError::InvalidDigest => DefinitionFailure::InvalidDigest {},
-        core::DefinitionError::FirmwareMismatch => DefinitionFailure::FirmwareMismatch {},
+        core::DefinitionError::Identity(IdentityError::EmptyIdentity) => {
+            DefinitionFailure::EmptyIdentity {}
+        }
+        core::DefinitionError::Identity(IdentityError::InvalidDigest) => {
+            DefinitionFailure::InvalidDigest {}
+        }
+        core::DefinitionError::Identity(IdentityError::FirmwareMismatch) => {
+            DefinitionFailure::FirmwareMismatch {}
+        }
         core::DefinitionError::EmptyModes => DefinitionFailure::EmptyModes {},
         core::DefinitionError::InvalidMailbox => DefinitionFailure::InvalidMailbox {},
         core::DefinitionError::InvalidLayout { code, codec } => DefinitionFailure::InvalidLayout {
@@ -52,15 +59,15 @@ fn invalid(error: core::DefinitionError) -> PyErr {
 #[pyclass(frozen, from_py_object, module = "fujimod.catalog")]
 #[derive(Clone)]
 pub struct FirmwareIdentity {
-    pub inner: core::FirmwareIdentity,
+    pub inner: fujimod_catalog_camera::FirmwareIdentity,
 }
 #[pymethods]
 impl FirmwareIdentity {
     #[new]
     fn new(id: String, sha256: &str) -> PyResult<Self> {
-        core::FirmwareIdentity::new(id, sha256)
+        fujimod_catalog_camera::FirmwareIdentity::new(id, sha256)
             .map(|inner| Self { inner })
-            .map_err(invalid)
+            .map_err(|error| invalid(error.into()))
     }
     #[getter]
     fn id(&self) -> &str {

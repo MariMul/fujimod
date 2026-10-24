@@ -35,7 +35,7 @@ jobs:
       - run: npm run check
       - name: Check USB protocol core
         working-directory: .
-        run: cargo test -p fujimod-usb
+        run: cargo test -p fujimod-usb -p fujimod-usb-app80
       - name: Check shared simulation
         working-directory: .
         run: cargo test --locked --manifest-path crates/simulation/Cargo.toml --lib

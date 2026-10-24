@@ -38,12 +38,12 @@ fn identity_is_explicit_and_never_falls_back_to_another_body() {
     let raw = document().to_string();
     assert!(matches!(
         Definition::from_json(&raw, &identity("body-b-v1")),
-        Err(DefinitionError::FirmwareMismatch)
+        Err(DefinitionError::Identity(IdentityError::FirmwareMismatch))
     ));
     let wrong = FirmwareIdentity::new("body-a-v1", &"cd".repeat(32)).unwrap();
     assert!(matches!(
         Definition::from_json(&raw, &wrong),
-        Err(DefinitionError::FirmwareMismatch)
+        Err(DefinitionError::Identity(IdentityError::FirmwareMismatch))
     ));
     assert!(FirmwareIdentity::new("", &"ab".repeat(32)).is_err());
     for digest in ["a".repeat(63), "z".repeat(64), "é".repeat(32)] {

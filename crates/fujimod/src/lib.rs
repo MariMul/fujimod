@@ -2,6 +2,9 @@
 #[cfg(feature = "usb")]
 pub use fujimod_usb as usb;
 
+#[cfg(feature = "app80")]
+pub use fujimod_usb_app80 as usb_app80;
+
 #[cfg(feature = "workflows")]
 pub use fujimod_workflows as workflows;
 
@@ -10,6 +13,9 @@ pub use fujimod_catalog as catalog;
 
 #[cfg(feature = "catalog-configuration")]
 pub use fujimod_catalog_configuration as catalog_configuration;
+
+#[cfg(feature = "catalog-camera")]
+pub use fujimod_catalog_camera as catalog_camera;
 
 #[cfg(feature = "catalog-service")]
 pub use fujimod_catalog_service as catalog_service;

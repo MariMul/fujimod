@@ -55,40 +55,9 @@ async fn upload(
         .await
         .map(|inner| data::UploadReply { inner })
 }
-#[pyfunction]
-async fn exchange(
-    session: AsyncSession,
-    mailbox: app80::Mailbox,
-    request: app80::Request,
-) -> PyResult<Py<PyBytes>> {
-    if session.limits.configuration.get() < 33 {
-        return Err(PyValueError::new_err(
-            "App80 mailbox requires a 33-byte configuration command",
-        ));
-    }
-    session
-        .with(move |s| Box::pin(async move { mailbox.inner.exchange(s, &request.inner).await }))
-        .await
-        .map(|reply| bytes(reply.raw()))
-}
-#[pyfunction]
-async fn execute(
-    session: AsyncSession,
-    invocation: app80::catalog::Invocation,
-) -> PyResult<app80::catalog::CommandReply> {
-    app80::catalog::check_limit(
-        &session.limits,
-        invocation.inner.command().request().encoded_len(),
-    )?;
-    session
-        .with(move |s| Box::pin(async move { invocation.inner.execute(s).await }))
-        .await
-        .map(|inner| app80::catalog::CommandReply { inner })
-}
 pub(super) fn register(
     py: Python<'_>,
     module: &Bound<'_, PyModule>,
-    app80: &Bound<'_, PyModule>,
 ) -> PyResult<()> {
     let memory = PyModule::new(py, "fujimod.usb.memory")?;
     memory.add_function(wrap_pyfunction!(read_range, &memory)?)?;
@@ -98,8 +67,6 @@ pub(super) fn register(
     data.add_function(wrap_pyfunction!(data_chunks, &data)?)?;
     data.add_function(wrap_pyfunction!(upload, &data)?)?;
     data.add_class::<data::UploadReply>()?;
-    app80.add_function(wrap_pyfunction!(exchange, app80)?)?;
-    app80.add_function(wrap_pyfunction!(execute, app80)?)?;
     module.add_submodule(&memory)?;
     module.add_submodule(&data)?;
     let modules = py

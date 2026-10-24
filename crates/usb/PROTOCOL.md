@@ -59,8 +59,9 @@ are inferred from those handlers.
 
 ## Nested commands and compositions
 
-`app80` defines a distinct one-byte command identifier and bounded 32-byte
-arguments. `operations::app80::Mailbox` supplies the ff80 configuration carrier.
+`fujimod-usb-app80` defines a distinct one-byte command identifier and bounded
+32-byte arguments. Its `operations::Mailbox` supplies the ff80 configuration
+carrier.
 It stages arguments, publishes the command and reads one result, awaiting the
 publish write's ff80 completion. Codes, argument/result codecs and effects come
 from the selected firmware. The library has no default body or mailbox address.

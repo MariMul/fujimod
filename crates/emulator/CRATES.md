@@ -71,7 +71,8 @@ From the bottom of the graph to the top:
    emulator bindings share, and the board session hook the remote bindings
    borrow a Python board's session through), `-catalog` (the reference catalog and corpus),
    `-service` (App80 service definitions, registered in the catalog module),
-   `-usb` (USB, app80, tracing, workflows and firmware files), `-usb-lease`
+   `-usb` (USB sessions, tracing, workflows and firmware files), `-app80` (App80
+   mailboxes and service commands, registered in the USB module), `-usb-lease`
    (the ff80 session lease the remote bindings borrow from a USB session
    without depending on the USB bindings), `-recording`, `-remote` and
    `-emulator` (boards, run configurations, input assets and settings

@@ -1,5 +1,5 @@
 use super::*;
-use fujimod_catalog_service::FirmwareIdentity;
+use fujimod_catalog_camera::FirmwareIdentity;
 #[test]
 fn signed_positions_and_notifier_snapshots_keep_all_bits_with_reordered_slots() {
     for slots in [[0u8, 1, 2], [31, 17, 4]] {

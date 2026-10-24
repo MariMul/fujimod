@@ -1,9 +1,65 @@
-//! Camera definitions: identity, configuration and service-mode guard facts for
+//! Firmware identities, and camera definitions: identity, configuration and service-mode guard facts for
 //! one firmware, loaded from caller-selected JSON (schema 1, the
 //! `firmware/<model>/<version>/camera.json` tables). Data only: no USB, no
 //! execution policy.
-use crate::{DefinitionError, Digest, FirmwareIdentity};
 use serde::Deserialize;
+
+/// A firmware identity that a definition or a camera does not satisfy.
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum IdentityError {
+    #[error("firmware identity fields must be nonempty")]
+    EmptyIdentity,
+    #[error("firmware digest must contain exactly 64 hexadecimal characters")]
+    InvalidDigest,
+    #[error("definition does not match the selected firmware id and digest")]
+    FirmwareMismatch,
+}
+
+/// SHA-256 identity, not an address or command selector.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Digest([u8; 32]);
+impl Digest {
+    pub fn parse(hex: &str) -> Result<Self, IdentityError> {
+        if hex.len() != 64 || !hex.as_bytes().iter().all(u8::is_ascii_hexdigit) {
+            return Err(IdentityError::InvalidDigest);
+        }
+        let mut bytes = [0; 32];
+        for (index, value) in bytes.iter_mut().enumerate() {
+            *value =
+                u8::from_str_radix(&hex[index * 2..index * 2 + 2], 16).expect("validated hex pair");
+        }
+        Ok(Self(bytes))
+    }
+    pub fn bytes(self) -> [u8; 32] {
+        self.0
+    }
+    pub fn hex(self) -> String {
+        self.0.iter().map(|byte| format!("{byte:02x}")).collect()
+    }
+}
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FirmwareIdentity {
+    id: String,
+    digest: Digest,
+}
+impl FirmwareIdentity {
+    pub fn new(id: impl Into<String>, sha256: &str) -> Result<Self, IdentityError> {
+        let id = id.into();
+        if id.trim().is_empty() {
+            return Err(IdentityError::EmptyIdentity);
+        }
+        Ok(Self {
+            id,
+            digest: Digest::parse(sha256)?,
+        })
+    }
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+    pub fn digest(&self) -> Digest {
+        self.digest
+    }
+}
 
 /// A JSON number or a `0x`-prefixed hexadecimal string.
 #[derive(Deserialize)]
@@ -32,7 +88,7 @@ impl RawNumber {
 #[derive(Debug, thiserror::Error)]
 pub enum CameraError {
     #[error(transparent)]
-    Definition(#[from] DefinitionError),
+    Identity(#[from] IdentityError),
     #[error("invalid camera definition JSON: {0}")]
     Json(#[from] serde_json::Error),
     #[error("unsupported camera definition schema {0}")]
@@ -258,7 +314,7 @@ impl CameraDefinition {
         }
         let identity = FirmwareIdentity::new(raw.firmware_id, &raw.firmware_sha256)?;
         if &identity != expected {
-            return Err(DefinitionError::FirmwareMismatch.into());
+            return Err(IdentityError::FirmwareMismatch.into());
         }
         if raw
             .identity
@@ -266,7 +322,7 @@ impl CameraDefinition {
             .iter()
             .any(|product| product.trim().is_empty())
         {
-            return Err(DefinitionError::EmptyIdentity.into());
+            return Err(IdentityError::EmptyIdentity.into());
         }
         let configuration = Configuration {
             address: raw.configuration.address.u32()?,

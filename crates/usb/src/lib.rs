@@ -5,7 +5,6 @@
 //! Firmware-specific limits are supplied explicitly; no camera body is a default.
 #![forbid(unsafe_code)]
 
-pub mod app80;
 pub mod connection;
 pub mod error;
 pub mod ff80;

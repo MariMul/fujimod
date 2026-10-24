@@ -1,6 +1,6 @@
 [package]
 name = "fujimod-catalog-service"
-description = "App80 service and camera definitions loaded from caller-selected JSON"
+description = "App80 service definitions loaded from caller-selected JSON"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,6 +11,7 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+fujimod-catalog-camera.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 sha2.workspace = true

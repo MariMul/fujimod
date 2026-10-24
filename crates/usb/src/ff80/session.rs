@@ -71,7 +71,7 @@ impl Session {
             .await?,
         })
     }
-    pub(crate) fn trace(&self) -> Option<crate::trace::Trace> {
+    pub fn trace(&self) -> Option<crate::trace::Trace> {
         self.core.io.trace()
     }
     pub fn info(&self) -> SessionInfo {

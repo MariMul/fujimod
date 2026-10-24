@@ -1,7 +1,7 @@
 //! App80 carried by ff80 configuration commands, above both command codecs.
-use crate::{
+use crate::{Reply, Request};
+use fujimod_usb::{
     Result,
-    app80::{Reply, Request},
     error::check_limit,
     ff80::{
         Session,
@@ -56,7 +56,7 @@ impl Mailbox {
             ReadConfiguration::new(self.location, NonZeroU32::new(length).unwrap(), self.limit)?;
         let span = session.trace().map(|t| {
             t.protocol(
-                crate::trace::Layer::App80,
+                fujimod_usb::trace::Layer::App80,
                 request.code().0.into(),
                 &request.encode(),
             )

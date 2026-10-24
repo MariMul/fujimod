@@ -1,6 +1,6 @@
 //! Firmware-selected App80 codecs. No USB carrier or model defaults.
 use super::{CommandCode, Reply, Request};
-use crate::{Result as UsbResult, error::ProtocolError, ff80::commands::memory::Address};
+use fujimod_usb::{Result as UsbResult, error::ProtocolError, ff80::commands::memory::Address};
 use fujimod_catalog_service::{Codec, Definition, Entry, ServiceModes};
 mod scan;
 pub use scan::ScanSelection;

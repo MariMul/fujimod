@@ -1,5 +1,5 @@
 //! Memory and configuration access for one workflow on one session.
-use fujimod_catalog_service::camera::CameraDefinition;
+use fujimod_catalog_camera::CameraDefinition;
 use fujimod_usb::{
     ff80::{
         Session,

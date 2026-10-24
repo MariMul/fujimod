@@ -1,6 +1,7 @@
 //! Inspect a firmware definition without connecting to USB.
-use fujimod_catalog_service::{Definition, FirmwareIdentity};
-use fujimod_usb::operations::app80::Service;
+use fujimod_catalog_service::Definition;
+use fujimod_catalog_camera::FirmwareIdentity;
+use fujimod_usb_app80::operations::Service;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.len() != 3 {
