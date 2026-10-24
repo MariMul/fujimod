@@ -579,6 +579,8 @@ impl Cpu for Core {
     fn exit_counters(&self) -> Result<BTreeMap<&'static str, u64>, String> {
         let mut counters = self.execution.cpu.exit_counters()?;
         let l = &self.execution.loops;
+        #[cfg(debug_assertions)]
+        l.log_unsupported_models();
         counters.insert("loop_poll_instructions", l.poll_instructions.get());
         counters.insert("loop_counted_instructions", l.counted_instructions.get());
         counters.insert(
@@ -632,6 +634,10 @@ impl Cpu for Core {
             l.proofs_failed_iteration_model_unsupported.get(),
         );
         counters.insert(
+            "loop_proofs_failed_iteration_model_unsupported_pcs",
+            l.unsupported_model_pc_count() as u64,
+        );
+        counters.insert(
             "loop_proofs_failed_counter_at_boundary",
             l.proofs_failed_counter_at_boundary.get(),
         );
@@ -666,6 +672,10 @@ impl Cpu for Core {
             self.execution
                 .block_hook_budget_fallback_accounting_ring
                 .get(),
+        );
+        counters.insert(
+            "block_hook_reason_budget_fallback_guest_clock",
+            self.execution.block_hook_budget_fallback_guest_clock.get(),
         );
         counters.insert(
             "block_hook_reason_budget_fallback_other",

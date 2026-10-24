@@ -3,7 +3,7 @@
 //! The execution owner bounds the stable window at every event/peer boundary.
 use super::*;
 use fujimod_emulator_cpu::loops::LoopMode;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Default)]
 pub(super) struct Loops {
@@ -30,6 +30,53 @@ pub(super) struct Loops {
     pub proofs_failed_counter_at_boundary: Cell<u64>,
     pub proofs_failed_budget_room: Cell<u64>,
     structural_failures: RefCell<BTreeMap<u64, Vec<u8>>>,
+    unsupported_models: RefCell<BTreeMap<u64, Vec<u8>>>,
+    unsupported_model_addresses: RefCell<BTreeSet<u64>>,
+    #[cfg(debug_assertions)]
+    unsupported_model_hits: RefCell<BTreeMap<u64, (Vec<u8>, u64)>>,
+}
+impl Loops {
+    pub(super) fn unsupported_model_pc_count(&self) -> usize {
+        self.unsupported_model_addresses.borrow().len()
+    }
+    #[cfg(debug_assertions)]
+    pub(super) fn log_unsupported_models(&self) {
+        if std::env::var_os("FUJIMOD_LOOP_MODEL_FAILURES").is_none() {
+            return;
+        }
+        let hits = self.unsupported_model_hits.borrow();
+        let mut entries: Vec<_> = hits.iter().collect();
+        entries.sort_by_key(|(_, (_, count))| std::cmp::Reverse(*count));
+        eprintln!("unsupported loop iteration models: {} distinct PCs", hits.len());
+        for (&pc, (bytes, count)) in entries.into_iter().take(32) {
+            let words = bytes_to_words(bytes);
+            eprintln!("  pc=0x{pc:08x} entries={count} words={words:08x?}");
+        }
+    }
+    #[cfg(debug_assertions)]
+    pub(super) fn record_unsupported_model_block(&self, block: Block) {
+        if block.bytes == 0 {
+            return;
+        }
+        let Some(branch) = block
+            .address
+            .checked_add(u64::from(block.bytes))
+            .and_then(|end| end.checked_sub(4))
+        else {
+            return;
+        };
+        let models = self.unsupported_models.borrow();
+        let Some(bytes) = models.get(&branch).filter(|bytes| bytes.len() == block.bytes as usize)
+        else {
+            return;
+        };
+        let mut hits = self.unsupported_model_hits.borrow_mut();
+        let entry = hits.entry(branch).or_insert((bytes.clone(), 0));
+        if entry.0 != *bytes {
+            *entry = (bytes.clone(), 0);
+        }
+        entry.1 = entry.1.saturating_add(1);
+    }
 }
 pub(super) struct Window<'a>(pub &'a Cell<bool>);
 impl Drop for Window<'_> {
@@ -286,6 +333,42 @@ impl Proof {
             compare,
         ))
     }
+    /// The supported iteration pattern is determined by decoded instruction
+    /// shape, register roles, and branch condition. Register contents only
+    /// determine the comparison value at runtime.
+    fn has_iteration_model(&self) -> bool {
+        let Some((&first, rest)) = self.body.split_first() else {
+            return false;
+        };
+        let Op::Data {
+            opcode,
+            flags,
+            dst,
+            lhs,
+            rhs: Operand::Immediate(1, _),
+            ..
+        } = first
+        else {
+            return false;
+        };
+        if dst != lhs || !matches!(opcode, 2 | 4) {
+            return false;
+        }
+        (match rest {
+            [] => flags,
+            [Op::Data {
+                opcode: 10,
+                lhs,
+                rhs,
+                ..
+            }] if *lhs == dst => match *rhs {
+                Operand::Immediate(_, _) => true,
+                Operand::Register(r, 0, 0) => r != dst,
+                _ => false,
+            },
+            _ => false,
+        }) && matches!(self.condition, 1 | 2 | 3 | 8 | 9)
+    }
     fn advance(
         &self,
         state: State,
@@ -306,9 +389,12 @@ impl Proof {
         if next == state {
             return Ok((state, cycles, false));
         }
+        if !self.has_iteration_model() {
+            return Err(AdvanceFailure::IterationModelUnsupported);
+        }
         let (counter, step, compare) = self
             .counter(state)
-            .ok_or(AdvanceFailure::IterationModelUnsupported)?;
+            .ok_or(AdvanceFailure::CounterAtBoundary)?;
         let value = state.registers[counter];
         let distance = if step < 0 {
             u64::from(value)
@@ -378,6 +464,15 @@ impl Execution {
         {
             return false;
         }
+        if self
+            .loops
+            .unsupported_models
+            .borrow()
+            .get(&address)
+            .is_some_and(|cached| *cached == bytes)
+        {
+            return false;
+        }
         self.loops.structural_failures.borrow_mut().remove(&address);
         self.loops
             .proofs_attempted
@@ -405,6 +500,7 @@ impl Execution {
     }
     pub(super) fn invalidate_loop_failures(&self) {
         self.loops.structural_failures.borrow_mut().clear();
+        self.loops.unsupported_models.borrow_mut().clear();
     }
     fn loop_read(&self, address: u32, width: usize) -> Option<u32> {
         if !(address as usize).is_multiple_of(width) {
@@ -521,6 +617,23 @@ impl Execution {
                             &self.loops.proofs_failed_loop_read_unavailable
                         }
                         AdvanceFailure::IterationModelUnsupported => {
+                            self.loops
+                                .unsupported_models
+                                .borrow_mut()
+                                .insert(address, bytes.clone());
+                            self.loops
+                                .unsupported_model_addresses
+                                .borrow_mut()
+                                .insert(address);
+                            #[cfg(debug_assertions)]
+                            {
+                                let mut hits = self.loops.unsupported_model_hits.borrow_mut();
+                                let entry = hits.entry(address).or_insert((bytes.clone(), 0));
+                                if entry.0 != bytes {
+                                    *entry = (bytes.clone(), 0);
+                                }
+                            }
+                            self.cpu.invalidate_code(Some((address, address + 3)))?;
                             &self.loops.proofs_failed_iteration_model_unsupported
                         }
                         AdvanceFailure::CounterAtBoundary => {

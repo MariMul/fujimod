@@ -97,6 +97,7 @@ pub(super) struct Execution {
     block_hook_thumb: Cell<u64>,
     block_hook_budget_fallback_remaining_budget: Cell<u64>,
     block_hook_budget_fallback_accounting_ring: Cell<u64>,
+    block_hook_budget_fallback_guest_clock: Cell<u64>,
     block_hook_budget_fallback_other: Cell<u64>,
     block_hook_other: Cell<u64>,
     user_stop: Cell<bool>,
@@ -207,6 +208,7 @@ impl Core {
             block_hook_thumb: Cell::new(0),
             block_hook_budget_fallback_remaining_budget: Cell::new(0),
             block_hook_budget_fallback_accounting_ring: Cell::new(0),
+            block_hook_budget_fallback_guest_clock: Cell::new(0),
             block_hook_budget_fallback_other: Cell::new(0),
             block_hook_other: Cell::new(0),
             user_stop: Cell::new(false),
@@ -506,6 +508,8 @@ impl Execution {
         })
     }
     fn block(&self, block: Block) -> Result<(), String> {
+        #[cfg(debug_assertions)]
+        self.loops.record_unsupported_model_block(block);
         self.block_hook_executions
             .set(self.block_hook_executions.get().saturating_add(1));
         if !self
@@ -539,6 +543,12 @@ impl Execution {
             {
                 self.block_hook_budget_fallback_accounting_ring.set(
                     self.block_hook_budget_fallback_accounting_ring
+                        .get()
+                        .saturating_add(1),
+                );
+            } else if self.clock.get().is_some() {
+                self.block_hook_budget_fallback_guest_clock.set(
+                    self.block_hook_budget_fallback_guest_clock
                         .get()
                         .saturating_add(1),
                 );
