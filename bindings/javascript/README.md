@@ -45,6 +45,9 @@ npm run test:browser
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` can select an explicitly installed Chromium
 binary. Permission UI and physical camera integration remain unvalidated.
 
+For worker CPU profiling and boot timing, see
+[browser performance](../../crates/emulator/BROWSER_PERFORMANCE.md).
+
 ## Emulator runtime
 
 The `fujimod/emulator` entry loads the emulator module and exports its `Camera`

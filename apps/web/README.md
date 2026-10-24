@@ -1,5 +1,8 @@
 # Fujimod
 
+See [browser boot profiling](../../crates/emulator/BROWSER_PERFORMANCE.md) for
+worker CPU captures, Wasm symbols, instruction rates and repeatable timing.
+
 This app lives in `apps/web/` of the FujiMod repository. Run the commands
 below from that directory.
 
