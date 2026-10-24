@@ -24,13 +24,17 @@
   },
   "stock": {
     "record-picture": {
-      "result": "not-run"
+      "result": "fail",
+      "passed": 0,
+      "total": 1
     },
     "record-movie": {
       "result": "not-run"
     },
     "control-input": {
-      "result": "not-run"
+      "result": "partial",
+      "passed": 4,
+      "total": 40
     },
     "focus": {
       "result": "not-run"
@@ -39,10 +43,14 @@
       "result": "not-run"
     },
     "film-simulations": {
-      "result": "not-run"
+      "result": "fail",
+      "passed": 0,
+      "total": 11
     },
     "playback-picture": {
-      "result": "not-run"
+      "result": "fail",
+      "passed": 0,
+      "total": 3
     },
     "playback-movie": {
       "result": "not-run"
@@ -51,7 +59,9 @@
       "result": "not-run"
     },
     "sd": {
-      "result": "not-run"
+      "result": "fail",
+      "passed": 0,
+      "total": 2
     },
     "control-layout": {
       "result": "not-run"

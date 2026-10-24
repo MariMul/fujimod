@@ -24,34 +24,44 @@
   },
   "stock": {
     "record-picture": {
-      "result": "pass"
+      "result": "pass",
+      "passed": 1,
+      "total": 1
     },
     "record-movie": {
-      "result": "pass"
+      "result": "stale"
     },
     "control-input": {
-      "result": "pass"
+      "result": "partial",
+      "passed": 18,
+      "total": 103
     },
     "focus": {
-      "result": "pass"
+      "result": "stale"
     },
     "lens": {
-      "result": "pass"
+      "result": "stale"
     },
     "film-simulations": {
-      "result": "pass"
+      "result": "fail",
+      "passed": 0,
+      "total": 11
     },
     "playback-picture": {
-      "result": "pass"
+      "result": "partial",
+      "passed": 2,
+      "total": 3
     },
     "playback-movie": {
-      "result": "pass"
+      "result": "stale"
     },
     "develop-raw": {
-      "result": "pass"
+      "result": "stale"
     },
     "sd": {
-      "result": "pass"
+      "result": "pass",
+      "passed": 2,
+      "total": 2
     },
     "control-layout": {
       "result": "pass"
