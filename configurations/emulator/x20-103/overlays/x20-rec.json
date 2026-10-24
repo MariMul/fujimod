@@ -28,7 +28,14 @@
         "movrsz_profile": "declared-packed-yycbcr-pyramid-unmeasured",
         "movrsz_ticks": 50000,
         "producer_data_profile": "xm1-150-declared-continuous-statistics-scene-unmeasured",
-        "secondary_bus_profile": "usbcharge-disconnected-pwic-startup-tagged"
+        "secondary_bus_profile": "usbcharge-disconnected-pwic-startup-tagged",
+        "sd_card_profile": "declared-blank-sdhc-default-speed-unmeasured",
+        "sd_card_present": true,
+        "sd_card_format": {
+          "label": "CAMERA",
+          "partition_start": 8192,
+          "sectors_per_cluster": 64
+        }
       },
       "execution": {
         "mode": "strict",
