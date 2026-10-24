@@ -211,6 +211,18 @@ records the rebuild costs below before and after.
    guest instructions after both moves, with the same host instructions
    retired. The remote bindings borrow a board's session through
    `fujimod-python-base`, so they no longer wait for the emulator bindings.
+10. Feature splits, run inputs and the final link: done. The `typescript` and
+    `testing` features are gone, so `cargo test -p`, the workspace, the
+    Python extension and the JavaScript builds share one copy of each crate
+    under them; the catalog crates keep their TypeScript declarations off
+    Emscripten, and the JavaScript synthetic USB endpoints are the test-only
+    `fujimod-javascript-testing` crate. `fujimod-catalog-run-inputs` holds
+    the run options, device profiles and native, firmware and hardware
+    inputs beside the reference catalog. `fujimod-python-boot` installs the
+    catalog boot behind a hook in `fujimod-python-base`, so the Python
+    emulator bindings no longer wait for the boot crate. Release builds no
+    longer strip the extension, which took 0.6 s of every rebuild; the dist
+    profile still strips published artifacts.
 
 ## Rebuild costs
 
@@ -222,39 +234,43 @@ image split of step 8: the catalog and image rows were measured in the same
 checkout as the next column, at load average 5–11, and the other rows
 repeat the measurements before them (load average 4–8). "Before step 9"
 precedes the catalog split, when every catalog row was one crate edit.
-"After the domain split" was measured after the catalog and binding splits of
-step 9, before the boot, preparation and configuration moves. The "now"
-columns were measured after all of step 9 at load average 3–6, two edits per
-row; a catalog row edits the file named, otherwise the crate's `lib.rs`.
+"Before step 10" repeats the "now" column of step 9, measured at load average
+3–6. The "now" columns were measured after step 10 at load average 6–7, with
+other builds running, two edits per row; a catalog row edits the file named,
+otherwise the crate's `lib.rs`. At that load the reference catalog compiled in
+1.6–1.8 s instead of 1.1–1.2 s, so the catalog rows are higher than their
+critical paths alone would give.
 
-| Edit | Extension before step 2 | Before steps 6 and 8 | Before step 9 | After the domain split | Extension now | Unit tests now | Target |
+| Edit | Extension before step 2 | Before steps 6 and 8 | Before step 9 | Before step 10 | Extension now | Unit tests now | Target |
 |---|---|---|---|---|---|---|---|
-| EXR II I2C controller | 23–26 | 1.4 | 1.4 | 1.3–1.4 | 1.4 | 0.7 | 2–3; under 1 |
-| EXR II ISP image input | 15–19 | 1.6 | 1.4 | 1.4–1.5 | 1.3–1.4 | 0.8 | 2–3; under 1 |
-| Lens part | 23–26 | 2.0 | 1.8 | 1.7–1.8 | 1.7–1.8 | 0.7 | 2–3; under 1 |
-| XP4 I/O | | 2.0–2.1 | 1.6 | 1.6–1.7 | 1.6–1.7 | 0.7 | 2–3; under 1 |
+| EXR II I2C controller | 23–26 | 1.4 | 1.4 | 1.4 | 1.1 | 0.8 | 2–3; under 1 |
+| EXR II ISP image input | 15–19 | 1.6 | 1.4 | 1.3–1.4 | 1.1 | 0.8 | 2–3; under 1 |
+| Lens part | 23–26 | 2.0 | 1.8 | 1.7–1.8 | 1.4–1.6 | 0.8 | 2–3; under 1 |
+| XP4 I/O | | 2.0–2.1 | 1.6 | 1.6–1.7 | 1.4 | 0.7 | 2–3; under 1 |
 | XP5 I/O | | not linked | not linked | not linked | not linked | 0.7 | under 1 |
-| Arm interrupt controller | | 3.3–3.5 | 1.5 | 1.5 | 1.5 | 0.6 | 2–3; under 1 |
-| Image formation | | 6.5–7.8 | 2.3–4.6 | 1.7–1.8 | 1.7–1.9 | 0.7 | 2–3; under 1 |
-| Image processing | | 6.5–7.8 | 2.1–2.2 | 1.6–1.7 | 1.6–1.7 | 0.6 | 2–3; under 1 |
-| Image interface | 23–26 | 6.5–7.8 | 4.7–5.2 | 4.2–4.6 | 3.7–4.4 | 0.8 | |
-| EXR II plan | | 12.7–17 | 6.0–7.7 | 3.7–3.8 | 3.4 | 0.8 | |
-| Boot assembly | | | | | 2.0 | 1.3 | 2–3 |
-| Run input preparation | | | | | 2.1–2.5 | 0.6 | 2–3 |
-| Run configuration (`lib.rs`, was `configuration.rs`) | | | 8.1–9.6 | 5.0–6.0 | 2.7 | 1.3 | 2–3 |
-| Reference catalog (`reference.rs`) | | 9.7–10.6 | 8.1–9.6 | 5.1–6.2 | 3.8 | 1.3 | 2–3 |
-| Hardware profiles (`profiles.rs`) | | | 8.1–9.6 | | 3.8–3.9 | 1.3 | 2–3 |
-| Catalog content | | | 8.1–9.6 | 5.9–6.9 | 4.5–5.1 | 0.5 | 2–3 |
-| Catalog service | | | 8.1–9.6 | 3.9–4.1 | 3.9–4.1 | 0.6 | 2–3 |
-| Catalog construction | | | 8.1–9.6 | 5.3–5.4 | 4.5–5.1 | 0.6 | 2–3 |
-| Catalog controls (`facts.rs`) | | | 8.1–9.6 | 5.1–5.2 | 4.1–4.2 | 0.7 | 2–3 |
-| Catalog remote | | | 8.1–9.6 | 5.3–6.0 | 3.9 | 0.6 | 2–3 |
-| Catalog settings | | | 8.1–9.6 | 7.6–8.0 | 3.9 | 0.5 | 2–3 |
-| Catalog bulk | | | 8.1–9.6 | 5.2–5.8 | 4.0–6.6 | 0.5 | 2–3 |
+| Arm interrupt controller | | 3.3–3.5 | 1.5 | 1.5 | 1.2 | 0.7 | 2–3; under 1 |
+| Image formation | | 6.5–7.8 | 2.3–4.6 | 1.7–1.9 | 1.6 | 0.7 | 2–3; under 1 |
+| Image processing | | 6.5–7.8 | 2.1–2.2 | 1.6–1.7 | 1.3–1.4 | 0.7 | 2–3; under 1 |
+| Image interface | 23–26 | 6.5–7.8 | 4.7–5.2 | 3.7–4.4 | 4.2 | 0.8 | 2–3 |
+| EXR II plan | | 12.7–17 | 6.0–7.7 | 3.4 | 3.1–3.2 | 0.8 | 2–3 |
+| Boot assembly | | | | 2.0 | 1.6–1.9 | 1.6 | 2–3 |
+| Run input preparation | | | | 2.1–2.5 | 1.7–2.1 | 0.7 | 2–3 |
+| Run configuration (`lib.rs`) | | | 8.1–9.6 | 2.7 | 1.9 | 1.1 | 2–3 |
+| Run inputs (`options.rs`) | | | 8.1–9.6 | 2.7 | 2.7–2.9 | 1.3 | 2–3 |
+| Reference catalog (`reference.rs`) | | 9.7–10.6 | 8.1–9.6 | 3.8 | 3.9–4.0 | 1.9 | 2–3 |
+| Hardware profiles (`profiles.rs`) | | | 8.1–9.6 | 3.8–3.9 | 3.4–3.6 | 1.6 | 2–3 |
+| Catalog content | | | 8.1–9.6 | 4.5–5.1 | 4.8 | 0.6 | 2–3 |
+| Catalog service | | | 8.1–9.6 | 3.9–4.1 | 4.0 | 1.1 | 2–3 |
+| Catalog construction | | | 8.1–9.6 | 4.5–5.1 | 4.6–5.0 | 0.7 | 2–3 |
+| Catalog controls (`facts.rs`) | | | 8.1–9.6 | 4.1–4.2 | 4.6 | 0.7–3.8 | 2–3 |
+| Catalog remote | | | 8.1–9.6 | 3.9 | 3.8–4.3 | 0.8 | 2–3 |
+| Catalog settings | | | 8.1–9.6 | 3.9 | 3.8–4.3 | 0.7 | 2–3 |
+| Catalog bulk | | | 8.1–9.6 | 4.0–6.6 | 3.9–4.7 | 0.6 | 2–3 |
 
 An EXR II model edit recompiles the model crate (0.2–0.3 s),
-`fujimod-emulator-models` (0.1 s) and the extension module (0.8–1.0 s, mostly
-linking). Before the registry it also recompiled the board crate (0.4–0.5 s;
+`fujimod-emulator-models` (0.1 s) and the extension module (0.5 s since step
+10, of which the link is 0.4 s; 0.8–1.0 s before, when cargo also stripped the
+extension). Before the registry it also recompiled the board crate (0.4–0.5 s;
 2.1–2.3 s in all for the I2C controller, 2.6 s for the lens part). A lens part
 edit also recompiles the EXR II serial, audio and boot serial crates, which
 depend on it. The extension links no XP5 model. An Arm interrupt controller
@@ -274,20 +290,32 @@ bindings.
 Before step 9 a catalog edit rebuilt the 20.8K-line catalog (2.6–3.5 s), then
 `fujimod-usb` (1.0–1.3 s), `fujimod-python-usb` (2.5–3.2 s) and the remote
 bindings on its critical path, beside the plan, every EXR II model and the
-emulator. A run configuration edit now rebuilds the configuration crate
-(0.8–0.9 s), the boot crate (0.6–0.8 s), the catalog and emulator bindings
-(0.3–0.5 s) and the module (0.8 s). A reference catalog or hardware profile
-edit adds `fujimod-catalog` (1.1–1.2 s for its 7.7K lines) before the
-configuration crate, and a document crate edit adds that crate (0.1–0.3 s)
-and, for controls, the remote crate. The remote bindings (0.6 s) build beside
-the configuration and boot crates. A content edit also rebuilds the emulator
-(0.8 s), the workflows and the USB bindings (2.4 s) beside that path, and a
-construction edit the plan, the EXR II models and the emulator. A service edit
-rebuilds `fujimod-usb` (0.5 s), the USB bindings (2.0 s) and the module only.
-The reference and configuration unit tests rebuild in 1.3 s; each document
-crate's own tests in 0.5–0.7 s.
+emulator. After step 10 a run configuration edit rebuilds the configuration
+crate (0.5–0.6 s), the boot crate (0.7–0.9 s), the boot and catalog bindings
+(0.1 s and 0.3–0.4 s) and the module (0.5 s). A run input edit adds the
+run-inputs crate (0.8 s) before the configuration crate. A reference catalog
+or hardware profile edit adds `fujimod-catalog` instead, and a document crate
+edit adds that crate (0.1–0.3 s) before it; the remote bindings build beside
+the configuration and boot crates. A content edit also rebuilds the run inputs
+and the emulator beside that path, and the workflows and the USB bindings
+(2.2–2.9 s), which end with it; a construction edit also rebuilds the plan,
+the EXR II models and the emulator. A service edit rebuilds `fujimod-usb`
+(0.5 s), the USB bindings (2.2 s) and the module only. An image interface or
+plan edit rebuilds the emulator (1.3–1.5 s), then the boot crate and the boot
+bindings before the module.
 
-The remaining catalog chain is the reference catalog, the configuration
-crate, the boot crate and the emulator bindings in series: each needs the
-types of the one before, and Cargo starts none of them before the previous
-crate finishes.
+The rows above 3 s end in serial chains in which each crate needs the types
+of the one before and Cargo starts none of them before the previous crate's
+metadata is written:
+
+- the reference catalog (1.1–1.8 s), the configuration crate (0.6 s), the
+  boot crate (0.8–1.0 s), the boot bindings (0.1 s) and the module (0.5 s),
+  for every catalog row except the service and run configuration rows;
+- `fujimod-usb` (0.5 s) and the USB bindings (2.2–2.9 s), for the service,
+  content and bulk rows;
+- the plan (0.7 s), the emulator (1.3–1.5 s) and the boot crate, for the
+  plan and image interface rows.
+
+In the boot crate and the USB bindings, incremental rebuilds spend half their
+time encoding crate metadata (0.5 s each) and expanding macros; the boot crate
+also re-collects the serde instantiations of the catalog documents it reads.
