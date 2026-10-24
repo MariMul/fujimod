@@ -399,7 +399,6 @@ impl Compositor {
                 let mut s = c.plane_state();
                 s.set("requested_prefix_bytes", S::Int(count));
                 s.set("captured_bytes", S::Int(raw.len() as i64));
-                s.set("sha256", S::str(&sha256(&raw)));
                 s.set("raw", S::Bytes(raw));
                 captures.push(s);
             }
@@ -549,7 +548,7 @@ impl Compositor {
             ("frame_sha256", frame_hash(host, &raw)),
             (
                 "png_sha256",
-                png.as_ref().map_or(S::None, |png| S::str(&sha256(png))),
+                png.as_ref().map_or(S::None, |png| frame_hash(host, png)),
             ),
             (
                 "kind",
@@ -597,7 +596,7 @@ impl Compositor {
         super::rectangles::compose(&mut frame, &rectangles, host.diagnostic_hashes());
         if let Some(rgb) = &frame.rgb {
             if let Some(png) = host.encode_png(rgb, frame.width, frame.height)? {
-                frame.state.set("png_sha256", S::str(&sha256(&png)));
+                frame.state.set("png_sha256", frame_hash(host, &png));
                 frame.png = Some(png);
             }
         }
@@ -899,7 +898,7 @@ impl Compositor {
             ("frame_sha256", frame_hash(host, &raw)),
             (
                 "png_sha256",
-                png.as_ref().map_or(S::None, |p| S::str(&sha256(p))),
+                png.as_ref().map_or(S::None, |p| frame_hash(host, p)),
             ),
             (
                 "kind",
