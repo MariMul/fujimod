@@ -20924,9 +20924,8 @@
           "description": "Closed predicate kind stored in the scanner record."
         },
         "lower": {
-          "description": "Lower comparison operand or calibration-table offset.",
-          "format": "uint16",
-          "maximum": 65535,
+          "description": "Lower comparison operand or calibration-table offset, a 32-bit record word.",
+          "format": "uint32",
           "minimum": 0,
           "type": "integer"
         },
@@ -20943,9 +20942,8 @@
           "type": "integer"
         },
         "upper": {
-          "description": "Upper comparison operand or calibration-table offset.",
-          "format": "uint16",
-          "maximum": 65535,
+          "description": "Upper comparison operand or calibration-table offset, a 32-bit record word.",
+          "format": "uint32",
           "minimum": 0,
           "type": "integer"
         }

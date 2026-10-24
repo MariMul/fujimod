@@ -195,10 +195,10 @@ pub struct ScannerRecordWitness {
     pub input_kind: ScannerInputKind,
     /// Source selector stored at byte offset twelve.
     pub source: u32,
-    /// Lower comparison operand or calibration-table offset.
-    pub lower: u16,
-    /// Upper comparison operand or calibration-table offset.
-    pub upper: u16,
+    /// Lower comparison operand or calibration-table offset, a 32-bit record word.
+    pub lower: u32,
+    /// Upper comparison operand or calibration-table offset, a 32-bit record word.
+    pub upper: u32,
 }
 
 /// A firmware scanner state reader.
