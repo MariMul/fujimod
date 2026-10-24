@@ -24,6 +24,7 @@ fujimod-catalog-camera.workspace = true
 fujimod-catalog-firmware-identity.workspace = true
 fujimod-catalog-service.workspace = true
 fujimod-usb-app80.workspace = true
+fujimod-usb-app80-types.workspace = true
 nusb.workspace = true
 js-sys.workspace = true
 web-sys = { version = "0.3", features = ["UsbDevice"] }

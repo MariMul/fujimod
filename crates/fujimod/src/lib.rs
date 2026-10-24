@@ -2,9 +2,6 @@
 #[cfg(feature = "usb")]
 pub use fujimod_usb as usb;
 
-#[cfg(feature = "app80")]
-pub use fujimod_usb_app80 as usb_app80;
-
 #[cfg(feature = "workflows")]
 pub use fujimod_workflows as workflows;
 
