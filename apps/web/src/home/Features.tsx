@@ -147,7 +147,8 @@ const CARDS: Record<string, Card> = {
     path: ['SHOOTING MENU'],
     summary: null,
     choices: {
-      HIGHLIGHT: 'Exposure is reduced when bright areas dominate the scene.',
+      HIGHLIGHT:
+        'Meters exposure in multiple areas of the frame with emphasis on the bright areas.',
       'RAW HIGHLIGHT':
         'Expose To The Right (ETTR): Exposure is set so that the brightest areas of the frame are recorded as brightly as possible without loss of detail in RAW images.',
     },
@@ -370,7 +371,7 @@ const CARDS: Record<string, Card> = {
   },
 };
 /** Recordings rendered for exactly this catalog text, else none. */
-const media = featureMedia('18e91160e275b2253842b0a5');
+const media = featureMedia('4953e0cf04ad0ac6b0fb2e48');
 
 function Icon(props: { name: string }) {
   return (
@@ -602,7 +603,10 @@ export function FeatureCatalog() {
             <Icon name="highlight" />
             <Ref card="photometry">PHOTOMETRY</Ref>
           </h4>
-          <p>Choose HIGHLIGHT to reduce exposure when bright areas dominate the scene.</p>
+          <p>
+            Choose HIGHLIGHT to meter exposure in multiple areas of the frame with emphasis on the
+            bright areas.
+          </p>
           <div class="catalog-chips">
             <span class="catalog-chip stock">MULTI</span>
             <span class="catalog-chip stock">SPOT</span>
