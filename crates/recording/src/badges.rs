@@ -84,6 +84,16 @@ impl Canvas {
                 / 255) as u8;
         }
     }
+    /// `color` over the pixel at `alpha` (0..1), unrounded until the store.
+    pub(crate) fn blend(&mut self, x: i32, y: i32, color: [f64; 3], alpha: f64) {
+        if x < 0 || y < 0 || x >= self.width || y >= self.height {
+            return;
+        }
+        let start = ((y * self.width + x) * 3) as usize;
+        for (value, over) in self.pixels[start..start + 3].iter_mut().zip(color) {
+            *value = (over * alpha + f64::from(*value) * (1. - alpha)).round() as u8;
+        }
+    }
     fn line(&mut self, mut x: i32, mut y: i32, end_x: i32, end_y: i32, c: [u8; 4]) {
         let (dx, dy) = ((end_x - x).abs(), -(end_y - y).abs());
         let (sx, sy) = (

@@ -266,22 +266,51 @@ fn touches_follow_the_finger_and_fade_after_lift() {
     // A 320x240 source fitted into 640x480 doubles positions and the radius.
     let marks =
         |r: &mut Recorder| touches::marks(&mut r.touches, r.frames, r.fps, (320, 240), (640, 480));
-    assert_eq!(marks(&mut r), vec![(200, 120, 44, 255)]);
+    assert_eq!(marks(&mut r), vec![(200., 120., 44., 255)]);
     r.touch(TouchPhase::Move, 110., 70., 0.).unwrap();
-    assert_eq!(marks(&mut r), vec![(220, 140, 44, 255)]);
+    assert_eq!(marks(&mut r), vec![(220., 140., 44., 255)]);
     r.touch(TouchPhase::End, 120., 70., 0.).unwrap();
-    assert_eq!(marks(&mut r), vec![(240, 140, 44, 255)]);
+    assert_eq!(marks(&mut r), vec![(240., 140., 44., 255)]);
     r.frames += 1;
-    assert_eq!(marks(&mut r), vec![(240, 140, 44, 170)]);
+    assert_eq!(marks(&mut r), vec![(240., 140., 44., 170)]);
     // A new finger may land while the previous one fades.
     r.touch(TouchPhase::Start, 10., 10., 0.).unwrap();
     assert_eq!(marks(&mut r).len(), 2);
     r.frames += 2;
-    assert_eq!(marks(&mut r), vec![(20, 20, 44, 255)]);
+    assert_eq!(marks(&mut r), vec![(20., 20., 44., 255)]);
     // Letterboxed sources keep the centered fit offset.
     assert_eq!(
         touches::marks(&mut r.touches, r.frames, r.fps, (320, 240), (640, 240)),
-        vec![(170, 10, 22, 255)]
+        vec![(170., 10., 22., 255)]
+    );
+}
+
+#[test]
+fn touch_edges_are_anti_aliased() {
+    // A white ring on black: the edge blends through partial coverage, and a
+    // half-pixel shift of the center changes the pixels, not a whole step.
+    let draw = |cx: f64| {
+        let mut canvas = crate::badges::Canvas {
+            pixels: vec![0; 64 * 64 * 3],
+            width: 64,
+            height: 64,
+        };
+        touches::draw_on(&mut canvas, &[(cx, 32., 20., 255)]);
+        canvas.pixels
+    };
+    let pixels = draw(32.);
+    let row: Vec<u8> = (0..64).map(|x| pixels[(32 * 64 + x) * 3]).collect();
+    let partial = row
+        .iter()
+        .filter(|&&v| v > 0 && v < row.iter().copied().max().unwrap())
+        .count();
+    assert!(partial >= 2, "edge pixels take partial coverage: {row:?}");
+    assert_eq!(row[0], 0);
+    assert_eq!(row[11], row[52], "the ring is symmetric about its center");
+    assert_ne!(
+        draw(32.25),
+        pixels,
+        "sub-pixel centers move the edge smoothly"
     );
 }
 
