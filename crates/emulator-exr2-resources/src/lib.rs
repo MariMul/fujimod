@@ -15,8 +15,9 @@ use std::{
 
 mod images;
 pub use images::{
-    Edge, ImageResources, ImageSnapshot, SensorFrame, SensorFrameCodec, SensorRecord,
-    SensorSnapshot, SensorState, install_sensor_frame_codec,
+    Edge, ImagePreparation, ImageResources, ImageSnapshot, ImageSpec, SensorFrame,
+    SensorFrameCodec, SensorRecord, SensorSnapshot, SensorState, install_image_preparation,
+    install_sensor_frame_codec, prepare_images,
 };
 
 /// Prepared external media inputs. Firmware/file verification belongs to the

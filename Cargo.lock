@@ -1990,10 +1990,8 @@ version = "0.1.0"
 dependencies = [
  "fujimod-catalog-settings",
  "fujimod-emulator-devices",
- "fujimod-emulator-exr2-images",
  "fujimod-emulator-exr2-plan",
  "fujimod-emulator-exr2-resources",
- "fujimod-emulator-imaging",
  "fujimod-settings",
  "fujimod-workspace-hack",
  "ruzstd",

@@ -19,6 +19,9 @@ use std::{
 };
 
 mod checkpoint;
+mod preparation;
+#[cfg(test)]
+mod preparation_tests;
 #[cfg(test)]
 mod tests;
 
@@ -139,6 +142,11 @@ macro_rules! image_wire {
             _ => return Err(format!("{} requires a {} wire", $name, stringify!($kind))),
         }
     };
+}
+
+/// Install this part's preparation of run image inputs.
+pub fn install_preparation() {
+    fujimod_emulator_exr2_resources::install_image_preparation(preparation::prepare);
 }
 
 /// Install the codec input logs use for this part's sensor frames.

@@ -99,12 +99,12 @@ fn runtime_catalog_builds_checked_graph_without_language_adapters() {
             asset.pattern.repeat(asset.size / asset.pattern.len()),
         );
     }
+    fujimod_emulator_exr2_board::register_board_builder();
+    fujimod_emulator_models::register();
     let resources = serde_json::from_value::<preparation::Spec>(spec.scene.clone())
         .unwrap()
         .build(&assets)
         .unwrap();
-    fujimod_emulator_exr2_board::register_board_builder();
-    fujimod_emulator_models::register();
     plan.build(resources, 0, &mut RefuseAdapters).unwrap();
     assert!(prepare("unknown", &[]).is_err());
 }

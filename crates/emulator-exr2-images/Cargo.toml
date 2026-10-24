@@ -14,11 +14,10 @@ doctest = false
 fujimod-emulator-exr2-resources.workspace = true
 fujimod-emulator-imaging.workspace = true
 fujimod-emulator-devices.workspace = true
+serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 fujimod-workspace-hack.workspace = true
 
-[dev-dependencies]
-serde = { workspace = true, features = ["derive"] }
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

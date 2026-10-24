@@ -1007,14 +1007,14 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
             })
             .collect::<Vec<_>>(),
     )?;
-    let resources = serde_json::from_value::<preparation::Spec>(scene.clone())
-        .map_err(|e| e.to_string())?
-        .build(&assets)?;
-    // Unit tests have no final crate to register the board builder.
+    // Unit tests have no final crate to register the board builder and models.
     #[cfg(test)]
     fujimod_emulator_exr2_board::register_board_builder();
     #[cfg(test)]
     fujimod_emulator_models::register();
+    let resources = serde_json::from_value::<preparation::Spec>(scene.clone())
+        .map_err(|e| e.to_string())?
+        .build(&assets)?;
     let built = plan.build(resources, 0, &mut RefuseAdapters)?;
     let bus_mode = match prepared.execution_policy.mode {
         RunExecutionMode::Strict => Mode::Strict,

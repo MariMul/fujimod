@@ -16,6 +16,7 @@ pub fn register(constructors: &mut Constructors) {
         fujimod_emulator_image_processing::sensor_decoders(),
     );
     fujimod_emulator_exr2_images::install_sensor_frame_codec();
+    fujimod_emulator_exr2_images::install_preparation();
 }
 
 fn image_input(builder: Builder<'_>, model: Model) -> Result<Built, String> {

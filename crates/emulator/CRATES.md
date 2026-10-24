@@ -44,10 +44,11 @@ From the bottom of the graph to the top:
    `fujimod-emulator-exr2-images` implements the image part: the image wires
    (frame period, image grid, exposure, ISP parameters, memory outputs,
    streams, output channels, phase edges) and the image, statistics and
-   sensor inputs. Only the models that read images, the EXR II board,
-   preparation and the bindings that build or inspect image inputs name it,
-   so an image interface edit does not rebuild the resources, the plan, the
-   session or the models that name no image type.
+   sensor inputs, and installs the preparation that builds a run's image
+   inputs. Only the models that read images, the EXR II board and the
+   bindings that inspect image inputs name it, so an image interface edit
+   does not rebuild the resources, the plan, the session, preparation, the
+   boot crate or the models that name no image type.
 3. Plan crates: each family's checked board description and construction
    interface, such as `fujimod-emulator-exr2-plan`. A plan carries each model's
    options as JSON for the model crate to decode, so an option change in a
@@ -64,9 +65,10 @@ From the bottom of the graph to the top:
    (the EXR II serial crate wires the lens unit, for example).
 5. Board crates: validation, wiring, resources and DMA consolidation.
    `fujimod-emulator-preparation` sits with them: it builds a run's declared
-   inputs (NAND media from persistent inputs and settings layouts, cards,
-   images, statistics and sensors) into the plan's inputs, so a settings edit
-   rebuilds neither the storage interface nor the emulator. They
+   inputs (NAND media from persistent inputs and settings layouts, cards and
+   card files, and through the image part's installed preparation its
+   images, statistics and sensors) into the plan's resources, so a settings
+   edit rebuilds neither the storage interface nor the emulator. They
    construct nodes through the constructor registry and depend on the interface
    and plan crates only.
 6. `fujimod-emulator`: execution and scheduling. It depends on the CPU and
@@ -300,6 +302,9 @@ records the rebuild costs below before and after.
     seconds of live view gave identical screenshots, ticks and instruction
     counts at every quarter second, and the boot to REC ran the same
     48,023,300 guest instructions with the same host instructions retired.
+    The image part also installs the preparation that builds a run's image,
+    statistics and sensor inputs from their JSON documents, so preparation,
+    the boot crate and the emulator bindings name no image type either.
 
 ## Rebuild costs
 

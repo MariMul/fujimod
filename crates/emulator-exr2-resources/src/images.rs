@@ -151,3 +151,37 @@ pub trait ImageResources: Send + Sync {
         frames: &mut dyn FnMut() -> Result<Checkpoint, String>,
     ) -> Result<SensorSnapshot, String>;
 }
+
+/// A run's declared image, statistics and sensor input documents.
+#[derive(Default)]
+pub struct ImageSpec {
+    pub images: BTreeMap<String, serde_json::Value>,
+    pub statistics: BTreeMap<String, serde_json::Value>,
+    pub sensors: BTreeMap<String, serde_json::Value>,
+}
+impl ImageSpec {
+    pub fn is_empty(&self) -> bool {
+        self.images.is_empty() && self.statistics.is_empty() && self.sensors.is_empty()
+    }
+}
+
+/// Builds the image part from a run's image inputs and scene assets.
+pub type ImagePreparation =
+    fn(ImageSpec, &BTreeMap<String, Vec<u8>>) -> Result<Box<dyn ImageResources>, String>;
+static IMAGE_PREPARATION: OnceLock<ImagePreparation> = OnceLock::new();
+
+/// Install the image part's preparation; there is one per process.
+pub fn install_image_preparation(preparation: ImagePreparation) {
+    let _ = IMAGE_PREPARATION.set(preparation);
+}
+
+/// Build the image part of a run with the installed preparation.
+pub fn prepare_images(
+    spec: ImageSpec,
+    assets: &BTreeMap<String, Vec<u8>>,
+) -> Result<Box<dyn ImageResources>, String> {
+    let prepare = IMAGE_PREPARATION
+        .get()
+        .ok_or("image inputs need the image part's preparation")?;
+    prepare(spec, assets)
+}

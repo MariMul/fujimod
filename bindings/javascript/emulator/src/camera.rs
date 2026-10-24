@@ -437,6 +437,8 @@ impl Session {
             .into_iter()
             .map(|(name, a)| Ok((name, a.build(dat)?)))
             .collect::<Result<_, String>>()?;
+        fujimod_emulator_exr2_board::register_board_builder();
+        fujimod_emulator_models::register();
         let resources = g.scene.build(&assets)?;
         let storage = fujimod_emulator_session::durable::Spec {
             cards: g
@@ -447,8 +449,6 @@ impl Session {
             nands,
         };
         let identity = camera_identity(&g.firmware_id, &g.firmware.sha256, &storage)?;
-        fujimod_emulator_exr2_board::register_board_builder();
-        fujimod_emulator_models::register();
         let built = g.devices.build(resources, 0, &mut RefuseAdapters)?;
         let bus = Bus::from_graph(Mode::Strict, built.graph)?;
         let mut board = g.execution.build(
