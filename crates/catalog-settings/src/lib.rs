@@ -18,7 +18,7 @@ pub const SETTINGS_SCHEMA_URI: &str = "https://fujimod.com/schemas/settings.gene
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -55,7 +55,7 @@ pub struct FirmwareSettings {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -75,7 +75,7 @@ pub struct SettingsSection {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -134,7 +134,7 @@ impl SectionLength {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -151,7 +151,10 @@ pub struct SettingsProfile {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(not(target_os = "emscripten"), derive(tsify::Tsify))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
 pub struct ProfileRecord {
     /// Physical flash block holding the record at its start.
     pub block: u32,
@@ -173,7 +176,10 @@ pub struct ProfileRecord {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(not(target_os = "emscripten"), derive(tsify::Tsify))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
 pub struct SettingsSource {
     /// Offset of the encoded stream in the installed flash image.
     pub flash_offset: u64,
@@ -189,7 +195,10 @@ pub struct SettingsSource {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(not(target_os = "emscripten"), derive(tsify::Tsify))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
 pub struct SettingsBank {
     /// The stock bank descriptor `(kind, blocks, first block)` in the update.
     pub descriptor: UpdateRange,
@@ -209,7 +218,10 @@ pub struct SettingsBank {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(not(target_os = "emscripten"), derive(tsify::Tsify))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
 pub struct UpdateRange {
     /// Firmware address.
     pub address: u64,
@@ -223,7 +235,10 @@ pub struct UpdateRange {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(not(target_os = "emscripten"), derive(tsify::Tsify))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
 pub struct SettingsField {
     /// Byte offset in the bank or record.
     pub offset: u64,
@@ -238,7 +253,7 @@ pub struct SettingsField {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]

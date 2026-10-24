@@ -522,7 +522,10 @@ pub enum Endpoint {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
-#[cfg_attr(not(target_os = "emscripten"), derive(tsify::Tsify))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
 pub enum VideoEncoderBackend {
     Videotoolbox,
     Software,
@@ -533,7 +536,7 @@ pub enum VideoEncoderBackend {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]

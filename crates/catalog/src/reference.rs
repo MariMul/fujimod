@@ -20,7 +20,7 @@ pub const FIRMWARE_SCHEMA_URI: &str = "https://fujimod.com/schemas/firmware.sche
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -37,14 +37,17 @@ pub enum ProcessorArchitecture {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct Soc {
     /// Stable schema URI for this SoC record.
     #[serde(rename = "$schema")]
-    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "\"https://fujimod.com/schemas/soc.schema.json\""))]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "\"https://fujimod.com/schemas/soc.schema.json\"")
+    )]
     pub schema_uri: String,
     /// SoC record version.
     pub schema: u32,
@@ -64,7 +67,10 @@ pub struct Soc {
     pub clocks: Vec<ClockDomain>,
     /// Additional family-specific hardware parameters, when specified.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "SocHardware | null"))]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "SocHardware | null")
+    )]
     pub hardware: Option<crate::soc::SocHardware>,
     /// CPU address-space mappings used to construct a processor graph.
     pub mappings: Vec<AddressMapping>,
@@ -253,7 +259,7 @@ impl Soc {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -280,7 +286,7 @@ pub struct ProcessorCore {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -301,7 +307,7 @@ pub enum ProcessorModel {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -317,7 +323,7 @@ pub struct RegisterValue {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -338,7 +344,7 @@ pub enum ProcessorRegister {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -355,7 +361,7 @@ pub struct MProfileState {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -374,7 +380,7 @@ pub struct RProfileState {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -391,7 +397,7 @@ pub struct TcmState {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -412,7 +418,7 @@ pub struct MemoryRegion {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -428,7 +434,7 @@ pub enum RegionSize {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -449,7 +455,7 @@ pub enum MemoryKind {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -464,7 +470,10 @@ pub struct SocBlock {
     pub kind: SocBlockKind,
     /// Processor core directly served by this block, for per-core interrupt controllers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "string | null"))]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "string | null")
+    )]
     pub processor_core_id: Option<String>,
     /// Clock domain supplying this block, when specified.
     #[serde(default)]
@@ -476,7 +485,7 @@ pub struct SocBlock {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -519,7 +528,7 @@ pub enum SocBlockKind {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -541,7 +550,7 @@ pub struct InterruptRoute {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -562,7 +571,7 @@ pub struct ClockDomain {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -587,7 +596,7 @@ pub struct AddressMapping {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -610,7 +619,7 @@ pub struct DmaMapping {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -629,7 +638,7 @@ pub struct AddressDecoder {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -646,7 +655,7 @@ pub struct DecoderSelection {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -663,7 +672,7 @@ pub struct DecoderChoice {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -676,7 +685,10 @@ pub struct PeripheralMapping {
     pub address: u64,
     /// Offset in the selected block for a subwindow, when nonzero.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "number | null"))]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "number | null")
+    )]
     pub offset: Option<u64>,
 }
 
@@ -686,7 +698,7 @@ pub struct PeripheralMapping {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -704,7 +716,7 @@ pub struct SocReset {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -725,7 +737,7 @@ pub struct CoreRelease {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -756,14 +768,17 @@ pub struct CoprocessorWrite {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct Body {
     /// Stable schema URI for this body record.
     #[serde(rename = "$schema")]
-    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "\"https://fujimod.com/schemas/body.schema.json\""))]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "\"https://fujimod.com/schemas/body.schema.json\"")
+    )]
     pub schema_uri: String,
     /// Body record version.
     pub schema: u32,
@@ -775,7 +790,10 @@ pub struct Body {
     pub dram_bytes: u64,
     /// Optional body-specific physical attachments and signal routing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "BodyHardware | null"))]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "BodyHardware | null")
+    )]
     pub hardware: Option<crate::assembly::BodyHardware>,
     /// Body-mapped RAM extents when the board exposes a non-default memory map.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -948,7 +966,7 @@ impl Body {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -969,7 +987,7 @@ pub struct BodyRamRegion {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -990,7 +1008,7 @@ pub struct NandGeometry {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1010,7 +1028,7 @@ pub struct SensorAssembly {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1032,7 +1050,7 @@ pub struct ControlBusAttachment {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1055,7 +1073,7 @@ pub struct SensorRaster {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1084,7 +1102,7 @@ pub struct SensorRadiometry {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1105,7 +1123,7 @@ pub struct SensorRollingReference {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1125,7 +1143,7 @@ pub struct SensorProjection {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1142,7 +1160,7 @@ pub enum SensorIllumination {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1159,7 +1177,7 @@ pub struct SensorControlInterface {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1191,7 +1209,7 @@ pub struct LensAssembly {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1208,7 +1226,7 @@ pub struct LensHomeConnection {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1227,7 +1245,7 @@ pub struct IrisOptics {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1243,7 +1261,7 @@ pub struct AperturePosition {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1260,7 +1278,7 @@ pub enum OpticalQuantity {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1279,7 +1297,7 @@ pub struct FocusAxis {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1299,7 +1317,7 @@ pub struct DisplayAssembly {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1324,7 +1342,7 @@ pub struct MicrocontrollerAssembly {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1347,7 +1365,7 @@ pub struct PowerControlAssembly {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1362,7 +1380,10 @@ pub struct CardSlotAssembly {
     pub write_protect_connection_id: String,
     /// SoC removable-card controller block, when implemented.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "string | null"))]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "string | null")
+    )]
     pub controller_id: Option<String>,
 }
 
@@ -1371,7 +1392,7 @@ pub struct CardSlotAssembly {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1390,7 +1411,7 @@ pub enum DisplayOrientation {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1408,7 +1429,7 @@ pub struct BodyConnection {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1447,7 +1468,7 @@ pub enum ConnectionKind {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1490,7 +1511,7 @@ pub enum ConnectionSignal {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1511,7 +1532,7 @@ pub enum BlockSignal {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1529,7 +1550,7 @@ pub struct BodyWiring {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1562,7 +1583,7 @@ pub enum WireSignal {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1585,14 +1606,17 @@ pub struct ControlBusChip {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct Part {
     /// Stable schema URI for this part record.
     #[serde(rename = "$schema")]
-    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "\"https://fujimod.com/schemas/part.schema.json\""))]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "\"https://fujimod.com/schemas/part.schema.json\"")
+    )]
     pub schema_uri: String,
     /// Part record version.
     pub schema: u32,
@@ -1602,7 +1626,10 @@ pub struct Part {
     pub model: PartModel,
     /// Declared board attachment for this reusable part assembly.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "PartAttachment | null"))]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "PartAttachment | null")
+    )]
     pub attachment: Option<crate::parts::PartAttachment>,
 }
 
@@ -1710,7 +1737,7 @@ impl Part {
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1799,7 +1826,10 @@ pub enum PartModel {
         reference_white: Vec<u32>,
         /// Radiometric, timing and projection facts; absent for a sensor without a declared exposure model.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[cfg_attr(not(target_os = "emscripten"), tsify(type = "SensorRadiometry | null"))]
+        #[cfg_attr(
+            all(target_arch = "wasm32", not(target_os = "emscripten")),
+            tsify(type = "SensorRadiometry | null")
+        )]
         radiometry: Option<SensorRadiometry>,
     },
     /// A display panel endpoint.
@@ -1830,7 +1860,7 @@ pub enum PartModel {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1887,7 +1917,7 @@ pub enum LensClockMode {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1911,7 +1941,7 @@ pub struct PulseInterface {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1935,7 +1965,7 @@ pub struct LensMotor {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1977,7 +2007,7 @@ pub struct LensMotorCounter {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1998,7 +2028,7 @@ pub struct PartEncoder {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2026,7 +2056,7 @@ pub struct ZoomMechanism {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2043,7 +2073,7 @@ pub struct ContactPosition {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2068,7 +2098,7 @@ pub struct SerialRoute {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2089,7 +2119,7 @@ pub enum SerialOutputKind {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2108,7 +2138,7 @@ pub struct RegisterRange {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2125,7 +2155,7 @@ pub struct StatusRegister {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2152,14 +2182,17 @@ impl ContentIdentity {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct Firmware {
     /// Stable schema URI for this firmware record.
     #[serde(rename = "$schema")]
-    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "\"https://fujimod.com/schemas/firmware.schema.json\""))]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "\"https://fujimod.com/schemas/firmware.schema.json\"")
+    )]
     pub schema_uri: String,
     /// Firmware record version.
     pub schema: u32,
@@ -2183,7 +2216,10 @@ pub struct Firmware {
     pub generated_facts: Option<FirmwareGeneratedFacts>,
     /// Located boot, device and persistent-storage layout facts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "FirmwareLayouts | null"))]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "FirmwareLayouts | null")
+    )]
     pub layouts: Option<crate::firmware::FirmwareLayouts>,
 }
 
@@ -2265,7 +2301,7 @@ impl Firmware {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2282,7 +2318,7 @@ pub struct BootRomIdentity {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2304,7 +2340,7 @@ pub struct FirmwareInstallation {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2321,7 +2357,7 @@ pub struct FirmwareLoaderValidation {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2345,7 +2381,7 @@ pub struct FirmwareImageSection {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2381,7 +2417,7 @@ pub struct FirmwareGeneratedFacts {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]

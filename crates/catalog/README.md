@@ -96,11 +96,15 @@ Schemas are generated from these Rust types with
 `cargo run -p fujimod-catalog-schemas --features schema --bin catalog-schemas -- --write`.
 New remote schema filenames include `.generated`; `--check` verifies committed
 copies. Only the `schema` feature compiles the JSON Schema implementations, so
-emulator and binding builds skip them; the `schema` and `typescript` features
-of this crate, the configuration crate and the schema generator enable the
+emulator and binding builds skip them; the `schema` features of this crate,
+the configuration and resolution crates and the schema generator enable the
 same features of the crates below them: derive with
 `#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]` and write
 schema attributes as `#[cfg_attr(feature = "schema", schemars(...))]`.
+TypeScript declarations are derived only for the browser's wasm32 target, the
+one whose bindings read them, so native builds skip them: derive with
+`#[cfg_attr(all(target_arch = "wasm32", not(target_os = "emscripten")), derive(tsify::Tsify))]`
+and write tsify attributes under the same condition.
 
 Hardware profiles preserve qualified device graphs and controller settings while
 reference records continue to own identity, memory, and physical attachments.

@@ -9,14 +9,17 @@ use std::collections::BTreeMap;
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct BodyHardware {
     /// Named hardware profiles, selected explicitly by a run preset.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "Record<string, BodyProfile>"))]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "Record<string, BodyProfile>")
+    )]
     pub profiles: BTreeMap<String, crate::profiles::BodyProfile>,
     /// Serial endpoints and their processor-side connections.
     pub serial_attachments: Vec<SerialAttachment>,
@@ -34,7 +37,7 @@ pub struct BodyHardware {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -56,7 +59,7 @@ pub struct SerialAttachment {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -117,7 +120,7 @@ impl BodyHardware {
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    not(target_os = "emscripten"),
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
