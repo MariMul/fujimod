@@ -12,6 +12,7 @@ doctest = false
 
 [dependencies]
 fujimod-usb.workspace = true
+fujimod-usb-app80-types.workspace = true
 fujimod-catalog-service.workspace = true
 thiserror.workspace = true
 fujimod-workspace-hack.workspace = true
