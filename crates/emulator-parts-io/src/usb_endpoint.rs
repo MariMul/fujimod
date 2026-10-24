@@ -152,6 +152,8 @@ pub struct Endpoint {
     staging: [[u8; 512]; 3],
     staged: [usize; 3],
     tx: [Queue; 3],
+    /// Status packets committed to the full FIFO port 2 and lost.
+    dropped_status: u64,
     partial: usize,
     fresh: [bool; 2],
     active: Option<Transfer>,
@@ -205,6 +207,7 @@ impl Endpoint {
             staging: [[0; 512]; 3],
             staged: [0; 3],
             tx: [Queue::new(4096), Queue::new(limit + 512), Queue::new(2048)],
+            dropped_status: 0,
             partial: 4,
             fresh: [false; 2],
             active: None,
@@ -606,7 +609,17 @@ impl Endpoint {
                     return Err("USB FIFO commit requires one port".into());
                 }
                 let port = value.trailing_zeros() as usize;
-                self.tx[port].push(&self.staging[port][..self.staged[port]])?;
+                let committed = self.tx[port].push(&self.staging[port][..self.staged[port]]);
+                match committed {
+                    // Stock firmware posts a two-byte status on port 2 after
+                    // every service command and never waits for the host to
+                    // read it; cameras run long service sessions whose hosts
+                    // never poll that endpoint. A commit to the full status
+                    // FIFO is lost, as it must be on the camera; the control
+                    // and bulk ports still refuse.
+                    Err(_) if port == 2 => self.dropped_status += 1,
+                    result => result?,
+                }
                 self.staged[port] = 0;
             }
             0x54 | 0x58 | 0x5c => {
@@ -633,7 +646,7 @@ impl Endpoint {
     }
 }
 impl Device for Endpoint {
-    fujimod_emulator_devices::checkpoint_fields!(regs:Box<[u32]>,dma:[[u32;18];2],#[serde(with="fujimod_emulator_devices::checkpoint::matrix")] rx:[[u8;512];2],rx_length:[usize;2],rx_position:[usize;2],setup:[u8;8],setup_length:usize,setup_position:usize,#[serde(with="fujimod_emulator_devices::checkpoint::matrix")] staging:[[u8;512];3],staged:[usize;3],tx:[Queue;3],partial:usize,fresh:[bool;2],active:Option<Transfer>,scratch:Box<[u8]>);
+    fujimod_emulator_devices::checkpoint_fields!(regs:Box<[u32]>,dma:[[u32;18];2],#[serde(with="fujimod_emulator_devices::checkpoint::matrix")] rx:[[u8;512];2],rx_length:[usize;2],rx_position:[usize;2],setup:[u8;8],setup_length:usize,setup_position:usize,#[serde(with="fujimod_emulator_devices::checkpoint::matrix")] staging:[[u8;512];3],staged:[usize;3],tx:[Queue;3],dropped_status:u64,partial:usize,fresh:[bool;2],active:Option<Transfer>,scratch:Box<[u8]>);
 
     fn fingerprint(&self) -> Result<serde_json::Value, String> {
         // save includes options, wiring, all FIFO bytes/positions and pending DMA.
@@ -829,6 +842,29 @@ mod tests {
         m.advance(&mut h.cx());
         assert!(m.host_in(&mut h.cx(), 0x82, 64).is_err());
     }
+    #[test]
+    fn unread_status_packets_fill_port_two_then_drop_while_control_refuses() {
+        let mut device = model();
+        let mut host = Ram::new(0x10000);
+        for _ in 0..80 {
+            write(&mut device, &mut host, CORE + 0x111c, 4, 0xc0000);
+            write(&mut device, &mut host, CORE + 0x18c + 16, 4, 0x0201);
+            write(&mut device, &mut host, CORE + 0x111c, 4, 0x12);
+            write(&mut device, &mut host, CORE + 0x88, 2, 4);
+        }
+        assert_eq!(device.tx[2].packets.len(), 65);
+        assert_eq!(device.dropped_status, 15);
+        assert_eq!(device.host_in(&mut host.cx(), 0x83, 64).unwrap(), vec![1, 2]);
+        device.tx[0].bytes.extend(vec![0; 4096]);
+        device.tx[0].packets.push_back(4096);
+        write(&mut device, &mut host, CORE + 0x111c, 4, 0xe0000);
+        write(&mut device, &mut host, CORE + 0x18c, 4, 7);
+        write(&mut device, &mut host, CORE + 0x111c, 4, 0x11);
+        let mut cx = host.cx();
+        device.write(&mut cx, CORE + 0x88, 2, 1);
+        assert!(cx.refusal().is_some());
+    }
+
     #[test]
     fn checkpoint_pending_in_dma_restores_packet_queue_capacity_and_wire_bytes() {
         let mut device = model();
