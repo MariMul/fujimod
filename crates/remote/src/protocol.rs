@@ -1,6 +1,6 @@
 //! Asynchronous remote primitives.
 use crate::{Control, Reference};
-use fujimod_catalog::controls::ControlOperation;
+use fujimod_catalog_controls::ControlOperation;
 use fujimod_recording::Frame;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, future::Future, pin::Pin};

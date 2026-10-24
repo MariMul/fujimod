@@ -434,7 +434,7 @@ pub enum Model {
         stream: String,
     },
     VideoEncoder {
-        options: fujimod_catalog::construction::VideoEncoderOptions,
+        options: fujimod_catalog_construction::VideoEncoderOptions,
         irq: isp::Irq,
     },
     JpegEncoder {

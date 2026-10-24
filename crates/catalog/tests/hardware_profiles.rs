@@ -17,7 +17,7 @@ fn declared_hardware_profiles_decode_and_validate() {
             hardware_bodies += 1;
         } else {
             let path = directory.join("controls.json");
-            let controls: fujimod_catalog::controls::PhysicalControls =
+            let controls: fujimod_catalog_controls::PhysicalControls =
                 serde_json::from_slice(&fs::read(&path).unwrap())
                     .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
             controls.validate().unwrap();

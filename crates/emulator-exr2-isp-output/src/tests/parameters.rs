@@ -21,7 +21,7 @@ fn parameter_domains_and_raw_video_refusals() {
     assert!(cx.refusal().is_some());
     let mut d = VideoEncoder::new(
         video::Options {
-            backend: fujimod_catalog::construction::VideoEncoderBackend::Software,
+            backend: fujimod_catalog_construction::VideoEncoderBackend::Software,
         },
         Irq { core: 0, line: 75 },
     )

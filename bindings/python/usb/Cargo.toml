@@ -16,7 +16,7 @@ testing = ["fujimod-usb/testing"]
 
 [dependencies]
 fujimod-python-catalog = { path = "../catalog" }
-fujimod-catalog.workspace = true
+fujimod-catalog-service.workspace = true
 fujimod-firmware.workspace = true
 fujimod-usb.workspace = true
 fujimod-workflows.workspace = true

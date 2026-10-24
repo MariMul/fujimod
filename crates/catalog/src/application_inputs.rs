@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 fn ids<'a>(values: impl IntoIterator<Item = &'a str>) -> Result<(), String> {
     let mut seen = BTreeSet::new();
     for value in values {
-        crate::emulator::validate_id(value)?;
+        fujimod_catalog_content::validate_id(value)?;
         if !seen.insert(value) {
             return Err(format!("application input repeats identity {value}"));
         }
@@ -65,7 +65,7 @@ impl ApplicationRunInputs {
                     }
                 }
                 ApplicationBlockInput::Flash { part_id, seeds, .. } => {
-                    crate::emulator::validate_id(part_id)?;
+                    fujimod_catalog_content::validate_id(part_id)?;
                     let mut offsets = BTreeSet::new();
                     if seeds.iter().any(|seed| !offsets.insert(seed.offset)) {
                         return Err("application flash input repeats a seeded offset".into());
@@ -111,7 +111,7 @@ impl ApplicationRunInputs {
                     bytes_per_tick,
                     ..
                 } => {
-                    crate::emulator::validate_id(block_id)?;
+                    fujimod_catalog_content::validate_id(block_id)?;
                     if *bytes_per_tick == 0 {
                         return Err("application throughput must be positive".into());
                     }
@@ -133,7 +133,7 @@ impl ApplicationRunInputs {
                     erase_ticks,
                     page_ticks,
                 } => {
-                    crate::emulator::validate_id(part_id)?;
+                    fujimod_catalog_content::validate_id(part_id)?;
                     if *erase_ticks == 0 || *page_ticks == 0 {
                         return Err(
                             "application storage programming durations must be positive".into()

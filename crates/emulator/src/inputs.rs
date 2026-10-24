@@ -1,7 +1,7 @@
 //! Explicit file providers for catalog documents and external assets.
 //! The caller selects both roots and every input location.
 
-use fujimod_catalog::emulator::{Asset, Content, Key, Provider, Reference, validate_id};
+use fujimod_catalog_content::{Asset, Content, Key, Provider, Reference, validate_id};
 use std::{
     collections::BTreeMap,
     fs::File,

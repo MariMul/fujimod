@@ -2038,7 +2038,7 @@ pub(super) fn assemble(
             }
         }
         if rule.name == "video_encoder" {
-            use fujimod_catalog::construction::VideoEncoderBackend;
+            use fujimod_catalog_construction::VideoEncoderBackend;
             let selected = configuration
                 .preset
                 .as_ref()

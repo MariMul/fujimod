@@ -18,10 +18,11 @@ use fujimod_catalog::{
         Exr2RunInputs, ResolvedConfiguration, RunEngine, RunExecution, RunExecutionMode, RunInputs,
         RunPurpose, RunScene, RunStart,
     },
-    controls::{AdcInterval, ElectricalInput, InputTarget},
-    emulator::Content,
-    facts::ConfigurationLocation,
     reference::PartModel,
+};
+use fujimod_catalog_content::Content;
+use fujimod_catalog_controls::{
+    AdcInterval, ElectricalInput, InputTarget, facts::ConfigurationLocation,
 };
 use fujimod_emulator_cpu::arm::Coprocessor;
 use fujimod_emulator_exr2_plan::{MemoryChoices, Plan, RefuseAdapters, Resources};

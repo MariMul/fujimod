@@ -21,7 +21,7 @@ pub enum NandInput {
     },
     Catalog {
         options: Options,
-        definition: fujimod_catalog::persistent_inputs::PersistentInputs,
+        definition: fujimod_catalog_settings::persistent_inputs::PersistentInputs,
         set: String,
         base: String,
         assets: BTreeMap<String, String>,
@@ -35,7 +35,7 @@ pub enum NandInput {
     Settings {
         options: Options,
         base: String,
-        layout: fujimod_catalog::settings::FirmwareSettings,
+        layout: fujimod_catalog_settings::FirmwareSettings,
         requested: BTreeMap<String, String>,
         #[serde(default)]
         camera: BTreeMap<String, String>,
@@ -48,7 +48,7 @@ pub enum NandInput {
     Profile {
         options: Options,
         base: String,
-        layout: fujimod_catalog::settings::FirmwareSettings,
+        layout: fujimod_catalog_settings::FirmwareSettings,
         requested: BTreeMap<String, String>,
     },
 }
@@ -171,7 +171,7 @@ fn decompress(compressed: &[u8]) -> Result<Vec<u8>, String> {
 fn settings_medium(
     options: Options,
     flash: &[u8],
-    layout: &fujimod_catalog::settings::FirmwareSettings,
+    layout: &fujimod_catalog_settings::FirmwareSettings,
     requested: &BTreeMap<String, String>,
     camera: Option<&BTreeMap<String, Vec<u8>>>,
     with_bank: bool,

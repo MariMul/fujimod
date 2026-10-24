@@ -1,6 +1,6 @@
 use super::read as read_bulk;
 use super::*;
-use fujimod_catalog::bulk::{BULK_SCHEMA_URI, CaptureScope, CodeCheck, NamedRange};
+use fujimod_catalog_bulk::{BULK_SCHEMA_URI, CaptureScope, CodeCheck, NamedRange};
 use fujimod_usb::{
     ff80::{commands::memory::DebugMemoryLimits, framing::RequestKind},
     operations::checks::sha256_bytes,

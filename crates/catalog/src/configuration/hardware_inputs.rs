@@ -987,7 +987,7 @@ pub struct HardwareInputs {
 impl HardwareInputs {
     /// Resolve a bundled body reset-input document by its stable identity.
     pub fn bundled(id: &str) -> Result<Self, String> {
-        crate::emulator::validate_id(id)?;
+        fujimod_catalog_content::validate_id(id)?;
         let document = super::BUNDLED_HARDWARE_INPUTS
             .iter()
             .find_map(|(candidate, document)| (*candidate == id).then_some(*document))
@@ -1000,7 +1000,7 @@ impl HardwareInputs {
         {
             return Err(format!("hardware-input profile {id} schema or identity differs"));
         }
-        crate::emulator::validate_id(&inputs.body_id)?;
+        fujimod_catalog_content::validate_id(&inputs.body_id)?;
         Ok(inputs)
     }
 }

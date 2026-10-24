@@ -1,6 +1,6 @@
 //! Signed native owner for the common board factory. JSON-lines transport and
 //! raw-frame publication are outside guest execution and never supply its time.
-use fujimod_catalog::emulator::Asset;
+use fujimod_catalog_content::Asset;
 use fujimod_emulator::board::{self, Board, InterruptMap, aprofile, bus::Bus, factory, mprofile};
 use fujimod_emulator::inputs::{Files, Location};
 use fujimod_emulator_cpu::{self as cpu, Access, Model, Register};

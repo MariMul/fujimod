@@ -3389,6 +3389,7 @@ name = "fujimod"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog",
+ "fujimod-catalog-service",
  "fujimod-emulator",
  "fujimod-emulator-cpu",
  "fujimod-emulator-cpu-hvf",
@@ -3415,6 +3416,12 @@ dependencies = [
 name = "fujimod-catalog"
 version = "0.1.0"
 dependencies = [
+ "fujimod-catalog-bulk",
+ "fujimod-catalog-construction",
+ "fujimod-catalog-content",
+ "fujimod-catalog-controls",
+ "fujimod-catalog-remote",
+ "fujimod-catalog-settings",
  "fujimod-workspace-hack",
  "jsonschema",
  "schemars",
@@ -3422,7 +3429,101 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_json",
  "sha2",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-catalog-bulk"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-content",
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-catalog-construction"
+version = "0.1.0"
+dependencies = [
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-catalog-content"
+version = "0.1.0"
+dependencies = [
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "fujimod-catalog-controls"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-content",
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-catalog-remote"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-content",
+ "fujimod-catalog-controls",
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-catalog-service"
+version = "0.1.0"
+dependencies = [
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "sha2",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "fujimod-catalog-settings"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-content",
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2",
  "tsify",
  "wasm-bindgen",
 ]
@@ -3455,6 +3556,9 @@ name = "fujimod-emulator"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog",
+ "fujimod-catalog-construction",
+ "fujimod-catalog-content",
+ "fujimod-catalog-controls",
  "fujimod-emulator-cpu",
  "fujimod-emulator-cpu-hvf",
  "fujimod-emulator-cpu-unicorn",
@@ -3484,7 +3588,7 @@ dependencies = [
 name = "fujimod-emulator-cli"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog",
+ "fujimod-catalog-content",
  "fujimod-emulator",
  "fujimod-emulator-cpu",
  "fujimod-emulator-cpu-unicorn",
@@ -3724,7 +3828,7 @@ dependencies = [
 name = "fujimod-emulator-exr2-isp-output"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog",
+ "fujimod-catalog-construction",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-codecs",
  "fujimod-emulator-exr2-isp-input",
@@ -3769,7 +3873,7 @@ dependencies = [
 name = "fujimod-emulator-exr2-plan"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog",
+ "fujimod-catalog-construction",
  "fujimod-emulator-devices",
  "fujimod-emulator-imaging",
  "fujimod-workspace-hack",
@@ -3831,7 +3935,7 @@ name = "fujimod-emulator-image-codecs"
 version = "0.1.0"
 dependencies = [
  "apple-cf",
- "fujimod-catalog",
+ "fujimod-catalog-construction",
  "fujimod-workspace-hack",
  "futures-lite",
  "rusty_h264-common",
@@ -4031,7 +4135,7 @@ dependencies = [
 name = "fujimod-emulator-storage"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog",
+ "fujimod-catalog-settings",
  "fujimod-emulator-devices",
  "fujimod-settings",
  "fujimod-workspace-hack",
@@ -4199,6 +4303,8 @@ dependencies = [
  "async-lock",
  "fujimod-bindgen",
  "fujimod-catalog",
+ "fujimod-catalog-bulk",
+ "fujimod-catalog-service",
  "fujimod-usb",
  "fujimod-usb-proxy",
  "fujimod-workflows",
@@ -4231,6 +4337,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-bindgen",
  "fujimod-catalog",
+ "fujimod-catalog-service",
  "fujimod-corpus",
  "fujimod-workspace-hack",
  "pyo3",
@@ -4242,7 +4349,8 @@ dependencies = [
 name = "fujimod-python-emulator"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog",
+ "fujimod-catalog-content",
+ "fujimod-catalog-settings",
  "fujimod-emulator",
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
@@ -4318,6 +4426,8 @@ dependencies = [
 name = "fujimod-python-remote"
 version = "0.1.0"
 dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-remote",
  "fujimod-emulator",
  "fujimod-python-emulator",
  "fujimod-python-usb",
@@ -4335,7 +4445,7 @@ name = "fujimod-python-usb"
 version = "0.1.0"
 dependencies = [
  "fujimod-bindgen",
- "fujimod-catalog",
+ "fujimod-catalog-service",
  "fujimod-firmware",
  "fujimod-python-catalog",
  "fujimod-usb",
@@ -4378,7 +4488,8 @@ name = "fujimod-remote"
 version = "0.1.0"
 dependencies = [
  "async-io",
- "fujimod-catalog",
+ "fujimod-catalog-controls",
+ "fujimod-catalog-remote",
  "fujimod-emulator",
  "fujimod-recording",
  "fujimod-usb",
@@ -4392,7 +4503,7 @@ dependencies = [
 name = "fujimod-settings"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog",
+ "fujimod-catalog-settings",
  "fujimod-firmware",
  "fujimod-workspace-hack",
 ]
@@ -4423,7 +4534,7 @@ version = "0.1.0"
 dependencies = [
  "async-channel",
  "async-lock",
- "fujimod-catalog",
+ "fujimod-catalog-service",
  "fujimod-usb-proxy",
  "fujimod-workspace-hack",
  "futures-lite",
@@ -4474,7 +4585,8 @@ dependencies = [
 name = "fujimod-workflows"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog",
+ "fujimod-catalog-bulk",
+ "fujimod-catalog-service",
  "fujimod-usb",
  "fujimod-workspace-hack",
  "futures-lite",

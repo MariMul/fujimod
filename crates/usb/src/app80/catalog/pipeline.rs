@@ -1,7 +1,7 @@
 //! Direct firmware pipeline and mode requests. Each action encodes one App80
 //! service command; waiting and request sequences are performed by firmware.
 use super::{ArgumentKind, CommandError, Toggle};
-use fujimod_catalog::service::Codec;
+use fujimod_catalog_service::Codec;
 
 /// A nonzero byte consumed by `adjustment_request_value`.
 ///
@@ -252,7 +252,7 @@ mod tests {
         Catalog, Command, CommandCode, CommandError, PreparedCommand, Reply, ReplyValue,
     };
     use super::*;
-    use fujimod_catalog::service::{Definition, FirmwareIdentity, ServiceModes};
+    use fujimod_catalog_service::{Definition, FirmwareIdentity, ServiceModes};
 
     fn catalog(reverse: bool) -> Catalog {
         let layouts = [

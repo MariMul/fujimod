@@ -2,7 +2,7 @@
 //! byte edits and journal layout come from explicit typed run inputs. No guest execution,
 //! camera transport or capture-pipeline module participates in preparation.
 use fujimod_emulator_devices::parts::nand::{Nand, Options as Geometry, Overlay, managed_tag};
-use fujimod_catalog::persistent_inputs::{
+use fujimod_catalog_settings::persistent_inputs::{
     PersistentInputs, PersistentJournalAppend, PersistentPacket,
 };
 use std::{collections::BTreeMap, sync::Arc};
@@ -204,7 +204,7 @@ fn append_record(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_catalog::persistent_inputs::{PersistentAsset, PersistentPatch};
+    use fujimod_catalog_settings::persistent_inputs::{PersistentAsset, PersistentPatch};
     use sha2::{Digest, Sha256};
     #[test]
     fn authored_catalog_decodes_and_erased_inputs_need_no_assets() {

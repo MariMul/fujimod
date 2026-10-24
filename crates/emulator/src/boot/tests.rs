@@ -606,7 +606,7 @@ fn browser_camera_overlay_declares_a_virtual_card_host_on_the_native_plan() {
             .unwrap()
             .factory_options
             .video_encoder_backend,
-        Some(fujimod_catalog::construction::VideoEncoderBackend::Software)
+        Some(fujimod_catalog_construction::VideoEncoderBackend::Software)
     );
     let text = serde_json::to_string(&prepared.to_json()).unwrap();
     assert!(Prepared::from_json(&serde_json::from_str(&text).unwrap()).is_ok());
@@ -745,7 +745,7 @@ fn serial_spi1_refuses_a_shift_with_both_chip_selects_low() {
 
 #[test]
 fn video_encoder_backend_is_selected_in_the_prepared_graph() {
-    use fujimod_catalog::construction::VideoEncoderBackend;
+    use fujimod_catalog_construction::VideoEncoderBackend;
     let base = prepare("x70-110-rec", &[]).unwrap();
     let expected = if cfg!(target_os = "macos") {
         "videotoolbox"

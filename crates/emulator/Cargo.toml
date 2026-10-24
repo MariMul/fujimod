@@ -21,6 +21,9 @@ fujimod-emulator-exr2-plan = { path = "../emulator-exr2-plan" }
 fujimod-emulator-cpu = { path = "../emulator-cpu" }
 fujimod-emulator-cpu-unicorn = { path = "../emulator-cpu-unicorn" }
 fujimod-catalog = { path = "../catalog" }
+fujimod-catalog-construction.workspace = true
+fujimod-catalog-content.workspace = true
+fujimod-catalog-controls.workspace = true
 serde_json = "1"
 toml = "0.9"
 sha2 = "0.10"

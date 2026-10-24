@@ -14,7 +14,8 @@ remote = ["dep:fujimod-remote"]
 default = []
 simulation = ["dep:fujimod-simulation"]
 catalog = ["dep:fujimod-catalog"]
-usb = ["catalog", "dep:fujimod-usb"]
+catalog-service = ["dep:fujimod-catalog-service"]
+usb = ["catalog-service", "dep:fujimod-usb"]
 workflows = ["usb", "dep:fujimod-workflows"]
 emulator = [
   "dep:fujimod-emulator",
@@ -32,6 +33,7 @@ emulator-cpu-hvf = ["emulator-cpu", "dep:fujimod-emulator-cpu-hvf"]
 fujimod-remote = { workspace = true, optional = true }
 fujimod-simulation = { workspace = true, optional = true }
 fujimod-catalog = { workspace = true, optional = true }
+fujimod-catalog-service = { workspace = true, optional = true }
 fujimod-usb = { workspace = true, optional = true }
 fujimod-workflows = { workspace = true, optional = true }
 fujimod-emulator = { workspace = true, optional = true }

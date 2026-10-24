@@ -1,5 +1,5 @@
 use super::*;
-use fujimod_catalog::service::FirmwareIdentity;
+use fujimod_catalog_service::FirmwareIdentity;
 #[test]
 fn signed_positions_and_notifier_snapshots_keep_all_bits_with_reordered_slots() {
     for slots in [[0u8, 1, 2], [31, 17, 4]] {
@@ -47,7 +47,7 @@ fn signed_positions_and_notifier_snapshots_keep_all_bits_with_reordered_slots() 
 
 #[test]
 fn explicit_constant_requests_preserve_firmware_selection_and_transition_metadata() {
-    use fujimod_catalog::service::ModeTransition;
+    use fujimod_catalog_service::ModeTransition;
     let entry = |code, codec, next| serde_json::json!({"code":code,"codec":codec,"label":codec,"slots":[],"enabled_modes":5,"next_mode":next,"firmware_kind":1,"handler":0,"parameter_table":0});
     let doc = serde_json::json!({"schema":1,"firmware":{"id":"constants","model":"Synthetic","version":"1","sha256":"ab".repeat(32)},"mailbox":{"page":0,"offset":128,"configuration_limit":256},"entries":[entry(5,"report_service_success",0),entry(8,"report_service_success",0),entry(192,"report_service_failure",64),entry(9,"return_without_signal",0)]});
     let c = Catalog::new(

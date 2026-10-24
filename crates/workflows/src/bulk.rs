@@ -5,7 +5,7 @@
 //! override is restored before the read returns. Nothing here writes settings,
 //! retries a command or reads outside the table's window.
 use crate::{Limits, access::range};
-use fujimod_catalog::bulk::{BulkRange, BulkSource, FirmwareBulk};
+use fujimod_catalog_bulk::{BulkRange, BulkSource, FirmwareBulk};
 use fujimod_usb::{
     ff80::{
         Session, SessionState,

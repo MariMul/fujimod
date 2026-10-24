@@ -22,6 +22,8 @@ fujimod-usb-proxy = { path = "../../crates/usb-proxy" }
 futures-timer.workspace = true
 fujimod-workflows.workspace = true
 fujimod-catalog = { workspace = true, features = ["typescript"] }
+fujimod-catalog-bulk = { workspace = true, features = ["typescript"] }
+fujimod-catalog-service.workspace = true
 nusb.workspace = true
 js-sys.workspace = true
 web-sys = { version = "0.3", features = ["UsbDevice"] }

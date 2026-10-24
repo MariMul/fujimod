@@ -1,5 +1,5 @@
 use super::*;
-use fujimod_catalog::emulator::{Catalog, Document, Kind};
+use fujimod_catalog_content::{Catalog, Document, Kind};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 struct Directory(PathBuf);

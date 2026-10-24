@@ -76,7 +76,7 @@ The upstream protocol reference is
 The retained [MIT notice](LICENSE.fffw) accompanies that reference. Experimental
 upstream names, such as `get_timeouts`, do not establish field semantics.
 
-Firmware-qualified App80 catalogs use the shared `fujimod-catalog` data schema.
+Firmware-qualified App80 catalogs use the shared `fujimod-catalog-service` data schema.
 The command codec layer accepts enum inputs and resolves the selected table's
 command byte and argument slots. Its mode rules preserve firmware order,
 including duplicate identifiers and unreviewed entries. The ff80 `Service`

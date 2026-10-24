@@ -2,9 +2,8 @@
 //!
 //! Addresses describe live memory. Menu rows, captions, glyphs and cursor values
 //! are read from the device; a build manifest supplies declaration identities.
-use crate::controls::{FirmwareControlIds, PhysicalControls};
-use crate::facts::{AddressIdentity, ConfigurationLocation};
-use crate::reference::FirmwareObservation;
+use fujimod_catalog_controls::facts::{AddressIdentity, ConfigurationLocation};
+use fujimod_catalog_controls::{FirmwareControlIds, PhysicalControls};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -951,9 +950,9 @@ impl FirmwareFacts {
         if self.schema != 1 || self.schema_uri != FIRMWARE_FACTS_SCHEMA_URI {
             return Err("unsupported remote firmware schema".into());
         }
-        crate::reference::validate_id(&self.firmware_id)?;
-        crate::reference::validate_id(&self.body_id)?;
-        crate::emulator::Content {
+        fujimod_catalog_content::validate_id(&self.firmware_id)?;
+        fujimod_catalog_content::validate_id(&self.body_id)?;
+        fujimod_catalog_content::Content {
             size: 1,
             sha256: self.firmware_sha256.clone(),
         }
@@ -1062,9 +1061,9 @@ impl BuildMenuManifest {
         if self.schema != 1 || self.schema_uri != MENU_MANIFEST_SCHEMA_URI {
             return Err("unsupported build menu schema".into());
         }
-        crate::reference::validate_id(&self.firmware_id)?;
+        fujimod_catalog_content::validate_id(&self.firmware_id)?;
         for digest in [&self.firmware_sha256, &self.elf_sha256] {
-            crate::emulator::Content {
+            fujimod_catalog_content::Content {
                 size: 1,
                 sha256: digest.clone(),
             }
@@ -1081,7 +1080,7 @@ impl BuildMenuManifest {
             {
                 return Err("invalid or repeated build artifact path".into());
             }
-            crate::emulator::Content {
+            fujimod_catalog_content::Content {
                 size: artifact.size,
                 sha256: artifact.sha256.clone(),
             }
@@ -1145,46 +1144,56 @@ impl BuildMenuManifest {
     }
 }
 
-impl Facts {
-    /// Assemble remote inputs from a checked body/firmware selection and build.
-    pub fn from_selection(
-        selection: &crate::reference::ResolvedSelection,
-        menu_manifest: Option<BuildMenuManifest>,
-    ) -> Result<Self, String> {
-        let firmware = selection
-            .firmware
-            .generated_facts
-            .as_ref()
-            .and_then(|facts| facts.remote.as_ref())
-            .ok_or("selected firmware has no remote facts")?
-            .clone();
-        let physical_controls = selection
-            .physical_controls
-            .clone()
-            .ok_or("selected body has no physical controls")?;
-        let control_ids = selection
-            .control_ids
-            .clone()
-            .ok_or("selected firmware has no control IDs")?;
-        if firmware.firmware_id != selection.firmware.id
-            || firmware.body_id != selection.body.id
-            || selection
-                .firmware
-                .update
-                .as_ref()
-                .map(|content| content.sha256.as_str())
-                != Some(firmware.firmware_sha256.as_str())
-        {
-            return Err("remote facts differ from selected firmware/body".into());
-        }
-        let facts = Self {
-            physical_controls,
-            control_ids,
-            firmware,
-            menu_manifest,
-            input_tasks: None,
-        };
-        facts.validate()?;
-        Ok(facts)
-    }
+/// Firmware addresses used by a supported run observer.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct FirmwareObservation {
+    /// Firmware address containing the UI mode.
+    pub ui_mode: u64,
+    /// Firmware address containing the system mode.
+    pub system_mode: u64,
+    /// Firmware address containing the menu-active flag.
+    pub menu_active: u64,
+    /// Firmware address containing the pending UI mode.
+    pub pending_mode: u64,
+    /// Firmware address containing the current menu node.
+    pub menu_node: u64,
+    /// REC mode value.
+    pub rec_mode: u32,
+    /// Setup mode value.
+    pub setup_mode: u32,
+    /// Readiness observer addresses.
+    pub readiness: ReadinessAddresses,
+}
+
+/// Addresses used to check REC readiness.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct ReadinessAddresses {
+    /// Firmware address for readiness category one.
+    pub category_one: u64,
+    /// Firmware address for readiness category two.
+    pub category_two: u64,
+    /// Firmware address for pending input state.
+    pub input_pending: u64,
+    /// Mask of readiness bits excluded from the check.
+    pub excluded_mask: u32,
+    /// Firmware address for the operation-alert timer.
+    pub operation_alert_timer: u64,
+    /// Firmware address used to override readiness.
+    pub override_address: u64,
 }

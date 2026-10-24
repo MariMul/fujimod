@@ -8,6 +8,9 @@ pub use fujimod_workflows as workflows;
 #[cfg(feature = "catalog")]
 pub use fujimod_catalog as catalog;
 
+#[cfg(feature = "catalog-service")]
+pub use fujimod_catalog_service as catalog_service;
+
 #[cfg(feature = "simulation")]
 pub use fujimod_simulation as simulation;
 

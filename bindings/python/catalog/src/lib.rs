@@ -1,5 +1,5 @@
 //! Language conversion for the shared firmware-data loader; no USB operations.
-use fujimod_catalog::service as core;
+use fujimod_catalog_service as core;
 use pyo3::{
     exceptions::PyValueError,
     prelude::*,

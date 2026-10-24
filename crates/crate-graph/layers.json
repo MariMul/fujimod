@@ -81,6 +81,13 @@
     "other": [
       "fujimod-bindgen",
       "fujimod-catalog",
+      "fujimod-catalog-bulk",
+      "fujimod-catalog-construction",
+      "fujimod-catalog-content",
+      "fujimod-catalog-controls",
+      "fujimod-catalog-remote",
+      "fujimod-catalog-service",
+      "fujimod-catalog-settings",
       "fujimod-corpus",
       "fujimod-crate-graph",
       "fujimod-emulator-exr2-isp-testing",

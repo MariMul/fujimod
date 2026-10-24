@@ -1,21 +1,12 @@
-//! Validated firmware, camera, and emulator catalog data.
+//! The reference catalog of SoCs, parts, bodies and firmware, and emulator run configurations.
 pub mod application_inputs;
 pub mod assembly;
-pub mod bulk;
-pub mod settings;
-pub mod camera;
 pub mod configuration;
-pub mod controls;
-pub mod emulator;
-pub mod facts;
 pub mod first_start;
-pub mod persistent_inputs;
 pub mod progress;
 pub mod reference;
-pub mod remote;
 #[cfg(feature = "schema")]
 pub mod schema;
-pub mod service;
 pub mod soc;
 
 pub use configuration::{ResolvedConfiguration, RunConfiguration, RunOverlay, RunOverlayChange};
@@ -30,9 +21,6 @@ pub mod profiles;
 
 /// Located firmware boot and storage layouts.
 pub mod firmware;
-
-/// Exported hardware construction profiles.
-pub mod construction;
 
 /// Supplemental source evidence and caller input identities.
 pub mod provenance;

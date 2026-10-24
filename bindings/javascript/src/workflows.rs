@@ -1,6 +1,6 @@
 //! Firmware-selected camera workflows share the session's ordinary lease.
 use crate::{error::property, session::Operation, session::Session, *};
-use fujimod_catalog::{camera::CameraDefinition, service::FirmwareIdentity};
+use fujimod_catalog_service::{FirmwareIdentity, camera::CameraDefinition};
 use fujimod_workflows::{Limits, bulk, debug_mode, service_mode};
 
 pub(crate) enum Action {
@@ -127,9 +127,9 @@ impl Workflow {
 }
 /// One qualified bulk read of a range named by the firmware's catalog facts.
 pub(crate) struct BulkRead {
-    facts: fujimod_catalog::bulk::FirmwareBulk,
+    facts: fujimod_catalog_bulk::FirmwareBulk,
     limits: Limits,
-    target: fujimod_catalog::bulk::BulkRange,
+    target: fujimod_catalog_bulk::BulkRange,
 }
 #[wasm_bindgen]
 impl Session {
@@ -145,7 +145,7 @@ impl Session {
         let facts = crate::reference::resolve(firmware_id)?
             .bulk
             .ok_or_else(|| workflow_error(format!("{firmware_id} has no located bulk reads")))?;
-        let target = fujimod_catalog::bulk::BulkRange {
+        let target = fujimod_catalog_bulk::BulkRange {
             address: u64::from(crate::error::integer(address, u32::MAX)?),
             size: u64::from(crate::error::integer(size, u32::MAX)?),
         };

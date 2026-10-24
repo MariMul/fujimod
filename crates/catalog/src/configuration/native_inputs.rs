@@ -1218,7 +1218,7 @@ impl RunNandSceneInput {
             overlays,
             spare,
         } = self;
-        crate::emulator::validate_id(base)?;
+        fujimod_catalog_content::validate_id(base)?;
         if options.bytes == 0
             || !options.page_bytes.is_power_of_two()
             || options.pages_per_block == 0
@@ -1229,7 +1229,7 @@ impl RunNandSceneInput {
             return Err("run NAND input geometry is invalid".into());
         }
         for placement in overlays.iter().chain(spare) {
-            crate::emulator::validate_id(&placement.asset_id)?;
+            fujimod_catalog_content::validate_id(&placement.asset_id)?;
             if placement.offset >= options.bytes {
                 return Err("run NAND input placement exceeds its medium".into());
             }

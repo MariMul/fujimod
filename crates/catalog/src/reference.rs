@@ -3,6 +3,8 @@
 //! The records contain device facts and named references. They never contain
 //! another record's filename or an input asset's location.
 
+use fujimod_catalog_content::{validate_id, validate_sha256};
+use fujimod_catalog_remote::FirmwareObservation;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -2153,17 +2155,6 @@ impl ContentIdentity {
     }
 }
 
-pub(crate) fn validate_sha256(digest: &str) -> Result<(), String> {
-    if digest.len() != 64
-        || !digest
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    {
-        return Err("identity requires a lowercase SHA-256 digest".into());
-    }
-    Ok(())
-}
-
 /// A named firmware version and the content identities needed to run it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -2373,81 +2364,27 @@ pub struct FirmwareImageSection {
 pub struct FirmwareGeneratedFacts {
     /// Layouts and declarations used by remote camera control.
     #[cfg_attr(feature = "typescript", serde(default))]
-    pub remote: Option<crate::remote::FirmwareFacts>,
+    pub remote: Option<fujimod_catalog_remote::FirmwareFacts>,
     /// Firmware configuration-block location.
     #[cfg_attr(feature = "typescript", serde(default))]
-    pub cfgdata_location: Option<crate::facts::ConfigurationLocation>,
+    pub cfgdata_location: Option<fujimod_catalog_controls::facts::ConfigurationLocation>,
     /// Additional playback UI mode values.
     #[cfg_attr(feature = "typescript", serde(default))]
-    pub additional_ui_modes: Option<crate::facts::AdditionalUiModes>,
+    pub additional_ui_modes: Option<fujimod_catalog_controls::facts::AdditionalUiModes>,
     /// Firmware menu-cursor structure base address.
     #[cfg_attr(feature = "typescript", serde(default))]
     pub menu_cursor: Option<u64>,
     /// Logical keys used by menu controls.
     #[cfg_attr(feature = "typescript", serde(default))]
-    pub menu_keys: Option<crate::facts::MenuKeys>,
+    pub menu_keys: Option<fujimod_catalog_controls::facts::MenuKeys>,
     /// Uncached alias used to access RAM addresses.
     #[cfg_attr(feature = "typescript", serde(default))]
     pub uncached_alias: Option<u64>,
     /// Hash-identified firmware address ranges used for identity checks.
-    pub identity_checks: Vec<crate::facts::AddressIdentity>,
+    pub identity_checks: Vec<fujimod_catalog_controls::facts::AddressIdentity>,
     /// Addresses and values used to observe firmware readiness.
     #[cfg_attr(feature = "typescript", serde(default))]
     pub observation: Option<FirmwareObservation>,
-}
-
-/// Firmware addresses used by a supported run observer.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
-#[cfg_attr(
-    feature = "typescript",
-    derive(tsify::Tsify),
-    tsify(hashmap_as_object, missing_as_null)
-)]
-pub struct FirmwareObservation {
-    /// Firmware address containing the UI mode.
-    pub ui_mode: u64,
-    /// Firmware address containing the system mode.
-    pub system_mode: u64,
-    /// Firmware address containing the menu-active flag.
-    pub menu_active: u64,
-    /// Firmware address containing the pending UI mode.
-    pub pending_mode: u64,
-    /// Firmware address containing the current menu node.
-    pub menu_node: u64,
-    /// REC mode value.
-    pub rec_mode: u32,
-    /// Setup mode value.
-    pub setup_mode: u32,
-    /// Readiness observer addresses.
-    pub readiness: ReadinessAddresses,
-}
-
-/// Addresses used to check REC readiness.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
-#[cfg_attr(
-    feature = "typescript",
-    derive(tsify::Tsify),
-    tsify(hashmap_as_object, missing_as_null)
-)]
-pub struct ReadinessAddresses {
-    /// Firmware address for readiness category one.
-    pub category_one: u64,
-    /// Firmware address for readiness category two.
-    pub category_two: u64,
-    /// Firmware address for pending input state.
-    pub input_pending: u64,
-    /// Mask of readiness bits excluded from the check.
-    pub excluded_mask: u32,
-    /// Firmware address for the operation-alert timer.
-    pub operation_alert_timer: u64,
-    /// Firmware address used to override readiness.
-    pub override_address: u64,
 }
 
 /// All resolved reference records for one body and firmware selection.
@@ -2471,19 +2408,63 @@ pub struct ResolvedSelection {
     pub parts: Vec<Part>,
     /// The body's hand-authored physical controls, when documented.
     #[cfg_attr(feature = "typescript", serde(default))]
-    pub physical_controls: Option<crate::controls::PhysicalControls>,
+    pub physical_controls: Option<fujimod_catalog_controls::PhysicalControls>,
     /// The firmware's generated located inputs, when generated.
     #[cfg_attr(feature = "typescript", serde(default))]
-    pub control_ids: Option<crate::controls::FirmwareControlIds>,
+    pub control_ids: Option<fujimod_catalog_controls::FirmwareControlIds>,
     /// Stock first-start menus, when located for this firmware.
     #[cfg_attr(feature = "typescript", serde(default))]
     pub first_start: Option<crate::first_start::FirstStartMenu>,
     /// Stock diagnostic bulk reads, when located for this firmware.
     #[cfg_attr(feature = "typescript", serde(default))]
-    pub bulk: Option<crate::bulk::FirmwareBulk>,
+    pub bulk: Option<fujimod_catalog_bulk::FirmwareBulk>,
     /// Settings-bank layout, when located for this firmware.
     #[cfg_attr(feature = "typescript", serde(default))]
-    pub settings: Option<crate::settings::FirmwareSettings>,
+    pub settings: Option<fujimod_catalog_settings::FirmwareSettings>,
+}
+
+impl ResolvedSelection {
+    /// Assemble remote inputs from a checked body/firmware self and build.
+    pub fn remote_facts(
+        &self,
+        menu_manifest: Option<fujimod_catalog_remote::BuildMenuManifest>,
+    ) -> Result<fujimod_catalog_remote::Facts, String> {
+        let firmware = self
+            .firmware
+            .generated_facts
+            .as_ref()
+            .and_then(|facts| facts.remote.as_ref())
+            .ok_or("selected firmware has no remote facts")?
+            .clone();
+        let physical_controls = self
+            .physical_controls
+            .clone()
+            .ok_or("selected body has no physical controls")?;
+        let control_ids = self
+            .control_ids
+            .clone()
+            .ok_or("selected firmware has no control IDs")?;
+        if firmware.firmware_id != self.firmware.id
+            || firmware.body_id != self.body.id
+            || self
+                .firmware
+                .update
+                .as_ref()
+                .map(|content| content.sha256.as_str())
+                != Some(firmware.firmware_sha256.as_str())
+        {
+            return Err("remote facts differ from selected firmware/body".into());
+        }
+        let facts = fujimod_catalog_remote::Facts {
+            physical_controls,
+            control_ids,
+            firmware,
+            menu_manifest,
+            input_tasks: None,
+        };
+        facts.validate()?;
+        Ok(facts)
+    }
 }
 
 /// A checked, ID-indexed catalog of processor, part, body and firmware facts.
@@ -2494,12 +2475,12 @@ pub struct ReferenceCatalog {
     bodies: BTreeMap<String, Body>,
     firmwares: BTreeMap<String, Firmware>,
     /// Hand-authored physical controls, keyed by body identity.
-    physical_controls: BTreeMap<String, crate::controls::PhysicalControls>,
+    physical_controls: BTreeMap<String, fujimod_catalog_controls::PhysicalControls>,
     /// Generated located inputs, keyed by firmware identity.
-    control_ids: BTreeMap<String, crate::controls::FirmwareControlIds>,
+    control_ids: BTreeMap<String, fujimod_catalog_controls::FirmwareControlIds>,
     first_start: BTreeMap<String, crate::first_start::FirstStartMenu>,
-    bulk: BTreeMap<String, crate::bulk::FirmwareBulk>,
-    settings: BTreeMap<String, crate::settings::FirmwareSettings>,
+    bulk: BTreeMap<String, fujimod_catalog_bulk::FirmwareBulk>,
+    settings: BTreeMap<String, fujimod_catalog_settings::FirmwareSettings>,
 }
 
 impl ReferenceCatalog {
@@ -2624,7 +2605,10 @@ impl ReferenceCatalog {
     }
 
     /// Return a body's hand-authored physical controls.
-    pub fn physical_controls(&self, body_id: &str) -> Option<&crate::controls::PhysicalControls> {
+    pub fn physical_controls(
+        &self,
+        body_id: &str,
+    ) -> Option<&fujimod_catalog_controls::PhysicalControls> {
         self.physical_controls.get(body_id)
     }
 
@@ -2634,7 +2618,10 @@ impl ReferenceCatalog {
     }
 
     /// Return a firmware's generated located inputs.
-    pub fn control_ids(&self, firmware_id: &str) -> Option<&crate::controls::FirmwareControlIds> {
+    pub fn control_ids(
+        &self,
+        firmware_id: &str,
+    ) -> Option<&fujimod_catalog_controls::FirmwareControlIds> {
         self.control_ids.get(firmware_id)
     }
 
@@ -2656,12 +2643,12 @@ impl ReferenceCatalog {
                 )
             }
             ReferenceKind::Settings => {
-                let value: crate::settings::FirmwareSettings = decode(bytes, path)?;
+                let value: fujimod_catalog_settings::FirmwareSettings = decode(bytes, path)?;
                 value.validate()?;
                 insert_unique(&mut self.settings, value.firmware_id.clone(), value, path)
             }
             ReferenceKind::Bulk => {
-                let value: crate::bulk::FirmwareBulk = decode(bytes, path)?;
+                let value: fujimod_catalog_bulk::FirmwareBulk = decode(bytes, path)?;
                 value.validate()?;
                 insert_unique(&mut self.bulk, value.firmware_id.clone(), value, path)
             }
@@ -2676,7 +2663,7 @@ impl ReferenceCatalog {
                 insert_unique(&mut self.firmwares, value.id.clone(), value, path)
             }
             ReferenceKind::PhysicalControls => {
-                let value: crate::controls::PhysicalControls = decode(bytes, path)?;
+                let value: fujimod_catalog_controls::PhysicalControls = decode(bytes, path)?;
                 value.validate()?;
                 insert_unique(
                     &mut self.physical_controls,
@@ -2686,7 +2673,7 @@ impl ReferenceCatalog {
                 )
             }
             ReferenceKind::ControlIds => {
-                let value: crate::controls::FirmwareControlIds = decode(bytes, path)?;
+                let value: fujimod_catalog_controls::FirmwareControlIds = decode(bytes, path)?;
                 insert_unique(
                     &mut self.control_ids,
                     value.firmware_id.clone(),
@@ -3133,22 +3120,6 @@ impl ReferenceCatalog {
         }
         Ok(())
     }
-}
-
-/// Validate a stable catalog, component or content identity.
-pub fn validate_id(id: &str) -> Result<(), String> {
-    if id.is_empty()
-        || id.len() > 128
-        || !id.as_bytes()[0].is_ascii_alphanumeric()
-        || !id
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))
-        || id == "."
-        || id == ".."
-    {
-        return Err("identity must be a bounded, safe identifier".into());
-    }
-    Ok(())
 }
 
 fn unique_ids<'a>(ids: impl IntoIterator<Item = &'a str>, label: &str) -> Result<(), String> {

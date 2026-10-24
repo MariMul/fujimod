@@ -8,7 +8,7 @@ use super::{
     AdjustmentPacketWrite, ExposureDuration, ExposureModeOption, ExposureOption, ExposureReadiness,
     ExposureStatusOption,
 };
-use fujimod_catalog::service::{Definition, FirmwareIdentity, ServiceModes};
+use fujimod_catalog_service::{Definition, FirmwareIdentity, ServiceModes};
 
 fn catalog(reverse: bool) -> Catalog {
     let entries: Vec<_> = [

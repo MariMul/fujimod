@@ -61,8 +61,8 @@ pub struct FirstStartLanguage {
 impl FirstStartMenu {
     /// Validate document identity, bounded rows and unambiguous language values.
     pub fn validate(&self) -> Result<(), String> {
-        crate::reference::validate_id(&self.id)?;
-        crate::reference::validate_id(&self.firmware_id)?;
+        fujimod_catalog_content::validate_id(&self.id)?;
+        fujimod_catalog_content::validate_id(&self.firmware_id)?;
         if self.schema_uri != FIRST_START_SCHEMA_URI
             || self.schema != 1
             || self.menu_node == 0

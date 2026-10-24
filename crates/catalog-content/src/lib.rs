@@ -42,6 +42,7 @@ impl Content {
     }
 }
 
+/// Validate a stable catalog, component or content identity.
 pub fn validate_id(id: &str) -> Result<(), String> {
     if id.is_empty()
         || id.len() > 128
@@ -52,7 +53,19 @@ pub fn validate_id(id: &str) -> Result<(), String> {
         || id == "."
         || id == ".."
     {
-        return Err("catalog identity must be a bounded, safe identifier".into());
+        return Err("identity must be a bounded, safe identifier".into());
+    }
+    Ok(())
+}
+
+/// Validate lowercase SHA-256 digest syntax.
+pub fn validate_sha256(digest: &str) -> Result<(), String> {
+    if digest.len() != 64
+        || !digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err("identity requires a lowercase SHA-256 digest".into());
     }
     Ok(())
 }

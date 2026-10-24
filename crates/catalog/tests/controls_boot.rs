@@ -1,4 +1,5 @@
-use fujimod_catalog::{ReferenceCatalog, controls::BootMode};
+use fujimod_catalog::ReferenceCatalog;
+use fujimod_catalog_controls::BootMode;
 use std::path::PathBuf;
 
 #[test]

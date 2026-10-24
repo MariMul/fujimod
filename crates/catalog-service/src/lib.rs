@@ -1,5 +1,7 @@
 //! App80 service definitions loaded from caller-selected JSON data.
 use serde::Deserialize;
+
+pub mod camera;
 use std::num::NonZeroU32;
 
 #[derive(Debug, thiserror::Error)]

@@ -53,7 +53,7 @@ pub struct SourceAnnotations {
     pub device_blobs: Option<BTreeMap<String, FirmwareBlob>>,
     /// Persistent input contents and placement recipes, without file locations.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub persistent_inputs: Option<crate::persistent_inputs::PersistentInputs>,
+    pub persistent_inputs: Option<fujimod_catalog_settings::persistent_inputs::PersistentInputs>,
     /// Geometry of the persistent medium used by these inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub persistent_geometry: Option<crate::firmware::PersistentInputsGeometry>,

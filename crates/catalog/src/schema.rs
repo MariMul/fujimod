@@ -35,11 +35,13 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
     );
     documents.insert(
         "settings.generated.schema.json",
-        schema::<crate::settings::FirmwareSettings>(crate::settings::SETTINGS_SCHEMA_URI),
+        schema::<fujimod_catalog_settings::FirmwareSettings>(
+            fujimod_catalog_settings::SETTINGS_SCHEMA_URI,
+        ),
     );
     documents.insert(
         "bulk.generated.schema.json",
-        schema::<crate::bulk::FirmwareBulk>(crate::bulk::BULK_SCHEMA_URI),
+        schema::<fujimod_catalog_bulk::FirmwareBulk>(fujimod_catalog_bulk::BULK_SCHEMA_URI),
     );
     documents.insert(
         "progress.generated.schema.json",
@@ -89,55 +91,63 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
     );
     documents.insert(
         "remote-firmware.generated.schema.json",
-        schema::<crate::remote::FirmwareFacts>(crate::remote::FIRMWARE_FACTS_SCHEMA_URI),
+        schema::<fujimod_catalog_remote::FirmwareFacts>(
+            fujimod_catalog_remote::FIRMWARE_FACTS_SCHEMA_URI,
+        ),
     );
     documents.insert(
         "build-menu.generated.schema.json",
-        schema::<crate::remote::BuildMenuManifest>(crate::remote::MENU_MANIFEST_SCHEMA_URI),
+        schema::<fujimod_catalog_remote::BuildMenuManifest>(
+            fujimod_catalog_remote::MENU_MANIFEST_SCHEMA_URI,
+        ),
     );
     documents.insert(
         "remote-facts.generated.schema.json",
-        schema::<crate::remote::Facts>(
+        schema::<fujimod_catalog_remote::Facts>(
             "https://fujimod.com/schemas/remote-facts.generated.schema.json",
         ),
     );
     documents.insert(
         "remote-menus.generated.schema.json",
-        schema::<crate::remote::MenuTables>(
+        schema::<fujimod_catalog_remote::MenuTables>(
             "https://fujimod.com/schemas/remote-menus.generated.schema.json",
         ),
     );
     documents.insert(
         "remote-resources.generated.schema.json",
-        schema::<crate::remote::Resources>(
+        schema::<fujimod_catalog_remote::Resources>(
             "https://fujimod.com/schemas/remote-resources.generated.schema.json",
         ),
     );
     documents.insert(
         "remote-scanout.generated.schema.json",
-        schema::<crate::remote::Scanout>(
+        schema::<fujimod_catalog_remote::Scanout>(
             "https://fujimod.com/schemas/remote-scanout.generated.schema.json",
         ),
     );
     documents.insert(
         "remote-state.generated.schema.json",
-        schema::<crate::reference::FirmwareObservation>(
+        schema::<fujimod_catalog_remote::FirmwareObservation>(
             "https://fujimod.com/schemas/remote-state.generated.schema.json",
         ),
     );
     documents.insert(
         "remote-debug-keys.generated.schema.json",
-        schema::<Vec<crate::remote::DebugKey>>(
+        schema::<Vec<fujimod_catalog_remote::DebugKey>>(
             "https://fujimod.com/schemas/remote-debug-keys.generated.schema.json",
         ),
     );
     documents.insert(
         "physical-controls.schema.json",
-        schema::<crate::controls::PhysicalControls>(crate::controls::PHYSICAL_CONTROLS_SCHEMA_URI),
+        schema::<fujimod_catalog_controls::PhysicalControls>(
+            fujimod_catalog_controls::PHYSICAL_CONTROLS_SCHEMA_URI,
+        ),
     );
     documents.insert(
         "control-ids.schema.json",
-        schema::<crate::controls::FirmwareControlIds>(crate::controls::CONTROL_IDS_SCHEMA_URI),
+        schema::<fujimod_catalog_controls::FirmwareControlIds>(
+            fujimod_catalog_controls::CONTROL_IDS_SCHEMA_URI,
+        ),
     );
     documents
 }

@@ -1,5 +1,5 @@
 use super::*;
-use fujimod_catalog::service::FirmwareIdentity;
+use fujimod_catalog_service::FirmwareIdentity;
 fn catalog(reverse: bool) -> Catalog {
     let layouts = [
         ("lens_operation6", 0),

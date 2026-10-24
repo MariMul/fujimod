@@ -161,7 +161,7 @@ impl PersistentInputs {
             return Err("Persistent input asset or set count exceeds its bound".into());
         }
         for (id, asset) in &self.assets {
-            crate::reference::validate_id(id)?;
+            fujimod_catalog_content::validate_id(id)?;
             asset.validate()?;
         }
         let window = |id: &str, offset: usize, bytes: usize| -> Result<(), String> {
@@ -179,7 +179,7 @@ impl PersistentInputs {
             Ok(())
         };
         for (id, set) in &self.sets {
-            crate::reference::validate_id(id)?;
+            fujimod_catalog_content::validate_id(id)?;
             if set.placements.len() > 1024 {
                 return Err("Persistent placement count exceeds its bound".into());
             }

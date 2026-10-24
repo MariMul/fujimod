@@ -12,12 +12,12 @@ const SIZE: usize = 0x10000;
 fn configured(h: &mut TestHost) -> VideoEncoder {
     configured_backend(
         h,
-        fujimod_catalog::construction::VideoEncoderBackend::Software,
+        fujimod_catalog_construction::VideoEncoderBackend::Software,
     )
 }
 fn configured_backend(
     h: &mut TestHost,
-    backend: fujimod_catalog::construction::VideoEncoderBackend,
+    backend: fujimod_catalog_construction::VideoEncoderBackend,
 ) -> VideoEncoder {
     let mut d = VideoEncoder::new(video::Options { backend }, Irq { core: 0, line: 75 }).unwrap();
     for (o, v) in [
@@ -319,7 +319,7 @@ fn hardware_backend_obeys_dma_clock_and_decodes_real_frames() {
     let mut h = TestHost::new();
     let mut d = configured_backend(
         &mut h,
-        fujimod_catalog::construction::VideoEncoderBackend::Videotoolbox,
+        fujimod_catalog_construction::VideoEncoderBackend::Videotoolbox,
     );
     let mut decoder = Decoder::new().unwrap();
     for i in 0..4 {

@@ -175,8 +175,8 @@ impl NamedRange {
 impl FirmwareBulk {
     /// Validate identity, bounded ranges, digests and scope containment.
     pub fn validate(&self) -> Result<(), String> {
-        crate::reference::validate_id(&self.id)?;
-        crate::reference::validate_id(&self.firmware_id)?;
+        fujimod_catalog_content::validate_id(&self.id)?;
+        fujimod_catalog_content::validate_id(&self.firmware_id)?;
         let fail = |message: &str| Err(format!("bulk {}: {message}", self.id));
         if self.schema_uri != BULK_SCHEMA_URI || self.schema != 1 {
             return fail("unsupported schema");

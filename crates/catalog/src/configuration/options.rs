@@ -23,7 +23,7 @@ pub struct RunFactoryOptions {
     pub audio_input_profile: Option<RunAudioInputProfile>,
     /// Explicit H.264 backend; absence selects the local platform default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub video_encoder_backend: Option<crate::construction::VideoEncoderBackend>,
+    pub video_encoder_backend: Option<fujimod_catalog_construction::VideoEncoderBackend>,
     /// Selected auxiliary control profile. Absence preserves the base selection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auxiliary_control_profile: Option<RunAuxiliaryControlProfile>,
@@ -745,7 +745,7 @@ impl RunFactoryOptions {
             return Err("run wifi_sdio_transfer_ticks must be positive".into());
         }
         if let Some(sink) = &self.hdmi_sink {
-            crate::emulator::validate_id(&sink.edid.id)?;
+            fujimod_catalog_content::validate_id(&sink.edid.id)?;
             if sink.edid.size == 0
                 || sink.edid.size % 128 != 0
                 || sink.edid.size > 32768

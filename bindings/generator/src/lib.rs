@@ -135,7 +135,7 @@ impl Api {
             }
         }
         let mut api = Self::from_sources(sources.iter().map(|(_, text)| text.as_str()))?;
-        let catalog = fs::read_to_string(root.join("crates/catalog/src/service.rs"))
+        let catalog = fs::read_to_string(root.join("crates/catalog-service/src/lib.rs"))
             .map_err(|e| e.to_string())?;
         api.codec = syn::parse_file(&catalog)
             .map_err(|e| e.to_string())?
@@ -358,7 +358,7 @@ impl Api {
         );
         println!(
             "cargo:rerun-if-changed={}",
-            root.join("crates/catalog/src/service.rs").display()
+            root.join("crates/catalog-service/src/lib.rs").display()
         );
         Self::read(root)
             .and_then(|api| api.write(out))

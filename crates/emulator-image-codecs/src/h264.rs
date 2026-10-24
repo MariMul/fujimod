@@ -1,6 +1,6 @@
 //! Host compression backends. No guest memory, clocks or device effects.
 //! Software uses scalar Rust and libm; VideoToolbox requires hardware encoding.
-pub use fujimod_catalog::construction::VideoEncoderBackend as Backend;
+pub use fujimod_catalog_construction::VideoEncoderBackend as Backend;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 

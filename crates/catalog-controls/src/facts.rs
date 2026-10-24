@@ -365,7 +365,7 @@ impl AddressIdentity {
         if self.size == 0 || self.address.checked_add(self.size).is_none() {
             return Err("firmware range identity has an empty or overflowing extent".into());
         }
-        crate::emulator::Content {
+        fujimod_catalog_content::Content {
             size: self.size,
             sha256: self.sha256.clone(),
         }

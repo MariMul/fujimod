@@ -856,7 +856,7 @@ pub struct BodyProfile {
     pub control_bus_order: Option<Vec<String>>,
     /// Exported construction topology, including native node identities and hardware parameters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub construction: Option<crate::construction::ConstructionProfile>,
+    pub construction: Option<fujimod_catalog_construction::ConstructionProfile>,
     /// Declared attachments.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attachments: Option<PartAssemblies>,
@@ -1814,11 +1814,11 @@ impl DeviceGraph {
         }
         let mut available = names.clone();
         for node in &self.devices {
-            crate::reference::validate_id(&node.name)?;
+            fujimod_catalog_content::validate_id(&node.name)?;
             if let Some(choices) = &node.model_choices {
                 for model in choices.models.values() {
                     for dependency in &model.dependencies {
-                        crate::reference::validate_id(&dependency.name)?;
+                        fujimod_catalog_content::validate_id(&dependency.name)?;
                         available.insert(&dependency.name);
                     }
                 }

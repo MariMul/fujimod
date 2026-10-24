@@ -8,7 +8,7 @@ use crate::{
     access::{Access, range},
     service_mode::{self, ServiceModeError},
 };
-use fujimod_catalog::camera::{CameraDefinition, CameraError, DebugMode};
+use fujimod_catalog_service::camera::{CameraDefinition, CameraError, DebugMode};
 use fujimod_usb::{
     ff80::{
         Session, SessionState,

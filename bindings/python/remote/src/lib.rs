@@ -385,9 +385,9 @@ fn read_set(json: &str, device_ids: &BTreeMap<String, usize>) -> Result<ReadSet>
 }
 #[pyfunction]
 fn facts_from_selection(selection: &str, manifest: &str) -> PyResult<String> {
-    let selection = decode(selection)?;
+    let selection: fujimod_catalog::ResolvedSelection = decode(selection)?;
     let manifest = decode(manifest)?;
-    let facts = Facts::from_selection(&selection, manifest).map_err(error)?;
+    let facts = selection.remote_facts(manifest).map_err(error)?;
     serde_json::to_string(&facts).map_err(|e| error(e.to_string()))
 }
 pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {

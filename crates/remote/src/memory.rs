@@ -1,9 +1,7 @@
 //! Bounded live-memory observation. No reads advance execution.
 use crate::{InputState, ReadSet, Readiness, Result, State, backend::Backend};
-use fujimod_catalog::{
-    facts::{ConfigurationLocation, DecodedTouch},
-    remote::Facts,
-};
+use fujimod_catalog_controls::facts::{ConfigurationLocation, DecodedTouch};
+use fujimod_catalog_remote::Facts;
 
 pub struct Memory<'a, B> {
     pub backend: &'a mut B,

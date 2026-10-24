@@ -13,6 +13,7 @@ doctest = false
 
 [dependencies]
 fujimod-catalog.workspace = true
+fujimod-catalog-service.workspace = true
 fujimod-corpus = { path = "../../../crates/corpus" }
 pyo3.workspace = true
 serde.workspace = true

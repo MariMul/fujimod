@@ -6,7 +6,7 @@
 //! the same way from the stock profile defaults. Stock firmware reads the
 //! result as it would a camera's own settings.
 #![forbid(unsafe_code)]
-use fujimod_catalog::settings::{FirmwareSettings, SectionLength, UpdateRange};
+use fujimod_catalog_settings::{FirmwareSettings, SectionLength, UpdateRange};
 use std::collections::BTreeMap;
 
 /// Settings ready to place before cold boot.

@@ -85,7 +85,7 @@ impl Device9Action {
 mod tests {
     use super::*;
     use crate::app80::catalog::{Catalog, Command, ReplyValue};
-    use fujimod_catalog::service::{Definition, FirmwareIdentity, ServiceModes};
+    use fujimod_catalog_service::{Definition, FirmwareIdentity, ServiceModes};
     #[test]
     fn exchanges_keep_twenty_ninth_byte_and_reject_thirty_before_io() {
         assert!(Device9Count::new(30).is_err());

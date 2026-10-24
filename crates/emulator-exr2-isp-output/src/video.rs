@@ -9,8 +9,8 @@ use fujimod_emulator_image_codecs::h264::{self, Codec, Config};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use fujimod_catalog::construction::VideoEncoderBackend as Backend;
-pub use fujimod_catalog::construction::VideoEncoderOptions as Options;
+use fujimod_catalog_construction::VideoEncoderBackend as Backend;
+pub use fujimod_catalog_construction::VideoEncoderOptions as Options;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Pending {

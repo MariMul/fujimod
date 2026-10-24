@@ -19,6 +19,8 @@ testing = ["fujimod-remote/testing"]
 fujimod-python-usb = { path = "../usb" }
 fujimod-python-emulator = { path = "../emulator", optional = true }
 fujimod-emulator = { workspace = true, optional = true }
+fujimod-catalog.workspace = true
+fujimod-catalog-remote.workspace = true
 fujimod-remote = { workspace = true, default-features = false, features = ["ff80"] }
 fujimod-usb.workspace = true
 pyo3.workspace = true

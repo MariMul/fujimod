@@ -1,5 +1,5 @@
 use super::*;
-use fujimod_catalog::settings::{
+use fujimod_catalog_settings::{
     NamedSetting, ProfileRecord, SETTINGS_SCHEMA_URI, SectionLength, SettingsBank, SettingsField,
     SettingsProfile, SettingsSection, SettingsSource,
 };

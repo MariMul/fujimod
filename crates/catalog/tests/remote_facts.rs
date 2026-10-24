@@ -1,7 +1,5 @@
-use fujimod_catalog::{
-    ReferenceCatalog,
-    remote::{BuildMenuManifest, Facts, MENU_MANIFEST_SCHEMA_URI},
-};
+use fujimod_catalog::ReferenceCatalog;
+use fujimod_catalog_remote::{BuildMenuManifest, Facts, MENU_MANIFEST_SCHEMA_URI};
 
 #[test]
 fn selected_firmware_supplies_complete_stock_remote_inputs() {
@@ -9,7 +7,7 @@ fn selected_firmware_supplies_complete_stock_remote_inputs() {
         .unwrap()
         .resolve_firmware("x70-110")
         .unwrap();
-    let facts = Facts::from_selection(&selected, None).unwrap();
+    let facts = selected.remote_facts(None).unwrap();
     assert_eq!(facts.firmware.menus.root_count, 188);
     assert_eq!(facts.firmware.menus.cursor.fields.cursor, 8);
     assert!(
@@ -31,7 +29,7 @@ fn mismatched_build_and_invalid_scanout_fail_before_use() {
         .unwrap()
         .resolve_firmware("x70-110")
         .unwrap();
-    let mut facts = Facts::from_selection(&selected, None).unwrap();
+    let mut facts = selected.remote_facts(None).unwrap();
     let mut value = serde_json::to_value(&facts).unwrap();
     value["firmware"]["scanout"]["stride_bytes"] = 1.into();
     assert!(

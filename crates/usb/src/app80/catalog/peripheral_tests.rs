@@ -1,5 +1,5 @@
 use super::*;
-use fujimod_catalog::service::FirmwareIdentity;
+use fujimod_catalog_service::FirmwareIdentity;
 
 fn catalog(reverse: bool) -> Catalog {
     let entries: Vec<_>=[("register_control",7),("i2c",14),("accumulator",7),("peripheral_report",8),("battery_control",2),("initialize_display",1),("display_pattern",5)]

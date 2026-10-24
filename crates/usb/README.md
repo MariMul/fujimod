@@ -185,7 +185,7 @@ and `apps/web`. See their README for the static-host build and mock-WebUSB tests
 
 ## Firmware-qualified App80 controls
 
-`fujimod::catalog::service::Definition` loads the selected firmware's service data.
+`fujimod::catalog_service::Definition` loads the selected firmware's service data.
 `app80::catalog::Catalog` resolves its ordered mode rules and typed codecs;
 `operations::app80::Service` binds those codecs to that definition's ff80
 mailbox. The resulting `Invocation` keeps its request and carrier together.

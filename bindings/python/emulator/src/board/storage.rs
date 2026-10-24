@@ -149,7 +149,7 @@ pub(crate) fn persistent_packet(
     selected: &str,
     assets: &Bound<'_, PyDict>,
 ) -> PyResult<Option<Vec<u8>>> {
-    let spec: fujimod_catalog::persistent_inputs::PersistentInputs = json(catalog)?;
+    let spec: fujimod_catalog_settings::persistent_inputs::PersistentInputs = json(catalog)?;
     let loaded = assets
         .iter()
         .map(|(key, value)| Ok((key.extract()?, value.extract()?)))

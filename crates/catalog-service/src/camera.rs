@@ -2,7 +2,7 @@
 //! one firmware, loaded from caller-selected JSON (schema 1, the
 //! `firmware/<model>/<version>/camera.json` tables). Data only: no USB, no
 //! execution policy.
-use crate::service::{DefinitionError, Digest, FirmwareIdentity};
+use crate::{DefinitionError, Digest, FirmwareIdentity};
 use serde::Deserialize;
 
 /// A JSON number or a `0x`-prefixed hexadecimal string.

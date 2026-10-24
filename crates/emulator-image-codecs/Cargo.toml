@@ -11,7 +11,7 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
-fujimod-catalog.workspace = true
+fujimod-catalog-construction.workspace = true
 serde = { version = "1", features = ["derive", "rc"] }
 rusty_h264-encoder = { version = "=0.16.1", default-features = false, features = ["libm"] }
 rusty_h264-common = { version = "=0.16.1", default-features = false, features = ["libm"] }

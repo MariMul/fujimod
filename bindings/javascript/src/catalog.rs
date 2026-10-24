@@ -1,7 +1,7 @@
 //! Shared definition types, without USB ownership or command implementation.
 use super::*;
 use error::{integer, property, record};
-use fujimod_catalog::service as core;
+use fujimod_catalog_service as core;
 
 include!(concat!(env!("OUT_DIR"), "/definition_codec_javascript.rs"));
 #[wasm_bindgen]

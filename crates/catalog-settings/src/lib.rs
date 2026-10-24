@@ -7,6 +7,8 @@
 //! the named settings a run may request. It holds addresses, sizes and hashes;
 //! bank and record bytes are built from the update.
 use serde::{Deserialize, Serialize};
+
+pub mod persistent_inputs;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub const SETTINGS_SCHEMA_URI: &str = "https://fujimod.com/schemas/settings.generated.schema.json";
@@ -252,8 +254,8 @@ pub struct NamedSetting {
 impl FirmwareSettings {
     /// Validate identity, store extents and field bounds.
     pub fn validate(&self) -> Result<(), String> {
-        crate::reference::validate_id(&self.id)?;
-        crate::reference::validate_id(&self.firmware_id)?;
+        fujimod_catalog_content::validate_id(&self.id)?;
+        fujimod_catalog_content::validate_id(&self.firmware_id)?;
         let fail = |message: &str| Err(format!("settings {}: {message}", self.id));
         if self.schema_uri != SETTINGS_SCHEMA_URI || self.schema != 1 {
             return fail("unsupported schema");
@@ -371,7 +373,7 @@ impl FirmwareSettings {
                 SectionLength::Counted { counts, bits } => bits > 0 && within(counts, 6),
                 SectionLength::CountedList { count, bits } => bits > 0 && within(count, 3),
             };
-            if crate::reference::validate_id(&section.name).is_err()
+            if fujimod_catalog_content::validate_id(&section.name).is_err()
                 || !names.insert(section.name.as_str())
                 || !within(section.offset, 0)
                 || !length

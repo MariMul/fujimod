@@ -1,6 +1,6 @@
 //! Transport details below reference resolution. These are mechanisms, not actions.
 use crate::{Capture, Input, LocalFuture, ReadSet, Result};
-use fujimod_catalog::remote::Facts;
+use fujimod_catalog_remote::Facts;
 
 pub trait Backend {
     fn now(&self) -> u64;

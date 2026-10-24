@@ -222,7 +222,7 @@ pub struct PersistentInputs {
     /// Declared geometry.
     pub geometry: PersistentInputsGeometry,
     /// Declared sets.
-    pub sets: BTreeMap<String, crate::persistent_inputs::PersistentSet>,
+    pub sets: BTreeMap<String, fujimod_catalog_settings::persistent_inputs::PersistentSet>,
 }
 
 /// Declared preload facts.
@@ -843,5 +843,5 @@ pub struct PersistentAssetLayout {
     /// SHA-256 after declared byte edits.
     pub normalized_sha256: String,
     /// Explicit small edits used to normalize the input.
-    pub patches: Vec<crate::persistent_inputs::PersistentPatch>,
+    pub patches: Vec<fujimod_catalog_settings::persistent_inputs::PersistentPatch>,
 }

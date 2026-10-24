@@ -11,7 +11,7 @@ pub use protocol::{
 };
 pub mod backend;
 pub mod memory;
-pub use fujimod_catalog::remote::Facts;
+pub use fujimod_catalog_remote::Facts;
 pub mod resolve;
 
 #[cfg(feature = "board")]

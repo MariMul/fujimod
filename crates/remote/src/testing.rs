@@ -23,7 +23,7 @@ pub fn facts() -> Facts {
     ];
     let button = |name: &str, key: &str| json!({"name":name,"location":"rear","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"pushable":true,"positions":[],"default_function":null,"role":null,"mechanical":false,"behavior":{"kind":"button","press":{"kind":"debug_key","name":key}}});
     let physical_controls = json!({
-        "$schema":fujimod_catalog::controls::PHYSICAL_CONTROLS_SCHEMA_URI,"schema":1,"id":"synthetic-controls","body_id":"synthetic",
+        "$schema":fujimod_catalog_controls::PHYSICAL_CONTROLS_SCHEMA_URI,"schema":1,"id":"synthetic-controls","body_id":"synthetic",
         "manual":{"url":"https://example.test/manual","title":"Synthetic controls","pages":[]},"analog_levels":1,
         "controls":{
             "menu_ok_button":button("MENU/OK button","MENU"),
@@ -38,7 +38,7 @@ pub fn facts() -> Facts {
         }
     });
     let control_ids = json!({
-        "$schema":fujimod_catalog::controls::CONTROL_IDS_SCHEMA_URI,"schema":1,"id":"synthetic-1-control-ids","firmware_id":"synthetic-1",
+        "$schema":fujimod_catalog_controls::CONTROL_IDS_SCHEMA_URI,"schema":1,"id":"synthetic-1-control-ids","firmware_id":"synthetic-1",
         "scanner":{"base":16,"count":1,"stride":4,"lookup":16,"sha256":hash},
         "input_readers":{"calibration":16,"scanner":{"stable_offset":0,"stable_width":1,"pressed_value":1,"released_value":0,"routine":{"address":16,"size":4,"sha256":hash}}},
         "native_key_names":{"rows":[],"reader":16,"size":4,"sha256":hash},
@@ -50,7 +50,7 @@ pub fn facts() -> Facts {
         "physical_controls":physical_controls,
         "control_ids":control_ids,
         "firmware":{
-            "$schema":fujimod_catalog::remote::FIRMWARE_FACTS_SCHEMA_URI,"schema":1,"firmware_id":"synthetic-1","firmware_sha256":hash,"body_id":"synthetic",
+            "$schema":fujimod_catalog_remote::FIRMWARE_FACTS_SCHEMA_URI,"schema":1,"firmware_id":"synthetic-1","firmware_sha256":hash,"body_id":"synthetic",
             "uncached_alias":0,
             "identity_checks":[{"address":16,"size":4,"sha256":hash}],"configuration":{"kind":"direct","address":1024},
             "state":{"ui_mode":768,"system_mode":772,"menu_active":776,"pending_mode":780,"menu_node":784,"rec_mode":3,"setup_mode":5,"readiness":{"category_one":800,"category_two":808,"input_pending":816,"excluded_mask":0,"operation_alert_timer":820,"override_address":824}},
@@ -567,7 +567,7 @@ fn predicate_timeout_reports_last_read_result() {
 
 #[test]
 fn input_task_boundary_is_live_and_tracks_tables_and_receive_states() {
-    use fujimod_catalog::remote::{InputTasks, ModeBusy};
+    use fujimod_catalog_remote::{InputTasks, ModeBusy};
     futures_lite::future::block_on(async {
         let mut facts = facts();
         facts.input_tasks = Some(InputTasks {

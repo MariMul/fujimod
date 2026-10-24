@@ -3,6 +3,8 @@
 //! A binding names one vocabulary explicitly. Numeric event identities establish
 //! the checked relationship; spelling is never used to translate vocabularies.
 
+pub mod facts;
+
 use crate::facts::{
     ControlInterface, DecodedTouch, GpioScanner, ManualReference, NativeKeyNames, ScannerReader,
     ScannerRecordWitness, ScannerTable,
@@ -714,7 +716,8 @@ pub struct ResolvedControlAction {
 }
 
 impl PhysicalControls {
-    pub(crate) fn has_bindings(&self) -> bool {
+    /// Whether any control declares an input binding.
+    pub fn has_bindings(&self) -> bool {
         !self.bindings().is_empty()
     }
     fn bindings(&self) -> Vec<(String, &InputBinding)> {
@@ -843,8 +846,8 @@ impl PhysicalControls {
         if self.schema != 1 || self.schema_uri != PHYSICAL_CONTROLS_SCHEMA_URI {
             return Err("physical controls schema differs".into());
         }
-        crate::reference::validate_id(&self.id)?;
-        crate::reference::validate_id(&self.body_id)?;
+        fujimod_catalog_content::validate_id(&self.id)?;
+        fujimod_catalog_content::validate_id(&self.body_id)?;
         if self.analog_levels.is_some_and(|levels| levels < 2)
             || self.controls.is_empty()
             || self.manual.url.is_empty()
@@ -1156,8 +1159,8 @@ impl FirmwareControlIds {
         if self.schema != 1 || self.schema_uri != CONTROL_IDS_SCHEMA_URI {
             return Err("firmware control IDs schema differs".into());
         }
-        crate::reference::validate_id(&self.id)?;
-        crate::reference::validate_id(&self.firmware_id)?;
+        fujimod_catalog_content::validate_id(&self.id)?;
+        fujimod_catalog_content::validate_id(&self.firmware_id)?;
         for (id, control) in &physical.controls {
             if control
                 .connection_ids
@@ -1190,16 +1193,16 @@ impl FirmwareControlIds {
                 return Err("firmware stable-state reader is invalid".into());
             }
         }
-        crate::reference::validate_sha256(&self.scanner.sha256)?;
+        fujimod_catalog_content::validate_sha256(&self.scanner.sha256)?;
         if let Some(table) = &self.event_translation {
-            crate::reference::validate_sha256(&table.sha256)?;
+            fujimod_catalog_content::validate_sha256(&table.sha256)?;
             let keys: BTreeSet<_> = table.rows.iter().map(|row| row.physical_key).collect();
             if table.rows.is_empty() || keys.len() != table.rows.len() || keys.contains(&0) {
                 return Err("firmware event translation rows are empty or duplicated".into());
             }
         }
         if let Some(names) = &self.native_key_names {
-            crate::reference::validate_sha256(&names.sha256)?;
+            fujimod_catalog_content::validate_sha256(&names.sha256)?;
         }
         if self.scanner.count == 0
             || self.scanner.stride < 20
@@ -1214,7 +1217,7 @@ impl FirmwareControlIds {
         let mut ids = BTreeSet::new();
         let mut rows = BTreeSet::new();
         for input in &self.inputs {
-            crate::reference::validate_id(&input.id)?;
+            fujimod_catalog_content::validate_id(&input.id)?;
             if !ids.insert(&input.id) {
                 return Err(format!("duplicate located input {}", input.id));
             }

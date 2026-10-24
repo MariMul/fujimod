@@ -11,6 +11,6 @@ description = "Camera settings banks built from a firmware's catalog layout and 
 doctest = false
 
 [dependencies]
-fujimod-catalog.workspace = true
+fujimod-catalog-settings.workspace = true
 fujimod-firmware.workspace = true
 fujimod-workspace-hack.workspace = true
