@@ -18,7 +18,7 @@ serde = { version = "1", features = ["derive", "rc"] }
 fujimod-workspace-hack.workspace = true
 
 [dev-dependencies]
-fujimod-emulator-exr2-isp.workspace = true
+fujimod-emulator-exr2-isp-output.workspace = true
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

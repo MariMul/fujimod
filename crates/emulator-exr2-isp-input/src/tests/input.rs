@@ -1,4 +1,4 @@
-use fujimod_emulator_exr2_isp::{OutputChannel, output};
+use fujimod_emulator_exr2_isp_output::output::{self, OutputChannel};
 use crate::*;
 use fujimod_emulator_devices::Device;
 use fujimod_emulator_devices::exr2::isp::*;

@@ -15,6 +15,9 @@ members = [
   "crates/emulator-cpu-unicorn",
   "crates/emulator-cpu-unicorn/sys",
   "crates/emulator-devices",
+  "crates/emulator-exr2-isp-output",
+  "crates/emulator-exr2-isp-statistics",
+  "crates/emulator-exr2-isp-testing",
   "crates/emulator-exr2-isp-face",
   "crates/emulator-exr2-isp-input",
   "crates/emulator-xp4-io",
@@ -45,7 +48,6 @@ members = [
   "crates/emulator-exr2-gpu",
   "crates/emulator-exr2-i2c",
   "crates/emulator-exr2-display",
-  "crates/emulator-exr2-isp",
   "crates/emulator-exr2-board",
   "crates/emulator-exr2-plan",
   "crates/settings",
@@ -77,6 +79,9 @@ fujimod-simulation = { path = "crates/simulation", version = "0.1.0" }
 fujimod-catalog = { path = "crates/catalog", version = "0.1.0" }
 fujimod-emulator = { path = "crates/emulator", version = "0.1.0" }
 fujimod-emulator-devices = { path = "crates/emulator-devices", version = "0.1.0" }
+fujimod-emulator-exr2-isp-output = { path = "crates/emulator-exr2-isp-output", version = "0.1.0" }
+fujimod-emulator-exr2-isp-statistics = { path = "crates/emulator-exr2-isp-statistics", version = "0.1.0" }
+fujimod-emulator-exr2-isp-testing = { path = "crates/emulator-exr2-isp-testing", version = "0.1.0" }
 fujimod-emulator-exr2-isp-face = { path = "crates/emulator-exr2-isp-face", version = "0.1.0" }
 fujimod-emulator-exr2-isp-input = { path = "crates/emulator-exr2-isp-input", version = "0.1.0" }
 fujimod-emulator-xp4-io = { path = "crates/emulator-xp4-io", version = "0.1.0" }
@@ -107,7 +112,6 @@ fujimod-emulator-exr2-audio = { path = "crates/emulator-exr2-audio", version = "
 fujimod-emulator-exr2-gpu = { path = "crates/emulator-exr2-gpu", version = "0.1.0" }
 fujimod-emulator-exr2-i2c = { path = "crates/emulator-exr2-i2c", version = "0.1.0" }
 fujimod-emulator-exr2-display = { path = "crates/emulator-exr2-display", version = "0.1.0" }
-fujimod-emulator-exr2-isp = { path = "crates/emulator-exr2-isp", version = "0.1.0" }
 fujimod-emulator-exr2-board = { path = "crates/emulator-exr2-board", version = "0.1.0" }
 fujimod-emulator-exr2-plan = { path = "crates/emulator-exr2-plan", version = "0.1.0" }
 fujimod-emulator-cpu = { path = "crates/emulator-cpu", version = "0.1.0" }

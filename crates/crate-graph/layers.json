@@ -13,9 +13,10 @@
       "fujimod-emulator-exr2-gpu",
       "fujimod-emulator-exr2-i2c",
       "fujimod-emulator-exr2-io",
-      "fujimod-emulator-exr2-isp",
       "fujimod-emulator-exr2-isp-face",
       "fujimod-emulator-exr2-isp-input",
+      "fujimod-emulator-exr2-isp-output",
+      "fujimod-emulator-exr2-isp-statistics",
       "fujimod-emulator-exr2-serial",
       "fujimod-emulator-exr2-storage",
       "fujimod-emulator-exr2-system",
@@ -67,6 +68,7 @@
       "fujimod-catalog",
       "fujimod-corpus",
       "fujimod-crate-graph",
+      "fujimod-emulator-exr2-isp-testing",
       "fujimod-firmware",
       "fujimod-recording",
       "fujimod-settings",
@@ -97,9 +99,10 @@
         "fujimod-emulator-exr2-gpu",
         "fujimod-emulator-exr2-i2c",
         "fujimod-emulator-exr2-io",
-        "fujimod-emulator-exr2-isp",
         "fujimod-emulator-exr2-isp-face",
         "fujimod-emulator-exr2-isp-input",
+        "fujimod-emulator-exr2-isp-output",
+        "fujimod-emulator-exr2-isp-statistics",
         "fujimod-emulator-exr2-serial",
         "fujimod-emulator-exr2-storage",
         "fujimod-emulator-exr2-system",
@@ -120,9 +123,7 @@
         "fujimod-emulator-xp5-storage"
       ]
     },
-    "oversize_models": [
-      "fujimod-emulator-exr2-isp"
-    ],
+    "oversize_models": [],
     "interface_devices": [
       "fujimod-emulator-devices/src/exr2/clock.rs",
       "fujimod-emulator-devices/src/exr2/gpio.rs",

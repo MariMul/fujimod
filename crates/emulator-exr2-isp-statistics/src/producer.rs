@@ -93,7 +93,7 @@ impl RasterJobInput {
             .transpose()?;
         let metering = self
             .metering
-            .then(|| super::metering::banks(&self.registers, &pixels, self.layout))
+            .then(|| crate::metering::banks(&self.registers, &pixels, self.layout))
             .transpose()?;
         Ok(RasterBanks { contrast, metering })
     }
@@ -158,7 +158,7 @@ pub struct Block18000 {
     input_spans: Vec<StatisticsSpan>,
     spans: Vec<StatisticsSpan>,
     histogram_bytes: [u8; 1024],
-    pixel_cache: super::pixel_statistics::Cache,
+    pixel_cache: crate::pixel_statistics::Cache,
 }
 impl Block18000 {
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
@@ -399,7 +399,7 @@ impl Block18000 {
                 } => {
                     if live && image.radiance.is_some() {
                         let mut windows =
-                            super::pixel_statistics::windows(grid, self.registers.as_slice());
+                            crate::pixel_statistics::windows(grid, self.registers.as_slice());
                         windows.push([
                             window[0].min(grid[0]),
                             window[1].min(grid[1]),
@@ -442,7 +442,7 @@ impl Block18000 {
                 let exposed = if let Some(physical) = image.pixels.histogram_image() {
                     measured = physical.measurement_windows(
                         grid,
-                        &super::pixel_statistics::windows(grid, self.registers.as_slice()),
+                        &crate::pixel_statistics::windows(grid, self.registers.as_slice()),
                     )?;
                     &measured
                 } else {

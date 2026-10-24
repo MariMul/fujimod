@@ -385,7 +385,7 @@ impl Builder<'_> {
                 {
                     return Err("image combination requires its register window".into());
                 }
-                Box::new(fujimod_emulator_exr2_isp::combination::Combination::new(options, route(irq)?)?)
+                Box::new(fujimod_emulator_exr2_isp_output::combination::Combination::new(options, route(irq)?)?)
             }
             Model::I2c {
                 options,
@@ -929,9 +929,9 @@ impl Builder<'_> {
                 let memory_outputs = memory_outputs
                     .map(|name| Ok(wire!(resources, id, name, MemoryOutputs)))
                     .transpose()?;
-                Box::new(fujimod_emulator_exr2_isp::OutputChannel::new(
+                Box::new(fujimod_emulator_exr2_isp_output::output::OutputChannel::new(
                     options,
-                    fujimod_emulator_exr2_isp::output::Wiring {
+                    fujimod_emulator_exr2_isp_output::output::Wiring {
                         base,
                         irq,
                         channel,
@@ -953,9 +953,9 @@ impl Builder<'_> {
                 frames,
                 images,
                 grid,
-            } => Box::new(fujimod_emulator_exr2_isp::Block18000::new(
+            } => Box::new(fujimod_emulator_exr2_isp_statistics::producer::Block18000::new(
                 options,
-                fujimod_emulator_exr2_isp::producer::Wiring {
+                fujimod_emulator_exr2_isp_statistics::producer::Wiring {
                     grid: grid
                         .map(|name| Ok(wire!(resources, id, name, ImageGrid)))
                         .transpose()?,
@@ -974,15 +974,15 @@ impl Builder<'_> {
                         .ok_or_else(|| format!("missing statistics frames {frames}"))?,
                 },
             )?),
-            Model::PhaseDetection { options, routes } => Box::new(fujimod_emulator_exr2_isp::PhaseDetection::new(
+            Model::PhaseDetection { options, routes } => Box::new(fujimod_emulator_exr2_isp_statistics::phase_detection::PhaseDetection::new(
                 options,
-                fujimod_emulator_exr2_isp::phase_detection::Wiring {
+                fujimod_emulator_exr2_isp_statistics::phase_detection::Wiring {
                     routes: wire!(resources, id, routes, IrqRoutes),
                 },
             )?),
-            Model::WindowAnalysis { options, routes } => Box::new(fujimod_emulator_exr2_isp::WindowAnalysis::new(
+            Model::WindowAnalysis { options, routes } => Box::new(fujimod_emulator_exr2_isp_statistics::window_analysis::WindowAnalysis::new(
                 options,
-                fujimod_emulator_exr2_isp::window_analysis::Wiring {
+                fujimod_emulator_exr2_isp_statistics::window_analysis::Wiring {
                     routes: wire!(resources, id, routes, IrqRoutes),
                 },
             )?),
@@ -998,19 +998,19 @@ impl Builder<'_> {
                 Box::new(fujimod_emulator_exr2_isp_input::raw::RawStatistics::new(options, route(irq)?)?)
             }
             Model::StillProcessor { options, irq } => {
-                Box::new(fujimod_emulator_exr2_isp::StillProcessor::new(options, route(irq)?)?)
+                Box::new(fujimod_emulator_exr2_isp_output::still::StillProcessor::new(options, route(irq)?)?)
             }
-            Model::Scaler { options, irq } => Box::new(fujimod_emulator_exr2_isp::Scaler::new(options, route(irq)?)?),
+            Model::Scaler { options, irq } => Box::new(fujimod_emulator_exr2_isp_output::scaler::Scaler::new(options, route(irq)?)?),
             Model::Warp {
                 options,
                 irq,
                 stream,
-            } => Box::new(fujimod_emulator_exr2_isp::Warp::new(
+            } => Box::new(fujimod_emulator_exr2_isp_output::warp::Warp::new(
                 options,
                 (route(irq)?, wire!(resources, id, stream, Stream)),
             )?),
             Model::VideoEncoder { options, irq } => {
-                Box::new(fujimod_emulator_exr2_isp::VideoEncoder::new(options, route(irq)?)?)
+                Box::new(fujimod_emulator_exr2_isp_output::video::VideoEncoder::new(options, route(irq)?)?)
             }
             Model::JpegEncoder {
                 options,

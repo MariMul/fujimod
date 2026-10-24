@@ -1,4 +1,4 @@
-use crate::Scaler;
+use crate::scaler::Scaler;
 use fujimod_emulator_devices::Device;
 use fujimod_emulator_devices::exr2::isp::Irq;
 use fujimod_emulator_devices::test_host::{TestHost, advance, write};

@@ -125,7 +125,7 @@ impl StillProcessor {
             (self.r[0x8058 / 4] >> 16 & 32767) as u16,
         ];
         let exposure = (self.r[0x8058 / 4] & 4095) as u16;
-        let shading = super::shading::Shading::from_registers(|o| self.r[(0x8000 + o) / 4])?;
+        let shading = crate::shading::Shading::from_registers(|o| self.r[(0x8000 + o) / 4])?;
         self.film
             .update(|o| self.r[(0x14000 + still_offset(o).unwrap()) / 4])?;
         // The still filter consumes its surrounding RAW context. For

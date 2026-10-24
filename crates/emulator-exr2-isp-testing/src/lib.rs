@@ -1,3 +1,5 @@
+//! Test support for the EXR II ISP live-view models: a recording memory host and an
+//! allocation counter. Test-only: it installs a counting global allocator.
 use fujimod_emulator_devices::exr2::isp::dma::IrqRoutes;
 use fujimod_emulator_devices::{Cx, Device, Host, Record};
 
@@ -5,7 +7,7 @@ use fujimod_emulator_devices::{Cx, Device, Host, Record};
 // unrelated tests and the harness outside the measurement are excluded.
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
-thread_local! {pub(crate) static ALLOCATIONS:Cell<Option<usize>>=const {Cell::new(None)};}
+thread_local! {pub static ALLOCATIONS:Cell<Option<usize>>=const {Cell::new(None)};}
 struct CountingAllocator;
 #[global_allocator]
 static ALLOCATOR: CountingAllocator = CountingAllocator;
@@ -32,14 +34,14 @@ unsafe impl GlobalAlloc for CountingAllocator {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) enum Effect {
+pub enum Effect {
     Dma(u64, usize),
     Irq(usize, u32),
 }
-pub(crate) struct Memory {
-    pub(crate) now: u64,
-    pub(crate) bytes: Vec<u8>,
-    pub(crate) effects: Vec<Effect>,
+pub struct Memory {
+    pub now: u64,
+    pub bytes: Vec<u8>,
+    pub effects: Vec<Effect>,
 }
 impl Default for Memory {
     fn default() -> Self {
@@ -86,29 +88,29 @@ impl Host for Memory {
         panic!("normal device path must not build records")
     }
 }
-pub(crate) fn write(d: &mut dyn Device, m: &mut Memory, address: u64, value: u64) {
+pub fn write(d: &mut dyn Device, m: &mut Memory, address: u64, value: u64) {
     let mut cx = Cx::new(m, 0, 0, 0);
     d.write(&mut cx, address, 4, value);
     assert_eq!(cx.refusal(), None);
 }
-pub(crate) fn reject(d: &mut dyn Device, m: &mut Memory, address: u64, value: u64) {
+pub fn reject(d: &mut dyn Device, m: &mut Memory, address: u64, value: u64) {
     let mut cx = Cx::new(m, 1, 0xdeadbeef, 0);
     d.write(&mut cx, address, 4, value);
     assert!(cx.refusal().is_some());
 }
-pub(crate) fn read(d: &mut dyn Device, m: &mut Memory, address: u64) -> u64 {
+pub fn read(d: &mut dyn Device, m: &mut Memory, address: u64) -> u64 {
     let mut cx = Cx::new(m, 1, 0x12345678, 0);
     let value = d.read(&mut cx, address, 4);
     assert_eq!(cx.refusal(), None);
     value
 }
-pub(crate) fn advance(d: &mut dyn Device, m: &mut Memory, tick: u64) {
+pub fn advance(d: &mut dyn Device, m: &mut Memory, tick: u64) {
     m.now = tick;
     let mut cx = Cx::new(m, 0, 0, 0);
     d.advance(&mut cx);
     assert_eq!(cx.refusal(), None);
 }
-pub(crate) fn routes(line: u32) -> IrqRoutes {
+pub fn routes(line: u32) -> IrqRoutes {
     let r = IrqRoutes::default();
     r.set(line, Some(0)).unwrap();
     r

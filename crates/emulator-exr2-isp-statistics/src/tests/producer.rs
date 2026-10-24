@@ -1,6 +1,6 @@
 use fujimod_emulator_devices::exr2::isp::dma::IrqRoutes;
 use crate::*;
-use super::liveview_support::*;
+use fujimod_emulator_exr2_isp_testing::*;
 use fujimod_emulator_devices::imaging::analysis::ImageLayout;
 use fujimod_emulator_devices::scene::{FrameEdge, ImageFrames, StatisticsFrames, StatisticsSpan};
 use fujimod_emulator_devices::Cx;
@@ -645,7 +645,7 @@ fn raster_worker_result_is_frozen_in_fingerprint_and_checkpoint_until_due() {
         },
     )
     .unwrap();
-    let expected_metering = super::super::metering::banks(&registers, &pixels, layout).unwrap();
+    let expected_metering = crate::metering::banks(&registers, &pixels, layout).unwrap();
 
     let before = d.fingerprint().unwrap();
     let saved = d.checkpoint().unwrap();

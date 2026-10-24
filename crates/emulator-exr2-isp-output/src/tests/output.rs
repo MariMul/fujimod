@@ -1,7 +1,8 @@
 use fujimod_emulator_devices::exr2::isp::dma::IrqRoutes;
 use crate::*;
-use super::liveview_support::*;
-use super::producer::producer;
+use fujimod_emulator_exr2_isp_testing::*;
+use fujimod_emulator_exr2_isp_statistics::{Block18000, producer};
+use fujimod_emulator_devices::scene::{StatisticsFrames, StatisticsSpan};
 use fujimod_emulator_devices::Cx;
 use fujimod_emulator_devices::Device;
 use fujimod_emulator_devices::imaging::analysis::ImageLayout;
@@ -418,16 +419,16 @@ fn native_preview_cadence_uses_physical_input_and_keeps_image_edges_and_stats_ph
             .is_err()
     );
     assert_eq!(source.save(), before);
-    let mut memory = super::liveview_support::Memory::default();
+    let mut memory = fujimod_emulator_exr2_isp_testing::Memory::default();
     for tick in [10, 20] {
-        super::liveview_support::advance(&mut source, &mut memory, tick);
+        fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, tick);
     }
     assert_eq!(images.0.lock().unwrap().edge.unwrap().index, 2);
     assert!(statistics.0.lock().unwrap().edge.is_none());
-    super::liveview_support::advance(&mut source, &mut memory, 30);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 30);
     assert_eq!(statistics.0.lock().unwrap().edge.unwrap().index, 3);
     level.store(false, Ordering::Relaxed);
-    super::liveview_support::advance(&mut source, &mut memory, 40);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 40);
     assert_eq!(statistics.0.lock().unwrap().edge.unwrap().index, 4);
     level.store(true, Ordering::Relaxed);
     source
@@ -441,10 +442,10 @@ fn native_preview_cadence_uses_physical_input_and_keeps_image_edges_and_stats_ph
         )
         .unwrap();
     assert_eq!(source.next_deadline(41), Some(50));
-    super::liveview_support::advance(&mut source, &mut memory, 50);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 50);
     assert_eq!(statistics.0.lock().unwrap().edge.unwrap().index, 4);
     assert_eq!(source.next_deadline(50), Some(70));
-    super::liveview_support::advance(&mut source, &mut memory, 70);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 70);
     assert_eq!(statistics.0.lock().unwrap().edge.unwrap().index, 6);
 }
 #[test]
@@ -483,12 +484,12 @@ fn external_frames_latch_host_pixels_only_at_due_edges_and_animate_in_guest_time
         },
     )
     .unwrap();
-    let mut memory = super::liveview_support::Memory::default();
+    let mut memory = fujimod_emulator_exr2_isp_testing::Memory::default();
     images.prepare_rgb(1, 1, &[255, 0, 0]).unwrap();
     assert_eq!(images.0.lock().unwrap().edge, None);
-    super::liveview_support::advance(&mut source, &mut memory, 9);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 9);
     assert_eq!(images.0.lock().unwrap().edge, None);
-    super::liveview_support::advance(&mut source, &mut memory, 10);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 10);
     let red = {
         let image = images.0.lock().unwrap();
         image.pixels.render(image.layout, 0).unwrap()
@@ -504,7 +505,7 @@ fn external_frames_latch_host_pixels_only_at_due_edges_and_animate_in_guest_time
     );
     let before = source.save();
     assert_eq!(source.save(), before);
-    super::liveview_support::advance(&mut source, &mut memory, 20);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 20);
     assert_ne!(
         {
             let image = images.0.lock().unwrap();
@@ -517,12 +518,12 @@ fn external_frames_latch_host_pixels_only_at_due_edges_and_animate_in_guest_time
         images.0.lock().unwrap().edge
     );
     images.use_analytic();
-    super::liveview_support::advance(&mut source, &mut memory, 30);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 30);
     let a = {
         let image = images.0.lock().unwrap();
         image.pixels.render(image.layout, 0).unwrap()
     };
-    super::liveview_support::advance(&mut source, &mut memory, 39);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 39);
     assert_eq!(
         {
             let image = images.0.lock().unwrap();
@@ -530,7 +531,7 @@ fn external_frames_latch_host_pixels_only_at_due_edges_and_animate_in_guest_time
         },
         a
     );
-    super::liveview_support::advance(&mut source, &mut memory, 40);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 40);
     assert_ne!(
         {
             let image = images.0.lock().unwrap();
@@ -572,7 +573,7 @@ fn wired_frame_clock_publishes_pixels_and_statistics_on_the_same_physical_edge()
         },
     )
     .unwrap();
-    let mut memory = super::liveview_support::Memory::default();
+    let mut memory = fujimod_emulator_exr2_isp_testing::Memory::default();
     assert_eq!(source.next_deadline(10), None);
     images.prepare_rgb(1, 1, &[255, 0, 0]).unwrap();
     edges.lock().unwrap()[0] = Some(FrameEdge { index: 1, tick: 17 });
@@ -580,7 +581,7 @@ fn wired_frame_clock_publishes_pixels_and_statistics_on_the_same_physical_edge()
     let edge = FrameEdge { index: 3, tick: 27 };
     edges.lock().unwrap()[1] = Some(edge);
     assert_eq!(source.next_deadline(27), Some(27));
-    super::liveview_support::advance(&mut source, &mut memory, 27);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 27);
     assert_eq!(images.0.lock().unwrap().edge, Some(edge));
     assert_eq!(statistics.0.lock().unwrap().edge, Some(edge));
     assert_eq!(
@@ -642,7 +643,7 @@ fn wired_frame_clock_publishes_pixels_and_statistics_on_the_same_physical_edge()
     assert_eq!(source.fingerprint().unwrap(), fingerprint);
     source.restore_checkpoint(&saved).unwrap();
     assert_eq!(source.fingerprint().unwrap(), fingerprint);
-    super::liveview_support::advance(&mut source, &mut memory, 30);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 30);
     assert_eq!(images.0.lock().unwrap().edge, Some(edge));
     assert!(
         source
@@ -696,9 +697,9 @@ fn wired_exposures_latch_physical_focus_until_the_next_input_edge() {
         },
     )
     .unwrap();
-    let mut memory = super::liveview_support::Memory::default();
+    let mut memory = fujimod_emulator_exr2_isp_testing::Memory::default();
     edges.lock().unwrap()[0] = Some(FrameEdge { index: 1, tick: 10 });
-    super::liveview_support::advance(&mut source, &mut memory, 10);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 10);
     let sharp = {
         let image = images.0.lock().unwrap();
         image.pixels.render(image.layout, 0).unwrap()
@@ -706,7 +707,7 @@ fn wired_exposures_latch_physical_focus_until_the_next_input_edge() {
     position.publish(64);
     let saved = source.save();
     assert_eq!(saved["focus_position"], 0);
-    super::liveview_support::advance(&mut source, &mut memory, 11);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 11);
     assert_eq!(source.save(), saved);
     assert_eq!(
         {
@@ -716,7 +717,7 @@ fn wired_exposures_latch_physical_focus_until_the_next_input_edge() {
         sharp
     );
     edges.lock().unwrap()[0] = Some(FrameEdge { index: 2, tick: 20 });
-    super::liveview_support::advance(&mut source, &mut memory, 20);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 20);
     assert_eq!(source.save()["focus_position"], 64);
     assert_ne!(
         {
@@ -730,13 +731,13 @@ fn wired_exposures_latch_physical_focus_until_the_next_input_edge() {
     let statistics_snapshot = statistics.checkpoint().unwrap();
     images.prepare_rgb(1, 1, &[0, 0, 255]).unwrap();
     edges.lock().unwrap()[0] = Some(FrameEdge { index: 3, tick: 25 });
-    super::liveview_support::advance(&mut source, &mut memory, 25);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 25);
     source.restore_checkpoint(&source_snapshot).unwrap();
     images.restore_checkpoint(&image_snapshot).unwrap();
     statistics.restore_checkpoint(&statistics_snapshot).unwrap();
     position.publish(0);
     edges.lock().unwrap()[0] = Some(FrameEdge { index: 3, tick: 30 });
-    super::liveview_support::advance(&mut source, &mut memory, 30);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 30);
     assert_eq!(
         {
             let image = images.0.lock().unwrap();
@@ -791,16 +792,16 @@ fn sensor_frame_clock_changes_are_causal_and_external_pixels_keep_their_clock() 
     assert_eq!(source.next_deadline(1), Some(1));
     assert_eq!(source.save(), before);
     // Sync before an edge is due: no renderer or pixels are needed yet.
-    let mut memory = super::liveview_support::Memory::default();
-    super::liveview_support::advance(&mut source, &mut memory, 1);
+    let mut memory = fujimod_emulator_exr2_isp_testing::Memory::default();
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 1);
     assert_eq!(source.next_deadline(1), Some(5));
     *period.lock().unwrap() = 8;
-    super::liveview_support::advance(&mut source, &mut memory, 2);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 2);
     assert_eq!(source.next_deadline(2), Some(5));
     images.prepare_rgb(1, 1, &[0; 3]).unwrap();
     assert_eq!(source.next_deadline(2), Some(2));
-    super::liveview_support::advance(&mut source, &mut memory, 2);
-    super::liveview_support::advance(&mut source, &mut memory, 5);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 2);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 5);
     assert_eq!(source.next_deadline(5), Some(15));
 }
 #[test]
@@ -857,14 +858,14 @@ fn radiometric_statistics_wait_for_the_physical_sensor_edge() {
         },
     )
     .unwrap();
-    let mut memory = super::liveview_support::Memory::default();
+    let mut memory = fujimod_emulator_exr2_isp_testing::Memory::default();
     assert_eq!(source.next_deadline(100), None);
     frames.lock().unwrap().latch(105).unwrap();
     assert_eq!(source.next_deadline(104), Some(105));
     let saved = source.save();
     assert_eq!(source.next_deadline(105), Some(105));
     assert_eq!(source.save(), saved);
-    super::liveview_support::advance(&mut source, &mut memory, 105);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 105);
     assert_eq!(
         images.0.lock().unwrap().edge,
         Some(FrameEdge {
@@ -878,7 +879,7 @@ fn radiometric_statistics_wait_for_the_physical_sensor_edge() {
     );
     assert_eq!(source.next_deadline(200), None);
     frames.lock().unwrap().latch(205).unwrap();
-    super::liveview_support::advance(&mut source, &mut memory, 205);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 205);
     assert_eq!(
         images.0.lock().unwrap().edge,
         Some(FrameEdge {
@@ -888,7 +889,7 @@ fn radiometric_statistics_wait_for_the_physical_sensor_edge() {
     );
     frames.lock().unwrap().latch(305).unwrap();
     frames.lock().unwrap().latch(405).unwrap();
-    super::liveview_support::advance(&mut source, &mut memory, 405);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 405);
     assert_eq!(
         images.0.lock().unwrap().edge,
         Some(FrameEdge {
@@ -938,13 +939,13 @@ fn delayed_external_observation_preserves_absolute_statistics_phase() {
     source
         .configure(10, StatisticsCadence::EveryNth { frames: 4 }, 0)
         .unwrap();
-    let mut memory = super::liveview_support::Memory::default();
-    super::liveview_support::advance(&mut source, &mut memory, 40);
+    let mut memory = fujimod_emulator_exr2_isp_testing::Memory::default();
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 40);
     assert_eq!(
         statistics.0.lock().unwrap().edge,
         Some(FrameEdge { index: 4, tick: 40 })
     );
-    super::liveview_support::advance(&mut source, &mut memory, 80);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 80);
     assert_eq!(
         statistics.0.lock().unwrap().edge,
         Some(FrameEdge { index: 8, tick: 80 })
@@ -1005,20 +1006,20 @@ fn switching_frame_sources_waits_for_a_new_edge_and_keeps_external_clock_phase()
         },
     )
     .unwrap();
-    let mut memory = super::liveview_support::Memory::default();
+    let mut memory = fujimod_emulator_exr2_isp_testing::Memory::default();
     frames.lock().unwrap().latch(5).unwrap();
-    super::liveview_support::advance(&mut source, &mut memory, 5);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 5);
     let physical = images.0.lock().unwrap().edge;
     assert_eq!(physical, Some(FrameEdge { index: 1, tick: 5 }));
     images.prepare_rgb(1, 1, &[255, 0, 0]).unwrap();
     assert_eq!(source.next_deadline(40), Some(40));
-    super::liveview_support::advance(&mut source, &mut memory, 40);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 40);
     assert_eq!(images.0.lock().unwrap().edge, physical);
     assert_eq!(source.next_deadline(40), Some(50));
     frames.lock().unwrap().latch(45).unwrap();
-    super::liveview_support::advance(&mut source, &mut memory, 49);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 49);
     assert_eq!(images.0.lock().unwrap().edge, physical);
-    super::liveview_support::advance(&mut source, &mut memory, 50);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 50);
     let external = images.0.lock().unwrap().edge;
     assert_eq!(external, Some(FrameEdge { index: 6, tick: 50 }));
     assert_eq!(
@@ -1030,14 +1031,14 @@ fn switching_frame_sources_waits_for_a_new_edge_and_keeps_external_clock_phase()
     );
     images.use_sensor();
     assert_eq!(source.next_deadline(50), Some(50));
-    super::liveview_support::advance(&mut source, &mut memory, 50);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 50);
     assert_eq!(images.0.lock().unwrap().edge, external);
     assert_eq!(source.next_deadline(50), None);
     frames.lock().unwrap().latch(55).unwrap();
     assert_eq!(source.next_deadline(54), Some(55));
-    super::liveview_support::advance(&mut source, &mut memory, 54);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 54);
     assert_eq!(images.0.lock().unwrap().edge, external);
-    super::liveview_support::advance(&mut source, &mut memory, 55);
+    fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 55);
     assert_eq!(
         images.0.lock().unwrap().edge,
         Some(FrameEdge { index: 7, tick: 55 })
@@ -1046,4 +1047,93 @@ fn switching_frame_sources_waits_for_a_new_edge_and_keeps_external_clock_phase()
         statistics.0.lock().unwrap().edge,
         images.0.lock().unwrap().edge
     );
+}
+
+/// The statistics producer the repeating-output test runs beside the output channels.
+fn producer(hist: bool) -> (Block18000, StatisticsFrames, ImageFrames, IrqRoutes, Memory) {
+    producer_with_metering(hist, 4, 2, None, None)
+}
+fn producer_with_metering(
+    hist: bool,
+    width: usize,
+    height: usize,
+    pixels_per_tick: Option<u64>,
+    metering: Option<fujimod_emulator_devices::exr2::isp::options::metering::Arithmetic>,
+) -> (Block18000, StatisticsFrames, ImageFrames, IrqRoutes, Memory) {
+    let images = ImageFrames::from_pixels(
+        ImageLayout {
+            width,
+            height,
+            stride: width * 2,
+        },
+        vec![5; width * height * 2],
+    )
+    .unwrap();
+    let spans = vec![
+        StatisticsSpan {
+            destination: 0,
+            offset: 0,
+            bytes: vec![3; 4],
+        },
+        StatisticsSpan {
+            destination: 1,
+            offset: 0,
+            bytes: vec![4; 4],
+        },
+    ];
+    let frames = StatisticsFrames::new(spans).unwrap();
+    let routes = routes(0x2e);
+    let mut d = Block18000::new(
+        fujimod_emulator_devices::exr2::isp::options::producer::Options {
+            pixels_per_tick,
+            contrast: None,
+            metering,
+            clock: fujimod_emulator_devices::exr2::isp::dma::Clock::Fixed { ticks: 5 },
+            ack_ticks: 2,
+            stop_ticks: 3,
+            histogram: hist,
+            external_statistics: false,
+            diagnostic_reads: true,
+        },
+        producer::Wiring {
+            grid: None,
+
+            frames: frames.clone(),
+            images: images.clone(),
+            routes: routes.clone(),
+        },
+    )
+    .unwrap();
+    let mut m = Memory::default();
+    for i in 0..9 {
+        write(&mut d, &mut m, 0xfff18500 + i * 4, 0x4000 + i * 0x4000);
+    }
+    for (o, v) in [
+        (0x524, 0x200),
+        (0x88c, 0),
+        (0x8f4, 1),
+        (0x8a0, 0x80003000u32),
+        (0x8f8, 0),
+        (0x8c4, 2),
+        (0x8f8, 0x10000000),
+        (0x884, 1),
+        (4, 0x33173317),
+    ] {
+        write(&mut d, &mut m, 0xfff18000 + o, v as u64);
+    }
+    if hist {
+        for (o, v) in [
+            (0x604, (width - 1) as u32),
+            (0x608, 0x10000 | (height - 1) as u32),
+            (0x700, 0xa000),
+            (0x704, 0x200),
+            (0x984, 1),
+            (0x9f8, 0x10000000),
+            (8, 1),
+        ] {
+            write(&mut d, &mut m, 0xfff18000 + o, v as u64);
+        }
+    }
+    advance(&mut d, &mut m, 2);
+    (d, frames, images, routes, m)
 }

@@ -1,6 +1,6 @@
 use fujimod_emulator_devices::exr2::isp::dma::IrqRoutes;
 use crate::*;
-use super::liveview_support::*;
+use fujimod_emulator_exr2_isp_testing::*;
 use fujimod_emulator_devices::Cx;
 use fujimod_emulator_devices::Device;
 fn phase(arithmetic: fujimod_emulator_devices::exr2::isp::options::phase_detection::Arithmetic) -> (PhaseDetection, Memory, IrqRoutes) {

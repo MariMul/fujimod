@@ -1,5 +1,5 @@
 //! The JPEG encoder consuming a warp's pixel stream.
-use crate::Warp;
+use crate::warp::Warp;
 use fujimod_emulator_devices::Device;
 use fujimod_emulator_devices::exr2::isp::Irq;
 use fujimod_emulator_devices::exr2::isp::stream::{State, StreamHandle};
