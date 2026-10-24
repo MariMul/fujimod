@@ -146,7 +146,7 @@ const CARDS: Record<string, Card> = {
     related: [
       {
         card: 'raw_view',
-        reason: 'previews the RAW headroom that RAW HIGHLIGHT exposes for',
+        reason: 'see how close the brightest areas are to losing detail in RAW file while shooting',
       },
     ],
     manual: 'menu_shooting/photometry',
@@ -157,7 +157,7 @@ const CARDS: Record<string, Card> = {
     title: 'RAW VIEW',
     path: [],
     summary:
-      'Press a button assigned to RAW VIEW to preview RAW headroom. Press it again to return to the normal live view. Recorded images are unchanged.',
+      'Press a button assigned to RAW VIEW to see how close the brightest areas are to losing detail in the RAW file. Press it again to return to the normal live view.',
     choices: {},
     related: [],
     manual: null,
@@ -342,7 +342,7 @@ const CARDS: Record<string, Card> = {
   },
 };
 /** Recordings rendered for exactly this catalog text, else none. */
-const media = featureMedia('155b1104e2a6049184ba1145');
+const media = featureMedia('63eaf5bdb6f719c7103954d9');
 
 function Icon(props: { name: string }) {
   return (
@@ -573,7 +573,10 @@ export function FeatureCatalog() {
             <Icon name="highlight" />
             <Ref card="raw_view">RAW VIEW</Ref>
           </h4>
-          <p>Assign RAW VIEW to a function button to preview RAW headroom.</p>
+          <p>
+            Assign RAW VIEW to a function button to see how close the brightest areas are to losing
+            detail in the RAW file.
+          </p>
         </FeatureTile>
         <FeatureTile media={media('edit_save_custom_setting')}>
           <h4>
