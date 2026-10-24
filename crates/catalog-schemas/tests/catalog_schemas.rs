@@ -39,7 +39,7 @@ fn reference_and_run_configuration_documents_validate_generated_schemas() {
     }
 
     let mut files = Vec::new();
-    for layer in ["soc", "parts", "bodies", "firmware"] {
+    for layer in ["soc", "parts", "bodies", "firmware", "progress"] {
         files.extend(json_files(&catalog.join(layer)));
     }
     files.extend(json_files(&package.join("../../configurations/emulator")));

@@ -8,7 +8,7 @@ import { byModel, phases, started, type FirmwareProgress } from '../src/ui/camer
 const url = process.env.FUJIMOD_WEB_URL;
 const output = process.env.FUJIMOD_TEST_OUTPUT;
 if (!url || !output) throw Error('Set the web URL and screenshot output directory.');
-const catalog = fileURLToPath(new URL('../../../catalog/firmware/', import.meta.url));
+const catalog = fileURLToPath(new URL('../../../catalog/progress/', import.meta.url));
 const documents: FirmwareProgress[] = [];
 for await (const path of glob('*/*/progress.generated.json', { cwd: catalog }))
   documents.push(JSON.parse(await readFile(catalog + path, 'utf8')));

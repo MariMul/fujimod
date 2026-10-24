@@ -2490,10 +2490,6 @@ impl ReferenceCatalog {
             catalog.insert_document(ReferenceKind::of_body_file(&path)?, &bytes, &path)?;
         }
         for (path, bytes) in read_json_files(&root.join("firmware"))? {
-            // Bring-up progress is website data, not an emulator input.
-            if path.file_name().is_some_and(|name| name == "progress.generated.json") {
-                continue;
-            }
             catalog.insert_document(ReferenceKind::of_firmware_file(&path)?, &bytes, &path)?;
         }
         catalog.validate_references()?;

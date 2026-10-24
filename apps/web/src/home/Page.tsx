@@ -20,7 +20,7 @@ import '../navigation.css';
 /** Latest recorded bring-up progress, assembled from the catalog at build time. */
 const cameraProgress = byModel(
   Object.values(
-    import.meta.glob<FirmwareProgress>('../../../../catalog/firmware/*/*/progress.generated.json', {
+    import.meta.glob<FirmwareProgress>('../../../../catalog/progress/*/*/progress.generated.json', {
       eager: true,
       import: 'default',
     }),
